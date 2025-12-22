@@ -1,0 +1,40 @@
+---
+// src/pages/admin/settings/meta-conversion/index.astro
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { MetaConversionsManager } from "../../../../components/admin/MetaConversionsManager";
+import { db } from "../../../../db";
+import { metaConversionsSettings } from "../../../../db/schema";
+import { eq } from "drizzle-orm";
+
+// SECURITY: Masked value for sensitive fields
+const MASKED_VALUE = "••••••••••••";
+
+// Get existing settings, specifically targeting the 'singleton' row
+const dbSettings = await db
+  .select()
+  .from(metaConversionsSettings)
+  .where(eq(metaConversionsSettings.id, "singleton"))
+  .get();
+
+// SECURITY: Mask access token before sending to client
+const settings = dbSettings ? {
+  ...dbSettings,
+  accessToken: dbSettings.accessToken ? MASKED_VALUE : null,
+} : undefined;
+---
+
+<AdminLayout title="Meta Conversions API">
+  <div class="container py-6 space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Meta Conversions API</h1>
+        <p class="text-muted-foreground">
+          Configure and monitor your Meta (Facebook) Conversions API integration
+          for improved tracking and attribution.
+        </p>
+      </div>
+    </div>
+
+    <MetaConversionsManager client:load initialSettings={settings} />
+  </div>
+</AdminLayout>

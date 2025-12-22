@@ -1,0 +1,156 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { DeliveryProviderSettings } from "@/components/admin/DeliveryProviderSettings";
+import { db } from "@/db";
+import { deliveryProviders } from "@/db/schema";
+
+// SECURITY: Mask sensitive credentials before sending to client
+const MASKED_VALUE = "••••••••••••";
+
+function maskCredentials(credentialsJson: string): string {
+  try {
+    const credentials = JSON.parse(credentialsJson);
+    const masked = { ...credentials };
+
+    // Mask all sensitive fields
+    if (masked.clientSecret) masked.clientSecret = MASKED_VALUE;
+    if (masked.password) masked.password = MASKED_VALUE;
+    if (masked.apiKey) masked.apiKey = MASKED_VALUE;
+    if (masked.secretKey) masked.secretKey = MASKED_VALUE;
+
+    return JSON.stringify(masked);
+  } catch (e) {
+    return credentialsJson;
+  }
+}
+
+// Get providers from the database
+const dbProviders = await db.select().from(deliveryProviders);
+
+// Mask sensitive credentials before sending to client
+const providers = dbProviders.map(provider => ({
+  ...provider,
+  credentials: maskCredentials(provider.credentials),
+}));
+
+// Add client-side scripting for provider operations
+const clientActions = `
+  window.deliveryProviderActions = {
+    async saveProvider(provider) {
+      try {
+        const method = provider.id ? 'PUT' : 'POST';
+        console.log(\`Saving provider with \${method}:\`, provider);
+        
+        const response = await fetch('/api/settings/delivery-providers', {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(provider)
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Error saving provider:', errorData);
+          throw new Error(errorData.error || "Failed to save provider");
+        }
+        
+        return response.json();
+      } catch (error) {
+        console.error('Error in saveProvider:', error);
+        throw error;
+      }
+    },
+    
+    async deleteProvider(id) {
+      try {
+        const response = await fetch(\`/api/settings/delivery-providers/\${id}\`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to delete provider");
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('Error in deleteProvider:', error);
+        throw error;
+      }
+    },
+    
+    async testProvider(id) {
+      try {
+        console.log('Testing provider:', id);
+        const response = await fetch(\`/api/settings/delivery-providers/\${id}/test\`, {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          console.error('Test failed with status:', response.status);
+          const errorData = await response.json().catch(e => ({ error: 'Failed to parse error response' }));
+          return { 
+            success: false, 
+            message: errorData.error || "Failed to test provider connection" 
+          };
+        }
+        
+        return response.json();
+      } catch (error) {
+        console.error('Error in testProvider:', error);
+        return { success: false, message: error.message || "Failed to test provider" };
+      }
+    },
+    
+    async testCredentials(type, credentials, config) {
+      try {
+        console.log('Testing credentials for provider type:', type);
+        const response = await fetch('/api/settings/delivery-providers/create-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            type, 
+            credentials, 
+            config,
+            name: 'Credential Test'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          console.error('Credential test failed with status:', response.status);
+          return { 
+            success: false, 
+            message: result.error || "Failed to test credentials" 
+          };
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('Error in testCredentials:', error);
+        return { 
+          success: false, 
+          message: error instanceof Error ? error.message : "Failed to test credentials" 
+        };
+      }
+    }
+  };
+`;
+---
+
+<AdminLayout title="Delivery Provider Settings">
+  <div class="container py-6 space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Delivery Providers</h1>
+        <p class="text-muted-foreground">
+          Configure and manage delivery service providers
+        </p>
+      </div>
+    </div>
+
+    <DeliveryProviderSettings client:load providers={providers} />
+  </div>
+
+  <script is:inline set:html={clientActions} />
+</AdminLayout>

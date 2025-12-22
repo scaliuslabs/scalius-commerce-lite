@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1760980416114,
+      "tag": "0000_cultured_newton_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1761080984086,
+      "tag": "0001_sticky_giant_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1762888194193,
+      "tag": "0002_stale_scream",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1765149157718,
+      "tag": "0003_illegal_doorman",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1765544065317,
+      "tag": "0004_chief_lyja",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1765577846031,
+      "tag": "0005_stale_speed_demon",
+      "breakpoints": true
+    }
+  ]
+}

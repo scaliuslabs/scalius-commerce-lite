@@ -1,0 +1,98 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { FraudCheckerSettings } from "@/components/admin/FraudCheckerSettings";
+import { FraudCheckerService } from "@/lib/fraud-checker/service";
+
+// SECURITY: Masked value for sensitive fields
+const MASKED_VALUE = "••••••••••••";
+
+const fraudCheckerService = new FraudCheckerService();
+const dbProviders = await fraudCheckerService.getProviders();
+
+// SECURITY: Mask API keys before sending to client
+const providers = dbProviders.map(provider => ({
+  ...provider,
+  apiKey: provider.apiKey ? MASKED_VALUE : "",
+}));
+
+const clientActions = `
+  window.fraudCheckerActions = {
+    async saveProvider(provider) {
+      try {
+        const method = provider.id ? 'PUT' : 'POST';
+        const response = await fetch('/api/settings/fraud-checker', {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(provider)
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to save provider");
+        }
+        
+        return response.json();
+      } catch (error) {
+        console.error('Error in saveProvider:', error);
+        throw error;
+      }
+    },
+    
+    async deleteProvider(id) {
+      try {
+        const response = await fetch(\`/api/settings/fraud-checker/\${id}\`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to delete provider");
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('Error in deleteProvider:', error);
+        throw error;
+      }
+    },
+    
+    async testProvider(id) {
+      try {
+        const response = await fetch(\`/api/settings/fraud-checker/\${id}/test\`, {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(e => ({ error: 'Failed to parse error response' }));
+          return { 
+            success: false, 
+            message: errorData.error || "Failed to test provider connection" 
+          };
+        }
+        
+        return response.json();
+      } catch (error) {
+        console.error('Error in testProvider:', error);
+        return { success: false, message: error.message || "Failed to test provider" };
+      }
+    }
+  };
+`;
+---
+
+<AdminLayout title="Fraud Checker Settings">
+  <div class="container py-6 space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Fraud Checker</h1>
+        <p class="text-muted-foreground">
+          Configure fraud detection providers for customer verification
+        </p>
+      </div>
+    </div>
+
+    <FraudCheckerSettings client:load providers={providers} />
+  </div>
+
+  <script is:inline set:html={clientActions} />
+</AdminLayout>

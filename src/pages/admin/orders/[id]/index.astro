@@ -1,0 +1,267 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { db } from "../../../../db";
+import {
+  products,
+  productVariants,
+  orders,
+  orderItems,
+  productImages,
+  deliveryLocations,
+} from "../../../../db/schema";
+import { eq, sql, and, isNull } from "drizzle-orm";
+import { OrderView } from "@/components/admin/OrderView";
+import { DeliveryService } from "@/lib/delivery/service";
+
+// Get order ID from URL
+const { id } = Astro.params;
+
+// Get order details from database
+const [order] = await db
+  .select({
+    id: orders.id,
+    customerName: orders.customerName,
+    customerPhone: orders.customerPhone,
+    customerEmail: orders.customerEmail,
+    customerId: orders.customerId,
+    shippingAddress: orders.shippingAddress,
+    totalAmount: orders.totalAmount,
+    shippingCharge: orders.shippingCharge,
+    discountAmount: orders.discountAmount,
+    notes: orders.notes,
+    city: orders.city,
+    zone: orders.zone,
+    area: orders.area,
+    cityName: orders.cityName,
+    zoneName: orders.zoneName,
+    areaName: orders.areaName,
+    status: orders.status,
+    createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
+    updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
+  })
+  .from(orders)
+  .where(eq(orders.id, id as string));
+
+if (!order) {
+  return Astro.redirect("/admin/orders");
+}
+
+// Get order items with product and variant details
+const items = await db
+  .select({
+    id: orderItems.id,
+    productId: orderItems.productId,
+    variantId: orderItems.variantId,
+    quantity: orderItems.quantity,
+    price: orderItems.price,
+    productName: products.name,
+    productImage: sql<string>`(
+      SELECT ${productImages.url}
+      FROM ${productImages}
+      WHERE ${productImages.productId} = ${products.id}
+      AND ${productImages.isPrimary} = 1
+      LIMIT 1
+    )`.as("productImage"),
+    variantSize: productVariants.size,
+    variantColor: productVariants.color,
+  })
+  .from(orderItems)
+  .leftJoin(products, eq(products.id, orderItems.productId))
+  .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+  .where(eq(orderItems.orderId, id as string));
+
+// Calculate total amount
+const totalAmount = items.reduce(
+  (sum, item) => sum + item.price * item.quantity,
+  0
+);
+
+// Get location data from the delivery_locations table
+const locationIds = [order.city, order.zone, order.area].filter(
+  Boolean
+) as string[];
+const locationMap = new Map<string, string>();
+
+if (locationIds.length > 0) {
+  const locations = await db
+    .select()
+    .from(deliveryLocations)
+    .where(
+      and(
+        sql`${deliveryLocations.id} IN (${locationIds.join(",")})`,
+        isNull(deliveryLocations.deletedAt)
+      )
+    );
+
+  // Create a map of ID to location name
+  locations.forEach((location) => {
+    try {
+      // Use the location name directly from the name field
+      locationMap.set(location.id, location.name);
+    } catch (err) {
+      console.error(`Error parsing location data for ${location.id}:`, err);
+      // Fallback to ID if name parsing fails
+      locationMap.set(location.id, location.id);
+    }
+  });
+}
+
+// Get the names for the locations
+const cityName =
+  order.cityName ||
+  (order.city ? locationMap.get(order.city) || order.city : "");
+const zoneName =
+  order.zoneName ||
+  (order.zone ? locationMap.get(order.zone) || order.zone : "");
+const areaName =
+  order.areaName ||
+  (order.area ? locationMap.get(order.area) || order.area : null);
+
+// Get delivery providers and shipments
+const deliveryService = new DeliveryService();
+const shipments = await deliveryService.getShipments(id as string);
+const activeProviders = await deliveryService.getActiveProviders();
+
+// Client-side script for shipping actions
+const shipmentActionsScript = `
+  // Helper to clean order ID from URL paths
+  function cleanOrderId(orderId) {
+    // Remove any URL path segments that might be present
+    if (orderId.includes('/')) {
+      const parts = orderId.split('/');
+      orderId = parts[parts.length - 1]; // Get the last segment
+    }
+    
+    // Also explicitly remove "orders/" prefix if present
+    return orderId.replace(/^orders[\\/]/, '');
+  }
+
+  window.shipmentActions = {
+    async createShipment(orderId, providerId, options = {}) {
+      // Ensure clean orderId
+      orderId = cleanOrderId(orderId);
+      
+      try {
+        console.log('Creating shipment:', { orderId, providerId, options });
+        const response = await fetch(\`/api/orders/\${orderId}/shipments\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ providerId, options })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || result.message || 'Failed to create shipment');
+        }
+        
+        return { success: true, data: result };
+      } catch (error) {
+        console.error('Error creating shipment:', error);
+        return { 
+          success: false, 
+          message: error instanceof Error ? error.message : String(error)
+        };
+      }
+    },
+    
+    async checkShipmentStatus(shipmentId) {
+      try {
+        // Get the current path and extract orderId more robustly
+        const pathParts = window.location.pathname.split('/');
+        const ordersIndex = pathParts.indexOf('orders');
+        let orderId = '';
+        
+        // Get the part after "orders/" in the path
+        if (ordersIndex !== -1 && ordersIndex + 1 < pathParts.length) {
+          orderId = pathParts[ordersIndex + 1];
+        } else {
+          // Fallback: try to get from the last non-empty segment
+          for (let i = pathParts.length - 1; i >= 0; i--) {
+            if (pathParts[i].trim() !== '') {
+              orderId = pathParts[i];
+              break;
+            }
+          }
+        }
+        
+        // Clean the orderId to be safe
+        orderId = cleanOrderId(orderId);
+        
+        console.log('Checking shipment status for order:', orderId, 'shipment:', shipmentId);
+        console.log('Request URL:', \`/api/orders/\${orderId}/shipments/\${shipmentId}/refresh\`);
+        
+        const response = await fetch(\`/api/orders/\${orderId}/shipments/\${shipmentId}/refresh\`, {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || errorData.message || 'Failed to check shipment status');
+        }
+        
+        const result = await response.json();
+        console.log('Shipment status check result:', result);
+        
+        return { 
+          success: true,
+          data: {
+            status: result.status,
+            rawStatus: result.rawStatus,
+            lastChecked: result.lastChecked,
+            statusChanged: result.statusChanged,
+            orderStatusUpdate: result.orderStatusUpdate,
+            metadata: result.metadata ? JSON.parse(result.metadata) : {}
+          } 
+        };
+      } catch (error) {
+        console.error('Error checking shipment status:', error);
+        return { 
+          success: false, 
+          message: error instanceof Error ? error.message : String(error)
+        };
+      }
+    },
+    
+    async deleteShipment(shipmentId) {
+      try {
+        const response = await fetch(\`/api/shipments/\${shipmentId}\`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to delete shipment');
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('Error deleting shipment:', error);
+        throw error;
+      }
+    }
+  };
+`;
+
+// Format dates properly
+const formattedOrder = {
+  ...order,
+  createdAt: new Date(order.createdAt * 1000),
+  updatedAt: new Date(order.updatedAt * 1000),
+  items,
+  totalAmount,
+  // Add location names
+  cityName,
+  zoneName,
+  areaName,
+  // Add shipment data
+  shipments,
+  deliveryProviders: activeProviders,
+};
+---
+
+<AdminLayout title={`Order #${order.id}`}>
+  <OrderView client:load order={formattedOrder} />
+
+  <script is:inline set:html={shipmentActionsScript} />
+</AdminLayout>

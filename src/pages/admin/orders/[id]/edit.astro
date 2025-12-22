@@ -1,0 +1,111 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { OrderForm } from "../../../../components/admin/OrderForm";
+import { db } from "../../../../db";
+import {
+  products,
+  productVariants,
+  orders,
+  orderItems,
+} from "../../../../db/schema";
+import { eq, isNull, sql } from "drizzle-orm";
+
+// Get order ID from URL
+const { id } = Astro.params;
+
+// Get order details with proper timestamp handling
+const [order] = await db
+  .select({
+    id: orders.id,
+    customerName: orders.customerName,
+    customerPhone: orders.customerPhone,
+    customerEmail: orders.customerEmail,
+    shippingAddress: orders.shippingAddress,
+    city: orders.city,
+    zone: orders.zone,
+    area: orders.area,
+    notes: orders.notes,
+    discountAmount: orders.discountAmount,
+    shippingCharge: orders.shippingCharge,
+    status: orders.status,
+    createdAt: sql<string>`datetime(${orders.createdAt}, 'unixepoch', 'localtime')`,
+    updatedAt: sql<string>`datetime(${orders.updatedAt}, 'unixepoch', 'localtime')`,
+  })
+  .from(orders)
+  .where(eq(orders.id, id as string));
+
+if (!order) {
+  return Astro.redirect("/admin/orders");
+}
+
+// Get order items with product and variant details
+const items = await db
+  .select({
+    id: orderItems.id,
+    productId: orderItems.productId,
+    variantId: orderItems.variantId,
+    quantity: orderItems.quantity,
+    price: orderItems.price,
+  })
+  .from(orderItems)
+  .where(eq(orderItems.orderId, id as string));
+
+// Get all active products with their variants
+const allProducts = await db
+  .select({
+    id: products.id,
+    name: products.name,
+    price: products.price,
+    discountPercentage: products.discountPercentage,
+  })
+  .from(products)
+  .where(isNull(products.deletedAt));
+
+// Get variants for each product
+const productVariantsMap = new Map();
+for (const product of allProducts) {
+  const variants = await db
+    .select()
+    .from(productVariants)
+    .where(
+      sql`${productVariants.productId} = ${product.id} AND ${productVariants.deletedAt} IS NULL`
+    );
+  productVariantsMap.set(product.id, variants);
+}
+
+// Prepare products with variants
+const productsWithVariants = allProducts.map((product) => ({
+  ...product,
+  variants: productVariantsMap.get(product.id) || [],
+}));
+
+// Prepare default values with proper type conversion
+const defaultValues = {
+  ...order,
+  discountAmount: order.discountAmount || null,
+  items: items.map((item) => ({
+    productId: item.productId,
+    variantId: item.variantId,
+    quantity: item.quantity,
+    price: item.price,
+  })),
+};
+---
+
+<AdminLayout title={`Edit Order #${order.id}`}>
+  <div class="container space-y-8 py-6">
+    <div class="mb-6">
+      <h1 class="text-3xl font-bold">Edit Order</h1>
+      <p class="text-muted-foreground">
+        Make changes to your order information.
+      </p>
+    </div>
+
+    <OrderForm
+      client:load
+      products={productsWithVariants}
+      defaultValues={defaultValues}
+      isEdit={true}
+    />
+  </div>
+</AdminLayout>

@@ -1,0 +1,35 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { AnalyticsList } from "../../../components/admin/AnalyticsList";
+import { db } from "../../../db";
+import { analytics } from "../../../db/schema";
+import { unixToDate } from "@/lib/utils";
+
+// Fetch all analytics scripts
+const analyticsScripts = await db.select().from(analytics);
+
+// Format the data for the component
+const formattedScripts = analyticsScripts.map((script) => ({
+  id: script.id,
+  name: script.name,
+  type: script.type,
+  isActive: script.isActive,
+  usePartytown: script.usePartytown,
+  location: script.location,
+  createdAt: unixToDate(script.createdAt) || new Date(),
+  updatedAt: unixToDate(script.updatedAt) || new Date(),
+}));
+---
+
+<AdminLayout title="Analytics Scripts">
+  <div class="container py-10">
+    <div class="mb-10">
+      <h1 class="text-3xl font-bold">Analytics Scripts</h1>
+      <p class="text-muted-foreground mt-2">
+        Manage analytics and tracking scripts for your site.
+      </p>
+    </div>
+
+    <AnalyticsList analytics={formattedScripts} client:load />
+  </div>
+</AdminLayout>

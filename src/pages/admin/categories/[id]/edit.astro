@@ -1,0 +1,111 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { CategoryForm } from "../../../../components/admin/CategoryForm";
+import { db } from "../../../../db";
+import { categories } from "../../../../db/schema";
+import { eq, sql } from "drizzle-orm";
+import { getStorefrontPath } from "../../../../lib/storefront-url";
+
+// Get category ID from URL
+const { id } = Astro.params;
+
+// Get category details with proper timestamp handling
+const [category] = await db
+  .select({
+    id: categories.id,
+    name: categories.name,
+    description: categories.description,
+    slug: categories.slug,
+    metaTitle: categories.metaTitle,
+    metaDescription: categories.metaDescription,
+    imageUrl: categories.imageUrl,
+    createdAt: sql<string>`datetime(${categories.createdAt}, 'unixepoch', 'localtime')`,
+    updatedAt: sql<string>`datetime(${categories.updatedAt}, 'unixepoch', 'localtime')`,
+  })
+  .from(categories)
+  .where(eq(categories.id, id as string));
+
+if (!category) {
+  return Astro.redirect("/admin/categories");
+}
+
+// Get storefront URL for the "View on Website" link
+const categoryUrl = await getStorefrontPath(`/categories/${category.slug}`);
+
+// Prepare default values with proper type conversion
+const defaultValues = {
+  ...category,
+  slugEdited: true,
+  image: category.imageUrl
+    ? {
+        id: `temp_${category.id}`,
+        url: category.imageUrl,
+        filename: category.imageUrl.split("/").pop() || "",
+        size: 0,
+        createdAt: new Date(),
+      }
+    : null,
+};
+---
+
+<AdminLayout title={`Edit ${category.name}`}>
+  <div class="container space-y-8 py-6">
+    <div class="mb-6">
+      <div class="flex items-center text-sm text-muted-foreground mb-2">
+        <a href="/admin/categories" class="hover:text-primary">Categories</a>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="mx-2 h-4 w-4"
+          ><polyline points="9 18 15 12 9 6"></polyline></svg
+        >
+        <span>Edit Category</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold">Edit Category</h1>
+          <p class="text-muted-foreground">
+            Make changes to your category information.
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <a
+            href={categoryUrl}
+            target="_blank"
+            class="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="mr-2 h-4 w-4"
+              ><path
+                d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+              ></path><polyline points="15 3 21 3 21 9"></polyline><line
+                x1="10"
+                x2="21"
+                y1="14"
+                y2="3"></line></svg
+            >
+            View on Website
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <CategoryForm client:load defaultValues={defaultValues} isEdit={true} />
+  </div>
+</AdminLayout>

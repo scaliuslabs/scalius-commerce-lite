@@ -1,0 +1,53 @@
+---
+// src/pages/admin/index.astro
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { DashboardStats } from "../../components/admin/DashboardStats";
+import { RecentOrders } from "../../components/admin/RecentOrders";
+import { QuickActions } from "../../components/admin/QuickActions";
+import { WelcomeBanner } from "../../components/admin/WelcomeBanner";
+import {
+  getDashboardStats,
+  getRecentOrders,
+  getDailyActivityData,
+} from "../../lib/admin";
+
+const stats = await getDashboardStats();
+const recentOrders = await getRecentOrders(11);
+const dailyActivityData = await getDailyActivityData(90);
+
+const pageTitle = "Admin Dashboard";
+---
+
+<AdminLayout title={pageTitle}>
+  <div class="space-y-8">
+    <WelcomeBanner client:load /> 
+
+    <div class="
+      overflow-hidden rounded-2xl 
+      border border-gray-100/80 dark:border-gray-800/60 
+      bg-white dark:bg-gray-900/50 
+      shadow-[0_1px_3px_0_rgb(0,0,0,0.08)] dark:shadow-none 
+      transition-all duration-200 ease-out
+    ">
+      <div class="p-5 md:p-6"> 
+        <DashboardStats
+          client:load
+          totalProducts={stats.totalProducts}
+          totalCustomers={stats.totalCustomers}
+          currentMonth={stats.currentMonth}
+          initialDailyData={dailyActivityData}
+        />
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div class="lg:col-span-2">
+        <RecentOrders client:load orders={recentOrders} /> 
+      </div>
+
+      <div class="lg:col-span-1">
+        <QuickActions client:load /> 
+      </div>
+    </div>
+  </div>
+</AdminLayout>

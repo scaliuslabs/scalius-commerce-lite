@@ -1,0 +1,92 @@
+---
+//src/pages/admin/discounts/index.astro
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { DiscountList } from "@/components/admin/discount/DiscountList";
+// Cannot import DiscountItem as it's not exported, define locally
+import { getDiscounts } from "@/lib/admin";
+
+// Local type definition matching DiscountListProps['discounts'] expected structure
+interface DiscountItem {
+  id: string;
+  code: string;
+  type: string;
+  valueType: string;
+  discountValue: number;
+  minPurchaseAmount: number | null;
+  minQuantity: number | null;
+  maxUsesPerOrder: number | null;
+  maxUses: number | null;
+  limitOnePerCustomer: boolean;
+  combineWithProductDiscounts: boolean;
+  combineWithOrderDiscounts: boolean;
+  combineWithShippingDiscounts: boolean;
+  customerSegment: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  isActive: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+  deletedAt: string | null;
+  relatedProducts: { buy: string[]; get: string[] };
+  relatedCollections: { buy: string[]; get: string[] };
+  usageCount: number;
+  totalDiscountAmount: number;
+}
+
+// Get params from URL
+const searchParams = Astro.url.searchParams;
+const page = parseInt(searchParams.get("page") || "1");
+const search = searchParams.get("search") || "";
+const type = searchParams.get("type") || undefined;
+const showTrashed = searchParams.get("trashed") === "true";
+const sort = (searchParams.get("sort") || "updatedAt") as
+  | "code"
+  | "type"
+  | "value"
+  | "startDate"
+  | "endDate"
+  | "createdAt"
+  | "updatedAt";
+const order = (searchParams.get("order") || "desc") as "asc" | "desc";
+const limit = parseInt(searchParams.get("limit") || "10");
+
+// Fetch discounts
+const { discounts: rawDiscounts, pagination } = await getDiscounts({
+  page,
+  search,
+  type,
+  showTrashed,
+  sort,
+  order,
+  limit,
+});
+
+// Explicitly map and type the discounts to match DiscountItem structure
+const discounts: DiscountItem[] = rawDiscounts.map((d: any) => ({
+  ...d,
+  // Ensure date strings are passed (already formatted in getDiscounts)
+  startDate: d.startDate,
+  endDate: d.endDate,
+  createdAt: d.createdAt,
+  updatedAt: d.updatedAt,
+  deletedAt: d.deletedAt,
+  // Ensure relatedProducts/Collections match the expected structure
+  // Provide default empty structure if null/undefined
+  relatedProducts: d.relatedProducts || { buy: [], get: [] },
+  relatedCollections: d.relatedCollections || { buy: [], get: [] },
+  // Ensure usage statistics are included
+  usageCount: d.usageCount || 0,
+  totalDiscountAmount: d.totalDiscountAmount || 0,
+}));
+---
+
+<AdminLayout title="Discounts">
+  <DiscountList
+    client:load
+    discounts={discounts}
+    pagination={pagination}
+    initialSearchQuery={search}
+    initialSort={{ field: sort, order }}
+    showTrashed={showTrashed}
+  />
+</AdminLayout>

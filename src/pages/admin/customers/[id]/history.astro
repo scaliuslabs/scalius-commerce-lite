@@ -1,0 +1,182 @@
+---
+// src/pages/admin/customers/[id]/history.astro
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { db } from "../../../../db";
+import {
+  customers,
+  customerHistory,
+  orders,
+  deliveryLocations,
+} from "../../../../db/schema";
+import { eq, sql } from "drizzle-orm";
+import { CustomerHistoryView } from "../../../../components/admin/CustomerHistoryView";
+
+// Get the customer ID from the URL
+const { id } = Astro.params;
+
+// Batch fetch all data in one round-trip
+const [customerResults, history, customerOrders] = await db.batch([
+  // Get customer details
+  db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      address: customers.address,
+      city: customers.city,
+      zone: customers.zone,
+      area: customers.area,
+      totalOrders: customers.totalOrders,
+      totalSpent: customers.totalSpent,
+      lastOrderAt: sql<number>`CAST(${customers.lastOrderAt} AS INTEGER)`,
+      createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
+      updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
+    })
+    .from(customers)
+    .where(eq(customers.id, id as string)),
+
+  // Get customer history
+  db
+    .select({
+      id: customerHistory.id,
+      name: customerHistory.name,
+      email: customerHistory.email,
+      phone: customerHistory.phone,
+      address: customerHistory.address,
+      city: customerHistory.city,
+      zone: customerHistory.zone,
+      area: customerHistory.area,
+      cityName: customerHistory.cityName,
+      zoneName: customerHistory.zoneName,
+      areaName: customerHistory.areaName,
+      changeType: customerHistory.changeType,
+      createdAt: sql<number>`CAST(${customerHistory.createdAt} AS INTEGER)`,
+    })
+    .from(customerHistory)
+    .where(eq(customerHistory.customerId, id as string))
+    .orderBy(sql`${customerHistory.createdAt} DESC`),
+
+  // Get customer orders
+  db
+    .select({
+      id: orders.id,
+      totalAmount: orders.totalAmount,
+      status: orders.status,
+      createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
+    })
+    .from(orders)
+    .where(eq(orders.customerId, id as string))
+    .orderBy(sql`${orders.createdAt} DESC`),
+]);
+
+const customer = customerResults[0];
+
+if (!customer) {
+  return Astro.redirect("/admin/customers");
+}
+
+// Format dates
+const formattedCustomer = {
+  ...customer,
+  lastOrderAt: customer.lastOrderAt
+    ? new Date(customer.lastOrderAt * 1000)
+    : null,
+  createdAt: new Date(customer.createdAt * 1000),
+  updatedAt: new Date(customer.updatedAt * 1000),
+};
+
+const formattedHistory = history.map((record) => ({
+  ...record,
+  createdAt: new Date(record.createdAt * 1000),
+}));
+
+const formattedOrders = customerOrders.map((order) => ({
+  ...order,
+  createdAt: new Date(order.createdAt * 1000),
+}));
+
+// Collect all unique location IDs
+const locationIds = new Set<string>();
+if (customer.city) locationIds.add(customer.city);
+if (customer.zone) locationIds.add(customer.zone);
+if (customer.area) locationIds.add(customer.area);
+
+// Add locations from history records
+for (const record of history) {
+  if (record.city) locationIds.add(record.city);
+  if (record.zone) locationIds.add(record.zone);
+  if (record.area) locationIds.add(record.area);
+}
+
+// Fetch all needed locations at once
+const locationArray = Array.from(locationIds).filter(Boolean) as string[];
+const locationMap = new Map<string, string>();
+
+if (locationArray.length > 0) {
+  console.log("Location IDs to lookup:", locationArray);
+
+  // Create a more robust SQL query with parameters for each ID
+  const locations = await db
+    .select()
+    .from(deliveryLocations)
+    .where(
+      sql`${deliveryLocations.id} IN (${sql.join(
+        locationArray.map((id) => sql`${id}`),
+        sql`, `
+      )}) AND ${deliveryLocations.deletedAt} IS NULL`
+    );
+
+  console.log(
+    "Locations found:",
+    locations.map((l) => ({ id: l.id, name: l.name }))
+  );
+
+  // Create a map of ID to location name
+  locations.forEach((location) => {
+    locationMap.set(location.id, location.name);
+  });
+}
+
+// Add location names to customer object
+const enhancedCustomer = {
+  ...formattedCustomer,
+  cityName: customer.city
+    ? locationMap.get(customer.city) || customer.city
+    : "",
+  zoneName: customer.zone
+    ? locationMap.get(customer.zone) || customer.zone
+    : "",
+  areaName: customer.area
+    ? locationMap.get(customer.area) || customer.area
+    : null,
+} as any; // Use 'any' to bypass type checking
+
+const historyWithLocationNames = formattedHistory.map((record) => {
+  const cityName = record.city
+    ? locationMap.get(record.city) || record.city
+    : "";
+  const zoneName = record.zone
+    ? locationMap.get(record.zone) || record.zone
+    : "";
+  const areaName = record.area
+    ? locationMap.get(record.area) || record.area
+    : null;
+
+  return {
+    ...record,
+    cityName,
+    zoneName,
+    areaName,
+  };
+}) as any[]; // Use 'any[]' to bypass type checking
+---
+
+<AdminLayout title={`Customer History - ${customer.name}`}>
+  <CustomerHistoryView
+    client:load
+    customer={enhancedCustomer}
+    history={historyWithLocationNames}
+    orders={formattedOrders}
+  />
+</AdminLayout>

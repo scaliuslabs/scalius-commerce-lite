@@ -1,0 +1,64 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { CustomerForm } from "../../../../components/admin/CustomerForm";
+import { db } from "../../../../db";
+import { customers } from "../../../../db/schema";
+import { eq, sql } from "drizzle-orm";
+
+// Get customer ID from URL
+const { id } = Astro.params;
+
+// Get customer details with proper timestamp handling
+const [customer] = await db
+  .select({
+    id: customers.id,
+    name: customers.name,
+    email: customers.email,
+    phone: customers.phone,
+    address: customers.address,
+    city: customers.city,
+    zone: customers.zone,
+    area: customers.area,
+    cityName: customers.cityName,
+    zoneName: customers.zoneName,
+    areaName: customers.areaName,
+    createdAt: sql<string>`datetime(${customers.createdAt}, 'unixepoch', 'localtime')`,
+    updatedAt: sql<string>`datetime(${customers.updatedAt}, 'unixepoch', 'localtime')`,
+  })
+  .from(customers)
+  .where(eq(customers.id, id as string));
+
+if (!customer) {
+  return Astro.redirect("/admin/customers");
+}
+
+// Log customer details for debugging
+console.log("Customer location details:", {
+  city: customer.city,
+  zone: customer.zone,
+  area: customer.area,
+  cityName: customer.cityName,
+  zoneName: customer.zoneName,
+  areaName: customer.areaName,
+});
+
+// Prepare default values
+const defaultValues = {
+  ...customer,
+  // Ensure the optional fields are treated as strings when they're null
+  cityName: customer.cityName || "",
+  zoneName: customer.zoneName || "",
+  areaName: customer.areaName || "",
+};
+---
+
+<AdminLayout title={`Edit ${customer.name}`}>
+  <div class="container space-y-8 py-6">
+    <div class="mb-6">
+      <h1 class="text-3xl font-bold">Edit Customer</h1>
+      <p class="text-muted-foreground">Make changes to customer information.</p>
+    </div>
+
+    <CustomerForm client:load defaultValues={defaultValues} isEdit={true} />
+  </div>
+</AdminLayout>

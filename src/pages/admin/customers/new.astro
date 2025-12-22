@@ -1,0 +1,26 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { CustomerForm } from "../../../components/admin/CustomerForm";
+
+// Default values for the form
+const defaultValues = {
+  name: "",
+  email: null,
+  phone: "",
+  address: null,
+  city: null,
+  zone: null,
+  area: null,
+};
+---
+
+<AdminLayout title="New Customer">
+  <div class="container py-6">
+    <div class="mb-6">
+      <h1 class="text-3xl font-bold">Create New Customer</h1>
+      <p class="text-muted-foreground">Add a new customer to your store.</p>
+    </div>
+
+    <CustomerForm client:load defaultValues={defaultValues} isEdit={false} />
+  </div>
+</AdminLayout>

@@ -1,0 +1,79 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { WidgetsList } from "@/components/admin/widget-list";
+import { Button } from "@/components/ui/button";
+import { LayoutDashboard } from "lucide-react";
+import { db } from "@/db";
+import { widgets, collections } from "@/db/schema";
+import { eq, isNotNull, asc, and, like, desc } from "drizzle-orm";
+import { unixToDate } from "@/lib/utils";
+
+const searchParams = Astro.url.searchParams;
+const search = searchParams.get("search") || "";
+
+const queryConditions = [isNotNull(widgets.deletedAt)];
+
+if (search) {
+  queryConditions.push(like(widgets.name, `%${search}%`));
+}
+
+const dbWidgets = await db
+  .select()
+  .from(widgets)
+  .where(and(...queryConditions))
+  .orderBy(desc(widgets.deletedAt));
+
+const allWidgets = dbWidgets.map((widget) => {
+  const createdAtDate = unixToDate(widget.createdAt);
+  const updatedAtDate = unixToDate(widget.updatedAt);
+  const deletedAtDate = unixToDate(widget.deletedAt);
+
+  return {
+    ...widget,
+    createdAt: createdAtDate?.toISOString() ?? null,
+    updatedAt: updatedAtDate?.toISOString() ?? null,
+    deletedAt: deletedAtDate?.toISOString() ?? null,
+  };
+});
+
+const allCollections = await db
+  .select({
+    id: collections.id,
+    name: collections.name,
+    type: collections.type,
+    sortOrder: collections.sortOrder,
+  })
+  .from(collections)
+  .where(and(eq(collections.isActive, true)))
+  .orderBy(asc(collections.sortOrder));
+
+// Stats are only for non-deleted widgets
+const statsResult = { total: 0, active: 0, inactive: 0 };
+---
+
+<AdminLayout title="Widget Trash">
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Widget Trash</h1>
+        <p class="text-muted-foreground">
+          View, restore, or permanently delete trashed widgets.
+        </p>
+      </div>
+      <a href="/admin/widgets">
+        <Button variant="outline" size="sm">
+          <LayoutDashboard client:visible className="mr-2 h-4 w-4" />
+          View Active
+        </Button>
+      </a>
+    </div>
+    <WidgetsList
+      client:load
+      showTrashed={true}
+      initialWidgets={allWidgets}
+      initialCollections={allCollections}
+      initialStats={statsResult}
+      initialSearch={search}
+    />
+  </div>
+</AdminLayout>

@@ -1,0 +1,41 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { PageForm } from "../../../../components/admin/PageForm";
+import { db } from "../../../../db";
+import { pages } from "../../../../db/schema";
+import { eq } from "drizzle-orm";
+import { unixToDate } from "@/lib/utils";
+
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect("/admin/pages");
+}
+
+const page = await db.select().from(pages).where(eq(pages.id, id)).get();
+
+if (!page) {
+  return Astro.redirect("/admin/pages");
+}
+
+// Format dates for client-side rendering
+const formattedPage = {
+  ...page,
+  // Convert Unix timestamps to JavaScript Date objects using the utility function
+  createdAt: unixToDate(page.createdAt) || new Date(),
+  updatedAt: unixToDate(page.updatedAt) || new Date(),
+  deletedAt: unixToDate(page.deletedAt),
+  publishedAt: unixToDate(page.publishedAt),
+};
+---
+
+<AdminLayout title={`Edit Page: ${page.title}`}>
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-3xl font-bold tracking-tight">Edit Page</h1>
+    </div>
+    <div class="grid gap-6">
+      <PageForm client:load defaultValues={formattedPage} isEdit={true} />
+    </div>
+  </div>
+</AdminLayout>

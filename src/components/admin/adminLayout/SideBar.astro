@@ -1,0 +1,865 @@
+---
+// src/components/admin/SideBar.astro
+import { Button } from "@/components/ui/button.tsx";
+import { ChevronDown, Store, ExternalLink, X } from "lucide-react";
+import { db } from "@/db";
+import { siteSettings } from "@/db/schema";
+import favicon from "@/assets/favicon.png";
+import logoDark from "@/assets/logo-dark.png";
+import logoLight from "@/assets/logo-light.png";
+
+export interface NavSubItem {
+  name: string;
+  href: string;
+  icon?: any;
+}
+export interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+  subItems?: NavSubItem[];
+}
+export interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+interface Props {
+  navSections: NavSection[];
+  currentPath: string;
+}
+
+const { navSections, currentPath } = Astro.props;
+const path = currentPath;
+
+// Get storefront URL from database with fallback
+let storefrontUrl = "/";
+try {
+  const [storefrontSettings] = await db
+    .select({ storefrontUrl: siteSettings.storefrontUrl })
+    .from(siteSettings)
+    .limit(1);
+  storefrontUrl = storefrontSettings?.storefrontUrl || "/";
+} catch (error) {
+  console.warn("Could not fetch storefront URL, using default:", error);
+}
+---
+
+<!-- Inline style to prevent FOUC -->
+<style is:inline>
+  .sidebar-desktop {
+    width: 240px;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar-collapsed {
+    width: 60px !important;
+  }
+
+  .sidebar-collapsed .sidebar-brand,
+  .sidebar-collapsed .sidebar-nav-text,
+  .sidebar-collapsed .sidebar-section-label,
+  .sidebar-collapsed .sidebar-subnav-text,
+  .sidebar-collapsed .sidebar-store-text,
+  .sidebar-collapsed .sidebar-submenu,
+  .sidebar-collapsed .sidebar-chevron,
+  .sidebar-collapsed .sidebar-external-icon {
+    display: none !important;
+  }
+
+  .sidebar-collapsed .sidebar-nav-item {
+    justify-content: center !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .sidebar-collapsed .sidebar-store-link {
+    justify-content: center !important;
+  }
+</style>
+
+<!-- Pre-load collapsed state to prevent FOUC -->
+<script is:inline>
+  (function () {
+    const isCollapsed = localStorage.getItem("sidebar-collapsed") === "true";
+    if (isCollapsed) {
+      document.documentElement.style.setProperty("--sidebar-width", "60px");
+      document.body.classList.add("sidebar-pre-collapsed");
+    } else {
+      document.documentElement.style.setProperty("--sidebar-width", "240px");
+    }
+  })();
+</script>
+
+<aside
+  class="hidden md:flex md:flex-col bg-sidebar border-r border-sidebar-border sticky top-0 h-screen transition-all duration-300 ease-in-out z-20 sidebar-desktop"
+  style="width: var(--sidebar-width, 240px);"
+  id="desktop-sidebar"
+>
+  <div
+    class="flex items-center h-14 px-6 border-b border-sidebar-border bg-sidebar"
+  >
+    <a href="/admin" class="flex items-center gap-3 group">
+      <div
+        class="w-8 h-8 bg-sidebar-accent rounded-lg flex items-center justify-center sidebar-logo sidebar-collapsed-only transition-transform group-hover:scale-105"
+      >
+        <img
+          src={favicon.src}
+          alt="Site icon"
+          class="w-7 h-7 left-1/2 -translate-x-1/2"
+        />
+      </div>
+      <div class="sidebar-brand">
+        <img
+          src={logoLight.src}
+          alt="Scalius"
+          class="h-8 w-auto block dark:hidden"
+        />
+        <img
+          src={logoDark.src}
+          alt="Scalius"
+          class="h-8 w-auto hidden dark:block"
+        />
+      </div>
+    </a>
+  </div>
+
+  <nav
+    class="flex-1 px-3 py-4 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground sidebar-nav"
+    id="sidebar-nav"
+  >
+    <div class="space-y-6 pb-4">
+      {
+        navSections.map((section: NavSection) => (
+          <div class="sidebar-section">
+            <div class="px-3 mb-3 sidebar-section-label">
+              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {section.label}
+              </span>
+            </div>
+            <div class="space-y-1">
+              {section.items.map((item: NavItem) => (
+                <div class="nav-item-container">
+                  <a
+                    href={
+                      item.subItems && item.subItems.length > 0
+                        ? "javascript:void(0)"
+                        : item.href
+                    }
+                    data-toggle-submenu={
+                      Array.isArray(item.subItems) && item.subItems.length > 0
+                        ? "true"
+                        : undefined
+                    }
+                    data-href={item.href}
+                    data-submenu-key={item.name
+                      .toLowerCase()
+                      .replace(/\s+/g, "-")}
+                    data-is-settings={
+                      item.name.toLowerCase() === "settings"
+                        ? "true"
+                        : undefined
+                    }
+                    class:list={[
+                      "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02]",
+                      path === item.href ||
+                      (item.subItems &&
+                        item.subItems.some((sub) => path === sub.href))
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm border border-sidebar-border"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                    ]}
+                  >
+                    <item.icon
+                      className={`w-5 h-5 shrink-0 sidebar-nav-icon transition-all duration-200 ${
+                        path === item.href ||
+                        (item.subItems &&
+                          item.subItems.some((sub) => path === sub.href))
+                          ? "text-sidebar-accent-foreground"
+                          : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
+                      }`}
+                      strokeWidth={2}
+                    />
+                    <span class="sidebar-nav-text flex-1">{item.name}</span>
+                    {Array.isArray(item.subItems) &&
+                      item.subItems.length > 0 && (
+                        <ChevronDown
+                          className={`submenu-chevron w-4 h-4 transition-all duration-300 sidebar-chevron ${
+                            path.startsWith(item.href) && path !== item.href
+                              ? "text-muted-foreground rotate-180"
+                              : path.startsWith(item.href)
+                                ? "text-muted-foreground"
+                                : "text-muted-foreground/70"
+                          }`}
+                        />
+                      )}
+                  </a>
+
+                  {Array.isArray(item.subItems) && item.subItems.length > 0 && (
+                    <div class="submenu-container ml-6 mt-1 space-y-1 sidebar-submenu overflow-hidden transition-all duration-300 ease-in-out">
+                      {item.subItems.map((subItem: NavSubItem) => (
+                        <a
+                          href={subItem.href}
+                          class:list={[
+                            "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 sidebar-subnav-item hover:scale-[1.01] hover:translate-x-1",
+                            path === subItem.href
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm"
+                              : "text-muted-foreground hover:bg-sidebar-accent/30 hover:text-sidebar-accent-foreground",
+                          ]}
+                        >
+                          {subItem.icon && (
+                            <subItem.icon
+                              className={`w-4 h-4 shrink-0 sidebar-subnav-icon transition-all duration-200 ${
+                                path === subItem.href
+                                  ? "text-sidebar-accent-foreground"
+                                  : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
+                              }`}
+                              strokeWidth={2}
+                            />
+                          )}
+                          <span class="sidebar-subnav-text">
+                            {subItem.name}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </nav>
+
+  <div class="px-3 py-4 border-t border-sidebar-border bg-sidebar mt-auto">
+    <Button
+      asChild
+      variant="ghost"
+      size="sm"
+      className="w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent h-9 px-3 rounded-lg transition-all duration-200 group hover:scale-[1.02]"
+    >
+      <a
+        href={storefrontUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="sidebar-store-link"
+      >
+        <div class="flex items-center gap-3">
+          <Store
+            className="w-4 h-4 text-muted-foreground group-hover:text-sidebar-accent-foreground sidebar-store-icon transition-all duration-200"
+          />
+          <span class="text-sm sidebar-store-text">View Store</span>
+          <ExternalLink
+            className="w-3.5 h-3.5 text-muted-foreground group-hover:text-sidebar-accent-foreground transition-all duration-200 sidebar-external-icon"
+          />
+        </div>
+      </a>
+    </Button>
+  </div>
+</aside>
+
+<div
+  class="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 opacity-0 pointer-events-none backdrop-blur-sm"
+  id="sidebar-overlay"
+>
+</div>
+
+<aside
+  class="fixed inset-y-0 left-0 w-[280px] bg-sidebar z-50 md:hidden transform -translate-x-full transition-all duration-300 shadow-2xl border-r border-sidebar-border"
+  id="mobile-sidebar"
+>
+  <div
+    class="flex items-center justify-between h-14 px-6 border-b border-sidebar-border"
+  >
+    <a href="/admin" class="flex items-center gap-3">
+      <img
+        src={logoLight.src}
+        alt="Scalius"
+        class="h-6 w-auto block dark:hidden"
+      />
+      <img
+        src={logoDark.src}
+        alt="Scalius"
+        class="h-6 w-auto hidden dark:block"
+      />
+    </a>
+    <Button
+      variant="ghost"
+      size="icon"
+      id="close-sidebar"
+      aria-label="Close sidebar"
+      className="h-8 w-8 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg"
+    >
+      <X className="w-4 h-4" />
+    </Button>
+  </div>
+
+  <nav
+    class="flex-1 px-3 py-4 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground"
+  >
+    <div class="space-y-6 pb-4">
+      {
+        navSections.map((section: NavSection) => (
+          <div>
+            <div class="px-3 mb-3">
+              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {section.label}
+              </span>
+            </div>
+            <div class="space-y-1">
+              {section.items.map((item: NavItem) => (
+                <div class="nav-item-container">
+                  <a
+                    href={
+                      item.subItems && item.subItems.length > 0
+                        ? "javascript:void(0)"
+                        : item.href
+                    }
+                    data-toggle-submenu={
+                      Array.isArray(item.subItems) && item.subItems.length > 0
+                        ? "true"
+                        : undefined
+                    }
+                    data-href={item.href}
+                    data-submenu-key={item.name
+                      .toLowerCase()
+                      .replace(/\s+/g, "-")}
+                    data-is-settings={
+                      item.name.toLowerCase() === "settings"
+                        ? "true"
+                        : undefined
+                    }
+                    class:list={[
+                      "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative",
+                      path === item.href ||
+                      (item.subItems &&
+                        item.subItems.some((sub) => path === sub.href))
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm border border-sidebar-border"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                    ]}
+                  >
+                    <item.icon
+                      className={`w-5 h-5 shrink-0 ${
+                        path === item.href ||
+                        (item.subItems &&
+                          item.subItems.some((sub) => path === sub.href))
+                          ? "text-sidebar-accent-foreground"
+                          : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
+                      }`}
+                      strokeWidth={2}
+                    />
+                    <span class="flex-1">{item.name}</span>
+                    {Array.isArray(item.subItems) &&
+                      item.subItems.length > 0 && (
+                        <ChevronDown
+                          className={`submenu-chevron w-4 h-4 transition-all duration-300 ${
+                            path.startsWith(item.href) && path !== item.href
+                              ? "text-muted-foreground rotate-180"
+                              : path.startsWith(item.href)
+                                ? "text-muted-foreground"
+                                : "text-muted-foreground/70"
+                          }`}
+                        />
+                      )}
+                  </a>
+                  {Array.isArray(item.subItems) && item.subItems.length > 0 && (
+                    <div class="submenu-container ml-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out">
+                      {item.subItems.map((subItem: NavSubItem) => (
+                        <a
+                          href={subItem.href}
+                          class:list={[
+                            "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
+                            path === subItem.href
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                              : "text-muted-foreground hover:bg-sidebar-accent/30 hover:text-sidebar-accent-foreground",
+                          ]}
+                        >
+                          {subItem.icon && (
+                            <subItem.icon
+                              className={`w-4 h-4 shrink-0 ${
+                                path === subItem.href
+                                  ? "text-sidebar-accent-foreground"
+                                  : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
+                              }`}
+                              strokeWidth={2}
+                            />
+                          )}
+                          <span>{subItem.name}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </nav>
+
+  <div class="px-3 py-4 border-t border-sidebar-border mt-auto">
+    <Button
+      asChild
+      variant="ghost"
+      size="sm"
+      className="w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent h-9 px-3 rounded-lg transition-colors group"
+    >
+      <a href={storefrontUrl} target="_blank" rel="noopener noreferrer">
+        <div class="flex items-center gap-3">
+          <Store
+            className="w-4 h-4 text-muted-foreground group-hover:text-sidebar-accent-foreground"
+          />
+          <span class="text-sm">View Store</span>
+        </div>
+        <ExternalLink
+          className="w-3.5 h-3.5 text-muted-foreground group-hover:text-sidebar-accent-foreground transition-colors"
+        />
+      </a>
+    </Button>
+  </div>
+</aside>
+
+<script is:inline define:vars={{ currentPath }}>
+  /**
+   * Admin Sidebar Component
+   *
+   * Features:
+   * - Responsive design with desktop/mobile variants
+   * - Collapsible sidebar with persistent state
+   * - FOUC (Flash of Unstyled Content) prevention
+   * - Expandable submenu navigation with state persistence
+   * - Smart scroll behavior for Settings dropdown
+   * - Smooth animations and transitions
+   *
+   * Key behaviors:
+   * - Settings dropdown auto-scrolls to ensure all items are visible above "View Store"
+   * - Sidebar collapse state persists across page reloads using localStorage
+   * - Submenu states are remembered per navigation item
+   * - Scroll position is preserved when navigating between pages
+   *
+   * Performance optimizations:
+   * - Uses requestAnimationFrame for smooth initialization
+   * - Debounced scroll position saving
+   * - CSS custom properties for efficient transitions
+   * - Graceful handling of localStorage errors
+   */
+
+  // Element references
+  const mobileSidebarEl = document.getElementById("mobile-sidebar");
+  const sidebarOverlayEl = document.getElementById("sidebar-overlay");
+  const closeSidebarBtn = document.getElementById("close-sidebar");
+  const desktopSidebarEl = document.getElementById("desktop-sidebar");
+  const sidebarNavEl = document.getElementById("sidebar-nav");
+
+  let isCollapsed = localStorage.getItem("sidebar-collapsed") === "true";
+
+  // Enhanced state management with better FOUC prevention
+  const STORAGE_KEYS = {
+    collapsed: "sidebar-collapsed",
+    submenus: "sidebar-submenu-states",
+    scrollPosition: "sidebar-scroll-position",
+  };
+
+  // Apply initial collapsed state immediately to prevent FOUC
+  function applyInitialState() {
+    if (!desktopSidebarEl) return;
+
+    // Remove the pre-collapsed class if it exists
+    document.body.classList.remove("sidebar-pre-collapsed");
+
+    if (isCollapsed) {
+      desktopSidebarEl.style.width = "60px";
+      desktopSidebarEl.classList.add("sidebar-collapsed");
+    } else {
+      desktopSidebarEl.style.width = "240px";
+      desktopSidebarEl.classList.remove("sidebar-collapsed");
+    }
+
+    // Update CSS custom property for smooth transitions
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      isCollapsed ? "60px" : "240px"
+    );
+  }
+
+  // Save/restore submenu states
+  function saveSubmenuStates() {
+    const states = {};
+    document.querySelectorAll("[data-submenu-key]").forEach((item) => {
+      const key = item.getAttribute("data-submenu-key");
+      const submenu = item.parentElement?.querySelector(".submenu-container");
+      if (submenu && key) {
+        states[key] =
+          !submenu.classList.contains("hidden") &&
+          submenu.style.maxHeight !== "0px";
+      }
+    });
+    localStorage.setItem(STORAGE_KEYS.submenus, JSON.stringify(states));
+  }
+
+  function restoreSubmenuStates() {
+    try {
+      const states = JSON.parse(
+        localStorage.getItem(STORAGE_KEYS.submenus) || "{}"
+      );
+      Object.entries(states).forEach(([key, isOpen]) => {
+        const item = document.querySelector(`[data-submenu-key="${key}"]`);
+        if (item) {
+          const submenu =
+            item.parentElement?.querySelector(".submenu-container");
+          const chevron = item.querySelector(".submenu-chevron");
+          if (submenu) {
+            if (isOpen) {
+              submenu.classList.remove("hidden");
+              submenu.style.maxHeight = submenu.scrollHeight + "px";
+              if (chevron) chevron.classList.add("rotate-180");
+            } else {
+              submenu.classList.add("hidden");
+              submenu.style.maxHeight = "0px";
+              if (chevron) chevron.classList.remove("rotate-180");
+            }
+          }
+        }
+      });
+    } catch (e) {
+      // Silently handle localStorage errors (e.g., in private browsing mode)
+    }
+  }
+
+  // Save/restore scroll position with smart scrolling for settings
+  function saveScrollPosition() {
+    if (sidebarNavEl) {
+      localStorage.setItem(
+        STORAGE_KEYS.scrollPosition,
+        sidebarNavEl.scrollTop.toString()
+      );
+    }
+  }
+
+  function restoreScrollPosition() {
+    if (sidebarNavEl) {
+      const scrollPos = localStorage.getItem(STORAGE_KEYS.scrollPosition);
+      if (scrollPos) {
+        sidebarNavEl.scrollTop = parseInt(scrollPos, 10);
+      }
+    }
+  }
+
+  function updateSidebarState() {
+    if (!desktopSidebarEl) return;
+
+    const collapseBtn = document.getElementById("sidebar-collapse");
+    if (!collapseBtn) return;
+
+    const expandedIcon = collapseBtn.querySelector(".sidebar-icon-expanded");
+    const collapsedIcon = collapseBtn.querySelector(".sidebar-icon-collapsed");
+
+    if (isCollapsed) {
+      desktopSidebarEl.style.width = "60px";
+      desktopSidebarEl.classList.add("sidebar-collapsed");
+      expandedIcon?.classList.add("hidden");
+      collapsedIcon?.classList.remove("hidden");
+    } else {
+      desktopSidebarEl.style.width = "240px";
+      desktopSidebarEl.classList.remove("sidebar-collapsed");
+      expandedIcon?.classList.remove("hidden");
+      collapsedIcon?.classList.add("hidden");
+    }
+
+    // Update CSS custom property for smooth transitions
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      isCollapsed ? "60px" : "240px"
+    );
+
+    localStorage.setItem(STORAGE_KEYS.collapsed, isCollapsed.toString());
+  }
+
+  function toggleSidebarCollapse() {
+    isCollapsed = !isCollapsed;
+    updateSidebarState();
+  }
+
+  function toggleMobileSidebar() {
+    mobileSidebarEl?.classList.toggle("-translate-x-full");
+    sidebarOverlayEl?.classList.toggle("opacity-0");
+    sidebarOverlayEl?.classList.toggle("pointer-events-none");
+  }
+
+  // Enhanced submenu toggle with smart scrolling for settings
+  function toggleSubmenu(submenu, chevron, save = true) {
+    const isCurrentlyHidden =
+      submenu.classList.contains("hidden") || submenu.style.maxHeight === "0px";
+
+    if (isCurrentlyHidden) {
+      // Note: Scroll handling is done in the click handler to ensure proper timing
+      submenu.classList.remove("hidden");
+      submenu.style.maxHeight = submenu.scrollHeight + "px";
+      if (chevron) chevron.classList.add("rotate-180");
+    } else {
+      submenu.style.maxHeight = "0px";
+      if (chevron) chevron.classList.remove("rotate-180");
+      setTimeout(() => {
+        if (submenu.style.maxHeight === "0px") {
+          submenu.classList.add("hidden");
+        }
+      }, 300);
+    }
+
+    if (save) {
+      saveSubmenuStates();
+    }
+  }
+
+  function initializeSubmenuHandlers() {
+    document
+      .querySelectorAll('[data-toggle-submenu="true"]')
+      .forEach((toggleButton) => {
+        const submenuContainer =
+          toggleButton.parentElement?.querySelector(".submenu-container");
+        const chevron = toggleButton.querySelector(".submenu-chevron");
+        const itemHref = toggleButton.getAttribute("data-href");
+
+        if (!submenuContainer || !itemHref) return;
+
+        // Check if should be open initially (current path or restored state)
+        let openInitially =
+          currentPath.startsWith(itemHref) && currentPath !== itemHref;
+        if (!openInitially) {
+          submenuContainer.querySelectorAll("a").forEach((subLink) => {
+            if (subLink.getAttribute("href") === currentPath) {
+              openInitially = true;
+            }
+          });
+        }
+
+        // Set initial state without saving to localStorage
+        if (openInitially) {
+          submenuContainer.classList.remove("hidden");
+          submenuContainer.style.maxHeight =
+            submenuContainer.scrollHeight + "px";
+          if (chevron) chevron.classList.add("rotate-180");
+        } else {
+          submenuContainer.classList.add("hidden");
+          submenuContainer.style.maxHeight = "0px";
+          if (chevron) chevron.classList.remove("rotate-180");
+        }
+
+        // Add click handler
+        toggleButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          const isSettings =
+            toggleButton.getAttribute("data-is-settings") === "true";
+
+          // Auto-scroll for Settings dropdown to ensure all submenu items are visible
+          if (isSettings && sidebarNavEl) {
+            // Wait for submenu to fully expand before calculating scroll position
+            setTimeout(() => {
+              const maxScroll =
+                sidebarNavEl.scrollHeight - sidebarNavEl.clientHeight;
+
+              if (maxScroll > 10) {
+                // Scroll to maximum position to ensure Cache Settings is visible above View Store
+                sidebarNavEl.scrollTo({
+                  top: maxScroll,
+                  behavior: "smooth",
+                });
+
+                // Double-check after submenu animation completes
+                setTimeout(() => {
+                  const finalMaxScroll =
+                    sidebarNavEl.scrollHeight - sidebarNavEl.clientHeight;
+                  if (finalMaxScroll > maxScroll) {
+                    sidebarNavEl.scrollTo({
+                      top: finalMaxScroll,
+                      behavior: "smooth",
+                    });
+                  }
+                }, 100);
+              }
+            }, 300);
+          }
+
+          // If collapsed, expand the sidebar and then show the submenu
+          if (isCollapsed) {
+            toggleSidebarCollapse();
+            setTimeout(() => {
+              toggleSubmenu(submenuContainer, chevron);
+            }, 300);
+            return;
+          }
+
+          toggleSubmenu(submenuContainer, chevron);
+        });
+      });
+  }
+
+  function initializeSidebar() {
+    // Apply initial state immediately to prevent FOUC
+    applyInitialState();
+
+    // Restore submenu states
+    restoreSubmenuStates();
+
+    // Initialize submenu handlers
+    initializeSubmenuHandlers();
+
+    // Restore scroll position after a short delay to ensure content is rendered
+    setTimeout(() => {
+      restoreScrollPosition();
+    }, 100);
+
+    // Save scroll position on scroll with debouncing
+    if (sidebarNavEl) {
+      let scrollTimeout;
+      sidebarNavEl.addEventListener("scroll", () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(saveScrollPosition, 150);
+      });
+    }
+  }
+
+  // Event listeners
+  window.addEventListener("toggleMobileSidebar", toggleMobileSidebar);
+  window.addEventListener("toggleSidebarCollapse", toggleSidebarCollapse);
+  sidebarOverlayEl?.addEventListener("click", toggleMobileSidebar);
+  closeSidebarBtn?.addEventListener("click", toggleMobileSidebar);
+
+  // Initialize immediately if DOM is ready, otherwise wait for it
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeSidebar);
+  } else {
+    // Use requestAnimationFrame to ensure DOM is fully ready and prevent FOUC
+    requestAnimationFrame(initializeSidebar);
+  }
+
+  // Save states before page unload
+  window.addEventListener("beforeunload", () => {
+    saveSubmenuStates();
+    saveScrollPosition();
+  });
+</script>
+
+<style>
+  .sidebar-desktop {
+    transition:
+      width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.3s ease;
+    will-change: width;
+  }
+
+  .sidebar-collapsed .sidebar-nav-item {
+    justify-content: center;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .sidebar-collapsed .sidebar-store-link {
+    justify-content: center;
+  }
+
+  .submenu-container {
+    max-height: 0;
+    transition:
+      max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.25s ease,
+      margin 0.3s ease;
+    opacity: 0;
+    overflow: hidden;
+  }
+
+  .submenu-container:not(.hidden) {
+    max-height: 600px;
+    opacity: 1;
+  }
+
+  .sidebar-nav-item {
+    position: relative;
+    transform-origin: center;
+  }
+
+  /* Remove old hover transform to prevent conflicts with global.css */
+  .sidebar-nav-item:hover .sidebar-nav-icon {
+    /* Removed - handled in global.css */
+  }
+
+  .sidebar-subnav-item {
+    position: relative;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar-subnav-item:hover {
+    transform: translateX(3px);
+  }
+
+  /* Enhanced scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 4px 0;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: oklch(var(--muted-foreground) / 0.25);
+    border-radius: 3px;
+    transition: background 0.2s ease;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--muted-foreground) / 0.45);
+  }
+
+  .nav-item-container {
+    position: relative;
+  }
+
+  .nav-item-container:hover {
+    z-index: 1;
+  }
+
+  /* Smooth chevron rotation */
+  .submenu-chevron {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Enhanced FOUC prevention */
+  .sidebar-pre-collapsed .sidebar-desktop {
+    width: 60px !important;
+  }
+
+  .sidebar-pre-collapsed .sidebar-brand,
+  .sidebar-pre-collapsed .sidebar-nav-text,
+  .sidebar-pre-collapsed .sidebar-section-label,
+  .sidebar-pre-collapsed .sidebar-subnav-text,
+  .sidebar-pre-collapsed .sidebar-store-text,
+  .sidebar-pre-collapsed .sidebar-submenu,
+  .sidebar-pre-collapsed .sidebar-chevron,
+  .sidebar-pre-collapsed .sidebar-external-icon {
+    display: none !important;
+  }
+
+  .sidebar-pre-collapsed .sidebar-nav-item {
+    justify-content: center !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .sidebar-pre-collapsed .sidebar-store-link {
+    justify-content: center !important;
+  }
+
+  /* Only show icon when collapsed */
+  .sidebar-collapsed-only {
+    display: none;
+  }
+  .sidebar-collapsed .sidebar-collapsed-only {
+    display: flex !important;
+  }
+</style>

@@ -1,0 +1,69 @@
+---
+// src/pages/admin/products/index.astro
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { ProductList } from "../../../components/admin/ProductList";
+import { getProducts, getProductStats } from "../../../lib/admin";
+import { db } from "../../../db";
+import { categories as categoriesTable } from "../../../db/schema";
+import { sql } from "drizzle-orm";
+
+const ALL_CATEGORIES = "all";
+const searchParams = Astro.url.searchParams;
+const page = parseInt(searchParams.get("page") || "1");
+const limit = parseInt(searchParams.get("limit") || "20");
+const search = searchParams.get("search") || "";
+const categoryId = searchParams.get("category") || ALL_CATEGORIES;
+const showTrashed = searchParams.get("trashed") === "true";
+const sort = (searchParams.get("sort") || "updatedAt") as
+  | "name"
+  | "price"
+  | "category"
+  | "createdAt"
+  | "updatedAt";
+const order = (searchParams.get("order") || "desc") as "asc" | "desc";
+
+// Get all active categories
+const categories = await db
+  .select({
+    id: categoriesTable.id,
+    name: categoriesTable.name,
+  })
+  .from(categoriesTable)
+  .where(sql`${categoriesTable.deletedAt} IS NULL`)
+  .orderBy(categoriesTable.name);
+
+// Get products with proper sorting and trash handling
+const { products, pagination } = await getProducts({
+  page,
+  search,
+  categoryId: categoryId === ALL_CATEGORIES ? undefined : categoryId,
+  sort,
+  order,
+  showTrashed,
+  limit,
+});
+
+// Get accurate product statistics
+const stats = await getProductStats();
+
+// Ensure all dates are properly instantiated
+const formattedProducts = products.map((product) => ({
+  ...product,
+  createdAt: new Date(product.createdAt),
+  updatedAt: new Date(product.updatedAt),
+}));
+---
+
+<AdminLayout title={showTrashed ? "Trash" : "Products"}>
+  <ProductList
+    client:load
+    products={formattedProducts}
+    categories={categories}
+    pagination={pagination}
+    initialSearchQuery={search}
+    initialCategoryId={categoryId}
+    initialSort={{ field: sort, order }}
+    showTrashed={showTrashed}
+    stats={stats}
+  />
+</AdminLayout>

@@ -1,0 +1,19 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { DeliveryLocationsManager } from "../../../../components/admin/DeliveryLocationsManager";
+---
+
+<AdminLayout title="Delivery Locations">
+  <div class="container py-6 space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Delivery Locations</h1>
+        <p class="text-muted-foreground">
+          Manage cities, zones, and areas for shipping
+        </p>
+      </div>
+    </div>
+
+    <DeliveryLocationsManager client:load />
+  </div>
+</AdminLayout>

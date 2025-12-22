@@ -1,0 +1,44 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { CategoryForm } from "../../../components/admin/CategoryForm";
+
+// Default values for the form
+const defaultValues = {
+  name: "",
+  description: null,
+  slug: "",
+  metaTitle: null,
+  metaDescription: null,
+  image: null,
+};
+---
+
+<AdminLayout title="New Category">
+  <div class="container py-6">
+    <div class="mb-6">
+      <div class="flex items-center text-sm text-muted-foreground mb-2">
+        <a href="/admin/categories" class="hover:text-primary">Categories</a>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="mx-2 h-4 w-4"
+          ><polyline points="9 18 15 12 9 6"></polyline></svg
+        >
+        <span>New Category</span>
+      </div>
+      <h1 class="text-3xl font-bold">Create New Category</h1>
+      <p class="text-muted-foreground">
+        Add a new product category to organize your store.
+      </p>
+    </div>
+
+    <CategoryForm client:load defaultValues={defaultValues} isEdit={false} />
+  </div>
+</AdminLayout>

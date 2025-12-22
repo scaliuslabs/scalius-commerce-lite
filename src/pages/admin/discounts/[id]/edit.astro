@@ -1,0 +1,306 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { AmountOffProductsForm } from "@/components/admin/discount/AmountOffProductsForm";
+import { AmountOffOrderForm } from "@/components/admin/discount/AmountOffOrderForm";
+import { FreeShippingForm } from "@/components/admin/discount/FreeShippingForm";
+import { db } from "@/db/index.ts";
+import {
+  discounts,
+  discountProducts,
+  discountCollections,
+  products,
+  collections,
+} from "@/db/schema";
+import { eq, inArray } from "drizzle-orm";
+
+// Local types for product/collection data (matching form expectations)
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  discountPercentage: number | null;
+}
+
+interface Collection {
+  id: string;
+  name: string;
+  description: string | null;
+  slug: string;
+}
+
+// Get discount ID from URL params
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect("/admin/discounts");
+}
+
+// Fetch discount data from database
+const discount = await db.query.discounts.findFirst({
+  where: eq(discounts.id, id),
+});
+
+if (!discount) {
+  return Astro.redirect("/admin/discounts");
+}
+
+// Helper function to safely convert timestamp to Date
+const safeTimestampToDate = (timestamp: any) => {
+  if (!timestamp) return null;
+
+  try {
+    // Convert timestamp to number if it's not already
+    const numericTimestamp =
+      typeof timestamp === "number" ? timestamp : Number(timestamp);
+
+    // Check if the timestamp is a valid number
+    if (isNaN(numericTimestamp)) {
+      console.error("Invalid timestamp (NaN):", timestamp);
+      return null;
+    }
+
+    // Create a date from the timestamp (in seconds)
+    const date = new Date(numericTimestamp * 1000);
+
+    // Validate the date - check if it's within reasonable range
+    // JavaScript dates work reliably from year 1970 to 2100
+    if (date.getFullYear() < 1970 || date.getFullYear() > 2100) {
+      console.error(
+        "Date outside valid range:",
+        date.toISOString(),
+        "from timestamp:",
+        numericTimestamp
+      );
+      return new Date(); // Return current date as fallback
+    }
+
+    return date;
+  } catch (error) {
+    console.error("Error converting timestamp to date:", error, timestamp);
+    return new Date(); // Return current date as fallback
+  }
+};
+
+// Convert UNIX timestamps to Date objects for form with explicit logging
+const formattedDiscount = {
+  ...discount,
+  startDate: safeTimestampToDate(discount.startDate) || new Date(),
+  endDate: safeTimestampToDate(discount.endDate),
+};
+
+// Log the formatted dates for debugging
+console.log("Discount dates:", {
+  originalStart: discount.startDate,
+  originalEnd: discount.endDate,
+  formattedStart:
+    formattedDiscount.startDate instanceof Date
+      ? formattedDiscount.startDate.toISOString()
+      : null,
+  formattedEnd:
+    formattedDiscount.endDate instanceof Date
+      ? formattedDiscount.endDate.toISOString()
+      : null,
+});
+
+// Fetch product IDs related to this discount
+const productAssociations = await db
+  .select()
+  .from(discountProducts)
+  .where(eq(discountProducts.discountId, id));
+
+// Fetch collection IDs related to this discount
+const collectionAssociations = await db
+  .select()
+  .from(discountCollections)
+  .where(eq(discountCollections.discountId, id));
+
+// Get all product and collection IDs
+const productIds = productAssociations.map((p) => p.productId);
+const collectionIds = collectionAssociations.map((c) => c.collectionId);
+
+// Fetch actual product data
+let selectedProducts: Product[] = [];
+
+if (productIds.length > 0) {
+  selectedProducts = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      price: products.price,
+      discountPercentage: products.discountPercentage,
+    })
+    .from(products)
+    .where(inArray(products.id, productIds));
+}
+
+// Fetch actual collection data
+let selectedCollections: Collection[] = [];
+
+if (collectionIds.length > 0) {
+  const collectionsData = await db
+    .select({
+      id: collections.id,
+      name: collections.name,
+    })
+    .from(collections)
+    .where(inArray(collections.id, collectionIds));
+
+  // Convert to expected Collection format with safe defaults
+  selectedCollections = collectionsData.map((c) => ({
+    id: c.id,
+    name: c.name,
+    description: null,
+    slug: "",
+  }));
+}
+
+// Ensure dates are properly serialized for the client
+const serializeDate = (date: Date | null) => {
+  if (!date) return null;
+
+  try {
+    // Validate it's a reasonable date within our expected range
+    if (!(date instanceof Date) || isNaN(date.getTime())) return null;
+    if (date.getFullYear() < 1970 || date.getFullYear() > 2100) {
+      console.warn("Date outside valid range for serialization:", date);
+      return new Date().toISOString(); // Return current date as fallback
+    }
+
+    return date.toISOString();
+  } catch (error) {
+    console.error("Error serializing date:", error);
+    return new Date().toISOString(); // Return current date as fallback
+  }
+};
+
+// Safely convert client data to ensure serializable
+const clientData = {
+  discount: {
+    ...formattedDiscount,
+    // Convert Date objects to ISO strings to ensure they're serializable
+    startDate: formattedDiscount.startDate
+      ? serializeDate(formattedDiscount.startDate)
+      : null,
+    endDate: formattedDiscount.endDate
+      ? serializeDate(formattedDiscount.endDate)
+      : null,
+  },
+  selectedProducts,
+  selectedCollections,
+};
+
+// Log final client data for debugging
+console.log("Serialized client data dates:", {
+  startDate: clientData.discount.startDate,
+  endDate: clientData.discount.endDate,
+});
+---
+
+<AdminLayout title="Edit Discount">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Edit Discount</h1>
+      <p class="text-muted-foreground">
+        Modify the discount "{discount.code}"
+      </p>
+    </div>
+    <a
+      href="/admin/discounts"
+      class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2"
+    >
+      Cancel
+    </a>
+  </div>
+
+  <div>
+    {
+      discount.type === "amount_off_products" && (
+        <AmountOffProductsForm
+          client:visible
+          defaultValues={{
+            id: discount.id,
+            code: discount.code,
+            valueType: discount.valueType as "percentage" | "fixed_amount",
+            discountValue: discount.discountValue,
+            minPurchaseAmount: discount.minPurchaseAmount,
+            minQuantity: discount.minQuantity,
+            maxUsesPerOrder: discount.maxUsesPerOrder,
+            maxUses: discount.maxUses,
+            limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
+            combineWithProductDiscounts: Boolean(
+              discount.combineWithProductDiscounts
+            ),
+            combineWithOrderDiscounts: Boolean(
+              discount.combineWithOrderDiscounts
+            ),
+            combineWithShippingDiscounts: Boolean(
+              discount.combineWithShippingDiscounts
+            ),
+            startDate: formattedDiscount.startDate,
+            endDate: formattedDiscount.endDate,
+            isActive: Boolean(discount.isActive),
+          }}
+          initialSelectedProducts={selectedProducts}
+          initialSelectedCollections={selectedCollections}
+        />
+      )
+    }
+
+    {
+      discount.type === "amount_off_order" && (
+        <AmountOffOrderForm
+          client:visible
+          defaultValues={{
+            id: discount.id,
+            code: discount.code,
+            valueType: discount.valueType as "percentage" | "fixed_amount",
+            discountValue: discount.discountValue,
+            minPurchaseAmount: discount.minPurchaseAmount,
+            maxUsesPerOrder: discount.maxUsesPerOrder,
+            maxUses: discount.maxUses,
+            limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
+            combineWithProductDiscounts: Boolean(
+              discount.combineWithProductDiscounts
+            ),
+            combineWithShippingDiscounts: Boolean(
+              discount.combineWithShippingDiscounts
+            ),
+            startDate: formattedDiscount.startDate,
+            endDate: formattedDiscount.endDate,
+            isActive: Boolean(discount.isActive),
+          }}
+        />
+      )
+    }
+
+    {
+      discount.type === "free_shipping" && (
+        <FreeShippingForm
+          client:visible
+          defaultValues={{
+            id: discount.id,
+            code: discount.code,
+            minPurchaseAmount: discount.minPurchaseAmount,
+            maxUsesPerOrder: discount.maxUsesPerOrder,
+            maxUses: discount.maxUses,
+            limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
+            combineWithProductDiscounts: Boolean(
+              discount.combineWithProductDiscounts
+            ),
+            combineWithOrderDiscounts: Boolean(
+              discount.combineWithOrderDiscounts
+            ),
+            startDate: formattedDiscount.startDate,
+            endDate: formattedDiscount.endDate,
+            isActive: Boolean(discount.isActive),
+          }}
+        />
+      )
+    }
+  </div>
+</AdminLayout>
+
+<script is:inline define:vars={{ clientData }}>
+  // Make client data available to the form components
+  window.discountEditData = clientData;
+</script>

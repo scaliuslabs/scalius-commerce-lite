@@ -1,0 +1,350 @@
+---
+// src/layouts/AdminLayout.astro
+import { SignedIn, SignedOut, UserButton } from "@clerk/astro/components";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  FolderTree,
+  ListTree,
+  Layers3,
+  Images,
+  FileText,
+  Blocks,
+  Menu,
+  Settings,
+  SlidersHorizontal,
+  MapPinned,
+  Truck,
+  PackageCheck,
+  Database,
+  ShoppingBag,
+  BadgePercent,
+  BarChart3,
+  Users,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Globe,
+  ShieldCheck,
+  Clock3,
+} from "lucide-react";
+
+import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
+import "../styles/global.css";
+import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
+import { Button } from "@/components/ui/button.tsx";
+import SideBar from "@/components/admin/adminLayout/SideBar.astro";
+import { generateAdminBreadcrumbs } from "@/lib/adminBreadCrumb";
+import favicon from "@/assets/favicon.png";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+
+// Get current path
+const currentPath = Astro.url.pathname;
+
+// Generate breadcrumb items using helper function
+const breadcrumbItems = generateAdminBreadcrumbs(currentPath);
+
+// Define nav item types for type safety
+// These types are used by SideBar.astro as well, consider moving to a shared types file eventually
+export interface NavSubItem {
+  name: string;
+  href: string;
+  icon?: any;
+}
+export interface NavItem {
+  name: string;
+  href: string;
+  icon: any; // Keep 'any' for Astro compatibility with React components
+  subItems?: NavSubItem[];
+}
+export interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
+  {
+    label: "Commerce",
+    items: [
+      { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+      { name: "Products", href: "/admin/products", icon: ShoppingCart },
+      { name: "Categories", href: "/admin/categories", icon: FolderTree },
+      { name: "Attributes", href: "/admin/attributes", icon: ListTree },
+      { name: "Collections", href: "/admin/collections", icon: Layers3 },
+      { name: "Media", href: "/admin/media", icon: Images },
+      { name: "Pages", href: "/admin/pages", icon: FileText },
+      { name: "Widgets", href: "/admin/widgets", icon: Blocks },
+    ],
+  },
+  {
+    label: "Sales",
+    items: [
+      { name: "Orders", href: "/admin/orders", icon: ShoppingBag },
+      {
+        name: "Incomplete Orders",
+        href: "/admin/abandoned-checkouts",
+        icon: Clock3,
+      },
+      { name: "Discounts", href: "/admin/discounts", icon: BadgePercent },
+      { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+      { name: "Customers", href: "/admin/customers", icon: Users },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      {
+        name: "Settings",
+        href: "/admin/settings",
+        icon: Settings,
+        subItems: [
+          {
+            name: "General",
+            href: "/admin/settings",
+            icon: SlidersHorizontal,
+          },
+          {
+            name: "Hero Sliders",
+            href: "/admin/settings/hero-sliders",
+            icon: Images,
+          },
+          {
+            name: "Delivery Locations",
+            href: "/admin/settings/delivery-locations",
+            icon: MapPinned,
+          },
+          {
+            name: "Delivery Providers",
+            href: "/admin/settings/delivery-providers",
+            icon: Truck,
+          },
+          {
+            name: "Fraud Checker",
+            href: "/admin/settings/fraud-checker",
+            icon: ShieldCheck,
+          },
+          {
+            name: "Shipping Methods",
+            href: "/admin/settings/shipping-methods",
+            icon: PackageCheck,
+          },
+          {
+            name: "Checkout Languages",
+            href: "/admin/settings/checkout-languages",
+            icon: Globe,
+          },
+          {
+            name: "Meta Conversions",
+            href: "/admin/settings/meta-conversion",
+            icon: BarChart3,
+          },
+          {
+            name: "Cache Settings",
+            href: "/admin/settings/cache",
+            icon: Database,
+          },
+        ],
+      },
+    ],
+  },
+];
+---
+
+<html lang="en" class="antialiased">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      const theme = (() => {
+        if (
+          typeof localStorage !== "undefined" &&
+          localStorage.getItem("theme")
+        ) {
+          return localStorage.getItem("theme");
+        }
+        // Default to light mode instead of following system preference
+        return "light";
+      })();
+
+      if (theme === "light") {
+        document.documentElement.classList.remove("dark");
+      } else {
+        document.documentElement.classList.add("dark");
+      }
+      document.documentElement.style.setProperty("color-scheme", theme);
+    </script>
+    <link rel="icon" type="image/png" href={favicon.src} />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} - Scalius Admin</title>
+  </head>
+  <body
+    data-current-path={Astro.url.pathname}
+    class="bg-background text-foreground transition-colors duration-200"
+  >
+    <SignedIn>
+      <div class="flex min-h-screen">
+        <SideBar navSections={navSections} currentPath={currentPath} />
+
+        <!-- Main content -->
+        <div class="flex-1 flex flex-col min-h-screen">
+          <!-- Header -->
+          <header
+            class="h-14 border-b border-border px-4 flex items-center justify-between sticky top-0 z-30 backdrop-blur-sm bg-background/95 transition-all duration-200"
+          >
+            <div class="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                id="sidebar-toggle"
+                aria-label="Toggle sidebar"
+                className="md:hidden h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <Menu className="w-5! h-5!" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                id="sidebar-collapse"
+                aria-label="Collapse sidebar"
+                className="hidden md:flex h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <PanelLeftClose className="w-6! h-6! sidebar-icon-expanded" />
+                <PanelLeftOpen
+                  className="w-6! h-6!  sidebar-icon-collapsed hidden"
+                />
+              </Button>
+
+              <Breadcrumb items={breadcrumbItems} client:load />
+            </div>
+            <div class="flex items-center gap-12">
+              <DarkModeToggle
+                client:load
+                className="h-8 w-8 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+              />
+              <UserButton
+                showName={true}
+                appearance={{
+                  elements: {
+                    avatarBox:
+                      "w-8 h-8 ring-2 ring-primary/10 hover:ring-primary/20 transition-all duration-200",
+                    rootBox:
+                      "relative inline-flex items-center gap-3 hover:bg-muted/50 px-2 py-1 rounded-lg transition-all duration-200",
+                    userPreviewMainIdentifier:
+                      "font-medium text-sm text-foreground",
+                    userPreviewSecondaryIdentifier:
+                      "text-muted-foreground text-xs",
+                    userButtonPopoverCard: `
+                      min-w-[280px] p-0 bg-card backdrop-blur-lg 
+                      text-card-foreground shadow-xl rounded-xl 
+                      border border-border mt-2 overflow-hidden
+                    `,
+                    userButtonPopoverActions: "p-3",
+                    userButtonPopoverActionButton: `
+                      w-full px-3 py-2.5 text-left text-sm hover:bg-muted/80 
+                      rounded-lg text-foreground transition-all duration-200
+                      hover:shadow-sm border border-transparent hover:border-border/50
+                    `,
+                    userButtonPopoverActionButtonText:
+                      "font-medium text-foreground",
+                    userButtonPopoverActionButtonIcon: "text-muted-foreground",
+                    userButtonPopoverFooter: "hidden",
+                  },
+                }}
+              />
+            </div>
+          </header>
+
+          <!-- Main content area -->
+          <main
+            class="flex-1 p-6 transition-all duration-200"
+            id="main-content"
+          >
+            <div class="max-w-7xl mx-auto">
+              <slot />
+            </div>
+          </main>
+        </div>
+      </div>
+    </SignedIn>
+    <SignedOut />
+
+    <ShadcnToaster client:load />
+    <SonnerToaster richColors closeButton client:load />
+
+    <script>
+      function initializeSidebarControls() {
+        const sidebarToggleBtn = document.getElementById("sidebar-toggle");
+        const sidebarCollapseBtn = document.getElementById("sidebar-collapse");
+
+        if (sidebarToggleBtn) {
+          sidebarToggleBtn.addEventListener("click", () => {
+            window.dispatchEvent(new CustomEvent("toggleMobileSidebar"));
+          });
+        }
+
+        if (sidebarCollapseBtn) {
+          sidebarCollapseBtn.addEventListener("click", () => {
+            window.dispatchEvent(new CustomEvent("toggleSidebarCollapse"));
+          });
+        }
+      }
+
+      // Initialize immediately if DOM is ready, otherwise wait for it
+      if (document.readyState === "loading") {
+        document.addEventListener(
+          "DOMContentLoaded",
+          initializeSidebarControls
+        );
+      } else {
+        initializeSidebarControls();
+      }
+    </script>
+
+    <script>
+      // This script runs purely client-side (Firebase notifications)
+      import { initFirebaseClientNotifications } from "@/lib/firebase/client";
+
+      function initializeFcmOnClient() {
+        console.log("AdminLayout: initializeFcmOnClient called");
+        let attempts = 0;
+        const maxAttempts = 10;
+        const intervalId = setInterval(() => {
+          attempts++;
+          if (typeof window.Clerk !== "undefined" && window.Clerk.user) {
+            clearInterval(intervalId);
+            const userId = window.Clerk.user.id;
+            if (userId) {
+              console.log(
+                "AdminLayout: User signed in, calling initFirebaseClientNotifications with userId:",
+                userId
+              );
+              initFirebaseClientNotifications(userId);
+            } else {
+              console.warn(
+                "AdminLayout: Clerk.user is available, but userId is missing. Cannot initialize FCM."
+              );
+            }
+          } else if (attempts >= maxAttempts) {
+            clearInterval(intervalId);
+            console.warn(
+              "AdminLayout: Clerk user object not available after multiple attempts. FCM not initialized."
+            );
+          }
+        }, 500);
+      }
+
+      if (document.readyState === "complete") {
+        initializeFcmOnClient();
+      } else {
+        window.addEventListener("load", initializeFcmOnClient);
+      }
+    </script>
+  </body>
+</html>

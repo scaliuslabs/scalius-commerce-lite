@@ -1,0 +1,50 @@
+---
+// src/pages/admin/attributes/index.astro
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { AttributesManager } from "@/components/admin/attributes-manager";
+import { Button } from "@/components/ui/button";
+import { Tags, Trash2 } from "lucide-react";
+
+const { searchParams } = Astro.url;
+const showTrashed = searchParams.get("trashed") === "true";
+const pageTitle = showTrashed ? "Attribute Trash" : "Product Attributes";
+---
+
+<AdminLayout title={pageTitle}>
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">{pageTitle}</h1>
+        <p class="text-muted-foreground">
+          {
+            showTrashed
+              ? "View, restore, or permanently delete trashed attributes."
+              : "Manage attributes like brand, color, or warranty to organize and filter products."
+          }
+        </p>
+      </div>
+      <a
+        href={showTrashed
+          ? "/admin/attributes"
+          : "/admin/attributes?trashed=true"}
+      >
+        <Button variant="outline" size="sm">
+          {
+            showTrashed ? (
+              <>
+                <Tags client:visible className="mr-2 h-4 w-4" />
+                View Active
+              </>
+            ) : (
+              <>
+                <Trash2 client:visible className="mr-2 h-4 w-4" />
+                View Trash
+              </>
+            )
+          }
+        </Button>
+      </a>
+    </div>
+    <AttributesManager client:load showTrashed={showTrashed} />
+  </div>
+</AdminLayout>

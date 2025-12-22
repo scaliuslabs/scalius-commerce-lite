@@ -1,0 +1,101 @@
+---
+// src/pages/admin/products/[id]/index.astro
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { ProductView } from "../../../../components/admin/ProductView";
+import { db } from "../../../../db";
+import {
+  products,
+  categories,
+  productVariants,
+  productImages,
+} from "../../../../db/schema";
+import { eq, sql } from "drizzle-orm";
+
+const { id } = Astro.params;
+
+// Get product details with proper timestamp handling
+const product = await db
+  .select({
+    id: products.id,
+    name: products.name,
+    description: products.description,
+    price: products.price,
+    categoryId: products.categoryId,
+    slug: products.slug,
+    metaTitle: products.metaTitle,
+    metaDescription: products.metaDescription,
+    isActive: products.isActive,
+    discountPercentage: products.discountPercentage,
+    freeDelivery: products.freeDelivery,
+    createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
+    updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
+    deletedAt: sql<number>`CAST(${products.deletedAt} AS INTEGER)`,
+    category: {
+      name: categories.name,
+    },
+  })
+  .from(products)
+  .leftJoin(categories, eq(categories.id, products.categoryId))
+  .where(eq(products.id, id as string))
+  .get();
+
+if (!product) {
+  return Astro.redirect("/admin/products");
+}
+
+// Get variants
+const variants = await db
+  .select({
+    id: productVariants.id,
+    size: productVariants.size,
+    color: productVariants.color,
+    weight: productVariants.weight,
+    sku: productVariants.sku,
+    price: productVariants.price,
+    stock: productVariants.stock,
+    createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
+    updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
+    deletedAt: sql<number>`CAST(${productVariants.deletedAt} AS INTEGER)`,
+  })
+  .from(productVariants)
+  .where(eq(productVariants.productId, id as string));
+
+// Get images
+const images = await db
+  .select({
+    id: productImages.id,
+    url: productImages.url,
+    alt: productImages.alt,
+    isPrimary: productImages.isPrimary,
+    sortOrder: productImages.sortOrder,
+    createdAt: sql<number>`CAST(${productImages.createdAt} AS INTEGER)`,
+  })
+  .from(productImages)
+  .where(eq(productImages.productId, id as string))
+  .orderBy(productImages.sortOrder);
+
+// Format dates and ensure category is not null
+const formattedProduct = {
+  ...product,
+  createdAt: new Date(product.createdAt * 1000),
+  updatedAt: new Date(product.updatedAt * 1000),
+  deletedAt: product.deletedAt ? new Date(product.deletedAt * 1000) : null,
+  category: {
+    name: product.category?.name || "Uncategorized",
+  },
+  variants: variants.map((variant) => ({
+    ...variant,
+    createdAt: new Date(variant.createdAt * 1000),
+    updatedAt: new Date(variant.updatedAt * 1000),
+    deletedAt: variant.deletedAt ? new Date(variant.deletedAt * 1000) : null,
+  })),
+  images: images.map((image) => ({
+    ...image,
+    createdAt: new Date(image.createdAt * 1000),
+  })),
+};
+---
+
+<AdminLayout title={`${product.name} - Product Details`}>
+  <ProductView client:load product={formattedProduct} />
+</AdminLayout>

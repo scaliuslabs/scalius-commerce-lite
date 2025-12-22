@@ -1,0 +1,35 @@
+---
+// src/pages/admin/collections/index.astro
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { CollectionsList } from "@/components/admin/collections-list";
+import { Button } from "@/components/ui/button";
+import { PlusCircle, Trash2 } from "lucide-react";
+---
+
+<AdminLayout title="Collections">
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Collections</h1>
+        <p class="text-muted-foreground">
+          Organize your products into curated collections
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/admin/collections/trash">
+          <Button variant="outline" size="sm">
+            <Trash2 client:visible className="mr-2 h-4 w-4" />
+            View Trash
+          </Button>
+        </a>
+        <a href="/admin/collections/new">
+          <Button>
+            <PlusCircle client:visible className="mr-2 h-4 w-4" />
+            New Collection
+          </Button>
+        </a>
+      </div>
+    </div>
+    <CollectionsList client:load showTrashed={false} />
+  </div>
+</AdminLayout>

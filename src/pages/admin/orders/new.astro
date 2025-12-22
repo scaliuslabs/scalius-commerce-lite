@@ -1,0 +1,67 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { OrderForm } from "../../../components/admin/OrderForm";
+import { db } from "../../../db";
+import { products, productVariants } from "../../../db/schema";
+import { isNull, sql } from "drizzle-orm";
+
+// Get all active products with their variants
+const allProducts = await db
+  .select({
+    id: products.id,
+    name: products.name,
+    price: products.price,
+    discountPercentage: products.discountPercentage,
+  })
+  .from(products)
+  .where(isNull(products.deletedAt));
+
+// Get variants for each product
+const productVariantsMap = new Map();
+for (const product of allProducts) {
+  const variants = await db
+    .select()
+    .from(productVariants)
+    .where(
+      sql`${productVariants.productId} = ${product.id} AND ${productVariants.deletedAt} IS NULL`
+    );
+  productVariantsMap.set(product.id, variants);
+}
+
+// Prepare products with variants
+const productsWithVariants = allProducts.map((product) => ({
+  ...product,
+  variants: productVariantsMap.get(product.id) || [],
+}));
+
+// Default values for the form
+const defaultValues = {
+  customerName: "",
+  customerPhone: "",
+  customerEmail: null,
+  shippingAddress: "",
+  city: "",
+  zone: "",
+  area: null,
+  notes: null,
+  items: [],
+  discountAmount: null,
+  shippingCharge: 0,
+};
+---
+
+<AdminLayout title="New Order">
+  <div class="container py-6">
+    <div class="mb-6">
+      <h1 class="text-3xl font-bold">Create New Order</h1>
+      <p class="text-muted-foreground">Add a new order to your store.</p>
+    </div>
+
+    <OrderForm
+      client:load
+      products={productsWithVariants}
+      defaultValues={defaultValues}
+      isEdit={false}
+    />
+  </div>
+</AdminLayout>

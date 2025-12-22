@@ -1,0 +1,72 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { ProductForm } from "../../../components/admin/ProductForm";
+import { db } from "../../../db";
+import { categories } from "../../../db/schema";
+import { sql } from "drizzle-orm";
+
+// Get all active categories
+const allCategories = await db
+  .select({
+    id: categories.id,
+    name: categories.name,
+  })
+  .from(categories)
+  .where(sql`${categories.deletedAt} IS NULL`);
+
+// Default values for the form
+const defaultValues = {
+  name: "",
+  description: null,
+  price: 0,
+  categoryId: "",
+  isActive: true,
+  discountType: "percentage" as "percentage" | "flat",
+  discountPercentage: 0,
+  discountAmount: 0,
+  freeDelivery: false,
+  metaTitle: null,
+  metaDescription: null,
+  slug: "",
+  images: [],
+};
+
+// Define the submit handler function
+const handleSubmit = `async function(values) {
+  try {
+    const response = await fetch("/api/products", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(values),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to create product");
+    }
+
+    const data = await response.json();
+    window.location.href = \`/admin/products/\${data.id}/edit\`;
+  } catch (error) {
+    console.error("Error creating product:", error);
+    alert("Failed to create product. Please try again.");
+  }
+}`;
+---
+
+<AdminLayout title="New Product">
+  <div class="container max-w-7xl py-4 pb-8">
+    <ProductForm
+      client:load
+      categories={allCategories}
+      defaultValues={defaultValues}
+      isEdit={false}
+    />
+  </div>
+</AdminLayout>
+
+<script is:inline define:vars={{ handleSubmit }}>
+  // Convert the string function to an actual function
+  window.handleProductSubmit = eval(`(${handleSubmit})`);
+</script>

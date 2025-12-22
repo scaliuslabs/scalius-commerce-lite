@@ -1,0 +1,374 @@
+import React from "react";
+import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../ui/dropdown-menu";
+import { Checkbox } from "../../ui/checkbox";
+import {
+  Plus,
+  Search,
+  Truck,
+  Package,
+  Trash2,
+  Filter,
+  X,
+  Download,
+  RefreshCw,
+} from "lucide-react";
+
+interface OrderListToolbarProps {
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  onSearchSubmit: (e: React.FormEvent) => void;
+  selectedOrdersCount: number;
+  onBulkDeleteClick: () => void;
+  onBulkShipClick: () => void;
+  showTrashed: boolean;
+  onToggleTrash: () => void;
+  activeStatus: string | null;
+  onStatusFilterChange: (status: string | null) => void;
+  onExportCSV?: () => void;
+  onRefresh?: () => void;
+}
+
+const statusFilters = [
+  { value: "pending", label: "Pending" },
+  { value: "processing", label: "Processing" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "shipped", label: "Shipped" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "returned", label: "Returned" },
+];
+
+export function OrderListToolbar({
+  searchQuery,
+  onSearchQueryChange,
+  onSearchSubmit,
+  selectedOrdersCount,
+  onBulkDeleteClick,
+  onBulkShipClick,
+  showTrashed,
+  onToggleTrash,
+  activeStatus,
+  onStatusFilterChange,
+  onExportCSV,
+  onRefresh,
+}: OrderListToolbarProps) {
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const [localSearch, setLocalSearch] = React.useState(searchQuery);
+  const searchTimeoutRef = React.useRef<number | undefined>(undefined);
+
+  // Auto-refresh state - using browser APIs only (Cloudflare Workers compatible)
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('orderlist-auto-refresh') === 'true';
+    }
+    return false;
+  });
+  const [countdown, setCountdown] = React.useState(60);
+  const refreshIntervalRef = React.useRef<number | undefined>(undefined);
+  const countdownIntervalRef = React.useRef<number | undefined>(undefined);
+
+  // Sync local search with prop changes
+  React.useEffect(() => {
+    setLocalSearch(searchQuery);
+  }, [searchQuery]);
+
+  // Auto-update parent search query after 500ms of inactivity
+  React.useEffect(() => {
+    if (searchTimeoutRef.current) {
+      window.clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = window.setTimeout(() => {
+      if (localSearch !== searchQuery) {
+        // Just update the search query - the parent will handle the actual search
+        onSearchQueryChange(localSearch);
+      }
+    }, 500);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        window.clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [localSearch, searchQuery, onSearchQueryChange]);
+
+  // Auto-refresh logic using browser setInterval (Cloudflare Workers compatible)
+  React.useEffect(() => {
+    if (autoRefreshEnabled && onRefresh) {
+      // Reset countdown
+      setCountdown(60);
+
+      // Countdown timer (1 second intervals)
+      countdownIntervalRef.current = window.setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            return 60; // Reset to 60 when it reaches 0
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      // Refresh timer (60 second intervals)
+      refreshIntervalRef.current = window.setInterval(() => {
+        onRefresh();
+      }, 60000);
+
+      return () => {
+        if (countdownIntervalRef.current) {
+          window.clearInterval(countdownIntervalRef.current);
+        }
+        if (refreshIntervalRef.current) {
+          window.clearInterval(refreshIntervalRef.current);
+        }
+      };
+    } else {
+      // Clean up intervals when disabled
+      if (countdownIntervalRef.current) {
+        window.clearInterval(countdownIntervalRef.current);
+      }
+      if (refreshIntervalRef.current) {
+        window.clearInterval(refreshIntervalRef.current);
+      }
+    }
+  }, [autoRefreshEnabled, onRefresh]);
+
+  // Save preference to localStorage
+  const toggleAutoRefresh = () => {
+    const newValue = !autoRefreshEnabled;
+    setAutoRefreshEnabled(newValue);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('orderlist-auto-refresh', String(newValue));
+    }
+  };
+
+  // Keyboard shortcuts
+  React.useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Focus search on "/" key (like GitHub)
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+        const target = e.target as HTMLElement;
+        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      }
+      // Clear search on Escape
+      if (e.key === "Escape" && document.activeElement === searchInputRef.current) {
+        setLocalSearch("");
+        searchInputRef.current?.blur();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyPress);
+    return () => document.removeEventListener("keydown", handleKeyPress);
+  }, []);
+
+  const isStatusActive = (status: string | null) => {
+    return activeStatus === status;
+  };
+
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        {/* Title and description will be part of the parent CardHeader */}
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-[var(--muted-foreground)] bg-[var(--muted)]/50 px-2 py-1 rounded-md border border-[var(--border)]/50">
+            Press <kbd className="px-1.5 py-0.5 bg-[var(--background)] border border-[var(--border)] rounded text-xs font-mono">/</kbd> to search
+          </div>
+          {onRefresh && (
+            <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] bg-[var(--muted)]/50 px-2 py-1 rounded-md border border-[var(--border)]/50">
+              <Checkbox
+                id="auto-refresh"
+                checked={autoRefreshEnabled}
+                onCheckedChange={toggleAutoRefresh}
+                className="h-3.5 w-3.5"
+              />
+              <label
+                htmlFor="auto-refresh"
+                className="cursor-pointer select-none flex items-center gap-1.5"
+              >
+                <RefreshCw className={`h-3 w-3 ${autoRefreshEnabled ? 'animate-spin' : ''}`} />
+                <span>Auto-refresh</span>
+                {autoRefreshEnabled && (
+                  <span className="font-mono font-medium text-primary">
+                    {countdown}s
+                  </span>
+                )}
+              </label>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {onExportCSV && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExportCSV}
+              className="group h-9 border-[var(--border)] bg-[var(--card)]/80 px-3 text-xs font-medium shadow-sm backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:border-[var(--border)] hover:bg-[var(--card)] hover:shadow-md active:translate-y-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              aria-label="Export orders to CSV file"
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
+              Export CSV
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onToggleTrash}
+            className="group h-9 border-[var(--border)] bg-[var(--card)]/80 px-3 text-xs font-medium shadow-sm backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:border-[var(--border)] hover:bg-[var(--card)] hover:shadow-md active:translate-y-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            aria-label={showTrashed ? "View active orders" : "View trash"}
+          >
+            {showTrashed ? (
+              <>
+                <Package className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
+                View Active Orders
+              </>
+            ) : (
+              <>
+                <Trash2 className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
+                View Trash
+              </>
+            )}
+          </Button>
+          {!showTrashed && (
+            <Button
+              size="sm"
+              asChild
+              className="group h-9 px-3 text-xs font-medium shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              <a href="/admin/orders/new" aria-label="Create new order">
+                <Plus className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
+                Add Order
+              </a>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-4">
+        <form onSubmit={onSearchSubmit} className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)] transition-colors duration-200 group-hover:text-[var(--foreground)]" />
+          <Input
+            ref={searchInputRef}
+            type="search"
+            placeholder="Search orders by name, ID, email or phone... (Press / to focus)"
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="h-10 pl-9 transition-all duration-200 hover:border-[var(--border)] focus:border-primary focus:ring-2 focus:ring-primary/20 bg-[var(--card)] border-[var(--border)] placeholder:text-[var(--muted-foreground)] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          />
+          {localSearch && (
+            <button
+              type="button"
+              onClick={() => setLocalSearch("")}
+              className="absolute right-2.5 top-2.5 h-5 w-5 rounded-full hover:bg-[var(--muted)] flex items-center justify-center transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+            </button>
+          )}
+        </form>
+        {selectedOrdersCount > 0 && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={onBulkDeleteClick}
+              className="group h-10 px-3 text-xs font-medium shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
+              {showTrashed ? "Delete Permanently" : "Move to Trash"} (
+              {selectedOrdersCount})
+            </Button>
+
+            {!showTrashed && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onBulkShipClick}
+                className="group h-10 px-3 text-xs font-medium shadow-sm transition-all hover:-translate-y-0.5 hover:border-gray-300 hover:bg-white hover:shadow-md active:translate-y-0 dark:hover:bg-gray-800 dark:hover:border-gray-600"
+              >
+                <Truck className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
+                Ship Orders ({selectedOrdersCount})
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!showTrashed && (
+        <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1 text-xs"
+              >
+                <Filter className="h-3.5 w-3.5" />
+                {activeStatus
+                  ? `Filter: ${activeStatus.charAt(0).toUpperCase() + activeStatus.slice(1)}`
+                  : "Filter"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem
+                onClick={() => onStatusFilterChange(null)}
+                className="hover:bg-[var(--muted)]"
+              >
+                All Orders
+              </DropdownMenuItem>
+              {statusFilters.map((filter) => (
+                <DropdownMenuItem
+                  key={filter.value}
+                  onClick={() => onStatusFilterChange(filter.value)}
+                  className="hover:bg-[var(--muted)]"
+                >
+                  {filter.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {activeStatus && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onStatusFilterChange(null)}
+              className="h-9 px-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+              title="Clear filter"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+
+          <Button
+            variant={isStatusActive(null) ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => onStatusFilterChange(null)}
+            className="h-9 whitespace-nowrap px-3 text-xs font-medium transition-colors duration-300"
+          >
+            All
+          </Button>
+          {statusFilters.map((filter) => (
+            <Button
+              key={filter.value}
+              variant={isStatusActive(filter.value) ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => onStatusFilterChange(filter.value)}
+              className="h-9 whitespace-nowrap px-3 text-xs font-medium transition-colors duration-300"
+            >
+              {filter.label}
+            </Button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}

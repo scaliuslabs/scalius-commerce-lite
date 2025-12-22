@@ -1,0 +1,237 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { DiscountTypeSelector } from "@/components/admin/discount/DiscountTypeSelector";
+import { Button } from "@/components/ui/button";
+---
+
+<AdminLayout title="New Discount">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Create New Discount</h1>
+      <p class="text-muted-foreground">
+        Choose a discount type and fill in the details
+      </p>
+    </div>
+    <a
+      href="/admin/discounts"
+      class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2"
+    >
+      Cancel
+    </a>
+  </div>
+
+  <!-- Added an outer container to attach listener -->
+  <div id="discount-form-container" class="discount-form-container space-y-8">
+    <!-- Discount Type Selector -->
+    <DiscountTypeSelector client:visible />
+
+    <!-- Change Type Button (Initially Hidden) -->
+    <div id="change-type-section" class="hidden mb-6">
+      <Button variant="outline" id="change-discount-type-button">
+        Change Discount Type
+      </Button>
+    </div>
+
+    <!-- Form containers - IDs must match keys in formMap in script -->
+    <div id="amount-off-products-form" class="hidden">
+      <div
+        id="lazy-amount-off-products-placeholder"
+        class="py-4 text-center text-sm text-muted-foreground"
+      >
+        Loading form...
+      </div>
+    </div>
+
+    <div id="amount-off-order-form" class="hidden">
+      <div
+        id="lazy-amount-off-order-placeholder"
+        class="py-4 text-center text-sm text-muted-foreground"
+      >
+        Loading form...
+      </div>
+    </div>
+
+    <div id="free-shipping-form" class="hidden">
+      <div
+        id="lazy-free-shipping-placeholder"
+        class="py-4 text-center text-sm text-muted-foreground"
+      >
+        Loading form...
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  // Re-add the client-side script logic
+  const formMap: { [key: string]: string } = {
+    amount_off_products: "amount-off-products-form",
+    amount_off_order: "amount-off-order-form",
+    free_shipping: "free-shipping-form",
+  };
+
+  // Mapping for lazy loading components
+  const formComponentMap: { [key: string]: () => Promise<void> } = {
+    amount_off_products: async () => {
+      const container = document.getElementById("amount-off-products-form");
+      const placeholder = document.getElementById(
+        "lazy-amount-off-products-placeholder"
+      );
+      if (container && placeholder) {
+        const [module, React, ReactDOM] = await Promise.all([
+          import("@/components/admin/discount/AmountOffProductsForm"),
+          import("react"),
+          import("react-dom/client"),
+        ]);
+
+        // Create a new div to render the React component into
+        const mountPoint = document.createElement("div");
+        container.appendChild(mountPoint);
+
+        // Remove placeholder
+        placeholder.remove();
+
+        // Mount the component
+        const { AmountOffProductsForm } = module;
+        ReactDOM.createRoot(mountPoint).render(
+          React.createElement(AmountOffProductsForm, {})
+        );
+      }
+    },
+    amount_off_order: async () => {
+      const container = document.getElementById("amount-off-order-form");
+      const placeholder = document.getElementById(
+        "lazy-amount-off-order-placeholder"
+      );
+      if (container && placeholder) {
+        const [module, React, ReactDOM] = await Promise.all([
+          import("@/components/admin/discount/AmountOffOrderForm"),
+          import("react"),
+          import("react-dom/client"),
+        ]);
+
+        // Create a new div to render the React component into
+        const mountPoint = document.createElement("div");
+        container.appendChild(mountPoint);
+
+        // Remove placeholder
+        placeholder.remove();
+
+        // Mount the component
+        const { AmountOffOrderForm } = module;
+        ReactDOM.createRoot(mountPoint).render(
+          React.createElement(AmountOffOrderForm, {})
+        );
+      }
+    },
+    free_shipping: async () => {
+      const container = document.getElementById("free-shipping-form");
+      const placeholder = document.getElementById(
+        "lazy-free-shipping-placeholder"
+      );
+      if (container && placeholder) {
+        const [module, React, ReactDOM] = await Promise.all([
+          import("@/components/admin/discount/FreeShippingForm"),
+          import("react"),
+          import("react-dom/client"),
+        ]);
+
+        // Create a new div to render the React component into
+        const mountPoint = document.createElement("div");
+        container.appendChild(mountPoint);
+
+        // Remove placeholder
+        placeholder.remove();
+
+        // Mount the component
+        const { FreeShippingForm } = module;
+        ReactDOM.createRoot(mountPoint).render(
+          React.createElement(FreeShippingForm, {})
+        );
+      }
+    },
+  };
+
+  let typeSelectorElement: HTMLElement | null = null;
+  let changeTypeSection: HTMLElement | null = null;
+  let changeTypeButton: HTMLElement | null = null;
+  let formLoaded: { [key: string]: boolean } = {};
+
+  // Function to handle showing/hiding forms AND the selector/button
+  function handleFormDisplay(newSelectedType: string | null) {
+    const isFormSelected = newSelectedType && newSelectedType in formMap;
+
+    // Hide/Show Type Selector
+    if (typeSelectorElement) {
+      if (isFormSelected) {
+        typeSelectorElement.classList.add("hidden");
+      } else {
+        typeSelectorElement.classList.remove("hidden");
+      }
+    }
+
+    // Hide/Show Change Type Button Section
+    if (changeTypeSection) {
+      if (isFormSelected) {
+        changeTypeSection.classList.remove("hidden");
+      } else {
+        changeTypeSection.classList.add("hidden");
+      }
+    }
+
+    // Hide all forms first
+    Object.values(formMap).forEach((formId) => {
+      const formElement = document.getElementById(formId);
+      if (formElement) {
+        formElement.classList.add("hidden");
+      }
+    });
+
+    // Show the selected form if valid
+    if (isFormSelected) {
+      const formId = formMap[newSelectedType];
+      const formElement = document.getElementById(formId);
+      if (formElement) {
+        formElement.classList.remove("hidden");
+
+        // Lazy load the component if not already loaded
+        if (!formLoaded[newSelectedType]) {
+          formComponentMap[newSelectedType]?.();
+          formLoaded[newSelectedType] = true;
+        }
+      }
+    }
+  }
+
+  // Function to show the type selector and hide forms/button
+  function showTypeSelector() {
+    handleFormDisplay(null); // Passing null hides all forms and shows selector
+  }
+
+  // Wait for the DOM to be fully loaded
+  document.addEventListener("DOMContentLoaded", () => {
+    // Get elements after DOM is ready
+    typeSelectorElement = document.getElementById("discount-type-selector");
+    changeTypeSection = document.getElementById("change-type-section");
+    changeTypeButton = document.getElementById("change-discount-type-button");
+
+    // Attach listener to the DiscountTypeSelector component
+    if (typeSelectorElement) {
+      typeSelectorElement.addEventListener("discountTypeSelected", (e) => {
+        const selectedType = (e as CustomEvent<{ type: string }>)?.detail?.type;
+        if (selectedType) {
+          handleFormDisplay(selectedType);
+        }
+      });
+    } else {
+      console.error("Could not find #discount-type-selector element.");
+    }
+
+    // Attach listener to the Change Type button
+    if (changeTypeButton) {
+      changeTypeButton.addEventListener("click", showTypeSelector);
+    } else {
+      console.error("Could not find #change-discount-type-button element.");
+    }
+  });
+</script>

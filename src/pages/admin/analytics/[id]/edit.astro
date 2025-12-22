@@ -1,0 +1,70 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { AnalyticsForm } from "../../../../components/admin/AnalyticsForm";
+import { db } from "../../../../db";
+import { analytics } from "../../../../db/schema";
+import { eq } from "drizzle-orm";
+import { unixToDate } from "@/lib/utils";
+
+// Get the analytics script ID from the URL
+const { id } = Astro.params;
+
+// Redirect to 404 if no ID is provided
+if (!id) {
+  return Astro.redirect("/404");
+}
+
+// Fetch the analytics script from the database
+const script = await db
+  .select()
+  .from(analytics)
+  .where(eq(analytics.id, id))
+  .get();
+
+// Redirect to 404 if script not found
+if (!script) {
+  return Astro.redirect("/404");
+}
+
+// Ensure the type is one of the expected values
+const validType = ["google_analytics", "facebook_pixel", "custom"].includes(
+  script.type
+)
+  ? (script.type as "google_analytics" | "facebook_pixel" | "custom")
+  : "custom";
+
+// Ensure the location is one of the expected values
+const validLocation = ["head", "body_start", "body_end"].includes(
+  script.location
+)
+  ? (script.location as "head" | "body_start" | "body_end")
+  : "head";
+
+// Format the data for the form
+const defaultValues = {
+  id: script.id,
+  name: script.name,
+  type: validType,
+  isActive: script.isActive,
+  usePartytown: script.usePartytown ?? true,
+  config: script.config,
+  location: validLocation,
+  createdAt: unixToDate(script.createdAt) || new Date(),
+  updatedAt: unixToDate(script.updatedAt) || new Date(),
+};
+---
+
+<AdminLayout title="Edit Analytics Script">
+  <div class="container py-10">
+    <div class="mb-10">
+      <h1 class="text-3xl font-bold">Edit Analytics Script</h1>
+      <p class="text-muted-foreground mt-2">
+        Update an existing analytics or tracking script.
+      </p>
+    </div>
+
+    <div class="max-w-3xl">
+      <AnalyticsForm defaultValues={defaultValues} isEdit={true} client:load />
+    </div>
+  </div>
+</AdminLayout>

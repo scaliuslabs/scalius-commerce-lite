@@ -1,0 +1,148 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { CategoryList } from "../../../components/admin/CategoryList";
+import { getCategoryStats } from "../../../lib/admin";
+import { db } from "../../../db";
+import { categories, products } from "../../../db/schema";
+import { sql, and, isNull, isNotNull, eq, desc, asc } from "drizzle-orm";
+
+const searchParams = Astro.url.searchParams;
+const page = parseInt(searchParams.get("page") || "1");
+const limit = parseInt(searchParams.get("limit") || "20");
+const search = searchParams.get("search") || "";
+const showTrashed = searchParams.get("trashed") === "true";
+const sort = (searchParams.get("sort") || "updatedAt") as
+  | "name"
+  | "createdAt"
+  | "updatedAt";
+const order = (searchParams.get("order") || "desc") as "asc" | "desc";
+
+// Initialize variables
+let formattedCategories: any[] = [];
+let data: any = { pagination: { total: 0, page, limit, totalPages: 0 } };
+let stats: any = null;
+
+try {
+  // Build where conditions (same logic as API endpoint)
+  const whereConditions = [];
+
+  if (showTrashed) {
+    // Show only trashed items
+    whereConditions.push(isNotNull(categories.deletedAt));
+  } else {
+    // Show only non-trashed items
+    whereConditions.push(isNull(categories.deletedAt));
+  }
+
+  if (search) {
+    whereConditions.push(
+      sql`(${categories.name} LIKE ${`%${search}%`} OR ${
+        categories.description
+      } LIKE ${`%${search}%`})`
+    );
+  }
+
+  // Get total count for pagination
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(categories)
+    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
+
+  // Calculate pagination
+  const offset = (page - 1) * limit;
+
+  // Get paginated results with proper timestamp handling
+  const results = await db
+    .select({
+      id: categories.id,
+      name: categories.name,
+      slug: categories.slug,
+      description: categories.description,
+      imageUrl: categories.imageUrl,
+      metaTitle: categories.metaTitle,
+      metaDescription: categories.metaDescription,
+      createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
+      updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
+      deletedAt: sql<number>`CAST(${categories.deletedAt} AS INTEGER)`,
+    })
+    .from(categories)
+    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+    .limit(limit)
+    .offset(offset)
+    .orderBy(
+      (() => {
+        const sortField = (() => {
+          switch (sort) {
+            case "name":
+              return categories.name;
+            case "createdAt":
+              return categories.createdAt;
+            case "updatedAt":
+            default:
+              return categories.updatedAt;
+          }
+        })();
+        return order === "asc" ? asc(sortField) : desc(sortField);
+      })()
+    );
+
+  // Get product counts for these categories in a separate query
+  const productCounts = await db
+    .select({
+      categoryId: products.categoryId,
+      count: sql<number>`count(*)`.as("count"),
+    })
+    .from(products)
+    .where(and(isNull(products.deletedAt), eq(products.isActive, true)))
+    .groupBy(products.categoryId);
+
+  // Create a map of category ID to product count
+  const countMap = new Map(
+    productCounts.map(({ categoryId, count }) => [categoryId, Number(count)])
+  );
+
+  // Format dates and add product counts
+  formattedCategories = results.map((category) => ({
+    ...category,
+    createdAt: category.createdAt ? new Date(category.createdAt * 1000) : null,
+    updatedAt: category.updatedAt ? new Date(category.updatedAt * 1000) : null,
+    deletedAt: category.deletedAt ? new Date(category.deletedAt * 1000) : null,
+    productCount: countMap.get(category.id) || 0,
+  }));
+
+  // Get accurate category statistics
+  stats = await getCategoryStats();
+
+  // Create pagination data
+  data = {
+    categories: formattedCategories,
+    pagination: {
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit),
+    },
+  };
+} catch (error) {
+  console.error("Error fetching categories in SSR:", error);
+  // Return to error page or show error state
+  return Astro.redirect("/admin?error=categories-load-failed");
+}
+---
+
+<AdminLayout title={showTrashed ? "Trash" : "Categories"}>
+  <CategoryList
+    client:load
+    categories={formattedCategories}
+    pagination={{
+      total: data.pagination.total,
+      page,
+      limit,
+      totalPages: data.pagination.totalPages,
+    }}
+    initialSearchQuery={search}
+    initialSort={{ field: sort, order }}
+    showTrashed={showTrashed}
+    stats={stats}
+  />
+</AdminLayout>

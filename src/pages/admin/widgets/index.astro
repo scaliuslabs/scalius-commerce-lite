@@ -1,0 +1,94 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { WidgetsList } from "@/components/admin/widget-list";
+import { Button } from "@/components/ui/button";
+import { PlusCircle, Trash2 } from "lucide-react";
+import { db } from "@/db";
+import { widgets, collections } from "@/db/schema";
+import { eq, isNull, asc, and, like, sql } from "drizzle-orm";
+import { unixToDate } from "@/lib/utils";
+
+const searchParams = Astro.url.searchParams;
+const search = searchParams.get("search") || "";
+
+const queryConditions = [isNull(widgets.deletedAt)];
+
+if (search) {
+  queryConditions.push(like(widgets.name, `%${search}%`));
+}
+
+const dbWidgets = await db
+  .select()
+  .from(widgets)
+  .where(and(...queryConditions))
+  .orderBy(asc(widgets.sortOrder), asc(widgets.name));
+
+const allWidgets = dbWidgets.map((widget) => {
+  const createdAtDate = unixToDate(widget.createdAt);
+  const updatedAtDate = unixToDate(widget.updatedAt);
+  const deletedAtDate = unixToDate(widget.deletedAt);
+
+  return {
+    ...widget,
+    createdAt: createdAtDate?.toISOString() ?? null,
+    updatedAt: updatedAtDate?.toISOString() ?? null,
+    deletedAt: deletedAtDate?.toISOString() ?? null,
+  };
+});
+
+const allCollections = await db
+  .select({
+    id: collections.id,
+    name: collections.name,
+    type: collections.type,
+    sortOrder: collections.sortOrder,
+  })
+  .from(collections)
+  .where(and(isNull(collections.deletedAt), eq(collections.isActive, true)))
+  .orderBy(asc(collections.sortOrder));
+
+const statsResult = await db
+  .select({
+    total: sql<number>`count(*)`,
+    active: sql<number>`count(case when is_active = 1 then 1 end)`,
+    inactive: sql<number>`count(case when is_active = 0 then 1 end)`,
+  })
+  .from(widgets)
+  .where(isNull(widgets.deletedAt))
+  .get() || { total: 0, active: 0, inactive: 0 };
+---
+
+<AdminLayout title="Widgets">
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Widgets</h1>
+        <p class="text-muted-foreground">
+          Create and manage dynamic content widgets for your store.
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/admin/widgets/trash">
+          <Button variant="outline" size="sm">
+            <Trash2 client:visible className="mr-2 h-4 w-4" />
+            View Trash
+          </Button>
+        </a>
+        <a href="/admin/widgets/create">
+          <Button>
+            <PlusCircle client:visible className="mr-2 h-4 w-4" />
+            New Widget
+          </Button>
+        </a>
+      </div>
+    </div>
+    <WidgetsList
+      client:load
+      showTrashed={false}
+      initialWidgets={allWidgets}
+      initialCollections={allCollections}
+      initialStats={statsResult}
+      initialSearch={search}
+    />
+  </div>
+</AdminLayout>

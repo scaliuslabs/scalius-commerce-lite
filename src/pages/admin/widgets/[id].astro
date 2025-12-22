@@ -1,0 +1,74 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { WidgetForm } from "@/components/admin/widgets/WidgetForm";
+import { db } from "@/db";
+import {
+  widgets,
+  collections,
+  WidgetPlacementRule,
+  type Widget,
+} from "@/db/schema";
+import { eq, isNull, asc, and } from "drizzle-orm";
+import { unixToDate } from "@/lib/utils";
+
+
+const { id } = Astro.params;
+const isCreateMode = id === "create";
+
+let widgetProp: Widget | null = null;
+let pageTitle = "Create New Widget";
+let submitButtonText = "Create Widget";
+
+if (!isCreateMode && id) {
+  const dbWidget = await db
+    .select()
+    .from(widgets)
+    .where(and(eq(widgets.id, id), isNull(widgets.deletedAt)))
+    .get();
+
+  if (dbWidget) {
+    pageTitle = `Edit Widget: ${dbWidget.name}`;
+    submitButtonText = "Save Changes";
+
+    // Safely convert integer timestamps to Date objects for the form
+    const createdAt = unixToDate(dbWidget.createdAt);
+    const updatedAt = unixToDate(dbWidget.updatedAt);
+    const deletedAt = unixToDate(dbWidget.deletedAt);
+
+    widgetProp = {
+      ...dbWidget,
+      createdAt: createdAt ?? new Date(), // Fallback for safety
+      updatedAt: updatedAt ?? new Date(), // Fallback for safety
+      deletedAt: deletedAt ?? null,
+    };
+  } else {
+    console.warn(`Widget with id ${id} not found.`);
+  }
+}
+
+const availableCollections = await db
+  .select({
+    id: collections.id,
+    name: collections.name,
+    type: collections.type,
+    sortOrder: collections.sortOrder,
+  })
+  .from(collections)
+  .where(and(isNull(collections.deletedAt), eq(collections.isActive, true)))
+  .orderBy(asc(collections.sortOrder));
+
+const placementRules = Object.values(WidgetPlacementRule);
+---
+
+<AdminLayout title={pageTitle}>
+  <div class="container mx-auto py-6">
+    <WidgetForm
+      client:load
+      widget={widgetProp}
+      isCreateMode={isCreateMode}
+      availableCollections={availableCollections}
+      placementRules={placementRules}
+      submitButtonText={submitButtonText}
+    />
+  </div>
+</AdminLayout>

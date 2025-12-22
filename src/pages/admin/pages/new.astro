@@ -1,0 +1,16 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { PageForm } from "../../../components/admin/PageForm";
+---
+
+<AdminLayout title="Create New Page">
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-3xl font-bold tracking-tight">Create New Page</h1>
+    </div>
+    <div class="grid gap-6">
+      <PageForm client:load />
+    </div>
+  </div>
+</AdminLayout>
+

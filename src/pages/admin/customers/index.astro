@@ -1,0 +1,239 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { CustomerList } from "../../../components/admin/CustomerList";
+import { db } from "../../../db";
+import { customers, orders, deliveryLocations } from "../../../db/schema";
+import { sql, eq, and, isNull, inArray } from "drizzle-orm";
+import { nanoid } from "nanoid";
+
+const searchParams = Astro.url.searchParams;
+const page = parseInt(searchParams.get("page") || "1");
+const limit = parseInt(searchParams.get("limit") || "10");
+const search = searchParams.get("search") || "";
+const showTrashed = searchParams.get("trashed") === "true";
+const sort = (searchParams.get("sort") || "updatedAt") as
+  | "name"
+  | "totalOrders"
+  | "totalSpent"
+  | "lastOrderAt"
+  | "createdAt"
+  | "updatedAt";
+const order = (searchParams.get("order") || "desc") as "asc" | "desc";
+
+// Build where conditions
+const whereConditions = [];
+
+if (showTrashed) {
+  // Show only trashed items
+  whereConditions.push(sql`${customers.deletedAt} IS NOT NULL`);
+} else {
+  // Show only non-trashed items
+  whereConditions.push(sql`${customers.deletedAt} IS NULL`);
+}
+
+if (search) {
+  whereConditions.push(
+    sql`(${customers.name} LIKE ${`%${search}%`} OR ${
+      customers.phone
+    } LIKE ${`%${search}%`} OR ${customers.email} LIKE ${`%${search}%`})`
+  );
+}
+
+// Get total count for pagination
+const [{ count }] = await db
+  .select({ count: sql<number>`count(*)` })
+  .from(customers)
+  .where(
+    whereConditions.length > 0
+      ? sql`${sql.join(whereConditions, sql` AND `)}`
+      : undefined
+  );
+
+// Get paginated results with proper timestamp handling
+const offset = (page - 1) * limit;
+
+// First, get all customers from orders who might not be in customers table
+const orderCustomers = await db
+  .select({
+    phone: orders.customerPhone,
+    name: orders.customerName,
+    email: orders.customerEmail,
+    totalAmount: sql<number>`CAST(SUM(${orders.totalAmount}) AS INTEGER)`,
+    orderCount: sql<number>`CAST(COUNT(*) AS INTEGER)`,
+    lastOrderAt: sql<number>`CAST(MAX(${orders.createdAt}) AS INTEGER)`,
+  })
+  .from(orders)
+  .where(sql`${orders.customerId} IS NULL`)
+  .groupBy(orders.customerPhone, orders.customerName, orders.customerEmail);
+
+// Create missing customers
+for (const customer of orderCustomers) {
+  // Check if customer exists
+  const existingCustomer = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.phone, customer.phone))
+    .get();
+
+  if (!existingCustomer) {
+    await db.insert(customers).values({
+      id: "cust_" + nanoid(),
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email,
+      address: null,
+      city: null,
+      zone: null,
+      area: null,
+      totalOrders: Number(customer.orderCount),
+      totalSpent: Number(customer.totalAmount),
+      lastOrderAt: customer.lastOrderAt
+        ? sql`CAST(${customer.lastOrderAt} AS INTEGER)`
+        : null,
+      createdAt: sql`CAST(strftime('%s','now') AS INTEGER)`,
+      updatedAt: sql`CAST(strftime('%s','now') AS INTEGER)`,
+      deletedAt: null,
+    });
+  }
+}
+
+// Now get all customers with updated stats
+const results = await db
+  .select({
+    id: customers.id,
+    name: customers.name,
+    email: customers.email,
+    phone: customers.phone,
+    address: customers.address,
+    city: customers.city,
+    zone: customers.zone,
+    area: customers.area,
+    totalOrders: customers.totalOrders,
+    totalSpent: customers.totalSpent,
+    lastOrderAt: sql<number>`CAST(${customers.lastOrderAt} AS INTEGER)`,
+    createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
+    updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
+  })
+  .from(customers)
+  .where(
+    whereConditions.length > 0
+      ? sql`${sql.join(whereConditions, sql` AND `)}`
+      : undefined
+  )
+  .limit(limit)
+  .offset(offset)
+  .orderBy(
+    (() => {
+      const sortField = (() => {
+        switch (sort) {
+          case "name":
+            return customers.name;
+          case "totalOrders":
+            return customers.totalOrders;
+          case "totalSpent":
+            return customers.totalSpent;
+          case "lastOrderAt":
+            return customers.lastOrderAt;
+          case "createdAt":
+            return customers.createdAt;
+          case "updatedAt":
+          default:
+            return customers.updatedAt;
+        }
+      })();
+
+      return order === "asc" ? sql`${sortField} asc` : sql`${sortField} desc`;
+    })()
+  );
+
+// Format dates
+const formattedCustomers = results.map((customer) => ({
+  ...customer,
+  lastOrderAt: customer.lastOrderAt
+    ? new Date(customer.lastOrderAt * 1000)
+    : null,
+  createdAt: new Date(customer.createdAt * 1000),
+  updatedAt: new Date(customer.updatedAt * 1000),
+}));
+
+// Fetch location data for all customers using the new deliveryLocations API
+// First, get all unique location IDs
+const uniqueCityIds = [
+  ...new Set(formattedCustomers.filter((c) => c.city).map((c) => c.city)),
+];
+const uniqueZoneIds = [
+  ...new Set(formattedCustomers.filter((c) => c.zone).map((c) => c.zone)),
+];
+const uniqueAreaIds = [
+  ...new Set(formattedCustomers.filter((c) => c.area).map((c) => c.area)),
+];
+
+// Fetch all locations in one query
+const allLocationIds = [
+  ...uniqueCityIds,
+  ...uniqueZoneIds,
+  ...uniqueAreaIds,
+].filter(Boolean) as string[];
+let locationMap = new Map();
+
+if (allLocationIds.length > 0) {
+  try {
+    // Get all locations that match the IDs
+    const locationResults = await db
+      .select({
+        id: deliveryLocations.id,
+        name: deliveryLocations.name,
+      })
+      .from(deliveryLocations)
+      .where(
+        and(
+          inArray(deliveryLocations.id, allLocationIds),
+          isNull(deliveryLocations.deletedAt)
+        )
+      );
+
+    // Create a map of ID to location name
+    locationResults.forEach((location) => {
+      locationMap.set(location.id, location.name);
+    });
+  } catch (error) {
+    console.error("Error fetching locations:", error);
+  }
+}
+
+// Add location names to customers
+const enhancedCustomers = formattedCustomers.map((customer) => {
+  const cityName = customer.city
+    ? locationMap.get(customer.city) || customer.city
+    : null;
+  const zoneName = customer.zone
+    ? locationMap.get(customer.zone) || customer.zone
+    : null;
+  const areaName = customer.area
+    ? locationMap.get(customer.area) || customer.area
+    : null;
+
+  return {
+    ...customer,
+    cityName,
+    zoneName,
+    areaName,
+  };
+});
+---
+
+<AdminLayout title={showTrashed ? "Trash" : "Customers"}>
+  <CustomerList
+    client:load
+    customers={enhancedCustomers}
+    pagination={{
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit),
+    }}
+    initialSearchQuery={search}
+    initialSort={{ field: sort, order }}
+    showTrashed={showTrashed}
+  />
+</AdminLayout>

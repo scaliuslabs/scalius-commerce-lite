@@ -1,0 +1,186 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { ProductForm } from "../../../../components/admin/ProductForm";
+import { VariantManager } from "../../../../components/admin/ProductForm/variants";
+import { db } from "../../../../db";
+import {
+  products,
+  categories as categoriesTable,
+  productImages,
+  productVariants,
+  productAttributeValues,
+  productAttributes,
+  productRichContent,
+} from "../../../../db/schema";
+import { eq, sql } from "drizzle-orm";
+
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect("/admin/products");
+}
+
+const product = await db
+  .select({
+    id: products.id,
+    name: products.name,
+    description: products.description,
+    price: products.price,
+    categoryId: products.categoryId,
+    slug: products.slug,
+    metaTitle: products.metaTitle,
+    metaDescription: products.metaDescription,
+    isActive: products.isActive,
+    discountType: products.discountType,
+    discountPercentage: products.discountPercentage,
+    discountAmount: products.discountAmount,
+    freeDelivery: products.freeDelivery,
+  })
+  .from(products)
+  .where(eq(products.id, id))
+  .get();
+
+if (!product) {
+  return Astro.redirect("/admin/products");
+}
+
+const images = await db
+  .select({
+    id: productImages.id,
+    url: productImages.url,
+    alt: productImages.alt,
+    sortOrder: productImages.sortOrder,
+    createdAt: sql<string>`datetime(${productImages.createdAt}, 'unixepoch')`,
+  })
+  .from(productImages)
+  .where(eq(productImages.productId, id))
+  .orderBy(productImages.sortOrder);
+
+const variants = await db
+  .select({
+    id: productVariants.id,
+    productId: productVariants.productId,
+    size: productVariants.size,
+    color: productVariants.color,
+    weight: productVariants.weight,
+    sku: productVariants.sku,
+    price: productVariants.price,
+    stock: productVariants.stock,
+    discountType: productVariants.discountType,
+    discountPercentage: productVariants.discountPercentage,
+    discountAmount: productVariants.discountAmount,
+    colorSortOrder: productVariants.colorSortOrder,
+    sizeSortOrder: productVariants.sizeSortOrder,
+    createdAt: sql<string>`datetime(${productVariants.createdAt}, 'unixepoch')`,
+    updatedAt: sql<string>`datetime(${productVariants.updatedAt}, 'unixepoch')`,
+    deletedAt: productVariants.deletedAt,
+  })
+  .from(productVariants)
+  .where(
+    sql`${productVariants.productId} = ${id} AND ${productVariants.deletedAt} IS NULL`
+  )
+  .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt);
+
+const assignedAttributes = await db
+  .select({
+    attributeId: productAttributeValues.attributeId,
+    value: productAttributeValues.value,
+    name: productAttributes.name,
+    slug: productAttributes.slug,
+  })
+  .from(productAttributeValues)
+  .leftJoin(
+    productAttributes,
+    eq(productAttributeValues.attributeId, productAttributes.id)
+  )
+  .where(eq(productAttributeValues.productId, id));
+
+const additionalInfo = await db
+  .select({
+    id: productRichContent.id,
+    title: productRichContent.title,
+    content: productRichContent.content,
+  })
+  .from(productRichContent)
+  .where(eq(productRichContent.productId, id))
+  .orderBy(productRichContent.sortOrder);
+
+const allCategories = await db
+  .select({
+    id: categoriesTable.id,
+    name: categoriesTable.name,
+  })
+  .from(categoriesTable)
+  .where(sql`${categoriesTable.deletedAt} IS NULL`);
+
+const defaultValues = {
+  ...product,
+  slugEdited: true,
+  discountType: (product.discountType || "percentage") as "percentage" | "flat",
+  discountPercentage: product.discountPercentage || 0,
+  discountAmount: product.discountAmount || 0,
+  images: images.map((img) => ({
+    id: img.id,
+    url: img.url,
+    filename: img.alt || img.url.split("/").pop() || "",
+    size: 0,
+    createdAt: new Date(img.createdAt),
+  })),
+  attributes: assignedAttributes,
+  additionalInfo: additionalInfo,
+};
+
+const formattedVariants = variants.map((variant) => ({
+  id: variant.id,
+  productId: variant.productId,
+  size: variant.size,
+  color: variant.color,
+  weight: variant.weight,
+  sku: variant.sku,
+  price: variant.price,
+  stock: variant.stock,
+  discountType: variant.discountType || "percentage",
+  discountPercentage: variant.discountPercentage || 0,
+  discountAmount: variant.discountAmount || 0,
+  createdAt: new Date(variant.createdAt),
+  updatedAt: new Date(variant.updatedAt),
+  deletedAt: variant.deletedAt ? new Date((variant.deletedAt as unknown as number) * 1000) : null,
+}));
+---
+
+<AdminLayout title={`Edit ${product.name}`}>
+  <div class="container max-w-7xl space-y-6 py-4 pb-8">
+    <ProductForm
+      client:load
+      categories={allCategories}
+      defaultValues={defaultValues}
+      isEdit={true}
+    />
+
+    <div class="mt-6" id="variant-section">
+      <VariantManager
+        client:load
+        productId={product.id}
+        productSlug={product.slug}
+        variants={formattedVariants}
+      />
+    </div>
+  </div>
+</AdminLayout>
+
+<script is:inline>
+  const urlParams = new URLSearchParams(window.location.search);
+  const isNewProduct = urlParams.get("new") === "true";
+
+  if (isNewProduct) {
+    setTimeout(() => {
+      const variantSection = document.getElementById("variant-section");
+      if (variantSection) {
+        variantSection.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    }, 500);
+  }
+</script>
