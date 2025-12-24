@@ -34,7 +34,7 @@
 
 <p align="center">
   <!-- Twitter / X -->
-  <a href="https://x.com/scaliuslabs">
+  <a href="https://scalius.com/x">
     <img src="https://img.shields.io/twitter/follow/scaliuslabs.svg?label=Follow%20@scaliuslabs" alt="Follow @scaliuslabs" />
   </a>
   <!-- Discord -->
