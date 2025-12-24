@@ -47,7 +47,7 @@
   </a>
 </p>
 
-## Scalius Commerce Lite
+## Get Started
 
 Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefront API** built on **Astro** and **Hono**, backed by **Turso (libSQL)** via **Drizzle ORM**. The admin side ships as Astro pages with React components; the storefront API ships as a Hono app mounted under `/api/v1`.
 
