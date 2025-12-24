@@ -1,3 +1,52 @@
+<p align="center">
+  <a href="https://scalius.com">
+    <img alt="Scalius Commerce Lite" src="https://raw.githubusercontent.com/scaliuslabs/scalius-commerce-lite/refs/heads/master/src/assets/logo-dark.png" width="200" />
+  </a>
+</p>
+
+<h1 align="center">
+  Scalius Commerce Lite
+</h1>
+
+<h4 align="center">
+  <a href="https://docs.scalius.com">Documentation</a> |
+  <a href="https://scalius.com">Website</a>
+</h4>
+
+<p align="center">
+  Full-stack e-commerce admin dashboard + storefront API built on Astro, Hono, and Turso.
+</p>
+
+<p align="center">
+  <!-- License: AGPL v3 -->
+  <a href="https://github.com/scaliuslabs/scalius-commerce-lite/blob/master/LICENSE">
+    <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="Scalius Commerce Lite is released under the AGPL v3 license." />
+  </a>
+  <!-- PRs Welcome -->
+  <a href="https://github.com/scaliuslabs/scalius-commerce-lite/blob/master/CONTRIBUTING.md">
+    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" alt="PRs welcome!" />
+  </a>
+  <!-- Security Policy -->
+  <a href="https://github.com/scaliuslabs/scalius-commerce-lite/blob/master/SECURITY.md">
+    <img src="https://img.shields.io/badge/Security-Policy-red.svg" alt="Security Policy" />
+  </a>
+</p>
+
+<p align="center">
+  <!-- Twitter / X -->
+  <a href="https://x.com/scaliuslabs">
+    <img src="https://img.shields.io/twitter/follow/scaliuslabs.svg?label=Follow%20@scaliuslabs" alt="Follow @scaliuslabs" />
+  </a>
+  <!-- Discord -->
+  <a href="https://scalius.com/discord">
+    <img src="https://img.shields.io/badge/chat-on%20discord-7289DA.svg" alt="Discord Chat" />
+  </a>
+  <!-- Facebook -->
+  <a href="https://scalius.com/facebook">
+    <img src="https://img.shields.io/badge/Facebook-Follow-1877F2?logo=facebook" alt="Follow on Facebook" />
+  </a>
+</p>
+
 ## Scalius Commerce Lite
 
 Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefront API** built on **Astro** and **Hono**, backed by **Turso (libSQL)** via **Drizzle ORM**. The admin side ships as Astro pages with React components; the storefront API ships as a Hono app mounted under `/api/v1`.
