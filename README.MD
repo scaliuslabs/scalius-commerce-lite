@@ -371,7 +371,7 @@ pnpm generate:sdk
 
 See `src/lib/sdk/README.md` for usage patterns and security notes.
 
-### Deployment (Cloudflare Pages)
+### Deployment (Cloudflare Workers)
 
 - Build output is SSR (`output: "server"`) with the Cloudflare adapter (`astro.config.mjs`).
 - Deploy with:
