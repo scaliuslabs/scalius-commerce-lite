@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 export const POST: APIRoute = async ({ params, request }) => {
   try {
@@ -136,17 +137,6 @@ export const POST: APIRoute = async ({ params, request }) => {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in clear specific cache API route:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to clear cache",
-        details: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

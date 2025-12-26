@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { FraudCheckerService } from "@/lib/fraud-checker/service";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 const fraudCheckerService = new FraudCheckerService();
 
@@ -26,18 +27,6 @@ export const DELETE: APIRoute = async ({ params }) => {
       },
     });
   } catch (error) {
-    console.error("Error deleting provider:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to delete provider",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

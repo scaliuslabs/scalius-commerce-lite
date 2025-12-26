@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { createProvider } from "@/lib/delivery/factory";
 import { nanoid } from "nanoid";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -115,19 +116,6 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
   } catch (error) {
-    console.error("Error in direct credential test:", error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        message: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

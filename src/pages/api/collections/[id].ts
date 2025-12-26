@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { collections } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 const updateCollectionSchema = z.object({
   name: z
@@ -53,11 +54,7 @@ export const GET: APIRoute = async ({ params }) => {
       status: 200,
     });
   } catch (error) {
-    console.error("Error fetching collection:", error);
-    return new Response(
-      JSON.stringify({ message: "Error fetching collection" }),
-      { status: 500 },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -97,16 +94,12 @@ export const PUT: APIRoute = async ({ request, params }) => {
       status: 200,
     });
   } catch (error) {
-    console.error("Error updating collection:", error);
     if (error instanceof z.ZodError) {
       return new Response(JSON.stringify({ errors: error.errors }), {
         status: 400,
       });
     }
-    return new Response(
-      JSON.stringify({ message: "Error updating collection" }),
-      { status: 500 },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -147,13 +140,6 @@ export const DELETE: APIRoute = async ({ params }) => {
 
     return new Response(null, { status: 204 });
   } catch (error) {
-    console.error("Error deleting collection:", error);
-    return new Response(
-      JSON.stringify({
-        message: "Error deleting collection",
-        error: error instanceof Error ? error.message : String(error),
-      }),
-      { status: 500 },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

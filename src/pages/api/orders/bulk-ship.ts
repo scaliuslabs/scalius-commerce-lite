@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { DeliveryService } from "@/lib/delivery/service";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 // Initialize the service
 const deliveryService = new DeliveryService();
@@ -80,18 +81,6 @@ export const POST: APIRoute = async ({ request }) => {
       },
     );
   } catch (error) {
-    console.error("Error creating bulk shipments:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to process bulk shipments",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

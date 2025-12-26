@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { DeliveryService } from "@/lib/delivery/service";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 // Initialize the service
 const deliveryService = new DeliveryService();
@@ -56,19 +57,7 @@ export const GET: APIRoute = async ({ params }) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching shipment:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to fetch shipment",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -126,18 +115,6 @@ export const DELETE: APIRoute = async ({ params }) => {
       },
     });
   } catch (error) {
-    console.error("Error deleting shipment:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to delete shipment",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

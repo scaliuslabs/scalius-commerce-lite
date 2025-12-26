@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { DeliveryService } from "@/lib/delivery/service";
 import { createProvider } from "@/lib/delivery/factory";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 // Initialize the service
 const deliveryService = new DeliveryService();
@@ -40,19 +41,7 @@ export const GET: APIRoute = async ({ params }) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching provider:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to fetch provider",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -116,19 +105,6 @@ export const POST: APIRoute = async ({ params }) => {
       );
     }
   } catch (error) {
-    console.error("Error testing provider:", error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        message: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

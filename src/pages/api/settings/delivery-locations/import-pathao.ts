@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { db } from "@/db";
+import { safeErrorResponse } from "@/lib/error-utils";
 import { deliveryLocations, deliveryProviders } from "@/db/schema";
 import { eq, isNull, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
@@ -338,16 +339,6 @@ export const POST: APIRoute = async () => {
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error("Error importing Pathao locations:", error);
-    return new Response(
-      JSON.stringify({
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to import Pathao locations",
-        details: error instanceof Error ? error.stack : undefined,
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

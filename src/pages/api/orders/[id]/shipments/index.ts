@@ -3,6 +3,7 @@ import { DeliveryService } from "@/lib/delivery/service";
 import { db } from "@/db";
 import { deliveryShipments } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 // Initialize the service
 const deliveryService = new DeliveryService();
@@ -44,19 +45,7 @@ export const GET: APIRoute = async ({ params }) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching shipments:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to fetch shipments",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -151,18 +140,6 @@ export const POST: APIRoute = async ({ params, request }) => {
       },
     });
   } catch (error) {
-    console.error("Error creating shipment:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to create shipment",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

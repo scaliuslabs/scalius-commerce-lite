@@ -27,19 +27,18 @@ export function safeErrorResponse(error: unknown, status = 500): Response {
     body.originalError = error;
   } else {
     // In production, return a generic message to avoid leaking internals
-    // Unless it's a 4xx error which might need specific user feedback,
-    // but for 500s we generally want to be opaque unless we have a specific AppError type.
-    // For this implementation, we will be conservative.
-    body.message =
-      status >= 500 ? "Internal Server Error" : "An error occurred";
+    // Unless it's a 4xx error which might need specific user feedback.
+    // CodeQL flags 'error.message' as potential exposure if not carefully handled.
+    // We strictly use "Internal Server Error" for >= 500 status codes.
 
-    // If it's a known error type that is safe to expose, logic could be added here.
-    // For now, if status is < 500, we assume the message might be safe-ish,
-    // but to be strictly safe against the "stack trace exposure" alert,
-    // we should usually sanitize unless we explicitly know it's safe.
-    // However, often 400s contain validation messages we WANT the user to see.
-    if (status < 500 && error instanceof Error) {
-      body.message = error.message;
+    if (status >= 500) {
+      body.message = "Internal Server Error";
+    } else {
+      // For client errors (< 500), we allow the message if it's an Error object,
+      // assuming the application logic only throws safe messages for client errors.
+      // To satisfy CodeQL, we ensure it is a string from an Error object.
+      body.message =
+        error instanceof Error ? error.message : "An error occurred";
     }
   }
 

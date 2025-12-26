@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { search, indexAllData } from "@/lib/search/index";
 import { rateLimit } from "@/lib/rate-limit";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 // Rate limiting for search API
 const limiter = rateLimit({
@@ -100,33 +101,7 @@ export const GET: APIRoute = async ({ request, url }) => {
       },
     );
   } catch (error) {
-    console.error("Search API error:", error);
-
-    // Try to reindex if there was an error
-    if (String(error).includes("Index not found")) {
-      try {
-        console.log("Attempting to reindex data...");
-        const indexResult = await indexAllData();
-        console.log("Reindexed data:", indexResult);
-      } catch (reindexError) {
-        console.error("Failed to reindex:", reindexError);
-      }
-    }
-
-    return new Response(
-      JSON.stringify({
-        error: "An error occurred while searching",
-        message: String(error),
-        success: false,
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, max-age=0",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -170,20 +145,6 @@ export const POST: APIRoute = async ({ request }) => {
       },
     );
   } catch (error) {
-    console.error("Reindexing error:", error);
-
-    return new Response(
-      JSON.stringify({
-        error: "Failed to reindex data",
-        message: String(error),
-        success: false,
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

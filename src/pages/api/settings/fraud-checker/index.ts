@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { FraudCheckerService } from "@/lib/fraud-checker/service";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 const fraudCheckerService = new FraudCheckerService();
 
@@ -11,7 +12,7 @@ export const GET: APIRoute = async () => {
     const providers = await fraudCheckerService.getProviders();
 
     // SECURITY: Mask API keys before sending to client
-    const maskedProviders = providers.map(provider => ({
+    const maskedProviders = providers.map((provider) => ({
       ...provider,
       apiKey: provider.apiKey ? MASKED_VALUE : "",
     }));
@@ -23,19 +24,7 @@ export const GET: APIRoute = async () => {
       },
     });
   } catch (error) {
-    console.error("Error fetching fraud checker providers:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to fetch providers",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -73,19 +62,7 @@ export const POST: APIRoute = async ({ request }) => {
       },
     });
   } catch (error) {
-    console.error("Error creating provider:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to create provider",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -93,7 +70,12 @@ export const PUT: APIRoute = async ({ request }) => {
   try {
     const provider = await request.json();
 
-    if (!provider.id || !provider.name || !provider.apiUrl || !provider.apiKey) {
+    if (
+      !provider.id ||
+      !provider.name ||
+      !provider.apiUrl ||
+      !provider.apiKey
+    ) {
       return new Response(
         JSON.stringify({
           error: "Missing required fields",
@@ -110,7 +92,9 @@ export const PUT: APIRoute = async ({ request }) => {
 
     // SECURITY: If API key is masked, fetch existing from database
     if (provider.apiKey === MASKED_VALUE) {
-      const existingProvider = await fraudCheckerService.getProvider(provider.id);
+      const existingProvider = await fraudCheckerService.getProvider(
+        provider.id,
+      );
       if (existingProvider?.apiKey) {
         provider.apiKey = existingProvider.apiKey;
       }
@@ -131,18 +115,6 @@ export const PUT: APIRoute = async ({ request }) => {
       },
     });
   } catch (error) {
-    console.error("Error updating provider:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to update provider",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { indexAllData } from "@/lib/search/index";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 // Dedicated endpoint for reindexing
 export const POST: APIRoute = async ({ request }) => {
@@ -64,23 +65,7 @@ export const POST: APIRoute = async ({ request }) => {
       },
     );
   } catch (error) {
-    console.error("Reindexing error:", error);
-
-    return new Response(
-      JSON.stringify({
-        error: "Failed to reindex data",
-        message: String(error),
-        success: false,
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -129,22 +114,6 @@ export const GET: APIRoute = async () => {
       },
     );
   } catch (error) {
-    console.error("Development reindexing error:", error);
-
-    return new Response(
-      JSON.stringify({
-        error: "Failed to reindex data",
-        message: String(error),
-        success: false,
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
