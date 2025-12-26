@@ -4,6 +4,7 @@ import { ShipmentTracker } from "@/lib/delivery/tracking";
 import { db } from "@/db";
 import { deliveryShipments } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 // Initialize the service
 const deliveryService = new DeliveryService();
@@ -111,18 +112,6 @@ export const POST: APIRoute = async ({ params }) => {
       },
     );
   } catch (error) {
-    console.error("Error checking shipment status:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to check shipment status",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

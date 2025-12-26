@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { DeliveryService } from "@/lib/delivery/service";
+import { safeErrorResponse } from "@/lib/error-utils";
 
 // Initialize the service
 const deliveryService = new DeliveryService();
@@ -11,7 +12,10 @@ const MASKED_VALUE = "••••••••••••";
  * SECURITY: Unmask credentials by fetching from database if fields are masked
  * This ensures masked credentials from the client are never saved to the database
  */
-function unmaskedCredentials(newCredentials: string, existingCredentials?: string): string {
+function unmaskedCredentials(
+  newCredentials: string,
+  existingCredentials?: string,
+): string {
   try {
     const newCreds = JSON.parse(newCredentials);
 
@@ -70,7 +74,7 @@ export const GET: APIRoute = async () => {
     const providers = await deliveryService.getProviders();
 
     // SECURITY: Mask credentials before sending to client
-    const maskedProviders = providers.map(provider => ({
+    const maskedProviders = providers.map((provider) => ({
       ...provider,
       credentials: maskCredentialsForClient(provider.credentials),
     }));
@@ -82,19 +86,7 @@ export const GET: APIRoute = async () => {
       },
     });
   } catch (error) {
-    console.error("Error fetching providers:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to fetch providers",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -144,19 +136,7 @@ export const POST: APIRoute = async ({ request }) => {
       },
     });
   } catch (error) {
-    console.error("Error creating provider:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to create provider",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };
 
@@ -216,7 +196,7 @@ export const PUT: APIRoute = async ({ request }) => {
     // SECURITY: Unmask credentials before saving
     const unmaskedCreds = unmaskedCredentials(
       provider.credentials,
-      existingProvider.credentials
+      existingProvider.credentials,
     );
 
     // Update existing provider
@@ -246,18 +226,6 @@ export const PUT: APIRoute = async ({ request }) => {
       },
     });
   } catch (error) {
-    console.error("Error updating provider:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Failed to update provider",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 };

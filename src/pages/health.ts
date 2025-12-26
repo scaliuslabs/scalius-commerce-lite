@@ -1,4 +1,5 @@
 export const prerender = false;
+import { safeErrorResponse } from "@/lib/error-utils";
 
 /**
  * Health check endpoint for the application
@@ -41,23 +42,7 @@ export async function GET() {
       },
     );
   } catch (error) {
-    console.error("Health check failed:", error);
-
-    return new Response(
-      JSON.stringify({
-        status: "error",
-        timestamp: new Date().toISOString(),
-        message: "Health check failed",
-        error: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, max-age=0",
-        },
-      },
-    );
+    return safeErrorResponse(error, 500);
   }
 }
 
