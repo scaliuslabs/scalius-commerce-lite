@@ -65,7 +65,21 @@ export const GET: APIRoute = async ({ params }) => {
     }
 
     const widget = await db
-      .select()
+      .select({
+        id: widgets.id,
+        name: widgets.name,
+        htmlContent: widgets.htmlContent,
+        cssContent: widgets.cssContent,
+        aiContext: widgets.aiContext,
+        isActive: widgets.isActive,
+        displayTarget: widgets.displayTarget,
+        placementRule: widgets.placementRule,
+        referenceCollectionId: widgets.referenceCollectionId,
+        sortOrder: widgets.sortOrder,
+        createdAt: sql<number>`CAST(${widgets.createdAt} AS INTEGER)`,
+        updatedAt: sql<number>`CAST(${widgets.updatedAt} AS INTEGER)`,
+        deletedAt: sql<number>`CAST(${widgets.deletedAt} AS INTEGER)`,
+      })
       .from(widgets)
       .where(
         and(
@@ -128,25 +142,35 @@ export const PUT: APIRoute = async ({ params, request }) => {
     const data = updateWidgetSchema.parse(json);
 
     // --- VERSION HISTORY LOGIC START ---
-    const currentWidget = await db.select().from(widgets).where(eq(widgets.id, widgetId)).get();
+    const currentWidget = await db
+      .select()
+      .from(widgets)
+      .where(eq(widgets.id, widgetId))
+      .get();
 
     if (currentWidget) {
-        await db.transaction(async (tx) => {
-            await tx.insert(widgetHistory).values({
-                id: 'wh_' + nanoid(),
-                widgetId: widgetId,
-                htmlContent: currentWidget.htmlContent,
-                cssContent: currentWidget.cssContent,
-                reason: 'updated'
-            });
-
-            const versions = await tx.select({ id: widgetHistory.id, createdAt: widgetHistory.createdAt }).from(widgetHistory).where(eq(widgetHistory.widgetId, widgetId)).orderBy(desc(widgetHistory.createdAt));
-
-            if (versions.length > 4) {
-                const versionsToDelete = versions.slice(4).map(v => v.id);
-                await tx.delete(widgetHistory).where(inArray(widgetHistory.id, versionsToDelete));
-            }
+      await db.transaction(async (tx) => {
+        await tx.insert(widgetHistory).values({
+          id: "wh_" + nanoid(),
+          widgetId: widgetId,
+          htmlContent: currentWidget.htmlContent,
+          cssContent: currentWidget.cssContent,
+          reason: "updated",
         });
+
+        const versions = await tx
+          .select({ id: widgetHistory.id, createdAt: widgetHistory.createdAt })
+          .from(widgetHistory)
+          .where(eq(widgetHistory.widgetId, widgetId))
+          .orderBy(desc(widgetHistory.createdAt));
+
+        if (versions.length > 4) {
+          const versionsToDelete = versions.slice(4).map((v) => v.id);
+          await tx
+            .delete(widgetHistory)
+            .where(inArray(widgetHistory.id, versionsToDelete));
+        }
+      });
     }
     // --- VERSION HISTORY LOGIC END ---
 
@@ -168,7 +192,21 @@ export const PUT: APIRoute = async ({ params, request }) => {
         updatedAt: sql`(cast(strftime('%s','now') as int))`, // CORRECTED
       })
       .where(eq(widgets.id, widgetId))
-      .returning();
+      .returning({
+        id: widgets.id,
+        name: widgets.name,
+        htmlContent: widgets.htmlContent,
+        cssContent: widgets.cssContent,
+        aiContext: widgets.aiContext,
+        isActive: widgets.isActive,
+        displayTarget: widgets.displayTarget,
+        placementRule: widgets.placementRule,
+        referenceCollectionId: widgets.referenceCollectionId,
+        sortOrder: widgets.sortOrder,
+        createdAt: sql<number>`CAST(${widgets.createdAt} AS INTEGER)`,
+        updatedAt: sql<number>`CAST(${widgets.updatedAt} AS INTEGER)`,
+        deletedAt: sql<number>`CAST(${widgets.deletedAt} AS INTEGER)`,
+      });
 
     if (!updatedWidget) {
       return new Response(JSON.stringify({ error: "Widget not found" }), {

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { LayoutDashboard } from "lucide-react";
 import { db } from "@/db";
 import { widgets, collections } from "@/db/schema";
-import { eq, isNotNull, asc, and, like, desc } from "drizzle-orm";
+import { eq, isNotNull, asc, and, like, desc, sql } from "drizzle-orm";
 import { unixToDate } from "@/lib/utils";
 
 const searchParams = Astro.url.searchParams;
@@ -18,7 +18,21 @@ if (search) {
 }
 
 const dbWidgets = await db
-  .select()
+  .select({
+    id: widgets.id,
+    name: widgets.name,
+    htmlContent: widgets.htmlContent,
+    cssContent: widgets.cssContent,
+    aiContext: widgets.aiContext,
+    isActive: widgets.isActive,
+    displayTarget: widgets.displayTarget,
+    placementRule: widgets.placementRule,
+    referenceCollectionId: widgets.referenceCollectionId,
+    sortOrder: widgets.sortOrder,
+    createdAt: sql<number>`CAST(${widgets.createdAt} AS INTEGER)`,
+    updatedAt: sql<number>`CAST(${widgets.updatedAt} AS INTEGER)`,
+    deletedAt: sql<number>`CAST(${widgets.deletedAt} AS INTEGER)`,
+  })
   .from(widgets)
   .where(and(...queryConditions))
   .orderBy(desc(widgets.deletedAt));

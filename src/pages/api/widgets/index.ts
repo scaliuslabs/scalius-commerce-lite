@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { db } from "@/db";
 import { widgets, collections } from "@/db/schema";
-import { eq, isNull, asc, and } from "drizzle-orm";
+import { eq, isNull, asc, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { WidgetPlacementRule } from "@/db/schema";
@@ -36,8 +36,7 @@ const createWidgetSchema = z
       return true;
     },
     {
-      message:
-        "A reference collection is required for this placement rule.",
+      message: "A reference collection is required for this placement rule.",
       path: ["referenceCollectionId"],
     },
   );
@@ -45,7 +44,21 @@ const createWidgetSchema = z
 export const GET: APIRoute = async () => {
   try {
     const allWidgets = await db
-      .select()
+      .select({
+        id: widgets.id,
+        name: widgets.name,
+        htmlContent: widgets.htmlContent,
+        cssContent: widgets.cssContent,
+        aiContext: widgets.aiContext,
+        isActive: widgets.isActive,
+        displayTarget: widgets.displayTarget,
+        placementRule: widgets.placementRule,
+        referenceCollectionId: widgets.referenceCollectionId,
+        sortOrder: widgets.sortOrder,
+        createdAt: sql<number>`CAST(${widgets.createdAt} AS INTEGER)`,
+        updatedAt: sql<number>`CAST(${widgets.updatedAt} AS INTEGER)`,
+        deletedAt: sql<number>`CAST(${widgets.deletedAt} AS INTEGER)`,
+      })
       .from(widgets)
       .where(isNull(widgets.deletedAt))
       .orderBy(asc(widgets.sortOrder), asc(widgets.name));
