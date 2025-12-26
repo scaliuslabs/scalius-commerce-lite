@@ -26,20 +26,25 @@ export function safeErrorResponse(error: unknown, status = 500): Response {
     }
     body.originalError = error;
   } else {
-    // In production, return a generic message to avoid leaking internals
-    // Unless it's a 4xx error which might need specific user feedback.
-    // CodeQL flags 'error.message' as potential exposure if not carefully handled.
-    // We strictly use "Internal Server Error" for >= 500 status codes.
+    // In production, return typically safe, standard HTTP messages based on status code.
+    // We strictly avoid passing dynamic error.message to the client to satisfy CodeQL
+    // rule js/stack-trace-exposure and prevent any info leakage.
+    const STATUS_MESSAGES: Record<number, string> = {
+      400: "Bad Request",
+      401: "Unauthorized",
+      403: "Forbidden",
+      404: "Not Found",
+      405: "Method Not Allowed",
+      409: "Conflict",
+      422: "Unprocessable Entity",
+      429: "Too Many Requests",
+      500: "Internal Server Error",
+      502: "Bad Gateway",
+      503: "Service Unavailable",
+      504: "Gateway Timeout",
+    };
 
-    if (status >= 500) {
-      body.message = "Internal Server Error";
-    } else {
-      // For client errors (< 500), we allow the message if it's an Error object,
-      // assuming the application logic only throws safe messages for client errors.
-      // To satisfy CodeQL, we ensure it is a string from an Error object.
-      body.message =
-        error instanceof Error ? error.message : "An error occurred";
-    }
+    body.message = STATUS_MESSAGES[status] || "An error occurred";
   }
 
   return new Response(JSON.stringify(body), {
