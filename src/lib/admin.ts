@@ -474,6 +474,8 @@ export async function getOrders(options: {
   showTrashed?: boolean;
   sort?: "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
   order?: "asc" | "desc";
+  startDate?: Date;
+  endDate?: Date;
 }) {
   const {
     search,
@@ -483,6 +485,8 @@ export async function getOrders(options: {
     showTrashed = false,
     sort = "updatedAt",
     order = "desc",
+    startDate,
+    endDate,
   } = options;
   const offset = (page - 1) * limit;
 
@@ -507,6 +511,19 @@ export async function getOrders(options: {
 
   if (status) {
     whereConditions.push(sql`${orders.status} = ${status}`);
+  }
+
+  if (startDate) {
+    const startTs = Math.floor(startDate.getTime() / 1000);
+    whereConditions.push(sql`${orders.createdAt} >= ${startTs}`);
+  }
+
+  if (endDate) {
+    // Set to end of day (23:59:59.999) to include all orders on that date
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    const endTs = Math.floor(endOfDay.getTime() / 1000);
+    whereConditions.push(sql`${orders.createdAt} <= ${endTs}`);
   }
 
   // Get total count for pagination

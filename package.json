@@ -131,7 +131,7 @@
     "vite": "^6.4.1",
     "wrangler": "4.47.0"
   },
-  "packageManager": "pnpm@10.20.0",
+  "packageManager": "pnpm@10.26.1",
   "overrides": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

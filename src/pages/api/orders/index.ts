@@ -71,6 +71,11 @@ export const GET: APIRoute = async ({ url }) => {
       | "createdAt"
       | "updatedAt";
     const order = (searchParams.get("order") || "desc") as "asc" | "desc";
+    const startDateParam = searchParams.get("startDate");
+    const endDateParam = searchParams.get("endDate");
+
+    const startDate = startDateParam ? new Date(startDateParam) : undefined;
+    const endDate = endDateParam ? new Date(endDateParam) : undefined;
 
     // Get orders with proper sorting and trash handling
     const { orders: fetchedOrders, pagination } = await getOrders({
@@ -81,6 +86,8 @@ export const GET: APIRoute = async ({ url }) => {
       order,
       showTrashed,
       limit,
+      startDate,
+      endDate,
     });
 
     // Get all unique location IDs from the orders to fetch their names in one go
@@ -134,19 +141,24 @@ export const GET: APIRoute = async ({ url }) => {
         // Provide safe fallbacks to ensure type correctness.
         cityName: order.cityName ?? locationMap.get(cityId) ?? cityId,
         zoneName: order.zoneName ?? locationMap.get(zoneId) ?? zoneId,
-        areaName: order.areaName ?? (order.area ? locationMap.get(order.area) ?? order.area : null),
+        areaName:
+          order.areaName ??
+          (order.area ? (locationMap.get(order.area) ?? order.area) : null),
 
         // Ensure city and zone are not null for type safety
         city: cityId,
         zone: zoneId,
 
         // Convert latestShipment dates if present
-        latestShipment: order.latestShipment ? {
-          ...order.latestShipment,
-          lastChecked: order.latestShipment.lastChecked instanceof Date
-            ? order.latestShipment.lastChecked.toISOString()
-            : order.latestShipment.lastChecked
-        } : null,
+        latestShipment: order.latestShipment
+          ? {
+              ...order.latestShipment,
+              lastChecked:
+                order.latestShipment.lastChecked instanceof Date
+                  ? order.latestShipment.lastChecked.toISOString()
+                  : order.latestShipment.lastChecked,
+            }
+          : null,
       };
     });
 
@@ -157,7 +169,7 @@ export const GET: APIRoute = async ({ url }) => {
         headers: {
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   } catch (error) {
     console.error("Error fetching orders:", error);
@@ -166,7 +178,7 @@ export const GET: APIRoute = async ({ url }) => {
         error: "Failed to fetch orders",
         message: error instanceof Error ? error.message : "Unknown error",
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 };

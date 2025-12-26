@@ -43,6 +43,13 @@
       "when": 1765577846031,
       "tag": "0005_stale_speed_demon",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1766765749717,
+      "tag": "0006_lumpy_sebastian_shaw",
+      "breakpoints": true
     }
   ]
 }

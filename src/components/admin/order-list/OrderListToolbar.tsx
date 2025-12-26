@@ -19,6 +19,9 @@ import {
   Download,
   RefreshCw,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
+import { DateRangePickerWithPresets } from "./DateRangePickerWithPresets";
 
 interface OrderListToolbarProps {
   searchQuery: string;
@@ -33,6 +36,8 @@ interface OrderListToolbarProps {
   onStatusFilterChange: (status: string | null) => void;
   onExportCSV?: () => void;
   onRefresh?: () => void;
+  dateRange: DateRange | undefined;
+  onDateRangeChange: (range: DateRange | undefined) => void;
 }
 
 const statusFilters = [
@@ -58,6 +63,8 @@ export function OrderListToolbar({
   onStatusFilterChange,
   onExportCSV,
   onRefresh,
+  dateRange,
+  onDateRangeChange,
 }: OrderListToolbarProps) {
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [localSearch, setLocalSearch] = React.useState(searchQuery);
@@ -65,8 +72,8 @@ export function OrderListToolbar({
 
   // Auto-refresh state - using browser APIs only (Cloudflare Workers compatible)
   const [autoRefreshEnabled, setAutoRefreshEnabled] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('orderlist-auto-refresh') === 'true';
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("orderlist-auto-refresh") === "true";
     }
     return false;
   });
@@ -143,8 +150,14 @@ export function OrderListToolbar({
   const toggleAutoRefresh = () => {
     const newValue = !autoRefreshEnabled;
     setAutoRefreshEnabled(newValue);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('orderlist-auto-refresh', String(newValue));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("orderlist-auto-refresh", String(newValue));
+    }
+
+    // Optimistic refresh: Trigger immediately when enabling
+    if (newValue && onRefresh) {
+      onRefresh();
+      setCountdown(60); // Reset countdown immediately
     }
   };
 
@@ -160,7 +173,10 @@ export function OrderListToolbar({
         }
       }
       // Clear search on Escape
-      if (e.key === "Escape" && document.activeElement === searchInputRef.current) {
+      if (
+        e.key === "Escape" &&
+        document.activeElement === searchInputRef.current
+      ) {
         setLocalSearch("");
         searchInputRef.current?.blur();
       }
@@ -179,11 +195,15 @@ export function OrderListToolbar({
       <div className="flex items-center justify-between">
         {/* Title and description will be part of the parent CardHeader */}
         <div className="flex items-center gap-3">
-          <div className="text-xs text-[var(--muted-foreground)] bg-[var(--muted)]/50 px-2 py-1 rounded-md border border-[var(--border)]/50">
-            Press <kbd className="px-1.5 py-0.5 bg-[var(--background)] border border-[var(--border)] rounded text-xs font-mono">/</kbd> to search
+          <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50">
+            Press{" "}
+            <kbd className="px-1.5 py-0.5 bg-background border border-border rounded text-xs font-mono">
+              /
+            </kbd>{" "}
+            to search
           </div>
           {onRefresh && (
-            <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] bg-[var(--muted)]/50 px-2 py-1 rounded-md border border-[var(--border)]/50">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50">
               <Checkbox
                 id="auto-refresh"
                 checked={autoRefreshEnabled}
@@ -194,7 +214,9 @@ export function OrderListToolbar({
                 htmlFor="auto-refresh"
                 className="cursor-pointer select-none flex items-center gap-1.5"
               >
-                <RefreshCw className={`h-3 w-3 ${autoRefreshEnabled ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  className={`h-3 w-3 ${autoRefreshEnabled ? "animate-spin" : ""}`}
+                />
                 <span>Auto-refresh</span>
                 {autoRefreshEnabled && (
                   <span className="font-mono font-medium text-primary">
@@ -211,18 +233,18 @@ export function OrderListToolbar({
               variant="outline"
               size="sm"
               onClick={onExportCSV}
-              className="group h-9 border-[var(--border)] bg-[var(--card)]/80 px-3 text-xs font-medium shadow-sm backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:border-[var(--border)] hover:bg-[var(--card)] hover:shadow-md active:translate-y-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              className="group h-9 border-border bg-card/80 px-3 text-xs font-medium shadow-sm backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:border-border hover:bg-card hover:shadow-md active:translate-y-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               aria-label="Export orders to CSV file"
             >
               <Download className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
-              Export CSV
+              Export Page to CSV
             </Button>
           )}
           <Button
             variant="outline"
             size="sm"
             onClick={onToggleTrash}
-            className="group h-9 border-[var(--border)] bg-[var(--card)]/80 px-3 text-xs font-medium shadow-sm backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:border-[var(--border)] hover:bg-[var(--card)] hover:shadow-md active:translate-y-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="group h-9 border-border bg-card/80 px-3 text-xs font-medium shadow-sm backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:border-border hover:bg-card hover:shadow-md active:translate-y-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label={showTrashed ? "View active orders" : "View trash"}
           >
             {showTrashed ? (
@@ -254,23 +276,23 @@ export function OrderListToolbar({
 
       <div className="mt-4 flex items-center gap-4">
         <form onSubmit={onSearchSubmit} className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)] transition-colors duration-200 group-hover:text-[var(--foreground)]" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground transition-colors duration-200 group-hover:text-foreground" />
           <Input
             ref={searchInputRef}
             type="search"
             placeholder="Search orders by name, ID, email or phone... (Press / to focus)"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="h-10 pl-9 transition-all duration-200 hover:border-[var(--border)] focus:border-primary focus:ring-2 focus:ring-primary/20 bg-[var(--card)] border-[var(--border)] placeholder:text-[var(--muted-foreground)] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="h-10 pl-9 transition-all duration-200 hover:border-border focus:border-primary focus:ring-2 focus:ring-primary/20 bg-card border-border placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           />
           {localSearch && (
             <button
               type="button"
               onClick={() => setLocalSearch("")}
-              className="absolute right-2.5 top-2.5 h-5 w-5 rounded-full hover:bg-[var(--muted)] flex items-center justify-center transition-colors"
+              className="absolute right-2.5 top-2.5 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center transition-colors"
               aria-label="Clear search"
             >
-              <X className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+              <X className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
         </form>
@@ -302,73 +324,82 @@ export function OrderListToolbar({
         )}
       </div>
 
-      {!showTrashed && (
-        <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1 text-xs"
-              >
-                <Filter className="h-3.5 w-3.5" />
-                {activeStatus
-                  ? `Filter: ${activeStatus.charAt(0).toUpperCase() + activeStatus.slice(1)}`
-                  : "Filter"}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem
-                onClick={() => onStatusFilterChange(null)}
-                className="hover:bg-[var(--muted)]"
-              >
-                All Orders
-              </DropdownMenuItem>
-              {statusFilters.map((filter) => (
-                <DropdownMenuItem
-                  key={filter.value}
-                  onClick={() => onStatusFilterChange(filter.value)}
-                  className="hover:bg-[var(--muted)]"
-                >
-                  {filter.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+        <div className={cn("grid gap-2", !showTrashed && "mr-2")}>
+          <DateRangePickerWithPresets
+            date={dateRange}
+            setDate={onDateRangeChange}
+          />
+        </div>
 
-          {activeStatus && (
+        {!showTrashed && (
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1 text-xs"
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  {activeStatus
+                    ? `Filter: ${activeStatus.charAt(0).toUpperCase() + activeStatus.slice(1)}`
+                    : "Filter"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem
+                  onClick={() => onStatusFilterChange(null)}
+                  className="hover:bg-muted"
+                >
+                  All Orders
+                </DropdownMenuItem>
+                {statusFilters.map((filter) => (
+                  <DropdownMenuItem
+                    key={filter.value}
+                    onClick={() => onStatusFilterChange(filter.value)}
+                    className="hover:bg-muted"
+                  >
+                    {filter.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {activeStatus && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onStatusFilterChange(null)}
+                className="h-9 px-2 text-xs text-muted-foreground hover:bg-muted"
+                title="Clear filter"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
             <Button
-              variant="ghost"
+              variant={isStatusActive(null) ? "secondary" : "outline"}
               size="sm"
               onClick={() => onStatusFilterChange(null)}
-              className="h-9 px-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
-              title="Clear filter"
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          )}
-
-          <Button
-            variant={isStatusActive(null) ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => onStatusFilterChange(null)}
-            className="h-9 whitespace-nowrap px-3 text-xs font-medium transition-colors duration-300"
-          >
-            All
-          </Button>
-          {statusFilters.map((filter) => (
-            <Button
-              key={filter.value}
-              variant={isStatusActive(filter.value) ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => onStatusFilterChange(filter.value)}
               className="h-9 whitespace-nowrap px-3 text-xs font-medium transition-colors duration-300"
             >
-              {filter.label}
+              All
             </Button>
-          ))}
-        </div>
-      )}
+            {statusFilters.map((filter) => (
+              <Button
+                key={filter.value}
+                variant={isStatusActive(filter.value) ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => onStatusFilterChange(filter.value)}
+                className="h-9 whitespace-nowrap px-3 text-xs font-medium transition-colors duration-300"
+              >
+                {filter.label}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
     </>
   );
 }

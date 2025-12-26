@@ -9,6 +9,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle } from "lucide-react";
 import type { OrderListItem } from "../../lib/admin";
+import type { DateRange } from "react-day-picker";
 
 // Import the refactored components
 import { OrderListToolbar } from "./order-list/OrderListToolbar";
@@ -66,6 +67,9 @@ export function OrderList({
   const [shipmentStatuses, setShipmentStatuses] = React.useState<
     Record<string, any>
   >({});
+  const [dateRange, setDateRange] = React.useState<DateRange | undefined>(
+    undefined,
+  );
 
   // UI State
   const [updatingStatusIds, setUpdatingStatusIds] = React.useState<Set<string>>(
@@ -137,6 +141,8 @@ export function OrderList({
       sort?: string;
       order?: string;
       trashed?: boolean;
+      startDate?: Date;
+      endDate?: Date;
     }) => {
       setIsLoadingOrders(true);
 
@@ -150,6 +156,10 @@ export function OrderList({
         if (params.sort) url.searchParams.set("sort", params.sort);
         if (params.order) url.searchParams.set("order", params.order);
         if (params.trashed) url.searchParams.set("trashed", "true");
+        if (params.startDate)
+          url.searchParams.set("startDate", params.startDate.toISOString());
+        if (params.endDate)
+          url.searchParams.set("endDate", params.endDate.toISOString());
 
         const response = await fetch(url.toString());
         if (!response.ok) throw new Error("Failed to fetch orders");
@@ -224,6 +234,35 @@ export function OrderList({
     [toast],
   );
 
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    setDateRange(range);
+    if (range?.from) {
+      fetchOrders({
+        page: 1,
+        limit: currentPagination.limit,
+        search: searchQuery,
+        status: activeStatus,
+        sort: sort.field,
+        order: sort.order,
+        trashed: showTrashed,
+        startDate: range.from,
+        endDate: range.to,
+      });
+    } else if (range === undefined) {
+      fetchOrders({
+        page: 1,
+        limit: currentPagination.limit,
+        search: searchQuery,
+        status: activeStatus,
+        sort: sort.field,
+        order: sort.order,
+        trashed: showTrashed,
+        startDate: undefined,
+        endDate: undefined,
+      });
+    }
+  };
+
   const handleSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     fetchOrders({
@@ -234,6 +273,8 @@ export function OrderList({
       sort: sort.field,
       order: sort.order,
       trashed: showTrashed,
+      startDate: dateRange?.from,
+      endDate: dateRange?.to,
     });
   };
 
@@ -259,6 +300,8 @@ export function OrderList({
       sort: field,
       order: newOrder,
       trashed: showTrashed,
+      startDate: dateRange?.from,
+      endDate: dateRange?.to,
     });
   };
 
@@ -271,6 +314,8 @@ export function OrderList({
       sort: sort.field,
       order: sort.order,
       trashed: showTrashed,
+      startDate: dateRange?.from,
+      endDate: dateRange?.to,
     });
   };
 
@@ -283,6 +328,8 @@ export function OrderList({
       sort: sort.field,
       order: sort.order,
       trashed: showTrashed,
+      startDate: dateRange?.from,
+      endDate: dateRange?.to,
     });
   };
 
@@ -296,6 +343,8 @@ export function OrderList({
       sort: sort.field,
       order: sort.order,
       trashed: showTrashed,
+      startDate: dateRange?.from,
+      endDate: dateRange?.to,
     });
   };
 
@@ -579,6 +628,8 @@ export function OrderList({
       sort: sort.field,
       order: sort.order,
       trashed: showTrashed,
+      startDate: dateRange?.from,
+      endDate: dateRange?.to,
     });
   };
 
@@ -671,6 +722,8 @@ export function OrderList({
             onStatusFilterChange={handleStatusFilter}
             onExportCSV={handleExportCSV}
             onRefresh={handleRefresh}
+            dateRange={dateRange}
+            onDateRangeChange={handleDateRangeChange}
           />
         </CardHeader>
 
