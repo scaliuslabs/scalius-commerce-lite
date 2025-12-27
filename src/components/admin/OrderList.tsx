@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "../ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle } from "lucide-react";
 import type { OrderListItem } from "../../lib/admin";
@@ -693,24 +687,17 @@ export function OrderList({
     <>
       <Card className="overflow-hidden border border-border bg-card shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-border hover:shadow-md">
         <CardHeader className="space-y-1.5 pb-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6">
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
-                  {showTrashed ? "Trash" : "Orders"}
-                </CardTitle>
-                {!showTrashed && (
-                  <div className="flex items-center justify-center rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary ring-1 ring-inset ring-primary/20">
-                    {currentPagination.total}{" "}
-                    {currentPagination.total === 1 ? "order" : "orders"}
-                  </div>
-                )}
-              </div>
-              <CardDescription className="text-base text-muted-foreground">
-                {showTrashed
-                  ? "View and manage deleted orders"
-                  : "Manage your orders and track your business growth"}
-              </CardDescription>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-2">
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
+                {showTrashed ? "Trash" : "Orders"}
+              </CardTitle>
+              {!showTrashed && (
+                <div className="flex items-center justify-center rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary ring-1 ring-inset ring-primary/20">
+                  {currentPagination.total}{" "}
+                  {currentPagination.total === 1 ? "order" : "orders"}
+                </div>
+              )}
             </div>
           </div>
 
