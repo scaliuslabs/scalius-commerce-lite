@@ -3,7 +3,7 @@
 import "dotenv/config";
 
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
-import { createClient } from "@libsql/client";
+import { createClient } from "@libsql/client/web";
 import * as schema from "./schema";
 
 export type Database = LibSQLDatabase<typeof schema>;

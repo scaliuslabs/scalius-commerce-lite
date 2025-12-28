@@ -12,7 +12,7 @@
  */
 
 import "dotenv/config";
-import { createClient } from "@libsql/client";
+import { createClient } from "@libsql/client/web";
 import * as fs from "fs";
 import * as path from "path";
 
