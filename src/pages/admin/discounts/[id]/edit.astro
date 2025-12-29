@@ -11,7 +11,7 @@ import {
   products,
   collections,
 } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 // Local types for product/collection data (matching form expectations)
 interface Product {
@@ -35,72 +35,43 @@ if (!id) {
   return Astro.redirect("/admin/discounts");
 }
 
-// Fetch discount data from database
-const discount = await db.query.discounts.findFirst({
-  where: eq(discounts.id, id),
-});
+// Fetch discount data from database using raw SQL for dates (like products/orders pages)
+const discount = await db
+  .select({
+    id: discounts.id,
+    code: discounts.code,
+    type: discounts.type,
+    valueType: discounts.valueType,
+    discountValue: discounts.discountValue,
+    minPurchaseAmount: discounts.minPurchaseAmount,
+    minQuantity: discounts.minQuantity,
+    maxUsesPerOrder: discounts.maxUsesPerOrder,
+    maxUses: discounts.maxUses,
+    limitOnePerCustomer: discounts.limitOnePerCustomer,
+    combineWithProductDiscounts: discounts.combineWithProductDiscounts,
+    combineWithOrderDiscounts: discounts.combineWithOrderDiscounts,
+    combineWithShippingDiscounts: discounts.combineWithShippingDiscounts,
+    customerSegment: discounts.customerSegment,
+    isActive: discounts.isActive,
+    deletedAt: discounts.deletedAt,
+    // Use SQL datetime() to convert UNIX timestamps to ISO strings (like products/orders pages)
+    startDate: sql<string>`datetime(${discounts.startDate}, 'unixepoch')`,
+    endDate: sql<string | null>`datetime(${discounts.endDate}, 'unixepoch')`,
+  })
+  .from(discounts)
+  .where(eq(discounts.id, id))
+  .get();
 
 if (!discount) {
   return Astro.redirect("/admin/discounts");
 }
 
-// Helper function to safely convert timestamp to Date
-const safeTimestampToDate = (timestamp: any) => {
-  if (!timestamp) return null;
-
-  try {
-    // Convert timestamp to number if it's not already
-    const numericTimestamp =
-      typeof timestamp === "number" ? timestamp : Number(timestamp);
-
-    // Check if the timestamp is a valid number
-    if (isNaN(numericTimestamp)) {
-      console.error("Invalid timestamp (NaN):", timestamp);
-      return null;
-    }
-
-    // Create a date from the timestamp (in seconds)
-    const date = new Date(numericTimestamp * 1000);
-
-    // Validate the date - check if it's within reasonable range
-    // JavaScript dates work reliably from year 1970 to 2100
-    if (date.getFullYear() < 1970 || date.getFullYear() > 2100) {
-      console.error(
-        "Date outside valid range:",
-        date.toISOString(),
-        "from timestamp:",
-        numericTimestamp
-      );
-      return new Date(); // Return current date as fallback
-    }
-
-    return date;
-  } catch (error) {
-    console.error("Error converting timestamp to date:", error, timestamp);
-    return new Date(); // Return current date as fallback
-  }
-};
-
-// Convert UNIX timestamps to Date objects for form with explicit logging
+// Convert datetime strings to Date objects (simple and clean like products page)
 const formattedDiscount = {
   ...discount,
-  startDate: safeTimestampToDate(discount.startDate) || new Date(),
-  endDate: safeTimestampToDate(discount.endDate),
+  startDate: discount.startDate ? new Date(discount.startDate + 'Z') : new Date(), // Add Z to indicate UTC
+  endDate: discount.endDate ? new Date(discount.endDate + 'Z') : null,
 };
-
-// Log the formatted dates for debugging
-console.log("Discount dates:", {
-  originalStart: discount.startDate,
-  originalEnd: discount.endDate,
-  formattedStart:
-    formattedDiscount.startDate instanceof Date
-      ? formattedDiscount.startDate.toISOString()
-      : null,
-  formattedEnd:
-    formattedDiscount.endDate instanceof Date
-      ? formattedDiscount.endDate.toISOString()
-      : null,
-});
 
 // Fetch product IDs related to this discount
 const productAssociations = await db
@@ -153,47 +124,6 @@ if (collectionIds.length > 0) {
     slug: "",
   }));
 }
-
-// Ensure dates are properly serialized for the client
-const serializeDate = (date: Date | null) => {
-  if (!date) return null;
-
-  try {
-    // Validate it's a reasonable date within our expected range
-    if (!(date instanceof Date) || isNaN(date.getTime())) return null;
-    if (date.getFullYear() < 1970 || date.getFullYear() > 2100) {
-      console.warn("Date outside valid range for serialization:", date);
-      return new Date().toISOString(); // Return current date as fallback
-    }
-
-    return date.toISOString();
-  } catch (error) {
-    console.error("Error serializing date:", error);
-    return new Date().toISOString(); // Return current date as fallback
-  }
-};
-
-// Safely convert client data to ensure serializable
-const clientData = {
-  discount: {
-    ...formattedDiscount,
-    // Convert Date objects to ISO strings to ensure they're serializable
-    startDate: formattedDiscount.startDate
-      ? serializeDate(formattedDiscount.startDate)
-      : null,
-    endDate: formattedDiscount.endDate
-      ? serializeDate(formattedDiscount.endDate)
-      : null,
-  },
-  selectedProducts,
-  selectedCollections,
-};
-
-// Log final client data for debugging
-console.log("Serialized client data dates:", {
-  startDate: clientData.discount.startDate,
-  endDate: clientData.discount.endDate,
-});
 ---
 
 <AdminLayout title="Edit Discount">
@@ -299,8 +229,3 @@ console.log("Serialized client data dates:", {
     }
   </div>
 </AdminLayout>
-
-<script is:inline define:vars={{ clientData }}>
-  // Make client data available to the form components
-  window.discountEditData = clientData;
-</script>

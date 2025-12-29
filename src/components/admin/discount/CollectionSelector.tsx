@@ -54,9 +54,18 @@ export function CollectionSelector({
       try {
         const response = await fetch("/api/collections?limit=50");
         const data = await response.json();
-        if (data.collections) {
-          setCollections(data.collections);
-          setFilteredCollections(data.collections);
+        // Handle both response formats: { data: [...] } from Astro API and { collections: [...] } from Hono API
+        const collectionsArray = data.data || data.collections || [];
+        if (collectionsArray.length > 0) {
+          // Map to expected interface (ensure all required fields are present)
+          const mappedCollections = collectionsArray.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            description: c.description || null,
+            slug: c.slug || "",
+          }));
+          setCollections(mappedCollections);
+          setFilteredCollections(mappedCollections);
         }
       } catch (error) {
         console.error("Error fetching collections:", error);
@@ -87,9 +96,15 @@ export function CollectionSelector({
         );
         const data = await response.json();
 
-        if (data.collections) {
-          setFilteredCollections(data.collections);
-        }
+        // Handle both response formats: { data: [...] } from Astro API and { collections: [...] } from Hono API
+        const collectionsArray = data.data || data.collections || [];
+        const mappedCollections = collectionsArray.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description || null,
+          slug: c.slug || "",
+        }));
+        setFilteredCollections(mappedCollections);
       } catch (error) {
         console.error("Error searching collections:", error);
       } finally {

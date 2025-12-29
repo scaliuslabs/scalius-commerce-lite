@@ -58,7 +58,6 @@ export function ProductSelector({
   // Load initial products when dropdown opens
   useEffect(() => {
     if (open) {
-      console.log("Dropdown opened, loading initial products");
       loadProducts();
     }
   }, [open]);
@@ -77,7 +76,6 @@ export function ProductSelector({
     }
 
     searchTimeoutRef.current = setTimeout(() => {
-      console.log(`Searching for products with term: "${searchTerm}"`);
       loadProducts();
     }, 300);
 
@@ -107,11 +105,8 @@ export function ProductSelector({
       }
 
       const url = `/api/products?${params.toString()}`;
-      console.log(`Fetching products from: ${url}`);
-
       const response = await fetch(url);
       const data = await response.json();
-      console.log("API response:", data);
 
       if (data.products) {
         if (page === 1) {
