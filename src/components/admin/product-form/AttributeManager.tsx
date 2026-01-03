@@ -114,8 +114,18 @@ export function AttributeManager({
 
       toast.success("Attribute created");
       setAvailableAttributes((prev) => [...prev, created]);
-      // Auto-assign the newly created attribute
-      handleAddAttribute(created.id);
+      // Auto-assign the newly created attribute directly to avoid stale state
+      const newAttrs = [
+        ...assignedAttributes,
+        {
+          attributeId: created.id,
+          value: "",
+          name: created.name,
+          slug: created.slug,
+        },
+      ];
+      setAssignedAttributes(newAttrs);
+      updateParent(newAttrs);
     } catch {
       toast.error("Failed to create attribute");
     } finally {
