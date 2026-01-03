@@ -15,17 +15,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Plus,
-  Trash2,
-  Loader2,
-  ChevronsUpDown,
-  Check,
-} from "lucide-react";
+import { Plus, Trash2, Loader2, ChevronsUpDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import type { ProductAttribute } from "@/db/schema";
 import { cn } from "@/lib/utils";
-import { AttributeCreateDialog } from "../attributes-manager/components/AttributeCreateDialog";
 
 interface AssignedAttribute {
   attributeId: string;
@@ -55,14 +48,7 @@ export function AttributeManager({
   >([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Create Attribute Dialog
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [newAttribute, setNewAttribute] = useState({
-    name: "",
-    slug: "",
-    filterable: true,
-    options: [] as string[],
-  });
+  // Create Attribute State
   const [isCreating, setIsCreating] = useState(false);
 
   const fetchAllAttributes = useCallback(async () => {
@@ -100,24 +86,36 @@ export function AttributeManager({
     );
   };
 
-  const handleCreateAttribute = async () => {
-    if (!newAttribute.name.trim() || !newAttribute.slug.trim()) return;
+  const handleCreateAttribute = async (name: string) => {
+    if (!name.trim()) return;
     setIsCreating(true);
+
+    // Auto-generate slug
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
     try {
       const response = await fetch("/api/admin/attributes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newAttribute),
+        body: JSON.stringify({
+          name,
+          slug,
+          filterable: true,
+          options: [],
+        }),
       });
+
       if (!response.ok) throw new Error("Failed");
       const data = await response.json();
       const created = data.data;
 
       toast.success("Attribute created");
       setAvailableAttributes((prev) => [...prev, created]);
+      // Auto-assign the newly created attribute
       handleAddAttribute(created.id);
-      setIsCreateDialogOpen(false);
-      setNewAttribute({ name: "", slug: "", filterable: true, options: [] });
     } catch {
       toast.error("Failed to create attribute");
     } finally {
@@ -129,6 +127,8 @@ export function AttributeManager({
     const def = availableAttributes.find((a) => a.id === attrId);
     if (!def || assignedAttributes.some((a) => a.attributeId === attrId))
       return;
+
+    // Add new attribute and notify parent immediately
     const newAttrs = [
       ...assignedAttributes,
       { attributeId: def.id, value: "", name: def.name, slug: def.slug },
@@ -159,41 +159,22 @@ export function AttributeManager({
 
   return (
     <div className="space-y-4">
-      <AttributeCreateDialog
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-        newAttribute={newAttribute}
-        isCreating={isCreating}
-        onNameChange={(e) => {
-          const name = e.target.value;
-          const slug = name
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-|-$/g, "");
-          setNewAttribute((p) => ({ ...p, name, slug: slug }));
-        }}
-        onSlugChange={(s) => setNewAttribute((p) => ({ ...p, slug: s }))}
-        onFilterableChange={(c) =>
-          setNewAttribute((p) => ({ ...p, filterable: c }))
-        }
-        onOptionsChange={(o) => setNewAttribute((p) => ({ ...p, options: o }))}
-        onCreate={handleCreateAttribute}
-      />
-
       <div className="space-y-3">
         {assignedAttributes.map((attr, index) => (
           <div
             key={`${attr.attributeId}-${index}`}
-            className="flex items-start gap-3 p-3 border rounded-lg bg-card group"
+            className="flex items-center gap-2 p-2 px-3 border rounded-md bg-card group h-12"
           >
-            <div className="w-[140px] shrink-0 pt-2 hidden sm:block">
-              <label className="text-sm font-medium">{attr.name}</label>
-              <p className="text-xs text-muted-foreground mt-1 font-mono">
-                {attr.slug}
-              </p>
+            <div className="w-[120px] shrink-0 hidden sm:block">
+              <label
+                className="text-sm font-medium truncate block"
+                title={attr.name}
+              >
+                {attr.name}
+              </label>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="sm:hidden text-sm font-medium mb-1">
+              <div className="sm:hidden text-xs font-medium mb-1 truncate">
                 {attr.name}
               </div>
               <AttributeValueSelector
@@ -207,7 +188,7 @@ export function AttributeManager({
               variant="ghost"
               size="icon"
               onClick={() => handleRemoveAttribute(index)}
-              className="h-10 w-10 text-muted-foreground hover:text-destructive"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -220,7 +201,8 @@ export function AttributeManager({
           attributes={availableAttributes}
           assignedIds={new Set(assignedAttributes.map((a) => a.attributeId))}
           onSelect={handleAddAttribute}
-          onCreate={() => setIsCreateDialogOpen(true)}
+          onCreate={handleCreateAttribute}
+          isCreating={isCreating}
         />
       </div>
 
@@ -240,66 +222,99 @@ function AttributeDefinitionCombobox({
   assignedIds,
   onSelect,
   onCreate,
+  isCreating,
 }: any) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="w-full justify-start pl-3 text-muted-foreground font-normal"
+          className="w-full justify-start pl-3 text-muted-foreground font-normal h-9"
         >
           <Plus className="mr-2 h-4 w-4" /> Add Attribute...
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search attributes..." />
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search attributes..."
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList>
-            <CommandEmpty>
-              No attribute found.{" "}
-              <Button
-                variant="link"
-                onClick={() => {
-                  setOpen(false);
-                  onCreate();
-                }}
-              >
-                Create new
-              </Button>
+            <CommandEmpty className="py-2 px-2">
+              <p className="text-xs text-muted-foreground mb-2 text-center">
+                No attribute found.
+              </p>
+              {search && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-8"
+                  disabled={isCreating}
+                  onClick={() => {
+                    setOpen(false);
+                    onCreate(search);
+                  }}
+                >
+                  {isCreating ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                  ) : (
+                    <Plus className="h-3 w-3 mr-2" />
+                  )}
+                  Create "{search}"
+                </Button>
+              )}
             </CommandEmpty>
             <CommandGroup>
-              {attributes.map((attr: any) => (
-                <CommandItem
-                  key={attr.id}
-                  value={attr.name}
-                  onSelect={() => {
-                    onSelect(attr.id);
-                    setOpen(false);
-                  }}
-                  disabled={assignedIds.has(attr.id)}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      assignedIds.has(attr.id) ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  {attr.name}
-                </CommandItem>
-              ))}
+              {attributes
+                .filter(
+                  (attr: any) =>
+                    !search ||
+                    attr.name.toLowerCase().includes(search.toLowerCase()) ||
+                    attr.slug.includes(search.toLowerCase()),
+                )
+                .map((attr: any) => (
+                  <CommandItem
+                    key={attr.id}
+                    value={attr.name}
+                    onSelect={() => {
+                      onSelect(attr.id);
+                      setOpen(false);
+                    }}
+                    disabled={assignedIds.has(attr.id)}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        assignedIds.has(attr.id) ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    {attr.name}
+                  </CommandItem>
+                ))}
             </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup>
-              <CommandItem
-                onSelect={() => {
-                  setOpen(false);
-                  onCreate();
-                }}
-              >
-                <Plus className="mr-2 h-4 w-4" /> Create new attribute
-              </CommandItem>
-            </CommandGroup>
+            {search &&
+              !attributes.some(
+                (a: any) => a.name.toLowerCase() === search.toLowerCase(),
+              ) && (
+                <>
+                  <CommandSeparator />
+                  <CommandGroup>
+                    <CommandItem
+                      onSelect={() => {
+                        setOpen(false);
+                        onCreate(search);
+                      }}
+                    >
+                      <Plus className="mr-2 h-4 w-4" /> Create "{search}"
+                    </CommandItem>
+                  </CommandGroup>
+                </>
+              )}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -389,16 +404,13 @@ function AttributeValueSelector({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between h-10 px-3 font-normal text-left"
+          className="w-full justify-between h-8 px-2 font-normal text-left text-xs"
         >
           {value ? (
-            <span className="text-foreground">{value}</span>
+            <span className="text-foreground truncate">{value}</span>
           ) : (
-            <span className="text-muted-foreground">
-              Select or type value...
-            </span>
+            <span className="text-muted-foreground truncate">Value...</span>
           )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0" align="start">
