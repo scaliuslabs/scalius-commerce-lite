@@ -1,5 +1,3 @@
-// src/lib/firebase/client.ts
-
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import {
   getMessaging,
@@ -8,22 +6,9 @@ import {
   type Messaging,
 } from "firebase/messaging";
 
-// This key is required by the getToken() method
-const PUBLIC_VAPID_KEY = import.meta.env.PUBLIC_VAPID_FIREBASE;
-
-// Dynamically build the Firebase configuration from environment variables
-const firebaseConfig = {
-  apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY,
-  authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.PUBLIC_FIREBASE_APP_ID,
-  measurementId: import.meta.env.PUBLIC_FIREBASE_MEASUREMENT_ID,
-};
-
 let app: FirebaseApp | null = null;
 let messaging: Messaging | null = null;
+let publicVapidKey: string | null = null; // Store VAPID key dynamically
 
 // Helper function to ensure the toast container exists in the DOM
 function ensureToastContainer() {
@@ -86,25 +71,18 @@ function showCustomFCMToast(title: string, body: string, link?: string) {
   }, 10);
 }
 
-function initializeFirebaseApp() {
+function initializeFirebaseApp(config: any) {
   if (app) {
     return; // Already initialized
   }
 
-  // Validate that all required Firebase config keys are present
-  const missingKeys = Object.entries(firebaseConfig)
-    .filter(([, value]) => !value)
-    .map(([key]) => key);
-
-  if (missingKeys.length > 0) {
-    console.error(
-      `Firebase client config is missing required environment variables: ${missingKeys.join(", ")}`,
-    );
+  if (!config || !config.apiKey) {
+    console.error("Firebase client config is missing or invalid.");
     return;
   }
 
   try {
-    app = initializeApp(firebaseConfig);
+    app = initializeApp(config);
     messaging = getMessaging(app);
     console.log("Firebase client app and messaging initialized.");
   } catch (error) {
@@ -117,10 +95,8 @@ async function requestNotificationPermissionAndToken(userId: string) {
     console.error("Firebase Messaging not initialized. Cannot request token.");
     return;
   }
-  if (!PUBLIC_VAPID_KEY) {
-    console.error(
-      "CRITICAL: PUBLIC_VAPID_FIREBASE is not set. Cannot request token.",
-    );
+  if (!publicVapidKey) {
+    console.error("CRITICAL: VAPID key is not set. Cannot request token.");
     return;
   }
 
@@ -128,7 +104,7 @@ async function requestNotificationPermissionAndToken(userId: string) {
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
       const currentToken = await getToken(messaging, {
-        vapidKey: PUBLIC_VAPID_KEY,
+        vapidKey: publicVapidKey,
       });
       if (currentToken) {
         console.log("FCM Token obtained:", currentToken);
@@ -204,7 +180,10 @@ function setupForegroundMessageListener() {
   });
 }
 
-export async function initFirebaseClientNotifications(userId: string | null) {
+export async function initFirebaseClientNotifications(
+  userId: string | null,
+  config: any,
+) {
   if (typeof window === "undefined" || !("Notification" in window) || !userId) {
     console.log(
       "Conditions not met for Firebase client initialization (not in browser, no notification support, or no user).",
@@ -212,7 +191,15 @@ export async function initFirebaseClientNotifications(userId: string | null) {
     return;
   }
 
-  initializeFirebaseApp();
+  if (!config) {
+    console.error("No Firebase config provided for client initialization.");
+    return;
+  }
+
+  // Set VAPID key from config or env fallback (passed from server)
+  publicVapidKey = config.vapidKey;
+
+  initializeFirebaseApp(config);
   if (app && messaging) {
     await requestNotificationPermissionAndToken(userId);
     setupForegroundMessageListener();

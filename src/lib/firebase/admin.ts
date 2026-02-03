@@ -6,7 +6,6 @@ import type { KVNamespace } from "@cloudflare/workers-types";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-
 function getEnv(contextEnv?: any) {
   if (contextEnv) {
     return contextEnv;
@@ -215,12 +214,15 @@ async function sendFCMMessage(
   };
 }
 
-function initializeFCMService(environment?: any) {
+function initializeFCMService(environment?: any, serviceAccountJson?: string) {
   const env = getEnv(environment);
-  const firebaseServiceAccountJson = env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON;
+  const firebaseServiceAccountJson =
+    serviceAccountJson || env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON;
 
   if (!firebaseServiceAccountJson) {
-    throw new Error("FIREBASE_SERVICE_ACCOUNT_CRED_JSON is not set");
+    throw new Error(
+      "FIREBASE_SERVICE_ACCOUNT_CRED_JSON is not set and no service account provided",
+    );
   }
 
   // Sanitize the JSON string to handle common env var formatting issues
@@ -274,13 +276,15 @@ export class FCMMessagingService {
   private projectId: string;
   private env: any;
 
-  constructor(environment: any) {
-    const { serviceAccount, projectId } = initializeFCMService(environment);
+  constructor(environment: any, serviceAccountJson?: string) {
+    const { serviceAccount, projectId } = initializeFCMService(
+      environment,
+      serviceAccountJson,
+    );
     this.serviceAccount = serviceAccount;
     this.projectId = projectId;
     this.env = environment;
   }
-
 
   private async ensureValidAccessToken(): Promise<string> {
     const cacheKey = `${this.env.PROJECT_CACHE_PREFIX}:fcm_access_token`;
@@ -402,7 +406,18 @@ let fcmInstance: FCMMessagingService | null = null;
 
 export function getFirebaseAdminMessaging(
   environment: any,
+  serviceAccountJson?: string,
 ): FCMMessagingService {
+  // If a specific service account is provided, we might want to bypass singleton or handle it differently.
+  // For now, if provided, we assume it's the intended source and create a new instance if needed,
+  // or just recreate if it differs. To keep it simple and safe for dynamic updates:
+  // If serviceAccountJson is provided, ALWAYS return a new instance or reuse if matches (too complex to check match).
+  // Let's just create a new one if credentials are provided, or fallback to singleton if not (legacy/env var mode).
+
+  if (serviceAccountJson) {
+    return new FCMMessagingService(environment, serviceAccountJson);
+  }
+
   if (!fcmInstance) {
     fcmInstance = new FCMMessagingService(environment);
   }

@@ -1,7 +1,7 @@
 import { db } from "@/db";
-import { adminFcmTokens } from "@/db/schema";
+import { adminFcmTokens, settings } from "@/db/schema";
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 
 interface OrderNotificationData {
   id: string;
@@ -19,7 +19,29 @@ export async function sendOrderNotification(
   requestUrl: string,
 ) {
   try {
-    const messaging = getFirebaseAdminMessaging(env);
+    let serviceAccountJson: string | undefined;
+    try {
+      const result = await db
+        .select({ value: settings.value })
+        .from(settings)
+        .where(
+          and(
+            eq(settings.key, "service_account"),
+            eq(settings.category, "firebase"),
+          ),
+        )
+        .get();
+      if (result && result.value) {
+        serviceAccountJson = result.value;
+      }
+    } catch (e) {
+      console.warn(
+        "Failed to fetch custom Firebase credentials from DB, falling back to env:",
+        e,
+      );
+    }
+
+    const messaging = getFirebaseAdminMessaging(env, serviceAccountJson);
 
     // Get all active admin tokens
     const tokensSnapshot = await db

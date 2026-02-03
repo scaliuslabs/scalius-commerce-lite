@@ -27,6 +27,7 @@ import {
   Globe,
   ShieldCheck,
   Clock3,
+  Bell,
 } from "lucide-react";
 
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
@@ -46,6 +47,39 @@ const { title } = Astro.props;
 
 // Get current path
 const currentPath = Astro.url.pathname;
+import { db } from "@/db";
+import { settings } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+
+let firebaseConfig = {
+  apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY,
+  authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.PUBLIC_FIREBASE_APP_ID,
+  measurementId: import.meta.env.PUBLIC_FIREBASE_MEASUREMENT_ID,
+  vapidKey: import.meta.env.PUBLIC_VAPID_FIREBASE,
+};
+
+try {
+  const result = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(and(eq(settings.key, "public_config"), eq(settings.category, "firebase")))
+    .get();
+
+  if (result && result.value) {
+    const dbConfig = JSON.parse(result.value);
+    // Merge DB config, overriding env vars if present
+    firebaseConfig = { ...firebaseConfig, ...dbConfig };
+    // Map vapidKey from likely json key "vapidKey"
+    if (dbConfig.vapidKey) firebaseConfig.vapidKey = dbConfig.vapidKey; 
+    // If user put standard keys, ensure we have everything
+  }
+} catch (e) {
+  console.error("Error loading Firebase settings in layout:", e);
+}
 
 // Generate breadcrumb items using helper function
 const breadcrumbItems = generateAdminBreadcrumbs(currentPath);
@@ -108,6 +142,11 @@ const navSections: NavSection[] = [
             name: "General",
             href: "/admin/settings",
             icon: SlidersHorizontal,
+          },
+          {
+            name: "Notifications",
+            href: "/admin/settings/notifications",
+            icon: Bell,
           },
           {
             name: "Hero Sliders",
@@ -307,7 +346,7 @@ const navSections: NavSection[] = [
       }
     </script>
 
-    <script>
+    <script define:vars={{ firebaseConfig }}>
       // This script runs purely client-side (Firebase notifications)
       import { initFirebaseClientNotifications } from "@/lib/firebase/client";
 
@@ -325,7 +364,8 @@ const navSections: NavSection[] = [
                 "AdminLayout: User signed in, calling initFirebaseClientNotifications with userId:",
                 userId
               );
-              initFirebaseClientNotifications(userId);
+              // Pass the injected config
+              initFirebaseClientNotifications(userId, firebaseConfig);
             } else {
               console.warn(
                 "AdminLayout: Clerk.user is available, but userId is missing. Cannot initialize FCM."
