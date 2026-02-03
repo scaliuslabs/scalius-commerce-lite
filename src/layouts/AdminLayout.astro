@@ -347,18 +347,30 @@ const navSections: NavSection[] = [
     </script>
 
     <script define:vars={{ firebaseConfig }}>
-      // This script runs purely client-side (Firebase notifications)
+      // Store config in window for the module script to access
+      window.__FIREBASE_CONFIG__ = firebaseConfig;
+    </script>
+    
+    <script>
+      // This script runs as a module (Firebase notifications)
       import { initFirebaseClientNotifications } from "@/lib/firebase/client";
 
       function initializeFcmOnClient() {
         console.log("AdminLayout: initializeFcmOnClient called");
+        const firebaseConfig = (window as any).__FIREBASE_CONFIG__;
+        
+        if (!firebaseConfig || !firebaseConfig.apiKey) {
+          console.error("AdminLayout: Firebase config not found or invalid");
+          return;
+        }
+        
         let attempts = 0;
         const maxAttempts = 10;
         const intervalId = setInterval(() => {
           attempts++;
-          if (typeof window.Clerk !== "undefined" && window.Clerk.user) {
+          if (typeof (window as any).Clerk !== "undefined" && (window as any).Clerk.user) {
             clearInterval(intervalId);
-            const userId = window.Clerk.user.id;
+            const userId = (window as any).Clerk.user.id;
             if (userId) {
               console.log(
                 "AdminLayout: User signed in, calling initFirebaseClientNotifications with userId:",

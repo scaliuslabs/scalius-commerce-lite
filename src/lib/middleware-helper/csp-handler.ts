@@ -36,6 +36,10 @@ const ESSENTIAL_DOMAINS = [
   // Vercel
   "vercel.app",
   "vercel.com",
+
+  // Cloudflare
+  "cloudflareinsights.com",
+  "static.cloudflareinsights.com",
 ];
 
 function getEssentialDomains(): string[] {
