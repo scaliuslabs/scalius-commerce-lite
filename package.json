@@ -80,7 +80,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-window": "^2.0.0",
     "@upstash/redis": "^1.36.0",
-    "astro": "^5.16.6",
+    "astro": "^5.17.1",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

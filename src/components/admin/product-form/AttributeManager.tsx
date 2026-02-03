@@ -15,7 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Plus, Trash2, Loader2, ChevronsUpDown, Check } from "lucide-react";
+import { Plus, Trash2, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import type { ProductAttribute } from "@/db/schema";
 import { cn } from "@/lib/utils";
