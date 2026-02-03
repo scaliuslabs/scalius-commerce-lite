@@ -109,7 +109,23 @@ export default function FirebaseSettingsForm() {
 
   const handleRawPaste = () => {
     try {
-      const parsed = JSON.parse(rawPublicConfig);
+      let input = rawPublicConfig.trim();
+
+      // Remove JavaScript variable declaration if present
+      // e.g., "const firebaseConfig = { ... };" -> "{ ... }"
+      input = input.replace(/^(const|let|var)\s+\w+\s*=\s*/, "");
+      input = input.replace(/;$/, ""); // Remove trailing semicolon
+
+      // Convert JavaScript object syntax to valid JSON
+      // Only quote keys that appear at the start of a line or after { or ,
+      // This regex matches: `  keyName:` pattern (unquoted key followed by colon)
+      // but NOT colons inside strings like URLs
+      input = input.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":');
+
+      // Handle trailing commas (invalid in JSON but valid in JS)
+      input = input.replace(/,(\s*[}\]])/g, "$1");
+
+      const parsed = JSON.parse(input);
       const mapped: any = { ...publicConfig };
       const keys = [
         "apiKey",
@@ -128,7 +144,8 @@ export default function FirebaseSettingsForm() {
       setRawPublicConfig("");
       toast.success("Config parsed successfully!");
     } catch (e) {
-      toast.error("Invalid JSON format");
+      console.error("Parse error:", e);
+      toast.error("Could not parse config. Please check format.");
     }
   };
 
