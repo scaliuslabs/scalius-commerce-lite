@@ -62,6 +62,7 @@ interface BetterAuthUser {
   emailVerified: boolean;
   image?: string | null;
   role?: string | null;
+  isSuperAdmin?: boolean | null;
   banned?: boolean | null;
   banReason?: string | null;
   banExpires?: Date | null;
@@ -89,6 +90,7 @@ declare namespace App {
   interface Locals {
     user: BetterAuthUser | null;
     session: BetterAuthSession | null;
+    permissions: Set<string>;
     runtime?: {
       env: Env;
     };

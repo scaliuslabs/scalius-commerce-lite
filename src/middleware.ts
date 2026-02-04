@@ -3,6 +3,8 @@ import { defineMiddleware, sequence } from "astro:middleware";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
 import { invalidateHonoCacheIfNeeded } from "@/lib/middleware-helper/hono-cache-invalidator";
 import { createAuth } from "@/lib/auth";
+import { getUserPermissions, hasAdminAccess } from "@/lib/rbac/helpers";
+import { autoSeedRbacIfNeeded } from "@/lib/rbac/auto-seed";
 
 // Protected API route patterns
 const protectedApiPatterns = [
@@ -141,6 +143,27 @@ const authMiddleware = defineMiddleware(async (context, next) => {
   context.locals.session = session;
   context.locals.user = sessionUser;
 
+  // Load user permissions if authenticated
+  if (sessionUser) {
+    try {
+      const { getDb } = await import("@/db");
+      const db = getDb(env);
+
+      // Auto-seed RBAC on first admin access (safe to call multiple times)
+      if (sessionUser.role === "admin") {
+        await autoSeedRbacIfNeeded(db);
+      }
+
+      const userPermissions = await getUserPermissions(db, sessionUser.id);
+      context.locals.permissions = userPermissions;
+    } catch (error) {
+      console.error("Error loading user permissions:", error);
+      context.locals.permissions = new Set<string>();
+    }
+  } else {
+    context.locals.permissions = new Set<string>();
+  }
+
   // Handle auth pages (login, setup, two-factor)
   if (pathname.startsWith("/auth/")) {
     // If accessing login page, check if we need to redirect to setup
@@ -180,18 +203,25 @@ const authMiddleware = defineMiddleware(async (context, next) => {
       );
     }
 
-    // Check if user has admin role for admin-only endpoints
-    if (pathname.startsWith("/api/admin/") && sessionUser.role !== "admin") {
-      return new Response(
-        JSON.stringify({
-          error: "Forbidden",
-          message: "Admin access required",
-        }),
-        {
-          status: 403,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+    // Check if user has admin access (either admin role, super admin, or has permissions)
+    if (pathname.startsWith("/api/admin/")) {
+      const { getDb } = await import("@/db");
+      const db = getDb(env);
+      const userHasAdminAccess = await hasAdminAccess(db, sessionUser.id);
+
+      // Also check the legacy role for backwards compatibility
+      if (sessionUser.role !== "admin" && !userHasAdminAccess) {
+        return new Response(
+          JSON.stringify({
+            error: "Forbidden",
+            message: "Admin access required",
+          }),
+          {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
     }
 
     const response = await next();
@@ -227,8 +257,13 @@ const authMiddleware = defineMiddleware(async (context, next) => {
       return context.redirect("/auth/setup-2fa");
     }
 
-    // Check if user has admin role
-    if (sessionUser.role !== "admin") {
+    // Check if user has admin access (either admin role, super admin, or has permissions)
+    const { getDb } = await import("@/db");
+    const db = getDb(env);
+    const userHasAdminAccess = await hasAdminAccess(db, sessionUser.id);
+
+    // Also check the legacy role for backwards compatibility
+    if (sessionUser.role !== "admin" && !userHasAdminAccess) {
       return new Response("Forbidden: Admin access required.", { status: 403 });
     }
 

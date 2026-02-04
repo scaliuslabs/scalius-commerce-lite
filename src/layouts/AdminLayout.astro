@@ -217,7 +217,12 @@ const userData = {
   image: user.image,
   role: user.role,
   twoFactorEnabled: user.twoFactorEnabled,
+  isSuperAdmin: (user as any).isSuperAdmin ?? false,
 };
+
+// Get user permissions from middleware
+const permissions = Astro.locals.permissions;
+const permissionsArray = permissions ? Array.from(permissions) : [];
 ---
 
 <html lang="en" class="antialiased">
@@ -339,10 +344,13 @@ const userData = {
       }
     </script>
 
-    <script define:vars={{ firebaseConfig, userId: user.id }}>
+    <script define:vars={{ firebaseConfig, userId: user.id, permissions: permissionsArray, isSuperAdmin: userData.isSuperAdmin }}>
       // Store config in window for the module script to access
       window.__FIREBASE_CONFIG__ = firebaseConfig;
       window.__USER_ID__ = userId;
+      // Store permissions for React components
+      window.__USER_PERMISSIONS__ = permissions;
+      window.__IS_SUPER_ADMIN__ = isSuperAdmin;
     </script>
 
     <script>

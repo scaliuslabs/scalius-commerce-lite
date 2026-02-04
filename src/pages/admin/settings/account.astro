@@ -1,7 +1,7 @@
 ---
 // src/pages/admin/settings/account.astro
 import AdminLayout from "../../../layouts/AdminLayout.astro";
-import { AccountSettings } from "../../../components/admin/AccountSettings";
+import { AccountSettingsWithPermissions } from "../../../components/admin/AccountSettingsWithPermissions";
 import { getDb } from "@/db";
 import { user as userTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -14,11 +14,14 @@ if (!user) {
   return Astro.redirect("/auth/login");
 }
 
-// Fetch twoFactorMethod from database (might not be in the session user object)
+// Fetch twoFactorMethod and isSuperAdmin from database
 const env = Astro.locals.runtime?.env || process.env;
 const db = getDb(env);
 const dbUser = await db
-  .select({ twoFactorMethod: userTable.twoFactorMethod })
+  .select({
+    twoFactorMethod: userTable.twoFactorMethod,
+    isSuperAdmin: userTable.isSuperAdmin
+  })
   .from(userTable)
   .where(eq(userTable.id, user.id))
   .get();
@@ -33,6 +36,11 @@ const userData = {
   twoFactorEnabled: user.twoFactorEnabled,
   twoFactorMethod: dbUser?.twoFactorMethod || null,
 };
+
+// Get permissions from middleware
+const permissions = Astro.locals.permissions;
+const permissionsArray = permissions ? Array.from(permissions) : [];
+const isSuperAdmin = dbUser?.isSuperAdmin ?? false;
 ---
 
 <AdminLayout title="Account Settings">
@@ -44,6 +52,11 @@ const userData = {
       </p>
     </div>
 
-    <AccountSettings user={userData} client:load />
+    <AccountSettingsWithPermissions
+      user={userData}
+      permissions={permissionsArray}
+      isSuperAdmin={isSuperAdmin}
+      client:load
+    />
   </div>
 </AdminLayout>

@@ -42,9 +42,14 @@ import {
   KeyRound,
   Eye,
   EyeOff,
+  ShieldPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MediaManager, type MediaFile } from "./MediaManager";
+import { RolesManagement } from "./RolesManagement";
+import { PermissionGate } from "./PermissionGate";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 
 interface User {
   id: string;
@@ -71,6 +76,9 @@ interface AccountSettingsProps {
 }
 
 export function AccountSettings({ user }: AccountSettingsProps) {
+  const { hasPermission } = usePermissions();
+  const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
+
   return (
     <div className="space-y-6">
       {/* Profile Header Card */}
@@ -78,7 +86,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
 
       {/* Tabbed Settings */}
       <Tabs defaultValue="security" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className={`grid w-full ${canManageRoles ? "grid-cols-4" : "grid-cols-3"}`}>
           <TabsTrigger value="security" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
             <span className="hidden sm:inline">Security</span>
@@ -91,6 +99,12 @@ export function AccountSettings({ user }: AccountSettingsProps) {
             <Users className="h-4 w-4" />
             <span className="hidden sm:inline">Team</span>
           </TabsTrigger>
+          {canManageRoles && (
+            <TabsTrigger value="roles" className="flex items-center gap-2">
+              <ShieldPlus className="h-4 w-4" />
+              <span className="hidden sm:inline">Roles</span>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="security" className="space-y-6">
@@ -104,6 +118,12 @@ export function AccountSettings({ user }: AccountSettingsProps) {
         <TabsContent value="team" className="space-y-6">
           <AdminUsersSection currentUserId={user.id} />
         </TabsContent>
+
+        {canManageRoles && (
+          <TabsContent value="roles" className="space-y-6">
+            <RolesManagement />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
