@@ -77,7 +77,7 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 - **Caching**: Upstash Redis (with in-memory fallback) for Hono API response caching
 - **Storage**: Cloudflare R2 (S3-compatible) for media uploads
 - **Notifications**: Firebase Cloud Messaging (admin push notifications, configured via dashboard)
-- **Email**: Cloudflare Email Workers (2FA codes, password reset)
+- **Email**: Resend API (2FA codes, password reset)
 - **AI tooling**: OpenRouter integration for widget/content generation (API key stored in DB settings)
 - **Deploy**: Cloudflare Pages/Workers via Wrangler
 
@@ -180,13 +180,14 @@ This project runs locally via `.dev.vars` (Wrangler) or `.env` and in production
   - `PUBLIC_API_BASE_URL`: canonical site origin used by the Hono layer (CORS, proxy headers, notifications links, CSP helpers)
   - `PUBLIC_API_URL`: optional override for the full Hono API base (some admin cache routes will use this if set)
 
-#### Email (Cloudflare Email Workers)
+#### Email (Resend API)
 
-Required for email-based 2FA and password reset in production:
+Required for email-based 2FA and password reset:
 
-- `EMAIL_SENDER`: sender email address (e.g., `noreply@yourdomain.com`)
+- `RESEND_API_KEY`: API key from [resend.com](https://resend.com)
+- `EMAIL_SENDER`: sender email address (must be from a verified domain in Resend)
 
-Note: Cloudflare Email Workers requires Email Routing to be enabled on your domain. In development, emails are logged to console.
+In development without `RESEND_API_KEY`, emails are logged to console.
 
 #### Caching (recommended for production)
 

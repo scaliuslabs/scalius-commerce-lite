@@ -20,12 +20,4 @@ directory = "./dist"
 
 [[kv_namespaces]]
 binding = "SHARED_AUTH_CACHE"
-id = "9f577136c05144349f2b8013a4fc1cc5"
-
-# Email sending binding for Cloudflare Email Workers
-# Requires Email Routing to be enabled on the domain
-# The sender email must be from a domain with Email Routing active
-[[send_email]]
-name = "EMAIL"
-# No destination restrictions - can send to any email address
-# Sender must be from your domain (configured via EMAIL_SENDER env var) 
+id = "9f577136c05144349f2b8013a4fc1cc5" 
