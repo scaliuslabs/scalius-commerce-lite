@@ -3,10 +3,11 @@
 
 import type { APIRoute } from "astro";
 import { getDb } from "@/db";
-import { user } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { user, roles, userRoles, userPermissions, permissions } from "@/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { createAuth } from "@/lib/auth";
 import { sendAdminInviteEmail } from "@/lib/email";
+import { assignRoleToUser } from "@/lib/rbac/helpers";
 
 // Generate a secure random password
 function generateTempPassword(length = 16): string {
@@ -67,15 +68,50 @@ export const GET: APIRoute = async ({ request, locals }) => {
         emailVerified: user.emailVerified,
         image: user.image,
         twoFactorEnabled: user.twoFactorEnabled,
+        isSuperAdmin: user.isSuperAdmin,
         createdAt: user.createdAt,
       })
       .from(user)
       .where(eq(user.role, "admin"));
 
+    // Get roles for each user
+    const usersWithRoles = await Promise.all(
+      adminUsers.map(async (adminUser) => {
+        const userRoleData = await db
+          .select({
+            id: roles.id,
+            name: roles.name,
+            displayName: roles.displayName,
+          })
+          .from(userRoles)
+          .innerJoin(roles, eq(userRoles.roleId, roles.id))
+          .where(eq(userRoles.userId, adminUser.id));
+
+        // Get permission overrides
+        const overrides = await db
+          .select({
+            permissionName: permissions.name,
+            granted: userPermissions.granted,
+          })
+          .from(userPermissions)
+          .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
+          .where(eq(userPermissions.userId, adminUser.id));
+
+        const grants = overrides.filter((o) => o.granted).map((o) => o.permissionName);
+        const denials = overrides.filter((o) => !o.granted).map((o) => o.permissionName);
+
+        return {
+          ...adminUser,
+          roles: userRoleData,
+          overrides: { grants, denials },
+        };
+      })
+    );
+
     return new Response(
       JSON.stringify({
         success: true,
-        users: adminUsers,
+        users: usersWithRoles,
       }),
       {
         status: 200,
@@ -136,7 +172,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     const body = await request.json();
-    const { name, email } = body;
+    const { name, email, roleId } = body;
 
     // Validate input
     if (!name || !email) {
@@ -150,6 +186,28 @@ export const POST: APIRoute = async ({ request, locals }) => {
           headers: { "Content-Type": "application/json" },
         }
       );
+    }
+
+    // Validate roleId if provided
+    if (roleId) {
+      const roleExists = await db
+        .select({ id: roles.id })
+        .from(roles)
+        .where(eq(roles.id, roleId))
+        .get();
+
+      if (!roleExists) {
+        return new Response(
+          JSON.stringify({
+            error: "Invalid input",
+            message: "Selected role does not exist",
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
     }
 
     // Check if email already exists
@@ -205,6 +263,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
         emailVerified: true, // Skip email verification for admin-created users
       })
       .where(eq(user.id, signUpResult.user.id));
+
+    // Assign the selected role if provided
+    if (roleId) {
+      await assignRoleToUser(db, signUpResult.user.id, roleId, sessionResult.user.id);
+    }
 
     // Get the base URL for the login link
     const baseUrl =

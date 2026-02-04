@@ -50,6 +50,14 @@ import { RolesManagement } from "./RolesManagement";
 import { PermissionGate } from "./PermissionGate";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { UserPermissionEditor } from "./UserPermissionEditor";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface User {
   id: string;
@@ -68,7 +76,18 @@ interface AdminUser {
   emailVerified: boolean;
   image?: string | null;
   twoFactorEnabled?: boolean | null;
+  isSuperAdmin?: boolean | null;
   createdAt: string;
+  roles: { id: string; name: string; displayName: string }[];
+  overrides: { grants: string[]; denials: string[] };
+}
+
+interface Role {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string | null;
+  isSystem: boolean;
 }
 
 interface AccountSettingsProps {
@@ -1081,12 +1100,17 @@ function TwoFactorSection({ user }: { user: User }) {
 // Admin Users Management Section
 function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const { hasPermission } = usePermissions();
+  const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
 
   const fetchAdminUsers = async () => {
     try {
@@ -1100,8 +1124,22 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
     }
   };
 
+  const fetchRoles = async () => {
+    try {
+      const response = await fetch("/api/admin/rbac/roles");
+      const result = await response.json();
+      if (response.ok) {
+        // Filter out super_admin role - it shouldn't be assignable
+        setAvailableRoles(result.roles.filter((r: Role) => r.name !== "super_admin"));
+      }
+    } catch {
+      console.error("Failed to fetch roles");
+    }
+  };
+
   useEffect(() => {
     fetchAdminUsers();
+    fetchRoles();
   }, []);
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -1113,7 +1151,11 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
       const response = await fetch("/api/auth/admin-users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newUserName, email: newUserEmail }),
+        body: JSON.stringify({
+          name: newUserName,
+          email: newUserEmail,
+          roleId: selectedRoleId || undefined,
+        }),
       });
 
       const result = await response.json();
@@ -1127,6 +1169,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
       setShowAddForm(false);
       setNewUserName("");
       setNewUserEmail("");
+      setSelectedRoleId("");
       fetchAdminUsers();
     } catch {
       setError("An unexpected error occurred");
@@ -1181,7 +1224,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
       <CardContent>
         {showAddForm && (
           <form onSubmit={handleAddUser} className="mb-6 p-5 bg-muted/30 rounded-xl border space-y-4">
-            <h4 className="font-medium">Invite New Admin</h4>
+            <h4 className="font-medium">Invite New Team Member</h4>
             {error && (
               <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -1213,18 +1256,45 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="roleSelect">Role</Label>
+              <Select
+                value={selectedRoleId}
+                onValueChange={setSelectedRoleId}
+                disabled={isAdding}
+              >
+                <SelectTrigger id="roleSelect">
+                  <SelectValue placeholder="Select a role for this user" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableRoles.map((role) => (
+                    <SelectItem key={role.id} value={role.id}>
+                      <div className="flex flex-col">
+                        <span>{role.displayName}</span>
+                        {role.description && (
+                          <span className="text-xs text-muted-foreground">{role.description}</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                The role determines what this user can access. You can change it later.
+              </p>
+            </div>
             <p className="text-xs text-muted-foreground">
               A temporary password will be sent to their email. They'll be required to set up 2FA on first login.
             </p>
             <div className="flex gap-2">
-              <Button type="submit" disabled={isAdding}>
+              <Button type="submit" disabled={isAdding || !selectedRoleId}>
                 {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Send Invite
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => { setShowAddForm(false); setNewUserName(""); setNewUserEmail(""); setError(null); }}
+                onClick={() => { setShowAddForm(false); setNewUserName(""); setNewUserEmail(""); setSelectedRoleId(""); setError(null); }}
                 disabled={isAdding}
               >
                 Cancel
@@ -1265,8 +1335,25 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
                           You
                         </span>
                       )}
+                      {adminUser.isSuperAdmin && (
+                        <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                          Super Admin
+                        </span>
+                      )}
                     </p>
                     <p className="text-sm text-muted-foreground">{adminUser.email}</p>
+                    {adminUser.roles && adminUser.roles.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {adminUser.roles.map((role) => (
+                          <span
+                            key={role.id}
+                            className="text-xs bg-muted px-2 py-0.5 rounded"
+                          >
+                            {role.displayName}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1281,7 +1368,18 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
                       No 2FA
                     </span>
                   )}
-                  {adminUser.id !== currentUserId && (
+                  {canManageRoles && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => setEditingUser(adminUser)}
+                    >
+                      <Shield className="h-3 w-3 mr-1" />
+                      Permissions
+                    </Button>
+                  )}
+                  {adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
@@ -1311,6 +1409,16 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
               </div>
             ))}
           </div>
+        )}
+
+        {/* User Permission Editor Modal */}
+        {editingUser && (
+          <UserPermissionEditor
+            user={editingUser}
+            isOpen={!!editingUser}
+            onClose={() => setEditingUser(null)}
+            onUpdate={fetchAdminUsers}
+          />
         )}
       </CardContent>
     </Card>
