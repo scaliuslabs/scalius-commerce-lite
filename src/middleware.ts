@@ -3,8 +3,16 @@ import { defineMiddleware, sequence } from "astro:middleware";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
 import { invalidateHonoCacheIfNeeded } from "@/lib/middleware-helper/hono-cache-invalidator";
 import { createAuth } from "@/lib/auth";
-import { getUserPermissions, hasAdminAccess } from "@/lib/rbac/helpers";
+import {
+  getUserPermissions,
+  hasAdminAccess,
+  hasPermission,
+  hasAnyPermission,
+  hasAllPermissions,
+  isSuperAdmin,
+} from "@/lib/rbac/helpers";
 import { autoSeedRbacIfNeeded } from "@/lib/rbac/auto-seed";
+import { getRoutePermission } from "@/lib/rbac/route-permissions";
 
 // Protected API route patterns
 const protectedApiPatterns = [
@@ -203,10 +211,11 @@ const authMiddleware = defineMiddleware(async (context, next) => {
       );
     }
 
+    const { getDb } = await import("@/db");
+    const db = getDb(env);
+
     // Check if user has admin access (either admin role, super admin, or has permissions)
     if (pathname.startsWith("/api/admin/")) {
-      const { getDb } = await import("@/db");
-      const db = getDb(env);
       const userHasAdminAccess = await hasAdminAccess(db, sessionUser.id);
 
       // Also check the legacy role for backwards compatibility
@@ -221,6 +230,61 @@ const authMiddleware = defineMiddleware(async (context, next) => {
             headers: { "Content-Type": "application/json" },
           }
         );
+      }
+    }
+
+    // RBAC: Check specific route permissions
+    const method = request.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+    const routePermission = getRoutePermission(pathname, method);
+
+    if (routePermission) {
+      // Super admins bypass all permission checks
+      const userIsSuperAdmin = await isSuperAdmin(db, sessionUser.id);
+
+      if (!userIsSuperAdmin) {
+        let hasRequiredPermission = false;
+
+        if (routePermission.permission) {
+          // Single permission required
+          hasRequiredPermission = await hasPermission(
+            db,
+            sessionUser.id,
+            routePermission.permission
+          );
+        } else if (routePermission.anyOf) {
+          // Any of these permissions is sufficient
+          hasRequiredPermission = await hasAnyPermission(
+            db,
+            sessionUser.id,
+            routePermission.anyOf
+          );
+        } else if (routePermission.allOf) {
+          // All of these permissions are required
+          hasRequiredPermission = await hasAllPermissions(
+            db,
+            sessionUser.id,
+            routePermission.allOf
+          );
+        }
+
+        if (!hasRequiredPermission) {
+          const requiredPermissions =
+            routePermission.permission ||
+            routePermission.anyOf?.join(" or ") ||
+            routePermission.allOf?.join(" and ");
+
+          return new Response(
+            JSON.stringify({
+              error: "Forbidden",
+              message: `You do not have permission to perform this action`,
+              requiredPermission: requiredPermissions,
+            }),
+            {
+              status: 403,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
       }
     }
 
