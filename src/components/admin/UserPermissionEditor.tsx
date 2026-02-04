@@ -54,7 +54,7 @@ interface UserWithRoles {
   id: string;
   name: string;
   email: string;
-  isSuperAdmin?: boolean;
+  isSuperAdmin?: boolean | null;
   roles: { id: string; name: string; displayName: string }[];
   overrides: {
     grants: string[];
