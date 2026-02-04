@@ -34,6 +34,8 @@ import {
   Check,
   Copy,
   Users,
+  Smartphone,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -44,6 +46,7 @@ interface User {
   image?: string | null;
   role?: string | null;
   twoFactorEnabled?: boolean | null;
+  twoFactorMethod?: string | null;
 }
 
 interface AdminUser {
@@ -197,14 +200,20 @@ function ChangePasswordSection() {
 // Two-Factor Authentication Section
 function TwoFactorSection({ user }: { user: User }) {
   const [isEnabled, setIsEnabled] = useState(user.twoFactorEnabled ?? false);
+  const [currentMethod, setCurrentMethod] = useState<"totp" | "email">(
+    (user.twoFactorMethod as "totp" | "email") || "email"
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
+  const [setupMode, setSetupMode] = useState<"enable" | "disable" | "change">("enable");
+  const [selectedMethod, setSelectedMethod] = useState<"totp" | "email">("email");
   const [totpUri, setTotpUri] = useState<string | null>(null);
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [verificationCode, setVerificationCode] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<"password" | "qr" | "verify" | "backup">("password");
+  const [step, setStep] = useState<"method" | "password" | "qr" | "verify" | "backup">("method");
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleEnable2FA = async () => {
     setError(null);
@@ -224,7 +233,15 @@ function TwoFactorSection({ user }: { user: User }) {
       if (result.data) {
         setTotpUri(result.data.totpURI);
         setBackupCodes(result.data.backupCodes || []);
-        setStep("qr");
+
+        if (selectedMethod === "totp") {
+          setStep("qr");
+        } else {
+          // For email method, send OTP
+          await authClient.twoFactor.sendOtp();
+          setEmailSent(true);
+          setStep("verify");
+        }
       }
     } catch {
       setError("Failed to enable 2FA");
@@ -238,9 +255,16 @@ function TwoFactorSection({ user }: { user: User }) {
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.verifyTotp({
-        code: verificationCode,
-      });
+      let result;
+      if (selectedMethod === "totp") {
+        result = await authClient.twoFactor.verifyTotp({
+          code: verificationCode,
+        });
+      } else {
+        result = await authClient.twoFactor.verifyOtp({
+          code: verificationCode,
+        });
+      }
 
       if (result.error) {
         setError(result.error.message || "Invalid verification code");
@@ -248,8 +272,14 @@ function TwoFactorSection({ user }: { user: User }) {
         return;
       }
 
-      // After enabling 2FA, mark the session as 2FA-verified
-      // so the user doesn't get redirected to the 2FA page immediately
+      // Save the user's preferred 2FA method
+      await fetch("/api/auth/update-2fa-method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: selectedMethod }),
+      });
+
+      // Mark the session as 2FA-verified
       await fetch("/api/auth/mark-2fa-verified", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -257,9 +287,33 @@ function TwoFactorSection({ user }: { user: User }) {
 
       setStep("backup");
       setIsEnabled(true);
+      setCurrentMethod(selectedMethod);
       toast.success("Two-factor authentication enabled");
     } catch {
       setError("Verification failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChangeMethod = async () => {
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      // Save the new method preference
+      await fetch("/api/auth/update-2fa-method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: selectedMethod }),
+      });
+
+      setCurrentMethod(selectedMethod);
+      setShowSetup(false);
+      resetState();
+      toast.success(`Verification method changed to ${selectedMethod === "totp" ? "Authenticator App" : "Email"}`);
+    } catch {
+      setError("Failed to change method");
     } finally {
       setIsLoading(false);
     }
@@ -282,11 +336,22 @@ function TwoFactorSection({ user }: { user: User }) {
 
       setIsEnabled(false);
       setShowSetup(false);
-      setStep("password");
-      setPassword("");
+      resetState();
       toast.success("Two-factor authentication disabled");
     } catch {
       setError("Failed to disable 2FA");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setIsLoading(true);
+    try {
+      await authClient.twoFactor.sendOtp();
+      toast.success("Verification code sent to your email");
+    } catch {
+      toast.error("Failed to send verification code");
     } finally {
       setIsLoading(false);
     }
@@ -301,18 +366,48 @@ function TwoFactorSection({ user }: { user: User }) {
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uri)}`;
   };
 
+  const resetState = () => {
+    setStep("method");
+    setPassword("");
+    setVerificationCode("");
+    setTotpUri(null);
+    setBackupCodes([]);
+    setError(null);
+    setEmailSent(false);
+    setSelectedMethod(currentMethod);
+  };
+
+  const startSetup = (mode: "enable" | "disable" | "change") => {
+    setSetupMode(mode);
+    setShowSetup(true);
+    if (mode === "disable") {
+      setStep("password");
+    } else if (mode === "change") {
+      setStep("method");
+      setSelectedMethod(currentMethod === "totp" ? "email" : "totp");
+    } else {
+      setStep("method");
+    }
+  };
+
   if (showSetup) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            {isEnabled ? "Disable Two-Factor Authentication" : "Enable Two-Factor Authentication"}
+            {setupMode === "disable"
+              ? "Disable Two-Factor Authentication"
+              : setupMode === "change"
+              ? "Change Verification Method"
+              : "Enable Two-Factor Authentication"}
           </CardTitle>
           <CardDescription>
-            {isEnabled
+            {setupMode === "disable"
               ? "Enter your password to disable 2FA"
-              : "Secure your account with an authenticator app"}
+              : setupMode === "change"
+              ? "Choose your preferred verification method"
+              : "Secure your account with two-factor authentication"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -320,6 +415,79 @@ function TwoFactorSection({ user }: { user: User }) {
             <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg mb-4">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {step === "method" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setSelectedMethod("totp")}
+                  className={`p-4 border rounded-lg text-left transition-colors ${
+                    selectedMethod === "totp"
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      selectedMethod === "totp" ? "bg-primary/10" : "bg-muted"
+                    }`}>
+                      <Smartphone className={`h-5 w-5 ${selectedMethod === "totp" ? "text-primary" : ""}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Authenticator App</p>
+                      <p className="text-xs text-muted-foreground">More secure</p>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setSelectedMethod("email")}
+                  className={`p-4 border rounded-lg text-left transition-colors ${
+                    selectedMethod === "email"
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      selectedMethod === "email" ? "bg-primary/10" : "bg-muted"
+                    }`}>
+                      <Mail className={`h-5 w-5 ${selectedMethod === "email" ? "text-primary" : ""}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Email</p>
+                      <p className="text-xs text-muted-foreground">More convenient</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    if (setupMode === "change") {
+                      handleChangeMethod();
+                    } else {
+                      setStep("password");
+                    }
+                  }}
+                  disabled={isLoading}
+                  className="flex-1"
+                >
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {setupMode === "change" ? "Save Changes" : "Continue"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSetup(false);
+                    resetState();
+                  }}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
           )}
 
@@ -334,29 +502,32 @@ function TwoFactorSection({ user }: { user: User }) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   disabled={isLoading}
+                  autoFocus
                 />
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={isEnabled ? handleDisable2FA : handleEnable2FA}
+                  onClick={setupMode === "disable" ? handleDisable2FA : handleEnable2FA}
                   disabled={isLoading || !password}
-                  variant={isEnabled ? "destructive" : "default"}
+                  variant={setupMode === "disable" ? "destructive" : "default"}
+                  className="flex-1"
                 >
-                  {isLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
-                  {isEnabled ? "Disable 2FA" : "Continue"}
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {setupMode === "disable" ? "Disable 2FA" : "Continue"}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setShowSetup(false);
-                    setPassword("");
-                    setError(null);
+                    if (setupMode === "enable") {
+                      setStep("method");
+                    } else {
+                      setShowSetup(false);
+                      resetState();
+                    }
                   }}
                   disabled={isLoading}
                 >
-                  Cancel
+                  {setupMode === "enable" ? "Back" : "Cancel"}
                 </Button>
               </div>
             </div>
@@ -383,16 +554,21 @@ function TwoFactorSection({ user }: { user: User }) {
           {step === "verify" && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="verification-code">Enter Verification Code</Label>
+                <Label htmlFor="verification-code">
+                  {selectedMethod === "email"
+                    ? "Enter the code sent to your email"
+                    : "Enter the code from your authenticator app"}
+                </Label>
                 <Input
                   id="verification-code"
                   type="text"
                   value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value)}
-                  placeholder="Enter 6-digit code"
-                  className="text-center text-lg tracking-widest"
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="000000"
+                  className="text-center text-xl tracking-[0.5em] font-mono"
                   maxLength={6}
                   disabled={isLoading}
+                  autoFocus
                 />
               </div>
               <div className="flex gap-2">
@@ -401,15 +577,27 @@ function TwoFactorSection({ user }: { user: User }) {
                   disabled={isLoading || verificationCode.length !== 6}
                   className="flex-1"
                 >
-                  {isLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Verify
                 </Button>
-                <Button variant="outline" onClick={() => setStep("qr")}>
+                <Button
+                  variant="outline"
+                  onClick={() => setStep(selectedMethod === "totp" ? "qr" : "password")}
+                >
                   Back
                 </Button>
               </div>
+              {selectedMethod === "email" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleResendOtp}
+                  disabled={isLoading}
+                  className="w-full text-sm"
+                >
+                  Didn't receive the code? Resend
+                </Button>
+              )}
             </div>
           )}
 
@@ -428,7 +616,7 @@ function TwoFactorSection({ user }: { user: User }) {
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Save these backup codes in a safe place. You can use them to access your account if you lose your authenticator.
+                  Save these backup codes in a safe place. You can use them to access your account if you lose your {selectedMethod === "totp" ? "authenticator" : "email access"}.
                 </p>
                 <div className="bg-muted p-4 rounded-lg">
                   <div className="grid grid-cols-2 gap-2 font-mono text-sm">
@@ -443,11 +631,7 @@ function TwoFactorSection({ user }: { user: User }) {
               <Button
                 onClick={() => {
                   setShowSetup(false);
-                  setStep("password");
-                  setPassword("");
-                  setVerificationCode("");
-                  setTotpUri(null);
-                  setBackupCodes([]);
+                  resetState();
                 }}
                 className="w-full"
               >
@@ -478,27 +662,58 @@ function TwoFactorSection({ user }: { user: User }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium">
-              Status:{" "}
-              <span className={isEnabled ? "text-green-600" : "text-muted-foreground"}>
-                {isEnabled ? "Enabled" : "Disabled"}
-              </span>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {isEnabled
-                ? "You'll need your authenticator app when signing in"
-                : "We recommend enabling 2FA for admin accounts"}
-            </p>
+        {isEnabled ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg">
+              <div className="flex items-center gap-3">
+                {currentMethod === "totp" ? (
+                  <Smartphone className="h-5 w-5 text-green-600" />
+                ) : (
+                  <Mail className="h-5 w-5 text-green-600" />
+                )}
+                <div>
+                  <p className="font-medium text-green-700 dark:text-green-400">
+                    {currentMethod === "totp" ? "Authenticator App" : "Email Verification"}
+                  </p>
+                  <p className="text-sm text-green-600 dark:text-green-500">
+                    {currentMethod === "totp"
+                      ? "Using authenticator app for verification"
+                      : `Verification codes sent to ${user.email}`}
+                  </p>
+                </div>
+              </div>
+              <ShieldCheck className="h-5 w-5 text-green-500" />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => startSetup("change")}
+                className="flex-1"
+              >
+                Change Method
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => startSetup("disable")}
+                className="text-destructive hover:text-destructive"
+              >
+                Disable
+              </Button>
+            </div>
           </div>
-          <Button
-            variant={isEnabled ? "outline" : "default"}
-            onClick={() => setShowSetup(true)}
-          >
-            {isEnabled ? "Manage 2FA" : "Enable 2FA"}
-          </Button>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Status: <span className="text-muted-foreground">Disabled</span></p>
+              <p className="text-sm text-muted-foreground">
+                Two-factor authentication is required for admin accounts
+              </p>
+            </div>
+            <Button onClick={() => startSetup("enable")}>
+              Enable 2FA
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

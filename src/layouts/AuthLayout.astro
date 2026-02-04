@@ -1,7 +1,10 @@
 ---
 // src/layouts/AuthLayout.astro
+// Clean, minimal auth layout matching Better Auth UI style
 import "../styles/global.css";
 import favicon from "@/assets/favicon.png";
+import logoDark from "@/assets/logo-dark.png";
+import { Toaster } from "sonner";
 
 interface Props {
   title: string;
@@ -14,12 +17,9 @@ const { title } = Astro.props;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script>
+    <script is:inline>
       const theme = (() => {
-        if (
-          typeof localStorage !== "undefined" &&
-          localStorage.getItem("theme")
-        ) {
+        if (typeof localStorage !== "undefined" && localStorage.getItem("theme")) {
           return localStorage.getItem("theme");
         }
         return "dark";
@@ -36,11 +36,64 @@ const { title } = Astro.props;
     <meta name="generator" content={Astro.generator} />
     <title>{title} - Scalius Commerce</title>
   </head>
-  <body
-    class="bg-background text-foreground min-h-screen flex items-center justify-center p-4"
-  >
-    <div class="w-full max-w-md">
-      <slot />
+  <body class="bg-background text-foreground min-h-screen">
+    <!-- Sonner Toaster for notifications -->
+    <div id="sonner-toaster">
+      <script>
+        // Toaster is initialized in React components
+      </script>
     </div>
+
+    <main class="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6">
+      <div class="w-full max-w-sm">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+          <a href="/" class="inline-block">
+            <img src={logoDark.src} alt="Logo" class="h-14 mx-auto" />
+          </a>
+        </div>
+
+        <!-- Auth form slot -->
+        <slot />
+      </div>
+    </main>
+
+    <!-- Fix tab order for auth forms -->
+    <script is:inline>
+      document.addEventListener('DOMContentLoaded', function() {
+        // Wait for React to render the form
+        setTimeout(function() {
+          fixTabOrder();
+        }, 100);
+
+        // Also observe for dynamic changes
+        const observer = new MutationObserver(function() {
+          fixTabOrder();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        function fixTabOrder() {
+          const emailInput = document.querySelector('input[type="email"], input[name="email"]');
+          const passwordInput = document.querySelector('input[type="password"], input[name="password"]');
+          const forgotLink = document.querySelector('a[href*="forgot"]');
+
+          if (emailInput) emailInput.setAttribute('tabindex', '1');
+          if (passwordInput) passwordInput.setAttribute('tabindex', '2');
+          if (forgotLink) forgotLink.setAttribute('tabindex', '4');
+
+          // Handle Enter key on email to focus password
+          if (emailInput && passwordInput) {
+            emailInput.addEventListener('keydown', function(e) {
+              if (e.key === 'Enter' || e.key === 'Tab') {
+                if (!e.shiftKey && e.key === 'Tab') {
+                  e.preventDefault();
+                  passwordInput.focus();
+                }
+              }
+            });
+          }
+        }
+      });
+    </script>
   </body>
 </html>

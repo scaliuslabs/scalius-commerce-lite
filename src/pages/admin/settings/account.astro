@@ -2,6 +2,9 @@
 // src/pages/admin/settings/account.astro
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { AccountSettings } from "../../../components/admin/AccountSettings";
+import { getDb } from "@/db";
+import { user as userTable } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 // Get user from middleware
 const user = Astro.locals.user;
@@ -11,6 +14,15 @@ if (!user) {
   return Astro.redirect("/auth/login");
 }
 
+// Fetch twoFactorMethod from database (might not be in the session user object)
+const env = Astro.locals.runtime?.env || process.env;
+const db = getDb(env);
+const dbUser = await db
+  .select({ twoFactorMethod: userTable.twoFactorMethod })
+  .from(userTable)
+  .where(eq(userTable.id, user.id))
+  .get();
+
 // Prepare user data for the component
 const userData = {
   id: user.id,
@@ -19,6 +31,7 @@ const userData = {
   image: user.image,
   role: user.role,
   twoFactorEnabled: user.twoFactorEnabled,
+  twoFactorMethod: dbUser?.twoFactorMethod || null,
 };
 ---
 
