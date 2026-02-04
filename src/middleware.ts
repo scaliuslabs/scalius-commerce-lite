@@ -222,8 +222,8 @@ const authMiddleware = defineMiddleware(async (context, next) => {
     }
 
     // SECURITY: Enforce mandatory 2FA for admin users
-    // If 2FA is not enabled, redirect to 2FA setup (skip if already on setup page)
-    if (!sessionUser.twoFactorEnabled && !pathname.startsWith("/admin/settings")) {
+    // If 2FA is not enabled, redirect to 2FA setup (except setup-2fa page itself)
+    if (!sessionUser.twoFactorEnabled && !pathname.startsWith("/auth/setup-2fa")) {
       return context.redirect("/auth/setup-2fa");
     }
 

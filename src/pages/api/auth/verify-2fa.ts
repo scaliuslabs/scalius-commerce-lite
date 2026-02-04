@@ -102,26 +102,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
 
-    // Last resort: update all sessions for user
-    const userId = verifyResult?.user?.id;
-    if (userId) {
-      await db
-        .update(sessionTable)
-        .set({ twoFactorVerified: true })
-        .where(eq(sessionTable.userId, userId));
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Two-factor authentication verified",
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-
+    // SECURITY: Do not update all sessions as fallback - return error instead
     return new Response(
       JSON.stringify({
         error: "No session",

@@ -81,11 +81,11 @@ export function UserMenu({ user }: UserMenuProps) {
         <DropdownMenuSeparator />
         <DropdownMenuItem className="cursor-pointer" asChild>
           <a
-            href="/admin/settings"
+            href="/admin/settings/account"
             className="flex items-center gap-2 w-full"
           >
             <User className="h-4 w-4" />
-            <span>Settings</span>
+            <span>Account Settings</span>
           </a>
         </DropdownMenuItem>
         {user.twoFactorEnabled && (

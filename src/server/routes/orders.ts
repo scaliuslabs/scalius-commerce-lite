@@ -1441,6 +1441,25 @@ app.post("/:id/restore", async (c) => {
   }
 });
 
+// Valid order statuses
+const ORDER_STATUSES = [
+  "pending",
+  "confirmed",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "refunded",
+] as const;
+
+const updateStatusSchema = z.object({
+  status: z.enum(ORDER_STATUSES, {
+    errorMap: () => ({
+      message: `Status must be one of: ${ORDER_STATUSES.join(", ")}`,
+    }),
+  }),
+});
+
 // PUT - Update order status
 app.put("/:id/status", async (c) => {
   try {
@@ -1456,16 +1475,7 @@ app.put("/:id/status", async (c) => {
     }
 
     const json = await c.req.json();
-    const { status } = json;
-
-    if (!status) {
-      return c.json(
-        {
-          error: "Status is required",
-        },
-        400,
-      );
-    }
+    const { status } = updateStatusSchema.parse(json);
 
     // Update order status
     await db
@@ -1482,6 +1492,17 @@ app.put("/:id/status", async (c) => {
     });
   } catch (error) {
     console.error("Error updating order status:", error);
+
+    if (error instanceof z.ZodError) {
+      return c.json(
+        {
+          error: "Invalid status",
+          details: error.errors,
+        },
+        400,
+      );
+    }
+
     return c.json(
       {
         error: "Internal server error",

@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { setCache, getCache } from "./redis";
 
 // Default JWT expiration time (1 hour)
 const DEFAULT_EXPIRATION = "1h";
@@ -17,40 +18,8 @@ if (
   );
 }
 
-// Token blacklist for revoked tokens
-interface BlacklistedToken {
-  token: string;
-  expiresAt: number;
-}
-
-const blacklistedTokens: BlacklistedToken[] = [];
-
-// Clean up expired blacklisted tokens periodically
-setInterval(
-  () => {
-    const now = Date.now();
-    const initialLength = blacklistedTokens.length;
-
-    // Remove expired tokens
-    while (
-      blacklistedTokens.length > 0 &&
-      blacklistedTokens[0].expiresAt < now
-    ) {
-      blacklistedTokens.shift();
-    }
-
-    // Log cleanup in production
-    if (
-      process.env.NODE_ENV === "production" &&
-      initialLength !== blacklistedTokens.length
-    ) {
-      console.log(
-        `Cleaned up ${initialLength - blacklistedTokens.length} expired blacklisted tokens`,
-      );
-    }
-  },
-  60 * 60 * 1000,
-); // Clean up every hour
+// Token blacklist key prefix for Redis
+const BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
 
 /**
  * Generate a JWT token
@@ -72,10 +41,10 @@ export function generateToken(
 /**
  * Verify a JWT token
  */
-export function verifyToken(token: string): any {
+export async function verifyToken(token: string): Promise<any> {
   try {
     // Check if token is blacklisted
-    if (isTokenBlacklisted(token)) {
+    if (await isTokenBlacklisted(token)) {
       throw new Error("Token has been revoked");
     }
 
@@ -86,7 +55,7 @@ export function verifyToken(token: string): any {
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
       if (error instanceof jwt.TokenExpiredError) {
-        throw new Error("Token has expired");
+        throw new Error("Invalid token");
       } else {
         throw new Error("Invalid token");
       }
@@ -161,9 +130,9 @@ export function refreshTokenIfNeeded(
 }
 
 /**
- * Revoke a token by adding it to the blacklist
+ * Revoke a token by adding it to the blacklist (Redis-backed)
  */
-export function revokeToken(token: string): void {
+export async function revokeToken(token: string): Promise<void> {
   try {
     const decoded = jwt.decode(token) as { exp?: number };
 
@@ -172,12 +141,11 @@ export function revokeToken(token: string): void {
     }
 
     const expiresAt = decoded.exp * 1000; // Convert to milliseconds
+    const ttlSeconds = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
 
-    // Add to blacklist
-    blacklistedTokens.push({ token, expiresAt });
-
-    // Sort blacklist by expiration time for efficient cleanup
-    blacklistedTokens.sort((a, b) => a.expiresAt - b.expiresAt);
+    // Store in Redis with TTL matching token expiry (auto-cleanup)
+    const tokenHash = Buffer.from(token).toString("base64").slice(0, 32);
+    await setCache(`${BLACKLIST_KEY_PREFIX}${tokenHash}`, { revoked: true }, ttlSeconds);
 
     if (process.env.NODE_ENV === "production") {
       console.log(
@@ -191,12 +159,17 @@ export function revokeToken(token: string): void {
 }
 
 /**
- * Check if a token is blacklisted
+ * Check if a token is blacklisted (Redis-backed)
  */
-export function isTokenBlacklisted(token: string): boolean {
-  return blacklistedTokens.some(
-    (blacklistedToken) => blacklistedToken.token === token,
-  );
+export async function isTokenBlacklisted(token: string): Promise<boolean> {
+  try {
+    const tokenHash = Buffer.from(token).toString("base64").slice(0, 32);
+    const result = await getCache<{ revoked: boolean }>(`${BLACKLIST_KEY_PREFIX}${tokenHash}`);
+    return result?.revoked === true;
+  } catch (error) {
+    console.error("Error checking token blacklist:", error);
+    return false; // Fail open to avoid blocking valid requests on cache errors
+  }
 }
 
 /**
@@ -216,12 +189,12 @@ export function extractTokenFromHeader(
  * Get token statistics
  */
 export function getTokenStats(): {
-  blacklistedTokensCount: number;
+  blacklistStorage: string;
   jwtSecret: string;
   isUsingDefaultSecret: boolean;
 } {
   return {
-    blacklistedTokensCount: blacklistedTokens.length,
+    blacklistStorage: "redis", // Now using Redis for distributed blacklist
     jwtSecret:
       JWT_SECRET_STRING.substring(0, 3) +
       "..." +
