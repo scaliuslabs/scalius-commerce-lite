@@ -29,6 +29,7 @@ export const user = sqliteTable("user", {
   twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).default(
     false
   ),
+  twoFactorMethod: text("two_factor_method"), // 'totp' | 'email' - user's preferred 2FA method
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(cast(strftime('%s','now') as int))`),
