@@ -1,5 +1,5 @@
 // src/lib/email.ts
-// Email service for sending emails using Cloudflare Email Workers
+// Email service using Resend API for transactional emails
 
 interface SendEmailOptions {
   to: string;
@@ -11,8 +11,8 @@ interface SendEmailOptions {
 }
 
 /**
- * Send an email using Cloudflare Email Workers.
- * Falls back to console logging in development when EMAIL binding is not available.
+ * Send an email using Resend API.
+ * Falls back to console logging in development when RESEND_API_KEY is not set.
  */
 export async function sendEmail({
   to,
@@ -22,7 +22,6 @@ export async function sendEmail({
   text,
   env,
 }: SendEmailOptions): Promise<void> {
-  // Get the sender email from environment
   const getEnvVar = (key: string): string | undefined => {
     if (env && key in env) {
       return (env as Record<string, string>)[key];
@@ -33,54 +32,40 @@ export async function sendEmail({
     return undefined;
   };
 
+  const resendApiKey = getEnvVar("RESEND_API_KEY");
   const senderEmail = from || getEnvVar("EMAIL_SENDER") || "noreply@scalius.com";
 
-  // Check if we have the EMAIL binding (Cloudflare Workers environment)
-  const emailBinding = (env as Env)?.EMAIL;
-
-  if (emailBinding) {
+  if (resendApiKey) {
     try {
-      // Use mimetext to create proper MIME message
-      const { createMimeMessage } = await import("mimetext");
-
-      const msg = createMimeMessage();
-      msg.setSender({ addr: senderEmail, name: "Scalius Commerce" });
-      msg.setRecipient(to);
-      msg.setSubject(subject);
-
-      // Add HTML content
-      msg.addMessage({
-        contentType: "text/html",
-        data: html,
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: senderEmail,
+          to: [to],
+          subject,
+          html,
+          text,
+        }),
       });
 
-      // Optionally add plain text version
-      if (text) {
-        msg.addMessage({
-          contentType: "text/plain",
-          data: text,
-        });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || `Resend API error: ${response.status}`);
       }
-
-      // Create EmailMessage and send
-      const rawEmail = msg.asRaw();
-
-      // Use the EmailMessage class from Cloudflare Workers
-      // @ts-expect-error - cloudflare:email is a runtime module only available in Cloudflare Workers
-      const { EmailMessage } = await import("cloudflare:email");
-      const message = new EmailMessage(senderEmail, to, rawEmail);
-
-      await emailBinding.send(message);
 
       console.log(`Email sent successfully to ${to}`);
     } catch (error) {
-      console.error("Failed to send email via Cloudflare Email Workers:", error);
+      console.error("Failed to send email via Resend:", error);
       throw new Error(`Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   } else {
     // Development fallback - log email to console
     console.log("=".repeat(60));
-    console.log("EMAIL (Development Mode - No EMAIL binding available)");
+    console.log("EMAIL (Development Mode - RESEND_API_KEY not set)");
     console.log("=".repeat(60));
     console.log(`From: ${senderEmail}`);
     console.log(`To: ${to}`);
