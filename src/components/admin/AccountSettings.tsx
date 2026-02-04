@@ -296,7 +296,76 @@ function TwoFactorSection({ user }: { user: User }) {
     }
   };
 
-  const handleChangeMethod = async () => {
+  // Handler for setting up TOTP when changing from email to authenticator
+  const handleSetupTotpForChange = async () => {
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      // We need to regenerate TOTP secret - use enable to get new totpURI
+      const result = await authClient.twoFactor.enable({
+        password,
+      });
+
+      if (result.error) {
+        setError(result.error.message || "Failed to setup authenticator");
+        setIsLoading(false);
+        return;
+      }
+
+      if (result.data) {
+        setTotpUri(result.data.totpURI);
+        setBackupCodes(result.data.backupCodes || []);
+        setStep("qr");
+      }
+    } catch {
+      setError("Failed to setup authenticator");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handler for verifying TOTP when changing method
+  const handleVerifyTotpForChange = async () => {
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const result = await authClient.twoFactor.verifyTotp({
+        code: verificationCode,
+      });
+
+      if (result.error) {
+        setError(result.error.message || "Invalid verification code");
+        setIsLoading(false);
+        return;
+      }
+
+      // Save the new method preference
+      await fetch("/api/auth/update-2fa-method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "totp" }),
+      });
+
+      // Mark the session as 2FA-verified
+      await fetch("/api/auth/mark-2fa-verified", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      setCurrentMethod("totp");
+      setStep("backup");
+      toast.success("Authenticator app configured successfully");
+    } catch {
+      setError("Verification failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handler for changing to email method (simpler, no setup needed)
+  const handleChangeToEmail = async () => {
     setError(null);
     setIsLoading(true);
 
@@ -305,13 +374,13 @@ function TwoFactorSection({ user }: { user: User }) {
       await fetch("/api/auth/update-2fa-method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ method: selectedMethod }),
+        body: JSON.stringify({ method: "email" }),
       });
 
-      setCurrentMethod(selectedMethod);
+      setCurrentMethod("email");
       setShowSetup(false);
       resetState();
-      toast.success(`Verification method changed to ${selectedMethod === "totp" ? "Authenticator App" : "Email"}`);
+      toast.success("Verification method changed to Email");
     } catch {
       setError("Failed to change method");
     } finally {
@@ -466,7 +535,13 @@ function TwoFactorSection({ user }: { user: User }) {
                 <Button
                   onClick={() => {
                     if (setupMode === "change") {
-                      handleChangeMethod();
+                      if (selectedMethod === "totp") {
+                        // Changing to authenticator requires full setup
+                        setStep("password");
+                      } else {
+                        // Changing to email is simple - no setup needed
+                        handleChangeToEmail();
+                      }
                     } else {
                       setStep("password");
                     }
@@ -475,7 +550,7 @@ function TwoFactorSection({ user }: { user: User }) {
                   className="flex-1"
                 >
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {setupMode === "change" ? "Save Changes" : "Continue"}
+                  {setupMode === "change" && selectedMethod === "email" ? "Save Changes" : "Continue"}
                 </Button>
                 <Button
                   variant="outline"
@@ -507,7 +582,15 @@ function TwoFactorSection({ user }: { user: User }) {
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={setupMode === "disable" ? handleDisable2FA : handleEnable2FA}
+                  onClick={() => {
+                    if (setupMode === "disable") {
+                      handleDisable2FA();
+                    } else if (setupMode === "change" && selectedMethod === "totp") {
+                      handleSetupTotpForChange();
+                    } else {
+                      handleEnable2FA();
+                    }
+                  }}
                   disabled={isLoading || !password}
                   variant={setupMode === "disable" ? "destructive" : "default"}
                   className="flex-1"
@@ -518,7 +601,7 @@ function TwoFactorSection({ user }: { user: User }) {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    if (setupMode === "enable") {
+                    if (setupMode === "enable" || setupMode === "change") {
                       setStep("method");
                     } else {
                       setShowSetup(false);
@@ -527,7 +610,7 @@ function TwoFactorSection({ user }: { user: User }) {
                   }}
                   disabled={isLoading}
                 >
-                  {setupMode === "enable" ? "Back" : "Cancel"}
+                  {setupMode === "enable" || setupMode === "change" ? "Back" : "Cancel"}
                 </Button>
               </div>
             </div>
@@ -573,7 +656,13 @@ function TwoFactorSection({ user }: { user: User }) {
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={handleVerify2FA}
+                  onClick={() => {
+                    if (setupMode === "change" && selectedMethod === "totp") {
+                      handleVerifyTotpForChange();
+                    } else {
+                      handleVerify2FA();
+                    }
+                  }}
                   disabled={isLoading || verificationCode.length !== 6}
                   className="flex-1"
                 >
@@ -605,7 +694,11 @@ function TwoFactorSection({ user }: { user: User }) {
             <div className="space-y-4">
               <div className="flex items-center gap-2 p-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg">
                 <Check className="h-4 w-4 flex-shrink-0" />
-                <span>Two-factor authentication is now enabled!</span>
+                <span>
+                  {setupMode === "change"
+                    ? "Authenticator app configured successfully!"
+                    : "Two-factor authentication is now enabled!"}
+                </span>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
