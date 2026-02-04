@@ -581,6 +581,15 @@ export function CategoryList({
     }
   }, []);
 
+  // Strip HTML tags and truncate description
+  const getPlainDescription = useCallback((html: string | null, maxLength: number = 60): string => {
+    if (!html) return "";
+    // Remove HTML tags
+    const text = html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength).trim() + "...";
+  }, []);
+
   const getSortIcon = useCallback(
     (field: SortField) => {
       if (sort.field !== field) {
@@ -884,66 +893,75 @@ export function CategoryList({
                         className="h-3.5 w-3.5"
                       />
                     </TableCell>
-                    <TableCell className="flex items-center space-x-2 py-2">
-                      {category.imageUrl ? (
-                        <div className="h-8 w-8 rounded-md overflow-hidden border bg-muted shrink-0">
-                          <img
-                            src={getOptimizedImageUrl(category.imageUrl)}
-                            alt={category.name}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        </div>
-                      ) : (
-                        <div className="h-8 w-8 rounded-md border bg-muted flex items-center justify-center shrink-0">
-                          <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      )}
-                      <div className="flex flex-col">
-                        <div
-                          className="font-medium text-sm text-foreground hover:underline cursor-pointer"
-                          onClick={() =>
-                            (window.location.href = `/admin/categories/${category.id}/edit`)
-                          }
-                        >
-                          {category.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground/70 font-mono">
-                          /{category.slug}
+                    <TableCell className="py-2.5">
+                      <div className="flex items-center gap-3">
+                        {category.imageUrl ? (
+                          <div className="h-11 w-11 rounded-lg overflow-hidden border bg-muted shrink-0">
+                            <img
+                              src={getOptimizedImageUrl(category.imageUrl)}
+                              alt={category.name}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-11 w-11 rounded-lg border bg-muted/50 flex items-center justify-center shrink-0">
+                            <Tag className="h-5 w-5 text-muted-foreground/50" />
+                          </div>
+                        )}
+                        <div className="flex flex-col min-w-0">
+                          <span
+                            className="font-medium text-sm text-foreground hover:text-primary cursor-pointer truncate"
+                            onClick={() =>
+                              (window.location.href = `/admin/categories/${category.id}/edit`)
+                            }
+                          >
+                            {category.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground truncate">
+                            {category.slug}
+                          </span>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="py-2 text-sm">
+                    <TableCell className="py-2.5 max-w-[200px]">
                       {category.description ? (
-                        <span className="line-clamp-1 text-foreground/80">
-                          {category.description}
+                        <span className="text-sm text-muted-foreground">
+                          {getPlainDescription(category.description)}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground/70 italic text-sm">
+                        <span className="text-sm text-muted-foreground/50 italic">
                           No description
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="py-2 text-sm">
-                      <div className="flex items-center">
+                    <TableCell className="py-2.5">
+                      <div className="flex items-center gap-1.5">
                         <span
-                          className={`${category.productCount > 0 ? "text-foreground font-semibold" : "text-muted-foreground/70"}`}
+                          className={cn(
+                            "text-sm tabular-nums",
+                            category.productCount > 0
+                              ? "text-foreground font-medium"
+                              : "text-muted-foreground/60"
+                          )}
                         >
                           {category.productCount}
                         </span>
                         {category.productCount > 0 && (
                           <a
                             href={`/admin/products?category=${category.id}`}
-                            className="ml-2 text-xs text-primary hover:underline font-medium"
+                            className="text-xs text-primary/80 hover:text-primary hover:underline"
                           >
-                            View
+                            view
                           </a>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground/80 py-2 font-medium">
-                      {formatDate(category.updatedAt)}
+                    <TableCell className="py-2.5">
+                      <span className="text-sm text-muted-foreground">
+                        {formatDate(category.updatedAt)}
+                      </span>
                     </TableCell>
                     <TableCell className="text-right pr-3 py-2">
                       <DropdownMenu>
