@@ -23,6 +23,9 @@ export const user = sqliteTable("user", {
     .default(false),
   image: text("image"),
   role: text("role").default("user"), // 'user' | 'admin'
+  isSuperAdmin: integer("is_super_admin", { mode: "boolean" })
+    .notNull()
+    .default(false), // Super admin has all permissions and cannot be demoted
   banned: integer("banned", { mode: "boolean" }).default(false),
   banReason: text("ban_reason"),
   banExpires: integer("ban_expires", { mode: "timestamp" }),
@@ -118,6 +121,122 @@ export type Session = InferSelectModel<typeof session>;
 export type Account = InferSelectModel<typeof account>;
 export type Verification = InferSelectModel<typeof verification>;
 export type TwoFactor = InferSelectModel<typeof twoFactor>;
+
+// =============================================
+// RBAC (Role-Based Access Control) TABLES
+// =============================================
+
+// All available permissions in the system
+export const permissions = sqliteTable("permissions", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(), // e.g., "products.view", "orders.create"
+  displayName: text("display_name").notNull(), // e.g., "View Products"
+  description: text("description"), // Detailed description of what this permission allows
+  resource: text("resource").notNull(), // e.g., "products", "orders", "settings"
+  action: text("action").notNull(), // e.g., "view", "create", "edit", "delete"
+  category: text("category").notNull(), // For UI grouping: "Products", "Orders", "Settings"
+  isSensitive: integer("is_sensitive", { mode: "boolean" })
+    .notNull()
+    .default(false), // Marks permissions that grant access to sensitive data
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+});
+
+// Role templates that define sets of permissions
+export const roles = sqliteTable("roles", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(), // e.g., "manager", "sales_rep"
+  displayName: text("display_name").notNull(), // e.g., "Manager", "Sales Representative"
+  description: text("description"), // Description of the role's purpose
+  isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false), // System roles cannot be deleted
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+});
+
+// Many-to-many: roles -> permissions
+export const rolePermissions = sqliteTable(
+  "role_permissions",
+  {
+    id: text("id").primaryKey(),
+    roleId: text("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+    permissionId: text("permission_id")
+      .notNull()
+      .references(() => permissions.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(cast(strftime('%s','now') as int))`),
+  },
+  (table) => [
+    unique("role_permission_unique").on(table.roleId, table.permissionId),
+    index("role_permissions_role_idx").on(table.roleId),
+    index("role_permissions_permission_idx").on(table.permissionId),
+  ]
+);
+
+// Many-to-many: users -> roles
+export const userRoles = sqliteTable(
+  "user_roles",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    roleId: text("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+    assignedBy: text("assigned_by").references(() => user.id, {
+      onDelete: "set null",
+    }), // Who assigned this role
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(cast(strftime('%s','now') as int))`),
+  },
+  (table) => [
+    unique("user_role_unique").on(table.userId, table.roleId),
+    index("user_roles_user_idx").on(table.userId),
+    index("user_roles_role_idx").on(table.roleId),
+  ]
+);
+
+// Direct permission overrides for users (grant or deny specific permissions)
+export const userPermissions = sqliteTable(
+  "user_permissions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    permissionId: text("permission_id")
+      .notNull()
+      .references(() => permissions.id, { onDelete: "cascade" }),
+    granted: integer("granted", { mode: "boolean" }).notNull(), // true = grant, false = deny
+    assignedBy: text("assigned_by").references(() => user.id, {
+      onDelete: "set null",
+    }), // Who assigned this override
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(cast(strftime('%s','now') as int))`),
+  },
+  (table) => [
+    unique("user_permission_unique").on(table.userId, table.permissionId),
+    index("user_permissions_user_idx").on(table.userId),
+    index("user_permissions_permission_idx").on(table.permissionId),
+  ]
+);
+
+// RBAC type exports
+export type Permission = InferSelectModel<typeof permissions>;
+export type Role = InferSelectModel<typeof roles>;
+export type RolePermission = InferSelectModel<typeof rolePermissions>;
+export type UserRole = InferSelectModel<typeof userRoles>;
+export type UserPermission = InferSelectModel<typeof userPermissions>;
 
 // =============================================
 // ENUMS
