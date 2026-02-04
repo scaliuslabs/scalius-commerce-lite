@@ -1,0 +1,29 @@
+---
+// src/pages/auth/two-factor.astro
+import AuthLayout from "@/layouts/AuthLayout.astro";
+import { TwoFactorForm } from "@/components/auth/TwoFactorForm";
+
+// Get session and user from middleware
+const session = Astro.locals.session;
+const user = Astro.locals.user;
+
+// If user is fully authenticated (session exists, 2FA verified or not required), go to admin
+if (session && user) {
+  const twoFactorVerified = (session as any).twoFactorVerified;
+
+  // If 2FA is not enabled OR 2FA is already verified, redirect to admin
+  if (!user.twoFactorEnabled || twoFactorVerified) {
+    return Astro.redirect("/admin");
+  }
+  // User has session but needs 2FA verification - show the form
+}
+
+// If no session at all, the user needs to sign in first
+// But Better Auth might use a different mechanism (like cookies) for pending 2FA state
+// So we allow access to this page even without a session - the verification will fail
+// if there's no pending 2FA state, and the user can go back to login
+---
+
+<AuthLayout title="Two-Factor Authentication">
+  <TwoFactorForm client:load />
+</AuthLayout>

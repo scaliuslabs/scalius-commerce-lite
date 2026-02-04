@@ -12,7 +12,8 @@ const MASKED_VALUE = "••••••••••••";
 export const GET: APIRoute = async (context) => {
   const { locals } = context as APIContext;
 
-  if (!locals.auth().userId) {
+  // Authentication check (relies on Better Auth middleware)
+  if (!locals.user?.id) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
     });
@@ -56,7 +57,8 @@ export const GET: APIRoute = async (context) => {
 export const POST: APIRoute = async (context) => {
   const { request, locals } = context as APIContext;
 
-  if (!locals.auth().userId) {
+  // Authentication check (relies on Better Auth middleware)
+  if (!locals.user?.id) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
     });
@@ -79,7 +81,7 @@ export const POST: APIRoute = async (context) => {
       } catch (e) {
         return new Response(
           JSON.stringify({ error: "Invalid Service Account JSON" }),
-          { status: 400 },
+          { status: 400 }
         );
       }
     }
@@ -100,7 +102,7 @@ export const POST: APIRoute = async (context) => {
           id: `set_${nanoid(10)}`,
           key: update.key,
           value: update.value,
-          type: "json", // or string/json depending on schema usage, safe to stick to stringified json
+          type: "json",
           category: CATEGORY,
         })
         .onConflictDoUpdate({
@@ -114,7 +116,7 @@ export const POST: APIRoute = async (context) => {
       {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      },
+      }
     );
   } catch (error) {
     console.error("Error saving Firebase settings:", error);

@@ -1,7 +1,7 @@
 ---
 // src/layouts/AdminLayout.astro
-import { SignedIn, SignedOut, UserButton } from "@clerk/astro/components";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { UserMenu } from "@/components/auth/UserMenu";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Clock3,
   Bell,
+  UserCog,
 } from "lucide-react";
 
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
@@ -47,6 +48,17 @@ const { title } = Astro.props;
 
 // Get current path
 const currentPath = Astro.url.pathname;
+
+// Get user and session from middleware
+const user = Astro.locals.user;
+const session = Astro.locals.session;
+
+// Redirect to login if not authenticated
+if (!user || !session) {
+  return Astro.redirect("/auth/login");
+}
+
+// Firebase config setup
 import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -74,8 +86,7 @@ try {
     // Merge DB config, overriding env vars if present
     firebaseConfig = { ...firebaseConfig, ...dbConfig };
     // Map vapidKey from likely json key "vapidKey"
-    if (dbConfig.vapidKey) firebaseConfig.vapidKey = dbConfig.vapidKey; 
-    // If user put standard keys, ensure we have everything
+    if (dbConfig.vapidKey) firebaseConfig.vapidKey = dbConfig.vapidKey;
   }
 } catch (e) {
   console.error("Error loading Firebase settings in layout:", e);
@@ -85,7 +96,6 @@ try {
 const breadcrumbItems = generateAdminBreadcrumbs(currentPath);
 
 // Define nav item types for type safety
-// These types are used by SideBar.astro as well, consider moving to a shared types file eventually
 export interface NavSubItem {
   name: string;
   href: string;
@@ -94,7 +104,7 @@ export interface NavSubItem {
 export interface NavItem {
   name: string;
   href: string;
-  icon: any; // Keep 'any' for Astro compatibility with React components
+  icon: any;
   subItems?: NavSubItem[];
 }
 export interface NavSection {
@@ -142,6 +152,11 @@ const navSections: NavSection[] = [
             name: "General",
             href: "/admin/settings",
             icon: SlidersHorizontal,
+          },
+          {
+            name: "Account",
+            href: "/admin/settings/account",
+            icon: UserCog,
           },
           {
             name: "Notifications",
@@ -193,6 +208,16 @@ const navSections: NavSection[] = [
     ],
   },
 ];
+
+// Prepare user data for UserMenu component
+const userData = {
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  image: user.image,
+  role: user.role,
+  twoFactorEnabled: user.twoFactorEnabled,
+};
 ---
 
 <html lang="en" class="antialiased">
@@ -226,93 +251,61 @@ const navSections: NavSection[] = [
     data-current-path={Astro.url.pathname}
     class="bg-background text-foreground transition-colors duration-200"
   >
-    <SignedIn>
-      <div class="flex min-h-screen">
-        <SideBar navSections={navSections} currentPath={currentPath} />
+    <div class="flex min-h-screen">
+      <SideBar navSections={navSections} currentPath={currentPath} />
 
-        <!-- Main content -->
-        <div class="flex-1 flex flex-col min-h-screen">
-          <!-- Header -->
-          <header
-            class="h-14 border-b border-border px-4 flex items-center justify-between sticky top-0 z-30 backdrop-blur-sm bg-background/95 transition-all duration-200"
-          >
-            <div class="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                id="sidebar-toggle"
-                aria-label="Toggle sidebar"
-                className="md:hidden h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted"
-              >
-                <Menu className="w-5! h-5!" />
-              </Button>
+      <!-- Main content -->
+      <div class="flex-1 flex flex-col min-h-screen">
+        <!-- Header -->
+        <header
+          class="h-14 border-b border-border px-4 flex items-center justify-between sticky top-0 z-30 backdrop-blur-sm bg-background/95 transition-all duration-200"
+        >
+          <div class="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              id="sidebar-toggle"
+              aria-label="Toggle sidebar"
+              className="md:hidden h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <Menu className="w-5! h-5!" />
+            </Button>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                id="sidebar-collapse"
-                aria-label="Collapse sidebar"
-                className="hidden md:flex h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
-              >
-                <PanelLeftClose className="w-6! h-6! sidebar-icon-expanded" />
-                <PanelLeftOpen
-                  className="w-6! h-6!  sidebar-icon-collapsed hidden"
-                />
-              </Button>
-
-              <Breadcrumb items={breadcrumbItems} client:load />
-            </div>
-            <div class="flex items-center gap-12">
-              <DarkModeToggle
-                client:load
-                className="h-8 w-8 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+            <Button
+              variant="ghost"
+              size="icon"
+              id="sidebar-collapse"
+              aria-label="Collapse sidebar"
+              className="hidden md:flex h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <PanelLeftClose className="w-6! h-6! sidebar-icon-expanded" />
+              <PanelLeftOpen
+                className="w-6! h-6!  sidebar-icon-collapsed hidden"
               />
-              <UserButton
-                showName={true}
-                appearance={{
-                  elements: {
-                    avatarBox:
-                      "w-8 h-8 ring-2 ring-primary/10 hover:ring-primary/20 transition-all duration-200",
-                    rootBox:
-                      "relative inline-flex items-center gap-3 hover:bg-muted/50 px-2 py-1 rounded-lg transition-all duration-200",
-                    userPreviewMainIdentifier:
-                      "font-medium text-sm text-foreground",
-                    userPreviewSecondaryIdentifier:
-                      "text-muted-foreground text-xs",
-                    userButtonPopoverCard: `
-                      min-w-[280px] p-0 bg-card backdrop-blur-lg 
-                      text-card-foreground shadow-xl rounded-xl 
-                      border border-border mt-2 overflow-hidden
-                    `,
-                    userButtonPopoverActions: "p-3",
-                    userButtonPopoverActionButton: `
-                      w-full px-3 py-2.5 text-left text-sm hover:bg-muted/80 
-                      rounded-lg text-foreground transition-all duration-200
-                      hover:shadow-sm border border-transparent hover:border-border/50
-                    `,
-                    userButtonPopoverActionButtonText:
-                      "font-medium text-foreground",
-                    userButtonPopoverActionButtonIcon: "text-muted-foreground",
-                    userButtonPopoverFooter: "hidden",
-                  },
-                }}
-              />
-            </div>
-          </header>
+            </Button>
 
-          <!-- Main content area -->
-          <main
-            class="flex-1 p-6 transition-all duration-200"
-            id="main-content"
-          >
-            <div class="max-w-7xl mx-auto">
-              <slot />
-            </div>
-          </main>
-        </div>
+            <Breadcrumb items={breadcrumbItems} client:load />
+          </div>
+          <div class="flex items-center gap-12">
+            <DarkModeToggle
+              client:load
+              className="h-8 w-8 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+            />
+            <UserMenu user={userData} client:load />
+          </div>
+        </header>
+
+        <!-- Main content area -->
+        <main
+          class="flex-1 p-6 transition-all duration-200"
+          id="main-content"
+        >
+          <div class="max-w-7xl mx-auto">
+            <slot />
+          </div>
+        </main>
       </div>
-    </SignedIn>
-    <SignedOut />
+    </div>
 
     <ShadcnToaster client:load />
     <SonnerToaster richColors closeButton client:load />
@@ -346,11 +339,12 @@ const navSections: NavSection[] = [
       }
     </script>
 
-    <script define:vars={{ firebaseConfig }}>
+    <script define:vars={{ firebaseConfig, userId: user.id }}>
       // Store config in window for the module script to access
       window.__FIREBASE_CONFIG__ = firebaseConfig;
+      window.__USER_ID__ = userId;
     </script>
-    
+
     <script>
       // This script runs as a module (Firebase notifications)
       import { initFirebaseClientNotifications } from "@/lib/firebase/client";
@@ -358,38 +352,20 @@ const navSections: NavSection[] = [
       function initializeFcmOnClient() {
         console.log("AdminLayout: initializeFcmOnClient called");
         const firebaseConfig = (window as any).__FIREBASE_CONFIG__;
-        
+        const userId = (window as any).__USER_ID__;
+
         if (!firebaseConfig || !firebaseConfig.apiKey) {
           console.error("AdminLayout: Firebase config not found or invalid");
           return;
         }
-        
-        let attempts = 0;
-        const maxAttempts = 10;
-        const intervalId = setInterval(() => {
-          attempts++;
-          if (typeof (window as any).Clerk !== "undefined" && (window as any).Clerk.user) {
-            clearInterval(intervalId);
-            const userId = (window as any).Clerk.user.id;
-            if (userId) {
-              console.log(
-                "AdminLayout: User signed in, calling initFirebaseClientNotifications with userId:",
-                userId
-              );
-              // Pass the injected config
-              initFirebaseClientNotifications(userId, firebaseConfig);
-            } else {
-              console.warn(
-                "AdminLayout: Clerk.user is available, but userId is missing. Cannot initialize FCM."
-              );
-            }
-          } else if (attempts >= maxAttempts) {
-            clearInterval(intervalId);
-            console.warn(
-              "AdminLayout: Clerk user object not available after multiple attempts. FCM not initialized."
-            );
-          }
-        }, 500);
+
+        if (!userId) {
+          console.warn("AdminLayout: User ID not available. FCM not initialized.");
+          return;
+        }
+
+        console.log("AdminLayout: Initializing FCM with userId:", userId);
+        initFirebaseClientNotifications(userId, firebaseConfig);
       }
 
       if (document.readyState === "complete") {

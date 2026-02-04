@@ -1,0 +1,29 @@
+---
+// src/pages/auth/setup-2fa.astro
+// Mandatory 2FA setup page - users must configure 2FA before accessing admin
+import AuthLayout from "@/layouts/AuthLayout.astro";
+import { TwoFactorSetup } from "@/components/auth/TwoFactorSetup";
+
+// Get session and user from middleware
+const session = Astro.locals.session;
+const user = Astro.locals.user;
+
+// If no session, redirect to login
+if (!session || !user) {
+  return Astro.redirect("/auth/login");
+}
+
+// If 2FA is already enabled, redirect to admin (or two-factor if not verified)
+if (user.twoFactorEnabled) {
+  const twoFactorVerified = (session as any).twoFactorVerified;
+  if (twoFactorVerified) {
+    return Astro.redirect("/admin");
+  } else {
+    return Astro.redirect("/auth/two-factor");
+  }
+}
+---
+
+<AuthLayout title="Setup Two-Factor Authentication">
+  <TwoFactorSetup client:load userEmail={user.email} />
+</AuthLayout>

@@ -1,12 +1,9 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
-import clerk from "@clerk/astro";
 import honoIntegration from "./src/integrations/hono-integration";
 // Import Tailwind CSS Vite plugin directly
 import tailwindcss from "@tailwindcss/vite";
-// Import Clerk themes for advanced theming
-import { dark } from "@clerk/themes";
 
 // Use Cloudflare adapter for Cloudflare Workers deployment
 import cloudflare from "@astrojs/cloudflare";
@@ -39,13 +36,6 @@ export default defineConfig({
 
   integrations: [
     react(),
-    clerk({
-      afterSignInUrl: "/admin",
-      afterSignUpUrl: "/admin",
-      appearance: {
-        baseTheme: dark,
-      },
-    }),
     honoIntegration(),
   ],
 
@@ -125,5 +115,4 @@ export default defineConfig({
     // Use Cloudflare's Image Resizing service for on-demand optimization
     imageService: "cloudflare",
   }),
-
 });

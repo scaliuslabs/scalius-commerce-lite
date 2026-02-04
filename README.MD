@@ -51,10 +51,10 @@
 
 Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefront API** built on **Astro** and **Hono**, backed by **Turso (libSQL)** via **Drizzle ORM**. The admin side ships as Astro pages with React components; the storefront API ships as a Hono app mounted under `/api/v1`.
 
-### What’s in this repo
+### What's in this repo
 
 - **Admin dashboard (UI)**: `src/pages/admin/**` (Astro pages) + `src/components/admin/**` (React components).
-- **Admin CRUD APIs (Astro API routes)**: `src/pages/api/**` (file-based endpoints, protected by Clerk via `src/middleware.ts`).
+- **Admin CRUD APIs (Astro API routes)**: `src/pages/api/**` (file-based endpoints, protected by Better Auth via `src/middleware.ts`).
 - **Storefront API (Hono)**: `src/server/**` (Hono app + routes), mounted at `/api/v1/**` via the custom Astro integration in `src/integrations/hono-integration.ts`.
 - **Database (Drizzle + Turso)**: schema in `src/db/schema.ts`, connection in `src/db/index.ts`, migrations in `migrations/**`.
 
@@ -73,10 +73,11 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 - **Storefront API**: Hono (Swagger UI + OpenAPI)
 - **Database**: Turso/libSQL + Drizzle ORM
 - **UI**: Tailwind CSS v4 + shadcn/ui (`src/components/ui/**`)
-- **Auth**: Clerk (`@clerk/astro`)
+- **Auth**: Better Auth (email/password + mandatory 2FA)
 - **Caching**: Upstash Redis (with in-memory fallback) for Hono API response caching
 - **Storage**: Cloudflare R2 (S3-compatible) for media uploads
-- **Notifications**: Firebase Cloud Messaging (admin push notifications)
+- **Notifications**: Firebase Cloud Messaging (admin push notifications, configured via dashboard)
+- **Email**: Cloudflare Email Workers (2FA codes, password reset)
 - **AI tooling**: OpenRouter integration for widget/content generation (API key stored in DB settings)
 - **Deploy**: Cloudflare Pages/Workers via Wrangler
 
@@ -89,6 +90,7 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 - **Media**: R2-backed uploads + Cloudflare Image Resizing optimization in production
 - **Notifications**: admin push notifications for new orders (Firebase Cloud Messaging)
 - **AI**: OpenRouter-powered widget/content generation and prompt tooling
+- **Security**: Mandatory 2FA for admin users (authenticator app or email), rate limiting, secure sessions
 
 ### Architecture overview
 
@@ -96,7 +98,7 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 
 - Admin pages live in `src/pages/admin/**` and render through `src/layouts/AdminLayout.astro`.
 - Most interactive UI is React (hydrated with `client:*` directives).
-- Authentication + org gating is enforced by `src/middleware.ts` using Clerk.
+- Authentication is enforced by `src/middleware.ts` using Better Auth with mandatory two-factor authentication.
 
 #### Admin CRUD APIs (Astro API routes)
 
@@ -119,9 +121,11 @@ src/                     # App code (Astro UI + APIs + Hono)
   pages/
     admin/               # Admin dashboard pages (Astro)
     api/                 # Admin CRUD endpoints (Astro API routes)
+    auth/                # Authentication pages (login, setup, 2FA)
     health.ts            # App health endpoint
   components/
     admin/               # Admin React components
+    auth/                # Authentication React components
     ui/                  # shadcn/ui components
   server/
     index.ts             # Hono app (storefront API)
@@ -130,6 +134,10 @@ src/                     # App code (Astro UI + APIs + Hono)
     middleware/          # Hono middleware (auth + caching)
     openapi/             # OpenAPI spec builder
     utils/               # Redis/JWT/etc
+  lib/
+    auth.ts              # Better Auth configuration
+    auth-client.ts       # Better Auth client for React
+    email.ts             # Cloudflare Email Workers integration
   db/
     schema.ts            # Drizzle schema (SQLite/libSQL)
     index.ts             # getDb() (Turso/libSQL)
@@ -142,9 +150,8 @@ From `package.json`:
 
 ```bash
 pnpm dev          # astro dev --host
-pnpm build        # astro check && astro build && pnpm db:generate &&  
-pnpx astro check  # Type check 
-pnpm start        # wrangler pages dev ./dist  (run built output; run pnpm build first)
+pnpm build        # astro check && astro build
+pnpm start        # wrangler pages dev ./dist (run built output; run pnpm build first)
 pnpm deploy       # wrangler pages deploy ./dist
 
 pnpm db:generate  # drizzle-kit generate
@@ -156,23 +163,30 @@ pnpm generate:sdk # tsx src/scripts/generate-openapi-json.ts && openapi-ts
 
 ### Environment variables
 
-This project runs locally via `.env` (loaded by `dotenv/config`) and in production via Cloudflare Pages/Workers environment variables + bindings.
+This project runs locally via `.dev.vars` (Wrangler) or `.env` and in production via Cloudflare Pages/Workers environment variables + bindings.
 
 #### Core (required)
 
 - **Database**
   - `TURSO_DATABASE_URL`: Turso/libSQL database URL (required by `src/db/index.ts`)
   - `TURSO_AUTH_TOKEN`: Turso auth token
-- **Clerk**
-  - `PUBLIC_CLERK_PUBLISHABLE_KEY`
-  - `CLERK_SECRET_KEY`
-  - `CLERK_ALLOWED_ORG_ID`: optional org allow-list for admin + admin APIs
+- **Authentication (Better Auth)**
+  - `BETTER_AUTH_SECRET`: Session encryption secret (generate with: `openssl rand -base64 32`)
+  - `BETTER_AUTH_URL`: Base URL for auth callbacks (e.g., `https://your-domain.com`)
 - **Hono auth**
   - `API_TOKEN`: machine-to-machine token (used by `/api/v1/auth/token`)
   - `JWT_SECRET`: JWT signing secret (required in production; defaults are blocked by code)
 - **Base URL (recommended)**
   - `PUBLIC_API_BASE_URL`: canonical site origin used by the Hono layer (CORS, proxy headers, notifications links, CSP helpers)
   - `PUBLIC_API_URL`: optional override for the full Hono API base (some admin cache routes will use this if set)
+
+#### Email (Cloudflare Email Workers)
+
+Required for email-based 2FA and password reset in production:
+
+- `EMAIL_SENDER`: sender email address (e.g., `noreply@yourdomain.com`)
+
+Note: Cloudflare Email Workers requires Email Routing to be enabled on your domain. In development, emails are logged to console.
 
 #### Caching (recommended for production)
 
@@ -208,19 +222,10 @@ If you have a separate storefront that exposes a purge endpoint, the backend can
 
 #### Admin notifications (Firebase Cloud Messaging)
 
-- **Server**
-  - `FIREBASE_SERVICE_ACCOUNT_CRED_JSON`: service account JSON (stringified)
-  - `PROJECT_CACHE_PREFIX`: reused for KV cache keys
-  - `SHARED_AUTH_CACHE` (Cloudflare KV binding): used to cache Firebase access tokens
-- **Client (public)**
-  - `PUBLIC_FIREBASE_API_KEY`
-  - `PUBLIC_FIREBASE_AUTH_DOMAIN`
-  - `PUBLIC_FIREBASE_PROJECT_ID`
-  - `PUBLIC_FIREBASE_STORAGE_BUCKET`
-  - `PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
-  - `PUBLIC_FIREBASE_APP_ID`
-  - `PUBLIC_FIREBASE_MEASUREMENT_ID`
-  - `PUBLIC_VAPID_FIREBASE`
+Firebase credentials are configured via the admin dashboard at **Settings → Notifications**. The dashboard stores credentials in the database settings table.
+
+Server-side requirements:
+- `SHARED_AUTH_CACHE` (Cloudflare KV binding): used to cache Firebase access tokens
 
 #### Search reindex auth (optional)
 
@@ -248,7 +253,19 @@ pnpm install
 
 #### 2) Configure env
 
-Create a `.env` file with at least the required variables (Turso + Clerk). Add Redis/R2/Firebase/OpenRouter settings depending on which features you plan to use.
+Create a `.dev.vars` file with at least the required variables (Turso + Better Auth). See `.env.example` for a template.
+
+```bash
+# Required
+TURSO_DATABASE_URL=libsql://your-db.turso.io
+TURSO_AUTH_TOKEN=your-turso-token
+BETTER_AUTH_SECRET=your-secret-key
+BETTER_AUTH_URL=http://localhost:4321
+
+# For production
+JWT_SECRET=your-jwt-secret
+API_TOKEN=your-api-token
+```
 
 #### 3) Run the dev server
 
@@ -257,6 +274,10 @@ pnpm dev
 ```
 
 Astro defaults to port `4321` unless configured otherwise.
+
+#### 4) First-time setup
+
+On first run, navigate to `/admin` - you'll be redirected to `/auth/setup` to create the first admin account. After account creation, you'll be required to set up two-factor authentication (authenticator app or email).
 
 If you want Cloudflare runtime parity (Workers execution context, KV bindings, etc.), run the built output with Wrangler:
 
@@ -280,12 +301,37 @@ pnpm db:sync
 
 `db:sync` runs `src/scripts/sync-migrations.ts` to keep the `__drizzle_migrations` history table aligned with your migration files and database state (helpful when switching between `db:push` and `db:migrate` workflows).
 
+### Authentication
+
+This project uses [Better Auth](https://better-auth.com) for authentication with the following features:
+
+- **Email/password authentication** with secure password hashing
+- **Mandatory two-factor authentication** for all admin users:
+  - Authenticator app (TOTP) - Google Authenticator, Authy, etc.
+  - Email verification codes (production only)
+  - Backup codes for account recovery
+- **Rate limiting** on sensitive endpoints (login, 2FA, password reset)
+- **Session management** with 7-day expiry and automatic refresh
+
+#### First-time setup
+
+1. Navigate to `/admin` (redirects to `/auth/setup`)
+2. Create the first admin account with email and password
+3. Set up two-factor authentication (required)
+4. Access the admin dashboard
+
+#### Subsequent logins
+
+1. Enter email and password at `/auth/login`
+2. Complete 2FA verification (authenticator, email, or backup code)
+3. Access the admin dashboard
+
 ### API usage
 
 #### Admin API (Astro) — `/api/**`
 
 - Source: `src/pages/api/**`
-- Auth: protected by Clerk middleware route matching in `src/middleware.ts`
+- Auth: protected by Better Auth middleware in `src/middleware.ts`
 - Example: products CRUD lives in:
   - `src/pages/api/products/index.ts` (`GET`, `POST`)
   - `src/pages/api/products/[id].ts` (`PUT`, `DELETE`)
@@ -300,7 +346,7 @@ pnpm db:sync
   - **Public (no JWT)**: most read-only storefront data (products, categories, collections, pages, layout data, etc.)
   - **Protected (JWT required)**: `/api/v1/orders/**` and `/api/v1/cache/**`
 
-##### Storefront “single-call” endpoints
+##### Storefront "single-call" endpoints
 
 To reduce client round-trips, the Hono API exposes consolidated endpoints:
 
@@ -343,15 +389,23 @@ In Cloudflare Workers, invalidations are scheduled via `ctx.waitUntil()` when av
 - Upload endpoint: `POST /api/media/upload` (multipart form field `files`)
 - Storage implementation: `src/lib/storage.ts` (S3-compatible client targeting R2)
 
-If R2 env vars are missing, the upload route will fail early with “Missing required R2 environment variables”.
+If R2 env vars are missing, the upload route will fail early with "Missing required R2 environment variables".
 
 ### Admin push notifications (FCM)
 
-- Client initializes FCM inside `src/layouts/AdminLayout.astro` and posts tokens to:
-  - `POST /api/admin/fcm-token`
-- Server sends order notifications in the background from Hono order creation:
-  - `src/lib/notification-utils.ts`
-  - `src/lib/firebase/admin.ts` (Worker-friendly FCM REST implementation)
+Firebase Cloud Messaging is configured via the admin dashboard at **Settings → Notifications**. No environment variables are required for Firebase - all credentials are stored securely in the database.
+
+To set up notifications:
+
+1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Enable Cloud Messaging in your Firebase project
+3. Go to **Settings → Notifications** in the admin dashboard
+4. Enter your Firebase configuration (API key, project ID, etc.)
+5. Enter your service account credentials for server-side messaging
+
+Implementation details:
+- Client initializes FCM inside `src/layouts/AdminLayout.astro` and posts tokens to `POST /api/admin/fcm-token`
+- Server sends order notifications in the background from Hono order creation via `src/lib/notification-utils.ts`
 
 ### AI generation (OpenRouter)
 
@@ -381,16 +435,19 @@ pnpm build
 pnpm deploy
 ```
 
-`wrangler.toml` defines worker compatibility flags, static assets binding, and a KV namespace binding (`SHARED_AUTH_CACHE`).
+`wrangler.toml` defines worker compatibility flags, static assets binding, and KV namespace bindings.
 
 ### Troubleshooting
 
-- **“CRITICAL SECURITY ERROR: Using default JWT secret in production”**
+- **"CRITICAL SECURITY ERROR: Using default JWT secret in production"**
   - Set `JWT_SECRET` in production.
+- **"BETTER_AUTH_SECRET is not set"**
+  - Set `BETTER_AUTH_SECRET` environment variable. Generate with: `openssl rand -base64 32`
 - **Redis not configured**
-  - You’ll see logs like “Redis URL not provided. Using in-memory cache fallback.” Configure Upstash env vars for production-grade caching.
+  - You'll see logs like "Redis URL not provided. Using in-memory cache fallback." Configure Upstash env vars for production-grade caching.
 - **CORS issues**
   - Set `PUBLIC_API_BASE_URL` and (if needed) `CSP_ALLOWED` / `CDN_DOMAIN_URL`.
-- **Admin auth / org mismatch**
-  - Set `CLERK_ALLOWED_ORG_ID` if you want to restrict access to a specific Clerk organization.
-
+- **Email 2FA not working in development**
+  - Email-based 2FA requires Cloudflare Email Workers (production only). Use authenticator app for local development.
+- **Firebase notifications not working**
+  - Configure Firebase credentials in the admin dashboard at Settings → Notifications.

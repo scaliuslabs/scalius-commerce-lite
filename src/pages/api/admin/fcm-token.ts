@@ -14,17 +14,16 @@ const fcmTokenSchema = z.object({
   deviceInfo: z.string().optional(),
 });
 
-// v-- CHANGE: Define the handler as an async function and explicitly type the context parameter
 export async function POST({ request, locals }: APIContext) {
-  // 1. Authentication check (relies on Clerk middleware)
-  const auth = locals.auth; // This will now be correctly typed
-  if (!auth || !auth().userId) {
+  // 1. Authentication check (relies on Better Auth middleware)
+  const user = locals.user;
+  if (!user || !user.id) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
     });
   }
-  const authenticatedUserId = auth().userId;
+  const authenticatedUserId = user.id;
 
   // 2. Parse and validate the request body
   let body;
@@ -45,7 +44,7 @@ export async function POST({ request, locals }: APIContext) {
         error: "Invalid input",
         details: validation.error.flatten(),
       }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
+      { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
 
@@ -55,7 +54,7 @@ export async function POST({ request, locals }: APIContext) {
   if (userId !== authenticatedUserId) {
     return new Response(
       JSON.stringify({ error: "Forbidden: User ID mismatch" }),
-      { status: 403, headers: { "Content-Type": "application/json" } },
+      { status: 403, headers: { "Content-Type": "application/json" } }
     );
   }
 
@@ -89,7 +88,7 @@ export async function POST({ request, locals }: APIContext) {
     // 5. Return a success response
     return new Response(
       JSON.stringify({ message: "FCM token registered successfully" }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
+      { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error saving FCM token:", error);

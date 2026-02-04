@@ -23,11 +23,6 @@ const ESSENTIAL_DOMAINS = [
   "facebook.net",
   "connect.facebook.net",
 
-  // Clerk Authentication
-  "clerk.dev",
-  "clerk.com",
-  "clerk.accounts.dev",
-
   // Common CDNs
   "jsdelivr.net",
   "unpkg.com",

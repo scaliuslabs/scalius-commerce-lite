@@ -1,0 +1,36 @@
+---
+// src/pages/admin/settings/account.astro
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { AccountSettings } from "../../../components/admin/AccountSettings";
+
+// Get user from middleware
+const user = Astro.locals.user;
+
+// Redirect if not authenticated (handled by AdminLayout, but just in case)
+if (!user) {
+  return Astro.redirect("/auth/login");
+}
+
+// Prepare user data for the component
+const userData = {
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  image: user.image,
+  role: user.role,
+  twoFactorEnabled: user.twoFactorEnabled,
+};
+---
+
+<AdminLayout title="Account Settings">
+  <div class="max-w-3xl mx-auto">
+    <div class="mb-8">
+      <h1 class="text-2xl font-bold">Account Settings</h1>
+      <p class="text-sm text-muted-foreground mt-1">
+        Manage your account security and administrator access
+      </p>
+    </div>
+
+    <AccountSettings user={userData} client:load />
+  </div>
+</AdminLayout>

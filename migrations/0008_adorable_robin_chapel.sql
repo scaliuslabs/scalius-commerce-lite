@@ -1,0 +1,1 @@
+ALTER TABLE `session` ADD `two_factor_verified` integer DEFAULT false;

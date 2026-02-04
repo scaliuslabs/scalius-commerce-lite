@@ -3,19 +3,18 @@ import { db } from "@/db";
 import { adminFcmTokens } from "@/db/schema";
 import { sql } from "drizzle-orm";
 
-export const POST: APIRoute = async (contextUntyped) => {
-  const context = contextUntyped as APIContext & { locals: App.Locals };
-  const { request, locals } = context;
-  const authResult = locals.auth();
-  const clerkUserId = authResult?.userId;
+export const POST: APIRoute = async (context) => {
+  const { request, locals } = context as APIContext;
 
-  if (!clerkUserId) {
+  // Authentication check (relies on Better Auth middleware)
+  const user = locals.user;
+  if (!user || !user.id) {
     return new Response(
       JSON.stringify({ error: "Unauthorized. Admin user must be logged in." }),
       {
         status: 401,
         headers: { "Content-Type": "application/json" },
-      },
+      }
     );
   }
 
@@ -30,7 +29,7 @@ export const POST: APIRoute = async (contextUntyped) => {
         {
           status: 400,
           headers: { "Content-Type": "application/json" },
-        },
+        }
       );
     }
 
@@ -56,7 +55,7 @@ export const POST: APIRoute = async (contextUntyped) => {
         updatedAt: sql`(cast(strftime('%s','now') as int))`,
       })
       .where(
-        sql`${adminFcmTokens.lastUsed} < ${thirtyDaysAgo} OR ${adminFcmTokens.lastUsed} IS NULL`,
+        sql`${adminFcmTokens.lastUsed} < ${thirtyDaysAgo} OR ${adminFcmTokens.lastUsed} IS NULL`
       );
 
     return new Response(
@@ -67,7 +66,7 @@ export const POST: APIRoute = async (contextUntyped) => {
       {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      },
+      }
     );
   } catch (error) {
     console.error("Error cleaning up FCM tokens:", error);
@@ -76,7 +75,7 @@ export const POST: APIRoute = async (contextUntyped) => {
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
-      },
+      }
     );
   }
 };

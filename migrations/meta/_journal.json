@@ -50,6 +50,20 @@
       "when": 1766765749717,
       "tag": "0006_lumpy_sebastian_shaw",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1770205393294,
+      "tag": "0007_steep_northstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1770209917199,
+      "tag": "0008_adorable_robin_chapel",
+      "breakpoints": true
     }
   ]
 }

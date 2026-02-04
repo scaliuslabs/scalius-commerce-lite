@@ -1,0 +1,15 @@
+---
+// src/pages/auth/login.astro
+import AuthLayout from "@/layouts/AuthLayout.astro";
+import { LoginForm } from "@/components/auth/LoginForm";
+
+// Check if user is already logged in
+const session = Astro.locals.session;
+if (session) {
+  return Astro.redirect("/admin");
+}
+---
+
+<AuthLayout title="Sign In">
+  <LoginForm client:load />
+</AuthLayout>
