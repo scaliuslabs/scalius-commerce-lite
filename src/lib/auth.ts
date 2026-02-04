@@ -46,8 +46,8 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
     appName,
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: false, // Can be enabled once email is configured
-      minPasswordLength: 8,
+      requireEmailVerification: true,
+      minPasswordLength: 12,
       // Email verification callback - called when user needs to verify email
       sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
         // Import dynamically to avoid circular dependencies

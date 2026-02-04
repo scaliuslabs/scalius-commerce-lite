@@ -21,13 +21,13 @@ const app = new Hono<{
 const API_TOKEN =
   process.env.API_TOKEN || "default-api-token-change-in-production";
 
-// Check if we're in production and warn about insecure API token
+// SECURITY: Block startup if using default API token in production
 if (
   process.env.NODE_ENV === "production" &&
   API_TOKEN === "default-api-token-change-in-production"
 ) {
-  console.warn(
-    "WARNING: Using default API token in production. This is insecure. Set API_TOKEN environment variable.",
+  throw new Error(
+    "CRITICAL SECURITY ERROR: Using default API token in production. Set API_TOKEN environment variable.",
   );
 }
 
@@ -79,7 +79,7 @@ app.get("/me", (c) => {
 });
 
 // Revoke current token
-app.post("/revoke", (c) => {
+app.post("/revoke", async (c) => {
   try {
     // Get authorization header
     const authHeader = c.req.header("Authorization") || null;
@@ -97,8 +97,8 @@ app.post("/revoke", (c) => {
 
     const token = authHeader.substring(7);
 
-    // Revoke token
-    revokeToken(token);
+    // Revoke token (async - stores in Redis)
+    await revokeToken(token);
 
     return c.json({
       success: true,

@@ -52,8 +52,8 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     }
 
     try {
-      // Verify token
-      const decoded = verifyToken(token) as User;
+      // Verify token (async - checks Redis blacklist)
+      const decoded = (await verifyToken(token)) as User;
 
       // Store user info in context
       c.set("user", decoded);
@@ -69,50 +69,12 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
       // Continue to next middleware/handler
       await next();
     } catch (error) {
-      // Handle specific token errors
-      if (error instanceof Error) {
-        if (error.message === "Token has expired") {
-          return c.json(
-            {
-              success: false,
-              error: "Token expired",
-              message:
-                "Your authentication token has expired. Please log in again.",
-            },
-            401,
-          );
-        } else if (error.message === "Token has been revoked") {
-          return c.json(
-            {
-              success: false,
-              error: "Token revoked",
-              message:
-                "Your authentication token has been revoked. Please log in again.",
-            },
-            401,
-          );
-        } else if (error.message === "Invalid token") {
-          return c.json(
-            {
-              success: false,
-              error: "Invalid token",
-              message:
-                "The provided authentication token is invalid. Please log in again.",
-            },
-            401,
-          );
-        }
-      }
-
-      // Generic auth error
+      // SECURITY: Use generic error message to prevent token enumeration
       return c.json(
         {
           success: false,
-          error: "Authentication failed",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Unknown authentication error",
+          error: "Invalid token",
+          message: "The provided authentication token is invalid. Please log in again.",
         },
         401,
       );

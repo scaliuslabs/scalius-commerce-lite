@@ -2,8 +2,9 @@ export function getCorsOriginFunction() {
   return (origin: string): string | null => {
     const allowedOrigins = getAllowedCorsOrigins();
 
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return "*";
+    // SECURITY: Reject requests with no origin in production
+    // Mobile apps and curl don't need CORS headers anyway
+    if (!origin) return null;
 
     const isAllowed = allowedOrigins.some((allowedOrigin) => {
       if (allowedOrigin === "*") return true;
@@ -30,14 +31,13 @@ function getAllowedCorsOrigins(): string[] {
 
   const origins = [
     currentOrigin,
-    // Allow all localhost ports in development
-    "http://localhost:*",
-    "http://127.0.0.1:*",
-    // Keep specific ports for backward compatibility
+    // SECURITY: Only allow specific localhost ports, not wildcards
     "http://localhost:4321",
     "http://localhost:4322",
+    "http://localhost:3000",
     "http://127.0.0.1:4321",
     "http://127.0.0.1:4322",
+    "http://127.0.0.1:3000",
   ];
 
   if (cdnDomain) {
@@ -45,21 +45,15 @@ function getAllowedCorsOrigins(): string[] {
   }
 
   if (cspAllowed.trim()) {
+    // SECURITY: Only add exact domains from CSP_ALLOWED, no automatic wildcard expansion
     const customOrigins = cspAllowed
       .split(",")
       .map((domain) => domain.trim())
       .filter((domain) => domain.length > 0)
-      .flatMap((domain) => {
+      .map((domain) => {
         // Remove https:// if present to normalize
         const cleanDomain = domain.replace(/^https?:\/\//, "");
-
-        // If it's already a wildcard, just add https
-        if (cleanDomain.startsWith("*.")) {
-          return [`https://${cleanDomain}`];
-        }
-
-        // For regular domains, add both exact and wildcard
-        return [`https://${cleanDomain}`, `https://*.${cleanDomain}`];
+        return `https://${cleanDomain}`;
       });
 
     origins.push(...customOrigins);

@@ -87,11 +87,16 @@ async function handleRequest(context: APIContextWithLocals) {
     const responseTime = endTime - startTime;
     console.error(`Error response time: ${responseTime.toFixed(2)}ms`);
 
+    // SECURITY: Don't expose error details in production
+    const isProduction = process.env.NODE_ENV === "production";
     return new Response(
       JSON.stringify({
         error: "Internal Server Error",
-        message:
-          error instanceof Error ? error.message : "Unknown error occurred",
+        message: isProduction
+          ? "An internal error occurred"
+          : error instanceof Error
+            ? error.message
+            : "Unknown error occurred",
         requestId: crypto.randomUUID(),
         timestamp: new Date().toISOString(),
       }),

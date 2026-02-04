@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,8 +38,13 @@ import {
   Users,
   Smartphone,
   Mail,
+  User,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MediaManager, type MediaFile } from "./MediaManager";
 
 interface User {
   id: string;
@@ -66,10 +73,221 @@ interface AccountSettingsProps {
 export function AccountSettings({ user }: AccountSettingsProps) {
   return (
     <div className="space-y-6">
-      <ChangePasswordSection />
-      <TwoFactorSection user={user} />
-      <AdminUsersSection currentUserId={user.id} />
+      {/* Profile Header Card */}
+      <ProfileHeaderCard user={user} />
+
+      {/* Tabbed Settings */}
+      <Tabs defaultValue="security" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="security" className="flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            <span className="hidden sm:inline">Security</span>
+          </TabsTrigger>
+          <TabsTrigger value="password" className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4" />
+            <span className="hidden sm:inline">Password</span>
+          </TabsTrigger>
+          <TabsTrigger value="team" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Team</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="security" className="space-y-6">
+          <TwoFactorSection user={user} />
+        </TabsContent>
+
+        <TabsContent value="password" className="space-y-6">
+          <ChangePasswordSection />
+        </TabsContent>
+
+        <TabsContent value="team" className="space-y-6">
+          <AdminUsersSection currentUserId={user.id} />
+        </TabsContent>
+      </Tabs>
     </div>
+  );
+}
+
+// Profile Header Card - Prominent display of user info
+function ProfileHeaderCard({ user }: { user: User }) {
+  const [name, setName] = useState(user.name);
+  const [image, setImage] = useState(user.image || "");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const getInitials = (nameStr: string) => {
+    return nameStr
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const handleImageSelect = (file: MediaFile) => {
+    setImage(file.url);
+    setIsEditing(true);
+  };
+
+  const removeImage = () => {
+    setImage("");
+    setIsEditing(true);
+  };
+
+  const handleSave = async () => {
+    if (name.trim().length < 2) {
+      toast.error("Name must be at least 2 characters");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/update-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          image: image || null,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        toast.error(result.error || "Failed to update profile");
+        return;
+      }
+
+      toast.success("Profile updated successfully");
+      setIsEditing(false);
+      // Reload to refresh header
+      window.location.reload();
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setName(user.name);
+    setImage(user.image || "");
+    setIsEditing(false);
+  };
+
+  const hasChanges = name !== user.name || image !== (user.image || "");
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent h-24" />
+      <CardContent className="relative pt-0 pb-6">
+        <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-end -mt-12">
+          {/* Avatar */}
+          <div className="relative group">
+            <div className="h-24 w-24 rounded-full border-4 border-background bg-muted shadow-lg overflow-hidden">
+              {image ? (
+                <img
+                  src={image}
+                  alt={name}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center bg-primary/10">
+                  <span className="text-2xl font-semibold text-primary">
+                    {getInitials(name)}
+                  </span>
+                </div>
+              )}
+            </div>
+            {image && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={removeImage}
+                title="Remove photo"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+
+          {/* User Info */}
+          <div className="flex-1 space-y-4 pt-2 sm:pt-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1 space-y-1">
+                {isEditing ? (
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="text-lg font-semibold h-auto py-1 px-2 -ml-2"
+                    placeholder="Your name"
+                  />
+                ) : (
+                  <h2 className="text-xl font-semibold">{name}</h2>
+                )}
+                <p className="text-sm text-muted-foreground">{user.email}</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {user.role === "admin" && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full">
+                    <Shield className="h-3 w-3" />
+                    Admin
+                  </span>
+                )}
+                {user.twoFactorEnabled && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full">
+                    <ShieldCheck className="h-3 w-3" />
+                    2FA
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              <MediaManager
+                onSelect={handleImageSelect}
+                triggerLabel={image ? "Change Photo" : "Add Photo"}
+              />
+              {!isEditing && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditing(true)}
+                >
+                  Edit Profile
+                </Button>
+              )}
+              {isEditing && hasChanges && (
+                <>
+                  <Button size="sm" onClick={handleSave} disabled={isLoading}>
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : null}
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancel}
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -80,6 +298,25 @@ function ChangePasswordSection() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
+  const getPasswordStrength = (password: string) => {
+    if (!password) return { strength: 0, label: "", color: "" };
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+
+    if (strength <= 2) return { strength, label: "Weak", color: "bg-red-500" };
+    if (strength <= 3) return { strength, label: "Fair", color: "bg-yellow-500" };
+    if (strength <= 4) return { strength, label: "Good", color: "bg-blue-500" };
+    return { strength, label: "Strong", color: "bg-green-500" };
+  };
+
+  const passwordStrength = getPasswordStrength(newPassword);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,8 +327,8 @@ function ChangePasswordSection() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError("New password must be at least 8 characters");
+    if (newPassword.length < 12) {
+      setError("Password must be at least 12 characters");
       return;
     }
 
@@ -108,7 +345,6 @@ function ChangePasswordSection() {
 
       if (!response.ok) {
         setError(result.message || "Failed to change password");
-        setIsLoading(false);
         return;
       }
 
@@ -127,11 +363,11 @@ function ChangePasswordSection() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Lock className="h-5 w-5" />
+          <KeyRound className="h-5 w-5" />
           Change Password
         </CardTitle>
         <CardDescription>
-          Update your password to keep your account secure
+          Choose a strong password with at least 12 characters
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -145,27 +381,80 @@ function ChangePasswordSection() {
 
           <div className="space-y-2">
             <Label htmlFor="currentPassword">Current Password</Label>
-            <Input
-              id="currentPassword"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-              disabled={isLoading}
-            />
+            <div className="relative">
+              <Input
+                id="currentPassword"
+                type={showCurrentPassword ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+                disabled={isLoading}
+                className="pr-10"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+              >
+                {showCurrentPassword ? (
+                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                )}
+              </Button>
+            </div>
           </div>
+
+          <Separator />
 
           <div className="space-y-2">
             <Label htmlFor="newPassword">New Password</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-              disabled={isLoading}
-              minLength={8}
-            />
+            <div className="relative">
+              <Input
+                id="newPassword"
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                disabled={isLoading}
+                minLength={12}
+                className="pr-10"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+              >
+                {showNewPassword ? (
+                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                )}
+              </Button>
+            </div>
+            {newPassword && (
+              <div className="space-y-1.5">
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={i}
+                      className={`h-1 flex-1 rounded-full transition-colors ${
+                        i <= passwordStrength.strength
+                          ? passwordStrength.color
+                          : "bg-muted"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Password strength: {passwordStrength.label}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -177,18 +466,25 @@ function ChangePasswordSection() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               disabled={isLoading}
-              minLength={8}
+              minLength={12}
             />
+            {confirmPassword && newPassword !== confirmPassword && (
+              <p className="text-xs text-destructive">Passwords do not match</p>
+            )}
           </div>
 
-          <Button type="submit" disabled={isLoading}>
+          <Button
+            type="submit"
+            disabled={isLoading || !currentPassword || !newPassword || newPassword !== confirmPassword}
+            className="w-full sm:w-auto"
+          >
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Changing Password...
+                Updating...
               </>
             ) : (
-              "Change Password"
+              "Update Password"
             )}
           </Button>
         </form>
@@ -213,20 +509,16 @@ function TwoFactorSection({ user }: { user: User }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<"method" | "password" | "qr" | "verify" | "backup">("method");
-  const [emailSent, setEmailSent] = useState(false);
 
   const handleEnable2FA = async () => {
     setError(null);
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.enable({
-        password,
-      });
+      const result = await authClient.twoFactor.enable({ password });
 
       if (result.error) {
         setError(result.error.message || "Failed to enable 2FA");
-        setIsLoading(false);
         return;
       }
 
@@ -237,9 +529,7 @@ function TwoFactorSection({ user }: { user: User }) {
         if (selectedMethod === "totp") {
           setStep("qr");
         } else {
-          // For email method, send OTP
           await authClient.twoFactor.sendOtp();
-          setEmailSent(true);
           setStep("verify");
         }
       }
@@ -255,31 +545,21 @@ function TwoFactorSection({ user }: { user: User }) {
     setIsLoading(true);
 
     try {
-      let result;
-      if (selectedMethod === "totp") {
-        result = await authClient.twoFactor.verifyTotp({
-          code: verificationCode,
-        });
-      } else {
-        result = await authClient.twoFactor.verifyOtp({
-          code: verificationCode,
-        });
-      }
+      const result = selectedMethod === "totp"
+        ? await authClient.twoFactor.verifyTotp({ code: verificationCode })
+        : await authClient.twoFactor.verifyOtp({ code: verificationCode });
 
       if (result.error) {
         setError(result.error.message || "Invalid verification code");
-        setIsLoading(false);
         return;
       }
 
-      // Save the user's preferred 2FA method
       await fetch("/api/auth/update-2fa-method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method: selectedMethod }),
       });
 
-      // Mark the session as 2FA-verified
       await fetch("/api/auth/mark-2fa-verified", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -296,20 +576,15 @@ function TwoFactorSection({ user }: { user: User }) {
     }
   };
 
-  // Handler for setting up TOTP when changing from email to authenticator
   const handleSetupTotpForChange = async () => {
     setError(null);
     setIsLoading(true);
 
     try {
-      // We need to regenerate TOTP secret - use enable to get new totpURI
-      const result = await authClient.twoFactor.enable({
-        password,
-      });
+      const result = await authClient.twoFactor.enable({ password });
 
       if (result.error) {
         setError(result.error.message || "Failed to setup authenticator");
-        setIsLoading(false);
         return;
       }
 
@@ -325,30 +600,24 @@ function TwoFactorSection({ user }: { user: User }) {
     }
   };
 
-  // Handler for verifying TOTP when changing method
   const handleVerifyTotpForChange = async () => {
     setError(null);
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.verifyTotp({
-        code: verificationCode,
-      });
+      const result = await authClient.twoFactor.verifyTotp({ code: verificationCode });
 
       if (result.error) {
         setError(result.error.message || "Invalid verification code");
-        setIsLoading(false);
         return;
       }
 
-      // Save the new method preference
       await fetch("/api/auth/update-2fa-method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method: "totp" }),
       });
 
-      // Mark the session as 2FA-verified
       await fetch("/api/auth/mark-2fa-verified", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -364,13 +633,11 @@ function TwoFactorSection({ user }: { user: User }) {
     }
   };
 
-  // Handler for changing to email method (simpler, no setup needed)
   const handleChangeToEmail = async () => {
     setError(null);
     setIsLoading(true);
 
     try {
-      // Save the new method preference
       await fetch("/api/auth/update-2fa-method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -393,13 +660,10 @@ function TwoFactorSection({ user }: { user: User }) {
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.disable({
-        password,
-      });
+      const result = await authClient.twoFactor.disable({ password });
 
       if (result.error) {
         setError(result.error.message || "Failed to disable 2FA");
-        setIsLoading(false);
         return;
       }
 
@@ -442,7 +706,6 @@ function TwoFactorSection({ user }: { user: User }) {
     setTotpUri(null);
     setBackupCodes([]);
     setError(null);
-    setEmailSent(false);
     setSelectedMethod(currentMethod);
   };
 
@@ -473,10 +736,10 @@ function TwoFactorSection({ user }: { user: User }) {
           </CardTitle>
           <CardDescription>
             {setupMode === "disable"
-              ? "Enter your password to disable 2FA"
+              ? "Enter your password to confirm"
               : setupMode === "change"
               ? "Choose your preferred verification method"
-              : "Secure your account with two-factor authentication"}
+              : "Add an extra layer of security to your account"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -489,59 +752,61 @@ function TwoFactorSection({ user }: { user: User }) {
 
           {step === "method" && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
+                  type="button"
                   onClick={() => setSelectedMethod("totp")}
-                  className={`p-4 border rounded-lg text-left transition-colors ${
+                  className={`p-4 border rounded-xl text-left transition-all ${
                     selectedMethod === "totp"
-                      ? "border-primary bg-primary/5"
-                      : "hover:bg-muted/50"
+                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      : "hover:bg-muted/50 hover:border-muted-foreground/20"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                       selectedMethod === "totp" ? "bg-primary/10" : "bg-muted"
                     }`}>
-                      <Smartphone className={`h-5 w-5 ${selectedMethod === "totp" ? "text-primary" : ""}`} />
+                      <Smartphone className={`h-6 w-6 ${selectedMethod === "totp" ? "text-primary" : "text-muted-foreground"}`} />
                     </div>
                     <div>
-                      <p className="font-medium text-sm">Authenticator App</p>
-                      <p className="text-xs text-muted-foreground">More secure</p>
+                      <p className="font-medium">Authenticator App</p>
+                      <p className="text-xs text-muted-foreground">Google Authenticator, Authy</p>
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-3">
+                    More secure. Works offline.
+                  </p>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setSelectedMethod("email")}
-                  className={`p-4 border rounded-lg text-left transition-colors ${
+                  className={`p-4 border rounded-xl text-left transition-all ${
                     selectedMethod === "email"
-                      ? "border-primary bg-primary/5"
-                      : "hover:bg-muted/50"
+                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      : "hover:bg-muted/50 hover:border-muted-foreground/20"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                       selectedMethod === "email" ? "bg-primary/10" : "bg-muted"
                     }`}>
-                      <Mail className={`h-5 w-5 ${selectedMethod === "email" ? "text-primary" : ""}`} />
+                      <Mail className={`h-6 w-6 ${selectedMethod === "email" ? "text-primary" : "text-muted-foreground"}`} />
                     </div>
                     <div>
-                      <p className="font-medium text-sm">Email</p>
-                      <p className="text-xs text-muted-foreground">More convenient</p>
+                      <p className="font-medium">Email</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-3">
+                    More convenient. No app needed.
+                  </p>
                 </button>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-2">
                 <Button
                   onClick={() => {
-                    if (setupMode === "change") {
-                      if (selectedMethod === "totp") {
-                        // Changing to authenticator requires full setup
-                        setStep("password");
-                      } else {
-                        // Changing to email is simple - no setup needed
-                        handleChangeToEmail();
-                      }
+                    if (setupMode === "change" && selectedMethod === "email") {
+                      handleChangeToEmail();
                     } else {
                       setStep("password");
                     }
@@ -550,14 +815,11 @@ function TwoFactorSection({ user }: { user: User }) {
                   className="flex-1"
                 >
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {setupMode === "change" && selectedMethod === "email" ? "Save Changes" : "Continue"}
+                  Continue
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    setShowSetup(false);
-                    resetState();
-                  }}
+                  onClick={() => { setShowSetup(false); resetState(); }}
                   disabled={isLoading}
                 >
                   Cancel
@@ -583,13 +845,9 @@ function TwoFactorSection({ user }: { user: User }) {
               <div className="flex gap-2">
                 <Button
                   onClick={() => {
-                    if (setupMode === "disable") {
-                      handleDisable2FA();
-                    } else if (setupMode === "change" && selectedMethod === "totp") {
-                      handleSetupTotpForChange();
-                    } else {
-                      handleEnable2FA();
-                    }
+                    if (setupMode === "disable") handleDisable2FA();
+                    else if (setupMode === "change" && selectedMethod === "totp") handleSetupTotpForChange();
+                    else handleEnable2FA();
                   }}
                   disabled={isLoading || !password}
                   variant={setupMode === "disable" ? "destructive" : "default"}
@@ -601,16 +859,12 @@ function TwoFactorSection({ user }: { user: User }) {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    if (setupMode === "enable" || setupMode === "change") {
-                      setStep("method");
-                    } else {
-                      setShowSetup(false);
-                      resetState();
-                    }
+                    if (setupMode === "enable" || setupMode === "change") setStep("method");
+                    else { setShowSetup(false); resetState(); }
                   }}
                   disabled={isLoading}
                 >
-                  {setupMode === "enable" || setupMode === "change" ? "Back" : "Cancel"}
+                  Back
                 </Button>
               </div>
             </div>
@@ -618,15 +872,19 @@ function TwoFactorSection({ user }: { user: User }) {
 
           {step === "qr" && totpUri && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
-              </p>
-              <div className="flex justify-center">
-                <img
-                  src={getQrCodeUrl(totpUri)}
-                  alt="2FA QR Code"
-                  className="w-48 h-48 rounded-lg border bg-white p-2"
-                />
+              <div className="text-center space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Scan this QR code with your authenticator app
+                </p>
+                <div className="flex justify-center">
+                  <div className="bg-white p-4 rounded-xl shadow-sm">
+                    <img
+                      src={getQrCodeUrl(totpUri)}
+                      alt="2FA QR Code"
+                      className="w-48 h-48"
+                    />
+                  </div>
+                </div>
               </div>
               <Button onClick={() => setStep("verify")} className="w-full">
                 I've Scanned the Code
@@ -640,7 +898,7 @@ function TwoFactorSection({ user }: { user: User }) {
                 <Label htmlFor="verification-code">
                   {selectedMethod === "email"
                     ? "Enter the code sent to your email"
-                    : "Enter the code from your authenticator app"}
+                    : "Enter the 6-digit code from your app"}
                 </Label>
                 <Input
                   id="verification-code"
@@ -648,7 +906,7 @@ function TwoFactorSection({ user }: { user: User }) {
                   value={verificationCode}
                   onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
                   placeholder="000000"
-                  className="text-center text-xl tracking-[0.5em] font-mono"
+                  className="text-center text-2xl tracking-[0.5em] font-mono h-14"
                   maxLength={6}
                   disabled={isLoading}
                   autoFocus
@@ -657,11 +915,8 @@ function TwoFactorSection({ user }: { user: User }) {
               <div className="flex gap-2">
                 <Button
                   onClick={() => {
-                    if (setupMode === "change" && selectedMethod === "totp") {
-                      handleVerifyTotpForChange();
-                    } else {
-                      handleVerify2FA();
-                    }
+                    if (setupMode === "change" && selectedMethod === "totp") handleVerifyTotpForChange();
+                    else handleVerify2FA();
                   }}
                   disabled={isLoading || verificationCode.length !== 6}
                   className="flex-1"
@@ -679,7 +934,7 @@ function TwoFactorSection({ user }: { user: User }) {
               {selectedMethod === "email" && (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="link"
                   onClick={handleResendOtp}
                   disabled={isLoading}
                   className="w-full text-sm"
@@ -692,42 +947,32 @@ function TwoFactorSection({ user }: { user: User }) {
 
           {step === "backup" && backupCodes.length > 0 && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 p-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2 p-3 text-sm text-green-700 bg-green-50 dark:bg-green-950/30 dark:text-green-400 border border-green-200 dark:border-green-900 rounded-lg">
                 <Check className="h-4 w-4 flex-shrink-0" />
-                <span>
-                  {setupMode === "change"
-                    ? "Authenticator app configured successfully!"
-                    : "Two-factor authentication is now enabled!"}
-                </span>
+                <span>Two-factor authentication is now enabled!</span>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label>Backup Codes</Label>
+                  <Label>Recovery Codes</Label>
                   <Button variant="ghost" size="sm" onClick={copyBackupCodes}>
                     <Copy className="h-4 w-4 mr-1" />
                     Copy
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Save these backup codes in a safe place. You can use them to access your account if you lose your {selectedMethod === "totp" ? "authenticator" : "email access"}.
+                  Save these codes securely. Each code can only be used once.
                 </p>
-                <div className="bg-muted p-4 rounded-lg">
+                <div className="bg-muted/50 p-4 rounded-lg border">
                   <div className="grid grid-cols-2 gap-2 font-mono text-sm">
                     {backupCodes.map((code, index) => (
-                      <div key={index} className="text-center">
+                      <div key={index} className="text-center py-1 bg-background rounded">
                         {code}
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
-              <Button
-                onClick={() => {
-                  setShowSetup(false);
-                  resetState();
-                }}
-                className="w-full"
-              >
+              <Button onClick={() => { setShowSetup(false); resetState(); }} className="w-full">
                 Done
               </Button>
             </div>
@@ -750,59 +995,60 @@ function TwoFactorSection({ user }: { user: User }) {
         </CardTitle>
         <CardDescription>
           {isEnabled
-            ? "Your account is protected with two-factor authentication"
-            : "Add an extra layer of security to your account"}
+            ? "Your account is protected with an extra layer of security"
+            : "Protect your account with two-factor authentication"}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {isEnabled ? (
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-xl">
+              <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
                 {currentMethod === "totp" ? (
-                  <Smartphone className="h-5 w-5 text-green-600" />
+                  <Smartphone className="h-6 w-6 text-green-600 dark:text-green-400" />
                 ) : (
-                  <Mail className="h-5 w-5 text-green-600" />
+                  <Mail className="h-6 w-6 text-green-600 dark:text-green-400" />
                 )}
-                <div>
-                  <p className="font-medium text-green-700 dark:text-green-400">
-                    {currentMethod === "totp" ? "Authenticator App" : "Email Verification"}
-                  </p>
-                  <p className="text-sm text-green-600 dark:text-green-500">
-                    {currentMethod === "totp"
-                      ? "Using authenticator app for verification"
-                      : `Verification codes sent to ${user.email}`}
-                  </p>
-                </div>
               </div>
-              <ShieldCheck className="h-5 w-5 text-green-500" />
+              <div className="flex-1">
+                <p className="font-medium text-green-700 dark:text-green-400">
+                  {currentMethod === "totp" ? "Authenticator App" : "Email Verification"}
+                </p>
+                <p className="text-sm text-green-600 dark:text-green-500">
+                  {currentMethod === "totp"
+                    ? "Using authenticator app for verification"
+                    : `Codes sent to ${user.email}`}
+                </p>
+              </div>
+              <ShieldCheck className="h-6 w-6 text-green-500" />
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => startSetup("change")}
-                className="flex-1"
-              >
+              <Button variant="outline" onClick={() => startSetup("change")} className="flex-1">
                 Change Method
               </Button>
               <Button
                 variant="outline"
                 onClick={() => startSetup("disable")}
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 Disable
               </Button>
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">Status: <span className="text-muted-foreground">Disabled</span></p>
-              <p className="text-sm text-muted-foreground">
-                Two-factor authentication is required for admin accounts
-              </p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="font-medium text-amber-700 dark:text-amber-400">2FA Required</p>
+                <p className="text-sm text-amber-600 dark:text-amber-500">
+                  Two-factor authentication is required for admin accounts
+                </p>
+              </div>
             </div>
-            <Button onClick={() => startSetup("enable")}>
+            <Button onClick={() => startSetup("enable")} className="shrink-0">
               Enable 2FA
             </Button>
           </div>
@@ -826,10 +1072,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
     try {
       const response = await fetch("/api/auth/admin-users");
       const result = await response.json();
-
-      if (response.ok) {
-        setAdminUsers(result.users);
-      }
+      if (response.ok) setAdminUsers(result.users);
     } catch {
       console.error("Failed to fetch admin users");
     } finally {
@@ -857,11 +1100,10 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
 
       if (!response.ok) {
         setError(result.message || "Failed to create admin user");
-        setIsAdding(false);
         return;
       }
 
-      toast.success("Admin user created successfully");
+      toast.success("Admin user created. An email has been sent with login instructions.");
       setShowAddForm(false);
       setNewUserName("");
       setNewUserEmail("");
@@ -893,38 +1135,42 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
     }
   };
 
+  const getInitials = (name: string) => {
+    return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  };
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              Admin Users
+              Team Members
             </CardTitle>
             <CardDescription>
-              Manage administrator accounts for your store
+              Manage administrator access to your store
             </CardDescription>
           </div>
           <Button onClick={() => setShowAddForm(true)} disabled={showAddForm}>
             <UserPlus className="h-4 w-4 mr-2" />
-            Add Admin
+            Add Member
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         {showAddForm && (
-          <form onSubmit={handleAddUser} className="mb-6 p-4 bg-muted/50 rounded-lg space-y-4">
-            <h4 className="font-medium">Add New Admin User</h4>
+          <form onSubmit={handleAddUser} className="mb-6 p-5 bg-muted/30 rounded-xl border space-y-4">
+            <h4 className="font-medium">Invite New Admin</h4>
             {error && (
               <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="newUserName">Name</Label>
+                <Label htmlFor="newUserName">Full Name</Label>
                 <Input
                   id="newUserName"
                   value={newUserName}
@@ -935,7 +1181,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="newUserEmail">Email</Label>
+                <Label htmlFor="newUserEmail">Email Address</Label>
                 <Input
                   id="newUserEmail"
                   type="email"
@@ -947,25 +1193,18 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
                 />
               </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              A temporary password will be generated and sent to their email address.
+            <p className="text-xs text-muted-foreground">
+              A temporary password will be sent to their email. They'll be required to set up 2FA on first login.
             </p>
             <div className="flex gap-2">
               <Button type="submit" disabled={isAdding}>
-                {isAdding ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                Create Admin User
+                {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Send Invite
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  setShowAddForm(false);
-                  setNewUserName("");
-                  setNewUserEmail("");
-                  setError(null);
-                }}
+                onClick={() => { setShowAddForm(false); setNewUserName(""); setNewUserEmail(""); setError(null); }}
                 disabled={isAdding}
               >
                 Cancel
@@ -975,31 +1214,34 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : adminUsers.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">
-            No admin users found
-          </p>
+          <div className="text-center py-12 text-muted-foreground">
+            <Users className="h-12 w-12 mx-auto mb-3 opacity-20" />
+            <p>No team members found</p>
+          </div>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-border rounded-xl border overflow-hidden">
             {adminUsers.map((adminUser) => (
               <div
                 key={adminUser.id}
-                className="flex items-center justify-between p-4 bg-muted/30 rounded-lg"
+                className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="text-sm font-medium">
-                      {adminUser.name.charAt(0).toUpperCase()}
-                    </span>
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                    {adminUser.image ? (
+                      <img src={adminUser.image} alt={adminUser.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-sm font-medium text-primary">{getInitials(adminUser.name)}</span>
+                    )}
                   </div>
                   <div>
-                    <p className="font-medium">
+                    <p className="font-medium flex items-center gap-2">
                       {adminUser.name}
                       {adminUser.id === currentUserId && (
-                        <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                           You
                         </span>
                       )}
@@ -1007,25 +1249,30 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
                     <p className="text-sm text-muted-foreground">{adminUser.email}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {adminUser.twoFactorEnabled && (
-                    <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                <div className="flex items-center gap-2">
+                  {adminUser.twoFactorEnabled ? (
+                    <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">
                       <ShieldCheck className="h-3 w-3" />
                       2FA
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-1 rounded-full">
+                      <AlertCircle className="h-3 w-3" />
+                      No 2FA
                     </span>
                   )}
                   {adminUser.id !== currentUserId && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Admin User</AlertDialogTitle>
+                          <AlertDialogTitle>Remove Team Member</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Are you sure you want to delete {adminUser.name}? This action cannot be undone.
+                            Are you sure you want to remove <strong>{adminUser.name}</strong> from the team? They will lose access to the admin dashboard immediately.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -1034,7 +1281,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
                             onClick={() => handleDeleteUser(adminUser.id)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
-                            Delete
+                            Remove
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
