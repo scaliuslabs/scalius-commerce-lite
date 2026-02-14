@@ -54,9 +54,13 @@ import {
   Pencil,
   Filter,
   Tag,
+  Percent,
+  Truck,
   MoreHorizontal,
   X,
   Check,
+  Copy,
+  Clock,
 } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -171,7 +175,29 @@ const DiscountRow = React.memo(
           </div>
         </TableCell>
         <TableCell>
-          <Badge variant="outline">{getTypeLabel(discount.type)}</Badge>
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-xs font-medium",
+              discount.type === "amount_off_products" &&
+                "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700",
+              discount.type === "amount_off_order" &&
+                "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700",
+              discount.type === "free_shipping" &&
+                "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-700",
+            )}
+          >
+            {discount.type === "amount_off_products" && (
+              <Tag className="h-3 w-3 mr-1" />
+            )}
+            {discount.type === "amount_off_order" && (
+              <Percent className="h-3 w-3 mr-1" />
+            )}
+            {discount.type === "free_shipping" && (
+              <Truck className="h-3 w-3 mr-1" />
+            )}
+            {getTypeLabel(discount.type)}
+          </Badge>
         </TableCell>
         <TableCell>
           <Badge variant="secondary">{getDiscountValueDisplay(discount)}</Badge>
@@ -182,22 +208,53 @@ const DiscountRow = React.memo(
         <TableCell className="text-muted-foreground text-xs">
           {discount.endDate ? formatDate(discount.endDate) : "No end date"}
         </TableCell>
-        {/* Usage stats column */}
+        {/* Usage stats column - show progress when limit exists */}
         <TableCell>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex items-center gap-1">
-                  <span className="font-medium">
-                    {discount.usageCount !== undefined
-                      ? discount.usageCount
-                      : "-"}
-                  </span>
-                  <span className="text-muted-foreground text-xs">uses</span>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium">
+                      {discount.usageCount !== undefined
+                        ? discount.usageCount
+                        : "-"}
+                    </span>
+                    {discount.maxUses ? (
+                      <span className="text-muted-foreground text-xs">
+                        / {discount.maxUses}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">
+                        uses
+                      </span>
+                    )}
+                  </div>
+                  {discount.maxUses && discount.usageCount !== undefined && (
+                    <div className="w-full bg-gray-200 rounded-full h-1 dark:bg-gray-700">
+                      <div
+                        className={cn(
+                          "h-1 rounded-full transition-all",
+                          (discount.usageCount / discount.maxUses) >= 1
+                            ? "bg-red-500"
+                            : (discount.usageCount / discount.maxUses) >= 0.8
+                              ? "bg-amber-500"
+                              : "bg-green-500",
+                        )}
+                        style={{
+                          width: `${Math.min(100, (discount.usageCount / discount.maxUses) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Times this discount code has been used</p>
+                <p>
+                  {discount.maxUses
+                    ? `${discount.usageCount || 0} of ${discount.maxUses} uses consumed`
+                    : "Times this discount code has been used"}
+                </p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -221,28 +278,59 @@ const DiscountRow = React.memo(
             </Tooltip>
           </TooltipProvider>
         </TableCell>
-        {/* Status cell - make toggleable */}
+        {/* Status cell - smart status with Scheduled/Expired */}
         <TableCell>
-          {!showTrashed && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-0 h-auto hover:bg-transparent"
-              onClick={() => onToggleStatus(discount.id, discount.isActive)}
-            >
-              <Badge
-                variant={discount.isActive ? "default" : "outline"}
-                className={cn(
-                  discount.isActive
-                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-700"
-                    : "text-muted-foreground",
-                  "text-xs font-medium px-2 py-0.5 rounded-full", // Consistent badge styling
-                )}
+          {!showTrashed && (() => {
+            const now = new Date();
+            const startDate = discount.startDate ? new Date(discount.startDate) : null;
+            const endDate = discount.endDate ? new Date(discount.endDate) : null;
+            const isExpired = endDate && endDate < now;
+            const isScheduled = startDate && startDate > now;
+
+            if (isExpired) {
+              return (
+                <Badge
+                  variant="outline"
+                  className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-900/30 dark:text-gray-400"
+                >
+                  Expired
+                </Badge>
+              );
+            }
+
+            if (isScheduled && discount.isActive) {
+              return (
+                <Badge
+                  variant="outline"
+                  className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400"
+                >
+                  <Clock className="h-3 w-3 mr-1" />
+                  Scheduled
+                </Badge>
+              );
+            }
+
+            return (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-0 h-auto hover:bg-transparent"
+                onClick={() => onToggleStatus(discount.id, discount.isActive)}
               >
-                {discount.isActive ? "Active" : "Inactive"}
-              </Badge>
-            </Button>
-          )}
+                <Badge
+                  variant={discount.isActive ? "default" : "outline"}
+                  className={cn(
+                    discount.isActive
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-700"
+                      : "text-muted-foreground",
+                    "text-xs font-medium px-2 py-0.5 rounded-full",
+                  )}
+                >
+                  {discount.isActive ? "Active" : "Inactive"}
+                </Badge>
+              </Button>
+            );
+          })()}
           {showTrashed && (
             <Badge
               variant="outline"
@@ -281,6 +369,18 @@ const DiscountRow = React.memo(
                   <DropdownMenuItem onClick={() => onEdit(discount.id)}>
                     <Pencil className="mr-2 h-4 w-4" />
                     <span>Edit</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      // Navigate to create page with type pre-selected, code will need to be changed
+                      const params = new URLSearchParams({
+                        duplicate: discount.id,
+                      });
+                      window.location.href = `/admin/discounts/${discount.id}/edit?duplicate=true`;
+                    }}
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    <span>Duplicate</span>
                   </DropdownMenuItem>
                   {/* Status toggle in dropdown too */}
                   <DropdownMenuItem

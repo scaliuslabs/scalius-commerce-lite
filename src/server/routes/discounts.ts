@@ -26,11 +26,11 @@ const validateDiscountSchema = z.object({
   customerPhone: z.string().optional(),
 });
 
-// Schema for cart item
+// Schema for cart item - coerce numbers to handle string values from localStorage
 const cartItemSchema = z.object({
   id: z.string(),
-  price: z.number(),
-  quantity: z.number(),
+  price: z.coerce.number(),
+  quantity: z.coerce.number(),
   variantId: z.string().optional(),
 });
 
@@ -474,14 +474,23 @@ app.get("/validate", async (c) => {
     let cartItems: any[] = [];
     if (items) {
       try {
-        cartItems = JSON.parse(items);
-        // Validate each item format
-        cartItems.forEach((item) => cartItemSchema.parse(item));
+        const parsed = JSON.parse(items);
+        // Ensure it's an array
+        const itemsArray = Array.isArray(parsed) ? parsed : Object.values(parsed);
+        // Validate and coerce each item
+        cartItems = itemsArray.map((item: any) => {
+          // Accept either 'id' or 'productId' for backwards compatibility
+          if (!item.id && item.productId) {
+            item.id = item.productId;
+          }
+          return cartItemSchema.parse(item);
+        });
       } catch (error) {
-        return c.json(
-          { valid: false, error: "Invalid cart items format" },
-          400,
-        );
+        const message =
+          error instanceof z.ZodError
+            ? `Invalid cart items: ${error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
+            : "Invalid cart items format";
+        return c.json({ valid: false, error: message }, 400);
       }
     }
 

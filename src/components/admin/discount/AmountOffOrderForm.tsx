@@ -31,13 +31,20 @@ import {
 } from "../../ui/select"; // Assuming correct path
 import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover"; // Assuming correct path
 import { Calendar } from "../../ui/calendar"; // Assuming correct path
-import { CalendarIcon, Percent, Loader2, Info } from "lucide-react";
+import { CalendarIcon, Percent, Loader2, Info, RefreshCw } from "lucide-react";
 import { Checkbox } from "../../ui/checkbox"; // Assuming correct path
 import { cn } from "@/lib/utils"; // Assuming correct path
 import { format } from "date-fns";
 import { Separator } from "../../ui/separator"; // Assuming correct path
 import { useToast } from "@/hooks/use-toast"; // Assuming correct path
-import { Alert, AlertDescription, AlertTitle } from "../../ui/alert"; // Add Alert for better info display
+import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../../ui/tooltip";
+import { Badge } from "../../ui/badge";
 
 // --- Form Schema (Unchanged) ---
 const formSchema = z
@@ -163,6 +170,15 @@ const CheckboxFormItem = ({
     )}
   />
 );
+
+function generateDiscountCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 
 export function AmountOffOrderForm({
   defaultValues,
@@ -313,12 +329,37 @@ export function AmountOffOrderForm({
                   <FormItem>
                     <FormLabel>Discount Code</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., SUMMER10 or SAVE500"
-                        {...field}
-                        // Optionally convert to uppercase
-                        // onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="e.g., SUMMER10 or SAVE500"
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(e.target.value.toUpperCase())
+                          }
+                          className="font-mono tracking-wider"
+                        />
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="shrink-0"
+                                onClick={() => {
+                                  const code = generateDiscountCode();
+                                  field.onChange(code);
+                                }}
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Generate random code</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                     </FormControl>
                     <FormDescription>
                       Customers enter this code at checkout. Use letters,
@@ -637,6 +678,52 @@ export function AmountOffOrderForm({
                 description="Make this discount available for use at checkout."
               />
             </FormSection>
+            <Separator className="my-4" />
+
+            {/* Live Discount Summary */}
+            <div className="rounded-lg border border-dashed bg-muted/30 p-4">
+              <h3 className="text-sm font-medium mb-3">Discount Summary</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="text-muted-foreground">Code</span>
+                <span className="font-mono font-semibold tracking-wider">
+                  {form.watch("code") || "---"}
+                </span>
+                <span className="text-muted-foreground">Value</span>
+                <span className="font-medium">
+                  {valueType === "percentage"
+                    ? `${form.watch("discountValue") || 0}% off entire order`
+                    : `৳${form.watch("discountValue") || 0} off entire order`}
+                </span>
+                <span className="text-muted-foreground">Min. purchase</span>
+                <span className="font-medium">
+                  {form.watch("minPurchaseAmount")
+                    ? `৳${form.watch("minPurchaseAmount")}`
+                    : "None"}
+                </span>
+                <span className="text-muted-foreground">Usage limit</span>
+                <span className="font-medium">
+                  {form.watch("maxUses")
+                    ? `${form.watch("maxUses")} total`
+                    : "Unlimited"}
+                  {form.watch("limitOnePerCustomer")
+                    ? " (1 per customer)"
+                    : ""}
+                </span>
+                <span className="text-muted-foreground">Status</span>
+                <span>
+                  <Badge
+                    variant={form.watch("isActive") ? "default" : "outline"}
+                    className={
+                      form.watch("isActive")
+                        ? "bg-green-100 text-green-800 border-green-200"
+                        : ""
+                    }
+                  >
+                    {form.watch("isActive") ? "Active" : "Inactive"}
+                  </Badge>
+                </span>
+              </div>
+            </div>
           </CardContent>
           <CardFooter className="border-t px-6 py-4">
             <div className="flex w-full justify-end gap-3">
