@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button.tsx";
 import SideBar from "@/components/admin/adminLayout/SideBar.astro";
 import { generateAdminBreadcrumbs } from "@/lib/adminBreadCrumb";
 import favicon from "@/assets/favicon.png";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 
 interface Props {
   title: string;
@@ -96,31 +97,25 @@ try {
 const breadcrumbItems = generateAdminBreadcrumbs(currentPath);
 
 // Define nav item types for type safety
-export interface NavSubItem {
+interface NavSubItem {
   name: string;
   href: string;
   icon?: any;
-  // Permission required to see this item (view permission for the resource)
   requiredPermission?: string;
-  // Any of these permissions is sufficient
   anyOfPermissions?: string[];
 }
-export interface NavItem {
+interface NavItem {
   name: string;
   href: string;
   icon: any;
   subItems?: NavSubItem[];
-  // Permission required to see this item (view permission for the resource)
   requiredPermission?: string;
-  // Any of these permissions is sufficient
   anyOfPermissions?: string[];
 }
-export interface NavSection {
+interface NavSection {
   label: string;
   items: NavItem[];
 }
-
-import { PERMISSIONS } from "@/lib/rbac/permissions";
 
 // Prepare user data for UserMenu component
 const userData = {
@@ -140,7 +135,7 @@ const permissionsArray = permissions ? Array.from(permissions) : [];
 // Permission check helper for nav item filtering
 const userIsSuperAdmin = userData.isSuperAdmin;
 
-function hasNavPermission(item: { requiredPermission?: string; anyOfPermissions?: string[] }): boolean {
+function hasNavPermission(item: NavItem | NavSubItem): boolean {
   if (userIsSuperAdmin) return true;
   if (!item.requiredPermission && !item.anyOfPermissions) return true;
   if (item.requiredPermission) {
