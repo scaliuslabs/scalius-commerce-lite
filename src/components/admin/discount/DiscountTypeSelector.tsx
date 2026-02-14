@@ -95,6 +95,7 @@ export function DiscountTypeSelector({}: DiscountTypeSelectorProps) {
                   "border bg-card hover:bg-accent hover:border-primary/50",
                   "rounded-lg shadow-sm hover:shadow-md",
                   "transition-all duration-200 group cursor-pointer text-left",
+                  "whitespace-normal",
                 )}
                 onClick={() => handleSelect(type.id)}
               >
