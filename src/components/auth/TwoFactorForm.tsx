@@ -219,12 +219,16 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
                       setCode(val.replace(/\D/g, ""));
                     }
                   }}
-                  className="text-center text-2xl tracking-[0.5em] font-mono h-14"
+                  className={
+                    method === "backup"
+                      ? "text-center text-base tracking-widest font-mono h-14"
+                      : "text-center text-2xl tracking-[0.5em] font-mono h-14"
+                  }
                   maxLength={method === "backup" ? 12 : 6}
                   required
                   disabled={isLoading}
                   autoFocus
-                  autoComplete="one-time-code"
+                  autoComplete={method === "backup" ? "off" : "one-time-code"}
                 />
               </div>
 
