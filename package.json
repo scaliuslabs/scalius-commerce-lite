@@ -128,7 +128,7 @@
     "terser": "^5.46.0",
     "tsx": "^4.21.0",
     "vite": "^6.4.1",
-    "wrangler": "4.47.0"
+    "wrangler": "4.65.0"
   },
   "packageManager": "pnpm@10.26.1",
   "overrides": {
@@ -149,7 +149,10 @@
     "overrides": {
       "jws": "^3.2.3",
       "esbuild": "^0.25.0",
-      "mdast-util-to-hast": "^13.2.1"
+      "mdast-util-to-hast": "^13.2.1",
+      "markdown-it": ">=14.1.1",
+      "lodash": ">=4.17.23",
+      "undici": ">=7.18.2"
     }
   }
 }
