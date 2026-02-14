@@ -27,19 +27,22 @@ export function DiscountTypeSelector({}: DiscountTypeSelectorProps) {
     {
       id: "amount_off_products",
       name: "Amount Off Products",
-      description: "Discount specific products or collections.",
+      description:
+        "Apply a percentage or fixed discount to specific products or collections. Best for targeted promotions.",
       icon: <Tag />,
     },
     {
       id: "amount_off_order",
       name: "Amount Off Order",
-      description: "Discount the total order amount.",
+      description:
+        "Apply a percentage or fixed discount to the entire order total. Best for site-wide sales and loyalty rewards.",
       icon: <Percent />,
     },
     {
       id: "free_shipping",
       name: "Free Shipping",
-      description: "Offer free shipping on an order.",
+      description:
+        "Waive shipping fees for qualifying orders. Best for increasing average order value.",
       icon: <Truck />,
     },
   ];

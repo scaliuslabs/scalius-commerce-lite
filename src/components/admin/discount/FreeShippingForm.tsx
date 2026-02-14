@@ -22,12 +22,28 @@ import {
 } from "../../ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
 import { Calendar } from "../../ui/calendar";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, RefreshCw } from "lucide-react";
 import { Checkbox } from "../../ui/checkbox";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Separator } from "../../ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../../ui/tooltip";
+import { Badge } from "../../ui/badge";
 import { useToast } from "@/hooks/use-toast";
+
+function generateDiscountCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 
 // Form validation schema
 const formSchema = z.object({
@@ -166,7 +182,37 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                 <FormItem>
                   <FormLabel>Discount Code</FormLabel>
                   <FormControl>
-                    <Input placeholder="FREESHIP" {...field} />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="e.g., FREESHIP"
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(e.target.value.toUpperCase())
+                        }
+                        className="font-mono tracking-wider"
+                      />
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="shrink-0"
+                              onClick={() => {
+                                const code = generateDiscountCode();
+                                field.onChange(code);
+                              }}
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Generate random code</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                   </FormControl>
                   <FormDescription>
                     Customers will enter this code at checkout
@@ -486,7 +532,70 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
+        {/* Live Discount Summary */}
+        <Card className="bg-muted/30 border-dashed">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium">
+              Discount Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <span className="text-muted-foreground">Code</span>
+              <span className="font-mono font-semibold tracking-wider">
+                {form.watch("code") || "---"}
+              </span>
+              <span className="text-muted-foreground">Type</span>
+              <span className="font-medium">Free Shipping</span>
+              <span className="text-muted-foreground">Min. purchase</span>
+              <span className="font-medium">
+                {form.watch("minPurchaseAmount")
+                  ? `৳${form.watch("minPurchaseAmount")}`
+                  : "None"}
+              </span>
+              <span className="text-muted-foreground">Usage limit</span>
+              <span className="font-medium">
+                {form.watch("maxUses")
+                  ? `${form.watch("maxUses")} total`
+                  : "Unlimited"}
+                {form.watch("limitOnePerCustomer") ? " (1 per customer)" : ""}
+              </span>
+              <span className="text-muted-foreground">Period</span>
+              <span className="font-medium">
+                {form.watch("startDate")
+                  ? format(form.watch("startDate")!, "MMM d, yyyy")
+                  : "---"}
+                {" - "}
+                {form.watch("endDate")
+                  ? format(form.watch("endDate")!, "MMM d, yyyy")
+                  : "No end date"}
+              </span>
+              <span className="text-muted-foreground">Status</span>
+              <span>
+                <Badge
+                  variant={form.watch("isActive") ? "default" : "outline"}
+                  className={
+                    form.watch("isActive")
+                      ? "bg-green-100 text-green-800 border-green-200"
+                      : ""
+                  }
+                >
+                  {form.watch("isActive") ? "Active" : "Inactive"}
+                </Badge>
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => window.history.back()}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting
               ? defaultValues?.id
