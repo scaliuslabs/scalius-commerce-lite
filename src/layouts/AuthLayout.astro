@@ -4,6 +4,7 @@
 import "../styles/global.css";
 import favicon from "@/assets/favicon.png";
 import logoDark from "@/assets/logo-dark.png";
+import logoLight from "@/assets/logo-light.png";
 import { Toaster } from "sonner";
 
 interface Props {
@@ -49,7 +50,8 @@ const { title } = Astro.props;
         <!-- Logo -->
         <div class="text-center mb-8">
           <a href="/" class="inline-block">
-            <img src={logoDark.src} alt="Logo" class="h-14 mx-auto" />
+            <img src={logoLight.src} alt="Logo" class="h-14 mx-auto block dark:hidden" />
+            <img src={logoDark.src} alt="Logo" class="h-14 mx-auto hidden dark:block" />
           </a>
         </div>
 
