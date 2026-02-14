@@ -13,6 +13,7 @@ import {
 } from "@/lib/rbac/helpers";
 import { autoSeedRbacIfNeeded } from "@/lib/rbac/auto-seed";
 import { getRoutePermission } from "@/lib/rbac/route-permissions";
+import { hasPageAccess } from "@/lib/rbac/page-permissions";
 
 // Protected API route patterns
 const protectedApiPatterns = [
@@ -329,6 +330,20 @@ const authMiddleware = defineMiddleware(async (context, next) => {
     // Also check the legacy role for backwards compatibility
     if (sessionUser.role !== "admin" && !userHasAdminAccess) {
       return new Response("Forbidden: Admin access required.", { status: 403 });
+    }
+
+    // RBAC: Check page-level permissions for admin routes
+    // Access denied page and settings/account are always accessible
+    if (pathname !== "/admin/access-denied" && pathname !== "/admin/settings/account") {
+      const userPerms = context.locals.permissions || new Set<string>();
+      const userIsSuperAdmin = await isSuperAdmin(db, sessionUser.id);
+
+      if (!hasPageAccess(userPerms, userIsSuperAdmin, pathname)) {
+        // Redirect to access denied page with the attempted URL
+        const accessDeniedUrl = new URL("/admin/access-denied", url.origin);
+        accessDeniedUrl.searchParams.set("from", pathname);
+        return context.redirect(accessDeniedUrl.pathname + accessDeniedUrl.search);
+      }
     }
 
     const response = await next();

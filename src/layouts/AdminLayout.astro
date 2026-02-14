@@ -100,114 +100,27 @@ export interface NavSubItem {
   name: string;
   href: string;
   icon?: any;
+  // Permission required to see this item (view permission for the resource)
+  requiredPermission?: string;
+  // Any of these permissions is sufficient
+  anyOfPermissions?: string[];
 }
 export interface NavItem {
   name: string;
   href: string;
   icon: any;
   subItems?: NavSubItem[];
+  // Permission required to see this item (view permission for the resource)
+  requiredPermission?: string;
+  // Any of these permissions is sufficient
+  anyOfPermissions?: string[];
 }
 export interface NavSection {
   label: string;
   items: NavItem[];
 }
 
-const navSections: NavSection[] = [
-  {
-    label: "Commerce",
-    items: [
-      { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-      { name: "Products", href: "/admin/products", icon: ShoppingCart },
-      { name: "Categories", href: "/admin/categories", icon: FolderTree },
-      { name: "Attributes", href: "/admin/attributes", icon: ListTree },
-      { name: "Collections", href: "/admin/collections", icon: Layers3 },
-      { name: "Media", href: "/admin/media", icon: Images },
-      { name: "Pages", href: "/admin/pages", icon: FileText },
-      { name: "Widgets", href: "/admin/widgets", icon: Blocks },
-    ],
-  },
-  {
-    label: "Sales",
-    items: [
-      { name: "Orders", href: "/admin/orders", icon: ShoppingBag },
-      {
-        name: "Incomplete Orders",
-        href: "/admin/abandoned-checkouts",
-        icon: Clock3,
-      },
-      { name: "Discounts", href: "/admin/discounts", icon: BadgePercent },
-      { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-      { name: "Customers", href: "/admin/customers", icon: Users },
-    ],
-  },
-  {
-    label: "Settings",
-    items: [
-      {
-        name: "Settings",
-        href: "/admin/settings",
-        icon: Settings,
-        subItems: [
-          {
-            name: "General",
-            href: "/admin/settings",
-            icon: SlidersHorizontal,
-          },
-          {
-            name: "Account",
-            href: "/admin/settings/account",
-            icon: UserCog,
-          },
-          {
-            name: "Notifications",
-            href: "/admin/settings/notifications",
-            icon: Bell,
-          },
-          {
-            name: "Hero Sliders",
-            href: "/admin/settings/hero-sliders",
-            icon: Images,
-          },
-          {
-            name: "Delivery Locations",
-            href: "/admin/settings/delivery-locations",
-            icon: MapPinned,
-          },
-          {
-            name: "Delivery Providers",
-            href: "/admin/settings/delivery-providers",
-            icon: Truck,
-          },
-          {
-            name: "Fraud Checker",
-            href: "/admin/settings/fraud-checker",
-            icon: ShieldCheck,
-          },
-          {
-            name: "Shipping Methods",
-            href: "/admin/settings/shipping-methods",
-            icon: PackageCheck,
-          },
-          {
-            name: "Checkout Languages",
-            href: "/admin/settings/checkout-languages",
-            icon: Globe,
-          },
-          {
-            name: "Meta Conversions",
-            href: "/admin/settings/meta-conversion",
-            icon: BarChart3,
-          },
-          {
-            name: "Cache Settings",
-            href: "/admin/settings/cache",
-            icon: Database,
-          },
-        ],
-      },
-    ],
-  },
-];
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 
 // Prepare user data for UserMenu component
 const userData = {
@@ -223,6 +136,153 @@ const userData = {
 // Get user permissions from middleware
 const permissions = Astro.locals.permissions;
 const permissionsArray = permissions ? Array.from(permissions) : [];
+
+// Permission check helper for nav item filtering
+const userIsSuperAdmin = userData.isSuperAdmin;
+
+function hasNavPermission(item: { requiredPermission?: string; anyOfPermissions?: string[] }): boolean {
+  if (userIsSuperAdmin) return true;
+  if (!item.requiredPermission && !item.anyOfPermissions) return true;
+  if (item.requiredPermission) {
+    return permissions ? permissions.has(item.requiredPermission) : false;
+  }
+  if (item.anyOfPermissions) {
+    return permissions ? item.anyOfPermissions.some((p: string) => permissions.has(p)) : false;
+  }
+  return true;
+}
+
+const allNavSections: NavSection[] = [
+  {
+    label: "Commerce",
+    items: [
+      { name: "Dashboard", href: "/admin", icon: LayoutDashboard, requiredPermission: PERMISSIONS.DASHBOARD_VIEW },
+      { name: "Products", href: "/admin/products", icon: ShoppingCart, requiredPermission: PERMISSIONS.PRODUCTS_VIEW },
+      { name: "Categories", href: "/admin/categories", icon: FolderTree, requiredPermission: PERMISSIONS.CATEGORIES_VIEW },
+      { name: "Attributes", href: "/admin/attributes", icon: ListTree, requiredPermission: PERMISSIONS.ATTRIBUTES_VIEW },
+      { name: "Collections", href: "/admin/collections", icon: Layers3, requiredPermission: PERMISSIONS.COLLECTIONS_VIEW },
+      { name: "Media", href: "/admin/media", icon: Images, requiredPermission: PERMISSIONS.MEDIA_VIEW },
+      { name: "Pages", href: "/admin/pages", icon: FileText, requiredPermission: PERMISSIONS.PAGES_VIEW },
+      { name: "Widgets", href: "/admin/widgets", icon: Blocks, requiredPermission: PERMISSIONS.WIDGETS_VIEW },
+    ],
+  },
+  {
+    label: "Sales",
+    items: [
+      { name: "Orders", href: "/admin/orders", icon: ShoppingBag, requiredPermission: PERMISSIONS.ORDERS_VIEW },
+      {
+        name: "Incomplete Orders",
+        href: "/admin/abandoned-checkouts",
+        icon: Clock3,
+        requiredPermission: PERMISSIONS.ORDERS_VIEW,
+      },
+      { name: "Discounts", href: "/admin/discounts", icon: BadgePercent, requiredPermission: PERMISSIONS.DISCOUNTS_VIEW },
+      { name: "Analytics", href: "/admin/analytics", icon: BarChart3, requiredPermission: PERMISSIONS.ANALYTICS_VIEW },
+      { name: "Customers", href: "/admin/customers", icon: Users, requiredPermission: PERMISSIONS.CUSTOMERS_VIEW },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      {
+        name: "Settings",
+        href: "/admin/settings",
+        icon: Settings,
+        // No permission on parent - it's a dropdown toggle, not a page link.
+        // Visibility is determined by whether any sub-items are visible.
+        // Account sub-item is always visible, so Settings always shows.
+        subItems: [
+          {
+            name: "General",
+            href: "/admin/settings",
+            icon: SlidersHorizontal,
+            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+          },
+          {
+            name: "Account",
+            href: "/admin/settings/account",
+            icon: UserCog,
+            // Account is always accessible - no permission required (own account management)
+          },
+          {
+            name: "Notifications",
+            href: "/admin/settings/notifications",
+            icon: Bell,
+            requiredPermission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
+          },
+          {
+            name: "Hero Sliders",
+            href: "/admin/settings/hero-sliders",
+            icon: Images,
+            requiredPermission: PERMISSIONS.SETTINGS_HEADER_EDIT,
+          },
+          {
+            name: "Delivery Locations",
+            href: "/admin/settings/delivery-locations",
+            icon: MapPinned,
+            requiredPermission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW,
+          },
+          {
+            name: "Delivery Providers",
+            href: "/admin/settings/delivery-providers",
+            icon: Truck,
+            requiredPermission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
+          },
+          {
+            name: "Fraud Checker",
+            href: "/admin/settings/fraud-checker",
+            icon: ShieldCheck,
+            requiredPermission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
+          },
+          {
+            name: "Shipping Methods",
+            href: "/admin/settings/shipping-methods",
+            icon: PackageCheck,
+            requiredPermission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
+          },
+          {
+            name: "Checkout Languages",
+            href: "/admin/settings/checkout-languages",
+            icon: Globe,
+            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+          },
+          {
+            name: "Meta Conversions",
+            href: "/admin/settings/meta-conversion",
+            icon: BarChart3,
+            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+          },
+          {
+            name: "Cache Settings",
+            href: "/admin/settings/cache",
+            icon: Database,
+            requiredPermission: PERMISSIONS.SETTINGS_CACHE_VIEW,
+          },
+        ],
+      },
+    ],
+  },
+];
+
+// Filter nav sections based on user permissions
+// Super admins see everything; other users only see items they have permission for
+const navSections: NavSection[] = allNavSections
+  .map((section) => ({
+    ...section,
+    items: section.items
+      .filter((item) => hasNavPermission(item))
+      .map((item) => {
+        if (item.subItems) {
+          return {
+            ...item,
+            subItems: item.subItems.filter((subItem) => hasNavPermission(subItem)),
+          };
+        }
+        return item;
+      })
+      .filter((item) => !item.subItems || item.subItems.length > 0),
+  }))
+  .filter((section) => section.items.length > 0);
 ---
 
 <html lang="en" class="antialiased">
