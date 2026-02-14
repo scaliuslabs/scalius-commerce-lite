@@ -122,6 +122,40 @@ interface DiscountListProps {
 }
 // --- End Type Definitions ---
 
+// Build a concise discount summary for tooltip display
+function buildDiscountSummary(
+  discount: DiscountItem,
+  getTypeLabel: (type: string) => string,
+  getDiscountValueDisplay: (discount: DiscountItem) => string,
+): string[] {
+  const lines: string[] = [];
+  lines.push(`Type: ${getTypeLabel(discount.type)}`);
+  lines.push(`Value: ${getDiscountValueDisplay(discount)}`);
+  if (discount.minPurchaseAmount) {
+    lines.push(`Min purchase: ৳${discount.minPurchaseAmount.toLocaleString()}`);
+  }
+  if (discount.minQuantity) {
+    lines.push(`Min quantity: ${discount.minQuantity}`);
+  }
+  if (discount.maxUsesPerOrder) {
+    lines.push(`Max per order: ${discount.maxUsesPerOrder}`);
+  }
+  if (discount.limitOnePerCustomer) {
+    lines.push("Limit: 1 per customer");
+  }
+  if (discount.customerSegment) {
+    lines.push(`Segment: ${discount.customerSegment}`);
+  }
+  const combines: string[] = [];
+  if (discount.combineWithProductDiscounts) combines.push("product");
+  if (discount.combineWithOrderDiscounts) combines.push("order");
+  if (discount.combineWithShippingDiscounts) combines.push("shipping");
+  if (combines.length > 0) {
+    lines.push(`Combines with: ${combines.join(", ")}`);
+  }
+  return lines;
+}
+
 // Enhanced Row Component with Action Dropdown
 const DiscountRow = React.memo(
   ({
@@ -151,6 +185,8 @@ const DiscountRow = React.memo(
     getTypeLabel: (type: string) => string;
     getDiscountValueDisplay: (discount: DiscountItem) => string;
   }) => {
+    const summaryLines = buildDiscountSummary(discount, getTypeLabel, getDiscountValueDisplay);
+
     return (
       <TableRow
         className={cn(
@@ -167,12 +203,26 @@ const DiscountRow = React.memo(
           />
         </TableCell>
         <TableCell className="font-medium">
-          <div className="flex items-center gap-2">
-            <Tag className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="truncate font-semibold text-foreground">
-              {discount.code}
-            </span>
-          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 cursor-default">
+                  <Tag className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="truncate font-semibold text-foreground">
+                    {discount.code}
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-xs">
+                <div className="space-y-1 text-xs">
+                  <p className="font-semibold text-sm mb-1.5">{discount.code}</p>
+                  {summaryLines.map((line, i) => (
+                    <p key={i} className="text-muted-foreground">{line}</p>
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </TableCell>
         <TableCell>
           <Badge
