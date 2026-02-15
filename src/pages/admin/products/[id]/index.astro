@@ -97,5 +97,5 @@ const formattedProduct = {
 ---
 
 <AdminLayout title={`${product.name} - Product Details`}>
-  <ProductView client:load product={formattedProduct} />
+  <ProductView client:idle product={formattedProduct} />
 </AdminLayout>

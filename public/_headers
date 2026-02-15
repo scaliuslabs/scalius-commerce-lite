@@ -1,0 +1,10 @@
+# Immutable cache for hashed Astro assets (JS, CSS, images)
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Static public assets
+/alert.mp3
+  Cache-Control: public, max-age=86400
+
+/placeholder-product.jpg
+  Cache-Control: public, max-age=86400

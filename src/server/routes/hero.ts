@@ -11,7 +11,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 0, 
+    ttl: 3600000,
     keyPrefix: "api:hero:",
     varyByQuery: false,
     methods: ["GET"],

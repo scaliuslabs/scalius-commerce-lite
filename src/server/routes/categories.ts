@@ -18,7 +18,7 @@ const app = new Hono();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 0,
+    ttl: 3600000,
     keyPrefix: "api:categories:",
     varyByQuery: true,
     methods: ["GET"],

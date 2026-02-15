@@ -316,7 +316,10 @@ export const productImages = sqliteTable("product_images", {
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [
+  index("product_images_product_id_idx").on(table.productId),
+  index("product_images_primary_idx").on(table.productId, table.isPrimary),
+]);
 
 export const productVariants = sqliteTable("product_variants", {
   id: text("id").primaryKey(),
@@ -341,7 +344,10 @@ export const productVariants = sqliteTable("product_variants", {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
   deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+  index("product_variants_product_id_idx").on(table.productId),
+  index("product_variants_sku_idx").on(table.sku),
+]);
 
 export const categories = sqliteTable(
   "categories",
@@ -534,7 +540,10 @@ export const orderItems = sqliteTable("order_items", {
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(cast(strftime('%s','now') as int))`),
-});
+}, (table) => [
+  index("order_items_order_id_idx").on(table.orderId),
+  index("order_items_product_id_idx").on(table.productId),
+]);
 
 // =============================================
 // DELIVERY RELATED TABLES

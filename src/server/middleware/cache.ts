@@ -59,15 +59,13 @@ export const cacheMiddleware = (
     if (varyByAuth) {
       const authHeader = c.req.header("Authorization") || "";
       if (authHeader) {
-        // Use a hash of the auth header to avoid storing sensitive data
-        const authHash = await crypto.subtle
-          .digest("SHA-256", new TextEncoder().encode(authHeader))
-          .then((hash) => {
-            return Array.from(new Uint8Array(hash))
-              .map((b) => b.toString(16).padStart(2, "0"))
-              .join("");
-          });
-        cacheKey += `:auth:${authHash}`;
+        // Use a fast simple hash to avoid expensive SHA-256 on every request
+        let hash = 0;
+        for (let i = 0; i < authHeader.length; i++) {
+          const char = authHeader.charCodeAt(i);
+          hash = ((hash << 5) - hash + char) | 0;
+        }
+        cacheKey += `:auth:${(hash >>> 0).toString(36)}`;
       } else {
         cacheKey += ":auth:none";
       }

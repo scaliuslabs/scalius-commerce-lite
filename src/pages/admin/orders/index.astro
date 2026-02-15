@@ -98,7 +98,7 @@ const formattedOrders: OrderListItem[] = orders.map((order) => {
 
 <AdminLayout title={showTrashed ? "Trash" : "Orders"}>
   <OrderList
-    client:load
+    client:idle
     orders={formattedOrders}
     pagination={pagination}
     initialSearchQuery={search}
