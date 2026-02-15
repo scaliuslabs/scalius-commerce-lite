@@ -152,7 +152,8 @@
       "mdast-util-to-hast": "^13.2.1",
       "markdown-it": ">=14.1.1",
       "lodash": ">=4.17.23",
-      "undici": ">=7.18.2"
+      "undici": ">=7.18.2",
+      "wrangler": ">=4.59.1"
     }
   }
 }
