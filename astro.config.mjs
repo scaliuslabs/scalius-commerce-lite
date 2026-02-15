@@ -96,8 +96,9 @@ export default defineConfig({
     build: {
       // Improve build performance
       cssCodeSplit: true,
-      // Disable minification for better error messages in development
-      minify: false,
+      // Enable minification for production (smaller bundles, faster load)
+      // Disable only in dev for easier debugging
+      minify: process.env.NODE_ENV !== "development",
     },
     // Add caching for better dev performance
     server: {

@@ -3,6 +3,7 @@ import { db } from "../../../db";
 import { siteSettings } from "../../../db/schema";
 import { nanoid } from "nanoid";
 import { sql, eq } from "drizzle-orm";
+import { layoutCache, CACHE_KEYS } from "../../../lib/layout-cache";
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -32,6 +33,9 @@ export const POST: APIRoute = async ({ request }) => {
         updatedAt: sql`unixepoch()`,
       });
     }
+
+    // Invalidate layout cache so next page load gets fresh storefront URL
+    layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
 
     return new Response(
       JSON.stringify({

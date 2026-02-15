@@ -11,16 +11,19 @@ import {
   getDailyActivityData,
 } from "../../lib/admin";
 
-const stats = await getDashboardStats();
-const recentOrders = await getRecentOrders(11);
-const dailyActivityData = await getDailyActivityData(90);
+// Parallel fetch for faster dashboard load (vs sequential)
+const [stats, recentOrders, dailyActivityData] = await Promise.all([
+  getDashboardStats(),
+  getRecentOrders(11),
+  getDailyActivityData(90),
+]);
 
 const pageTitle = "Admin Dashboard";
 ---
 
 <AdminLayout title={pageTitle}>
   <div class="space-y-8">
-    <WelcomeBanner client:load /> 
+    <WelcomeBanner client:idle />
 
     <div class="
       overflow-hidden rounded-2xl 
@@ -31,7 +34,7 @@ const pageTitle = "Admin Dashboard";
     ">
       <div class="p-5 md:p-6"> 
         <DashboardStats
-          client:load
+          client:idle
           totalProducts={stats.totalProducts}
           totalCustomers={stats.totalCustomers}
           currentMonth={stats.currentMonth}
@@ -42,11 +45,11 @@ const pageTitle = "Admin Dashboard";
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div class="lg:col-span-2">
-        <RecentOrders client:load orders={recentOrders} /> 
+        <RecentOrders client:visible orders={recentOrders} />
       </div>
 
       <div class="lg:col-span-1">
-        <QuickActions client:load /> 
+        <QuickActions client:visible /> 
       </div>
     </div>
   </div>
