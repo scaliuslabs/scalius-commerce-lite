@@ -3,7 +3,6 @@
 import { Hono } from "hono";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
-import { compress } from "hono/compress";
 import { getDb } from "@/db";
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
@@ -36,8 +35,9 @@ import { getCorsOriginFunction } from "../lib/cors-helper";
 // Create typed Hono app with Cloudflare Workers Env bindings
 const app = new Hono<{ Bindings: Env }>();
 
-// Response compression middleware - compress JSON/text responses with gzip
-app.use("*", compress());
+// NOTE: Do NOT add compress() middleware here. Cloudflare Workers handles
+// compression at the edge automatically. Application-level compression
+// breaks the cache middleware (compressed body stored as garbled text).
 
 // Database injection middleware
 // Creates per-request database connection using CF Workers env
