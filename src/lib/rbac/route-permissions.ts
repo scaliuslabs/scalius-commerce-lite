@@ -672,7 +672,9 @@ function matchPattern(pattern: string, pathname: string): boolean {
   }
 
   // Convert glob pattern to regex
+  // Escape special regex chars (including backslash) before converting globs
   const regexPattern = pattern
+    .replace(/[\\^$.|?+()[\]{}]/g, "\\$&") // Escape regex special chars
     .replace(/\*/g, "[^/]+") // * matches anything except /
     .replace(/\//g, "\\/"); // Escape forward slashes
 

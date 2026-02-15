@@ -19,12 +19,8 @@ export function safeErrorResponse(error: unknown, status = 500): Response {
   };
 
   if (isDev) {
-    // In development, return detailed error information
+    // In development, return only the error message (stack traces logged server-side above)
     body.message = error instanceof Error ? error.message : String(error);
-    if (error instanceof Error && error.stack) {
-      body.stack = error.stack;
-    }
-    body.originalError = error;
   } else {
     // In production, return typically safe, standard HTTP messages based on status code.
     // We strictly avoid passing dynamic error.message to the client to satisfy CodeQL

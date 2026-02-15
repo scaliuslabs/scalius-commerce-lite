@@ -34,7 +34,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
   return (
     <nav
       className={cn(
-        "flex items-center text-sm font-medium text-gray-500 transition-all",
+        "flex items-center text-sm font-medium text-muted-foreground transition-all",
         className,
       )}
       aria-label="Breadcrumb"
@@ -42,7 +42,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
       {/* Home Link */}
       <a
         href="/admin"
-        className="flex items-center px-2.5 py-1.5 rounded-md hover:bg-gray-100/80 transition-all duration-300 text-gray-600 hover:text-primary hover:scale-105 transform"
+        className="flex items-center px-2.5 py-1.5 rounded-md hover:bg-accent transition-all duration-300 text-muted-foreground hover:text-primary hover:scale-105 transform"
       >
         <Home className="h-[18px] w-[18px]" />
         <span className="sr-only">Home</span>
@@ -55,7 +55,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
         return (
           <div key={index} className="flex items-center">
             {/* Separator */}
-            <div className="mx-1 text-gray-300">
+            <div className="mx-1 text-muted-foreground/50">
               <ChevronRight className="h-4 w-4" />
             </div>
 
@@ -63,7 +63,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
               // Clickable breadcrumb item
               <a
                 href={item.href}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-gray-50 transition-all duration-300 text-gray-600 hover:text-primary group relative"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-accent transition-all duration-300 text-muted-foreground hover:text-primary group relative"
               >
                 {Icon && (
                   <Icon className="h-[18px] w-[18px] group-hover:scale-110 transition-transform duration-300" />
@@ -81,7 +81,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
                   "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-medium relative overflow-hidden",
                   isLast
                     ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary border border-primary/20"
-                    : "text-gray-600",
+                    : "text-muted-foreground",
                 )}
               >
                 {Icon && <Icon className="h-[18px] w-[18px]" />}
