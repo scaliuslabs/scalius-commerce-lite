@@ -59,10 +59,11 @@ if (!user || !session) {
   return Astro.redirect("/auth/login");
 }
 
-// Firebase config setup
+// Firebase config setup (cached to avoid DB query on every admin page load)
 import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { layoutCache, CACHE_KEYS } from "@/lib/layout-cache";
 
 let firebaseConfig = {
   apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY,
@@ -75,22 +76,26 @@ let firebaseConfig = {
   vapidKey: import.meta.env.PUBLIC_VAPID_FIREBASE,
 };
 
-try {
-  const result = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(and(eq(settings.key, "public_config"), eq(settings.category, "firebase")))
-    .get();
+const cached = layoutCache.get<typeof firebaseConfig>(CACHE_KEYS.FIREBASE_CONFIG);
+if (cached) {
+  firebaseConfig = cached;
+} else {
+  try {
+    const result = await db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(and(eq(settings.key, "public_config"), eq(settings.category, "firebase")))
+      .get();
 
-  if (result && result.value) {
-    const dbConfig = JSON.parse(result.value);
-    // Merge DB config, overriding env vars if present
-    firebaseConfig = { ...firebaseConfig, ...dbConfig };
-    // Map vapidKey from likely json key "vapidKey"
-    if (dbConfig.vapidKey) firebaseConfig.vapidKey = dbConfig.vapidKey;
+    if (result && result.value) {
+      const dbConfig = JSON.parse(result.value);
+      firebaseConfig = { ...firebaseConfig, ...dbConfig };
+      if (dbConfig.vapidKey) firebaseConfig.vapidKey = dbConfig.vapidKey;
+    }
+    layoutCache.set(CACHE_KEYS.FIREBASE_CONFIG, firebaseConfig);
+  } catch (e) {
+    console.error("Error loading Firebase settings in layout:", e);
   }
-} catch (e) {
-  console.error("Error loading Firebase settings in layout:", e);
 }
 
 // Generate breadcrumb items using helper function
@@ -337,14 +342,14 @@ const navSections: NavSection[] = allNavSections
               />
             </Button>
 
-            <Breadcrumb items={breadcrumbItems} client:load />
+            <Breadcrumb items={breadcrumbItems} client:idle />
           </div>
           <div class="flex items-center gap-12">
             <DarkModeToggle
-              client:load
+              client:idle
               className="h-8 w-8 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
             />
-            <UserMenu user={userData} client:load />
+            <UserMenu user={userData} client:idle />
           </div>
         </header>
 
@@ -360,8 +365,8 @@ const navSections: NavSection[] = allNavSections
       </div>
     </div>
 
-    <ShadcnToaster client:load />
-    <SonnerToaster richColors closeButton client:load />
+    <ShadcnToaster client:idle />
+    <SonnerToaster richColors closeButton client:idle />
 
     <script>
       function initializeSidebarControls() {

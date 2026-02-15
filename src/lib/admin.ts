@@ -35,53 +35,53 @@ export async function getDashboardStats() {
     firstDayOfLastMonth.getTime() / 1000,
   );
 
-  // Get total active products (not deleted and active)
-  const [{ count: totalProducts }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(products)
-    .where(sql`${products.deletedAt} is null AND ${products.isActive} = 1`);
-
-  // Get total active customers (not deleted)
-  const [{ count: totalCustomers }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(customers)
-    .where(sql`${customers.deletedAt} is null`);
-
-  // Get orders and revenue for current month
-  const [currentMonthStats] = await db
-    .select({
-      count: sql<number>`count(*)`,
-      revenue: sql<number>`sum(total_amount)`,
-      delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
-      processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
-      shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
-      cancelled: sql<number>`count(case when status in ('cancelled', 'returned') then 1 end)`,
-    })
-    .from(orders)
-    .where(
-      sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
-    );
-
-  // Get orders for last month for growth calculation
-  const [lastMonthStats] = await db
-    .select({
-      count: sql<number>`count(*)`,
-      revenue: sql<number>`sum(total_amount)`,
-    })
-    .from(orders)
-    .where(
-      sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfLastMonthTs} AND ${orders.createdAt} < ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
-    );
-
-  // Get total revenue all time
-  const [{ total: totalRevenue }] = await db
-    .select({
-      total: sql<number>`sum(total_amount)`,
-    })
-    .from(orders)
-    .where(
-      sql`${orders.deletedAt} is null AND ${orders.status} NOT IN ('cancelled', 'returned')`,
-    );
+  // Run independent dashboard queries in parallel for faster load
+  const [
+    [{ count: totalProducts }],
+    [{ count: totalCustomers }],
+    [currentMonthStats],
+    [lastMonthStats],
+    [{ total: totalRevenue }],
+  ] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(products)
+      .where(sql`${products.deletedAt} is null AND ${products.isActive} = 1`),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(customers)
+      .where(sql`${customers.deletedAt} is null`),
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        revenue: sql<number>`sum(total_amount)`,
+        delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
+        processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
+        shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
+        cancelled: sql<number>`count(case when status in ('cancelled', 'returned') then 1 end)`,
+      })
+      .from(orders)
+      .where(
+        sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
+      ),
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        revenue: sql<number>`sum(total_amount)`,
+      })
+      .from(orders)
+      .where(
+        sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfLastMonthTs} AND ${orders.createdAt} < ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
+      ),
+    db
+      .select({
+        total: sql<number>`sum(total_amount)`,
+      })
+      .from(orders)
+      .where(
+        sql`${orders.deletedAt} is null AND ${orders.status} NOT IN ('cancelled', 'returned')`,
+      ),
+  ]);
 
   // Calculate growth percentages
   const orderGrowth = lastMonthStats.count
@@ -787,40 +787,48 @@ export async function getOrderDetails(
     .leftJoin(products, eq(products.id, orderItems.productId))
     .where(eq(orderItems.orderId, id));
 
-  // Format items with proper structure
-  const formattedItems = await Promise.all(
-    items.map(async (item) => {
-      let variant = undefined;
-      if (item.variantId) {
-        const variantData = await db
-          .select({
-            size: productVariants.size,
-            color: productVariants.color,
-            weight: productVariants.weight,
-            sku: productVariants.sku,
-          })
-          .from(productVariants)
-          .where(eq(productVariants.id, item.variantId))
-          .get();
+  // Batch fetch all variants in one query (fix N+1)
+  const variantIds = [...new Set(items.map((i) => i.variantId).filter(Boolean))] as string[];
+  const variantMap = new Map<
+    string,
+    { size: string | null; color: string | null; weight: number | null; sku: string }
+  >();
+  if (variantIds.length > 0) {
+    const variants = await db
+      .select({
+        id: productVariants.id,
+        size: productVariants.size,
+        color: productVariants.color,
+        weight: productVariants.weight,
+        sku: productVariants.sku,
+      })
+      .from(productVariants)
+      .where(inArray(productVariants.id, variantIds));
+    for (const v of variants) {
+      variantMap.set(v.id, {
+        size: v.size,
+        color: v.color,
+        weight: v.weight,
+        sku: v.sku,
+      });
+    }
+  }
 
-        if (variantData) {
-          variant = variantData;
-        }
-      }
-
-      return {
-        id: item.id,
-        productId: item.productId,
-        variantId: item.variantId,
-        quantity: item.quantity,
-        price: item.price,
-        product: {
-          name: item.productName || "Unknown Product",
-          ...(variant && { variant }),
-        },
-      };
-    }),
-  );
+  // Format items with proper structure (no per-item DB calls)
+  const formattedItems = items.map((item) => {
+    const variant = item.variantId ? variantMap.get(item.variantId) : undefined;
+    return {
+      id: item.id,
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      price: item.price,
+      product: {
+        name: item.productName || "Unknown Product",
+        ...(variant && { variant }),
+      },
+    };
+  });
 
   return {
     ...order,

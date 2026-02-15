@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { layoutCache, CACHE_KEYS } from "@/lib/layout-cache";
 
 const CATEGORY = "firebase";
 const KEY_SERVICE_ACCOUNT = "service_account";
@@ -110,6 +111,9 @@ export const POST: APIRoute = async (context) => {
           set: { value: update.value, updatedAt: new Date() },
         });
     }
+
+    // Invalidate layout cache so next page load gets fresh Firebase config
+    layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);
 
     return new Response(
       JSON.stringify({ message: "Settings saved successfully" }),
