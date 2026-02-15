@@ -35,7 +35,7 @@
 }
 
 .rich-content a {
-  color: #0066cc;
+  color: var(--primary);
   text-decoration: none;
 }
 
@@ -84,24 +84,24 @@
 
 /* Blockquote styling */
 .rich-content blockquote {
-  border-left: 4px solid #e5e7eb;
+  border-left: 4px solid var(--border);
   padding-left: 1rem;
   font-style: italic;
   margin: 1rem 0;
-  color: #4b5563;
+  color: var(--muted-foreground);
 }
 
 /* Code styling */
 .rich-content code {
-  background-color: #f3f4f6;
+  background-color: var(--muted);
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
-  color: #1f2937;
+  color: var(--foreground);
 }
 
 .rich-content pre {
-  background-color: #f3f4f6;
+  background-color: var(--muted);
   padding: 1rem;
   border-radius: 0.5rem;
   overflow-x: auto;
@@ -123,19 +123,19 @@
 
 .rich-content th,
 .rich-content td {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   padding: 0.5rem;
 }
 
 .rich-content th {
-  background-color: #f9fafb;
+  background-color: var(--muted);
 }
 
 /* Horizontal rule */
 .rich-content hr {
   margin: 1.5rem 0;
   border: 0;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border);
 }
 
 /* Image styling */

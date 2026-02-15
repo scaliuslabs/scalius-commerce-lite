@@ -584,8 +584,14 @@ export function CategoryList({
   // Strip HTML tags and truncate description
   const getPlainDescription = useCallback((html: string | null, maxLength: number = 60): string => {
     if (!html) return "";
-    // Remove HTML tags
-    const text = html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+    // Remove HTML tags iteratively to prevent incomplete sanitization (e.g. "<scr<script>ipt>")
+    let text = html;
+    let prev = "";
+    while (prev !== text) {
+      prev = text;
+      text = text.replace(/<[^>]*>/g, "");
+    }
+    text = text.replace(/&nbsp;/g, " ").trim();
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength).trim() + "...";
   }, []);

@@ -284,24 +284,17 @@ const navSections: NavSection[] = allNavSections
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script>
-      const theme = (() => {
-        if (
-          typeof localStorage !== "undefined" &&
-          localStorage.getItem("theme")
-        ) {
-          return localStorage.getItem("theme");
+    <script is:inline>
+      (function() {
+        var theme = "light";
+        try { theme = localStorage.getItem("theme") || "light"; } catch(e) {}
+        if (theme === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
         }
-        // Default to light mode instead of following system preference
-        return "light";
+        document.documentElement.style.colorScheme = theme;
       })();
-
-      if (theme === "light") {
-        document.documentElement.classList.remove("dark");
-      } else {
-        document.documentElement.classList.add("dark");
-      }
-      document.documentElement.style.setProperty("color-scheme", theme);
     </script>
     <link rel="icon" type="image/png" href={favicon.src} />
     <meta name="generator" content={Astro.generator} />

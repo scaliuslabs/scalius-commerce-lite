@@ -42,27 +42,29 @@ export function RichContent({
         "prose-hr:my-6",
         // Table styling
         "prose-table:border-collapse prose-table:w-full",
-        "prose-th:border prose-th:border-gray-300 prose-th:p-2 prose-th:bg-gray-100",
-        "prose-td:border prose-td:border-gray-300 prose-td:p-2",
+        "prose-th:border prose-th:border-border prose-th:p-2 prose-th:bg-muted",
+        "prose-td:border prose-td:border-border prose-td:p-2",
         // Code styling
-        "prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-gray-800 prose-code:text-sm",
-        "prose-pre:bg-gray-100 prose-pre:p-4 prose-pre:rounded-md prose-pre:overflow-x-auto",
+        "prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground prose-code:text-sm",
+        "prose-pre:bg-muted prose-pre:p-4 prose-pre:rounded-md prose-pre:overflow-x-auto",
         "prose-pre:code:bg-transparent prose-pre:code:p-0",
         // Blockquote styling
-        "prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:my-4 prose-blockquote:text-gray-700",
+        "prose-blockquote:border-l-4 prose-blockquote:border-border prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:my-4 prose-blockquote:text-muted-foreground",
+        // Dark mode
+        "dark:prose-invert",
         // Variant-specific styling
         variant === "default" && "prose-sm md:prose-base",
         variant === "compact" && "prose-xs md:prose-sm",
         variant === "product" && [
           "prose-sm md:prose-base",
-          "prose-headings:text-gray-900",
-          "prose-p:text-gray-700",
+          "prose-headings:text-foreground",
+          "prose-p:text-muted-foreground",
           "prose-a:text-primary",
           "prose-img:my-4",
-          "prose-ul:text-gray-700 prose-ol:text-gray-700",
-          "prose-li:text-gray-700",
-          "prose-code:text-gray-800",
-          "prose-blockquote:text-gray-700",
+          "prose-ul:text-muted-foreground prose-ol:text-muted-foreground",
+          "prose-li:text-muted-foreground",
+          "prose-code:text-foreground",
+          "prose-blockquote:text-muted-foreground",
         ],
         className,
       )}
