@@ -24,12 +24,6 @@ export default defineConfig({
     remotePatterns: [{ protocol: "https" }],
   },
 
-  // Improved prefetching strategy
-  prefetch: {
-    prefetchAll: true,
-    defaultStrategy: "hover",
-  },
-
   output: "server",
 
   // Add compression for better performance
