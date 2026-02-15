@@ -82,7 +82,7 @@ const discounts: DiscountItem[] = rawDiscounts.map((d: any) => ({
 
 <AdminLayout title="Discounts">
   <DiscountList
-    client:load
+    client:idle
     discounts={discounts}
     pagination={pagination}
     initialSearchQuery={search}

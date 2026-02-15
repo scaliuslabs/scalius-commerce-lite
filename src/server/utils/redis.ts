@@ -37,7 +37,7 @@ interface CacheEntry {
 
 class InMemoryCache {
   private cache = new Map<string, CacheEntry>();
-  private maxSize = 1000; // Limit memory usage
+  private maxSize = 5000; // Limit memory usage
 
   set(key: string, value: any, ttl: number): void {
     // Clean up expired entries if cache is getting large

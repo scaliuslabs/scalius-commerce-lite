@@ -5,10 +5,6 @@ import { invalidateHonoCacheIfNeeded } from "@/lib/middleware-helper/hono-cache-
 import { createAuth } from "@/lib/auth";
 import {
   getUserPermissions,
-  hasAdminAccess,
-  hasPermission,
-  hasAnyPermission,
-  hasAllPermissions,
   isSuperAdmin,
 } from "@/lib/rbac/helpers";
 import { autoSeedRbacIfNeeded } from "@/lib/rbac/auto-seed";
@@ -153,18 +149,27 @@ const authMiddleware = defineMiddleware(async (context, next) => {
   context.locals.user = sessionUser;
 
   // Load user permissions if authenticated
+  // Permissions are cached in-memory for 5 minutes by getUserPermissions()
   if (sessionUser) {
     try {
       const { getDb } = await import("@/db");
       const db = getDb(env);
 
-      // Auto-seed RBAC on first admin access (safe to call multiple times)
+      // Auto-seed RBAC on first admin access (no-ops after first successful seed)
       if (sessionUser.role === "admin") {
         await autoSeedRbacIfNeeded(db);
       }
 
       const userPermissions = await getUserPermissions(db, sessionUser.id);
       context.locals.permissions = userPermissions;
+
+      // Cache isSuperAdmin and hasAdminAccess in locals to avoid redundant DB queries
+      // getUserPermissions already queries isSuperAdmin internally, but we cache the
+      // result here so hasAdminAccess/isSuperAdmin don't re-query the user table
+      const userIsSuperAdminFlag = await isSuperAdmin(db, sessionUser.id);
+      (context.locals as any)._isSuperAdmin = userIsSuperAdminFlag;
+      (context.locals as any)._hasAdminAccess =
+        userIsSuperAdminFlag || sessionUser.role === "admin" || userPermissions.size > 0;
     } catch (error) {
       console.error("Error loading user permissions:", error);
       context.locals.permissions = new Set<string>();
@@ -212,12 +217,10 @@ const authMiddleware = defineMiddleware(async (context, next) => {
       );
     }
 
-    const { getDb } = await import("@/db");
-    const db = getDb(env);
-
     // Check if user has admin access (either admin role, super admin, or has permissions)
+    // Uses cached values from permission loading above to avoid redundant DB queries
     if (pathname.startsWith("/api/admin/")) {
-      const userHasAdminAccess = await hasAdminAccess(db, sessionUser.id);
+      const userHasAdminAccess = (context.locals as any)._hasAdminAccess ?? false;
 
       // Also check the legacy role for backwards compatibility
       if (sessionUser.role !== "admin" && !userHasAdminAccess) {
@@ -239,33 +242,23 @@ const authMiddleware = defineMiddleware(async (context, next) => {
     const routePermission = getRoutePermission(pathname, method);
 
     if (routePermission) {
-      // Super admins bypass all permission checks
-      const userIsSuperAdmin = await isSuperAdmin(db, sessionUser.id);
+      // Super admins bypass all permission checks (cached from permission loading)
+      const userIsSuperAdmin = (context.locals as any)._isSuperAdmin ?? false;
 
       if (!userIsSuperAdmin) {
+        // Use already-loaded permissions from context.locals instead of re-querying DB
+        const userPerms = context.locals.permissions || new Set<string>();
         let hasRequiredPermission = false;
 
         if (routePermission.permission) {
           // Single permission required
-          hasRequiredPermission = await hasPermission(
-            db,
-            sessionUser.id,
-            routePermission.permission
-          );
+          hasRequiredPermission = userPerms.has(routePermission.permission);
         } else if (routePermission.anyOf) {
           // Any of these permissions is sufficient
-          hasRequiredPermission = await hasAnyPermission(
-            db,
-            sessionUser.id,
-            routePermission.anyOf
-          );
+          hasRequiredPermission = routePermission.anyOf.some((p: string) => userPerms.has(p));
         } else if (routePermission.allOf) {
           // All of these permissions are required
-          hasRequiredPermission = await hasAllPermissions(
-            db,
-            sessionUser.id,
-            routePermission.allOf
-          );
+          hasRequiredPermission = routePermission.allOf.every((p: string) => userPerms.has(p));
         }
 
         if (!hasRequiredPermission) {
@@ -322,10 +315,8 @@ const authMiddleware = defineMiddleware(async (context, next) => {
       return context.redirect("/auth/setup-2fa");
     }
 
-    // Check if user has admin access (either admin role, super admin, or has permissions)
-    const { getDb } = await import("@/db");
-    const db = getDb(env);
-    const userHasAdminAccess = await hasAdminAccess(db, sessionUser.id);
+    // Check if user has admin access using cached values (no extra DB queries)
+    const userHasAdminAccess = (context.locals as any)._hasAdminAccess ?? false;
 
     // Also check the legacy role for backwards compatibility
     if (sessionUser.role !== "admin" && !userHasAdminAccess) {
@@ -336,7 +327,7 @@ const authMiddleware = defineMiddleware(async (context, next) => {
     // Access denied page and settings/account are always accessible
     if (pathname !== "/admin/access-denied" && pathname !== "/admin/settings/account") {
       const userPerms = context.locals.permissions || new Set<string>();
-      const userIsSuperAdmin = await isSuperAdmin(db, sessionUser.id);
+      const userIsSuperAdmin = (context.locals as any)._isSuperAdmin ?? false;
 
       if (!hasPageAccess(userPerms, userIsSuperAdmin, pathname)) {
         // Redirect to access denied page with the attempted URL

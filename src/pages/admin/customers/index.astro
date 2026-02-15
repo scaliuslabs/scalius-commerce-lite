@@ -224,7 +224,7 @@ const enhancedCustomers = formattedCustomers.map((customer) => {
 
 <AdminLayout title={showTrashed ? "Trash" : "Customers"}>
   <CustomerList
-    client:load
+    client:idle
     customers={enhancedCustomers}
     pagination={{
       total: count,

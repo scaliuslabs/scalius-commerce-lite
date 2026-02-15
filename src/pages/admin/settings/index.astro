@@ -66,7 +66,7 @@ const footerConfig = safeParseJSON(settings?.footerConfig) || {};
             </div>
           </summary>
           <div class="p-6">
-            <HeaderBuilder client:load initialConfig={headerConfig} />
+            <HeaderBuilder client:idle initialConfig={headerConfig} />
           </div>
         </details>
       </div>
@@ -101,7 +101,7 @@ const footerConfig = safeParseJSON(settings?.footerConfig) || {};
             </div>
           </summary>
           <div class="p-6">
-            <FooterBuilder client:load initialConfig={footerConfig} />
+            <FooterBuilder client:idle initialConfig={footerConfig} />
           </div>
         </details>
       </div>
@@ -135,7 +135,7 @@ const footerConfig = safeParseJSON(settings?.footerConfig) || {};
             </div>
           </summary>
           <div class="p-6">
-            <SeoSettingsBuilder client:load />
+            <SeoSettingsBuilder client:idle />
           </div>
         </details>
       </div>
@@ -169,7 +169,7 @@ const footerConfig = safeParseJSON(settings?.footerConfig) || {};
             </div>
           </summary>
           <div class="p-6">
-            <StorefrontUrlBuilder client:load />
+            <StorefrontUrlBuilder client:idle />
           </div>
         </details>
       </div>

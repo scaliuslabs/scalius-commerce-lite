@@ -132,7 +132,7 @@ try {
 
 <AdminLayout title={showTrashed ? "Trash" : "Categories"}>
   <CategoryList
-    client:load
+    client:idle
     categories={formattedCategories}
     pagination={{
       total: data.pagination.total,

@@ -407,32 +407,29 @@ const navSections: NavSection[] = allNavSections
     </script>
 
     <script>
-      // This script runs as a module (Firebase notifications)
-      import { initFirebaseClientNotifications } from "@/lib/firebase/client";
-
+      // Lazy-load Firebase notifications - deferred to avoid blocking page load
+      // Uses dynamic import so the ~50KB Firebase SDK only loads after the page is idle
       function initializeFcmOnClient() {
-        console.log("AdminLayout: initializeFcmOnClient called");
         const firebaseConfig = (window as any).__FIREBASE_CONFIG__;
         const userId = (window as any).__USER_ID__;
 
-        if (!firebaseConfig || !firebaseConfig.apiKey) {
-          console.error("AdminLayout: Firebase config not found or invalid");
+        if (!firebaseConfig || !firebaseConfig.apiKey || !userId) {
           return;
         }
 
-        if (!userId) {
-          console.warn("AdminLayout: User ID not available. FCM not initialized.");
-          return;
-        }
-
-        console.log("AdminLayout: Initializing FCM with userId:", userId);
-        initFirebaseClientNotifications(userId, firebaseConfig);
+        // Dynamic import - Firebase SDK loaded only when needed
+        import("@/lib/firebase/client").then(({ initFirebaseClientNotifications }) => {
+          initFirebaseClientNotifications(userId, firebaseConfig);
+        }).catch((err) => {
+          console.error("Failed to load Firebase client:", err);
+        });
       }
 
-      if (document.readyState === "complete") {
-        initializeFcmOnClient();
+      // Defer Firebase init until browser is idle (or 3s timeout)
+      if ("requestIdleCallback" in window) {
+        (window as any).requestIdleCallback(initializeFcmOnClient, { timeout: 3000 });
       } else {
-        window.addEventListener("load", initializeFcmOnClient);
+        setTimeout(initializeFcmOnClient, 3000);
       }
     </script>
   </body>

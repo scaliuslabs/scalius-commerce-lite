@@ -273,64 +273,66 @@ export async function getProducts(options: {
 
   const productIds = productResults.map((p) => p.id);
 
-  // Step 2: Fetch variant counts
-  const variantCounts = await db
-    .select({
-      productId: productVariants.productId,
-      count: sql<number>`count(${productVariants.id})`,
-    })
-    .from(productVariants)
-    .where(
-      sql`${productVariants.productId} IN ${productIds} AND ${productVariants.deletedAt} IS NULL`,
-    )
-    .groupBy(productVariants.productId);
+  // Fetch variant counts, image counts, primary images, and SKUs in parallel
+  const [variantCounts, imageCounts, primaryImages, productSkus] = await Promise.all([
+    // Variant counts
+    db
+      .select({
+        productId: productVariants.productId,
+        count: sql<number>`count(${productVariants.id})`,
+      })
+      .from(productVariants)
+      .where(
+        sql`${productVariants.productId} IN ${productIds} AND ${productVariants.deletedAt} IS NULL`,
+      )
+      .groupBy(productVariants.productId),
+    // Image counts
+    db
+      .select({
+        productId: productImages.productId,
+        count: sql<number>`count(${productImages.id})`,
+      })
+      .from(productImages)
+      .where(sql`${productImages.productId} IN ${productIds}`)
+      .groupBy(productImages.productId),
+    // Primary images
+    db
+      .select({
+        productId: productImages.productId,
+        url: productImages.url,
+      })
+      .from(productImages)
+      .where(
+        and(
+          sql`${productImages.productId} IN ${productIds}`,
+          eq(productImages.isPrimary, true),
+        ),
+      ),
+    // SKUs (first variant per product)
+    db
+      .select({
+        productId: productVariants.productId,
+        sku: productVariants.sku,
+      })
+      .from(productVariants)
+      .where(
+        sql`${productVariants.productId} IN ${productIds} AND ${productVariants.deletedAt} IS NULL`,
+      )
+      .orderBy(productVariants.productId, asc(productVariants.createdAt)),
+  ]);
 
   const variantCountMap = new Map(
     variantCounts.map((vc) => [vc.productId, vc.count]),
   );
 
-  // Step 3: Fetch image counts
-  const imageCounts = await db
-    .select({
-      productId: productImages.productId,
-      count: sql<number>`count(${productImages.id})`,
-    })
-    .from(productImages)
-    .where(sql`${productImages.productId} IN ${productIds}`)
-    .groupBy(productImages.productId);
-
   const imageCountMap = new Map(
     imageCounts.map((ic) => [ic.productId, ic.count]),
   );
 
-  // Step 4: Fetch primary images
-  const primaryImages = await db
-    .select({
-      productId: productImages.productId,
-      url: productImages.url,
-    })
-    .from(productImages)
-    .where(
-      and(
-        sql`${productImages.productId} IN ${productIds}`,
-        eq(productImages.isPrimary, true),
-      ),
-    );
   const primaryImageMap = new Map(
     primaryImages.map((pi) => [pi.productId, pi.url]),
   );
 
-  // Step 5: Fetch a SKU for each product (e.g., the first one if multiple variants)
-  const productSkus = await db
-    .select({
-      productId: productVariants.productId,
-      sku: productVariants.sku,
-    })
-    .from(productVariants)
-    .where(
-      sql`${productVariants.productId} IN ${productIds} AND ${productVariants.deletedAt} IS NULL`,
-    )
-    .orderBy(productVariants.productId, asc(productVariants.createdAt));
   // Create a map for the first SKU of each product
   const skuMap = new Map<string, string>();
   productSkus.forEach((item) => {
@@ -587,18 +589,48 @@ export async function getOrders(options: {
       })(),
     );
 
-  // Get item counts for each order
-  const itemCounts = await db
-    .select({
-      orderId: orderItems.orderId,
-      count: sql<number>`COUNT(*)`,
-      totalQuantity: sql<number>`SUM(${orderItems.quantity})`,
-    })
-    .from(orderItems)
-    .where(sql`${orderItems.orderId} IN ${results.map((r) => r.id)}`)
-    .groupBy(orderItems.orderId);
+  // Fetch item counts and shipments in parallel
+  const orderIds = results.map((r) => r.id);
 
-  // Create a map of order ID to item count
+  const [itemCounts, shipments] = await Promise.all([
+    // Item counts
+    db
+      .select({
+        orderId: orderItems.orderId,
+        count: sql<number>`COUNT(*)`,
+        totalQuantity: sql<number>`SUM(${orderItems.quantity})`,
+      })
+      .from(orderItems)
+      .where(sql`${orderItems.orderId} IN ${orderIds}`)
+      .groupBy(orderItems.orderId),
+    // Latest shipments
+    results.length > 0
+      ? db
+          .select({
+            orderId: deliveryShipments.orderId,
+            id: deliveryShipments.id,
+            providerId: deliveryShipments.providerId,
+            providerType: deliveryShipments.providerType,
+            status: deliveryShipments.status,
+            rawStatus: deliveryShipments.rawStatus,
+            externalId: deliveryShipments.externalId,
+            trackingId: deliveryShipments.trackingId,
+            lastChecked: deliveryShipments.lastChecked,
+            updatedAt: deliveryShipments.updatedAt,
+            createdAt: deliveryShipments.createdAt,
+            providerName: deliveryProviders.name,
+          })
+          .from(deliveryShipments)
+          .leftJoin(
+            deliveryProviders,
+            eq(deliveryShipments.providerId, deliveryProviders.id),
+          )
+          .where(inArray(deliveryShipments.orderId, orderIds))
+          .orderBy(desc(deliveryShipments.createdAt))
+      : Promise.resolve([]),
+  ]);
+
+  // Create item count map
   const itemCountMap = new Map(
     itemCounts.map((ic) => [
       ic.orderId,
@@ -606,100 +638,52 @@ export async function getOrders(options: {
     ]),
   );
 
-  // Fetch latest shipments for all orders
-  if (results.length > 0) {
-    const orderIds = results.map((r) => r.id);
-
-    const shipments = await db
-      .select({
-        orderId: deliveryShipments.orderId,
-        id: deliveryShipments.id,
-        providerId: deliveryShipments.providerId,
-        providerType: deliveryShipments.providerType,
-        status: deliveryShipments.status,
-        rawStatus: deliveryShipments.rawStatus,
-        externalId: deliveryShipments.externalId,
-        trackingId: deliveryShipments.trackingId,
-        lastChecked: deliveryShipments.lastChecked,
-        updatedAt: deliveryShipments.updatedAt,
-        createdAt: deliveryShipments.createdAt,
-        providerName: deliveryProviders.name,
-      })
-      .from(deliveryShipments)
-      .leftJoin(
-        deliveryProviders,
-        eq(deliveryShipments.providerId, deliveryProviders.id),
-      )
-      .where(inArray(deliveryShipments.orderId, orderIds))
-      .orderBy(desc(deliveryShipments.createdAt));
-
-    const normalizeDate = (value: unknown): Date | null => {
-      if (!value) return null;
-      if (value instanceof Date) return value;
-      if (typeof value === "number") {
-        return value > 1e12 ? new Date(value) : new Date(value * 1000);
-      }
-      const numericValue = Number(value);
-      if (!Number.isNaN(numericValue) && numericValue !== 0) {
-        return numericValue > 1e12
-          ? new Date(numericValue)
-          : new Date(numericValue * 1000);
-      }
-      try {
-        return new Date(String(value));
-      } catch {
-        return null;
-      }
-    };
-
-    const shipmentMap = new Map<string, OrderShipmentSummary>();
-
-    for (const shipment of shipments) {
-      if (!shipmentMap.has(shipment.orderId)) {
-        shipmentMap.set(shipment.orderId, {
-          id: shipment.id,
-          providerId: shipment.providerId,
-          providerType: shipment.providerType,
-          providerName: shipment.providerName,
-          status: shipment.status,
-          rawStatus: shipment.rawStatus,
-          externalId: shipment.externalId,
-          trackingId: shipment.trackingId,
-          lastChecked: normalizeDate(shipment.lastChecked),
-          updatedAt: normalizeDate(shipment.updatedAt) ?? new Date(),
-          createdAt: normalizeDate(shipment.createdAt) ?? new Date(),
-        });
-      }
+  const normalizeDate = (value: unknown): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value === "number") {
+      return value > 1e12 ? new Date(value) : new Date(value * 1000);
     }
+    const numericValue = Number(value);
+    if (!Number.isNaN(numericValue) && numericValue !== 0) {
+      return numericValue > 1e12
+        ? new Date(numericValue)
+        : new Date(numericValue * 1000);
+    }
+    try {
+      return new Date(String(value));
+    } catch {
+      return null;
+    }
+  };
 
-    const formattedResults = results.map((order) => ({
-      ...order,
-      createdAt: new Date(order.createdAt * 1000),
-      updatedAt: new Date(order.updatedAt * 1000),
-      itemCount: itemCountMap.get(order.id)?.count || 0,
-      totalQuantity: itemCountMap.get(order.id)?.quantity || 0,
-      latestShipment: shipmentMap.get(order.id) || null,
-    }));
+  const shipmentMap = new Map<string, OrderShipmentSummary>();
 
-    return {
-      orders: formattedResults,
-      pagination: {
-        total: count,
-        page,
-        limit,
-        totalPages: Math.ceil(count / limit),
-      },
-    };
+  for (const shipment of shipments) {
+    if (!shipmentMap.has(shipment.orderId)) {
+      shipmentMap.set(shipment.orderId, {
+        id: shipment.id,
+        providerId: shipment.providerId,
+        providerType: shipment.providerType,
+        providerName: shipment.providerName,
+        status: shipment.status,
+        rawStatus: shipment.rawStatus,
+        externalId: shipment.externalId,
+        trackingId: shipment.trackingId,
+        lastChecked: normalizeDate(shipment.lastChecked),
+        updatedAt: normalizeDate(shipment.updatedAt) ?? new Date(),
+        createdAt: normalizeDate(shipment.createdAt) ?? new Date(),
+      });
+    }
   }
 
-  // Format dates and add item counts
   const formattedResults = results.map((order) => ({
     ...order,
     createdAt: new Date(order.createdAt * 1000),
     updatedAt: new Date(order.updatedAt * 1000),
     itemCount: itemCountMap.get(order.id)?.count || 0,
     totalQuantity: itemCountMap.get(order.id)?.quantity || 0,
-    latestShipment: null,
+    latestShipment: shipmentMap.get(order.id) || null,
   }));
 
   return {

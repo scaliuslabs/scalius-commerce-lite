@@ -30,6 +30,6 @@ const formattedScripts = analyticsScripts.map((script) => ({
       </p>
     </div>
 
-    <AnalyticsList analytics={formattedScripts} client:load />
+    <AnalyticsList analytics={formattedScripts} client:idle />
   </div>
 </AdminLayout>

@@ -26,7 +26,8 @@ export default defineConfig({
 
   // Improved prefetching strategy
   prefetch: {
-    defaultStrategy: "viewport",
+    prefetchAll: true,
+    defaultStrategy: "hover",
   },
 
   output: "server",

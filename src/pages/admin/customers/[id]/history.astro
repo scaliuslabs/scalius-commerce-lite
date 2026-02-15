@@ -174,7 +174,7 @@ const historyWithLocationNames = formattedHistory.map((record) => {
 
 <AdminLayout title={`Customer History - ${customer.name}`}>
   <CustomerHistoryView
-    client:load
+    client:idle
     customer={enhancedCustomer}
     history={historyWithLocationNames}
     orders={formattedOrders}

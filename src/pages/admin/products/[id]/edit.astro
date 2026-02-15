@@ -151,7 +151,7 @@ const formattedVariants = variants.map((variant) => ({
 <AdminLayout title={`Edit ${product.name}`}>
   <div class="container max-w-7xl space-y-6 py-4 pb-8">
     <ProductForm
-      client:load
+      client:idle
       categories={allCategories}
       defaultValues={defaultValues}
       isEdit={true}
@@ -159,7 +159,7 @@ const formattedVariants = variants.map((variant) => ({
 
     <div class="mt-6" id="variant-section">
       <VariantManager
-        client:load
+        client:idle
         productId={product.id}
         productSlug={product.slug}
         variants={formattedVariants}

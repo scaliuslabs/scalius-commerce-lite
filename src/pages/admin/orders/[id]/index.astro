@@ -261,7 +261,7 @@ const formattedOrder = {
 ---
 
 <AdminLayout title={`Order #${order.id}`}>
-  <OrderView client:load order={formattedOrder} />
+  <OrderView client:idle order={formattedOrder} />
 
   <script is:inline set:html={shipmentActionsScript} />
 </AdminLayout>

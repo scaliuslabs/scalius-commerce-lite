@@ -47,36 +47,22 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // Get location names from the delivery_locations table
+    // Get location names from the delivery_locations table in a single query
     let cityName = null;
     let zoneName = null;
     let areaName = null;
 
-    if (data.city) {
-      const cityResult = await db
-        .select({ name: deliveryLocations.name })
+    const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
+    if (locationIds.length > 0) {
+      const locations = await db
+        .select({ id: deliveryLocations.id, name: deliveryLocations.name })
         .from(deliveryLocations)
-        .where(sql`${deliveryLocations.id} = ${data.city}`)
-        .get();
-      if (cityResult) cityName = cityResult.name;
-    }
+        .where(sql`${deliveryLocations.id} IN ${locationIds}`);
 
-    if (data.zone) {
-      const zoneResult = await db
-        .select({ name: deliveryLocations.name })
-        .from(deliveryLocations)
-        .where(sql`${deliveryLocations.id} = ${data.zone}`)
-        .get();
-      if (zoneResult) zoneName = zoneResult.name;
-    }
-
-    if (data.area) {
-      const areaResult = await db
-        .select({ name: deliveryLocations.name })
-        .from(deliveryLocations)
-        .where(sql`${deliveryLocations.id} = ${data.area}`)
-        .get();
-      if (areaResult) areaName = areaResult.name;
+      const locationMap = new Map(locations.map((l) => [l.id, l.name]));
+      if (data.city) cityName = locationMap.get(data.city) ?? null;
+      if (data.zone) zoneName = locationMap.get(data.zone) ?? null;
+      if (data.area) areaName = locationMap.get(data.area) ?? null;
     }
 
     // Create customer

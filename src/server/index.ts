@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
+import { compress } from "hono/compress";
 import { getDb } from "@/db";
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
@@ -35,7 +36,10 @@ import { getCorsOriginFunction } from "../lib/cors-helper";
 // Create typed Hono app with Cloudflare Workers Env bindings
 const app = new Hono<{ Bindings: Env }>();
 
-// Database injection middleware - MUST be first
+// Response compression middleware - compress JSON/text responses with gzip
+app.use("*", compress());
+
+// Database injection middleware
 // Creates per-request database connection using CF Workers env
 app.use("*", async (c, next) => {
   const db = getDb(c.env);
