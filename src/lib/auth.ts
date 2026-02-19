@@ -23,7 +23,6 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
 
   const secret = getEnvVar("BETTER_AUTH_SECRET");
   const baseURL = getEnvVar("BETTER_AUTH_URL") || getEnvVar("PUBLIC_API_BASE_URL");
-  const senderEmail = getEnvVar("EMAIL_SENDER") || "noreply@scalius.com";
   const appName = "Scalius Commerce";
 
   if (!secret) {
@@ -46,7 +45,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
     appName,
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: true,
+      requireEmailVerification: false,
       minPasswordLength: 12,
       // Email verification callback - called when user needs to verify email
       sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
@@ -74,8 +73,6 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
               </p>
             </div>
           `,
-          from: senderEmail,
-          env,
         });
       },
       // Password reset callback
@@ -103,8 +100,6 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
               </p>
             </div>
           `,
-          from: senderEmail,
-          env,
         });
       },
     },
@@ -184,8 +179,6 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
                   </p>
                 </div>
               `,
-              from: senderEmail,
-              env,
             });
           },
           // OTP expires in 5 minutes
@@ -213,10 +206,10 @@ let cachedEnvSignature: string | null = null;
  * Uses caching to avoid recreating the instance on every request.
  */
 export function getAuth(env?: Env | NodeJS.ProcessEnv): Auth {
-  // Create a signature to detect env changes
+  // Create a signature to detect env changes (keyed only on the auth secret)
   const envSignature = env
-    ? `${(env as Record<string, string>).BETTER_AUTH_SECRET || ""}:${(env as Record<string, string>).TURSO_DATABASE_URL || ""}`
-    : `${process.env.BETTER_AUTH_SECRET || ""}:${process.env.TURSO_DATABASE_URL || ""}`;
+    ? `${(env as Record<string, string>).BETTER_AUTH_SECRET || ""}`
+    : `${process.env.BETTER_AUTH_SECRET || ""}`;
 
   // Return cached instance if env hasn't changed
   if (cachedAuth && cachedEnvSignature === envSignature) {

@@ -26,7 +26,7 @@ function getAllowedCorsOrigins(): string[] {
   const cspAllowed = process.env.CSP_ALLOWED || "";
   const cdnDomain = process.env.CDN_DOMAIN_URL;
   // Use PUBLIC_API_BASE_URL environment variable - no hardcoded fallbacks
-  const currentOrigin = process.env.PUBLIC_API_BASE_URL || "";
+  const currentOrigin = (process.env.PUBLIC_API_BASE_URL || "").trim();
 
   const origins = [
     currentOrigin,

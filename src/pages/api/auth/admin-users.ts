@@ -286,7 +286,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
         sessionResult.user.name,
         tempPassword,
         loginUrl,
-        env
       );
     } catch (emailError) {
       console.error("Failed to send invitation email:", emailError);

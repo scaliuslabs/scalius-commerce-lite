@@ -90,7 +90,7 @@ function getCombinedDomains(): string[] {
 export function setPageCspHeader(response: Response): Response {
   const allowedDomains = getCombinedDomains();
   // Use PUBLIC_API_BASE_URL environment variable - no hardcoded fallbacks
-  const currentOrigin = process.env.PUBLIC_API_BASE_URL || "";
+  const currentOrigin = (process.env.PUBLIC_API_BASE_URL || "").trim();
 
   const scriptSrc = [
     "'self'",

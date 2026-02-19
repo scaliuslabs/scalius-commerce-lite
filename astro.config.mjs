@@ -36,9 +36,7 @@ export default defineConfig({
 
   vite: {
     plugins: [tailwindcss()],
-    optimizeDeps: {
-      exclude: ["@libsql/client"],
-    },
+    optimizeDeps: {},
     define: {
       global: "globalThis",
     },
@@ -107,6 +105,7 @@ export default defineConfig({
     // Enable platform proxy for local development (helps emulate CF bindings in `astro dev`)
     platformProxy: {
       enabled: true,
+      configPath: "wrangler.jsonc",
     },
     // Use Cloudflare's Image Resizing service for on-demand optimization
     imageService: "cloudflare",

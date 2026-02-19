@@ -29,13 +29,16 @@ const ASTRO_ADMIN_WRITE_PATHS_FOR_CACHE_CLEAR = [
 
 /**
  * Triggers the storefront's cache purge endpoint.
+ * Uses PURGE_URL / PURGE_TOKEN from the Cloudflare Workers runtime env.
  */
-async function triggerStorefrontCachePurge(): Promise<void> {
-  const purgeUrl = process.env.PURGE_URL;
-  const purgeToken = process.env.PURGE_TOKEN;
+async function triggerStorefrontCachePurge(runtimeEnv?: Env): Promise<void> {
+  const purgeUrl = runtimeEnv?.PURGE_URL;
+  const purgeToken = runtimeEnv?.PURGE_TOKEN;
 
   if (!purgeUrl || !purgeToken) {
-    console.warn("[Storefront Cache] PURGE_URL or PURGE_TOKEN not found in process.env. Skipping storefront cache purge.");
+    console.warn(
+      "[Storefront Cache] PURGE_URL or PURGE_TOKEN not configured. Skipping storefront cache purge.",
+    );
     return;
   }
 
@@ -43,7 +46,9 @@ async function triggerStorefrontCachePurge(): Promise<void> {
     const urlWithToken = new URL(purgeUrl);
     urlWithToken.searchParams.set("token", purgeToken);
 
-    console.log(`[Storefront Cache] Triggering purge for: ${urlWithToken.origin}${urlWithToken.pathname}`);
+    console.log(
+      `[Storefront Cache] Triggering purge for: ${urlWithToken.origin}${urlWithToken.pathname}`,
+    );
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -57,16 +62,21 @@ async function triggerStorefrontCachePurge(): Promise<void> {
 
     if (response.ok) {
       const data = await response.json();
-      console.log("[Storefront Cache] Purge successful:", data.message);
+      console.log("[Storefront Cache] Purge successful:", (data as any).message);
     } else {
       const errorText = await response.text();
-      console.error(`[Storefront Cache] Purge failed with status ${response.status}: ${errorText}`);
+      console.error(
+        `[Storefront Cache] Purge failed with status ${response.status}: ${errorText}`,
+      );
     }
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (error instanceof Error && error.name === "AbortError") {
       console.error("[Storefront Cache] Purge request timed out.");
     } else {
-      console.error("[Storefront Cache] An unexpected error occurred during purge:", error);
+      console.error(
+        "[Storefront Cache] An unexpected error occurred during purge:",
+        error,
+      );
     }
   }
 }
@@ -94,26 +104,30 @@ export async function invalidateHonoCacheIfNeeded(
 
     if (shouldInvalidate) {
       console.log(
-        `[Cache Invalidator] Detected admin write to ${url.pathname}. Triggering full cache invalidation for backend and storefront in background.`,
+        `[Cache Invalidator] Detected admin write to ${url.pathname}. Triggering full cache invalidation.`,
       );
 
-      // CRITICAL FIX: Access the Cloudflare context and its `waitUntil` method.
-      // We use `as any` to bypass the TypeScript error since we cannot modify env.d.ts.
+      const runtimeEnv = (locals as any).runtime?.env as Env | undefined;
+      const kv = runtimeEnv?.CACHE as KVNamespace | undefined;
+
       const runtimeCtx = (locals as any).runtime?.ctx;
-      const waitUntil = runtimeCtx?.waitUntil;
+      const waitUntil = runtimeCtx?.waitUntil?.bind(runtimeCtx);
 
       if (waitUntil) {
-        // This is the correct way: tell the runtime to wait for our tasks.
-        waitUntil(Promise.allSettled([
-          invalidateEntireCache(),
-          triggerStorefrontCachePurge()
-        ]));
+        waitUntil(
+          Promise.allSettled([
+            invalidateEntireCache(kv),
+            triggerStorefrontCachePurge(runtimeEnv),
+          ]),
+        );
       } else {
-        // Fallback for local dev or if runtime is not found
-        console.warn("[Cache Invalidator] Could not find 'waitUntil' on context. Background tasks may not complete reliably in production.");
+        // Fallback for local dev or if runtime context is not available
+        console.warn(
+          "[Cache Invalidator] Could not find 'waitUntil'. Background tasks may not complete reliably.",
+        );
         Promise.allSettled([
-          invalidateEntireCache(),
-          triggerStorefrontCachePurge()
+          invalidateEntireCache(kv),
+          triggerStorefrontCachePurge(runtimeEnv),
         ]);
       }
     }
