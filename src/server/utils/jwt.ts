@@ -1,37 +1,52 @@
+// src/server/utils/jwt.ts
 import jwt from "jsonwebtoken";
-import { setCache, getCache } from "./redis";
+import { setCache, getCache, getKv } from "./kv-cache";
 
 // Default JWT expiration time (1 hour)
 const DEFAULT_EXPIRATION = "1h";
 
-// JWT Secret from environment variable or fallback
-const JWT_SECRET_STRING =
-  process.env.JWT_SECRET || "your-jwt-secret-key-change-this-in-production";
-
-// Check if we're in production and throw an error if using the default JWT secret
-if (
-  process.env.NODE_ENV === "production" &&
-  JWT_SECRET_STRING === "your-jwt-secret-key-change-this-in-production"
-) {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Using default JWT secret in production. Set JWT_SECRET environment variable.",
-  );
-}
-
-// Token blacklist key prefix for Redis
+// Token blacklist key prefix
 const BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
 
+// KV minimum TTL is 60 seconds. Tokens expiring sooner are still stored for
+// 60 s – an acceptable security trade-off for short-lived tokens.
+const MIN_BLACKLIST_TTL = 60;
+
 /**
- * Generate a JWT token
+ * Retrieve the JWT secret from the Workers env or process.env.
+ * Called at request time (not module load) to avoid the missing-env issue.
+ */
+function getJwtSecret(env?: { JWT_SECRET?: string } | any): string {
+  const secret =
+    env?.JWT_SECRET ||
+    (typeof process !== "undefined" ? process.env.JWT_SECRET : undefined) ||
+    "your-jwt-secret-key-change-this-in-production";
+
+  if (
+    typeof process !== "undefined" &&
+    process.env.NODE_ENV === "production" &&
+    secret === "your-jwt-secret-key-change-this-in-production"
+  ) {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: Using default JWT secret in production. Set JWT_SECRET environment variable.",
+    );
+  }
+
+  return secret;
+}
+
+/**
+ * Generate a JWT token.
  */
 export function generateToken(
   payload: Record<string, any>,
   expiresIn: string = DEFAULT_EXPIRATION,
+  env?: { JWT_SECRET?: string } | any,
 ): string {
   try {
-    // Use any type to avoid TypeScript errors
+    const secret = getJwtSecret(env);
     const jwtSign: any = jwt.sign;
-    return jwtSign(payload, JWT_SECRET_STRING, { expiresIn });
+    return jwtSign(payload, secret, { expiresIn });
   } catch (error) {
     console.error("Error generating JWT token:", error);
     throw new Error("Failed to generate authentication token");
@@ -39,35 +54,30 @@ export function generateToken(
 }
 
 /**
- * Verify a JWT token
+ * Verify a JWT token. Checks the blacklist and signature.
  */
-export async function verifyToken(token: string): Promise<any> {
+export async function verifyToken(
+  token: string,
+  env?: { JWT_SECRET?: string } | any,
+): Promise<any> {
   try {
-    // Check if token is blacklisted
     if (await isTokenBlacklisted(token)) {
       throw new Error("Token has been revoked");
     }
 
-    // Verify token
-    // Use any type to avoid TypeScript errors
+    const secret = getJwtSecret(env);
     const jwtVerify: any = jwt.verify;
-    return jwtVerify(token, JWT_SECRET_STRING);
+    return jwtVerify(token, secret);
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
-      if (error instanceof jwt.TokenExpiredError) {
-        throw new Error("Invalid token");
-      } else {
-        throw new Error("Invalid token");
-      }
+      throw new Error("Invalid token");
     }
-
     throw error;
   }
 }
 
 /**
- * Decode a JWT token without verification
- * Useful for getting token metadata without verifying signature
+ * Decode a JWT token without verification.
  */
 export function decodeToken(token: string): any {
   try {
@@ -79,49 +89,35 @@ export function decodeToken(token: string): any {
 }
 
 /**
- * Check if a token is about to expire
- * Returns true if token will expire within the specified threshold
+ * Check if a token is about to expire within `thresholdMinutes`.
  */
 export function isTokenExpiringSoon(
   token: string,
-  thresholdMinutes: number = 5,
+  thresholdMinutes = 5,
 ): boolean {
   try {
     const decoded = jwt.decode(token) as { exp?: number };
-
-    if (!decoded || !decoded.exp) {
-      return true; // If we can't determine expiration, assume it's expiring soon
-    }
-
-    const expirationTime = decoded.exp * 1000; // Convert to milliseconds
-    const currentTime = Date.now();
-    const timeUntilExpiration = expirationTime - currentTime;
-
-    return timeUntilExpiration < thresholdMinutes * 60 * 1000;
-  } catch (error) {
-    return true; // If there's an error, assume the token is expiring soon
+    if (!decoded?.exp) return true;
+    return decoded.exp * 1000 - Date.now() < thresholdMinutes * 60 * 1000;
+  } catch {
+    return true;
   }
 }
 
 /**
- * Refresh a token if it's about to expire
- * Returns the original token if it's not expiring soon
+ * Refresh a token if it is close to expiry.
  */
 export function refreshTokenIfNeeded(
   token: string,
-  thresholdMinutes: number = 5,
+  thresholdMinutes = 5,
+  env?: { JWT_SECRET?: string } | any,
 ): string {
   try {
     if (isTokenExpiringSoon(token, thresholdMinutes)) {
       const decoded = jwt.decode(token) as Record<string, any>;
-
-      // Remove standard JWT claims before regenerating
       const { iat, exp, nbf, jti, ...payload } = decoded;
-
-      // Generate a new token with the same payload
-      return generateToken(payload);
+      return generateToken(payload, DEFAULT_EXPIRATION, env);
     }
-
     return token;
   } catch (error) {
     console.error("Error refreshing token:", error);
@@ -130,27 +126,30 @@ export function refreshTokenIfNeeded(
 }
 
 /**
- * Revoke a token by adding it to the blacklist (Redis-backed)
+ * Revoke a token by storing it in the KV blacklist.
  */
 export async function revokeToken(token: string): Promise<void> {
   try {
     const decoded = jwt.decode(token) as { exp?: number };
+    if (!decoded?.exp) throw new Error("Invalid token format");
 
-    if (!decoded || !decoded.exp) {
-      throw new Error("Invalid token format");
-    }
+    const expiresAt = decoded.exp * 1000;
+    const ttlSeconds = Math.max(
+      MIN_BLACKLIST_TTL,
+      Math.floor((expiresAt - Date.now()) / 1000),
+    );
 
-    const expiresAt = decoded.exp * 1000; // Convert to milliseconds
-    const ttlSeconds = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
-
-    // Store in Redis with TTL matching token expiry (auto-cleanup)
     const tokenHash = Buffer.from(token).toString("base64").slice(0, 32);
-    await setCache(`${BLACKLIST_KEY_PREFIX}${tokenHash}`, { revoked: true }, ttlSeconds);
+    const kv = getKv();
+    await setCache(
+      `${BLACKLIST_KEY_PREFIX}${tokenHash}`,
+      { revoked: true },
+      ttlSeconds,
+      kv,
+    );
 
-    if (process.env.NODE_ENV === "production") {
-      console.log(
-        `Token revoked, will expire at ${new Date(expiresAt).toISOString()}`,
-      );
+    if (typeof process !== "undefined" && process.env.NODE_ENV === "production") {
+      console.log(`Token revoked, expires at ${new Date(expiresAt).toISOString()}`);
     }
   } catch (error) {
     console.error("Error revoking token:", error);
@@ -159,47 +158,51 @@ export async function revokeToken(token: string): Promise<void> {
 }
 
 /**
- * Check if a token is blacklisted (Redis-backed)
+ * Check if a token is in the KV blacklist.
  */
 export async function isTokenBlacklisted(token: string): Promise<boolean> {
   try {
     const tokenHash = Buffer.from(token).toString("base64").slice(0, 32);
-    const result = await getCache<{ revoked: boolean }>(`${BLACKLIST_KEY_PREFIX}${tokenHash}`);
+    const kv = getKv();
+    const result = await getCache<{ revoked: boolean }>(
+      `${BLACKLIST_KEY_PREFIX}${tokenHash}`,
+      kv,
+    );
     return result?.revoked === true;
   } catch (error) {
     console.error("Error checking token blacklist:", error);
-    return false; // Fail open to avoid blocking valid requests on cache errors
+    return false; // Fail open to avoid blocking valid requests
   }
 }
 
 /**
- * Extract token from Authorization header
+ * Extract Bearer token from Authorization header.
  */
 export function extractTokenFromHeader(
   authHeader: string | null,
 ): string | null {
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return null;
-  }
-
-  return authHeader.substring(7); // Remove "Bearer " prefix
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  return authHeader.substring(7);
 }
 
 /**
- * Get token statistics
+ * Get token statistics (for diagnostics).
  */
-export function getTokenStats(): {
+export function getTokenStats(
+  env?: { JWT_SECRET?: string } | any,
+): {
   blacklistStorage: string;
   jwtSecret: string;
   isUsingDefaultSecret: boolean;
 } {
+  const secret = env?.JWT_SECRET || process.env?.JWT_SECRET || "";
+  const defaultSecret = "your-jwt-secret-key-change-this-in-production";
   return {
-    blacklistStorage: "redis", // Now using Redis for distributed blacklist
+    blacklistStorage: "cloudflare-kv",
     jwtSecret:
-      JWT_SECRET_STRING.substring(0, 3) +
-      "..." +
-      JWT_SECRET_STRING.substring(JWT_SECRET_STRING.length - 3),
-    isUsingDefaultSecret:
-      JWT_SECRET_STRING === "your-jwt-secret-key-change-this-in-production",
+      secret.length > 6
+        ? `${secret.substring(0, 3)}...${secret.substring(secret.length - 3)}`
+        : "***",
+    isUsingDefaultSecret: secret === defaultSecret,
   };
 }

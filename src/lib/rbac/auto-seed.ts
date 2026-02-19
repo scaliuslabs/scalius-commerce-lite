@@ -12,7 +12,9 @@ import {
 } from "@/db/schema";
 import { PERMISSIONS, getAllPermissions } from "./permissions";
 
-// Track if seeding has been checked this isolate lifecycle
+// Track if seeding has been checked this isolate lifecycle.
+// Reset to false on each new deployment (fresh isolate).
+// If you reset the DB manually, run `pnpm deploy` to get a fresh isolate.
 let seedingChecked = false;
 
 /**
@@ -239,7 +241,7 @@ async function setFirstAdminAsSuperAdmin(db: Database): Promise<void> {
  * Safe to call multiple times - only seeds once
  */
 export async function autoSeedRbacIfNeeded(db: Database): Promise<void> {
-  // Quick check to avoid repeated DB calls in same isolate
+  // Quick check — only runs once per isolate lifecycle, zero DB cost after that
   if (seedingChecked) {
     return;
   }

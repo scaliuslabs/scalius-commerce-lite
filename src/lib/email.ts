@@ -1,5 +1,7 @@
 // src/lib/email.ts
-// Email service using Resend API for transactional emails
+// Transactional email via Resend API.
+// Resend API key and sender address are stored in the DB settings table
+// (configurable from the admin dashboard) rather than environment variables.
 
 interface SendEmailOptions {
   to: string;
@@ -7,12 +9,52 @@ interface SendEmailOptions {
   html: string;
   from?: string;
   text?: string;
-  env?: Env | NodeJS.ProcessEnv;
+}
+
+const DEFAULT_FROM = "noreply@scalius.com";
+
+/**
+ * Fetch Resend settings (api key + sender) from the DB settings table.
+ * Returns null values when the settings are not configured.
+ */
+async function getEmailSettings(): Promise<{
+  apiKey: string | null;
+  sender: string;
+}> {
+  try {
+    // Dynamic import to avoid circular deps and allow tree-shaking
+    const { getDb } = await import("@/db");
+    const { settings } = await import("@/db/schema");
+    const { and, eq } = await import("drizzle-orm");
+
+    const db = getDb();
+
+    const [apiKeyRow, senderRow] = await Promise.all([
+      db
+        .select({ value: settings.value })
+        .from(settings)
+        .where(and(eq(settings.key, "resend_api_key"), eq(settings.category, "email")))
+        .get(),
+      db
+        .select({ value: settings.value })
+        .from(settings)
+        .where(and(eq(settings.key, "email_sender"), eq(settings.category, "email")))
+        .get(),
+    ]);
+
+    return {
+      apiKey: apiKeyRow?.value || null,
+      sender: senderRow?.value || DEFAULT_FROM,
+    };
+  } catch (err) {
+    console.error("[Email] Failed to load email settings from DB:", err);
+    return { apiKey: null, sender: DEFAULT_FROM };
+  }
 }
 
 /**
- * Send an email using Resend API.
- * Falls back to console logging in development when RESEND_API_KEY is not set.
+ * Send an email using the Resend API.
+ * Falls back to console logging when the API key is not configured.
  */
 export async function sendEmail({
   to,
@@ -20,31 +62,20 @@ export async function sendEmail({
   html,
   from,
   text,
-  env,
 }: SendEmailOptions): Promise<void> {
-  const getEnvVar = (key: string): string | undefined => {
-    if (env && key in env) {
-      return (env as Record<string, string>)[key];
-    }
-    if (typeof process !== "undefined" && process.env) {
-      return process.env[key];
-    }
-    return undefined;
-  };
+  const { apiKey, sender } = await getEmailSettings();
+  const fromAddress = from || sender;
 
-  const resendApiKey = getEnvVar("RESEND_API_KEY");
-  const senderEmail = from || getEnvVar("EMAIL_SENDER") || "noreply@scalius.com";
-
-  if (resendApiKey) {
+  if (apiKey) {
     try {
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${resendApiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: senderEmail,
+          from: fromAddress,
           to: [to],
           subject,
           html,
@@ -53,29 +84,31 @@ export async function sendEmail({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || `Resend API error: ${response.status}`);
+        const error = await response.json().catch(() => ({}));
+        throw new Error(
+          (error as any).message || `Resend API error: ${response.status}`,
+        );
       }
 
-      console.log(`Email sent successfully to ${to}`);
+      console.log(`[Email] Sent to ${to}`);
     } catch (error) {
-      console.error("Failed to send email via Resend:", error);
-      throw new Error(`Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`);
+      console.error("[Email] Failed to send via Resend:", error);
+      throw new Error(
+        `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   } else {
-    // Development fallback - log email to console
+    // Development fallback – log to console
     console.log("=".repeat(60));
-    console.log("EMAIL (Development Mode - RESEND_API_KEY not set)");
+    console.log("EMAIL (Resend API key not configured – logging only)");
     console.log("=".repeat(60));
-    console.log(`From: ${senderEmail}`);
+    console.log(`From: ${fromAddress}`);
     console.log(`To: ${to}`);
     console.log(`Subject: ${subject}`);
     console.log("-".repeat(60));
-    console.log("HTML Content:");
     console.log(html);
     if (text) {
       console.log("-".repeat(60));
-      console.log("Plain Text Content:");
       console.log(text);
     }
     console.log("=".repeat(60));
@@ -83,13 +116,12 @@ export async function sendEmail({
 }
 
 /**
- * Send a verification email to a user.
+ * Send a verification email.
  */
 export async function sendVerificationEmail(
   email: string,
   name: string,
   verificationUrl: string,
-  env?: Env | NodeJS.ProcessEnv
 ): Promise<void> {
   await sendEmail({
     to: email,
@@ -113,19 +145,17 @@ export async function sendVerificationEmail(
         </p>
       </div>
     `,
-    text: `Hi ${name},\n\nPlease verify your email by visiting: ${verificationUrl}\n\nThis link expires in 24 hours.\n\nIf you didn't request this email, you can safely ignore it.`,
-    env,
+    text: `Hi ${name},\n\nPlease verify your email: ${verificationUrl}\n\nExpires in 24 hours.`,
   });
 }
 
 /**
- * Send a password reset email to a user.
+ * Send a password reset email.
  */
 export async function sendPasswordResetEmail(
   email: string,
   name: string,
   resetUrl: string,
-  env?: Env | NodeJS.ProcessEnv
 ): Promise<void> {
   await sendEmail({
     to: email,
@@ -134,7 +164,7 @@ export async function sendPasswordResetEmail(
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Reset your password</h2>
         <p>Hi ${name},</p>
-        <p>We received a request to reset your password. Click the button below to create a new password:</p>
+        <p>Click the button below to create a new password:</p>
         <p style="margin: 30px 0;">
           <a href="${resetUrl}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
             Reset Password
@@ -142,15 +172,14 @@ export async function sendPasswordResetEmail(
         </p>
         <p>Or copy and paste this link in your browser:</p>
         <p style="color: #666; word-break: break-all;">${resetUrl}</p>
-        <p>This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.</p>
+        <p>This link expires in 1 hour.</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="color: #999; font-size: 12px;">
           For security reasons, this link can only be used once.
         </p>
       </div>
     `,
-    text: `Hi ${name},\n\nWe received a request to reset your password. Visit this link to create a new password: ${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, you can safely ignore this email.`,
-    env,
+    text: `Hi ${name},\n\nReset your password: ${resetUrl}\n\nExpires in 1 hour.`,
   });
 }
 
@@ -162,7 +191,6 @@ export async function sendAdminInviteEmail(
   inviterName: string,
   tempPassword: string,
   loginUrl: string,
-  env?: Env | NodeJS.ProcessEnv
 ): Promise<void> {
   await sendEmail({
     to: email,
@@ -182,17 +210,14 @@ export async function sendAdminInviteEmail(
             Login to Admin Panel
           </a>
         </p>
-        <p style="color: #e74c3c; font-weight: 500;">
-          Please change your password immediately after logging in.
-        </p>
-        <p>We also strongly recommend setting up two-factor authentication for enhanced security.</p>
+        <p style="color: #e74c3c; font-weight: 500;">Please change your password immediately after logging in.</p>
+        <p>We also strongly recommend setting up two-factor authentication.</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="color: #999; font-size: 12px;">
           If you weren't expecting this invitation, please contact your administrator.
         </p>
       </div>
     `,
-    text: `Hi,\n\n${inviterName} has invited you to join Scalius Commerce as an administrator.\n\nYour temporary login credentials are:\nEmail: ${email}\nTemporary Password: ${tempPassword}\n\nLogin at: ${loginUrl}\n\nPlease change your password immediately after logging in.\n\nWe also strongly recommend setting up two-factor authentication for enhanced security.`,
-    env,
+    text: `Hi,\n\n${inviterName} invited you to Scalius Commerce admin.\n\nEmail: ${email}\nTemp Password: ${tempPassword}\n\nLogin: ${loginUrl}\n\nChange your password immediately.`,
   });
 }

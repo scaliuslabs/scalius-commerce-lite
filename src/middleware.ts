@@ -100,7 +100,24 @@ const authMiddleware = defineMiddleware(async (context, next) => {
   const pathname = url.pathname;
 
   // Get environment from Astro context (Cloudflare Workers)
-  const env = context.locals.runtime?.env || process.env;
+  const runtimeEnv = context.locals.runtime?.env;
+  const env = runtimeEnv || (typeof process !== "undefined" ? process.env : {});
+
+  // Initialize module-level Cloudflare binding singletons on first request.
+  // D1, KV, and R2 are stable handles within a Workers isolate – it is safe
+  // to cache them after the first request.
+  if (runtimeEnv) {
+    const [{ getDb }, { initKv }, { initStorage }] = await Promise.all([
+      import("@/db"),
+      import("@/server/utils/kv-cache"),
+      import("@/lib/storage"),
+    ]);
+    getDb(runtimeEnv);
+    if (runtimeEnv.CACHE) initKv(runtimeEnv.CACHE);
+    if (runtimeEnv.BUCKET) {
+      initStorage(runtimeEnv.BUCKET, (runtimeEnv.R2_PUBLIC_URL as string) || "");
+    }
+  }
 
   // Skip Hono API routes - they have their own auth
   if (pathname.startsWith("/api/v1")) {
@@ -307,12 +324,6 @@ const authMiddleware = defineMiddleware(async (context, next) => {
     // Redirect to 2FA verification if enabled but not verified
     if (sessionUser.twoFactorEnabled && !sessionTwoFactorVerified) {
       return context.redirect("/auth/two-factor");
-    }
-
-    // SECURITY: Enforce mandatory 2FA for admin users
-    // If 2FA is not enabled, redirect to 2FA setup (except setup-2fa page itself)
-    if (!sessionUser.twoFactorEnabled && !pathname.startsWith("/auth/setup-2fa")) {
-      return context.redirect("/auth/setup-2fa");
     }
 
     // Check if user has admin access using cached values (no extra DB queries)

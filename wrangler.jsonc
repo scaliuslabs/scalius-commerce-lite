@@ -1,0 +1,65 @@
+{
+  "name": "testdash",
+
+  // Cloudflare Workers entrypoint (built by Astro)
+  "main": "./dist/_worker.js/index.js",
+  "compatibility_date": "2026-02-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  "limits": {
+    "cpu_ms": 300000
+  },
+
+  "workers_dev": true,
+
+  "observability": {
+    "enabled": true
+  },
+
+  "placement": {
+    "mode": "smart"
+  },
+
+  // Static assets binding (required by @astrojs/cloudflare)
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist"
+  },
+
+  // Cloudflare D1 – replaces Turso/libSQL
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "scalius-commerce",
+      "database_id": "2efcad0d-841e-4f8d-b8f6-5b735d881edc",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Cloudflare KV namespaces
+  "kv_namespaces": [
+    {
+      // API response cache – replaces Upstash Redis
+      "binding": "CACHE",
+      "id": "d6e2d77d898e4b3f9c186802ce63f9b8"
+    },
+    {
+      // Astro session storage (required by @astrojs/cloudflare session middleware)
+      "binding": "SESSION",
+      "id": "0564d3a6c3704c8c9f355b7ec5498f50"
+    },
+    {
+      // Shared auth / Firebase token cache
+      "binding": "SHARED_AUTH_CACHE",
+      "id": "9f577136c05144349f2b8013a4fc1cc5"
+    }
+  ],
+
+  // Cloudflare R2 – replaces AWS S3 SDK for media storage
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "scalius-media"
+    }
+  ]
+}

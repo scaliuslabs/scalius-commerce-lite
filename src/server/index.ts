@@ -68,8 +68,8 @@ app.use(
 );
 
 app.use("*", async (c, next) => {
-  // Use PUBLIC_API_BASE_URL environment variable, fallback to request origin
-  const baseUrl = process.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin;
+  // Use PUBLIC_API_BASE_URL from CF Workers env binding, fallback to request origin
+  const baseUrl = (c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin).trim();
 
   c.header("X-Proxy-Base-URL", `${baseUrl}/api/v1`);
   await next();
@@ -140,25 +140,17 @@ app.route("/storefront", storefrontRoutes); // Consolidated homepage/layout endp
 // Add health check endpoint (relative path '/health')
 app.get("/health", async (c) => {
   try {
-    // Get cache stats
-    const { getCacheStats, isRedisAvailable, getCacheType } = await import(
-      "./utils/redis"
-    );
-    const cacheStats = await getCacheStats();
+    const { getCacheStats, getCacheType } = await import("./utils/kv-cache");
+    const kv: KVNamespace | undefined = (c.env as any)?.CACHE;
+    const cacheStats = await getCacheStats(kv);
 
     return c.json({
       status: "ok",
       timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || "1.0.0",
-      environment: process.env.NODE_ENV || "development",
-      uptime: process.uptime(),
       cache: {
-        type: getCacheType(),
-        redisAvailable: isRedisAvailable(),
+        type: getCacheType(kv),
         size: cacheStats.size,
         memory: cacheStats.memory,
-        hitRate: cacheStats.hitRate,
-        missRate: cacheStats.missRate,
         uptime: cacheStats.uptime,
       },
     });
@@ -167,12 +159,8 @@ app.get("/health", async (c) => {
     return c.json({
       status: "ok",
       timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || "1.0.0",
-      environment: process.env.NODE_ENV || "development",
-      uptime: process.uptime(),
       cache: {
         type: "unknown",
-        redisAvailable: false,
         error: "Failed to get cache stats",
       },
     });

@@ -1,16 +1,10 @@
 // drizzle.config.ts
 import type { Config } from "drizzle-kit";
-import { loadEnv } from "vite";
 
-// Load environment variables
-const env = loadEnv(process.env.NODE_ENV ?? "development", process.cwd(), "");
-
+// For D1: drizzle-kit only needs schema + output dir for "generate".
+// Migrations are applied via: wrangler d1 migrations apply DB --local/--remote
 export default {
   schema: "./src/db/schema.ts",
   out: "./migrations",
-  dialect: "turso",
-  dbCredentials: {
-    url: env.TURSO_DATABASE_URL,
-    authToken: env.TURSO_AUTH_TOKEN,
-  },
+  dialect: "sqlite",
 } satisfies Config;

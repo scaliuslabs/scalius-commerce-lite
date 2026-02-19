@@ -75,9 +75,9 @@ export function SetupForm() {
         return;
       }
 
-      // Move to 2FA setup
-      setStep("2fa-setup");
-      setIsLoading(false);
+      // Redirect directly to admin (2FA is optional, can be enabled from dashboard)
+      window.location.href = "/admin";
+      return;
     } catch (err) {
       console.error("Setup error:", err);
       setError("An unexpected error occurred. Please try again.");
