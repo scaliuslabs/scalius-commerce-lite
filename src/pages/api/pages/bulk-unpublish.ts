@@ -3,7 +3,6 @@ import { db } from "../../../db";
 import { pages } from "../../../db/schema";
 import { inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex } from "@/lib/search/index";
 
 const bulkUnpublishSchema = z.object({
   pageIds: z.array(z.string()).min(1, "At least one page ID is required"),
@@ -24,12 +23,6 @@ export const POST: APIRoute = async ({ request }) => {
       .returning();
 
     // Trigger reindexing in the background
-    triggerReindex().catch((error) => {
-      console.error(
-        "Background reindexing failed after bulk unpublish:",
-        error,
-      );
-    });
 
     return new Response(JSON.stringify({ unpublished: updated.length }), {
       status: 200,

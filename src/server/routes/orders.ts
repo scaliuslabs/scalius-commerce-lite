@@ -11,6 +11,10 @@ import {
   productImages,
   discountUsage,
   discounts,
+  PaymentMethod,
+  PaymentStatus,
+  FulfillmentStatus,
+  InventoryPool,
 } from "@/db/schema";
 import { eq, sql, and, isNull, desc, asc } from "drizzle-orm";
 import { z } from "zod";
@@ -22,6 +26,8 @@ import {
 } from "@/lib/customer-utils";
 import { DeliveryService } from "@/lib/delivery/service";
 import { cacheMiddleware } from "../middleware/cache";
+import { reserveMultiple, releaseMultiple } from "@/lib/inventory";
+import { initCODTracking } from "@/lib/payment/cod";
 
 // Create a Hono app for order routes, typed with Env bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -45,6 +51,11 @@ app.get("/", async (c) => {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || undefined;
     const showTrashed = searchParams.get("trashed") === "true";
+    const paymentStatus = searchParams.get("paymentStatus") || undefined;
+    const paymentMethod = searchParams.get("paymentMethod") || undefined;
+    const fulfillmentStatus = searchParams.get("fulfillmentStatus") || undefined;
+    const dateFrom = searchParams.get("dateFrom") || undefined;
+    const dateTo = searchParams.get("dateTo") || undefined;
     const sortField = (searchParams.get("sort") || "updatedAt") as
       | "customerName"
       | "totalAmount"
@@ -72,6 +83,28 @@ app.get("/", async (c) => {
 
     if (status) {
       whereConditions.push(sql`${orders.status} = ${status}`);
+    }
+
+    if (paymentStatus) {
+      whereConditions.push(sql`${orders.paymentStatus} = ${paymentStatus}`);
+    }
+
+    if (paymentMethod) {
+      whereConditions.push(sql`${orders.paymentMethod} = ${paymentMethod}`);
+    }
+
+    if (fulfillmentStatus) {
+      whereConditions.push(sql`${orders.fulfillmentStatus} = ${fulfillmentStatus}`);
+    }
+
+    if (dateFrom) {
+      const fromTimestamp = Math.floor(new Date(dateFrom).getTime() / 1000);
+      whereConditions.push(sql`${orders.createdAt} >= ${fromTimestamp}`);
+    }
+
+    if (dateTo) {
+      const toTimestamp = Math.floor(new Date(dateTo).getTime() / 1000) + 86399; // end of day
+      whereConditions.push(sql`${orders.createdAt} <= ${toTimestamp}`);
     }
 
     // Combine all conditions
@@ -113,6 +146,11 @@ app.get("/", async (c) => {
         customerEmail: orders.customerEmail,
         totalAmount: orders.totalAmount,
         status: orders.status,
+        paymentStatus: orders.paymentStatus,
+        paymentMethod: orders.paymentMethod,
+        fulfillmentStatus: orders.fulfillmentStatus,
+        paidAmount: orders.paidAmount,
+        balanceDue: orders.balanceDue,
         createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
         updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
         customerId: orders.customerId,
@@ -448,6 +486,8 @@ const createOrderSchema = z.object({
       variantId: z.string().nullable(),
       quantity: z.number().min(1, "Quantity must be at least 1"),
       price: z.number().min(0, "Price must be greater than or equal to 0"),
+      productName: z.string().optional().nullable(),
+      variantLabel: z.string().optional().nullable(),
     }),
   ),
   discountAmount: z
@@ -458,6 +498,12 @@ const createOrderSchema = z.object({
   shippingCharge: z
     .number()
     .min(0, "Shipping charge must be greater than or equal to 0"),
+  paymentMethod: z
+    .enum([PaymentMethod.STRIPE, PaymentMethod.SSLCOMMERZ, PaymentMethod.COD])
+    .default(PaymentMethod.COD),
+  inventoryPool: z
+    .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
+    .default(InventoryPool.REGULAR),
 });
 
 // POST - Create a new order
@@ -468,11 +514,8 @@ app.post("/", async (c) => {
     const data = createOrderSchema.parse(json);
     const requestUrl = c.req.url;
 
-    // Calculate total amount strictly (server-side only)
-    const totalAmount =
-      data.items.reduce((sum, item) => sum + item.price * item.quantity, 0) +
-      data.shippingCharge -
-      (data.discountAmount || 0);
+    // NOTE: totalAmount is computed AFTER fetching DB prices (see below).
+    // We never trust the client-submitted item.price values.
 
     // ------------------------------------------------------------------
     // 1. Batched Reads
@@ -495,8 +538,12 @@ app.post("/", async (c) => {
         db
           .select({
             id: productVariants.id,
+            productId: productVariants.productId,
             stock: productVariants.stock,
             price: productVariants.price,
+            discountPercentage: productVariants.discountPercentage,
+            discountType: productVariants.discountType,
+            discountAmount: productVariants.discountAmount,
           })
           .from(productVariants)
           .where(
@@ -552,8 +599,32 @@ app.post("/", async (c) => {
       readBatch.push(db.select().from(discounts).limit(0));
     }
 
+    // 5. Products (for server-side price verification)
+    const productIds = [...new Set(data.items.map((item) => item.productId))];
+    if (productIds.length > 0) {
+      readBatch.push(
+        db
+          .select({
+            id: products.id,
+            price: products.price,
+            discountPercentage: products.discountPercentage,
+            discountType: products.discountType,
+            discountAmount: products.discountAmount,
+          })
+          .from(products)
+          .where(
+            and(
+              sql`${products.id} IN ${productIds}`,
+              isNull(products.deletedAt),
+            ),
+          ),
+      );
+    } else {
+      readBatch.push(db.select().from(products).limit(0));
+    }
+
     // Execute Read Batch
-    const readResults = await db.batch(readBatch as [any, any, any, any]);
+    const readResults = await db.batch(readBatch as [any, any, any, any, any]);
 
     // Unpack Results
     const variants =
@@ -580,6 +651,18 @@ app.post("/", async (c) => {
       : [];
     const appliedDiscount = discountList.length > 0 ? discountList[0] : null;
 
+    // Handle products (for price verification)
+    const productList = productIds.length > 0
+      ? (readResults[4] as {
+        id: string;
+        price: number;
+        discountPercentage: number | null;
+        discountType: string | null;
+        discountAmount: number | null;
+      }[])
+      : [];
+    const productMap = new Map(productList.map((p) => [p.id, p]));
+
     // Validation (Pre-Check)
     const variantMap = new Map(variants.map((v: any) => [v.id, v]));
     for (const item of data.items) {
@@ -591,7 +674,55 @@ app.post("/", async (c) => {
           );
         }
       }
+      // Verify the product exists in DB
+      const product = productMap.get(item.productId);
+      if (!product) {
+        throw new Error(
+          `VALIDATION_ERROR:Product ${item.productId} not found or is inactive.`,
+        );
+      }
     }
+
+    // ------------------------------------------------------------------
+    // SERVER-SIDE PRICE VERIFICATION
+    // Compute the real item total from DB prices to prevent client manipulation.
+    // ------------------------------------------------------------------
+    let serverItemTotal = 0;
+    for (const item of data.items) {
+      let unitPrice: number;
+
+      if (item.variantId) {
+        // Use variant's own price (variant price takes precedence)
+        const variant = variantMap.get(item.variantId) as any;
+        unitPrice = variant.price;
+
+        // Apply variant-level discount if present
+        if (variant.discountType === "percentage" && variant.discountPercentage > 0) {
+          unitPrice = unitPrice * (1 - variant.discountPercentage / 100);
+        } else if (variant.discountType === "flat" && variant.discountAmount > 0) {
+          unitPrice = Math.max(0, unitPrice - variant.discountAmount);
+        }
+      } else {
+        // No variant — use product base price
+        const product = productMap.get(item.productId)!;
+        unitPrice = product.price;
+
+        // Apply product-level discount
+        if (product.discountType === "percentage" && (product.discountPercentage ?? 0) > 0) {
+          unitPrice = unitPrice * (1 - (product.discountPercentage ?? 0) / 100);
+        } else if (product.discountType === "flat" && (product.discountAmount ?? 0) > 0) {
+          unitPrice = Math.max(0, unitPrice - (product.discountAmount ?? 0));
+        }
+      }
+
+      serverItemTotal += unitPrice * item.quantity;
+    }
+
+    // Round to 2 decimal places to avoid floating-point drift
+    serverItemTotal = Math.round(serverItemTotal * 100) / 100;
+
+    const totalAmount =
+      serverItemTotal + data.shippingCharge - (data.discountAmount || 0);
 
     // Process Location Data
     const locationMap = new Map(
@@ -612,32 +743,25 @@ app.post("/", async (c) => {
       ? existingCustomer.id
       : "cust_" + nanoid();
 
-    const writeBatch: any[] = [];
-    const itemVariantChecks: { variantId: string; batchIndex: number }[] = [];
+    // A. Reserve inventory using optimistic locking (replaces direct stock decrement)
+    // This handles concurrent order creation safely via version-checked atomic updates.
+    const reservationEntries = data.items
+      .filter((item) => item.variantId !== null)
+      .map((item) => ({
+        variantId: item.variantId as string,
+        quantity: item.quantity,
+        pool: data.inventoryPool as "regular" | "preorder" | "backorder",
+      }));
 
-    // A. Atomic Stock Decrement (Conditional Update)
-    for (const item of data.items) {
-      if (item.variantId) {
-        const stmt = db
-          .update(productVariants)
-          .set({
-            stock: sql`${productVariants.stock} - ${item.quantity}`,
-            updatedAt: sql`unixepoch()`,
-          })
-          .where(
-            and(
-              eq(productVariants.id, item.variantId),
-              sql`${productVariants.stock} >= ${item.quantity}`,
-            ),
-          );
-
-        writeBatch.push(stmt);
-        itemVariantChecks.push({
-          variantId: item.variantId,
-          batchIndex: writeBatch.length - 1,
-        });
+    if (reservationEntries.length > 0) {
+      const reserveResult = await reserveMultiple(db, reservationEntries, orderId);
+      if (!reserveResult.success) {
+        const failedResult = reserveResult.results.find((r) => !r.success);
+        throw new Error(`INSUFFICIENT_STOCK:${failedResult?.error ?? "Insufficient stock"}`);
       }
     }
+
+    const writeBatch: any[] = [];
 
     // B. Customer Upsert
     if (!existingCustomer) {
@@ -713,6 +837,14 @@ app.post("/", async (c) => {
       shippingCharge: data.shippingCharge,
       discountAmount: data.discountAmount || 0,
       status: "pending" as const,
+      // Payment fields
+      paymentMethod: data.paymentMethod,
+      paymentStatus: PaymentStatus.UNPAID,
+      paidAmount: 0,
+      balanceDue: totalAmount,
+      // Fulfillment fields
+      fulfillmentStatus: FulfillmentStatus.PENDING,
+      inventoryPool: data.inventoryPool,
       customerId,
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
@@ -720,7 +852,7 @@ app.post("/", async (c) => {
 
     writeBatch.push(db.insert(orders).values(newOrderData));
 
-    // D. Create Order Items
+    // D. Create Order Items (with product/variant name snapshots)
     if (data.items.length > 0) {
       writeBatch.push(
         db.insert(orderItems).values(
@@ -731,6 +863,10 @@ app.post("/", async (c) => {
             variantId: item.variantId,
             quantity: item.quantity,
             price: item.price,
+            // Snapshot product/variant labels at order time so they survive future edits
+            productName: item.productName ?? null,
+            variantLabel: item.variantLabel ?? null,
+            fulfillmentStatus: "pending" as const,
             createdAt: sql`unixepoch()`,
           })),
         ),
@@ -752,81 +888,24 @@ app.post("/", async (c) => {
     }
 
     // Execute Write Batch (1 Roundtrip)
-    // db.batch executes implicitly in a transaction for LibSQL/Drizzle
-    const writeResults = await db.batch(writeBatch as any);
-
-    // ------------------------------------------------------------------
-    // 3. Post-Write Validation (Stock Check & Compensation)
-    // ------------------------------------------------------------------
-    const failedVariants = [];
-
-    for (const check of itemVariantChecks) {
-      const result = writeResults[check.batchIndex];
-      // Check if rowsAffected is 0 (meaning strict conditional update failed)
-      if (
-        result &&
-        typeof result === "object" &&
-        "rowsAffected" in result &&
-        result.rowsAffected === 0
-      ) {
-        failedVariants.push(check.variantId);
+    try {
+      await db.batch(writeBatch as any);
+    } catch (batchError) {
+      // Write batch failed — release the reservations we just placed
+      if (reservationEntries.length > 0) {
+        await releaseMultiple(db, reservationEntries, orderId).catch((releaseErr) =>
+          console.error("[orders] Reservation release failed after batch error:", releaseErr)
+        );
       }
+      throw batchError;
     }
 
-    if (failedVariants.length > 0) {
-      // COMPENSATING TRANSACTION: Revert the order
-      // We must delete the order, items, and revert customer stats.
-      // Note: We don't need to revert stock because it wasn't changed.
-
-      console.warn(
-        `Stock check failed for variants ${failedVariants.join(", ")}. Reverting order ${orderId}.`,
-      );
-
-      const compensationBatch: any[] = [];
-
-      // Delete Order & Items (Cascade usually handles items, but being explicit is safer)
-      compensationBatch.push(
-        db.delete(orderItems).where(eq(orderItems.orderId, orderId)),
-      );
-      compensationBatch.push(db.delete(orders).where(eq(orders.id, orderId)));
-
-      // Revert Customer Stats
-      if (existingCustomer) {
-        compensationBatch.push(
-          db
-            .update(customers)
-            .set({
-              totalOrders: sql`${customers.totalOrders} - 1`,
-              totalSpent: sql`${customers.totalSpent} - ${totalAmount}`,
-              // We can't easily revert lastOrderAt without history, but that's acceptable for this edge case
-            })
-            .where(eq(customers.id, existingCustomer.id)),
-        );
-      } else {
-        // If we created a new customer, we should strictly delete them?
-        // Maybe keep them as it's harmless?
-        // Let's delete to be clean.
-        compensationBatch.push(
-          db.delete(customers).where(eq(customers.id, customerId)),
-        );
-        compensationBatch.push(
-          db
-            .delete(customerHistory)
-            .where(eq(customerHistory.customerId, customerId)),
-        );
-      }
-
-      if (appliedDiscount && data.discountAmount && data.discountAmount > 0) {
-        compensationBatch.push(
-          db.delete(discountUsage).where(eq(discountUsage.orderId, orderId)),
-        );
-      }
-
-      // Execute Compensation
-      await db.batch(compensationBatch as any);
-
-      throw new Error(
-        `INSUFFICIENT_STOCK:Insufficient stock for variant ${failedVariants[0]}.`,
+    // ------------------------------------------------------------------
+    // 3. Post-write: initialize COD tracking for COD orders
+    // ------------------------------------------------------------------
+    if (data.paymentMethod === PaymentMethod.COD) {
+      await initCODTracking(db, { orderId }).catch((err) =>
+        console.error("[orders] COD tracking init failed:", err)
       );
     }
 
@@ -858,6 +937,8 @@ app.post("/", async (c) => {
         success: true,
         data: {
           id: orderId,
+          paymentMethod: data.paymentMethod,
+          totalAmount,
         },
       },
       201,
@@ -1576,6 +1657,91 @@ app.delete("/:id/permanent", async (c) => {
       },
       500,
     );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /:id/refund — Issue a refund for an order (gateway-agnostic)
+// ---------------------------------------------------------------------------
+app.post("/:id/refund", async (c) => {
+  try {
+    const db = c.get("db");
+    const id = c.req.param("id");
+    const body = await c.req.json() as {
+      amount?: number;
+      reason?: string;
+      gateway?: "stripe" | "sslcommerz";
+    };
+
+    const { processRefund } = await import("@/lib/payment/refund-service");
+    const result = await processRefund(db, c.env.CACHE, {
+      orderId: id,
+      amount: body.amount,
+      reason: body.reason ?? "Refund requested",
+      gateway: body.gateway,
+    });
+
+    return c.json(result, result.success ? 200 : 400);
+  } catch (error) {
+    console.error("Error processing refund:", error);
+    return c.json({ success: false, error: "Failed to process refund" }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /:id/return — Process an order return with optional auto-refund
+// ---------------------------------------------------------------------------
+app.post("/:id/return", async (c) => {
+  try {
+    const db = c.get("db");
+    const id = c.req.param("id");
+    const body = await c.req.json() as {
+      reason?: string;
+      autoRefund?: boolean;
+    };
+
+    const { processReturn } = await import("@/lib/payment/refund-service");
+    const result = await processReturn(db, c.env.CACHE, {
+      orderId: id,
+      reason: body.reason ?? "Customer return",
+      autoRefund: body.autoRefund ?? false,
+    });
+
+    return c.json(result, result.success ? 200 : 400);
+  } catch (error) {
+    console.error("Error processing return:", error);
+    return c.json({ success: false, error: "Failed to process return" }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /counts — Return order counts grouped by status (for toolbar pills)
+// ---------------------------------------------------------------------------
+app.get("/counts", async (c) => {
+  try {
+    const db = c.get("db");
+
+    const counts = await db
+      .select({
+        status: orders.status,
+        count: sql<number>`count(*)`.as("count"),
+      })
+      .from(orders)
+      .where(sql`${orders.deletedAt} IS NULL`)
+      .groupBy(orders.status);
+
+    const countMap: Record<string, number> = {};
+    let total = 0;
+    for (const row of counts) {
+      countMap[row.status] = row.count;
+      total += row.count;
+    }
+    countMap.all = total;
+
+    return c.json({ counts: countMap });
+  } catch (error) {
+    console.error("Error fetching order counts:", error);
+    return c.json({ error: "Failed to fetch counts" }, 500);
   }
 });
 

@@ -18,8 +18,18 @@ import {
   X,
   Download,
   RefreshCw,
+  CreditCard,
+  Banknote,
+  Navigation,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { DateRange } from "react-day-picker";
 import { DateRangePickerWithPresets } from "./DateRangePickerWithPresets";
 
@@ -38,6 +48,12 @@ interface OrderListToolbarProps {
   onRefresh?: () => void;
   dateRange: DateRange | undefined;
   onDateRangeChange: (range: DateRange | undefined) => void;
+  paymentStatus: string | null;
+  onPaymentStatusChange: (status: string | null) => void;
+  paymentMethod: string | null;
+  onPaymentMethodChange: (method: string | null) => void;
+  fulfillmentStatus: string | null;
+  onFulfillmentStatusChange: (status: string | null) => void;
 }
 
 const statusFilters = [
@@ -65,6 +81,12 @@ export function OrderListToolbar({
   onRefresh,
   dateRange,
   onDateRangeChange,
+  paymentStatus,
+  onPaymentStatusChange,
+  paymentMethod,
+  onPaymentMethodChange,
+  fulfillmentStatus,
+  onFulfillmentStatusChange,
 }: OrderListToolbarProps) {
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [localSearch, setLocalSearch] = React.useState(searchQuery);
@@ -274,7 +296,7 @@ export function OrderListToolbar({
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-4">
+      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center">
         <form onSubmit={onSearchSubmit} className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground transition-colors duration-200 group-hover:text-foreground" />
           <Input
@@ -324,8 +346,8 @@ export function OrderListToolbar({
         )}
       </div>
 
-      <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-        <div className={cn("grid gap-2", !showTrashed && "mr-2")}>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <div className={cn("flex-shrink-0 grid gap-2", !showTrashed && "mr-2")}>
           <DateRangePickerWithPresets
             date={dateRange}
             setDate={onDateRangeChange}
@@ -333,73 +355,82 @@ export function OrderListToolbar({
         </div>
 
         {!showTrashed && (
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 gap-1 text-xs"
-                >
-                  <Filter className="h-3.5 w-3.5" />
-                  {activeStatus
-                    ? `Filter: ${activeStatus.charAt(0).toUpperCase() + activeStatus.slice(1)}`
-                    : "Filter"}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem
-                  onClick={() => onStatusFilterChange(null)}
-                  className="hover:bg-muted"
-                >
-                  All Orders
-                </DropdownMenuItem>
-                {statusFilters.map((filter) => (
-                  <DropdownMenuItem
-                    key={filter.value}
-                    onClick={() => onStatusFilterChange(filter.value)}
-                    className="hover:bg-muted"
-                  >
-                    {filter.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {activeStatus && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onStatusFilterChange(null)}
-                className="h-9 px-2 text-xs text-muted-foreground hover:bg-muted"
-                title="Clear filter"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            )}
-
-            <Button
-              variant={isStatusActive(null) ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => onStatusFilterChange(null)}
-              className="h-9 whitespace-nowrap px-3 text-xs font-medium transition-colors duration-300"
+          <div className="flex flex-wrap flex-1 gap-3">
+            <Select
+              value={paymentStatus || "all"}
+              onValueChange={(val) => onPaymentStatusChange(val === "all" ? null : val)}
             >
-              All
-            </Button>
-            {statusFilters.map((filter) => (
-              <Button
-                key={filter.value}
-                variant={isStatusActive(filter.value) ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => onStatusFilterChange(filter.value)}
-                className="h-9 whitespace-nowrap px-3 text-xs font-medium transition-colors duration-300"
-              >
-                {filter.label}
-              </Button>
-            ))}
+              <SelectTrigger className="w-[140px] text-xs h-9 bg-background">
+                <SelectValue placeholder="Payment Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any Pay Status</SelectItem>
+                <SelectItem value="unpaid">Unpaid</SelectItem>
+                <SelectItem value="partial">Partial</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="refunded">Refunded</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={paymentMethod || "all"}
+              onValueChange={(val) => onPaymentMethodChange(val === "all" ? null : val)}
+            >
+              <SelectTrigger className="w-[140px] text-xs h-9 bg-background">
+                <SelectValue placeholder="Payment Method" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any Method</SelectItem>
+                <SelectItem value="stripe">Stripe</SelectItem>
+                <SelectItem value="sslcommerz">SSLCommerz</SelectItem>
+                <SelectItem value="cod">COD</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={fulfillmentStatus || "all"}
+              onValueChange={(val) => onFulfillmentStatusChange(val === "all" ? null : val)}
+            >
+              <SelectTrigger className="w-[140px] text-xs h-9 bg-background">
+                <SelectValue placeholder="Fulfillment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any Fulfillment</SelectItem>
+                <SelectItem value="unfulfilled">Unfulfilled</SelectItem>
+                <SelectItem value="partial">Partial</SelectItem>
+                <SelectItem value="fulfilled">Fulfilled</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
+
+      {!showTrashed && (
+        <div className="mt-4 flex flex-wrap items-center gap-1.5 pt-3 border-t border-border">
+          <span className="text-xs font-medium text-muted-foreground mr-2">Status:</span>
+
+          <Button
+            variant={isStatusActive(null) ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => onStatusFilterChange(null)}
+            className="h-8 text-xs font-medium transition-colors"
+          >
+            All
+          </Button>
+          {statusFilters.map((filter) => (
+            <Button
+              key={filter.value}
+              variant={isStatusActive(filter.value) ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => onStatusFilterChange(filter.value)}
+              className="h-8 text-xs font-medium transition-colors"
+            >
+              {filter.label}
+            </Button>
+          ))}
+        </div>
+      )}
     </>
   );
 }

@@ -365,9 +365,9 @@ app.post("/orders/:orderId/shipments/:shipmentId/refresh", async (c) => {
     }
 
     // Get the provider for the response
-    const provider = await deliveryService.getProvider(
-      updatedShipment.providerId,
-    );
+    const provider = updatedShipment.providerId
+      ? await deliveryService.getProvider(updatedShipment.providerId)
+      : null;
 
     // Check if the status changed
     const statusChanged = previousStatus !== updatedShipment.status;
@@ -516,9 +516,9 @@ app.post("/shipments/bulk-refresh", async (c) => {
             }
 
             // Get the provider for the response
-            const provider = await deliveryService.getProvider(
-              updatedShipment.providerId,
-            );
+            const provider = updatedShipment.providerId
+              ? await deliveryService.getProvider(updatedShipment.providerId)
+              : null;
 
             // Check if the status changed
             const statusChanged = previousStatus !== updatedShipment.status;

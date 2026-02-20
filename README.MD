@@ -14,7 +14,7 @@
 </h4>
 
 <p align="center">
-  Full-stack e-commerce admin dashboard + storefront API built on Astro, Hono, and Turso.
+  Full-stack e-commerce admin dashboard + storefront API built on Astro, Hono, and Cloudflare D1.
 </p>
 
 <p align="center">
@@ -49,14 +49,14 @@
 
 ## Get Started
 
-Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefront API** built on **Astro** and **Hono**, backed by **Turso (libSQL)** via **Drizzle ORM**. The admin side ships as Astro pages with React components; the storefront API ships as a Hono app mounted under `/api/v1`.
+Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefront API** built on **Astro** and **Hono**, backed by **Cloudflare D1** (SQLite) via **Drizzle ORM**. The admin side ships as Astro pages with React components; the storefront API ships as a Hono app mounted under `/api/v1`.
 
 ### What's in this repo
 
 - **Admin dashboard (UI)**: `src/pages/admin/**` (Astro pages) + `src/components/admin/**` (React components).
 - **Admin CRUD APIs (Astro API routes)**: `src/pages/api/**` (file-based endpoints, protected by Better Auth via `src/middleware.ts`).
 - **Storefront API (Hono)**: `src/server/**` (Hono app + routes), mounted at `/api/v1/**` via the custom Astro integration in `src/integrations/hono-integration.ts`.
-- **Database (Drizzle + Turso)**: schema in `src/db/schema.ts`, connection in `src/db/index.ts`, migrations in `migrations/**`.
+- **Database (Drizzle + D1)**: schema in `src/db/schema.ts`, connection in `src/db/index.ts`, migrations in `migrations/**`.
 
 ### Key URLs
 
@@ -71,15 +71,15 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 
 - **Runtime / framework**: Astro (SSR, Cloudflare adapter) + React
 - **Storefront API**: Hono (Swagger UI + OpenAPI)
-- **Database**: Turso/libSQL + Drizzle ORM
+- **Database**: Cloudflare D1 (SQLite) + Drizzle ORM
 - **UI**: Tailwind CSS v4 + shadcn/ui (`src/components/ui/**`)
 - **Auth**: Better Auth (email/password + mandatory 2FA)
-- **Caching**: Upstash Redis (with in-memory fallback) for Hono API response caching
-- **Storage**: Cloudflare R2 (S3-compatible) for media uploads
+- **Caching**: Cloudflare KV (with in-memory fallback) for Hono API response caching
+- **Storage**: Cloudflare R2 for media uploads
 - **Notifications**: Firebase Cloud Messaging (admin push notifications, configured via dashboard)
-- **Email**: Resend API (2FA codes, password reset)
+- **Email**: Resend API (2FA codes, password reset, configured via dashboard)
 - **AI tooling**: OpenRouter integration for widget/content generation (API key stored in DB settings)
-- **Deploy**: Cloudflare Pages/Workers via Wrangler
+- **Deploy**: Cloudflare Workers via Wrangler
 
 ### Features (high level)
 
@@ -133,15 +133,16 @@ src/                     # App code (Astro UI + APIs + Hono)
     routes/              # Hono route modules
     middleware/          # Hono middleware (auth + caching)
     openapi/             # OpenAPI spec builder
-    utils/               # Redis/JWT/etc
+    utils/               # KV cache / JWT / etc
   lib/
     auth.ts              # Better Auth configuration
     auth-client.ts       # Better Auth client for React
-    email.ts             # Cloudflare Email Workers integration
+    email.ts             # Resend email integration (key fetched from DB)
   db/
-    schema.ts            # Drizzle schema (SQLite/libSQL)
-    index.ts             # getDb() (Turso/libSQL)
+    schema.ts            # Drizzle schema (SQLite/D1)
+    index.ts             # getDb() (Cloudflare D1)
 migrations/              # Drizzle migration SQL + snapshots
+scripts/                 # Build and deployment scripts
 ```
 
 ### Scripts
@@ -149,66 +150,42 @@ migrations/              # Drizzle migration SQL + snapshots
 From `package.json`:
 
 ```bash
-pnpm dev          # astro dev --host
-pnpm build        # astro check && astro build
-pnpm start        # wrangler pages dev ./dist (run built output; run pnpm build first)
-pnpm deploy       # wrangler pages deploy ./dist
+pnpm dev              # astro dev --host
+pnpm build            # astro check && astro build && pnpm db:generate
+pnpm start            # wrangler dev (Cloudflare Workers local runtime)
+pnpm deploy           # node scripts/deploy.mjs (build + migrate + deploy)
 
-pnpm db:generate  # drizzle-kit generate
-pnpm db:sync      # tsx src/scripts/sync-migrations.ts
-pnpm db:studio    # drizzle-kit studio
+pnpm db:generate      # drizzle-kit generate
+pnpm db:migrate:local # node scripts/deploy.mjs --migrate-only --local
+pnpm db:migrate:remote # node scripts/deploy.mjs --migrate-only
+pnpm db:studio        # drizzle-kit studio
 
-pnpm generate:sdk # tsx src/scripts/generate-openapi-json.ts && openapi-ts
+pnpm generate:sdk     # tsx src/scripts/generate-openapi-json.ts && openapi-ts
 ```
 
 ### Environment variables
 
-This project runs locally via `.dev.vars` (Wrangler) or `.env` and in production via Cloudflare Pages/Workers environment variables + bindings.
+This project uses Cloudflare Workers bindings for databases and storage (declared in `wrangler.jsonc`). Only secrets and runtime configuration need to be set as environment variables/secrets.
+
+For local development, create a `.dev.vars` file. In production, set these in the Cloudflare dashboard or via `wrangler secret put`.
 
 #### Core (required)
 
-- **Database**
-  - `TURSO_DATABASE_URL`: Turso/libSQL database URL (required by `src/db/index.ts`)
-  - `TURSO_AUTH_TOKEN`: Turso auth token
 - **Authentication (Better Auth)**
   - `BETTER_AUTH_SECRET`: Session encryption secret (generate with: `openssl rand -base64 32`)
   - `BETTER_AUTH_URL`: Base URL for auth callbacks (e.g., `https://your-domain.com`)
 - **Hono auth**
   - `API_TOKEN`: machine-to-machine token (used by `/api/v1/auth/token`)
   - `JWT_SECRET`: JWT signing secret (required in production; defaults are blocked by code)
-- **Base URL (recommended)**
+
+#### Optional runtime configuration
+
+- **Base URL**
   - `PUBLIC_API_BASE_URL`: canonical site origin used by the Hono layer (CORS, proxy headers, notifications links, CSP helpers)
   - `PUBLIC_API_URL`: optional override for the full Hono API base (some admin cache routes will use this if set)
-
-#### Email (Resend API)
-
-Required for email-based 2FA and password reset:
-
-- `RESEND_API_KEY`: API key from [resend.com](https://resend.com)
-- `EMAIL_SENDER`: sender email address (must be from a verified domain in Resend)
-
-In development without `RESEND_API_KEY`, emails are logged to console.
-
-#### Caching (recommended for production)
-
-- `UPSTASH_REDIS_REST_URL` (or `UPSTASH_REDIS_URL` / `REDIS_URL`)
-- `UPSTASH_REDIS_REST_TOKEN` (or `UPSTASH_REDIS_TOKEN`)
-- `PROJECT_CACHE_PREFIX`: prefixes all cache keys (multi-project safety; defaults to `default_project`)
-- `REDIS_CACHE_TTL`: default cache TTL in seconds (optional)
-
-#### Media uploads (Cloudflare R2)
-
-Required if you use `/api/media/upload`:
-
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET_NAME`
-- `R2_PUBLIC_URL` (public base URL used to construct file URLs)
-
-Optional:
-
-- `CDN_DOMAIN_URL`: used for CSP and image allow-listing
+- **Media**
+  - `R2_PUBLIC_URL`: public base URL used to construct file URLs for R2 uploads (the bucket binding is set in `wrangler.jsonc`)
+  - `CDN_DOMAIN_URL`: used for CSP and image allow-listing
 
 #### Content Security Policy / CORS
 
@@ -221,12 +198,22 @@ If you have a separate storefront that exposes a purge endpoint, the backend can
 - `PURGE_URL`
 - `PURGE_TOKEN`
 
+#### KV cache prefix (optional)
+
+- `PROJECT_CACHE_PREFIX`: prefixes all KV cache keys (multi-project safety; defaults to `sc`)
+
 #### Admin notifications (Firebase Cloud Messaging)
 
-Firebase credentials are configured via the admin dashboard at **Settings → Notifications**. The dashboard stores credentials in the database settings table.
+Firebase credentials are configured via the admin dashboard at **Settings → Notifications**. No environment variables are required for Firebase — all credentials (service account JSON, web app config, VAPID key) are stored securely in the database settings table.
 
-Server-side requirements:
-- `SHARED_AUTH_CACHE` (Cloudflare KV binding): used to cache Firebase access tokens
+Optional local-dev fallback:
+- `FIREBASE_SERVICE_ACCOUNT_CRED_JSON`: service account JSON (falls back to DB setting)
+
+#### Email (Resend API)
+
+Resend API key and sender address are configured via the admin dashboard at **Settings → Email**. No environment variables are required — credentials are stored in the database settings table and fetched at runtime.
+
+In development without a Resend API key configured in the dashboard, emails are logged to console.
 
 #### Search reindex auth (optional)
 
@@ -244,6 +231,19 @@ Optional env vars used for OpenRouter request metadata:
 - `PUBLIC_SITE_URL`
 - `SITE_TITLE`
 
+### Cloudflare bindings
+
+The following bindings are declared in `wrangler.jsonc` and are automatically available to the Worker at runtime. No environment variables are needed for these — they are injected by the Cloudflare Workers runtime:
+
+| Binding | Type | Purpose |
+|---------|------|---------|
+| `DB` | D1Database | Primary SQLite database (replaces Turso/libSQL) |
+| `CACHE` | KVNamespace | API response cache (replaces Upstash Redis) |
+| `SESSION` | KVNamespace | Astro session storage |
+| `SHARED_AUTH_CACHE` | KVNamespace | Firebase access token cache |
+| `BUCKET` | R2Bucket | Media file storage |
+| `ASSETS` | Fetcher | Static asset serving |
+
 ### Local development
 
 #### 1) Install dependencies
@@ -254,18 +254,20 @@ pnpm install
 
 #### 2) Configure env
 
-Create a `.dev.vars` file with at least the required variables (Turso + Better Auth). See `.env.example` for a template.
+Create a `.dev.vars` file with at least the required variables:
 
 ```bash
 # Required
-TURSO_DATABASE_URL=libsql://your-db.turso.io
-TURSO_AUTH_TOKEN=your-turso-token
 BETTER_AUTH_SECRET=your-secret-key
 BETTER_AUTH_URL=http://localhost:4321
 
 # For production
 JWT_SECRET=your-jwt-secret
 API_TOKEN=your-api-token
+
+# Optional - configure via admin dashboard instead
+# R2_PUBLIC_URL=https://your-bucket.r2.cloudflarestorage.com
+# CDN_DOMAIN_URL=cdn.yourdomain.com
 ```
 
 #### 3) Run the dev server
@@ -280,27 +282,29 @@ Astro defaults to port `4321` unless configured otherwise.
 
 On first run, navigate to `/admin` - you'll be redirected to `/auth/setup` to create the first admin account. After account creation, you'll be required to set up two-factor authentication (authenticator app or email).
 
-If you want Cloudflare runtime parity (Workers execution context, KV bindings, etc.), run the built output with Wrangler:
+For full Cloudflare Workers runtime parity (D1, KV, R2 bindings in local dev), use Wrangler:
 
 ```bash
-pnpm build
 pnpm start
 ```
 
-### Database & migrations (Drizzle + Turso)
+This runs your built output in a local `workerd` environment via `wrangler dev`.
+
+### Database & migrations (Drizzle + Cloudflare D1)
 
 - Drizzle config: `drizzle.config.ts`
 - Schema: `src/db/schema.ts`
 - Migrations: `migrations/**`
 
-Recommended workflow for this repo:
+Recommended workflow:
 
 ```bash
-pnpm db:generate
-pnpm db:sync
+pnpm db:generate        # generate migration from schema changes
+pnpm db:migrate:local   # apply migrations to local D1 (via wrangler)
+pnpm db:migrate:remote  # apply migrations to remote D1
 ```
 
-`db:sync` runs `src/scripts/sync-migrations.ts` to keep the `__drizzle_migrations` history table aligned with your migration files and database state (helpful when switching between `db:push` and `db:migrate` workflows).
+The deploy script (`scripts/deploy.mjs`) handles migrations automatically when running `pnpm deploy`.
 
 ### Authentication
 
@@ -309,7 +313,7 @@ This project uses [Better Auth](https://better-auth.com) for authentication with
 - **Email/password authentication** with secure password hashing
 - **Mandatory two-factor authentication** for all admin users:
   - Authenticator app (TOTP) - Google Authenticator, Authy, etc.
-  - Email verification codes (production only)
+  - Email verification codes (requires Resend configured in dashboard)
   - Backup codes for account recovery
 - **Rate limiting** on sensitive endpoints (login, 2FA, password reset)
 - **Session management** with 7-day expiry and automatic refresh
@@ -380,7 +384,7 @@ There are two complementary mechanisms:
 
 - **Hono-side invalidation for Hono writes**: `src/server/astro-handler.ts` can invalidate related cache keys after successful `/api/v1` write requests.
 - **Admin-side invalidation for Astro admin writes**: `src/lib/middleware-helper/hono-cache-invalidator.ts` watches successful writes to admin endpoints like `/api/products`, `/api/categories`, `/api/collections`, etc. and triggers:
-  - backend cache invalidation (Upstash/in-memory)
+  - backend KV cache invalidation
   - optional external storefront purge (if `PURGE_URL` + `PURGE_TOKEN` are set)
 
 In Cloudflare Workers, invalidations are scheduled via `ctx.waitUntil()` when available (see `src/middleware.ts`).
@@ -388,13 +392,14 @@ In Cloudflare Workers, invalidations are scheduled via `ctx.waitUntil()` when av
 ### Media uploads (R2)
 
 - Upload endpoint: `POST /api/media/upload` (multipart form field `files`)
-- Storage implementation: `src/lib/storage.ts` (S3-compatible client targeting R2)
+- Storage implementation: `src/lib/storage.ts` (native R2 bucket binding)
+- The R2 bucket binding (`BUCKET`) is declared in `wrangler.jsonc`
 
-If R2 env vars are missing, the upload route will fail early with "Missing required R2 environment variables".
+If `R2_PUBLIC_URL` is not set, uploaded file URLs will be incomplete. Set this to the public base URL of your R2 bucket.
 
 ### Admin push notifications (FCM)
 
-Firebase Cloud Messaging is configured via the admin dashboard at **Settings → Notifications**. No environment variables are required for Firebase - all credentials are stored securely in the database.
+Firebase Cloud Messaging is configured via the admin dashboard at **Settings → Notifications**. No environment variables are required for Firebase — all credentials are stored in the database.
 
 To set up notifications:
 
@@ -432,11 +437,12 @@ See `src/lib/sdk/README.md` for usage patterns and security notes.
 - Deploy with:
 
 ```bash
-pnpm build
 pnpm deploy
 ```
 
-`wrangler.toml` defines worker compatibility flags, static assets binding, and KV namespace bindings.
+This runs `scripts/deploy.mjs` which handles building, migrations, and deploying to Cloudflare Workers via Wrangler.
+
+`wrangler.jsonc` defines worker compatibility flags, D1/KV/R2 bindings, and static assets binding.
 
 ### Troubleshooting
 
@@ -444,11 +450,15 @@ pnpm deploy
   - Set `JWT_SECRET` in production.
 - **"BETTER_AUTH_SECRET is not set"**
   - Set `BETTER_AUTH_SECRET` environment variable. Generate with: `openssl rand -base64 32`
-- **Redis not configured**
-  - You'll see logs like "Redis URL not provided. Using in-memory cache fallback." Configure Upstash env vars for production-grade caching.
+- **KV cache not working**
+  - Ensure the `CACHE` KV namespace is correctly bound in `wrangler.jsonc` and created in your Cloudflare account.
 - **CORS issues**
   - Set `PUBLIC_API_BASE_URL` and (if needed) `CSP_ALLOWED` / `CDN_DOMAIN_URL`.
-- **Email 2FA not working in development**
-  - Email-based 2FA requires Cloudflare Email Workers (production only). Use authenticator app for local development.
+- **Email 2FA not working**
+  - Configure Resend API key and sender address in the admin dashboard at **Settings → Email**.
+  - Email-based 2FA via OTP requires a configured Resend API key. Use authenticator app for local development without Resend.
 - **Firebase notifications not working**
-  - Configure Firebase credentials in the admin dashboard at Settings → Notifications.
+  - Configure Firebase credentials in the admin dashboard at **Settings → Notifications**.
+- **D1 database errors in local dev**
+  - Run `pnpm db:migrate:local` to apply pending migrations to the local D1 database.
+  - Use `pnpm start` (wrangler dev) for full D1/KV/R2 binding support locally.

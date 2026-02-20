@@ -4,7 +4,6 @@ import { categories, products } from "../../../db/schema";
 import { nanoid } from "nanoid";
 import { sql, and, isNull, isNotNull, eq, desc, asc } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex } from "@/lib/search/index";
 
 const createCategorySchema = z.object({
   name: z
@@ -206,12 +205,6 @@ export const POST: APIRoute = async ({ request }) => {
 
     // Trigger reindexing in the background
     // We don't await this to avoid delaying the response
-    triggerReindex().catch((error) => {
-      console.error(
-        "Background reindexing failed after category creation:",
-        error,
-      );
-    });
 
     return new Response(JSON.stringify({ id: categoryId }), {
       status: 201,

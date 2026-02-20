@@ -29,6 +29,8 @@ import {
   Clock3,
   Bell,
   UserCog,
+  CreditCard,
+  Warehouse,
 } from "lucide-react";
 
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
@@ -158,6 +160,7 @@ const allNavSections: NavSection[] = [
     items: [
       { name: "Dashboard", href: "/admin", icon: LayoutDashboard, requiredPermission: PERMISSIONS.DASHBOARD_VIEW },
       { name: "Products", href: "/admin/products", icon: ShoppingCart, requiredPermission: PERMISSIONS.PRODUCTS_VIEW },
+      { name: "Inventory", href: "/admin/inventory", icon: Warehouse, requiredPermission: PERMISSIONS.PRODUCTS_VIEW },
       { name: "Categories", href: "/admin/categories", icon: FolderTree, requiredPermission: PERMISSIONS.CATEGORIES_VIEW },
       { name: "Attributes", href: "/admin/attributes", icon: ListTree, requiredPermission: PERMISSIONS.ATTRIBUTES_VIEW },
       { name: "Collections", href: "/admin/collections", icon: Layers3, requiredPermission: PERMISSIONS.COLLECTIONS_VIEW },
@@ -250,6 +253,12 @@ const allNavSections: NavSection[] = [
             name: "Meta Conversions",
             href: "/admin/settings/meta-conversion",
             icon: BarChart3,
+            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+          },
+          {
+            name: "Payment Gateways",
+            href: "/admin/settings/payment-gateways",
+            icon: CreditCard,
             requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
           },
           {

@@ -36,6 +36,12 @@ const [order] = await db
     zoneName: orders.zoneName,
     areaName: orders.areaName,
     status: orders.status,
+    paymentMethod: orders.paymentMethod,
+    paymentStatus: orders.paymentStatus,
+    paidAmount: orders.paidAmount,
+    balanceDue: orders.balanceDue,
+    fulfillmentStatus: orders.fulfillmentStatus,
+    inventoryPool: orders.inventoryPool,
     createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
     updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
   })

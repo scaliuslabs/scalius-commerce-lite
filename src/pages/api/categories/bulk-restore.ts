@@ -3,7 +3,6 @@ import { db } from "../../../db";
 import { categories } from "../../../db/schema";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex } from "@/lib/search/index";
 
 const bulkRestoreSchema = z.object({
   categoryIds: z.array(z.string()),
@@ -33,12 +32,6 @@ export const POST: APIRoute = async ({ request }) => {
 
     // Trigger reindexing to add the restored categories back to the search index
     // We need a full reindex here since we're adding items back
-    triggerReindex().catch((error) => {
-      console.error(
-        "Background reindexing failed after bulk category restoration:",
-        error,
-      );
-    });
 
     return new Response(null, { status: 204 });
   } catch (error) {

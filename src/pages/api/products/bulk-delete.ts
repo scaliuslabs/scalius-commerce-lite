@@ -4,7 +4,6 @@ import { db } from "../../../db";
 import { products, orderItems, discountProducts, productVariants, productImages } from "../../../db/schema";
 import { sql, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex, deleteFromIndex } from "@/lib/search/index";
 
 const bulkDeleteSchema = z.object({
   productIds: z.array(z.string()),
@@ -54,12 +53,12 @@ export const POST: APIRoute = async ({ request }) => {
         );
       }
 
-      // If checks pass, proceed with permanent deletion in a transaction
-      await db.transaction(async (tx) => {
-        await tx.delete(productVariants).where(inArray(productVariants.productId, productIds));
-        await tx.delete(productImages).where(inArray(productImages.productId, productIds));
-        await tx.delete(products).where(inArray(products.id, productIds));
-      });
+      // If checks pass, proceed with permanent deletion
+      await db.batch([
+        db.delete(productVariants).where(inArray(productVariants.productId, productIds)),
+        db.delete(productImages).where(inArray(productImages.productId, productIds)),
+        db.delete(products).where(inArray(products.id, productIds)),
+      ]);
 
     } else {
       // Soft delete products
@@ -68,16 +67,6 @@ export const POST: APIRoute = async ({ request }) => {
         .set({ deletedAt: sql`unixepoch()` })
         .where(inArray(products.id, productIds));
     }
-
-    deleteFromIndex({ productIds }).catch((error) => {
-      console.error("Error deleting products from search index:", error);
-      triggerReindex().catch((reindexError) => {
-        console.error(
-          "Background reindexing failed after bulk product deletion:",
-          reindexError,
-        );
-      });
-    });
 
     return new Response(null, { status: 204 });
   } catch (error) {

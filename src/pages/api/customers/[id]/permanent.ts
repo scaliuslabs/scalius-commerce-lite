@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../../db";
 import { customers, customerHistory, orders } from "../../../../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 export const DELETE: APIRoute = async ({ params }) => {
   try {
@@ -15,22 +15,11 @@ export const DELETE: APIRoute = async ({ params }) => {
       );
     }
 
-    // Start a transaction
-    await db.transaction(async (tx) => {
-      // First update orders to remove customer references
-      await tx
-        .update(orders)
-        .set({ customerId: null })
-        .where(eq(orders.customerId, id));
-
-      // Delete customer history
-      await tx
-        .delete(customerHistory)
-        .where(eq(customerHistory.customerId, id));
-
-      // Finally delete customer
-      await tx.delete(customers).where(eq(customers.id, id));
-    });
+    await db.batch([
+      db.update(orders).set({ customerId: null }).where(eq(orders.customerId, id)),
+      db.delete(customerHistory).where(eq(customerHistory.customerId, id)),
+      db.delete(customers).where(eq(customers.id, id)),
+    ]);
 
     return new Response(null, { status: 204 });
   } catch (error) {

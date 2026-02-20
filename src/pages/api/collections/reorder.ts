@@ -16,15 +16,12 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.json();
     const validatedData = reorderSchema.parse(body);
 
-    // Update each collection's sort order in a transaction
-    await db.transaction(async (tx) => {
-      for (const item of validatedData) {
-        await tx
-          .update(collections)
-          .set({ sortOrder: item.sortOrder })
-          .where(eq(collections.id, item.id));
-      }
-    });
+    // Update each collection's sort order atomically
+    await db.batch(
+      validatedData.map((item) =>
+        db.update(collections).set({ sortOrder: item.sortOrder }).where(eq(collections.id, item.id))
+      ) as any,
+    );
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

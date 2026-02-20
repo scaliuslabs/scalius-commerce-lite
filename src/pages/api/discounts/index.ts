@@ -248,9 +248,31 @@ export const POST: APIRoute = async ({ request }) => {
 
     const discountId = "disc_" + nanoid();
 
-    await db.transaction(async (tx) => {
-      // Insert discount
-      await tx.insert(discounts).values({
+    // Build related products/collections arrays before the batch
+    const productsToInsert: (typeof discountProducts.$inferInsert)[] = [];
+    const collectionsToInsert: (typeof discountCollections.$inferInsert)[] = [];
+
+    if (data.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
+      (data.appliesToProducts || []).forEach((productId) =>
+        productsToInsert.push({
+          id: "dp_" + nanoid(),
+          discountId,
+          productId,
+          applicationType: "get",
+        }),
+      );
+      (data.appliesToCollections || []).forEach((collectionId) =>
+        collectionsToInsert.push({
+          id: "dc_" + nanoid(),
+          discountId,
+          collectionId,
+          applicationType: "get",
+        }),
+      );
+    }
+
+    const batchOps: any[] = [
+      db.insert(discounts).values({
         id: discountId,
         code: data.code,
         type: data.type,
@@ -272,45 +294,19 @@ export const POST: APIRoute = async ({ request }) => {
         isActive: data.isActive,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
-      });
+      }),
+    ];
 
-      // Insert related products/collections based on type
-      const productsToInsert: (typeof discountProducts.$inferInsert)[] = [];
-      const collectionsToInsert: (typeof discountCollections.$inferInsert)[] =
-        [];
+    if (productsToInsert.length > 0) {
+      batchOps.push(db.insert(discountProducts).values(productsToInsert));
+    }
+    if (collectionsToInsert.length > 0) {
+      batchOps.push(db.insert(discountCollections).values(collectionsToInsert));
+    }
 
-      if (data.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
-        (data.appliesToProducts || []).forEach((productId) =>
-          productsToInsert.push({
-            id: "dp_" + nanoid(),
-            discountId,
-            productId,
-            applicationType: "get",
-          }),
-        );
-        (data.appliesToCollections || []).forEach((collectionId) =>
-          collectionsToInsert.push({
-            id: "dc_" + nanoid(),
-            discountId,
-            collectionId,
-            applicationType: "get",
-          }),
-        );
-      }
-      // AMOUNT_OFF_ORDER and FREE_SHIPPING don't usually have specific products/collections
-
-      if (productsToInsert.length > 0) {
-        await tx.insert(discountProducts).values(productsToInsert);
-      }
-      if (collectionsToInsert.length > 0) {
-        await tx.insert(discountCollections).values(collectionsToInsert);
-      }
-    });
+    await db.batch(batchOps as any);
 
     // Consider if discounts need to be indexed for search
-    // triggerReindex().catch((error) => {
-    //   console.error("Background reindexing failed after discount creation:", error);
-    // });
 
     return new Response(JSON.stringify({ id: discountId }), {
       status: 201,

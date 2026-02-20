@@ -100,9 +100,9 @@ export const POST: APIRoute = async ({ params }) => {
     }
 
     // Get the provider for the response
-    const provider = await deliveryService.getProvider(
-      updatedShipment.providerId,
-    );
+    const provider = updatedShipment.providerId
+      ? await deliveryService.getProvider(updatedShipment.providerId)
+      : null;
 
     // Check if the status changed
     const statusChanged = previousStatus !== updatedShipment.status;

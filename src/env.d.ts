@@ -4,10 +4,8 @@
 /// <reference types="astro/client" />
 
 // Vite / Astro build-time environment variables (import.meta.env).
-// Runtime secrets (DB, CACHE, BUCKET …) come through `context.locals.runtime.env`
-// NOT through import.meta.env – they are Cloudflare Workers bindings.
+// Runtime secrets (DB, CACHE, BUCKET …) come through Cloudflare Workers bindings.
 interface ImportMetaEnv {
-  // Better Auth (available at runtime via Cloudflare binding, mirrored here for type-safety)
   readonly BETTER_AUTH_SECRET: string;
   readonly BETTER_AUTH_URL: string;
   readonly PUBLIC_API_BASE_URL: string;
@@ -93,8 +91,7 @@ declare class EmailMessage {
 // ---------------------------------------------------------------------------
 // Minimal Cloudflare Workers type stubs
 // These avoid importing @cloudflare/workers-types globally, which can conflict
-// with DOM types (e.g. Response.json() overload changes). Keep in sync with
-// @cloudflare/workers-types as the project evolves.
+// with DOM types (e.g. Response.json() overload changes).
 // ---------------------------------------------------------------------------
 
 interface KVNamespaceListKey<Metadata = unknown, Key extends string = string> {
@@ -203,8 +200,29 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+// Cloudflare Queue binding types
+interface Queue<Body = unknown> {
+  send(message: Body, options?: { contentType?: "text" | "bytes" | "json" | "v8" }): Promise<void>;
+  sendBatch(messages: { body: Body; contentType?: string }[]): Promise<void>;
+}
+
+interface MessageBatch<Body = unknown> {
+  queue: string;
+  messages: Message<Body>[];
+  ackAll(): void;
+  retryAll(): void;
+}
+
+interface Message<Body = unknown> {
+  id: string;
+  timestamp: Date;
+  body: Body;
+  ack(): void;
+  retry(): void;
+}
+
 // Cloudflare Workers environment bindings (global Env interface).
-// Must stay in sync with src/server/hono-env.d.ts and wrangler.jsonc.
+// Must stay in sync with wrangler.jsonc.
 interface Env {
   // Service / resource bindings
   ASSETS: Fetcher;
@@ -214,11 +232,18 @@ interface Env {
   SHARED_AUTH_CACHE: KVNamespace;
   EMAIL?: SendEmail;
 
-  // Secrets
+  // Cloudflare Queue bindings (optional until queues are created)
+  PAYMENT_EVENTS_QUEUE?: Queue<{ type: string; payload: Record<string, unknown> }>;
+  INVENTORY_QUEUE?: Queue<{ type: string; payload: Record<string, unknown> }>;
+
+  // Secrets (set via `wrangler secret put`)
   BETTER_AUTH_SECRET: string;
   API_TOKEN?: string;
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
+
+  // Note: Stripe and SSLCommerz credentials are stored in the DB settings table
+  // and managed via the admin dashboard — NOT as environment variables.
 
   // Variables
   BETTER_AUTH_URL?: string;
@@ -229,4 +254,9 @@ interface Env {
   PURGE_TOKEN?: string;
   PROJECT_CACHE_PREFIX?: string;
   [key: string]: unknown;
+}
+
+// Required by @astrojs/cloudflare — provides the Worker `env` object at module level.
+declare module "cloudflare:workers" {
+  export const env: Env;
 }

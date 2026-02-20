@@ -5,7 +5,6 @@ import { products, productImages, productRichContent, productAttributeValues } f
 import { nanoid } from "nanoid";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex } from "@/lib/search/index";
 import { getProducts } from "../../../lib/admin";
 
 const createProductSchema = z.object({
@@ -108,31 +107,31 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const productId = "prod_" + nanoid();
-    
-    await db.transaction(async (tx) => {
-      await tx
-        .insert(products)
-        .values({
-          id: productId,
-          name: data.name,
-          description: data.description || null,
-          price: data.price,
-          categoryId: data.categoryId,
-          slug: data.slug,
-          metaTitle: data.metaTitle || null,
-          metaDescription: data.metaDescription || null,
-          isActive: data.isActive,
-          discountType: data.discountType || "percentage",
-          discountPercentage: data.discountPercentage || null,
-          discountAmount: data.discountAmount || null,
-          freeDelivery: data.freeDelivery,
-          createdAt: sql`unixepoch()`,
-          updatedAt: sql`unixepoch()`,
-          deletedAt: null,
-        });
 
-      if (data.images.length > 0) {
-        await tx.insert(productImages).values(
+    const batchOps: any[] = [
+      db.insert(products).values({
+        id: productId,
+        name: data.name,
+        description: data.description || null,
+        price: data.price,
+        categoryId: data.categoryId,
+        slug: data.slug,
+        metaTitle: data.metaTitle || null,
+        metaDescription: data.metaDescription || null,
+        isActive: data.isActive,
+        discountType: data.discountType || "percentage",
+        discountPercentage: data.discountPercentage || null,
+        discountAmount: data.discountAmount || null,
+        freeDelivery: data.freeDelivery,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+        deletedAt: null,
+      }),
+    ];
+
+    if (data.images.length > 0) {
+      batchOps.push(
+        db.insert(productImages).values(
           data.images.map((image, index) => ({
             id: "img_" + nanoid(),
             productId,
@@ -141,43 +140,39 @@ export const POST: APIRoute = async ({ request }) => {
             isPrimary: index === 0,
             sortOrder: index,
           })),
-        );
-      }
-      
-      if (data.additionalInfo && data.additionalInfo.length > 0) {
-          await tx.insert(productRichContent).values(
-              data.additionalInfo.map((item) => ({
-                  id: `prc_${nanoid()}`,
-                  productId: productId,
-                  title: item.title,
-                  content: item.content,
-                  sortOrder: item.sortOrder,
-              }))
-          );
-      }
-
-      if (data.attributes && data.attributes.length > 0) {
-        const attributeValuesToInsert = data.attributes
-          .filter((attr) => attr.attributeId && attr.value.trim())
-          .map((attr) => ({
-            id: `val_${nanoid()}`,
-            productId: productId,
-            attributeId: attr.attributeId,
-            value: attr.value,
-          }));
-        if (attributeValuesToInsert.length > 0) {
-          await tx.insert(productAttributeValues).values(attributeValuesToInsert);
-        }
-      }
-    });
-
-
-    triggerReindex().catch((error) => {
-      console.error(
-        "Background reindexing failed after product creation:",
-        error,
+        ),
       );
-    });
+    }
+
+    if (data.additionalInfo && data.additionalInfo.length > 0) {
+      batchOps.push(
+        db.insert(productRichContent).values(
+          data.additionalInfo.map((item) => ({
+            id: `prc_${nanoid()}`,
+            productId: productId,
+            title: item.title,
+            content: item.content,
+            sortOrder: item.sortOrder,
+          })),
+        ),
+      );
+    }
+
+    if (data.attributes && data.attributes.length > 0) {
+      const attributeValuesToInsert = data.attributes
+        .filter((attr) => attr.attributeId && attr.value.trim())
+        .map((attr) => ({
+          id: `val_${nanoid()}`,
+          productId: productId,
+          attributeId: attr.attributeId,
+          value: attr.value,
+        }));
+      if (attributeValuesToInsert.length > 0) {
+        batchOps.push(db.insert(productAttributeValues).values(attributeValuesToInsert));
+      }
+    }
+
+    await db.batch(batchOps as any);
 
     return new Response(JSON.stringify({ id: productId }), {
       status: 201,

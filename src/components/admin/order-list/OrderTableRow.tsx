@@ -18,6 +18,7 @@ import {
   Undo,
   XCircle,
   Trash2,
+  ExternalLink,
 } from "lucide-react";
 import { OrderItemsPopover } from "./OrderItemsPopover";
 import { OrderStatusSelector } from "./OrderStatusSelector";
@@ -113,15 +114,14 @@ export const OrderTableRow = React.memo(function OrderTableRow({
   onStatusUpdate,
   onShipmentStatusUpdated,
 }: OrderTableRowProps) {
-  const rowClassName = `group border-b border-[var(--border)] transition-colors duration-150 hover:bg-[var(--muted)]/80 ${
-    order.status.toLowerCase() === "delivered"
-      ? "border-l-3 border-l-emerald-500"
-      : order.status.toLowerCase() === "shipped"
-        ? "border-l-3 border-l-violet-500"
-        : order.status.toLowerCase() === "processing"
-          ? "border-l-3 border-l-blue-500"
-          : ""
-  }`;
+  const rowClassName = `group border-b border-[var(--border)] transition-colors duration-150 hover:bg-[var(--muted)]/80 ${order.status.toLowerCase() === "delivered"
+    ? "border-l-3 border-l-emerald-500"
+    : order.status.toLowerCase() === "shipped"
+      ? "border-l-3 border-l-violet-500"
+      : order.status.toLowerCase() === "processing"
+        ? "border-l-3 border-l-blue-500"
+        : ""
+    }`;
 
   return (
     <TableRow key={order.id} className={rowClassName}>
@@ -137,7 +137,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
         >
           <Checkbox
             checked={isSelected}
-            onCheckedChange={() => {}}
+            onCheckedChange={() => { }}
             className="translate-y-[2px] transition-all duration-200 cursor-pointer pointer-events-none"
             aria-label={`Select order ${order.id}. Hold Shift to select range`}
           />
@@ -202,7 +202,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
         <OrderItemsPopover orderId={order.id} itemCount={order.itemCount} />
       </TableCell>
       <TableCell className="py-4">
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             ৳{order.totalAmount.toLocaleString()}
           </span>
@@ -216,6 +216,24 @@ export const OrderTableRow = React.memo(function OrderTableRow({
               </Badge>
             </div>
           )}
+          <div className="flex items-center gap-1">
+            {order.paymentStatus === "paid" ? (
+              <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0">
+                Paid
+              </Badge>
+            ) : order.paymentStatus === "partial" ? (
+              <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0">
+                Partial
+              </Badge>
+            ) : order.paymentStatus === "unpaid" ? (
+              <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 py-0">
+                Unpaid
+              </Badge>
+            ) : null}
+            <span className="text-[10px] text-[var(--muted-foreground)] uppercase">
+              {order.paymentMethod === "cod" ? "COD" : order.paymentMethod === "stripe" ? "Stripe" : order.paymentMethod === "sslcommerz" ? "SSL" : order.paymentMethod}
+            </span>
+          </div>
         </div>
       </TableCell>
       <TableCell className="py-4">
@@ -228,22 +246,46 @@ export const OrderTableRow = React.memo(function OrderTableRow({
         />
       </TableCell>
       <TableCell className="py-4">
-        {shipment ? (
-          <ShipmentStatusIndicator
-            shipment={{
-              id: shipment.id,
-              status: shipment.status,
-              orderId: order.id,
-              lastChecked:
-                shipment.lastChecked instanceof Date
-                  ? shipment.lastChecked.toISOString()
-                  : typeof shipment.lastChecked === "string"
-                    ? shipment.lastChecked
-                    : undefined,
-            }}
-            onStatusUpdated={onShipmentStatusUpdated}
-          />
-        ) : (
+        {shipment ? (() => {
+          const trackingUrl = shipment.providerType === "pathao"
+            ? `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId || '')}`
+            : shipment.providerType === "steadfast"
+              ? `https://steadfast.com.bd/t/${encodeURIComponent(shipment.trackingId || '')}`
+              : null;
+
+          return (
+            <div className="flex flex-col gap-2 relative z-10">
+              <ShipmentStatusIndicator
+                shipment={{
+                  id: shipment.id,
+                  status: shipment.status,
+                  orderId: order.id,
+                  lastChecked:
+                    shipment.lastChecked instanceof Date
+                      ? shipment.lastChecked.toISOString()
+                      : typeof shipment.lastChecked === "string"
+                        ? shipment.lastChecked
+                        : undefined,
+                }}
+                onStatusUpdated={onShipmentStatusUpdated}
+              />
+              {shipment.trackingId && trackingUrl && (
+                <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-1">
+                  <a
+                    href={trackingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="font-mono truncate max-w-[90px]">{shipment.trackingId}</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
+            </div>
+          );
+        })() : (
           <span className="text-xs text-[var(--muted-foreground)]">
             No shipment
           </span>

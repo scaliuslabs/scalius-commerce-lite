@@ -9,7 +9,6 @@ import {
   discountProducts,
 } from "../../../../db/schema";
 import { eq, sql } from "drizzle-orm";
-import { deleteFromIndex, triggerReindex } from "@/lib/search/index";
 
 export const DELETE: APIRoute = async ({ params }) => {
   const { id } = params;
@@ -51,24 +50,11 @@ export const DELETE: APIRoute = async ({ params }) => {
     }
 
     // If checks pass, proceed with deletion
-    await db.transaction(async (tx) => {
-      await tx.delete(productVariants).where(eq(productVariants.productId, id));
-      await tx.delete(productImages).where(eq(productImages.productId, id));
-      await tx.delete(products).where(eq(products.id, id));
-    });
-
-    deleteFromIndex({ productIds: [id] }).catch((error) => {
-      console.error(
-        "Error deleting product from search index during permanent delete:",
-        error,
-      );
-      triggerReindex().catch((reindexError) => {
-        console.error(
-          "Background reindexing failed after permanent product deletion:",
-          reindexError,
-        );
-      });
-    });
+    await db.batch([
+      db.delete(productVariants).where(eq(productVariants.productId, id)),
+      db.delete(productImages).where(eq(productImages.productId, id)),
+      db.delete(products).where(eq(products.id, id)),
+    ]);
 
     return new Response(null, { status: 204 });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { search, indexAllData } from "@/lib/search/index";
+import { search } from "@/lib/search/index";
 import { cacheMiddleware } from "../middleware/cache";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -112,16 +112,6 @@ app.get("/", async (c) => {
   } catch (error) {
     console.error("Search API error:", error);
 
-    // Try to reindex if there was an error related to missing indices
-    if (String(error).includes("Index not found")) {
-      try {
-        console.log("Attempting to reindex data...");
-        const indexResult = await indexAllData();
-        console.log("Reindexed data:", indexResult);
-      } catch (reindexError) {
-        console.error("Failed to reindex:", reindexError);
-      }
-    }
 
     return c.json(
       {
@@ -134,45 +124,6 @@ app.get("/", async (c) => {
   }
 });
 
-// For manual reindexing
-app.post("/reindex", async (c) => {
-  // Check for secret to authorize reindexing
-  const authHeader = c.req.header("Authorization");
-  const expectedAuth = `Bearer ${process.env.SERVICE_PASSWORD_MEILISEARCH || ""}`;
-
-  if (authHeader !== expectedAuth) {
-    return c.json(
-      {
-        error: "Unauthorized",
-        success: false,
-      },
-      401,
-    );
-  }
-
-  try {
-    // Reindex all data
-    const result = await indexAllData();
-
-    return c.json({
-      ...result,
-      success: true,
-      message: "Successfully reindexed all data",
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error("Reindexing error:", error);
-
-    return c.json(
-      {
-        error: "Failed to reindex data",
-        message: String(error),
-        success: false,
-      },
-      500,
-    );
-  }
-});
 
 // Export the search routes
 export { app as searchRoutes };

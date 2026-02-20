@@ -58,6 +58,9 @@ export function OrderList({
     null,
   );
   const [activeStatus, setActiveStatus] = React.useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = React.useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = React.useState<string | null>(null);
+  const [fulfillmentStatus, setFulfillmentStatus] = React.useState<string | null>(null);
   const [shipmentStatuses, setShipmentStatuses] = React.useState<
     Record<string, any>
   >({});
@@ -89,8 +92,10 @@ export function OrderList({
 
   React.useEffect(() => {
     const url = new URL(window.location.href);
-    const statusFromUrl = url.searchParams.get("status");
-    setActiveStatus(statusFromUrl);
+    setActiveStatus(url.searchParams.get("status"));
+    setPaymentStatus(url.searchParams.get("paymentStatus"));
+    setPaymentMethod(url.searchParams.get("paymentMethod"));
+    setFulfillmentStatus(url.searchParams.get("fulfillmentStatus"));
 
     // Update sort state from URL params
     const sortField = url.searchParams.get("sort") as SortField | null;
@@ -150,6 +155,10 @@ export function OrderList({
         if (params.sort) url.searchParams.set("sort", params.sort);
         if (params.order) url.searchParams.set("order", params.order);
         if (params.trashed) url.searchParams.set("trashed", "true");
+        // new filters
+        if (paymentStatus) url.searchParams.set("paymentStatus", paymentStatus);
+        if (paymentMethod) url.searchParams.set("paymentMethod", paymentMethod);
+        if (fulfillmentStatus) url.searchParams.set("fulfillmentStatus", fulfillmentStatus);
         if (params.startDate)
           url.searchParams.set("startDate", params.startDate.toISOString());
         if (params.endDate)
@@ -167,11 +176,11 @@ export function OrderList({
           updatedAt: new Date(order.updatedAt),
           latestShipment: order.latestShipment
             ? {
-                ...order.latestShipment,
-                lastChecked: order.latestShipment.lastChecked
-                  ? new Date(order.latestShipment.lastChecked)
-                  : null,
-              }
+              ...order.latestShipment,
+              lastChecked: order.latestShipment.lastChecked
+                ? new Date(order.latestShipment.lastChecked)
+                : null,
+            }
             : null,
         }));
 
@@ -203,6 +212,17 @@ export function OrderList({
         } else {
           urlToUpdate.searchParams.delete("status");
         }
+
+        // Sync advance filters
+        if (paymentStatus) urlToUpdate.searchParams.set("paymentStatus", paymentStatus);
+        else urlToUpdate.searchParams.delete("paymentStatus");
+
+        if (paymentMethod) urlToUpdate.searchParams.set("paymentMethod", paymentMethod);
+        else urlToUpdate.searchParams.delete("paymentMethod");
+
+        if (fulfillmentStatus) urlToUpdate.searchParams.set("fulfillmentStatus", fulfillmentStatus);
+        else urlToUpdate.searchParams.delete("fulfillmentStatus");
+
         if (params.sort) urlToUpdate.searchParams.set("sort", params.sort);
         if (params.order) urlToUpdate.searchParams.set("order", params.order);
         if (params.trashed) {
@@ -271,6 +291,32 @@ export function OrderList({
       endDate: dateRange?.to,
     });
   };
+
+
+
+  // React to additional filter changes
+  React.useEffect(() => {
+    // Only fetch if it's not the initial mount
+    const url = new URL(window.location.href);
+    const urlPaymentStatus = url.searchParams.get("paymentStatus");
+    const urlPaymentMethod = url.searchParams.get("paymentMethod");
+    const urlFulfillmentStatus = url.searchParams.get("fulfillmentStatus");
+
+    // We compare with the state explicitly. If they differ significantly, fetch.
+    if (paymentStatus !== urlPaymentStatus || paymentMethod !== urlPaymentMethod || fulfillmentStatus !== urlFulfillmentStatus) {
+      fetchOrders({
+        page: 1,
+        limit: currentPagination.limit,
+        search: searchQuery,
+        status: activeStatus,
+        sort: sort.field,
+        order: sort.order,
+        trashed: showTrashed,
+        startDate: dateRange?.from,
+        endDate: dateRange?.to,
+      });
+    }
+  }, [paymentStatus, paymentMethod, fulfillmentStatus]);
 
   // Auto-trigger search when searchQuery changes from toolbar
   const prevSearchQuery = React.useRef(initialSearchQuery);
@@ -716,6 +762,12 @@ export function OrderList({
             onRefresh={handleRefresh}
             dateRange={dateRange}
             onDateRangeChange={handleDateRangeChange}
+            paymentStatus={paymentStatus}
+            onPaymentStatusChange={setPaymentStatus}
+            paymentMethod={paymentMethod}
+            onPaymentMethodChange={setPaymentMethod}
+            fulfillmentStatus={fulfillmentStatus}
+            onFulfillmentStatusChange={setFulfillmentStatus}
           />
         </CardHeader>
 

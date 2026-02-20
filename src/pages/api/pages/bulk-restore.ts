@@ -3,7 +3,6 @@ import { db } from "../../../db";
 import { pages } from "../../../db/schema";
 import { inArray } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex } from "@/lib/search/index";
 
 const bulkRestoreSchema = z.object({
   pageIds: z.array(z.string()).min(1, "At least one page ID is required"),
@@ -21,9 +20,6 @@ export const POST: APIRoute = async ({ request }) => {
       .returning();
 
     // Trigger reindexing in the background
-    triggerReindex().catch((error) => {
-      console.error("Background reindexing failed after bulk restore:", error);
-    });
 
     return new Response(JSON.stringify({ restored: updated.length }), {
       status: 200,

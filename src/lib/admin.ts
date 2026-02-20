@@ -86,18 +86,18 @@ export async function getDashboardStats() {
   // Calculate growth percentages
   const orderGrowth = lastMonthStats.count
     ? Math.round(
-        ((currentMonthStats.count - lastMonthStats.count) /
-          lastMonthStats.count) *
-          100,
-      )
+      ((currentMonthStats.count - lastMonthStats.count) /
+        lastMonthStats.count) *
+      100,
+    )
     : 0;
 
   const revenueGrowth = lastMonthStats.revenue
     ? Math.round(
-        ((currentMonthStats.revenue - lastMonthStats.revenue) /
-          lastMonthStats.revenue) *
-          100,
-      )
+      ((currentMonthStats.revenue - lastMonthStats.revenue) /
+        lastMonthStats.revenue) *
+      100,
+    )
     : 0;
 
   return {
@@ -433,8 +433,8 @@ export async function getProductDetails(
 
 export interface OrderShipmentSummary {
   id: string;
-  providerId: string;
-  providerType: string;
+  providerId: string | null;
+  providerType: string | null;
   providerName: string | null;
   status: string;
   rawStatus: string | null;
@@ -455,6 +455,9 @@ export interface OrderListItem {
   shippingCharge: number;
   discountAmount: number | null;
   status: string;
+  paymentStatus: string;
+  paymentMethod: string;
+  fulfillmentStatus: string;
   createdAt: Date;
   updatedAt: Date;
   itemCount: number;
@@ -505,9 +508,8 @@ export async function getOrders(options: {
 
   if (search) {
     whereConditions.push(
-      sql`(${orders.customerName} LIKE ${`%${search}%`} OR ${
-        orders.customerPhone
-      } LIKE ${`%${search}%`} OR ${orders.id} LIKE ${`%${search}%`})`,
+      sql`(${orders.customerName} LIKE ${`%${search}%`} OR ${orders.customerPhone
+        } LIKE ${`%${search}%`} OR ${orders.id} LIKE ${`%${search}%`})`,
     );
   }
 
@@ -550,6 +552,9 @@ export async function getOrders(options: {
       shippingCharge: orders.shippingCharge,
       discountAmount: orders.discountAmount,
       status: orders.status,
+      paymentStatus: orders.paymentStatus,
+      paymentMethod: orders.paymentMethod,
+      fulfillmentStatus: orders.fulfillmentStatus,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
       city: orders.city,
@@ -606,27 +611,27 @@ export async function getOrders(options: {
     // Latest shipments
     results.length > 0
       ? db
-          .select({
-            orderId: deliveryShipments.orderId,
-            id: deliveryShipments.id,
-            providerId: deliveryShipments.providerId,
-            providerType: deliveryShipments.providerType,
-            status: deliveryShipments.status,
-            rawStatus: deliveryShipments.rawStatus,
-            externalId: deliveryShipments.externalId,
-            trackingId: deliveryShipments.trackingId,
-            lastChecked: deliveryShipments.lastChecked,
-            updatedAt: deliveryShipments.updatedAt,
-            createdAt: deliveryShipments.createdAt,
-            providerName: deliveryProviders.name,
-          })
-          .from(deliveryShipments)
-          .leftJoin(
-            deliveryProviders,
-            eq(deliveryShipments.providerId, deliveryProviders.id),
-          )
-          .where(inArray(deliveryShipments.orderId, orderIds))
-          .orderBy(desc(deliveryShipments.createdAt))
+        .select({
+          orderId: deliveryShipments.orderId,
+          id: deliveryShipments.id,
+          providerId: deliveryShipments.providerId,
+          providerType: deliveryShipments.providerType,
+          status: deliveryShipments.status,
+          rawStatus: deliveryShipments.rawStatus,
+          externalId: deliveryShipments.externalId,
+          trackingId: deliveryShipments.trackingId,
+          lastChecked: deliveryShipments.lastChecked,
+          updatedAt: deliveryShipments.updatedAt,
+          createdAt: deliveryShipments.createdAt,
+          providerName: deliveryProviders.name,
+        })
+        .from(deliveryShipments)
+        .leftJoin(
+          deliveryProviders,
+          eq(deliveryShipments.providerId, deliveryProviders.id),
+        )
+        .where(inArray(deliveryShipments.orderId, orderIds))
+        .orderBy(desc(deliveryShipments.createdAt))
       : Promise.resolve([]),
   ]);
 
@@ -734,6 +739,9 @@ export async function getOrderDetails(
       shippingCharge: orders.shippingCharge,
       discountAmount: orders.discountAmount,
       status: orders.status,
+      paymentStatus: orders.paymentStatus,
+      paymentMethod: orders.paymentMethod,
+      fulfillmentStatus: orders.fulfillmentStatus,
       notes: orders.notes,
       shippingAddress: orders.shippingAddress,
       city: orders.city,
@@ -980,13 +988,13 @@ export async function getDiscounts(options: {
   limit?: number;
   showTrashed?: boolean;
   sort?:
-    | "code"
-    | "type"
-    | "value"
-    | "startDate"
-    | "endDate"
-    | "createdAt"
-    | "updatedAt";
+  | "code"
+  | "type"
+  | "value"
+  | "startDate"
+  | "endDate"
+  | "createdAt"
+  | "updatedAt";
   order?: "asc" | "desc";
 }) {
   const {
