@@ -3,7 +3,6 @@ import { db } from "../../../db";
 import { pages } from "../../../db/schema";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex, deleteFromIndex } from "@/lib/search/index";
 
 const bulkDeleteSchema = z.object({
   pageIds: z.array(z.string()),
@@ -37,18 +36,6 @@ export const POST: APIRoute = async ({ request }) => {
         .where(sql`${pages.id} IN ${data.pageIds}`);
     }
 
-    // Delete from search index directly instead of full reindexing
-    // This is more efficient for bulk deletions
-    deleteFromIndex({ pageIds: data.pageIds }).catch((error) => {
-      console.error("Error deleting pages from search index:", error);
-      // Fall back to full reindexing if direct deletion fails
-      triggerReindex().catch((reindexError) => {
-        console.error(
-          "Background reindexing failed after bulk page deletion:",
-          reindexError,
-        );
-      });
-    });
 
     return new Response(null, { status: 204 });
   } catch (error) {

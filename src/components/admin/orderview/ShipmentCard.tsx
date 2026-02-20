@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Truck, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Truck, ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
 import type { DeliveryShipment } from "@/db/schema";
 import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
@@ -175,12 +175,29 @@ const ShipmentHistoryItem = ({
           <span className="text-muted-foreground">Provider:</span>
           <span className="text-foreground">{shipment.providerType}</span>
         </div>
-        {shipment.trackingId && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Tracking ID:</span>
-            <span className="font-mono text-xs">{shipment.trackingId}</span>
-          </div>
-        )}
+        {shipment.trackingId && (() => {
+          const trackingUrl = shipment.providerType === "pathao"
+            ? `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId)}`
+            : shipment.providerType === "steadfast"
+              ? `https://steadfast.com.bd/t/${encodeURIComponent(shipment.trackingId)}`
+              : null;
+
+          return (
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Tracking ID:</span>
+              <div className="flex flex-col items-end gap-1">
+                <span className="font-mono text-xs">{shipment.trackingId}</span>
+                {trackingUrl && (
+                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+                    <a href={trackingUrl} target="_blank" rel="noopener noreferrer">
+                      View Courier Tracking <ExternalLink className="h-3 w-3 ml-1" />
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {isExpanded && shipment.metadata && (

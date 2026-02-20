@@ -20,10 +20,10 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     if (data.permanent) {
-      await db.transaction(async (tx) => {
-        await tx.delete(productAttributeValues).where(inArray(productAttributeValues.attributeId, data.attributeIds));
-        await tx.delete(productAttributes).where(inArray(productAttributes.id, data.attributeIds));
-      });
+      await db.batch([
+        db.delete(productAttributeValues).where(inArray(productAttributeValues.attributeId, data.attributeIds)),
+        db.delete(productAttributes).where(inArray(productAttributes.id, data.attributeIds)),
+      ]);
     } else {
       // Check if any attributes are in use before soft-deleting
       const usage = await db

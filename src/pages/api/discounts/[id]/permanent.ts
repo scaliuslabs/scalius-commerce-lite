@@ -29,24 +29,15 @@ export const DELETE: APIRoute = async ({ params }) => {
       });
     }
 
-    // Permanently delete the discount and its associations in a transaction
-    await db.transaction(async (tx) => {
-      await tx
-        .delete(discountProducts)
-        .where(eq(discountProducts.discountId, id));
-      await tx
-        .delete(discountCollections)
-        .where(eq(discountCollections.discountId, id));
+    // Permanently delete the discount and its associations
+    await db.batch([
+      db.delete(discountProducts).where(eq(discountProducts.discountId, id)),
+      db.delete(discountCollections).where(eq(discountCollections.discountId, id)),
       // Add deletion for discountUsage table if needed
-      // await tx.delete(discountUsage).where(eq(discountUsage.discountId, id));
-      await tx.delete(discounts).where(eq(discounts.id, id));
-    });
+      // db.delete(discountUsage).where(eq(discountUsage.discountId, id)),
+      db.delete(discounts).where(eq(discounts.id, id)),
+    ]);
 
-    // Handle search index updates if necessary
-    // deleteFromIndex({ discountIds: [id] }).catch((error) => {
-    //   console.error("Error deleting discount from search index:", error);
-    //   // Optionally trigger full reindex as fallback
-    // });
 
     return new Response(
       JSON.stringify({

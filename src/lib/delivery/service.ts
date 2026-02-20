@@ -257,6 +257,9 @@ export class DeliveryService {
     }
 
     // Get provider
+    if (!shipment.providerId) {
+      throw new Error(`Shipment ${shipmentId} has no provider (manual shipment)`);
+    }
     const provider = await this.getProvider(shipment.providerId);
     if (!provider) {
       throw new Error(`Provider with ID ${shipment.providerId} not found`);

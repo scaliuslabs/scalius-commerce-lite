@@ -35,6 +35,13 @@ export interface Order {
   areaName?: string | null;
   shipments?: DeliveryShipment[];
   deliveryProviders?: DeliveryProvider[];
+  // Payment fields
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+  paidAmount?: number | null;
+  balanceDue?: number | null;
+  fulfillmentStatus?: string | null;
+  inventoryPool?: string | null;
 }
 
 // This will be useful for the status constants
@@ -44,6 +51,7 @@ export const ORDER_STATUSES = [
   "confirmed",
   "shipped",
   "delivered",
+  "completed",
   "cancelled",
   "returned",
 ] as const;

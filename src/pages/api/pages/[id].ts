@@ -3,7 +3,6 @@ import { db } from "../../../db";
 import { pages } from "../../../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex, deleteFromIndex } from "@/lib/search/index";
 
 const updatePageSchema = z.object({
   id: z.string(),
@@ -151,9 +150,6 @@ export const PUT: APIRoute = async ({ request, params }) => {
 
     // Trigger reindexing in the background
     // We don't await this to avoid delaying the response
-    triggerReindex().catch((error) => {
-      console.error("Background reindexing failed after page update:", error);
-    });
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -203,18 +199,6 @@ export const DELETE: APIRoute = async ({ params }) => {
       })
       .where(eq(pages.id, id));
 
-    // Delete from search index directly instead of full reindexing
-    // This is more efficient for single item deletions
-    deleteFromIndex({ pageIds: [id] }).catch((error) => {
-      console.error("Error deleting page from search index:", error);
-      // Fall back to full reindexing if direct deletion fails
-      triggerReindex().catch((reindexError) => {
-        console.error(
-          "Background reindexing failed after page deletion:",
-          reindexError,
-        );
-      });
-    });
 
     return new Response(null, { status: 204 });
   } catch (error) {

@@ -7,7 +7,6 @@ import {
 } from "../../../db/schema";
 import { sql, inArray } from "drizzle-orm";
 import { z } from "zod";
-// import { triggerReindex, deleteFromIndex } from "@/lib/search/index"; // Uncomment if discounts are indexed
 
 const bulkDeleteSchema = z.object({
   discountIds: z.array(z.string()),
@@ -28,19 +27,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (data.permanent) {
       // Permanently delete discounts and their associations
-      await db.transaction(async (tx) => {
-        await tx
-          .delete(discountProducts)
-          .where(inArray(discountProducts.discountId, data.discountIds));
-        await tx
-          .delete(discountCollections)
-          .where(inArray(discountCollections.discountId, data.discountIds));
+      await db.batch([
+        db.delete(discountProducts).where(inArray(discountProducts.discountId, data.discountIds)),
+        db.delete(discountCollections).where(inArray(discountCollections.discountId, data.discountIds)),
         // Add deletion for discountUsage table if it exists and needs cascading
-        // await tx.delete(discountUsage).where(inArray(discountUsage.discountId, data.discountIds));
-        await tx
-          .delete(discounts)
-          .where(inArray(discounts.id, data.discountIds));
-      });
+        // db.delete(discountUsage).where(inArray(discountUsage.discountId, data.discountIds)),
+        db.delete(discounts).where(inArray(discounts.id, data.discountIds)),
+      ]);
     } else {
       // Soft delete discounts
       await db
@@ -49,15 +42,6 @@ export const POST: APIRoute = async ({ request }) => {
         .where(inArray(discounts.id, data.discountIds));
     }
 
-    // Handle search index updates if necessary
-    // if (data.discountIds.length > 0) {
-    //     deleteFromIndex({ discountIds: data.discountIds }).catch((error) => {
-    //       console.error("Error deleting discounts from search index:", error);
-    //       triggerReindex().catch((reindexError) => {
-    //         console.error("Background reindexing failed after bulk discount deletion:", reindexError);
-    //       });
-    //     });
-    // }
 
     return new Response(null, { status: 204 });
   } catch (error) {

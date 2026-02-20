@@ -177,6 +177,20 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/orders/*/shipments/*/refresh": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
+  "/api/orders/*/fulfill": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
+  },
+  "/api/orders/*/items": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
+  "/api/orders/*/payments": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
+  "/api/orders/*/cod": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+    POST: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
 
   // =============================================
   // Shipments API
@@ -395,6 +409,14 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Settings API (SENSITIVE)
   // =============================================
+  "/api/settings/stripe": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/settings/sslcommerz": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   "/api/settings/header": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
@@ -611,6 +633,17 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/admin/rbac/user-permissions": {
     POST: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
     DELETE: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
+  },
+
+  // =============================================
+  // Inventory API
+  // =============================================
+  "/api/inventory/alerts": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/inventory/*/adjust": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
 
   // =============================================

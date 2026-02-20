@@ -2,7 +2,6 @@ import type { APIRoute } from "astro";
 import { db } from "../../../../db";
 import { products } from "../../../../db/schema";
 import { eq, sql } from "drizzle-orm";
-import { triggerReindex } from "@/lib/search/index";
 
 export const POST: APIRoute = async ({ params }) => {
   try {
@@ -26,12 +25,6 @@ export const POST: APIRoute = async ({ params }) => {
       .where(eq(products.id, id));
 
     // Trigger reindexing in the background
-    triggerReindex().catch((error) => {
-      console.error(
-        "Background reindexing failed after product restoration:",
-        error,
-      );
-    });
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

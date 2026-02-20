@@ -26,7 +26,7 @@
     "directory": "./dist"
   },
 
-  // Cloudflare D1 – replaces Turso/libSQL
+  // Cloudflare D1 – primary database
   "d1_databases": [
     {
       "binding": "DB",
@@ -39,12 +39,12 @@
   // Cloudflare KV namespaces
   "kv_namespaces": [
     {
-      // API response cache – replaces Upstash Redis
+      // API response cache
       "binding": "CACHE",
       "id": "d6e2d77d898e4b3f9c186802ce63f9b8"
     },
     {
-      // Astro session storage (required by @astrojs/cloudflare session middleware)
+      // Astro session storage
       "binding": "SESSION",
       "id": "0564d3a6c3704c8c9f355b7ec5498f50"
     },
@@ -55,11 +55,48 @@
     }
   ],
 
-  // Cloudflare R2 – replaces AWS S3 SDK for media storage
+  // Cloudflare R2 – media storage
   "r2_buckets": [
     {
       "binding": "BUCKET",
       "bucket_name": "scalius-media"
     }
-  ]
+  ],
+
+  // Cloudflare Queues – async webhook & inventory processing
+  // NOTE: Queue IDs must be created via `wrangler queues create <name>` before deploying.
+  // Uncomment and fill in IDs after creation:
+  // "queues": {
+  //   "producers": [
+  //     {
+  //       "binding": "PAYMENT_EVENTS_QUEUE",
+  //       "queue": "payment-events"
+  //     },
+  //     {
+  //       "binding": "INVENTORY_QUEUE",
+  //       "queue": "inventory-events"
+  //     }
+  //   ],
+  //   "consumers": [
+  //     {
+  //       "queue": "payment-events",
+  //       "max_batch_size": 10,
+  //       "max_batch_timeout": 5,
+  //       "max_retries": 3
+  //     },
+  //     {
+  //       "queue": "inventory-events",
+  //       "max_batch_size": 10,
+  //       "max_batch_timeout": 5,
+  //       "max_retries": 3
+  //     }
+  //   ]
+  // },
+
+  // Environment variables (non-secret)
+  // NOTE: Stripe and SSLCommerz credentials are managed via the admin dashboard
+  // and stored in the D1 database — do NOT put them here as env vars or secrets.
+  // Only infrastructure secrets go here:
+  //   wrangler secret put BETTER_AUTH_SECRET
+  "vars": {}
 }

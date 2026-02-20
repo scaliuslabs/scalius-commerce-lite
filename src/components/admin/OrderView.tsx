@@ -7,6 +7,7 @@ import { OrderItemsCard } from "./orderview/OrderItemsCard";
 import { OrderStatusCard } from "./orderview/OrderStatusCard";
 import { ShipmentCard } from "./orderview/ShipmentCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
+import { PaymentCard } from "./orderview/PaymentCard";
 
 interface OrderViewProps {
   order: Order;
@@ -20,9 +21,10 @@ export function OrderView({ order }: OrderViewProps) {
         <OrderViewHeader order={order} />
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
-          {/* Left Column for Status, Shipments, and Notes */}
+          {/* Left Column for Status, Payment, Shipments, and Notes */}
           <div className="space-y-4 lg:col-span-4">
             <OrderStatusCard order={order} />
+            <PaymentCard order={order} />
             <ShipmentCard order={order} />
             <OrderNotesCard order={order} />
           </div>

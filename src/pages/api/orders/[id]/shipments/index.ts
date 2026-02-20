@@ -28,7 +28,9 @@ export const GET: APIRoute = async ({ params }) => {
     // Add provider names to the shipments
     const enhancedShipments = await Promise.all(
       shipments.map(async (shipment) => {
-        const provider = await deliveryService.getProvider(shipment.providerId);
+        const provider = shipment.providerId
+          ? await deliveryService.getProvider(shipment.providerId)
+          : null;
         return {
           ...shipment,
           providerName: provider?.name || shipment.providerType,

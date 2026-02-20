@@ -9,6 +9,8 @@ import {
   CalendarClock,
   Pencil,
   History,
+  CreditCard,
+  Package,
 } from "lucide-react";
 import type { Order } from "./types";
 import { getStatusBadgeClass, formatDate } from "@/lib/utils";
@@ -58,6 +60,26 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
 
   const grandTotal =
     order.totalAmount + order.shippingCharge - (order.discountAmount ?? 0);
+
+  const PAYMENT_STATUS_COLORS: Record<string, string> = {
+    paid:     "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    partial:  "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+    unpaid:   "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+    refunded: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+    failed:   "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  };
+
+  const FULFILLMENT_STATUS_COLORS: Record<string, string> = {
+    pending:  "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400",
+    partial:  "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+    complete: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  };
+
+  const PAYMENT_METHOD_LABELS: Record<string, string> = {
+    stripe: "Stripe",
+    sslcommerz: "SSLCommerz",
+    cod: "COD",
+  };
 
   return (
     <div className="relative rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
@@ -132,6 +154,33 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                 ৳{grandTotal.toLocaleString()}
               </span>
             </InfoItem>
+            {order.paymentStatus && (
+              <InfoItem icon={CreditCard} label="Payment">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className={`text-xs ${PAYMENT_STATUS_COLORS[order.paymentStatus] ?? ""}`}
+                  >
+                    {order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
+                  </Badge>
+                  {order.paymentMethod && (
+                    <span className="text-xs text-muted-foreground">
+                      {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
+                    </span>
+                  )}
+                </div>
+              </InfoItem>
+            )}
+            {order.fulfillmentStatus && (
+              <InfoItem icon={Package} label="Fulfillment">
+                <Badge
+                  variant="secondary"
+                  className={`text-xs ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}
+                >
+                  {order.fulfillmentStatus.charAt(0).toUpperCase() + order.fulfillmentStatus.slice(1)}
+                </Badge>
+              </InfoItem>
+            )}
           </div>
         </div>
 

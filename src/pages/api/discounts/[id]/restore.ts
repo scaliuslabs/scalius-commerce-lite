@@ -2,7 +2,6 @@ import type { APIRoute } from "astro";
 import { db } from "../../../../db";
 import { discounts } from "../../../../db/schema";
 import { eq, sql } from "drizzle-orm";
-// import { triggerReindex } from "@/lib/search/index"; // Uncomment if discounts need reindexing on restore
 
 export const POST: APIRoute = async ({ params }) => {
   try {
@@ -46,9 +45,6 @@ export const POST: APIRoute = async ({ params }) => {
       .get();
 
     // Handle search index updates if necessary
-    // triggerReindex().catch((error) => {
-    //   console.error("Background reindexing failed after discount restore:", error);
-    // });
 
     // Format dates for consistent API response
     const formattedDiscount = restoredDiscount

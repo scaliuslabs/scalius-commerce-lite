@@ -248,15 +248,15 @@ export async function search(
       Promise<PageSearchResult[]> | Promise<[]>,
       Promise<CategorySearchResult[]> | Promise<[]>,
     ] = [
-      fetchProducts(query, {
-        limit,
-        categoryId: options?.categoryId,
-        minPrice: options?.minPrice,
-        maxPrice: options?.maxPrice,
-      }),
-      searchPages ? fetchPages(query, limit) : Promise.resolve([]),
-      searchCategories ? fetchCategories(query, limit) : Promise.resolve([]),
-    ];
+        fetchProducts(query, {
+          limit,
+          categoryId: options?.categoryId,
+          minPrice: options?.minPrice,
+          maxPrice: options?.maxPrice,
+        }),
+        searchPages ? fetchPages(query, limit) : Promise.resolve([]),
+        searchCategories ? fetchCategories(query, limit) : Promise.resolve([]),
+      ];
 
     const [products, pages, categories] = await Promise.all(searchPromises);
 
@@ -278,87 +278,4 @@ export async function search(
       categories: [],
     };
   }
-}
-
-/**
- * Dummy function to maintain API compatibility
- * This function doesn't do anything since we're not using MeiliSearch anymore
- */
-export async function indexAllData(): Promise<{
-  productsCount: number;
-  pagesCount: number;
-  categoriesCount: number;
-}> {
-  console.log("Database-only search doesn't require indexing");
-
-  // Return counts of active items in the database
-  try {
-    const productsCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(products)
-      .where(sql`${products.deletedAt} IS NULL AND ${products.isActive} = 1`)
-      .get()
-      .then((result) => result?.count || 0);
-
-    const pagesCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(pages)
-      .where(sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = 1`)
-      .get()
-      .then((result) => result?.count || 0);
-
-    const categoriesCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(categories)
-      .where(sql`${categories.deletedAt} IS NULL`)
-      .get()
-      .then((result) => result?.count || 0);
-
-    return {
-      productsCount,
-      pagesCount,
-      categoriesCount,
-    };
-  } catch (error) {
-    console.error("Error counting database items:", error);
-    return {
-      productsCount: 0,
-      pagesCount: 0,
-      categoriesCount: 0,
-    };
-  }
-}
-
-/**
- * Dummy function to maintain API compatibility
- * This function doesn't do anything since we're not using MeiliSearch anymore
- */
-export async function triggerReindex(): Promise<{
-  productsCount: number;
-  pagesCount: number;
-  categoriesCount: number;
-} | null> {
-  console.log("Database-only search doesn't require reindexing");
-  return indexAllData();
-}
-
-/**
- * Dummy function to maintain API compatibility
- * This function doesn't do anything since we're not using MeiliSearch anymore
- */
-export async function deleteFromIndex(options: {
-  productIds?: string[];
-  pageIds?: string[];
-  categoryIds?: string[];
-}): Promise<{
-  deletedProducts: number;
-  deletedPages: number;
-  deletedCategories: number;
-} | null> {
-  console.log("Database-only search doesn't require index deletion");
-  return {
-    deletedProducts: options.productIds?.length || 0,
-    deletedPages: options.pageIds?.length || 0,
-    deletedCategories: options.categoryIds?.length || 0,
-  };
 }

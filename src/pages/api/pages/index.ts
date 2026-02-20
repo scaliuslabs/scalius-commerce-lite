@@ -4,7 +4,6 @@ import { pages } from "../../../db/schema";
 import { nanoid } from "nanoid";
 import { sql, desc, asc, isNull, like, and, isNotNull } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex } from "@/lib/search/index";
 
 const createPageSchema = z.object({
   title: z.string().min(3).max(100),
@@ -173,9 +172,6 @@ export const POST: APIRoute = async ({ request }) => {
 
     // Trigger reindexing in the background
     // We don't await this to avoid delaying the response
-    triggerReindex().catch((error) => {
-      console.error("Background reindexing failed after page creation:", error);
-    });
 
     return new Response(JSON.stringify({ id: pageId }), {
       status: 201,

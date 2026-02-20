@@ -10,7 +10,6 @@ import {
 import { eq, sql, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-// import { triggerReindex, deleteFromIndex } from "@/lib/search/index"; // Uncomment if discounts are indexed
 
 const discountTypeEnum = z.nativeEnum(DiscountType);
 const discountValueTypeEnum = z.nativeEnum(DiscountValueType);
@@ -185,53 +184,64 @@ export const PUT: APIRoute = async ({ request, params }) => {
       );
     }
 
-    await db.transaction(async (tx) => {
-      // Get current timestamp for fallback and updates
-      const currentTimestamp = Math.floor(Date.now() / 1000);
+    // Compute timestamps outside of batch (startDate fallback requires a SELECT)
+    const currentTimestamp = Math.floor(Date.now() / 1000);
 
-      // For startDate, either use the existing timestamp from the current record
-      // or the current time as a fallback
-      let startDateTimestamp: number;
+    let startDateTimestamp: number;
+    try {
+      if (data.startDate instanceof Date && !isNaN(data.startDate.getTime())) {
+        startDateTimestamp = Math.floor(data.startDate.getTime() / 1000);
+      } else {
+        const existingDiscountTs = await db
+          .select({ startDate: discounts.startDate })
+          .from(discounts)
+          .where(eq(discounts.id, id))
+          .get();
+        const storedStartDate = existingDiscountTs?.startDate;
+        startDateTimestamp =
+          typeof storedStartDate === "number" ? storedStartDate : currentTimestamp;
+      }
+    } catch (error) {
+      console.error("Error processing startDate:", error);
+      startDateTimestamp = currentTimestamp;
+    }
+
+    let endDateTimestamp: number | null = null;
+    if (data.endDate) {
       try {
-        if (
-          data.startDate instanceof Date &&
-          !isNaN(data.startDate.getTime())
-        ) {
-          startDateTimestamp = Math.floor(data.startDate.getTime() / 1000);
-        } else {
-          // Fetch current timestamp from DB as fallback
-          const existingDiscount = await tx
-            .select({ startDate: discounts.startDate })
-            .from(discounts)
-            .where(eq(discounts.id, id))
-            .get();
-
-          // Convert to number with fallback to current timestamp
-          const storedStartDate = existingDiscount?.startDate;
-          startDateTimestamp =
-            typeof storedStartDate === "number"
-              ? storedStartDate
-              : currentTimestamp;
+        if (data.endDate instanceof Date && !isNaN(data.endDate.getTime())) {
+          endDateTimestamp = Math.floor(data.endDate.getTime() / 1000);
         }
       } catch (error) {
-        console.error("Error processing startDate:", error);
-        startDateTimestamp = currentTimestamp;
+        console.error("Error processing endDate:", error);
       }
+    }
 
-      // Handle endDate (can be null)
-      let endDateTimestamp: number | null = null;
-      if (data.endDate) {
-        try {
-          if (data.endDate instanceof Date && !isNaN(data.endDate.getTime())) {
-            endDateTimestamp = Math.floor(data.endDate.getTime() / 1000);
-          }
-        } catch (error) {
-          console.error("Error processing endDate:", error);
-        }
-      }
+    // Build new associations before batch
+    const productsToInsert: (typeof discountProducts.$inferInsert)[] = [];
+    const collectionsToInsert: (typeof discountCollections.$inferInsert)[] = [];
 
-      // Update discount with direct numeric timestamps to avoid date parsing issues
-      await tx
+    if (data.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
+      (data.appliesToProducts || []).forEach((productId) =>
+        productsToInsert.push({
+          id: "dp_" + nanoid(),
+          discountId: id,
+          productId,
+          applicationType: "get",
+        }),
+      );
+      (data.appliesToCollections || []).forEach((collectionId) =>
+        collectionsToInsert.push({
+          id: "dc_" + nanoid(),
+          discountId: id,
+          collectionId,
+          applicationType: "get",
+        }),
+      );
+    }
+
+    const batchOps: any[] = [
+      db
         .update(discounts)
         .set({
           code: data.code,
@@ -252,52 +262,21 @@ export const PUT: APIRoute = async ({ request, params }) => {
           isActive: data.isActive,
           updatedAt: sql`${currentTimestamp}`,
         })
-        .where(eq(discounts.id, id));
+        .where(eq(discounts.id, id)),
+      db.delete(discountProducts).where(eq(discountProducts.discountId, id)),
+      db.delete(discountCollections).where(eq(discountCollections.discountId, id)),
+    ];
 
-      // Clear existing product/collection associations
-      await tx
-        .delete(discountProducts)
-        .where(eq(discountProducts.discountId, id));
-      await tx
-        .delete(discountCollections)
-        .where(eq(discountCollections.discountId, id));
+    if (productsToInsert.length > 0) {
+      batchOps.push(db.insert(discountProducts).values(productsToInsert));
+    }
+    if (collectionsToInsert.length > 0) {
+      batchOps.push(db.insert(discountCollections).values(collectionsToInsert));
+    }
 
-      // Insert new associations
-      const productsToInsert: (typeof discountProducts.$inferInsert)[] = [];
-      const collectionsToInsert: (typeof discountCollections.$inferInsert)[] =
-        [];
-
-      if (data.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
-        (data.appliesToProducts || []).forEach((productId) =>
-          productsToInsert.push({
-            id: "dp_" + nanoid(),
-            discountId: id,
-            productId,
-            applicationType: "get",
-          }),
-        );
-        (data.appliesToCollections || []).forEach((collectionId) =>
-          collectionsToInsert.push({
-            id: "dc_" + nanoid(),
-            discountId: id,
-            collectionId,
-            applicationType: "get",
-          }),
-        );
-      }
-
-      if (productsToInsert.length > 0) {
-        await tx.insert(discountProducts).values(productsToInsert);
-      }
-      if (collectionsToInsert.length > 0) {
-        await tx.insert(discountCollections).values(collectionsToInsert);
-      }
-    });
+    await db.batch(batchOps as any);
 
     // Consider reindexing if necessary
-    // triggerReindex().catch((error) => {
-    //   console.error("Background reindexing failed after discount update:", error);
-    // });
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -336,13 +315,6 @@ export const DELETE: APIRoute = async ({ params }) => {
       .set({ deletedAt: sql`unixepoch()` })
       .where(eq(discounts.id, id));
 
-    // Consider deleting from index if necessary
-    // deleteFromIndex({ discountIds: [id] }).catch((error) => {
-    //   console.error("Error deleting discount from search index:", error);
-    //   triggerReindex().catch((reindexError) => {
-    //     console.error("Background reindexing failed after discount deletion:", reindexError);
-    //   });
-    // });
 
     return new Response(null, { status: 204 });
   } catch (error) {

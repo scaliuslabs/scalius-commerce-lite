@@ -13,7 +13,8 @@
     "db:migrate:remote": "node scripts/deploy.mjs --migrate-only",
     "db:studio": "drizzle-kit studio",
     "deploy": "node scripts/deploy.mjs",
-    "generate:sdk": "tsx src/scripts/generate-openapi-json.ts && openapi-ts"
+    "generate:sdk": "tsx src/scripts/generate-openapi-json.ts && openapi-ts",
+    "seed:pathao": "tsx scripts/seed-pathao.ts"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.6",
@@ -103,6 +104,7 @@
     "recharts": "^2.15.4",
     "sharp": "^0.33.5",
     "sonner": "^2.0.7",
+    "stripe": "^20.3.1",
     "tailwind-merge": "^3.4.0",
     "tailwind-variants": "^1.0.0",
     "tailwindcss": "^4.1.18",

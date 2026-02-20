@@ -22,17 +22,15 @@ export const user = sqliteTable("user", {
     .notNull()
     .default(false),
   image: text("image"),
-  role: text("role").default("user"), // 'user' | 'admin'
+  role: text("role").default("user"),
   isSuperAdmin: integer("is_super_admin", { mode: "boolean" })
     .notNull()
-    .default(false), // Super admin has all permissions and cannot be demoted
+    .default(false),
   banned: integer("banned", { mode: "boolean" }).default(false),
   banReason: text("ban_reason"),
   banExpires: integer("ban_expires", { mode: "timestamp" }),
-  twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).default(
-    false
-  ),
-  twoFactorMethod: text("two_factor_method"), // 'totp' | 'email' - user's preferred 2FA method
+  twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).default(false),
+  twoFactorMethod: text("two_factor_method"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(cast(strftime('%s','now') as int))`),
@@ -51,7 +49,6 @@ export const session = sqliteTable("session", {
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   impersonatedBy: text("impersonated_by"),
-  // Two-factor authentication verification status
   twoFactorVerified: integer("two_factor_verified", { mode: "boolean" }).default(false),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -70,12 +67,8 @@ export const account = sqliteTable("account", {
   providerId: text("provider_id").notNull(),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
-  accessTokenExpiresAt: integer("access_token_expires_at", {
-    mode: "timestamp",
-  }),
-  refreshTokenExpiresAt: integer("refresh_token_expires_at", {
-    mode: "timestamp",
-  }),
+  accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
+  refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
   scope: text("scope"),
   password: text("password"),
   idToken: text("id_token"),
@@ -115,7 +108,6 @@ export const twoFactor = sqliteTable("two_factor", {
     .default(sql`(cast(strftime('%s','now') as int))`),
 });
 
-// Better Auth type exports
 export type User = InferSelectModel<typeof user>;
 export type Session = InferSelectModel<typeof session>;
 export type Account = InferSelectModel<typeof account>;
@@ -126,30 +118,26 @@ export type TwoFactor = InferSelectModel<typeof twoFactor>;
 // RBAC (Role-Based Access Control) TABLES
 // =============================================
 
-// All available permissions in the system
 export const permissions = sqliteTable("permissions", {
   id: text("id").primaryKey(),
-  name: text("name").notNull().unique(), // e.g., "products.view", "orders.create"
-  displayName: text("display_name").notNull(), // e.g., "View Products"
-  description: text("description"), // Detailed description of what this permission allows
-  resource: text("resource").notNull(), // e.g., "products", "orders", "settings"
-  action: text("action").notNull(), // e.g., "view", "create", "edit", "delete"
-  category: text("category").notNull(), // For UI grouping: "Products", "Orders", "Settings"
-  isSensitive: integer("is_sensitive", { mode: "boolean" })
-    .notNull()
-    .default(false), // Marks permissions that grant access to sensitive data
+  name: text("name").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  description: text("description"),
+  resource: text("resource").notNull(),
+  action: text("action").notNull(),
+  category: text("category").notNull(),
+  isSensitive: integer("is_sensitive", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(cast(strftime('%s','now') as int))`),
 });
 
-// Role templates that define sets of permissions
 export const roles = sqliteTable("roles", {
   id: text("id").primaryKey(),
-  name: text("name").notNull().unique(), // e.g., "manager", "sales_rep"
-  displayName: text("display_name").notNull(), // e.g., "Manager", "Sales Representative"
-  description: text("description"), // Description of the role's purpose
-  isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false), // System roles cannot be deleted
+  name: text("name").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  description: text("description"),
+  isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(cast(strftime('%s','now') as int))`),
@@ -158,7 +146,6 @@ export const roles = sqliteTable("roles", {
     .default(sql`(cast(strftime('%s','now') as int))`),
 });
 
-// Many-to-many: roles -> permissions
 export const rolePermissions = sqliteTable(
   "role_permissions",
   {
@@ -180,7 +167,6 @@ export const rolePermissions = sqliteTable(
   ]
 );
 
-// Many-to-many: users -> roles
 export const userRoles = sqliteTable(
   "user_roles",
   {
@@ -191,9 +177,7 @@ export const userRoles = sqliteTable(
     roleId: text("role_id")
       .notNull()
       .references(() => roles.id, { onDelete: "cascade" }),
-    assignedBy: text("assigned_by").references(() => user.id, {
-      onDelete: "set null",
-    }), // Who assigned this role
+    assignedBy: text("assigned_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(cast(strftime('%s','now') as int))`),
@@ -205,7 +189,6 @@ export const userRoles = sqliteTable(
   ]
 );
 
-// Direct permission overrides for users (grant or deny specific permissions)
 export const userPermissions = sqliteTable(
   "user_permissions",
   {
@@ -216,10 +199,8 @@ export const userPermissions = sqliteTable(
     permissionId: text("permission_id")
       .notNull()
       .references(() => permissions.id, { onDelete: "cascade" }),
-    granted: integer("granted", { mode: "boolean" }).notNull(), // true = grant, false = deny
-    assignedBy: text("assigned_by").references(() => user.id, {
-      onDelete: "set null",
-    }), // Who assigned this override
+    granted: integer("granted", { mode: "boolean" }).notNull(),
+    assignedBy: text("assigned_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(cast(strftime('%s','now') as int))`),
@@ -231,7 +212,6 @@ export const userPermissions = sqliteTable(
   ]
 );
 
-// RBAC type exports
 export type Permission = InferSelectModel<typeof permissions>;
 export type Role = InferSelectModel<typeof roles>;
 export type RolePermission = InferSelectModel<typeof rolePermissions>;
@@ -242,28 +222,69 @@ export type UserPermission = InferSelectModel<typeof userPermissions>;
 // ENUMS
 // =============================================
 
-// Order status enum
 export const OrderStatus = {
   PENDING: "pending",
   PROCESSING: "processing",
   CONFIRMED: "confirmed",
   SHIPPED: "shipped",
   DELIVERED: "delivered",
+  COMPLETED: "completed",
   CANCELLED: "cancelled",
   RETURNED: "returned",
 } as const;
 
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
-// Delivery provider enum
+export const PaymentMethod = {
+  STRIPE: "stripe",
+  SSLCOMMERZ: "sslcommerz",
+  COD: "cod",
+} as const;
+
+export type PaymentMethodType = (typeof PaymentMethod)[keyof typeof PaymentMethod];
+
+export const PaymentStatus = {
+  UNPAID: "unpaid",
+  PARTIAL: "partial",
+  PAID: "paid",
+  REFUNDED: "refunded",
+  FAILED: "failed",
+} as const;
+
+export type PaymentStatusType = (typeof PaymentStatus)[keyof typeof PaymentStatus];
+
+export const FulfillmentStatus = {
+  PENDING: "pending",
+  PARTIAL: "partial",
+  COMPLETE: "complete",
+} as const;
+
+export type FulfillmentStatusType = (typeof FulfillmentStatus)[keyof typeof FulfillmentStatus];
+
+export const InventoryPool = {
+  REGULAR: "regular",
+  PREORDER: "preorder",
+  BACKORDER: "backorder",
+} as const;
+
+export type InventoryPoolType = (typeof InventoryPool)[keyof typeof InventoryPool];
+
+export const ItemFulfillmentStatus = {
+  PENDING: "pending",
+  PICKED: "picked",
+  PACKED: "packed",
+  SHIPPED: "shipped",
+  DELIVERED: "delivered",
+} as const;
+
+export type ItemFulfillmentStatusType = (typeof ItemFulfillmentStatus)[keyof typeof ItemFulfillmentStatus];
+
 export const DeliveryProvider = {
   PATHAO: "pathao",
   STEADFAST: "steadfast",
-  // Future providers can be added here
 } as const;
 
-export type DeliveryProviderType =
-  (typeof DeliveryProvider)[keyof typeof DeliveryProvider];
+export type DeliveryProviderType = (typeof DeliveryProvider)[keyof typeof DeliveryProvider];
 
 // =============================================
 // PRODUCT RELATED TABLES
@@ -289,13 +310,9 @@ export const products = sqliteTable(
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     discountPercentage: real("discount_percentage").default(0),
-    discountType: text("discount_type", {
-      enum: ["percentage", "flat"],
-    }).default("percentage"),
+    discountType: text("discount_type", { enum: ["percentage", "flat"] }).default("percentage"),
     discountAmount: real("discount_amount").default(0),
-    freeDelivery: integer("free_delivery", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    freeDelivery: integer("free_delivery", { mode: "boolean" }).notNull().default(false),
   },
   (table) => [
     index("products_slug_idx").on(table.slug),
@@ -309,9 +326,7 @@ export const productImages = sqliteTable("product_images", {
   productId: text("product_id").notNull(),
   url: text("url").notNull(),
   alt: text("alt"),
-  isPrimary: integer("is_primary", { mode: "boolean" })
-    .notNull()
-    .default(false),
+  isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -330,10 +345,20 @@ export const productVariants = sqliteTable("product_variants", {
   sku: text("sku").notNull(),
   price: real("price").notNull(),
   stock: integer("stock").notNull().default(0),
+  // Inventory management fields
+  reservedStock: integer("reserved_stock").notNull().default(0),
+  preorderStock: integer("preorder_stock").notNull().default(0),
+  version: integer("version").notNull().default(1), // Optimistic locking
+  lowStockThreshold: integer("low_stock_threshold"), // Alert when stock <= this value
+  // Pre-order / backorder settings
+  allowPreorder: integer("allow_preorder", { mode: "boolean" }).notNull().default(false),
+  preorderDate: text("preorder_date"), // ISO date string: when stock arrives / ships
+  preorderMessage: text("preorder_message"), // Customer-facing message e.g. "Ships Feb 28"
+  allowBackorder: integer("allow_backorder", { mode: "boolean" }).notNull().default(false),
+  backorderLimit: integer("backorder_limit").notNull().default(0), // 0 = unlimited
+  // Existing discount fields
   discountPercentage: real("discount_percentage").default(0),
-  discountType: text("discount_type", { enum: ["percentage", "flat"] }).default(
-    "percentage",
-  ),
+  discountType: text("discount_type", { enum: ["percentage", "flat"] }).default("percentage"),
   discountAmount: real("discount_amount").default(0),
   colorSortOrder: integer("color_sort_order").default(0),
   sizeSortOrder: integer("size_sort_order").default(0),
@@ -373,10 +398,8 @@ export const categories = sqliteTable(
 export const collections = sqliteTable("collections", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  type: text("type", {
-    enum: ["collection1", "collection2"],
-  }).notNull(), // UI rendering style only (grid-with-featured vs horizontal-scroll)
-  config: text("config").notNull(), // JSON: { categoryIds: string[], productIds: string[], featuredProductId?: string, maxProducts: number, title?: string, subtitle?: string }
+  type: text("type", { enum: ["collection1", "collection2"] }).notNull(),
+  config: text("config").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp" })
@@ -394,12 +417,10 @@ export const collections = sqliteTable("collections", {
 
 export const productAttributes = sqliteTable("product_attributes", {
   id: text("id").primaryKey(),
-  name: text("name").notNull().unique(), // e.g., "Brand", "Warranty", "Color"
-  slug: text("slug").notNull().unique(), // e.g., "brand", "warranty", "color"
-  filterable: integer("filterable", { mode: "boolean" })
-    .notNull()
-    .default(true), // Can be used in frontend filters
-  options: text("options", { mode: "json" }).$type<string[]>(), // JSON array of predefined values e.g. ["S", "M", "L"]
+  name: text("name").notNull().unique(),
+  slug: text("slug").notNull().unique(),
+  filterable: integer("filterable", { mode: "boolean" }).notNull().default(true),
+  options: text("options", { mode: "json" }).$type<string[]>(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -419,7 +440,7 @@ export const productAttributeValues = sqliteTable(
     attributeId: text("attribute_id")
       .notNull()
       .references(() => productAttributes.id, { onDelete: "cascade" }),
-    value: text("value").notNull(), // e.g., "Apple", "2 Years", "15-inch"
+    value: text("value").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -427,7 +448,6 @@ export const productAttributeValues = sqliteTable(
   (table) => [unique().on(table.productId, table.attributeId)],
 );
 
-// Add productRichContent table
 export const productRichContent = sqliteTable("product_rich_content", {
   id: text("id").primaryKey(),
   productId: text("product_id")
@@ -487,9 +507,7 @@ export const customerHistory = sqliteTable("customer_history", {
   cityName: text("city_name"),
   zoneName: text("zone_name"),
   areaName: text("area_name"),
-  changeType: text("change_type", {
-    enum: ["created", "updated", "deleted"],
-  }).notNull(),
+  changeType: text("change_type", { enum: ["created", "updated", "deleted"] }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -516,6 +534,18 @@ export const orders = sqliteTable("orders", {
   discountAmount: real("discount_amount").default(0),
   status: text("status").notNull().default(OrderStatus.PENDING),
   notes: text("notes"),
+  // Payment fields
+  paymentMethod: text("payment_method").notNull().default(PaymentMethod.COD),
+  paymentStatus: text("payment_status").notNull().default(PaymentStatus.UNPAID),
+  paymentIntentId: text("payment_intent_id"), // Stripe PI ID or SSLCommerz session key
+  paidAmount: real("paid_amount").notNull().default(0),
+  balanceDue: real("balance_due").notNull().default(0),
+  // Fulfillment fields
+  fulfillmentStatus: text("fulfillment_status").notNull().default(FulfillmentStatus.PENDING),
+  inventoryPool: text("inventory_pool").notNull().default(InventoryPool.REGULAR),
+  expectedDelivery: text("expected_delivery"), // ISO date string for pre-orders
+  // Relations
+  customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(cast(strftime('%s','now') as int))`),
@@ -523,10 +553,12 @@ export const orders = sqliteTable("orders", {
     .notNull()
     .default(sql`(cast(strftime('%s','now') as int))`),
   deletedAt: integer("deleted_at", { mode: "timestamp" }),
-  customerId: text("customer_id").references(() => customers.id, {
-    onDelete: "set null",
-  }),
-});
+}, (table) => [
+  index("orders_status_idx").on(table.status),
+  index("orders_payment_status_idx").on(table.paymentStatus),
+  index("orders_customer_id_idx").on(table.customerId),
+  index("orders_created_at_idx").on(table.createdAt),
+]);
 
 export const orderItems = sqliteTable("order_items", {
   id: text("id").primaryKey(),
@@ -537,12 +569,164 @@ export const orderItems = sqliteTable("order_items", {
   variantId: text("variant_id"),
   quantity: integer("quantity").notNull(),
   price: real("price").notNull(),
+  // Snapshot fields (captured at order time)
+  productName: text("product_name"), // Snapshot of product name
+  variantLabel: text("variant_label"), // e.g. "Red / XL"
+  // Fulfillment tracking per item
+  fulfillmentStatus: text("fulfillment_status").notNull().default(ItemFulfillmentStatus.PENDING),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(cast(strftime('%s','now') as int))`),
 }, (table) => [
   index("order_items_order_id_idx").on(table.orderId),
   index("order_items_product_id_idx").on(table.productId),
+]);
+
+// =============================================
+// PAYMENT RELATED TABLES
+// =============================================
+
+// Tracks all individual payment transactions for an order
+export const orderPayments = sqliteTable("order_payments", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  amount: real("amount").notNull(),
+  currency: text("currency").notNull().default("BDT"),
+  paymentMethod: text("payment_method").notNull(), // stripe | sslcommerz | cod
+  paymentType: text("payment_type").notNull().default("full"), // full | deposit | balance
+  status: text("status").notNull().default("pending"), // pending | succeeded | failed | refunded
+  // Stripe-specific fields
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeChargeId: text("stripe_charge_id"),
+  // SSLCommerz-specific fields
+  sslcommerzTranId: text("sslcommerz_tran_id"),
+  sslcommerzValId: text("sslcommerz_val_id"),
+  sslcommerzBankTranId: text("sslcommerz_bank_tran_id"),
+  // COD-specific fields
+  codCollectedBy: text("cod_collected_by"),
+  codCollectedAt: integer("cod_collected_at", { mode: "timestamp" }),
+  codReceiptUrl: text("cod_receipt_url"),
+  // Metadata for extra context
+  metadata: text("metadata"), // JSON string
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+}, (table) => [
+  index("order_payments_order_id_idx").on(table.orderId),
+  index("order_payments_stripe_pi_idx").on(table.stripePaymentIntentId),
+  index("order_payments_ssl_tran_idx").on(table.sslcommerzTranId),
+]);
+
+// Payment plan for deposit + balance orders
+export const paymentPlans = sqliteTable("payment_plans", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" })
+    .unique(),
+  totalAmount: real("total_amount").notNull(),
+  depositAmount: real("deposit_amount").notNull(),
+  balanceDue: real("balance_due").notNull(),
+  depositPaidAt: integer("deposit_paid_at", { mode: "timestamp" }),
+  balancePaidAt: integer("balance_paid_at", { mode: "timestamp" }),
+  balanceDueDate: text("balance_due_date"), // ISO date string
+  status: text("status").notNull().default("pending"), // pending | deposit_paid | fully_paid
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+});
+
+// COD delivery tracking
+export const codTracking = sqliteTable("cod_tracking", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" })
+    .unique(),
+  deliveryAttempts: integer("delivery_attempts").notNull().default(0),
+  lastAttemptAt: integer("last_attempt_at", { mode: "timestamp" }),
+  codStatus: text("cod_status").notNull().default("pending"), // pending | collected | failed | returned
+  failureReason: text("failure_reason"), // not_home | refused | no_cash | wrong_address
+  collectedBy: text("collected_by"), // courier name/ID
+  collectedAmount: real("collected_amount"),
+  collectedAt: integer("collected_at", { mode: "timestamp" }),
+  receiptUrl: text("receipt_url"), // Photo of delivery/receipt
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+});
+
+// Idempotency store for webhook events
+export const webhookEvents = sqliteTable("webhook_events", {
+  id: text("id").primaryKey(), // Stripe event ID or SSLCommerz tran_id
+  provider: text("provider").notNull(), // stripe | sslcommerz
+  eventType: text("event_type").notNull(),
+  orderId: text("order_id"),
+  status: text("status").notNull().default("processed"), // processed | failed
+  result: text("result"), // JSON string of processing result
+  processedAt: integer("processed_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+}, (table) => [
+  index("webhook_events_provider_idx").on(table.provider),
+  index("webhook_events_order_id_idx").on(table.orderId),
+]);
+
+// =============================================
+// INVENTORY TRACKING TABLES
+// =============================================
+
+// Audit log for all stock movements
+export const inventoryMovements = sqliteTable("inventory_movements", {
+  id: text("id").primaryKey(),
+  variantId: text("variant_id").notNull(),
+  orderId: text("order_id"), // Nullable: null for manual adjustments
+  type: text("type").notNull(), // reserved | deducted | released | adjusted | preorder_reserved | preorder_deducted
+  quantity: integer("quantity").notNull(), // Positive = added, negative = removed
+  previousStock: integer("previous_stock").notNull(),
+  newStock: integer("new_stock").notNull(),
+  notes: text("notes"),
+  createdBy: text("created_by"), // Admin user ID for manual adjustments
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+}, (table) => [
+  index("inventory_movements_variant_idx").on(table.variantId),
+  index("inventory_movements_order_idx").on(table.orderId),
+  index("inventory_movements_created_at_idx").on(table.createdAt),
+]);
+
+// Low stock alerts configuration and state
+export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {
+  id: text("id").primaryKey(),
+  variantId: text("variant_id").notNull().unique(),
+  productId: text("product_id").notNull(),
+  currentQty: integer("current_qty").notNull(),
+  threshold: integer("threshold").notNull(),
+  alertStatus: text("alert_status").notNull().default("active"), // active | acknowledged | resolved
+  alertSentAt: integer("alert_sent_at", { mode: "timestamp" }),
+  acknowledgedAt: integer("acknowledged_at", { mode: "timestamp" }),
+  resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+}, (table) => [
+  index("pls_alerts_product_idx").on(table.productId),
+  index("pls_alerts_status_idx").on(table.alertStatus),
 ]);
 
 // =============================================
@@ -553,9 +737,9 @@ export const deliveryLocations = sqliteTable("delivery_locations", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   type: text("type", { enum: ["city", "zone", "area"] }).notNull(),
-  parentId: text("parent_id"), // References parent location (e.g., zone's city or area's zone)
-  externalIds: text("external_ids").notNull(), // JSON string mapping provider IDs: { "pathao": "123", "other_provider": "456" }
-  metadata: text("metadata").notNull(), // JSON string for additional data like availability, coordinates, etc.
+  parentId: text("parent_id"),
+  externalIds: text("external_ids").notNull(),
+  metadata: text("metadata").notNull(),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" })
@@ -570,10 +754,10 @@ export const deliveryLocations = sqliteTable("delivery_locations", {
 export const deliveryProviders = sqliteTable("delivery_providers", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  type: text("type").notNull(), // pathao, steadfast, etc.
+  type: text("type").notNull(),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
-  credentials: text("credentials").notNull(), // JSON string of provider-specific credentials
-  config: text("config").notNull(), // JSON string of additional configuration
+  credentials: text("credentials").notNull(),
+  config: text("config").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -587,16 +771,22 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
   orderId: text("order_id")
     .notNull()
     .references(() => orders.id, { onDelete: "cascade" }),
-  providerId: text("provider_id")
-    .notNull()
-    .references(() => deliveryProviders.id),
-  providerType: text("provider_type").notNull(), // pathao, steadfast, etc.
-  externalId: text("external_id"), // consignment_id from provider
-  trackingId: text("tracking_id"), // Tracking ID (may be same as externalId)
-  status: text("status").notNull(), // Mapped status in our system (pending, in_transit, etc.)
-  rawStatus: text("raw_status"), // Raw status from the provider
-  metadata: text("metadata"), // JSON string containing response data, options, etc.
-  lastChecked: integer("last_checked", { mode: "timestamp" }), // When the status was last checked
+  // Nullable for manual shipments that don't use an integrated provider
+  providerId: text("provider_id").references(() => deliveryProviders.id),
+  providerType: text("provider_type").notNull().default("manual"),
+  externalId: text("external_id"),
+  trackingId: text("tracking_id"), // Tracking number
+  trackingUrl: text("tracking_url"),
+  courierName: text("courier_name"), // For manual shipments
+  status: text("status").notNull().default("pending"),
+  rawStatus: text("raw_status"),
+  note: text("note"),
+  metadata: text("metadata"),
+  lastChecked: integer("last_checked", { mode: "timestamp" }),
+  // Partial fulfillment: which items are in this shipment
+  shipmentItems: text("shipment_items"), // JSON array of orderItem IDs
+  shipmentAmount: real("shipment_amount"), // Amount captured for this shipment (Stripe multicapture)
+  isFinalShipment: integer("is_final_shipment", { mode: "boolean" }).default(false),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -615,12 +805,12 @@ export const settings = sqliteTable(
     id: text("id").primaryKey(),
     key: text("key").notNull(),
     value: text("value").notNull(),
-    type: text("type").notNull(), // 'string' | 'number' | 'boolean' | 'json'
-    category: text("category").notNull(), // 'general' | 'pathao' | 'shipping' etc
+    type: text("type").notNull(),
+    category: text("category").notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
-    expiresAt: integer("expires_at", { mode: "timestamp" }), // For cache expiration
+    expiresAt: integer("expires_at", { mode: "timestamp" }),
   },
   (table) => [unique("settings_key_category").on(table.key, table.category)],
 );
@@ -631,15 +821,15 @@ export const siteSettings = sqliteTable("site_settings", {
   favicon: text("favicon"),
   siteName: text("site_name").notNull(),
   siteDescription: text("site_description"),
-  headerConfig: text("header_config").notNull(), // JSON string for header builder
-  footerConfig: text("footer_config").notNull(), // JSON string for footer builder: { logo, tagline, menus: [{id, title, links}], socialLinks: [{id, platform, icon, url}] }
-  socialLinks: text("social_links"), // JSON string for social media links
-  contactInfo: text("contact_info"), // JSON string for contact information
-  siteTitle: text("site_title"), // New: For SEO - overall site title
-  homepageTitle: text("homepage_title"), // New: For SEO - specific title for the homepage
-  homepageMetaDescription: text("homepage_meta_description"), // New: For SEO - specific meta description for the homepage
-  robotsTxt: text("robots_txt"), // New: For robots.txt content
-  storefrontUrl: text("storefront_url").default("/"), // New: For configurable storefront URL
+  headerConfig: text("header_config").notNull(),
+  footerConfig: text("footer_config").notNull(),
+  socialLinks: text("social_links"),
+  contactInfo: text("contact_info"),
+  siteTitle: text("site_title"),
+  homepageTitle: text("homepage_title"),
+  homepageMetaDescription: text("homepage_meta_description"),
+  robotsTxt: text("robots_txt"),
+  storefrontUrl: text("storefront_url").default("/"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -657,19 +847,10 @@ export const pages = sqliteTable(
     content: text("content").notNull(),
     metaTitle: text("meta_title"),
     metaDescription: text("meta_description"),
-    isPublished: integer("is_published", { mode: "boolean" })
-      .notNull()
-      .default(true),
-    // Add new fields for layout control
-    hideHeader: integer("hide_header", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    hideFooter: integer("hide_footer", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    hideTitle: integer("hide_title", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    isPublished: integer("is_published", { mode: "boolean" }).notNull().default(true),
+    hideHeader: integer("hide_header", { mode: "boolean" }).notNull().default(false),
+    hideFooter: integer("hide_footer", { mode: "boolean" }).notNull().default(false),
+    hideTitle: integer("hide_title", { mode: "boolean" }).notNull().default(false),
     publishedAt: integer("published_at", { mode: "timestamp" }),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
@@ -686,13 +867,11 @@ export const pages = sqliteTable(
 export const analytics = sqliteTable("analytics", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  type: text("type").notNull(), // 'google_analytics', 'facebook_pixel', 'custom'
+  type: text("type").notNull(),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  usePartytown: integer("use_partytown", { mode: "boolean" })
-    .notNull()
-    .default(true),
-  config: text("config").notNull(), // JSON string for analytics configuration
-  location: text("location").notNull(), // 'head', 'body_start', 'body_end'
+  usePartytown: integer("use_partytown", { mode: "boolean" }).notNull().default(true),
+  config: text("config").notNull(),
+  location: text("location").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -708,9 +887,9 @@ export const analytics = sqliteTable("analytics", {
 export const pageTemplates = sqliteTable("page_templates", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  type: text("type").notNull(), // 'home', 'product', 'collection', 'custom'
+  type: text("type").notNull(),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  config: text("config").notNull(), // JSON string for template configuration
+  config: text("config").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -722,9 +901,9 @@ export const pageTemplates = sqliteTable("page_templates", {
 export const heroSections = sqliteTable("hero_sections", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  type: text("type").notNull(), // 'slider', 'single', 'grid'
+  type: text("type").notNull(),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  config: text("config").notNull(), // JSON string for hero configuration
+  config: text("config").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -736,7 +915,7 @@ export const heroSections = sqliteTable("hero_sections", {
 export const heroSliders = sqliteTable("hero_sliders", {
   id: text("id").primaryKey(),
   type: text("type", { enum: ["desktop", "mobile"] }).notNull(),
-  images: text("images").notNull(), // Will store JSON array of {url, link, title}
+  images: text("images").notNull(),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -798,8 +977,7 @@ export const DiscountValueType = {
   FREE: "free",
 } as const;
 
-export type DiscountValueType =
-  (typeof DiscountValueType)[keyof typeof DiscountValueType];
+export type DiscountValueType = (typeof DiscountValueType)[keyof typeof DiscountValueType];
 
 export const discounts = sqliteTable("discounts", {
   id: text("id").primaryKey(),
@@ -822,24 +1000,12 @@ export const discounts = sqliteTable("discounts", {
   minPurchaseAmount: real("min_purchase_amount"),
   minQuantity: integer("min_quantity"),
   maxUsesPerOrder: integer("max_uses_per_order"),
-  // Usage limitations
   maxUses: integer("max_uses"),
-  limitOnePerCustomer: integer("limit_one_per_customer", {
-    mode: "boolean",
-  }).default(false),
-  // Combinability with other discounts
-  combineWithProductDiscounts: integer("combine_with_product_discounts", {
-    mode: "boolean",
-  }).default(false),
-  combineWithOrderDiscounts: integer("combine_with_order_discounts", {
-    mode: "boolean",
-  }).default(false),
-  combineWithShippingDiscounts: integer("combine_with_shipping_discounts", {
-    mode: "boolean",
-  }).default(false),
-  // Eligibility - if null/empty, applies to all customers
-  customerSegment: text("customer_segment"), // can store JSON with customer group IDs
-  // Dates
+  limitOnePerCustomer: integer("limit_one_per_customer", { mode: "boolean" }).default(false),
+  combineWithProductDiscounts: integer("combine_with_product_discounts", { mode: "boolean" }).default(false),
+  combineWithOrderDiscounts: integer("combine_with_order_discounts", { mode: "boolean" }).default(false),
+  combineWithShippingDiscounts: integer("combine_with_shipping_discounts", { mode: "boolean" }).default(false),
+  customerSegment: text("customer_segment"),
   startDate: integer("start_date", { mode: "timestamp" }).notNull(),
   endDate: integer("end_date", { mode: "timestamp" }),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
@@ -852,7 +1018,6 @@ export const discounts = sqliteTable("discounts", {
   deletedAt: integer("deleted_at", { mode: "timestamp" }),
 });
 
-// Table for mapping specific products to discounts
 export const discountProducts = sqliteTable("discount_products", {
   id: text("id").primaryKey(),
   discountId: text("discount_id")
@@ -861,14 +1026,12 @@ export const discountProducts = sqliteTable("discount_products", {
   productId: text("product_id")
     .notNull()
     .references(() => products.id),
-  // For discount application, we use "get" as the standard type
   applicationType: text("application_type", { enum: ["get"] }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
-// Table for mapping specific collections to discounts
 export const discountCollections = sqliteTable("discount_collections", {
   id: text("id").primaryKey(),
   discountId: text("discount_id")
@@ -877,14 +1040,12 @@ export const discountCollections = sqliteTable("discount_collections", {
   collectionId: text("collection_id")
     .notNull()
     .references(() => collections.id),
-  // For discount application, we use "get" as the standard type
   applicationType: text("application_type", { enum: ["get"] }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
-// Table for tracking discount usage by customers
 export const discountUsage = sqliteTable("discount_usage", {
   id: text("id").primaryKey(),
   discountId: text("discount_id")
@@ -907,27 +1068,23 @@ export const discountUsage = sqliteTable("discount_usage", {
 export const WidgetPlacementRule = {
   BEFORE_COLLECTION: "before_collection",
   AFTER_COLLECTION: "after_collection",
-  FIXED_TOP_HOMEPAGE: "fixed_top_homepage", // Specific fixed position
-  FIXED_BOTTOM_HOMEPAGE: "fixed_bottom_homepage", // Specific fixed position
-  STANDALONE: "standalone", // For use with shortcodes only
+  FIXED_TOP_HOMEPAGE: "fixed_top_homepage",
+  FIXED_BOTTOM_HOMEPAGE: "fixed_bottom_homepage",
+  STANDALONE: "standalone",
 } as const;
 
-export type WidgetPlacementRule =
-  (typeof WidgetPlacementRule)[keyof typeof WidgetPlacementRule];
+export type WidgetPlacementRule = (typeof WidgetPlacementRule)[keyof typeof WidgetPlacementRule];
 
 export const widgets = sqliteTable(
   "widgets",
   {
     id: text("id").primaryKey(),
-    name: text("name").notNull(), // For admin identification
+    name: text("name").notNull(),
     htmlContent: text("html_content").notNull(),
-    cssContent: text("css_content"), // Optional CSS
-    aiContext: text("ai_context"), // JSON string for AI context
+    cssContent: text("css_content"),
+    aiContext: text("ai_context"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    // 'homepage' is the only target for now, but this allows future expansion
-    displayTarget: text("display_target", { enum: ["homepage"] })
-      .notNull()
-      .default("homepage"),
+    displayTarget: text("display_target", { enum: ["homepage"] }).notNull().default("homepage"),
     placementRule: text("placement_rule", {
       enum: [
         WidgetPlacementRule.BEFORE_COLLECTION,
@@ -937,13 +1094,10 @@ export const widgets = sqliteTable(
         WidgetPlacementRule.STANDALONE,
       ],
     }).notNull(),
-    // Only relevant if placementRule is BEFORE_COLLECTION or AFTER_COLLECTION
     referenceCollectionId: text("reference_collection_id").references(
       () => collections.id,
-      { onDelete: "set null" }, // If a collection is deleted, we might want to handle widgets pointing to it
+      { onDelete: "set null" },
     ),
-    // General sort order. For collections, this orders widgets relative to the same collection.
-    // For fixed positions, this orders widgets within that fixed block.
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
@@ -954,30 +1108,87 @@ export const widgets = sqliteTable(
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
   },
   (table) => [
-    index("widgets_target_idx").on(
-      table.displayTarget,
-      table.isActive,
-      table.deletedAt,
-    ),
+    index("widgets_target_idx").on(table.displayTarget, table.isActive, table.deletedAt),
   ],
 );
+
+export const widgetHistory = sqliteTable("widget_history", {
+  id: text("id").primaryKey(),
+  widgetId: text("widget_id")
+    .notNull()
+    .references(() => widgets.id, { onDelete: "cascade" }),
+  htmlContent: text("html_content").notNull(),
+  cssContent: text("css_content"),
+  reason: text("reason").notNull().default("updated"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+});
 
 // =============================================
 // META CONVERSIONS API RELATED TABLES
 // =============================================
 
-export const metaConversionsSettings = sqliteTable(
-  "meta_conversions_settings",
+export const metaConversionsSettings = sqliteTable("meta_conversions_settings", {
+  id: text("id").primaryKey(),
+  pixelId: text("pixel_id"),
+  accessToken: text("access_token"),
+  testEventCode: text("test_event_code"),
+  isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(false),
+  logRetentionDays: integer("log_retention_days").notNull().default(30),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+});
+
+export const metaConversionsLogs = sqliteTable("meta_conversions_logs", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id").notNull().unique(),
+  eventName: text("event_name").notNull(),
+  status: text("status", { enum: ["success", "failed"] }).notNull(),
+  requestPayload: text("request_payload").notNull(),
+  responsePayload: text("response_payload"),
+  errorMessage: text("error_message"),
+  eventTime: integer("event_time", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+});
+
+// =============================================
+// SHIPPING METHODS
+// =============================================
+
+export const shippingMethods = sqliteTable("shipping_methods", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  fee: real("fee").notNull().default(0),
+  description: text("description"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  deletedAt: integer("deleted_at", { mode: "timestamp" }),
+});
+
+// =============================================
+// ABANDONED CHECKOUTS
+// =============================================
+
+export const abandonedCheckouts = sqliteTable(
+  "abandoned_checkouts",
   {
-    id: text("id").primaryKey(), // Using a single row with a fixed ID e.g., 'singleton'
-    pixelId: text("pixel_id"),
-    // IMPORTANT: This token is highly sensitive and should be encrypted before being stored.
-    accessToken: text("access_token"),
-    testEventCode: text("test_event_code"), // For testing events in Meta's Events Manager
-    isEnabled: integer("is_enabled", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    logRetentionDays: integer("log_retention_days").notNull().default(30), // Days to keep logs before auto-clearing
+    id: text("id").primaryKey(),
+    checkoutId: text("checkout_id").notNull(),
+    customerPhone: text("customer_phone"),
+    checkoutData: text("checkout_data").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(cast(strftime('%s','now') as int))`),
@@ -985,20 +1196,47 @@ export const metaConversionsSettings = sqliteTable(
       .notNull()
       .default(sql`(cast(strftime('%s','now') as int))`),
   },
+  (table) => [unique("ab_checkout_id_unique").on(table.checkoutId)],
 );
 
-export const metaConversionsLogs = sqliteTable("meta_conversions_logs", {
+// =============================================
+// ADMIN NOTIFICATION TABLES
+// =============================================
+
+export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {
   id: text("id").primaryKey(),
-  eventId: text("event_id").notNull().unique(), // Unique ID for deduplication
-  eventName: text("event_name").notNull(), // e.g., 'Purchase', 'AddToCart'
-  status: text("status", { enum: ["success", "failed"] }).notNull(),
-  requestPayload: text("request_payload").notNull(), // JSON string of the sent data
-  responsePayload: text("response_payload"), // JSON string of the response from Meta
-  errorMessage: text("error_message"), // Stores the error if the request failed
-  eventTime: integer("event_time", { mode: "timestamp" }).notNull(), // The timestamp of when the event occurred
+  userId: text("user_id").notNull(),
+  token: text("token").notNull().unique(),
+  deviceInfo: text("device_info"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  lastUsed: integer("last_used", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(cast(strftime('%s','now') as int))`),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+});
+
+// =============================================
+// CHECKOUT LANGUAGE SETTINGS
+// =============================================
+
+export const checkoutLanguages = sqliteTable("checkout_languages", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  code: text("code").notNull().unique(),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
+  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  languageData: text("language_data").notNull(),
+  fieldVisibility: text("field_visibility").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(cast(strftime('%s','now') as int))`),
+  deletedAt: integer("deleted_at", { mode: "timestamp" }),
 });
 
 // =============================================
@@ -1012,9 +1250,7 @@ export type ProductVariant = InferSelectModel<typeof productVariants>;
 export type Category = InferSelectModel<typeof categories>;
 export type Collection = InferSelectModel<typeof collections>;
 export type ProductAttribute = InferSelectModel<typeof productAttributes>;
-export type ProductAttributeValue = InferSelectModel<
-  typeof productAttributeValues
->;
+export type ProductAttributeValue = InferSelectModel<typeof productAttributeValues>;
 export type ProductRichContent = InferSelectModel<typeof productRichContent>;
 
 // Customer related types
@@ -1024,26 +1260,14 @@ export type CustomerHistory = InferSelectModel<typeof customerHistory>;
 // Order related types
 export type Order = InferSelectModel<typeof orders>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
+export type OrderPayment = InferSelectModel<typeof orderPayments>;
+export type PaymentPlan = InferSelectModel<typeof paymentPlans>;
+export type CodTracking = InferSelectModel<typeof codTracking>;
+export type WebhookEvent = InferSelectModel<typeof webhookEvents>;
 
-// Abandoned Checkouts
-export const abandonedCheckouts = sqliteTable(
-  "abandoned_checkouts",
-  {
-    id: text("id").primaryKey(),
-    checkoutId: text("checkout_id").notNull(), // Unique ID for the checkout session from the client
-    customerPhone: text("customer_phone"),
-    checkoutData: text("checkout_data").notNull(), // JSON string of cart items and customer info
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`(cast(strftime('%s','now') as int))`),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`(cast(strftime('%s','now') as int))`),
-  },
-  (table) => [unique("ab_checkout_id_unique").on(table.checkoutId)],
-);
-
-export type AbandonedCheckout = InferSelectModel<typeof abandonedCheckouts>;
+// Inventory related types
+export type InventoryMovement = InferSelectModel<typeof inventoryMovements>;
+export type ProductLowStockAlert = InferSelectModel<typeof productLowStockAlerts>;
 
 // Delivery related types
 export type DeliveryLocation = InferSelectModel<typeof deliveryLocations>;
@@ -1072,99 +1296,12 @@ export type DiscountUsage = InferSelectModel<typeof discountUsage>;
 
 // Widget type
 export type Widget = InferSelectModel<typeof widgets>;
-
-export const widgetHistory = sqliteTable("widget_history", {
-  id: text("id").primaryKey(),
-  widgetId: text("widget_id")
-    .notNull()
-    .references(() => widgets.id, { onDelete: "cascade" }),
-  htmlContent: text("html_content").notNull(),
-  cssContent: text("css_content"),
-  reason: text("reason").notNull().default("updated"),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(cast(strftime('%s','now') as int))`),
-});
-
 export type WidgetHistory = InferSelectModel<typeof widgetHistory>;
 
-// =============================================
-// SHIPPING METHODS RELATED TABLES
-// =============================================
-
-export const shippingMethods = sqliteTable("shipping_methods", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull().unique(), // e.g., "Inside Dhaka", "Outside Dhaka", "Express"
-  fee: real("fee").notNull().default(0),
-  description: text("description"), // Optional description
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  sortOrder: integer("sort_order").notNull().default(0),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(cast(strftime('%s','now') as int))`),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(cast(strftime('%s','now') as int))`),
-  deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
-
-// =============================================
-// ADMIN NOTIFICATION RELATED TABLES
-// =============================================
-
-export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").notNull(), // Better Auth User ID for the admin
-  token: text("token").notNull().unique(), // Keep token unique to prevent duplicates
-  deviceInfo: text("device_info"), // Optional: store device/browser info for identification
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true), // Allow soft deletion of tokens
-  lastUsed: integer("last_used", { mode: "timestamp" }), // Track when token was last used
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(cast(strftime('%s','now') as int))`),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(cast(strftime('%s','now') as int))`),
-});
-
+// Misc types
+export type AbandonedCheckout = InferSelectModel<typeof abandonedCheckouts>;
 export type AdminFcmToken = InferSelectModel<typeof adminFcmTokens>;
-
-// Type for ShippingMethods
 export type ShippingMethod = InferSelectModel<typeof shippingMethods>;
-
-// =============================================
-// CHECKOUT LANGUAGE SETTINGS RELATED TABLES
-// =============================================
-
-export const checkoutLanguages = sqliteTable("checkout_languages", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(), // e.g., "English", "বাংলা", "العربية"
-  code: text("code").notNull().unique(), // e.g., "en", "bn", "ar"
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(false), // Only one can be active
-  isDefault: integer("is_default", { mode: "boolean" })
-    .notNull()
-    .default(false), // Fallback language
-
-  // All language data stored as JSON
-  languageData: text("language_data").notNull(), // JSON string containing all labels, placeholders, messages, etc.
-
-  // Field visibility settings
-  fieldVisibility: text("field_visibility").notNull(), // JSON string for field visibility settings
-
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(cast(strftime('%s','now') as int))`),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(cast(strftime('%s','now') as int))`),
-  deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
-
-// Type for CheckoutLanguage
 export type CheckoutLanguage = InferSelectModel<typeof checkoutLanguages>;
-
-// Meta Conversions API related types
-export type MetaConversionsSettings = InferSelectModel<
-  typeof metaConversionsSettings
->;
+export type MetaConversionsSettings = InferSelectModel<typeof metaConversionsSettings>;
 export type MetaConversionsLog = InferSelectModel<typeof metaConversionsLogs>;

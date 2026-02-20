@@ -149,6 +149,18 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                 -৳{(order.discountAmount ?? 0).toLocaleString()}
               </Badge>
             )}
+            <div className="flex items-center justify-end gap-1 mt-1">
+              {order.paymentStatus === "paid" ? (
+                <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0">Paid</Badge>
+              ) : order.paymentStatus === "partial" ? (
+                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0">Partial</Badge>
+              ) : (
+                <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 py-0">Unpaid</Badge>
+              )}
+              <span className="text-[10px] text-[var(--muted-foreground)] uppercase">
+                {order.paymentMethod === "cod" ? "COD" : order.paymentMethod === "stripe" ? "Stripe" : order.paymentMethod === "sslcommerz" ? "SSL" : order.paymentMethod}
+              </span>
+            </div>
           </div>
         </div>
 

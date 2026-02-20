@@ -11,12 +11,10 @@ export const DELETE: APIRoute = async ({ params }) => {
   }
 
   try {
-    await db.transaction(async (tx) => {
-      // First, delete all values associated with this attribute
-      await tx.delete(productAttributeValues).where(eq(productAttributeValues.attributeId, id));
-      // Then, delete the attribute definition itself
-      await tx.delete(productAttributes).where(eq(productAttributes.id, id));
-    });
+    await db.batch([
+      db.delete(productAttributeValues).where(eq(productAttributeValues.attributeId, id)),
+      db.delete(productAttributes).where(eq(productAttributes.id, id)),
+    ]);
 
     return new Response(null, { status: 204 });
   } catch (error) {

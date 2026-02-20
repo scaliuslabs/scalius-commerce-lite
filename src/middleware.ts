@@ -31,6 +31,7 @@ const protectedApiPatterns = [
   /^\/api\/shipments(\/.*)?$/,
   /^\/api\/system-prompt(\/.*)?$/,
   /^\/api\/widgets(\/.*)?$/,
+  /^\/api\/inventory(\/.*)?$/,
 ];
 
 // Check if a path matches any protected API pattern

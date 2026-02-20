@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../db";
 import { customers, customerHistory, orders } from "../../../db/schema";
-import { sql } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 const bulkDeleteSchema = z.object({
@@ -23,34 +23,19 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // Start a transaction
-    await db.transaction(async (tx) => {
-      if (data.permanent) {
-        // First update orders to remove customer references
-        await tx
-          .update(orders)
-          .set({ customerId: null })
-          .where(sql`${orders.customerId} IN ${data.customerIds}`);
-
-        // Delete customer history
-        await tx
-          .delete(customerHistory)
-          .where(sql`${customerHistory.customerId} IN ${data.customerIds}`);
-
-        // Finally delete customers
-        await tx
-          .delete(customers)
-          .where(sql`${customers.id} IN ${data.customerIds}`);
-      } else {
-        // Soft delete customers
-        await tx
-          .update(customers)
-          .set({
-            deletedAt: sql`unixepoch()`,
-          })
-          .where(sql`${customers.id} IN ${data.customerIds}`);
-      }
-    });
+    if (data.permanent) {
+      await db.batch([
+        db.update(orders).set({ customerId: null }).where(inArray(orders.customerId, data.customerIds)),
+        db.delete(customerHistory).where(inArray(customerHistory.customerId, data.customerIds)),
+        db.delete(customers).where(inArray(customers.id, data.customerIds)),
+      ]);
+    } else {
+      // Soft delete customers
+      await db
+        .update(customers)
+        .set({ deletedAt: sql`unixepoch()` })
+        .where(inArray(customers.id, data.customerIds));
+    }
 
     return new Response(null, { status: 204 });
   } catch (error) {

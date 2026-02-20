@@ -18,6 +18,9 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Dashboard
   "/admin": { permission: PERMISSIONS.DASHBOARD_VIEW },
 
+  // Inventory
+  "/admin/inventory": { permission: PERMISSIONS.PRODUCTS_VIEW },
+
   // Products
   "/admin/products": { permission: PERMISSIONS.PRODUCTS_VIEW },
   "/admin/products/new": { permission: PERMISSIONS.PRODUCTS_CREATE },
@@ -77,6 +80,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/settings/shipping-methods": { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW },
   "/admin/settings/checkout-languages": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/meta-conversion": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/settings/payment-gateways": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/cache": { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
 };
 

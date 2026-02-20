@@ -1,0 +1,18 @@
+---
+// src/pages/admin/inventory.astro
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { InventoryManager } from "../../components/admin/InventoryManager";
+---
+
+<AdminLayout title="Inventory">
+  <div class="max-w-6xl mx-auto">
+    <div class="mb-8">
+      <h1 class="text-2xl font-bold">Inventory</h1>
+      <p class="text-sm text-muted-foreground mt-1">
+        Monitor low-stock alerts and manually adjust stock levels with a full audit trail.
+      </p>
+    </div>
+
+    <InventoryManager client:idle />
+  </div>
+</AdminLayout>

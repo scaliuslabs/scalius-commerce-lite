@@ -3,7 +3,6 @@ import { db } from "../../../db";
 import { categories, collections, products } from "../../../db/schema";
 import { sql, inArray, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { triggerReindex, deleteFromIndex } from "@/lib/search/index";
 
 const bulkDeleteSchema = z.object({
   categoryIds: z.array(z.string()),
@@ -99,18 +98,6 @@ export const POST: APIRoute = async ({ request }) => {
         .where(inArray(categories.id, data.categoryIds));
     }
 
-    // Delete from search index directly instead of full reindexing
-    // This is more efficient for bulk deletions
-    deleteFromIndex({ categoryIds: data.categoryIds }).catch((error) => {
-      console.error("Error deleting categories from search index:", error);
-      // Fall back to full reindexing if direct deletion fails
-      triggerReindex().catch((reindexError) => {
-        console.error(
-          "Background reindexing failed after bulk category deletion:",
-          reindexError,
-        );
-      });
-    });
 
     return new Response(null, { status: 204 });
   } catch (error) {

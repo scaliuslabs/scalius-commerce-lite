@@ -55,7 +55,9 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
     const updatedShipments = initialShipments.map((shipment) => ({
       ...shipment,
       providerName:
-        providerMap.get(shipment.providerId) || shipment.providerType,
+        (shipment.providerId ? providerMap.get(shipment.providerId) : undefined)
+        ?? shipment.courierName
+        ?? "Manual",
       trackingNumber: shipment.trackingId,
     }));
 

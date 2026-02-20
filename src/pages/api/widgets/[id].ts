@@ -149,28 +149,31 @@ export const PUT: APIRoute = async ({ params, request }) => {
       .get();
 
     if (currentWidget) {
-      await db.transaction(async (tx) => {
-        await tx.insert(widgetHistory).values({
+      // Pre-fetch existing versions to determine pruning without a nested SELECT in the batch
+      const existingVersions = await db
+        .select({ id: widgetHistory.id, createdAt: widgetHistory.createdAt })
+        .from(widgetHistory)
+        .where(eq(widgetHistory.widgetId, widgetId))
+        .orderBy(desc(widgetHistory.createdAt));
+
+      const historyOps: any[] = [
+        db.insert(widgetHistory).values({
           id: "wh_" + nanoid(),
           widgetId: widgetId,
           htmlContent: currentWidget.htmlContent,
           cssContent: currentWidget.cssContent,
           reason: "updated",
-        });
+        }),
+      ];
 
-        const versions = await tx
-          .select({ id: widgetHistory.id, createdAt: widgetHistory.createdAt })
-          .from(widgetHistory)
-          .where(eq(widgetHistory.widgetId, widgetId))
-          .orderBy(desc(widgetHistory.createdAt));
+      // After inserting one more, total = existingVersions.length + 1.
+      // Keep max 4: prune oldest if existing count already >= 4.
+      if (existingVersions.length >= 4) {
+        const versionsToDelete = existingVersions.slice(3).map((v) => v.id);
+        historyOps.push(db.delete(widgetHistory).where(inArray(widgetHistory.id, versionsToDelete)));
+      }
 
-        if (versions.length > 4) {
-          const versionsToDelete = versions.slice(4).map((v) => v.id);
-          await tx
-            .delete(widgetHistory)
-            .where(inArray(widgetHistory.id, versionsToDelete));
-        }
-      });
+      await db.batch(historyOps as any);
     }
     // --- VERSION HISTORY LOGIC END ---
 

@@ -22,43 +22,61 @@ export const POST: APIRoute = async ({ params, request }) => {
       return new Response(JSON.stringify({ error: "History record not found" }), { status: 404 });
     }
 
-    const updatedWidget = await db.transaction(async (tx) => {
-        // 2. Get the current widget content to save it to history before overwriting
-        const currentWidget = await tx.select().from(widgets).where(eq(widgets.id, widgetId)).get();
-        if (currentWidget) {
-            await tx.insert(widgetHistory).values({
-                id: 'wh_' + nanoid(),
-                widgetId: widgetId,
-                htmlContent: currentWidget.htmlContent,
-                cssContent: currentWidget.cssContent,
-                reason: `restoring version from ${new Date(
-                  versionToRestore.createdAt instanceof Date
-                    ? versionToRestore.createdAt.getTime()
-                    : versionToRestore.createdAt * 1000
-                ).toLocaleString()}`
-            });
-        }
+    // 2. Pre-fetch current widget and existing versions outside the batch
+    const currentWidget = await db.select().from(widgets).where(eq(widgets.id, widgetId)).get();
+    const existingVersions = await db
+      .select({ id: widgetHistory.id })
+      .from(widgetHistory)
+      .where(eq(widgetHistory.widgetId, widgetId))
+      .orderBy(desc(widgetHistory.createdAt));
 
-        // 3. Update the main widget with the restored content
-        const [restoredWidget] = await tx
-          .update(widgets)
-          .set({
-            htmlContent: versionToRestore.htmlContent,
-            cssContent: versionToRestore.cssContent,
-            updatedAt: sql`(cast(strftime('%s','now') as int))`,
-          })
-          .where(eq(widgets.id, widgetId))
-          .returning();
+    const restoreReason = `restoring version from ${new Date(
+      versionToRestore.createdAt instanceof Date
+        ? versionToRestore.createdAt.getTime()
+        : versionToRestore.createdAt * 1000
+    ).toLocaleString()}`;
 
-        // 4. Enforce 4-version limit
-        const versions = await tx.select({ id: widgetHistory.id }).from(widgetHistory).where(eq(widgetHistory.widgetId, widgetId)).orderBy(desc(widgetHistory.createdAt));
-        if (versions.length > 4) {
-            const versionsToDelete = versions.slice(4).map(v => v.id);
-            await tx.delete(widgetHistory).where(inArray(widgetHistory.id, versionsToDelete));
-        }
+    const batchOps: any[] = [];
+    let updateIndex = 0;
 
-        return restoredWidget;
-    });
+    if (currentWidget) {
+      batchOps.push(
+        db.insert(widgetHistory).values({
+          id: 'wh_' + nanoid(),
+          widgetId: widgetId,
+          htmlContent: currentWidget.htmlContent,
+          cssContent: currentWidget.cssContent,
+          reason: restoreReason,
+        }),
+      );
+      updateIndex = 1;
+    }
+
+    // 3. Update the main widget with the restored content
+    batchOps.push(
+      db
+        .update(widgets)
+        .set({
+          htmlContent: versionToRestore.htmlContent,
+          cssContent: versionToRestore.cssContent,
+          updatedAt: sql`(cast(strftime('%s','now') as int))`,
+        })
+        .where(eq(widgets.id, widgetId))
+        .returning(),
+    );
+
+    // 4. Enforce 4-version limit: total after = existing + (currentWidget ? 1 : 0)
+    const willAdd = currentWidget ? 1 : 0;
+    if (existingVersions.length + willAdd > 4) {
+      const keepCount = 4 - willAdd;
+      const versionsToDelete = existingVersions.slice(keepCount).map((v) => v.id);
+      if (versionsToDelete.length > 0) {
+        batchOps.push(db.delete(widgetHistory).where(inArray(widgetHistory.id, versionsToDelete)));
+      }
+    }
+
+    const batchResult = await db.batch(batchOps as any);
+    const updatedWidget = (batchResult[updateIndex] as any[])[0];
 
     return new Response(JSON.stringify(updatedWidget), { status: 200 });
 

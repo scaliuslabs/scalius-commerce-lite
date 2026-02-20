@@ -71,12 +71,6 @@ export function DeliveryLocationsManager() {
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
   const [parentLocations, setParentLocations] = useState<Location[]>([]);
   const [loadingParents, setLoadingParents] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState({
-    step: "",
-    percent: 0,
-  });
-
   // Pagination state
   const [pagination, setPagination] = useState({
     page: 1,
@@ -187,76 +181,6 @@ export function DeliveryLocationsManager() {
     }
   };
 
-  const importFromPathao = async () => {
-    try {
-      setImporting(true);
-      setImportProgress({ step: "Starting import...", percent: 5 });
-
-      // Start the import
-      const response = await fetch(
-        "/api/settings/delivery-locations/import-pathao",
-        {
-          method: "POST",
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to import locations from Pathao");
-      }
-
-      // Show progress while waiting
-      // This is a simulation since we can't get real-time updates from server
-      let countdown = 0;
-      const interval = setInterval(() => {
-        countdown += 1;
-
-        if (countdown <= 10) {
-          setImportProgress({
-            step: "Fetching cities...",
-            percent: 10 + countdown * 3,
-          });
-        } else if (countdown <= 25) {
-          setImportProgress({
-            step: "Importing zones...",
-            percent: 40 + (countdown - 10) * 2,
-          });
-        } else {
-          setImportProgress({
-            step: "Importing areas...",
-            percent: 70 + Math.min((countdown - 25) * 1, 25),
-          });
-        }
-      }, 800);
-
-      const result = await response.json();
-
-      // Clear the interval and set to complete
-      clearInterval(interval);
-      setImportProgress({ step: "Import complete!", percent: 100 });
-
-      if (result.success) {
-        toast.success(
-          `Successfully imported ${result.counts.total} locations from Pathao`,
-        );
-        // Small delay to show 100% completion before resetting
-        setTimeout(() => {
-          setImporting(false);
-          setImportProgress({ step: "", percent: 0 });
-          loadLocations(1, pagination.limit);
-        }, 1000);
-      } else {
-        toast.info(result.message);
-        setImporting(false);
-        setImportProgress({ step: "", percent: 0 });
-      }
-    } catch (error) {
-      console.error("Error importing from Pathao:", error);
-      toast.error("Failed to import locations from Pathao");
-      setImporting(false);
-      setImportProgress({ step: "", percent: 0 });
-    }
-  };
-
   const handleEditLocation = (location: Location) => {
     setEditingLocation(location);
     setFormData({
@@ -315,14 +239,13 @@ export function DeliveryLocationsManager() {
         const errorData = await response.json();
         throw new Error(
           errorData.error ||
-            `Failed to ${editMode ? "update" : "create"} location`,
+          `Failed to ${editMode ? "update" : "create"} location`,
         );
       }
 
       await response.json();
       toast.success(
-        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} ${
-          editMode ? "updated" : "created"
+        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} ${editMode ? "updated" : "created"
         } successfully`,
       );
 
@@ -376,8 +299,7 @@ export function DeliveryLocationsManager() {
       }
 
       toast.success(
-        `${
-          activeTab.charAt(0).toUpperCase() + activeTab.slice(1)
+        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)
         } deleted successfully`,
       );
       loadLocations(pagination.page, pagination.limit);
@@ -410,8 +332,7 @@ export function DeliveryLocationsManager() {
       }
 
       toast.success(
-        `${
-          activeTab.charAt(0).toUpperCase() + activeTab.slice(1)
+        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)
         } status updated`,
       );
       loadLocations();
@@ -554,29 +475,6 @@ export function DeliveryLocationsManager() {
           </TabsList>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={importFromPathao}
-              disabled={importing}
-              className="relative"
-            >
-              {importing ? (
-                <>
-                  <div
-                    className="absolute left-0 top-0 bottom-0 bg-primary/20 z-0 transition-all"
-                    style={{ width: `${importProgress.percent}%` }}
-                  />
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin z-10" />
-                  <span className="z-10">{importProgress.step}</span>
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import from Pathao
-                </>
-              )}
-            </Button>
 
             <Button variant="outline" size="sm" onClick={handleCleanAll}>
               <Trash2 className="mr-2 h-4 w-4" />

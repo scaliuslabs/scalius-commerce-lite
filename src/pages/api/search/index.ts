@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { search, indexAllData } from "@/lib/search/index";
+import { search } from "@/lib/search/index";
 import { rateLimit } from "@/lib/rate-limit";
 import { safeErrorResponse } from "@/lib/error-utils";
 
@@ -105,46 +105,3 @@ export const GET: APIRoute = async ({ request, url }) => {
   }
 };
 
-// For manual reindexing
-export const POST: APIRoute = async ({ request }) => {
-  // Check for secret to authorize reindexing
-  const authHeader = request.headers.get("Authorization");
-  const expectedAuth = `Bearer ${process.env.SERVICE_PASSWORD_MEILISEARCH || ""}`;
-
-  if (authHeader !== expectedAuth) {
-    return new Response(
-      JSON.stringify({
-        error: "Unauthorized",
-        success: false,
-      }),
-      {
-        status: 401,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-  }
-
-  try {
-    // Reindex all data
-    const result = await indexAllData();
-
-    return new Response(
-      JSON.stringify({
-        ...result,
-        success: true,
-        message: "Successfully reindexed all data",
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-  } catch (error) {
-    return safeErrorResponse(error, 500);
-  }
-};

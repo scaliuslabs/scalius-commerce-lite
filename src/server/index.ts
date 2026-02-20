@@ -17,6 +17,12 @@ import { navigationRoutes } from "./routes/navigation";
 import { footerRoutes } from "./routes/footer";
 import { pagesRoutes } from "./routes/pages";
 import { orderRoutes } from "./routes/orders";
+import { stripePaymentRoutes } from "./routes/payment/stripe-routes";
+import { sslcommerzPaymentRoutes } from "./routes/payment/sslcommerz-routes";
+import { stripeWebhookRoutes } from "./routes/webhooks/stripe";
+import { sslcommerzWebhookRoutes } from "./routes/webhooks/sslcommerz";
+import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
+import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
 import { authMiddleware } from "./middleware/auth";
 import { locationRoutes } from "./routes/locations";
 import { discountRoutes } from "./routes/discounts";
@@ -29,6 +35,7 @@ import { checkoutLanguageRoutes } from "./routes/checkout-languages";
 import { abandonedCheckoutsRoutes } from "./routes/abandoned-checkouts";
 import { metaConversionsRoutes } from "./routes/meta-conversions";
 import { storefrontRoutes } from "./routes/storefront";
+import { checkoutRoutes } from "./routes/checkout";
 import { openApiSpec } from "./openapi";
 import { getCorsOriginFunction } from "../lib/cors-helper";
 
@@ -136,6 +143,7 @@ app.route("/checkout-languages", checkoutLanguageRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
 app.route("/meta", metaConversionsRoutes); // Register the new route
 app.route("/storefront", storefrontRoutes); // Consolidated homepage/layout endpoints
+app.route("/checkout", checkoutRoutes);    // Public checkout config (enabled gateways)
 
 // Add health check endpoint (relative path '/health')
 app.get("/health", async (c) => {
@@ -172,6 +180,13 @@ app.route("/__ptproxy", partytownProxyRoutes);
 
 // --- Protected API routes ---
 
+// Webhook routes — NO auth middleware (signature verification IS the auth)
+// Must be registered BEFORE the auth middleware block
+app.route("/webhooks/stripe", stripeWebhookRoutes);
+app.route("/webhooks/sslcommerz", sslcommerzWebhookRoutes);
+app.route("/webhooks/pathao", pathaoWebhookRoutes);
+app.route("/webhooks/steadfast", steadfastWebhookRoutes);
+
 // Apply auth middleware ONLY to paths needing protection
 // Paths are relative (prefix already stripped by astro-handler)
 app.use("/cache/*", authMiddleware);
@@ -182,6 +197,10 @@ app.route("/products", productRoutes);
 app.route("/categories", categoryRoutes); // Categories are now public (category listing and products)
 app.route("/cache", cacheControlRoutes);
 app.route("/orders", orderRoutes);
+
+// Payment routes — public (order ID acts as token; no customer auth required)
+app.route("/payment/stripe", stripePaymentRoutes);
+app.route("/payment/sslcommerz", sslcommerzPaymentRoutes);
 
 // Add Swagger UI documentation (relative path '/docs')
 // Swagger URL needs full path as it's resolved by browser/Swagger tool

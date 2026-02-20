@@ -10,7 +10,6 @@ import {
 import { eq, sql, and } from "drizzle-orm";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { triggerReindex, deleteFromIndex } from "@/lib/search/index";
 
 const updateProductSchema = z.object({
   id: z.string(),
@@ -98,8 +97,27 @@ export const PUT: APIRoute = async ({ request, params }) => {
       );
     }
 
-    await db.transaction(async (tx) => {
-      await tx
+    const attributeValuesToInsert = (data.attributes ?? [])
+      .filter((attr) => attr.attributeId && attr.value.trim())
+      .map((attr) => ({
+        id: `val_${nanoid()}`,
+        productId: id,
+        attributeId: attr.attributeId,
+        value: attr.value,
+      }));
+
+    const contentToInsert = (data.additionalInfo ?? [])
+      .filter((item) => item.title.trim() && item.content.trim())
+      .map((item) => ({
+        id: item.id.startsWith("item-") ? `prc_${nanoid()}` : item.id,
+        productId: id,
+        title: item.title,
+        content: item.content,
+        sortOrder: item.sortOrder,
+      }));
+
+    const batchOps: any[] = [
+      db
         .update(products)
         .set({
           name: data.name,
@@ -116,11 +134,15 @@ export const PUT: APIRoute = async ({ request, params }) => {
           freeDelivery: data.freeDelivery,
           updatedAt: sql`unixepoch()`,
         })
-        .where(eq(products.id, id));
+        .where(eq(products.id, id)),
+      db.delete(productImages).where(eq(productImages.productId, id)),
+      db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
+      db.delete(productRichContent).where(eq(productRichContent.productId, id)),
+    ];
 
-      await tx.delete(productImages).where(eq(productImages.productId, id));
-      if (data.images.length > 0) {
-        await tx.insert(productImages).values(
+    if (data.images.length > 0) {
+      batchOps.push(
+        db.insert(productImages).values(
           data.images.map((image, index) => ({
             id: image.id.startsWith("temp_") ? `img_${nanoid()}` : image.id,
             productId: id,
@@ -129,47 +151,19 @@ export const PUT: APIRoute = async ({ request, params }) => {
             isPrimary: index === 0,
             sortOrder: index,
           })),
-        );
-      }
+        ),
+      );
+    }
 
-      await tx
-        .delete(productAttributeValues)
-        .where(eq(productAttributeValues.productId, id));
-      if (data.attributes && data.attributes.length > 0) {
-        const attributeValuesToInsert = data.attributes
-          .filter((attr) => attr.attributeId && attr.value.trim())
-          .map((attr) => ({
-            id: `val_${nanoid()}`,
-            productId: id,
-            attributeId: attr.attributeId,
-            value: attr.value,
-          }));
+    if (attributeValuesToInsert.length > 0) {
+      batchOps.push(db.insert(productAttributeValues).values(attributeValuesToInsert));
+    }
 
-        if (attributeValuesToInsert.length > 0) {
-          await tx
-            .insert(productAttributeValues)
-            .values(attributeValuesToInsert);
-        }
-      }
-      
-      await tx.delete(productRichContent).where(eq(productRichContent.productId, id));
-      if (data.additionalInfo && data.additionalInfo.length > 0) {
-          const contentToInsert = data.additionalInfo.filter(item => item.title.trim() && item.content.trim())
-            .map(item => ({
-              id: item.id.startsWith("item-") ? `prc_${nanoid()}` : item.id,
-              productId: id,
-              title: item.title,
-              content: item.content,
-              sortOrder: item.sortOrder,
-          }));
-          
-          if(contentToInsert.length > 0) {
-              await tx.insert(productRichContent).values(contentToInsert);
-          }
-      }
-    });
+    if (contentToInsert.length > 0) {
+      batchOps.push(db.insert(productRichContent).values(contentToInsert));
+    }
 
-    triggerReindex().catch(console.error);
+    await db.batch(batchOps as any);
 
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (error) {
@@ -207,16 +201,6 @@ export const DELETE: APIRoute = async ({ params }) => {
         deletedAt: sql`unixepoch()`,
       })
       .where(eq(products.id, id));
-
-    deleteFromIndex({ productIds: [id] }).catch((error) => {
-      console.error("Error deleting product from search index:", error);
-      triggerReindex().catch((reindexError) => {
-        console.error(
-          "Background reindexing failed after product deletion:",
-          reindexError,
-        );
-      });
-    });
 
     return new Response(null, { status: 204 });
   } catch (error) {

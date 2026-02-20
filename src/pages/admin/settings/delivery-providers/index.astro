@@ -81,7 +81,7 @@ const clientActions = `
     async testProvider(id) {
       try {
         console.log('Testing provider:', id);
-        const response = await fetch(\`/api/settings/delivery-providers/\${id}/test\`, {
+        const response = await fetch(\`/api/settings/delivery-providers/\${id}\`, {
           method: 'POST'
         });
         
