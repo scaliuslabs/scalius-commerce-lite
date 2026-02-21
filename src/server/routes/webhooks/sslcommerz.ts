@@ -4,20 +4,20 @@
 // Key design decisions:
 // - SSLCommerz POSTs IPN as application/x-www-form-urlencoded.
 // - MANDATORY: We MUST validate via SSLCommerz's server-to-server API — never trust the IPN directly.
-// - Returns 200 immediately; validation and DB updates run in waitUntil().
-// - Two-layer idempotency: KV (fast) + webhookEvents DB table (durable).
+//   Validation happens synchronously before enqueuing (it is the auth layer for SSLCommerz).
+// - Enqueues to PAYMENT_EVENTS_QUEUE after successful server-side validation.
+//   Cloudflare Queue consumer handles all DB writes and retries automatically.
+// - Returns 200 immediately after enqueuing; SSLCommerz never sees processing latency.
+// - Two-layer idempotency: KV fast check → set AFTER enqueuing succeeds.
+// - FAILED/CANCELLED IPNs enqueue a failure message so the queue consumer can mark the order.
 // - Gateway credentials loaded from DB settings (not env vars).
 
 import { Hono } from "hono";
 import { validateSSLCommerzIPN } from "@/lib/payment/sslcommerz";
 import { getSSLCommerzSettings } from "@/lib/payment/gateway-settings";
-import {
-  processPaymentConfirmed,
-  processPaymentFailed,
-  recordWebhookEvent,
-} from "@/lib/payment/process-payment";
 import { getDb } from "@/db";
 import type { SSLCommerzIPNPayload } from "@/lib/payment/types";
+import type { PaymentQueueMessage } from "@/queue-consumer";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -52,104 +52,61 @@ app.post("/", async (c) => {
     return c.text("OK");
   }
 
-  // Fast idempotency check
+  // Fast idempotency check — prevents duplicate queue messages for the same IPN
   const kvKey = `${KV_WEBHOOK_PREFIX}${tranId}_${valId}`;
   const alreadyProcessed = await c.env.CACHE?.get(kvKey);
   if (alreadyProcessed) {
     return c.text("OK");
   }
 
-  // NOTE: We intentionally do NOT set the KV key here.
-  // The key is set inside handleSSLCommerzIPN AFTER the DB transaction succeeds.
-  // This ensures that if processPaymentConfirmed() fails, SSLCommerz can retry
-  // and the IPN won't be silently dropped.
+  // MANDATORY: Validate via SSLCommerz server-to-server API — this is the auth layer.
+  // We do this synchronously so we never enqueue unvalidated IPNs.
+  const validation = await validateSSLCommerzIPN(ssl.storeId, ssl.storePassword, ssl.sandbox, valId);
 
-  // Return 200 immediately; validate and process asynchronously
-  c.executionCtx.waitUntil(
-    handleSSLCommerzIPN(c.env, payload, ssl.storeId, ssl.storePassword, ssl.sandbox, kvKey)
-  );
+  if (!validation) {
+    // Validation API unreachable — do NOT set KV key so SSLCommerz can retry
+    console.error(`[ssl-webhook] IPN validation API call failed for order ${tranId}`);
+    return c.text("OK");
+  }
+
+  const isValid = validation.status === "VALID" || validation.status === "VALIDATED";
+  const isTerminalFailure = validation.status === "FAILED" || validation.status === "CANCELLED";
+
+  let message: PaymentQueueMessage | null = null;
+
+  if (isValid) {
+    const amount = parseFloat(validation.store_amount ?? validation.amount ?? "0");
+
+    message = {
+      type: "payment.sslcommerz.confirmed",
+      orderId: tranId,
+      tranId,
+      valId,
+      bankTranId: payload.bank_tran_id,
+      amount,
+      currency: payload.currency,
+      cardType: payload.card_type,
+      cardBrand: payload.card_brand,
+    };
+  } else if (isTerminalFailure) {
+    console.warn(`[ssl-webhook] IPN terminal failure for order ${tranId}: ${validation.status}`);
+    message = {
+      type: "payment.sslcommerz.failed",
+      orderId: tranId,
+      tranId,
+      status: validation.status,
+    };
+  } else {
+    // Non-terminal status (e.g. PENDING, UNATTEMPTED) — do not set KV key, allow retry
+    console.warn(`[ssl-webhook] IPN non-terminal status for order ${tranId}: ${validation.status}`);
+    return c.text("OK");
+  }
+
+  await c.env.PAYMENT_EVENTS_QUEUE.send(message);
+  // Set KV idempotency key AFTER enqueuing succeeds — prevents double-enqueue on retries
+  await c.env.CACHE?.put(kvKey, "queued", { expirationTtl: KV_WEBHOOK_TTL });
 
   return c.text("OK");
 });
-
-async function handleSSLCommerzIPN(
-  env: Env,
-  payload: SSLCommerzIPNPayload,
-  storeId: string,
-  storePassword: string,
-  isSandbox: boolean,
-  kvKey: string
-): Promise<void> {
-  const db = getDb(env);
-  const orderId = payload.tran_id;
-  const valId = payload.val_id;
-
-  try {
-    // MANDATORY: Always validate via SSLCommerz server-to-server API
-    const validation = await validateSSLCommerzIPN(storeId, storePassword, isSandbox, valId);
-
-    if (!validation) {
-      console.error(`[ssl-webhook] IPN validation API call failed for order ${orderId}`);
-      await recordWebhookEvent(db, `${orderId}_${valId}`, "sslcommerz", "ipn", orderId, "failed", {
-        error: "Validation API unreachable",
-      });
-      // Do NOT set KV key — allow SSLCommerz to retry
-      return;
-    }
-
-    const isValid = validation.status === "VALID" || validation.status === "VALIDATED";
-
-    if (!isValid) {
-      console.warn(`[ssl-webhook] IPN invalid for order ${orderId}: ${validation.status}`);
-
-      if (validation.status === "FAILED" || validation.status === "CANCELLED") {
-        await processPaymentFailed(db, orderId, "sslcommerz", orderId);
-      }
-
-      await recordWebhookEvent(
-        db, `${orderId}_${valId}`, "sslcommerz", "ipn", orderId, "failed",
-        { validationStatus: validation.status }
-      );
-      // Set KV key for terminal failures (FAILED/CANCELLED) — no point retrying these
-      if (validation.status === "FAILED" || validation.status === "CANCELLED") {
-        await env.CACHE?.put(kvKey, "1", { expirationTtl: KV_WEBHOOK_TTL });
-      }
-      return;
-    }
-
-    // Payment is valid
-    const amount = parseFloat(validation.store_amount ?? validation.amount ?? "0");
-    const paymentType = (payload.value_a as "full" | "deposit" | "balance") ?? "full";
-
-    const result = await processPaymentConfirmed(db, {
-      orderId,
-      amount,
-      paymentGateway: "sslcommerz",
-      paymentType,
-      sslcommerzTranId: orderId,
-      sslcommerzValId: valId,
-      sslcommerzBankTranId: payload.bank_tran_id,
-      metadata: {
-        cardType: payload.card_type,
-        cardBrand: payload.card_brand,
-        currency: payload.currency,
-      },
-    });
-
-    await recordWebhookEvent(
-      db, `${orderId}_${valId}`, "sslcommerz", "ipn", orderId,
-      result.success ? "processed" : "failed", result
-    );
-
-    // Set KV idempotency key ONLY after successful processing
-    // If processPaymentConfirmed threw, we never reach here — SSLCommerz can retry.
-    if (result.success) {
-      await env.CACHE?.put(kvKey, "1", { expirationTtl: KV_WEBHOOK_TTL });
-    }
-  } catch (err) {
-    console.error(`[ssl-webhook] Error processing IPN for order ${orderId}:`, err);
-    // Do NOT set KV key on errors — allow SSLCommerz to retry
-  }
-}
 
 export const sslcommerzWebhookRoutes = app;

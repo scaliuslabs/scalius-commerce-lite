@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "astro dev --host",
     "start": "wrangler dev",
-    "build": "astro check && astro build && pnpm db:generate",
+    "build": "astro check && astro build && pnpm db:generate && node scripts/build-with-queue.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "db:generate": "drizzle-kit generate",
@@ -13,8 +13,7 @@
     "db:migrate:remote": "node scripts/deploy.mjs --migrate-only",
     "db:studio": "drizzle-kit studio",
     "deploy": "node scripts/deploy.mjs",
-    "generate:sdk": "tsx src/scripts/generate-openapi-json.ts && openapi-ts",
-    "seed:pathao": "tsx scripts/seed-pathao.ts"
+    "generate:sdk": "tsx src/scripts/generate-openapi-json.ts && openapi-ts"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.6",

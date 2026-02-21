@@ -1,7 +1,18 @@
 import { Hono } from "hono";
 
-function getAllowedDomains(): string[] {
-  const cspAllowed = process.env.CSP_ALLOWED || "";
+async function getAllowedDomainsAsync(c: any): Promise<string[]> {
+  let cspAllowed = c.env?.CSP_ALLOWED || "";
+  try {
+    if (c.env?.CACHE_CONTROL) {
+      const cached = await c.env.CACHE_CONTROL.get("security:csp_allowed_domains");
+      if (cached !== null) {
+        cspAllowed = cached;
+      }
+    }
+  } catch (e) {
+    console.error(`[Partytown Proxy] Failed to read CSP_ALLOWED from KV`, e);
+  }
+
   if (!cspAllowed.trim()) {
     console.warn("[Partytown Proxy] No CSP_ALLOWED domains configured");
     return [];
@@ -9,17 +20,17 @@ function getAllowedDomains(): string[] {
 
   const domains = cspAllowed
     .split(",")
-    .map((domain) => domain.trim())
-    .filter((domain) => domain.length > 0)
-    .map((domain) => domain.replace(/^https?:\/\//, ""))
-    .flatMap((domain) => {
+    .map((domain: string) => domain.trim())
+    .filter((domain: string) => domain.length > 0)
+    .map((domain: string) => domain.replace(/^https?:\/\//, ""))
+    .flatMap((domain: string) => {
       if (domain.startsWith("*.")) {
         return [domain.slice(2), domain];
       }
       return [domain, `*.${domain}`];
     })
-    .map((domain) => domain.replace(/^\*\./, ""))
-    .filter((domain, index, arr) => arr.indexOf(domain) === index);
+    .map((domain: string) => domain.replace(/^\*\./, ""))
+    .filter((domain: string, index: number, arr: string[]) => arr.indexOf(domain) === index);
 
   console.log("[Partytown Proxy] Allowed domains:", domains);
   return domains;
@@ -58,7 +69,7 @@ app.get("/", async (c) => {
     });
   }
 
-  const allowedDomains = getAllowedDomains();
+  const allowedDomains = await getAllowedDomainsAsync(c);
   const isAllowed = allowedDomains.some((domain) => {
     if (domain.includes("*")) {
       const domainPattern = domain.replace(/\*/g, ".*");

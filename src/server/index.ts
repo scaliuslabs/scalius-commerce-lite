@@ -36,8 +36,9 @@ import { abandonedCheckoutsRoutes } from "./routes/abandoned-checkouts";
 import { metaConversionsRoutes } from "./routes/meta-conversions";
 import { storefrontRoutes } from "./routes/storefront";
 import { checkoutRoutes } from "./routes/checkout";
+import { customerAuthRoutes } from "./routes/customer-auth";
 import { openApiSpec } from "./openapi";
-import { getCorsOriginFunction } from "../lib/cors-helper";
+import { getCorsOriginContext } from "../lib/cors-helper";
 
 // Create typed Hono app with Cloudflare Workers Env bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -63,16 +64,16 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-app.use(
-  "*",
-  cors({
-    origin: getCorsOriginFunction(),
+app.use("*", async (c, next) => {
+  const corsMiddleware = cors({
+    origin: await getCorsOriginContext(c),
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowHeaders: ["Content-Type", "Authorization", "X-API-Token", "Accept"],
     exposeHeaders: ["Content-Type", "Cache-Control"],
     credentials: true,
-  }),
-);
+  });
+  return corsMiddleware(c, next);
+});
 
 app.use("*", async (c, next) => {
   // Use PUBLIC_API_BASE_URL from CF Workers env binding, fallback to request origin
@@ -144,6 +145,7 @@ app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
 app.route("/meta", metaConversionsRoutes); // Register the new route
 app.route("/storefront", storefrontRoutes); // Consolidated homepage/layout endpoints
 app.route("/checkout", checkoutRoutes);    // Public checkout config (enabled gateways)
+app.route("/customer-auth", customerAuthRoutes);
 
 // Add health check endpoint (relative path '/health')
 app.get("/health", async (c) => {

@@ -1,7 +1,6 @@
-export function getCorsOriginFunction() {
+export const getCorsOriginContext = async (c: any) => {
+  const allowedOrigins = await getAllowedCorsOrigins(c);
   return (origin: string): string | null => {
-    const allowedOrigins = getAllowedCorsOrigins();
-
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return "*";
 
@@ -20,13 +19,25 @@ export function getCorsOriginFunction() {
 
     return isAllowed ? origin : null;
   };
-}
+};
 
-function getAllowedCorsOrigins(): string[] {
-  const cspAllowed = process.env.CSP_ALLOWED || "";
-  const cdnDomain = process.env.CDN_DOMAIN_URL;
+async function getAllowedCorsOrigins(c: any): Promise<string[]> {
+  // Try to get from KV, fallback to env
+  let cspAllowed = c.env?.CSP_ALLOWED || "";
+  try {
+    if (c.env?.CACHE_CONTROL) {
+      const cached = await c.env.CACHE_CONTROL.get("security:csp_allowed_domains");
+      if (cached !== null) {
+        cspAllowed = cached;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to read CSP_ALLOWED from KV Cache", e);
+  }
+
+  const cdnDomain = c.env?.CDN_DOMAIN_URL;
   // Use PUBLIC_API_BASE_URL environment variable - no hardcoded fallbacks
-  const currentOrigin = (process.env.PUBLIC_API_BASE_URL || "").trim();
+  const currentOrigin = (c.env?.PUBLIC_API_BASE_URL || "").trim();
 
   const origins = [
     currentOrigin,
@@ -47,9 +58,9 @@ function getAllowedCorsOrigins(): string[] {
   if (cspAllowed.trim()) {
     const customOrigins = cspAllowed
       .split(",")
-      .map((domain) => domain.trim())
-      .filter((domain) => domain.length > 0)
-      .flatMap((domain) => {
+      .map((domain: string) => domain.trim())
+      .filter((domain: string) => domain.length > 0)
+      .flatMap((domain: string) => {
         // Remove https:// if present to normalize
         const cleanDomain = domain.replace(/^https?:\/\//, "");
 

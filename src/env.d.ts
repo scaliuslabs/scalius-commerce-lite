@@ -201,24 +201,24 @@ interface ExecutionContext {
 }
 
 // Cloudflare Queue binding types
-interface Queue<Body = unknown> {
-  send(message: Body, options?: { contentType?: "text" | "bytes" | "json" | "v8" }): Promise<void>;
-  sendBatch(messages: { body: Body; contentType?: string }[]): Promise<void>;
+interface Queue<T = unknown> {
+  send(message: T, options?: { delaySeconds?: number }): Promise<void>;
+  sendBatch(messages: Array<{ body: T; delaySeconds?: number }>): Promise<void>;
 }
 
-interface MessageBatch<Body = unknown> {
-  queue: string;
-  messages: Message<Body>[];
+interface MessageBatch<T = unknown> {
+  readonly queue: string;
+  readonly messages: Message<T>[];
   ackAll(): void;
-  retryAll(): void;
+  retryAll(options?: { delaySeconds?: number }): void;
 }
 
-interface Message<Body = unknown> {
-  id: string;
-  timestamp: Date;
-  body: Body;
+interface Message<T = unknown> {
+  readonly id: string;
+  readonly timestamp: Date;
+  readonly body: T;
   ack(): void;
-  retry(): void;
+  retry(options?: { delaySeconds?: number }): void;
 }
 
 // Cloudflare Workers environment bindings (global Env interface).
@@ -232,9 +232,9 @@ interface Env {
   SHARED_AUTH_CACHE: KVNamespace;
   EMAIL?: SendEmail;
 
-  // Cloudflare Queue bindings (optional until queues are created)
-  PAYMENT_EVENTS_QUEUE?: Queue<{ type: string; payload: Record<string, unknown> }>;
-  INVENTORY_QUEUE?: Queue<{ type: string; payload: Record<string, unknown> }>;
+  // Cloudflare Queue bindings
+  PAYMENT_EVENTS_QUEUE: Queue<any>;
+  ORDER_NOTIFICATIONS_QUEUE: Queue<any>;
 
   // Secrets (set via `wrangler secret put`)
   BETTER_AUTH_SECRET: string;
