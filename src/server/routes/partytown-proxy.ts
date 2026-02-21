@@ -3,8 +3,8 @@ import { Hono } from "hono";
 async function getAllowedDomainsAsync(c: any): Promise<string[]> {
   let cspAllowed = c.env?.CSP_ALLOWED || "";
   try {
-    if (c.env?.CACHE_CONTROL) {
-      const cached = await c.env.CACHE_CONTROL.get("security:csp_allowed_domains");
+    if (c.env?.CACHE) {
+      const cached = await c.env.CACHE.get("security:csp_allowed_domains");
       if (cached !== null) {
         cspAllowed = cached;
       }
