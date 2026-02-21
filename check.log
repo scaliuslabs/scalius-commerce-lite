@@ -1,0 +1,326 @@
+(node:49960) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+22:56:38 [@astrojs/cloudflare] Enabling sessions with Cloudflare KV with the "SESSION" KV binding.
+22:56:38 [@astrojs/cloudflare] If you see the error "Invalid binding `SESSION`" in your build output, you need to add the binding to your wrangler config file.
+22:56:38 [hono-integration] Setting up Hono API integration for Scalius Commerce
+22:56:38 [hono-integration] Injected Hono catch-all route: pattern='/api/v1/[...slug]', entrypoint='./src/server/astro-handler.ts'
+22:56:38 [hono-integration] Injected Partytown proxy route: pattern='/api/__ptproxy', entrypoint='./src/server/astro-handler.ts'
+22:56:38 [hono-integration] Injected docs route: pattern='/api/v1/docs', entrypoint='./src/server/astro-handler.ts'
+22:56:38 [hono-integration] Injected openapi route: pattern='/api/v1/openapi.json', entrypoint='./src/server/astro-handler.ts'
+22:56:38 [hono-integration] Hono API routes integration setup complete.
+22:56:38 [content] Syncing content
+22:56:38 [content] Synced content
+22:56:38 [types] Generated 30ms
+22:56:38 [check] Getting diagnostics for Astro files in /Users/arob/Desktop/open/scalius-commerce-lite...
+[96msrc/queue-consumer.ts[0m:[93m109[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'env' is declared but its value is never read.
+
+[7m109[0m   env: Env,
+[7m   [0m [93m  ~~~[0m
+
+[96msrc/components/admin/AccountSettings.tsx[0m:[93m1145[0m:[93m41[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m1145[0m   const handleAddUser = async (e: React.FormEvent) => {
+[7m    [0m [93m                                        ~~~~~~~~~[0m
+[96msrc/components/admin/AccountSettings.tsx[0m:[93m360[0m:[93m40[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m360[0m   const handleSubmit = async (e: React.FormEvent) => {
+[7m   [0m [93m                                       ~~~~~~~~~[0m
+[96msrc/components/admin/AccountSettings.tsx[0m:[93m50[0m:[93m1[0m - [93mwarning[0m[90m ts(6133): [0m'PermissionGate' is declared but its value is never read.
+
+[7m50[0m import { PermissionGate } from "./PermissionGate";
+[7m  [0m [93m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[96msrc/components/admin/AccountSettings.tsx[0m:[93m29[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'Lock' is declared but its value is never read.
+
+[7m29[0m   Lock,
+[7m  [0m [93m  ~~~~[0m
+
+[96msrc/components/admin/CategoryList.tsx[0m:[93m187[0m:[93m15[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m187[0m     (e: React.FormEvent) => {
+[7m   [0m [93m              ~~~~~~~~~[0m
+
+[96msrc/components/admin/CheckoutLanguagesManager.tsx[0m:[93m370[0m:[93m44[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m370[0m   const handleFormSubmit = async (e: React.FormEvent) => {
+[7m   [0m [93m                                           ~~~~~~~~~[0m
+[96msrc/components/admin/CheckoutLanguagesManager.tsx[0m:[93m295[0m:[93m16[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m295[0m     (e?: React.FormEvent) => {
+[7m   [0m [93m               ~~~~~~~~~[0m
+
+[96msrc/components/admin/CustomerList.tsx[0m:[93m169[0m:[93m15[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m169[0m     (e: React.FormEvent) => {
+[7m   [0m [93m              ~~~~~~~~~[0m
+
+[96msrc/components/admin/DeliveryLocationsManager.tsx[0m:[93m196[0m:[93m40[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m196[0m   const handleSubmit = async (e: React.FormEvent) => {
+[7m   [0m [93m                                       ~~~~~~~~~[0m
+[96msrc/components/admin/DeliveryLocationsManager.tsx[0m:[93m9[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'Upload' is declared but its value is never read.
+
+[7m9[0m   Upload,
+[7m [0m [93m  ~~~~~~[0m
+
+[96msrc/components/admin/OrderList.tsx[0m:[93m280[0m:[93m35[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m280[0m   const handleSearch = (e?: React.FormEvent) => {
+[7m   [0m [93m                                  ~~~~~~~~~[0m
+
+[96msrc/components/admin/ProductList.tsx[0m:[93m407[0m:[93m15[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m407[0m     (e: React.FormEvent) => {
+[7m   [0m [93m              ~~~~~~~~~[0m
+
+[96msrc/components/admin/RolesManagement.tsx[0m:[93m291[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'groupedPermissions' is declared but its value is never read.
+
+[7m291[0m   groupedPermissions,
+[7m   [0m [93m  ~~~~~~~~~~~~~~~~~~[0m
+[96msrc/components/admin/RolesManagement.tsx[0m:[93m81[0m:[93m10[0m - [93mwarning[0m[90m ts(6133): [0m'allPermissions' is declared but its value is never read.
+
+[7m81[0m   const [allPermissions, setAllPermissions] = useState<PermissionMetadata[]>([]);
+[7m  [0m [93m         ~~~~~~~~~~~~~~[0m
+
+[96msrc/components/admin/ShipmentForm.tsx[0m:[93m53[0m:[93m40[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m53[0m   const handleSubmit = async (e: React.FormEvent) => {
+[7m  [0m [93m                                       ~~~~~~~~~[0m
+
+[96msrc/components/admin/ShippingMethodsManager.tsx[0m:[93m294[0m:[93m44[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m294[0m   const handleFormSubmit = async (e: React.FormEvent) => {
+[7m   [0m [93m                                           ~~~~~~~~~[0m
+[96msrc/components/admin/ShippingMethodsManager.tsx[0m:[93m202[0m:[93m16[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m202[0m     (e?: React.FormEvent) => {
+[7m   [0m [93m               ~~~~~~~~~[0m
+
+[96msrc/components/admin/UserPermissionEditor.tsx[0m:[93m81[0m:[93m20[0m - [93mwarning[0m[90m ts(6133): [0m'setIsSaving' is declared but its value is never read.
+
+[7m81[0m   const [isSaving, setIsSaving] = useState(false);
+[7m  [0m [93m                   ~~~~~~~~~~~[0m
+[96msrc/components/admin/UserPermissionEditor.tsx[0m:[93m81[0m:[93m10[0m - [93mwarning[0m[90m ts(6133): [0m'isSaving' is declared but its value is never read.
+
+[7m81[0m   const [isSaving, setIsSaving] = useState(false);
+[7m  [0m [93m         ~~~~~~~~[0m
+[96msrc/components/admin/UserPermissionEditor.tsx[0m:[93m29[0m:[93m49[0m - [93mwarning[0m[90m ts(6133): [0m'Plus' is declared but its value is never read.
+
+[7m29[0m import { Loader2, Shield, AlertTriangle, Crown, Plus, X } from "lucide-react";
+[7m  [0m [93m                                                ~~~~[0m
+[96msrc/components/admin/UserPermissionEditor.tsx[0m:[93m5[0m:[93m1[0m - [93mwarning[0m[90m ts(6133): [0m'Checkbox' is declared but its value is never read.
+
+[7m5[0m import { Checkbox } from "@/components/ui/checkbox";
+[7m [0m [93m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96msrc/components/admin/discount/AmountOffProductsForm.tsx[0m:[93m35[0m:[93m44[0m - [93mwarning[0m[90m ts(6133): [0m'Copy' is declared but its value is never read.
+
+[7m35[0m import { CalendarIcon, Percent, RefreshCw, Copy } from "lucide-react";
+[7m  [0m [93m                                           ~~~~[0m
+
+[96msrc/components/admin/discount/DiscountList.tsx[0m:[93m519[0m:[93m15[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m519[0m     (e: React.FormEvent) => {
+[7m   [0m [93m              ~~~~~~~~~[0m
+[96msrc/components/admin/discount/DiscountList.tsx[0m:[93m426[0m:[93m29[0m - [93mwarning[0m[90m ts(6133): [0m'params' is declared but its value is never read.
+
+[7m426[0m                       const params = new URLSearchParams({
+[7m   [0m [93m                            ~~~~~~[0m
+
+[96msrc/components/admin/order-list/OrderListToolbar.tsx[0m:[93m39[0m:[93m29[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m39[0m   onSearchSubmit: (e: React.FormEvent) => void;
+[7m  [0m [93m                            ~~~~~~~~~[0m
+[96msrc/components/admin/order-list/OrderListToolbar.tsx[0m:[93m23[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'Navigation' is declared but its value is never read.
+
+[7m23[0m   Navigation,
+[7m  [0m [93m  ~~~~~~~~~~[0m
+[96msrc/components/admin/order-list/OrderListToolbar.tsx[0m:[93m22[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'Banknote' is declared but its value is never read.
+
+[7m22[0m   Banknote,
+[7m  [0m [93m  ~~~~~~~~[0m
+[96msrc/components/admin/order-list/OrderListToolbar.tsx[0m:[93m21[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'CreditCard' is declared but its value is never read.
+
+[7m21[0m   CreditCard,
+[7m  [0m [93m  ~~~~~~~~~~[0m
+[96msrc/components/admin/order-list/OrderListToolbar.tsx[0m:[93m17[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'Filter' is declared but its value is never read.
+
+[7m17[0m   Filter,
+[7m  [0m [93m  ~~~~~~[0m
+[96msrc/components/admin/order-list/OrderListToolbar.tsx[0m:[93m4[0m:[93m1[0m - [93mwarning[0m[90m ts(6192): [0mAll imports in import declaration are unused.
+
+[7m  4[0m import {
+[7m   [0m [93m~~~~~~~~[0m
+[7m  5[0m   DropdownMenu,
+[7m   [0m [93m~~~~~~~~~~~~~~~[0m
+[7m...[0m 
+[7m  8[0m   DropdownMenuTrigger,
+[7m   [0m [93m~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m  9[0m } from "../../ui/dropdown-menu";
+[7m   [0m [93m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96msrc/components/admin/orderview/OrderStatusCard.tsx[0m:[93m1[0m:[93m8[0m - [93mwarning[0m[90m ts(6133): [0m'React' is declared but its value is never read.
+
+[7m1[0m import React, { useState } from "react";
+[7m [0m [93m       ~~~~~[0m
+
+[96msrc/components/admin/settings/EmailSettingsForm.tsx[0m:[93m46[0m:[93m40[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m46[0m   const handleSubmit = async (e: React.FormEvent) => {
+[7m  [0m [93m                                       ~~~~~~~~~[0m
+
+[96msrc/components/admin/settings/FirebaseSettingsForm.tsx[0m:[93m152[0m:[93m40[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m152[0m   const handleSubmit = async (e: React.FormEvent) => {
+[7m   [0m [93m                                       ~~~~~~~~~[0m
+
+[96msrc/components/admin/settings/PaymentGatewaysManager.tsx[0m:[93m4[0m:[93m51[0m - [93mwarning[0m[90m ts(6133): [0m'useRef' is declared but its value is never read.
+
+[7m4[0m import React, { useState, useEffect, useCallback, useRef } from "react";
+[7m [0m [93m                                                  ~~~~~~[0m
+[96msrc/components/admin/settings/PaymentGatewaysManager.tsx[0m:[93m4[0m:[93m8[0m - [93mwarning[0m[90m ts(6133): [0m'React' is declared but its value is never read.
+
+[7m4[0m import React, { useState, useEffect, useCallback, useRef } from "react";
+[7m [0m [93m       ~~~~~[0m
+
+[96msrc/components/admin/settings/PaymentMethodSettings.tsx[0m:[93m4[0m:[93m8[0m - [93mwarning[0m[90m ts(6133): [0m'React' is declared but its value is never read.
+
+[7m4[0m import React, { useState, useEffect, useCallback } from "react";
+[7m [0m [93m       ~~~~~[0m
+
+[96msrc/components/admin/settings/SSLCommerzSettingsForm.tsx[0m:[93m54[0m:[93m40[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m54[0m   const handleSubmit = async (e: React.FormEvent) => {
+[7m  [0m [93m                                       ~~~~~~~~~[0m
+
+[96msrc/components/admin/settings/StripeSettingsForm.tsx[0m:[93m56[0m:[93m40[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m56[0m   const handleSubmit = async (e: React.FormEvent) => {
+[7m  [0m [93m                                       ~~~~~~~~~[0m
+
+[96msrc/components/auth/SetupForm.tsx[0m:[93m116[0m:[93m43[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m116[0m   const handleVerify2FA = async (e: React.FormEvent) => {
+[7m   [0m [93m                                          ~~~~~~~~~[0m
+[96msrc/components/auth/SetupForm.tsx[0m:[93m30[0m:[93m47[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m30[0m   const handleCreateAccount = async (e: React.FormEvent) => {
+[7m  [0m [93m                                              ~~~~~~~~~[0m
+
+[96msrc/components/auth/TwoFactorForm.tsx[0m:[93m80[0m:[93m40[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m80[0m   const handleVerify = async (e: React.FormEvent) => {
+[7m  [0m [93m                                       ~~~~~~~~~[0m
+
+[96msrc/components/auth/TwoFactorSetup.tsx[0m:[93m3[0m:[93m20[0m - [93mwarning[0m[90m ts(6133): [0m'useEffect' is declared but its value is never read.
+
+[7m3[0m import { useState, useEffect } from "react";
+[7m [0m [93m                   ~~~~~~~~~[0m
+
+[96msrc/contexts/PermissionContext.tsx[0m:[93m2[0m:[93m8[0m - [93mwarning[0m[90m ts(6133): [0m'React' is declared but its value is never read.
+
+[7m2[0m import React, { createContext, useContext, useMemo, useState, useEffect, type ReactNode } from "react";
+[7m [0m [93m       ~~~~~[0m
+
+[96msrc/layouts/AdminLayout.astro[0m:[93m409[0m:[93m13[0m - [93mwarning[0m[90m astro(4000): [0mThis script will be treated as if it has the `is:inline` directive because it contains an attribute. Therefore, features that require processing (e.g. using TypeScript or npm packages in the script) are unavailable.
+
+See docs for more details: https://docs.astro.build/en/guides/client-side-scripts/#script-processing.
+
+Add the `is:inline` directive explicitly to silence this hint.
+
+[7m409[0m     <script define:vars={{ firebaseConfig, userId: user.id, permissions: permissionsArray, isSuperAdmin: userData.isSuperAdmin }}>
+[7m   [0m [93m            ~~~~~~~~~~~[0m
+
+[96msrc/layouts/AuthLayout.astro[0m:[93m8[0m:[93m1[0m - [93mwarning[0m[90m ts(6133): [0m'Toaster' is declared but its value is never read.
+
+[7m8[0m import { Toaster } from "sonner";
+[7m [0m [93m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96msrc/lib/inventory/movements.ts[0m:[93m4[0m:[93m1[0m - [93mwarning[0m[90m ts(6133): [0m'sql' is declared but its value is never read.
+
+[7m4[0m import { sql } from "drizzle-orm";
+[7m [0m [93m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96msrc/lib/inventory/reserve.ts[0m:[93m6[0m:[93m24[0m - [93mwarning[0m[90m ts(6133): [0m'gte' is declared but its value is never read.
+
+[7m6[0m import { eq, and, sql, gte } from "drizzle-orm";
+[7m [0m [93m                       ~~~[0m
+
+[96msrc/lib/payment/gateway-settings.ts[0m:[93m7[0m:[93m14[0m - [93mwarning[0m[90m ts(6133): [0m'and' is declared but its value is never read.
+
+[7m7[0m import { eq, and } from "drizzle-orm";
+[7m [0m [93m             ~~~[0m
+
+[96msrc/lib/rbac/auto-seed.ts[0m:[93m11[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'userRoles' is declared but its value is never read.
+
+[7m11[0m   userRoles,
+[7m  [0m [93m  ~~~~~~~~~[0m
+
+[96msrc/lib/rbac/helpers.ts[0m:[93m2[0m:[93m19[0m - [93mwarning[0m[90m ts(6133): [0m'inArray' is declared but its value is never read.
+
+[7m2[0m import { eq, and, inArray } from "drizzle-orm";
+[7m [0m [93m                  ~~~~~~~[0m
+
+[96msrc/pages/admin/access-denied.astro[0m:[93m6[0m:[93m7[0m - [93mwarning[0m[90m ts(6133): [0m'attemptedUrl' is declared but its value is never read.
+
+[7m6[0m const attemptedUrl = Astro.url.searchParams.get("from") || "";
+[7m [0m [93m      ~~~~~~~~~~~~[0m
+
+[96msrc/pages/admin/settings/index.astro[0m:[93m208[0m:[93m16[0m - [91merror[0m[90m ts(2322): [0mType '{ children: any; className: string; }' is not assignable to type 'HTMLAttributes'.
+  Property 'className' does not exist on type 'HTMLAttributes'.
+
+[7m208[0m           <div className="p-6">
+[7m   [0m [91m               ~~~~~~~~~[0m
+
+[96msrc/pages/api/admin/rbac/user-roles.ts[0m:[93m15[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'clearPermissionCache' is declared but its value is never read.
+
+[7m15[0m   clearPermissionCache,
+[7m  [0m [93m  ~~~~~~~~~~~~~~~~~~~~[0m
+[96msrc/pages/api/admin/rbac/user-roles.ts[0m:[93m12[0m:[93m3[0m - [93mwarning[0m[90m ts(6133): [0m'isSuperAdmin' is declared but its value is never read.
+
+[7m12[0m   isSuperAdmin,
+[7m  [0m [93m  ~~~~~~~~~~~~[0m
+
+[96msrc/pages/api/auth/admin-users.ts[0m:[93m7[0m:[93m14[0m - [93mwarning[0m[90m ts(6133): [0m'inArray' is declared but its value is never read.
+
+[7m7[0m import { eq, inArray } from "drizzle-orm";
+[7m [0m [93m             ~~~~~~~[0m
+
+[96msrc/pages/api/customers/[id]/permanent.ts[0m:[93m4[0m:[93m14[0m - [93mwarning[0m[90m ts(6133): [0m'inArray' is declared but its value is never read.
+
+[7m4[0m import { eq, inArray } from "drizzle-orm";
+[7m [0m [93m             ~~~~~~~[0m
+
+[96msrc/pages/api/inventory/alerts.ts[0m:[93m10[0m:[93m14[0m - [93mwarning[0m[90m ts(6133): [0m'and' is declared but its value is never read.
+
+[7m10[0m import { eq, and, sql } from "drizzle-orm";
+[7m  [0m [93m             ~~~[0m
+
+[96msrc/pages/api/orders/[id]/cod.ts[0m:[93m9[0m:[93m44[0m - [93mwarning[0m[90m ts(6133): [0m'PaymentStatus' is declared but its value is never read.
+
+[7m9[0m import { codTracking, orders, OrderStatus, PaymentStatus } from "@/db/schema";
+[7m [0m [93m                                           ~~~~~~~~~~~~~[0m
+
+[96msrc/pages/api/orders/[id]/fulfill.ts[0m:[93m17[0m:[93m19[0m - [93mwarning[0m[90m ts(6133): [0m'and' is declared but its value is never read.
+
+[7m17[0m import { eq, sql, and } from "drizzle-orm";
+[7m  [0m [93m                  ~~~[0m
+
+[96msrc/pages/api/settings/stripe.ts[0m:[93m9[0m:[93m14[0m - [93mwarning[0m[90m ts(6133): [0m'and' is declared but its value is never read.
+
+[7m9[0m import { eq, and } from "drizzle-orm";
+[7m [0m [93m             ~~~[0m
+
+[96msrc/server/routes/customer-auth.ts[0m:[93m87[0m:[93m13[0m - [93mwarning[0m[90m ts(6133): [0m'timeLeft' is declared but its value is never read.
+
+[7m87[0m       const timeLeft = Math.ceil((existing.expiresAt - now + OTP_TTL_SECONDS * 1000 - minWait * 1000 / 1000) / 1000);
+[7m  [0m [93m            ~~~~~~~~[0m
+[96msrc/server/routes/customer-auth.ts[0m:[93m25[0m:[93m7[0m - [93mwarning[0m[90m ts(6133): [0m'OTP_LENGTH' is declared but its value is never read.
+
+[7m25[0m const OTP_LENGTH = 6;
+[7m  [0m [93m      ~~~~~~~~~~[0m
+
+Result (663 files): 
+- 1 error
+- 0 warnings
+- 62 hints
+
