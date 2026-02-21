@@ -23,6 +23,7 @@ const ASTRO_ADMIN_WRITE_PATHS_FOR_CACHE_CLEAR = [
   "/api/settings/delivery-locations",
   "/api/admin/settings/shipping-methods",
   "/api/settings/seo",
+  "/api/settings/security",
   "/api/admin/settings/checkout-languages",
   "/api/settings/meta-conversion",
 ];

@@ -47,8 +47,8 @@ function getEssentialDomains(): string[] {
 async function parseCspAllowedDomains(env?: any): Promise<string[]> {
   let cspAllowed = env?.CSP_ALLOWED || process.env.CSP_ALLOWED || "";
   try {
-    if (env?.CACHE_CONTROL) {
-      const cached = await env.CACHE_CONTROL.get("security:csp_allowed_domains");
+    if (env?.CACHE) {
+      const cached = await env.CACHE.get("security:csp_allowed_domains");
       if (cached !== null) {
         cspAllowed = cached;
       }
