@@ -89,7 +89,5 @@
   // and stored in the D1 database — do NOT put them here as env vars or secrets.
   // Only infrastructure secrets go here:
   //   wrangler secret put BETTER_AUTH_SECRET
-  "vars": {
-    "CSP_ALLOWED": "storefront-test.abnidaala.workers.dev"
-  }
+  "vars": {}
 }
