@@ -363,7 +363,7 @@ const cspMiddleware = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url);
 
   if (!url.pathname.startsWith("/api/")) {
-    return setPageCspHeader(response);
+    return await setPageCspHeader(response, context.locals.runtime?.env);
   }
 
   return response;

@@ -44,15 +44,26 @@ function getEssentialDomains(): string[] {
   ]);
 }
 
-function parseCspAllowedDomains(): string[] {
-  const cspAllowed = process.env.CSP_ALLOWED || "";
+async function parseCspAllowedDomains(env?: any): Promise<string[]> {
+  let cspAllowed = env?.CSP_ALLOWED || process.env.CSP_ALLOWED || "";
+  try {
+    if (env?.CACHE_CONTROL) {
+      const cached = await env.CACHE_CONTROL.get("security:csp_allowed_domains");
+      if (cached !== null) {
+        cspAllowed = cached;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to read CSP_ALLOWED from KV Cache", e);
+  }
+
   if (!cspAllowed.trim()) return [];
 
   return cspAllowed
     .split(",")
-    .map((domain) => domain.trim())
-    .filter((domain) => domain.length > 0)
-    .flatMap((domain) => {
+    .map((domain: string) => domain.trim())
+    .filter((domain: string) => domain.length > 0)
+    .flatMap((domain: string) => {
       // Remove https:// if present to normalize
       const cleanDomain = domain.replace(/^https?:\/\//, "");
 
@@ -66,17 +77,17 @@ function parseCspAllowedDomains(): string[] {
     });
 }
 
-function getCdnDomains(): string[] {
-  const cdnDomain = process.env.CDN_DOMAIN_URL;
+function getCdnDomains(env?: any): string[] {
+  const cdnDomain = env?.CDN_DOMAIN_URL || process.env.CDN_DOMAIN_URL;
   if (!cdnDomain) return [];
 
   return [`https://${cdnDomain}`, `https://*.${cdnDomain}`];
 }
 
-function getCombinedDomains(): string[] {
+async function getCombinedDomains(env?: any): Promise<string[]> {
   const essentialDomains = getEssentialDomains();
-  const cdnDomains = getCdnDomains();
-  const customDomains = parseCspAllowedDomains();
+  const cdnDomains = getCdnDomains(env);
+  const customDomains = await parseCspAllowedDomains(env);
 
   return [...new Set([...essentialDomains, ...cdnDomains, ...customDomains])];
 }
@@ -85,12 +96,13 @@ function getCombinedDomains(): string[] {
  * Applies Content Security Policy (CSP) headers to a given Response object.
  *
  * @param response The Astro Response object to modify.
+ * @param env Cloudflare runtime environment variables.
  * @returns The Response object with CSP headers applied.
  */
-export function setPageCspHeader(response: Response): Response {
-  const allowedDomains = getCombinedDomains();
+export async function setPageCspHeader(response: Response, env?: any): Promise<Response> {
+  const allowedDomains = await getCombinedDomains(env);
   // Use PUBLIC_API_BASE_URL environment variable - no hardcoded fallbacks
-  const currentOrigin = (process.env.PUBLIC_API_BASE_URL || "").trim();
+  const currentOrigin = (env?.PUBLIC_API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "").trim();
 
   const scriptSrc = [
     "'self'",
@@ -125,6 +137,6 @@ export function setPageCspHeader(response: Response): Response {
     "frame-ancestors 'self'",
   ];
 
-  response.headers.set("Content-Security-Policy", cspDirectives.join("; "));
+  response.headers.set("Content-Security-Policy", [...new Set(cspDirectives)].join("; "));
   return response;
 }

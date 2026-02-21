@@ -1,87 +1,19 @@
 ---
 // src/pages/admin/settings/payment-gateways.astro
 import AdminLayout from "../../../layouts/AdminLayout.astro";
-import StripeSettingsForm from "../../../components/admin/settings/StripeSettingsForm";
-import SSLCommerzSettingsForm from "../../../components/admin/settings/SSLCommerzSettingsForm";
+import PaymentGatewaysManager from "../../../components/admin/settings/PaymentGatewaysManager";
 ---
 
 <AdminLayout title="Payment Gateways">
-  <div class="max-w-5xl mx-auto">
-    <h1 class="text-2xl font-bold mb-2">Payment Gateways</h1>
-    <p class="text-sm text-muted-foreground mb-8">
-      Configure payment providers used at checkout. Credentials are stored
-      securely in the database — never in environment variables.
-    </p>
-
-    <div class="space-y-4" data-accordion-wrapper>
-      <div
-        class="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
-      >
-        <details class="group" open>
-          <summary
-            class="cursor-pointer list-none border-b border-border bg-muted/5 px-6 py-4 hover:bg-muted/10 transition-colors"
-          >
-            <div class="flex items-center justify-between">
-              <div>
-                <h2 class="text-lg font-semibold">Stripe</h2>
-                <p class="text-sm text-muted-foreground mt-1">
-                  Accept card payments globally via Stripe
-                </p>
-              </div>
-              <svg
-                class="w-5 h-5 text-muted-foreground transition-transform group-open:rotate-180"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-          </summary>
-          <div class="p-6">
-            <StripeSettingsForm client:idle />
-          </div>
-        </details>
-      </div>
-
-      <div
-        class="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
-      >
-        <details class="group">
-          <summary
-            class="cursor-pointer list-none border-b border-border bg-muted/5 px-6 py-4 hover:bg-muted/10 transition-colors"
-          >
-            <div class="flex items-center justify-between">
-              <div>
-                <h2 class="text-lg font-semibold">SSLCommerz</h2>
-                <p class="text-sm text-muted-foreground mt-1">
-                  Local Bangladesh payment gateway (cards, mobile banking, net
-                  banking)
-                </p>
-              </div>
-              <svg
-                class="w-5 h-5 text-muted-foreground transition-transform group-open:rotate-180"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-          </summary>
-          <div class="p-6">
-            <SSLCommerzSettingsForm client:idle />
-          </div>
-        </details>
-      </div>
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold">Payment Gateways</h1>
+      <p class="text-sm text-muted-foreground mt-1">
+        Configure and activate payment methods for your storefront. Credentials are stored
+        securely in the database.
+      </p>
     </div>
+
+    <PaymentGatewaysManager client:idle />
   </div>
 </AdminLayout>

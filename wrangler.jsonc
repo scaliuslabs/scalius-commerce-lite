@@ -1,31 +1,27 @@
 {
   "name": "testdash",
-
-  // Cloudflare Workers entrypoint (built by Astro)
-  "main": "./dist/_worker.js/index.js",
+  // Cloudflare Workers entrypoint (built by Astro + queue wrapper)
+  "main": "./dist/worker-with-queue.js",
   "compatibility_date": "2026-02-01",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
   "limits": {
     "cpu_ms": 300000
   },
-
   "workers_dev": true,
-
   "observability": {
     "enabled": true
   },
-
   "placement": {
     "mode": "smart"
   },
-
   // Static assets binding (required by @astrojs/cloudflare)
   "assets": {
     "binding": "ASSETS",
     "directory": "./dist"
   },
-
   // Cloudflare D1 – primary database
   "d1_databases": [
     {
@@ -35,7 +31,6 @@
       "migrations_dir": "migrations"
     }
   ],
-
   // Cloudflare KV namespaces
   "kv_namespaces": [
     {
@@ -54,7 +49,6 @@
       "id": "9f577136c05144349f2b8013a4fc1cc5"
     }
   ],
-
   // Cloudflare R2 – media storage
   "r2_buckets": [
     {
@@ -62,41 +56,40 @@
       "bucket_name": "scalius-media"
     }
   ],
-
-  // Cloudflare Queues – async webhook & inventory processing
-  // NOTE: Queue IDs must be created via `wrangler queues create <name>` before deploying.
-  // Uncomment and fill in IDs after creation:
-  // "queues": {
-  //   "producers": [
-  //     {
-  //       "binding": "PAYMENT_EVENTS_QUEUE",
-  //       "queue": "payment-events"
-  //     },
-  //     {
-  //       "binding": "INVENTORY_QUEUE",
-  //       "queue": "inventory-events"
-  //     }
-  //   ],
-  //   "consumers": [
-  //     {
-  //       "queue": "payment-events",
-  //       "max_batch_size": 10,
-  //       "max_batch_timeout": 5,
-  //       "max_retries": 3
-  //     },
-  //     {
-  //       "queue": "inventory-events",
-  //       "max_batch_size": 10,
-  //       "max_batch_timeout": 5,
-  //       "max_retries": 3
-  //     }
-  //   ]
-  // },
-
+  // Cloudflare Queues – async webhook & payment processing
+  "queues": {
+    "producers": [
+      {
+        "binding": "PAYMENT_EVENTS_QUEUE",
+        "queue": "payment-events"
+      },
+      {
+        "binding": "ORDER_NOTIFICATIONS_QUEUE",
+        "queue": "order-notifications"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "payment-events",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "payment-events-dlq"
+      },
+      {
+        "queue": "order-notifications",
+        "max_batch_size": 20,
+        "max_batch_timeout": 10,
+        "max_retries": 3
+      }
+    ]
+  },
   // Environment variables (non-secret)
   // NOTE: Stripe and SSLCommerz credentials are managed via the admin dashboard
   // and stored in the D1 database — do NOT put them here as env vars or secrets.
   // Only infrastructure secrets go here:
   //   wrangler secret put BETTER_AUTH_SECRET
-  "vars": {}
+  "vars": {
+    "CSP_ALLOWED": "storefront-test.abnidaala.workers.dev"
+  }
 }
