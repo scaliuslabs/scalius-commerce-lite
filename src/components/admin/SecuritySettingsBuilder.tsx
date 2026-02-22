@@ -2,13 +2,6 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-    CardContent,
-} from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
@@ -48,7 +41,9 @@ export function SecuritySettingsBuilder() {
 
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(error.details || "Failed to save security settings");
+                throw new Error(
+                    error.details || "Failed to save security settings"
+                );
             }
 
             toast({
@@ -74,53 +69,50 @@ export function SecuritySettingsBuilder() {
 
     if (isFetching) {
         return (
-            <div className="flex items-center justify-center p-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
         );
     }
 
     return (
-        <Card className="border border-border shadow-sm">
-            <CardHeader>
-                <CardTitle>CORS & CSP Allowed Domains</CardTitle>
-                <CardDescription>
-                    Configure additional domains allowed to interact with the API (CORS) and connect to the storefront (Content Security Policy).
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="csp-allowed-domains">Allowed Domains (Comma Separated)</Label>
-                    <Input
-                        id="csp-allowed-domains"
-                        value={cspAllowedDomains}
-                        onChange={(e) => setCspAllowedDomains(e.target.value)}
-                        placeholder="store.scalius.com, admin.scalius.com, *.facebook.com"
-                        className="w-full"
-                    />
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Enter a comma-separated list of domains without protocols (e.g., <code>store.scalius.com</code>).
-                        Wildcards are supported (e.g., <code>*.facebook.com</code>). These domains will be immediately synced to Edge Cache.
-                    </p>
-                </div>
+        <div className="space-y-4 max-w-xl">
+            <div className="space-y-2">
+                <Label htmlFor="csp-allowed-domains">
+                    CORS & CSP Allowed Domains
+                </Label>
+                <Input
+                    id="csp-allowed-domains"
+                    value={cspAllowedDomains}
+                    onChange={(e) => setCspAllowedDomains(e.target.value)}
+                    placeholder="store.scalius.com, admin.scalius.com, *.facebook.com"
+                    className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                    Comma-separated domains without protocols (e.g.,{" "}
+                    <code className="text-[0.8em] bg-muted px-1 py-0.5 rounded">store.scalius.com</code>).
+                    Wildcards supported (e.g.,{" "}
+                    <code className="text-[0.8em] bg-muted px-1 py-0.5 rounded">*.facebook.com</code>).
+                    Synced to Edge Cache immediately on save.
+                </p>
+            </div>
 
-                <div className="flex justify-end">
-                    <Button
-                        onClick={handleSave}
-                        disabled={isLoading}
-                        className="relative min-w-[120px]"
-                    >
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Saving...
-                            </>
-                        ) : (
-                            "Save Settings"
-                        )}
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
+            <div className="flex justify-end pt-4 border-t border-border">
+                <Button
+                    onClick={handleSave}
+                    disabled={isLoading}
+                    className="min-w-[120px]"
+                >
+                    {isLoading ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                        </>
+                    ) : (
+                        "Save Settings"
+                    )}
+                </Button>
+            </div>
+        </div>
     );
 }

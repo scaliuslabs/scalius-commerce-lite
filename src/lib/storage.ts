@@ -125,7 +125,9 @@ export async function uploadFile(
     );
   }
 
-  const baseUrl = (publicUrl ?? _publicUrl) || "";
+  // Fallback ensures we always produce full URLs even if R2_PUBLIC_URL is misconfigured
+  const CDN_FALLBACK = "https://cloud.wrygo.com";
+  const baseUrl = (publicUrl ?? _publicUrl) || CDN_FALLBACK;
   const ext = file.name.split(".").pop();
   const key = `${nanoid()}.${ext}`;
 
@@ -167,7 +169,7 @@ export async function uploadFile(
 
   return {
     key,
-    url: baseUrl ? `${baseUrl}/${key}` : key,
+    url: `${baseUrl}/${key}`,
     size: file.size,
     filename: file.name,
     mimeType: file.type,

@@ -1,11 +1,4 @@
 import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -26,7 +19,7 @@ const defaultConfig: SeoConfig = {
   siteTitle: "",
   homepageTitle: "",
   homepageMetaDescription: "",
-  robotsTxt: `User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`, // Default robots.txt
+  robotsTxt: `User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`,
 };
 
 export function SeoSettingsBuilder() {
@@ -63,7 +56,6 @@ export function SeoSettingsBuilder() {
               : "Could not load SEO settings.",
           variant: "destructive",
         });
-        // Fallback to default config if fetch fails
         setConfig(defaultConfig);
       } finally {
         setIsFetching(false);
@@ -111,22 +103,15 @@ export function SeoSettingsBuilder() {
 
   if (isFetching) {
     return (
-      <div className="flex items-center justify-center py-10">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-3 text-muted-foreground">Loading SEO settings...</p>
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <Card className="border border-border shadow-sm">
-      <CardHeader>
-        <CardTitle>SEO Settings</CardTitle>
-        <CardDescription>
-          Configure your site's general SEO properties and robots.txt content.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <div className="space-y-6">
+      <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="site-title">Global Site Title</Label>
           <Input
@@ -144,9 +129,8 @@ export function SeoSettingsBuilder() {
               max={70}
             />
           )}
-          <p className="text-sm text-muted-foreground">
-            The default title for your site, used if a page-specific title isn't
-            set. Keep it concise and descriptive.
+          <p className="text-xs text-muted-foreground">
+            Default title for your site. Keep it concise and descriptive.
           </p>
         </div>
 
@@ -167,85 +151,77 @@ export function SeoSettingsBuilder() {
               max={70}
             />
           )}
-          <p className="text-sm text-muted-foreground">
-            The specific title for your homepage (e.g., displayed in browser
-            tabs and search results for your main page).
+          <p className="text-xs text-muted-foreground">
+            Title shown in browser tabs and search results for your homepage.
           </p>
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="homepage-meta-description">
-            Homepage Meta Description
-          </Label>
-          <Textarea
-            id="homepage-meta-description"
-            value={config.homepageMetaDescription}
-            onChange={(e) =>
-              setConfig({ ...config, homepageMetaDescription: e.target.value })
-            }
-            placeholder="Describe your homepage in a way that attracts users from search results."
-            rows={3}
+      <div className="space-y-2">
+        <Label htmlFor="homepage-meta-description">
+          Homepage Meta Description
+        </Label>
+        <Textarea
+          id="homepage-meta-description"
+          value={config.homepageMetaDescription}
+          onChange={(e) =>
+            setConfig({ ...config, homepageMetaDescription: e.target.value })
+          }
+          placeholder="Describe your homepage in a way that attracts users from search results."
+          rows={3}
+        />
+        {config.homepageMetaDescription && (
+          <CharacterCounter
+            current={config.homepageMetaDescription.length}
+            recommended={160}
+            max={200}
           />
-          {config.homepageMetaDescription && (
-            <CharacterCounter
-              current={config.homepageMetaDescription.length}
-              recommended={160}
-              max={200}
-            />
+        )}
+      </div>
+
+      <Alert variant="default">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Title Usage</AlertTitle>
+        <AlertDescription>
+          Individual pages, products, and categories can override these global
+          settings with their own meta titles.
+        </AlertDescription>
+      </Alert>
+
+      <div className="space-y-2">
+        <Label htmlFor="robots-txt">robots.txt Content</Label>
+        <Textarea
+          id="robots-txt"
+          value={config.robotsTxt}
+          onChange={(e) =>
+            setConfig({ ...config, robotsTxt: e.target.value })
+          }
+          placeholder={`User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`}
+          rows={6}
+          className="font-mono text-sm"
+        />
+        <p className="text-xs text-muted-foreground">
+          Controls which pages search engine crawlers can access. Ensure your
+          sitemap URL is included.
+        </p>
+      </div>
+
+      <div className="flex justify-end pt-4 border-t border-border">
+        <Button
+          onClick={handleSave}
+          disabled={isLoading}
+          className="min-w-[120px]"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            "Save SEO Settings"
           )}
-          <p className="text-sm text-muted-foreground">
-            The meta description for your homepage. Recommended: 150-160
-            characters for optimal SEO.
-          </p>
-        </div>
-
-        <Alert variant="default">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Title Usage</AlertTitle>
-          <AlertDescription>
-            These titles are used as defaults. Individual pages, products, and
-            categories might have their own specific meta titles which can
-            override these global settings for more targeted SEO.
-          </AlertDescription>
-        </Alert>
-
-        <div className="space-y-2">
-          <Label htmlFor="robots-txt">robots.txt Content</Label>
-          <Textarea
-            id="robots-txt"
-            value={config.robotsTxt}
-            onChange={(e) =>
-              setConfig({ ...config, robotsTxt: e.target.value })
-            }
-            placeholder={`User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`}
-            rows={8}
-            className="font-mono text-sm"
-          />
-          <p className="text-sm text-muted-foreground">
-            Manage the content of your robots.txt file. This tells search engine
-            crawlers which pages or files the crawler can or can't request from
-            your site. Ensure your sitemap URL is correctly specified if you
-            have one.
-          </p>
-        </div>
-
-        <div className="flex justify-end pt-4 border-t border-border">
-          <Button
-            onClick={handleSave}
-            disabled={isLoading}
-            className="relative min-w-[120px]"
-          >
-            {isLoading ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-primary rounded-md">
-                <Loader2 className="h-5 w-5 animate-spin text-primary-foreground" />
-              </div>
-            ) : null}
-            <span className={isLoading ? "opacity-0" : "opacity-100"}>
-              Save SEO Settings
-            </span>
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </Button>
+      </div>
+    </div>
   );
 }
