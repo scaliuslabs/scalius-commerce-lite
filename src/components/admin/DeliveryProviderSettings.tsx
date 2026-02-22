@@ -1,6 +1,46 @@
 import { type FC, useState } from "react";
 import type { DeliveryProvider, DeliveryProviderType } from "@/db/schema";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  TestTube,
+  Save,
+  X,
+  Truck,
+} from "lucide-react";
 
 // Provider type options
 const PROVIDER_TYPES: { value: DeliveryProviderType; label: string }[] = [
@@ -8,7 +48,7 @@ const PROVIDER_TYPES: { value: DeliveryProviderType; label: string }[] = [
   { value: "steadfast", label: "Steadfast" },
 ];
 
-// Default credentials by provider type
+// Default credentials structure per provider type
 const DEFAULT_CREDENTIALS = {
   pathao: {
     baseUrl: "https://api-hermes.pathao.com",
@@ -18,19 +58,17 @@ const DEFAULT_CREDENTIALS = {
     password: "",
   },
   steadfast: {
-    baseUrl: "https://portal.packzy.com/api/v1",
+    baseUrl: "https://portal.steadfast.com.bd/api/v1",
     apiKey: "",
     secretKey: "",
   },
 };
-
-// Default config by provider type
 const DEFAULT_CONFIG = {
   pathao: {
     storeId: "",
-    defaultDeliveryType: 48, // Regular delivery
-    defaultItemType: 2, // Parcel
-    defaultItemWeight: 0.5, // 0.5 KG
+    defaultDeliveryType: 48,
+    defaultItemType: 2,
+    defaultItemWeight: 0.5,
   },
   steadfast: {
     defaultCodAmount: 0,
@@ -41,19 +79,74 @@ interface DeliveryProviderSettingsProps {
   providers: DeliveryProvider[];
 }
 
-declare global {
-  interface Window {
-    deliveryProviderActions: {
-      saveProvider: (provider: any) => Promise<any>;
-      deleteProvider: (id: string) => Promise<boolean>;
-      testProvider: (id: string) => Promise<any>;
-      testCredentials: (
-        type: string,
-        credentials: any,
-        config: any,
-      ) => Promise<any>;
+// API helpers (replaces the old window.deliveryProviderActions inline script)
+async function apiSaveProvider(provider: any) {
+  const method = provider.id ? "PUT" : "POST";
+  const response = await fetch("/api/settings/delivery-providers", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(provider),
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to save provider");
+  }
+  return response.json();
+}
+
+async function apiDeleteProvider(id: string) {
+  const response = await fetch(`/api/settings/delivery-providers/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to delete provider");
+  }
+  return true;
+}
+
+async function apiTestProvider(id: string) {
+  const response = await fetch(`/api/settings/delivery-providers/${id}`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ error: "Failed to parse error response" }));
+    return {
+      success: false,
+      message: errorData.error || "Failed to test provider connection",
     };
   }
+  return response.json();
+}
+
+async function apiTestCredentials(
+  type: string,
+  credentials: any,
+  config: any
+) {
+  const response = await fetch(
+    "/api/settings/delivery-providers/create-test",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type,
+        credentials,
+        config,
+        name: "Credential Test",
+      }),
+    }
+  );
+  const result = await response.json();
+  if (!response.ok) {
+    return {
+      success: false,
+      message: result.error || "Failed to test credentials",
+    };
+  }
+  return result;
 }
 
 const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
@@ -82,7 +175,6 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
     isActive: false,
   });
 
-  // Reset form to selected provider or default values
   const resetForm = (provider?: DeliveryProvider) => {
     if (provider) {
       setFormData({
@@ -105,40 +197,25 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
     }
   };
 
-  // Handle provider type change
   const handleTypeChange = (type: DeliveryProviderType) => {
     let credentials = formData.credentials;
     let config = formData.config;
-
     try {
-      // If we're changing provider type, reset to defaults
       if (type !== formData.type) {
         credentials = JSON.stringify(DEFAULT_CREDENTIALS[type]);
         config = JSON.stringify(DEFAULT_CONFIG[type]);
       }
-    } catch (error) {
-      console.error("Error parsing form data", error);
+    } catch {
       credentials = JSON.stringify(DEFAULT_CREDENTIALS[type]);
       config = JSON.stringify(DEFAULT_CONFIG[type]);
     }
-
-    setFormData((prev) => ({
-      ...prev,
-      type,
-      credentials,
-      config,
-    }));
+    setFormData((prev) => ({ ...prev, type, credentials, config }));
   };
 
-  // Handle form field changes
   const handleChange = (field: string, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Handle credential changes
   const handleCredentialChange = (field: string, value: any) => {
     try {
       const credentials = JSON.parse(formData.credentials);
@@ -147,12 +224,9 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
         ...prev,
         credentials: JSON.stringify(credentials),
       }));
-    } catch (error) {
-      console.error("Error updating credentials", error);
-    }
+    } catch { }
   };
 
-  // Handle config changes
   const handleConfigChange = (field: string, value: any) => {
     try {
       const config = JSON.parse(formData.config);
@@ -161,170 +235,105 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
         ...prev,
         config: JSON.stringify(config),
       }));
-    } catch (error) {
-      console.error("Error updating config", error);
-    }
+    } catch { }
   };
 
-  // Save provider
   const handleSave = async () => {
     if (!formData.name) {
       toast.error("Provider name is required");
       return;
     }
-
     setIsSaving(true);
     try {
-      if (!window.deliveryProviderActions) {
-        toast.error("Provider actions not available");
-        return;
-      }
-
-      // Call API to save provider
-      const savedProvider =
-        await window.deliveryProviderActions.saveProvider(formData);
-
-      // Update local state
+      const savedProvider = await apiSaveProvider(formData);
       if (isCreating) {
         setProviders((prev) => [...prev, savedProvider]);
       } else {
         setProviders((prev) =>
-          prev.map((p) => (p.id === savedProvider.id ? savedProvider : p)),
+          prev.map((p) => (p.id === savedProvider.id ? savedProvider : p))
         );
       }
-
       setSelectedProvider(savedProvider);
       setIsEditing(false);
       setIsCreating(false);
       toast.success("Provider saved successfully");
     } catch (error) {
       toast.error(
-        `Error saving provider: ${error instanceof Error ? error.message : String(error)}`,
+        `Error: ${error instanceof Error ? error.message : String(error)}`
       );
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Delete provider
   const handleDelete = async () => {
     if (!selectedProvider) return;
-
-    if (!confirm(`Are you sure you want to delete ${selectedProvider.name}?`)) {
-      return;
-    }
-
     setIsDeleting(true);
     try {
-      if (!window.deliveryProviderActions) {
-        toast.error("Provider actions not available");
-        return;
-      }
-
-      await window.deliveryProviderActions.deleteProvider(selectedProvider.id);
-
-      // Update local state
-      setProviders((prev) => prev.filter((p) => p.id !== selectedProvider.id));
+      await apiDeleteProvider(selectedProvider.id);
+      setProviders((prev) =>
+        prev.filter((p) => p.id !== selectedProvider.id)
+      );
       toast.success("Provider deleted");
       setSelectedProvider(null);
     } catch (error) {
       toast.error(
-        `Error deleting provider: ${error instanceof Error ? error.message : String(error)}`,
+        `Error: ${error instanceof Error ? error.message : String(error)}`
       );
     } finally {
       setIsDeleting(false);
     }
   };
 
-  // Test provider connection
   const handleTest = async () => {
     if (!selectedProvider) return;
-
     setIsTesting(true);
     try {
-      if (!window.deliveryProviderActions) {
-        toast.error("Provider actions not available");
-        return;
-      }
-
-      console.log(
-        `Testing provider connection for: ${selectedProvider.name} (${selectedProvider.id})`,
-      );
-      const result = await window.deliveryProviderActions.testProvider(
-        selectedProvider.id,
-      );
-
-      console.log("Test provider response:", result);
-
+      const result = await apiTestProvider(selectedProvider.id);
       if (result.success) {
         toast.success(result.message || "Connection successful");
       } else {
         toast.error(result.message || "Connection failed");
       }
     } catch (error) {
-      console.error("Error testing provider connection:", error);
       toast.error(
-        `Error testing provider: ${error instanceof Error ? error.message : String(error)}`,
+        `Error: ${error instanceof Error ? error.message : String(error)}`
       );
     } finally {
       setIsTesting(false);
     }
   };
 
-  // Test current credentials in the form without saving
   const handleTestCredentials = async () => {
     if (!formData.type || !formData.credentials || !formData.config) {
       toast.error("Provider type, credentials, and config are required");
       return;
     }
-
     setIsTestingCredentials(true);
     try {
-      if (!window.deliveryProviderActions) {
-        toast.error("Provider actions not available");
-        return;
-      }
-
-      // Extract credentials and config as objects
-      let credentials;
-      let config;
-
+      let credentials, config;
       try {
         credentials = JSON.parse(formData.credentials);
         config = JSON.parse(formData.config);
-      } catch (error) {
+      } catch {
         toast.error("Invalid credentials or config format");
         return;
       }
-
-      console.log(
-        `Testing current credentials for ${formData.type} provider before saving`,
-      );
-
-      const result = await window.deliveryProviderActions.testCredentials(
-        formData.type,
-        credentials,
-        config,
-      );
-
-      console.log("Test credentials response:", result);
-
+      const result = await apiTestCredentials(formData.type, credentials, config);
       if (result.success) {
         toast.success(result.message || "Connection successful");
       } else {
         toast.error(result.message || "Connection failed");
       }
     } catch (error) {
-      console.error("Error testing credentials:", error);
       toast.error(
-        `Error testing credentials: ${error instanceof Error ? error.message : String(error)}`,
+        `Error: ${error instanceof Error ? error.message : String(error)}`
       );
     } finally {
       setIsTestingCredentials(false);
     }
   };
 
-  // Start creating a new provider
   const handleCreate = () => {
     resetForm();
     setIsCreating(true);
@@ -332,7 +341,6 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
     setSelectedProvider(null);
   };
 
-  // Start editing the selected provider
   const handleEdit = () => {
     if (!selectedProvider) return;
     resetForm(selectedProvider);
@@ -340,16 +348,12 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
     setIsCreating(false);
   };
 
-  // Cancel editing
   const handleCancel = () => {
     setIsEditing(false);
     setIsCreating(false);
-    if (selectedProvider) {
-      resetForm(selectedProvider);
-    }
+    if (selectedProvider) resetForm(selectedProvider);
   };
 
-  // Select a provider
   const handleSelect = (provider: DeliveryProvider) => {
     setSelectedProvider(provider);
     resetForm(provider);
@@ -357,561 +361,456 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
     setIsCreating(false);
   };
 
-  // Parse JSON for display
   const parseJSON = (jsonString: string, fallback: any = {}) => {
     try {
       return JSON.parse(jsonString);
-    } catch (error) {
-      console.error("Error parsing JSON", error);
+    } catch {
       return fallback;
     }
   };
 
+  const creds = parseJSON(formData.credentials);
+  const conf = parseJSON(formData.config);
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Delivery Providers</h2>
-        <button
-          onClick={handleCreate}
-          className="px-4 py-2 bg-foreground text-background rounded hover:bg-primary/90 transition-colors"
-        >
-          Add Provider
-        </button>
-      </div>
-
-      {/* Provider List */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="col-span-1 border rounded p-4">
-          <h3 className="font-medium mb-4">Available Providers</h3>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Provider List Sidebar */}
+      <Card className="md:col-span-1">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Providers</CardTitle>
+          <Button size="sm" onClick={handleCreate}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
           {providers.length === 0 ? (
-            <p className="text-gray-500">No providers configured</p>
+            <div className="px-6 pb-6 text-sm text-muted-foreground">
+              No providers configured yet.
+            </div>
           ) : (
-            <ul className="space-y-2">
+            <div className="divide-y divide-border">
               {providers.map((provider) => (
-                <li
+                <button
                   key={provider.id}
-                  className={`p-2 rounded cursor-pointer ${
-                    selectedProvider?.id === provider.id
-                      ? "bg-background border border-gray-300"
-                      : "hover:bg-background border border-transparent"
-                  }`}
+                  type="button"
                   onClick={() => handleSelect(provider)}
+                  className={`w-full text-left px-4 py-3 transition-colors hover:bg-muted/50 ${selectedProvider?.id === provider.id
+                      ? "bg-muted/60 border-l-2 border-l-primary"
+                      : "border-l-2 border-l-transparent"
+                    }`}
                 >
-                  <div className="flex items-center space-x-2 ">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        provider.isActive ? "bg-green-500" : "bg-gray-300"
-                      }`}
-                    ></span>
-                    <span className="font-medium">{provider.name}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm">{provider.name}</span>
+                    <Badge
+                      variant={provider.isActive ? "default" : "secondary"}
+                      className="text-[10px] px-1.5 py-0"
+                    >
+                      {provider.isActive ? "Active" : "Inactive"}
+                    </Badge>
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <span className="text-xs text-muted-foreground capitalize">
                     {provider.type}
-                  </div>
-                </li>
+                  </span>
+                </button>
               ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Provider Details */}
-        <div className="col-span-1 md:col-span-2 border rounded p-4">
-          <h3 className="font-medium mb-4">
-            {isCreating
-              ? "New Provider"
-              : selectedProvider
-                ? "Provider Details"
-                : "Select a Provider"}
-          </h3>
-
-          {(selectedProvider || isCreating) && (
-            <div className="space-y-4">
-              {/* Provider Form */}
-              <div className="space-y-6">
-                {/* Basic Information */}
-                <div>
-                  <h4 className="font-medium mb-2">Basic Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Name
-                      </label>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={formData.name}
-                          onChange={(e) => handleChange("name", e.target.value)}
-                          className="w-full p-2 border rounded"
-                          disabled={!isEditing}
-                        />
-                      ) : (
-                        <p>{formData.name}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Type
-                      </label>
-                      {isEditing ? (
-                        <select
-                          value={formData.type}
-                          onChange={(e) =>
-                            handleTypeChange(
-                              e.target.value as DeliveryProviderType,
-                            )
-                          }
-                          className="w-full p-2 border rounded"
-                          disabled={!isEditing}
-                        >
-                          {PROVIDER_TYPES.map((type) => (
-                            <option key={type.value} value={type.value}>
-                              {type.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <p>
-                          {
-                            PROVIDER_TYPES.find(
-                              (type) => type.value === formData.type,
-                            )?.label
-                          }
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Status
-                      </label>
-                      {isEditing ? (
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={formData.isActive}
-                            onChange={(e) =>
-                              handleChange("isActive", e.target.checked)
-                            }
-                            className="rounded"
-                            id="provider-active"
-                          />
-                          <label
-                            htmlFor="provider-active"
-                            className="text-sm select-none"
-                          >
-                            Active
-                          </label>
-                        </div>
-                      ) : (
-                        <p>
-                          {formData.isActive ? (
-                            <span className="text-green-600 font-medium">
-                              Active
-                            </span>
-                          ) : (
-                            <span className="text-gray-600">Inactive</span>
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Credentials Section */}
-                <div>
-                  <h4 className="font-medium mb-2">API Credentials</h4>
-
-                  {formData.type === "pathao" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Base URL
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={
-                              parseJSON(formData.credentials).baseUrl || ""
-                            }
-                            onChange={(e) =>
-                              handleCredentialChange("baseUrl", e.target.value)
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>{parseJSON(formData.credentials).baseUrl}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Client ID
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={
-                              parseJSON(formData.credentials).clientId || ""
-                            }
-                            onChange={(e) =>
-                              handleCredentialChange("clientId", e.target.value)
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>••••••••••••</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Client Secret
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="password"
-                            value={
-                              parseJSON(formData.credentials).clientSecret || ""
-                            }
-                            onChange={(e) =>
-                              handleCredentialChange(
-                                "clientSecret",
-                                e.target.value,
-                              )
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>••••••••••••</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Username
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={
-                              parseJSON(formData.credentials).username || ""
-                            }
-                            onChange={(e) =>
-                              handleCredentialChange("username", e.target.value)
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>{parseJSON(formData.credentials).username}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Password
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="password"
-                            value={
-                              parseJSON(formData.credentials).password || ""
-                            }
-                            onChange={(e) =>
-                              handleCredentialChange("password", e.target.value)
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>••••••••••••</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {formData.type === "steadfast" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Base URL
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={
-                              parseJSON(formData.credentials).baseUrl || ""
-                            }
-                            onChange={(e) =>
-                              handleCredentialChange("baseUrl", e.target.value)
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>{parseJSON(formData.credentials).baseUrl}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          API Key
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="password"
-                            value={parseJSON(formData.credentials).apiKey || ""}
-                            onChange={(e) =>
-                              handleCredentialChange("apiKey", e.target.value)
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>••••••••••••</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Secret Key
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="password"
-                            value={
-                              parseJSON(formData.credentials).secretKey || ""
-                            }
-                            onChange={(e) =>
-                              handleCredentialChange(
-                                "secretKey",
-                                e.target.value,
-                              )
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>••••••••••••</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Configuration Section */}
-                <div>
-                  <h4 className="font-medium mb-2">Configuration</h4>
-
-                  {formData.type === "pathao" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Store ID
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={parseJSON(formData.config).storeId || ""}
-                            onChange={(e) =>
-                              handleConfigChange("storeId", e.target.value)
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>{parseJSON(formData.config).storeId}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Default Delivery Type
-                        </label>
-                        {isEditing ? (
-                          <select
-                            value={
-                              parseJSON(formData.config).defaultDeliveryType ||
-                              48
-                            }
-                            onChange={(e) =>
-                              handleConfigChange(
-                                "defaultDeliveryType",
-                                Number(e.target.value),
-                              )
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          >
-                            <option value={48}>Regular (48)</option>
-                            <option value={12}>Express (12)</option>
-                          </select>
-                        ) : (
-                          <p>
-                            {parseJSON(formData.config).defaultDeliveryType ===
-                            12
-                              ? "Express (12)"
-                              : "Regular (48)"}
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Default Item Type
-                        </label>
-                        {isEditing ? (
-                          <select
-                            value={
-                              parseJSON(formData.config).defaultItemType || 2
-                            }
-                            onChange={(e) =>
-                              handleConfigChange(
-                                "defaultItemType",
-                                Number(e.target.value),
-                              )
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          >
-                            <option value={1}>Document</option>
-                            <option value={2}>Parcel</option>
-                          </select>
-                        ) : (
-                          <p>
-                            {parseJSON(formData.config).defaultItemType === 1
-                              ? "Document"
-                              : "Parcel"}
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Default Weight (KG)
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0.1"
-                            value={
-                              parseJSON(formData.config).defaultItemWeight ||
-                              0.5
-                            }
-                            onChange={(e) =>
-                              handleConfigChange(
-                                "defaultItemWeight",
-                                Number(e.target.value),
-                              )
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>{parseJSON(formData.config).defaultItemWeight}</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {formData.type === "steadfast" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Default COD Amount
-                        </label>
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            min="0"
-                            value={
-                              parseJSON(formData.config).defaultCodAmount || 0
-                            }
-                            onChange={(e) =>
-                              handleConfigChange(
-                                "defaultCodAmount",
-                                Number(e.target.value),
-                              )
-                            }
-                            className="w-full p-2 border rounded"
-                            disabled={!isEditing}
-                          />
-                        ) : (
-                          <p>{parseJSON(formData.config).defaultCodAmount}</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Form Actions */}
-                <div className="flex space-x-2 pt-4">
-                  {isEditing ? (
-                    <>
-                      <button
-                        onClick={handleSave}
-                        className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={isSaving}
-                      >
-                        {isSaving ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        onClick={handleTestCredentials}
-                        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={isTestingCredentials}
-                      >
-                        {isTestingCredentials
-                          ? "Testing..."
-                          : "Test Credentials"}
-                      </button>
-                      <button
-                        onClick={handleCancel}
-                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={handleEdit}
-                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={handleTest}
-                        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={isTesting}
-                      >
-                        {isTesting ? "Testing..." : "Test Connection"}
-                      </button>
-                      <button
-                        onClick={handleDelete}
-                        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={isDeleting}
-                      >
-                        {isDeleting ? "Deleting..." : "Delete"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          {!selectedProvider && !isCreating && (
-            <p className="text-gray-500">
-              Select a provider to view details or create a new one.
+      {/* Provider Detail Panel */}
+      <Card className="md:col-span-2">
+        {!selectedProvider && !isCreating ? (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <Truck className="h-10 w-10 mb-3 opacity-40" />
+            <p className="text-sm">
+              Select a provider or add a new one to get started.
             </p>
-          )}
-        </div>
-      </div>
+          </div>
+        ) : (
+          <>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base">
+                  {isCreating ? "New Provider" : "Provider Details"}
+                </CardTitle>
+                <CardDescription>
+                  {isCreating
+                    ? "Configure a new delivery integration"
+                    : formData.name}
+                </CardDescription>
+              </div>
+              {!isEditing && selectedProvider && (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleEdit}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTest}
+                    disabled={isTesting}
+                  >
+                    {isTesting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    ) : (
+                      <TestTube className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    Test
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" disabled={isDeleting}>
+                        {isDeleting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Delete
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete provider?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently remove{" "}
+                          <strong>{selectedProvider.name}</strong> and all its
+                          configuration. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDelete}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                  Basic Information
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="provider-name">Name</Label>
+                    <Input
+                      id="provider-name"
+                      value={formData.name}
+                      onChange={(e) => handleChange("name", e.target.value)}
+                      disabled={!isEditing}
+                      placeholder="e.g. Pathao Production"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Type</Label>
+                    {isEditing ? (
+                      <Select
+                        value={formData.type}
+                        onValueChange={(val) =>
+                          handleTypeChange(val as DeliveryProviderType)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PROVIDER_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={
+                          PROVIDER_TYPES.find((t) => t.value === formData.type)
+                            ?.label || formData.type
+                        }
+                        disabled
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between sm:col-span-2">
+                    <div className="space-y-0.5">
+                      <Label>Status</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Enable to make this provider available for orders
+                      </p>
+                    </div>
+                    <Switch
+                      checked={formData.isActive}
+                      onCheckedChange={(checked) =>
+                        handleChange("isActive", checked)
+                      }
+                      disabled={!isEditing}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Credentials */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                  API Credentials
+                </h4>
+
+                {formData.type === "pathao" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Base URL</Label>
+                      <Input
+                        value={creds.baseUrl || ""}
+                        onChange={(e) =>
+                          handleCredentialChange("baseUrl", e.target.value)
+                        }
+                        disabled={!isEditing}
+                        placeholder="https://api-hermes.pathao.com"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Client ID</Label>
+                      <Input
+                        value={creds.clientId || ""}
+                        onChange={(e) =>
+                          handleCredentialChange("clientId", e.target.value)
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Client Secret</Label>
+                      <Input
+                        type="password"
+                        value={creds.clientSecret || ""}
+                        onChange={(e) =>
+                          handleCredentialChange("clientSecret", e.target.value)
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Username</Label>
+                      <Input
+                        value={creds.username || ""}
+                        onChange={(e) =>
+                          handleCredentialChange("username", e.target.value)
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label>Password</Label>
+                      <Input
+                        type="password"
+                        value={creds.password || ""}
+                        onChange={(e) =>
+                          handleCredentialChange("password", e.target.value)
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {formData.type === "steadfast" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label>Base URL</Label>
+                      <Input
+                        value={creds.baseUrl || ""}
+                        onChange={(e) =>
+                          handleCredentialChange("baseUrl", e.target.value)
+                        }
+                        disabled={!isEditing}
+                        placeholder="https://portal.steadfast.com.bd/api/v1"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>API Key</Label>
+                      <Input
+                        type="password"
+                        value={creds.apiKey || ""}
+                        onChange={(e) =>
+                          handleCredentialChange("apiKey", e.target.value)
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Secret Key</Label>
+                      <Input
+                        type="password"
+                        value={creds.secretKey || ""}
+                        onChange={(e) =>
+                          handleCredentialChange("secretKey", e.target.value)
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Configuration Section */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                  Configuration
+                </h4>
+
+                {formData.type === "pathao" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Store ID</Label>
+                      <Input
+                        value={conf.storeId || ""}
+                        onChange={(e) =>
+                          handleConfigChange("storeId", e.target.value)
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Default Delivery Type</Label>
+                      {isEditing ? (
+                        <Select
+                          value={String(conf.defaultDeliveryType || 48)}
+                          onValueChange={(val) =>
+                            handleConfigChange("defaultDeliveryType", Number(val))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="48">Regular (48hr)</SelectItem>
+                            <SelectItem value="12">Express (12hr)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={
+                            conf.defaultDeliveryType === 12
+                              ? "Express (12hr)"
+                              : "Regular (48hr)"
+                          }
+                          disabled
+                        />
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Default Item Type</Label>
+                      {isEditing ? (
+                        <Select
+                          value={String(conf.defaultItemType || 2)}
+                          onValueChange={(val) =>
+                            handleConfigChange("defaultItemType", Number(val))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">Document</SelectItem>
+                            <SelectItem value="2">Parcel</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={
+                            conf.defaultItemType === 1 ? "Document" : "Parcel"
+                          }
+                          disabled
+                        />
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Default Weight (KG)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        value={conf.defaultItemWeight || 0.5}
+                        onChange={(e) =>
+                          handleConfigChange(
+                            "defaultItemWeight",
+                            Number(e.target.value)
+                          )
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {formData.type === "steadfast" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Default COD Amount</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={conf.defaultCodAmount || 0}
+                        onChange={(e) =>
+                          handleConfigChange(
+                            "defaultCodAmount",
+                            Number(e.target.value)
+                          )
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Bar */}
+              {isEditing && (
+                <div className="flex items-center gap-2 pt-4 border-t border-border">
+                  <Button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="min-w-[100px]"
+                  >
+                    {isSaving ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1" />
+                    )}
+                    Save
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleTestCredentials}
+                    disabled={isTestingCredentials}
+                  >
+                    {isTestingCredentials ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <TestTube className="h-4 w-4 mr-1" />
+                    )}
+                    Test Credentials
+                  </Button>
+                  <Button variant="ghost" onClick={handleCancel}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </>
+        )}
+      </Card>
     </div>
   );
 };

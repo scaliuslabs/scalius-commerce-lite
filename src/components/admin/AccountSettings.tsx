@@ -105,23 +105,23 @@ export function AccountSettings({ user }: AccountSettingsProps) {
 
       {/* Tabbed Settings */}
       <Tabs defaultValue="security" className="space-y-6">
-        <TabsList className={`grid w-full ${canManageRoles ? "grid-cols-4" : "grid-cols-3"}`}>
-          <TabsTrigger value="security" className="flex items-center gap-2">
+        <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent p-0 h-auto gap-0">
+          <TabsTrigger value="security" className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground flex items-center gap-2">
             <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Security</span>
+            Security
           </TabsTrigger>
-          <TabsTrigger value="password" className="flex items-center gap-2">
+          <TabsTrigger value="password" className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground flex items-center gap-2">
             <KeyRound className="h-4 w-4" />
-            <span className="hidden sm:inline">Password</span>
+            Password
           </TabsTrigger>
-          <TabsTrigger value="team" className="flex items-center gap-2">
+          <TabsTrigger value="team" className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground flex items-center gap-2">
             <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Team</span>
+            Team
           </TabsTrigger>
           {canManageRoles && (
-            <TabsTrigger value="roles" className="flex items-center gap-2">
+            <TabsTrigger value="roles" className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground flex items-center gap-2">
               <ShieldPlus className="h-4 w-4" />
-              <span className="hidden sm:inline">Roles</span>
+              Roles
             </TabsTrigger>
           )}
         </TabsList>
@@ -481,11 +481,10 @@ function ChangePasswordSection() {
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div
                       key={i}
-                      className={`h-1 flex-1 rounded-full transition-colors ${
-                        i <= passwordStrength.strength
+                      className={`h-1 flex-1 rounded-full transition-colors ${i <= passwordStrength.strength
                           ? passwordStrength.color
                           : "bg-muted"
-                      }`}
+                        }`}
                     />
                   ))}
                 </div>
@@ -770,15 +769,15 @@ function TwoFactorSection({ user }: { user: User }) {
             {setupMode === "disable"
               ? "Disable Two-Factor Authentication"
               : setupMode === "change"
-              ? "Change Verification Method"
-              : "Enable Two-Factor Authentication"}
+                ? "Change Verification Method"
+                : "Enable Two-Factor Authentication"}
           </CardTitle>
           <CardDescription>
             {setupMode === "disable"
               ? "Enter your password to confirm"
               : setupMode === "change"
-              ? "Choose your preferred verification method"
-              : "Add an extra layer of security to your account"}
+                ? "Choose your preferred verification method"
+                : "Add an extra layer of security to your account"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -795,16 +794,14 @@ function TwoFactorSection({ user }: { user: User }) {
                 <button
                   type="button"
                   onClick={() => setSelectedMethod("totp")}
-                  className={`p-4 border rounded-xl text-left transition-all ${
-                    selectedMethod === "totp"
+                  className={`p-4 border rounded-xl text-left transition-all ${selectedMethod === "totp"
                       ? "border-primary bg-primary/5 ring-1 ring-primary"
                       : "hover:bg-muted/50 hover:border-muted-foreground/20"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                      selectedMethod === "totp" ? "bg-primary/10" : "bg-muted"
-                    }`}>
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedMethod === "totp" ? "bg-primary/10" : "bg-muted"
+                      }`}>
                       <Smartphone className={`h-6 w-6 ${selectedMethod === "totp" ? "text-primary" : "text-muted-foreground"}`} />
                     </div>
                     <div>
@@ -819,16 +816,14 @@ function TwoFactorSection({ user }: { user: User }) {
                 <button
                   type="button"
                   onClick={() => setSelectedMethod("email")}
-                  className={`p-4 border rounded-xl text-left transition-all ${
-                    selectedMethod === "email"
+                  className={`p-4 border rounded-xl text-left transition-all ${selectedMethod === "email"
                       ? "border-primary bg-primary/5 ring-1 ring-primary"
                       : "hover:bg-muted/50 hover:border-muted-foreground/20"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                      selectedMethod === "email" ? "bg-primary/10" : "bg-muted"
-                    }`}>
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedMethod === "email" ? "bg-primary/10" : "bg-muted"
+                      }`}>
                       <Mail className={`h-6 w-6 ${selectedMethod === "email" ? "text-primary" : "text-muted-foreground"}`} />
                     </div>
                     <div>
