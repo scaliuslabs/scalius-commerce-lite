@@ -197,42 +197,23 @@ export default function FirebaseSettingsForm() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Push Notifications
-          </h2>
-          <p className="text-muted-foreground">
-            Configure Firebase Cloud Messaging for order notifications.
-          </p>
-        </div>
-        <Button onClick={handleSubmit} disabled={saving}>
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          <Save className="mr-2 h-4 w-4" />
-          Save Changes
-        </Button>
-      </div>
+    <div className="space-y-5 max-w-3xl">
 
       {/* SECTION 1: Service Account */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                1. Service Account JSON
-                {serviceAccountStatus === "configured" && (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                )}
-                {serviceAccountStatus === "invalid" && (
-                  <AlertCircle className="h-5 w-5 text-red-500" />
-                )}
-              </CardTitle>
-              <CardDescription>
-                Required for sending notifications from the server.
-              </CardDescription>
-            </div>
-          </div>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            Service Account JSON
+            {serviceAccountStatus === "configured" && (
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+            )}
+            {serviceAccountStatus === "invalid" && (
+              <AlertCircle className="h-4 w-4 text-red-500" />
+            )}
+          </CardTitle>
+          <CardDescription>
+            Required for sending notifications from the server.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert>
@@ -273,8 +254,8 @@ export default function FirebaseSettingsForm() {
 
       {/* SECTION 2: Firebase Config */}
       <Card>
-        <CardHeader>
-          <CardTitle>2. Firebase Web App Config</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Firebase Web App Config</CardTitle>
           <CardDescription>
             Required for the admin dashboard to receive notifications in
             browser.
@@ -395,8 +376,8 @@ export default function FirebaseSettingsForm() {
 
       {/* SECTION 3: VAPID Key */}
       <Card>
-        <CardHeader>
-          <CardTitle>3. Web Push Certificate (VAPID Key)</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Web Push Certificate (VAPID Key)</CardTitle>
           <CardDescription>
             Required for subscribing browsers to push notifications.
           </CardDescription>
@@ -436,9 +417,10 @@ export default function FirebaseSettingsForm() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end pb-8">
-        <Button onClick={handleSubmit} disabled={saving} size="lg">
+      <div className="flex justify-end pt-4 border-t border-border">
+        <Button onClick={handleSubmit} disabled={saving} className="min-w-[160px]">
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Save className="mr-2 h-4 w-4" />
           Save All Settings
         </Button>
       </div>
