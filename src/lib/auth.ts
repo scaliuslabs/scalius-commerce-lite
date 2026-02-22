@@ -23,6 +23,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
 
   const secret = getEnvVar("BETTER_AUTH_SECRET");
   const baseURL = getEnvVar("BETTER_AUTH_URL") || getEnvVar("PUBLIC_API_BASE_URL");
+  const storefrontURL = getEnvVar("STOREFRONT_URL");
   const appName = "Scalius Commerce";
 
   if (!secret) {
@@ -190,7 +191,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
         adminRoles: ["admin"],
       }),
     ],
-    trustedOrigins: baseURL ? [baseURL] : [],
+    trustedOrigins: [baseURL, storefrontURL].filter(Boolean) as string[],
   });
 }
 

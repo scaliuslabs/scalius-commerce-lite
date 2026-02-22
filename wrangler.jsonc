@@ -1,6 +1,5 @@
 {
   "name": "testdash",
-  // Cloudflare Workers entrypoint (built by Astro + queue wrapper)
   "main": "./dist/worker-with-queue.js",
   "compatibility_date": "2026-02-01",
   "compatibility_flags": [
@@ -17,12 +16,10 @@
   "placement": {
     "mode": "smart"
   },
-  // Static assets binding (required by @astrojs/cloudflare)
   "assets": {
     "binding": "ASSETS",
     "directory": "./dist"
   },
-  // Cloudflare D1 – primary database
   "d1_databases": [
     {
       "binding": "DB",
@@ -31,32 +28,26 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Cloudflare KV namespaces
   "kv_namespaces": [
     {
-      // API response cache
       "binding": "CACHE",
       "id": "d6e2d77d898e4b3f9c186802ce63f9b8"
     },
     {
-      // Astro session storage
       "binding": "SESSION",
       "id": "0564d3a6c3704c8c9f355b7ec5498f50"
     },
     {
-      // Shared auth / Firebase token cache
       "binding": "SHARED_AUTH_CACHE",
       "id": "9f577136c05144349f2b8013a4fc1cc5"
     }
   ],
-  // Cloudflare R2 – media storage
   "r2_buckets": [
     {
       "binding": "BUCKET",
       "bucket_name": "scalius-media"
     }
   ],
-  // Cloudflare Queues – async webhook & payment processing
   "queues": {
     "producers": [
       {
@@ -84,10 +75,11 @@
       }
     ]
   },
-  // Environment variables (non-secret)
-  // NOTE: Stripe and SSLCommerz credentials are managed via the admin dashboard
-  // and stored in the D1 database — do NOT put them here as env vars or secrets.
-  // Only infrastructure secrets go here:
-  //   wrangler secret put BETTER_AUTH_SECRET
-  "vars": {}
+  "vars": {
+    "PUBLIC_API_BASE_URL": "https://dash.wrygo.com",
+    "BETTER_AUTH_URL": "https://dash.wrygo.com",
+    "STOREFRONT_URL": "https://store.wrygo.com",
+    "CDN_DOMAIN_URL": "cloud.wrygo.com",
+    "PURGE_URL": "https://store.wrygo.com/api/purge-cache"
+  }
 }

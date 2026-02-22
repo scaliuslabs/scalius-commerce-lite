@@ -830,6 +830,13 @@ export const siteSettings = sqliteTable("site_settings", {
   homepageMetaDescription: text("homepage_meta_description"),
   robotsTxt: text("robots_txt"),
   storefrontUrl: text("storefront_url").default("/"),
+  // Auth & Guest Checkout Settings
+  authVerificationMethod: text("auth_verification_method", { enum: ["email", "phone", "both"] }).notNull().default("email"),
+  guestCheckoutEnabled: integer("guest_checkout_enabled", { mode: "boolean" }).notNull().default(true),
+  whatsappAccessToken: text("whatsapp_access_token"),
+  whatsappPhoneNumberId: text("whatsapp_phone_number_id"),
+  whatsappTemplateName: text("whatsapp_template_name").default("auth_otp"),
+  // Timestamps
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),

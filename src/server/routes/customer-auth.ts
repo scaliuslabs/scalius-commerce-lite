@@ -14,7 +14,7 @@
 import { Hono } from "hono";
 import { nanoid } from "nanoid";
 import { sendEmail } from "@/lib/email";
-import { customers } from "@/db/schema";
+import { customers, siteSettings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 const COOKIE_NAME = "cs_tok";
@@ -62,21 +62,39 @@ function buildSetCookieHeader(token: string, maxAge: number): string {
 const app = new Hono<{ Bindings: Env }>();
 
 // ─── POST /send-otp ──────────────────────────────────────────────────────────
-// Body: { email: string, name?: string }
+// Body: { method: "email" | "phone", identifier: string, name?: string }
 // Rate limiting: checked via OTP TTL (can't spam — existing OTP blocks new one for 2 min)
 
 app.post("/send-otp", async (c) => {
   try {
-    const body = await c.req.json() as { email?: string; name?: string };
-    const email = body.email?.trim().toLowerCase();
+    const body = await c.req.json() as { method?: "email" | "phone"; identifier?: string; name?: string };
+    const method = body.method || "email";
+    const identifier = body.identifier?.trim().toLowerCase();
     const name = body.name?.trim() || "Customer";
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!identifier) {
+      return c.json({ error: "Contact identifier required (email or phone)" }, 400);
+    }
+
+    if (method === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
       return c.json({ error: "Valid email address required" }, 400);
     }
 
+    if (method === "phone" && !/^\+?[1-9]\d{1,14}$/.test(identifier)) {
+      return c.json({ error: "Valid phone number required" }, 400);
+    }
+
+    const db = c.get("db");
+    const [settings] = await db.select().from(siteSettings).limit(1);
+
+    // Check if the requested method is allowed by admin
+    const allowedMethod = settings?.authVerificationMethod || "email";
+    if (allowedMethod !== "both" && allowedMethod !== method) {
+      return c.json({ error: `Verification via ${method} is currently disabled by the store.` }, 403);
+    }
+
     const kv = c.env.CACHE;
-    const otpKey = `${OTP_PREFIX}${email}`;
+    const otpKey = `${OTP_PREFIX}${identifier}`;
 
     // Check if a recent OTP exists (prevent spam — must wait 2 min between sends)
     const existingOtpRaw = await kv.get(otpKey, "text");
@@ -87,7 +105,7 @@ app.post("/send-otp", async (c) => {
       const timeLeft = Math.ceil((existing.expiresAt - now + OTP_TTL_SECONDS * 1000 - minWait * 1000 / 1000) / 1000);
       if (existing.expiresAt - now > (OTP_TTL_SECONDS - 120) * 1000) {
         // OTP was created less than 2 min ago
-        return c.json({ 
+        return c.json({
           error: "A verification code was recently sent. Please wait a moment before requesting a new one.",
           retryAfter: 120
         }, 429);
@@ -99,31 +117,85 @@ app.post("/send-otp", async (c) => {
     const now = Date.now();
     const storedOtp: StoredOtp = {
       code,
-      email,
+      email: identifier, // Using "email" as the generic identifier property for backwards compatibility in StoredOtp interface
       expiresAt: now + OTP_TTL_SECONDS * 1000,
       attempts: 0,
     };
 
     await kv.put(otpKey, JSON.stringify(storedOtp), { expirationTtl: OTP_TTL_SECONDS });
 
-    // Send OTP email
-    await sendEmail({
-      to: email,
-      subject: "Your login code",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-          <h2 style="font-size: 20px; margin-bottom: 8px;">Your login code</h2>
-          <p style="color: #555; margin-bottom: 24px;">Hi ${name}, enter this code to sign in:</p>
-          <div style="background: #f5f5f5; border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 24px;">
-            <span style="font-size: 40px; font-weight: 700; letter-spacing: 10px; font-family: monospace; color: #111;">${code}</span>
+    if (method === "email") {
+      // Send OTP email
+      await sendEmail({
+        to: identifier,
+        subject: "Your login code",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+            <h2 style="font-size: 20px; margin-bottom: 8px;">Your login code</h2>
+            <p style="color: #555; margin-bottom: 24px;">Hi ${name}, enter this code to sign in:</p>
+            <div style="background: #f5f5f5; border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 24px;">
+              <span style="font-size: 40px; font-weight: 700; letter-spacing: 10px; font-family: monospace; color: #111;">${code}</span>
+            </div>
+            <p style="color: #888; font-size: 13px;">This code expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
           </div>
-          <p style="color: #888; font-size: 13px;">This code expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
-        </div>
-      `,
-      text: `Your login code is: ${code}\n\nExpires in 5 minutes.`,
-    });
+        `,
+        text: `Your login code is: ${code}\n\nExpires in 5 minutes.`,
+      });
 
-    return c.json({ success: true, message: "Verification code sent to your email" });
+      return c.json({ success: true, message: "Verification code sent to your email" });
+    } else {
+      // Send OTP WhatsApp
+      const waToken = settings?.whatsappAccessToken;
+      const waPhoneId = settings?.whatsappPhoneNumberId;
+      const waTemplate = settings?.whatsappTemplateName || "auth_otp";
+
+      if (!waToken || !waPhoneId) {
+        console.error("[CustomerAuth] WhatsApp API keys missing in DB settings.");
+        return c.json({ error: "WhatsApp verification is currently unavailable. Contact store support." }, 500);
+      }
+
+      const waRes = await fetch(`https://graph.facebook.com/v19.0/${waPhoneId}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${waToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: identifier.replace("+", ""), // FB API expects number without '+'
+          type: "template",
+          template: {
+            name: waTemplate,
+            language: { code: "en_US" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: code }
+                ]
+              },
+              {
+                type: "button",
+                sub_type: "url",
+                index: "0",
+                parameters: [
+                  { type: "text", text: code }
+                ]
+              }
+            ]
+          }
+        })
+      });
+
+      if (!waRes.ok) {
+        const err = await waRes.text();
+        console.error("[CustomerAuth] WhatsApp API failed:", err);
+        return c.json({ error: "Failed to deliver WhatsApp verification code." }, 500);
+      }
+
+      return c.json({ success: true, message: "Verification code sent via WhatsApp" });
+    }
+
   } catch (error) {
     console.error("[CustomerAuth] send-otp error:", error);
     return c.json({ error: "Failed to send verification code" }, 500);
@@ -131,29 +203,31 @@ app.post("/send-otp", async (c) => {
 });
 
 // ─── POST /verify-otp ────────────────────────────────────────────────────────
-// Body: { email: string, code: string, name?: string, phone?: string }
-// Returns: { success: true, customer: { email, name, phone?, customerId? } }
-// Sets cookie: cs_tok=<session_token>
+// Body: { method: "email" | "phone", identifier: string, code: string, name?: string }
+// Returns: { success: true, customer: { identifier, name, customerId? } }
+// Sets cookie: cs_tok=<session_token>, cs_auth=1
 
 app.post("/verify-otp", async (c) => {
   try {
-    const body = await c.req.json() as { 
-      email?: string; 
+    const body = await c.req.json() as {
+      method?: "email" | "phone";
+      identifier?: string;
       code?: string;
       name?: string;
       phone?: string;
     };
-    const email = body.email?.trim().toLowerCase();
+    const method = body.method || "email";
+    const identifier = body.identifier?.trim().toLowerCase();
     const code = body.code?.trim();
     const name = body.name?.trim() || "Customer";
-    const phone = body.phone?.trim() || undefined;
+    const phone = body.phone?.trim();
 
-    if (!email || !code) {
-      return c.json({ error: "Email and code are required" }, 400);
+    if (!identifier || !code) {
+      return c.json({ error: "Contact identifier and code are required" }, 400);
     }
 
     const kv = c.env.CACHE;
-    const otpKey = `${OTP_PREFIX}${email}`;
+    const otpKey = `${OTP_PREFIX}${identifier}`;
 
     // Fetch stored OTP
     const storedRaw = await kv.get(otpKey, "text");
@@ -183,7 +257,7 @@ app.post("/verify-otp", async (c) => {
       // Save updated attempts count
       const remaining = OTP_TTL_SECONDS - Math.floor((Date.now() - (stored.expiresAt - OTP_TTL_SECONDS * 1000)) / 1000);
       await kv.put(otpKey, JSON.stringify(stored), { expirationTtl: Math.max(remaining, 1) });
-      return c.json({ 
+      return c.json({
         error: "Incorrect code. Please try again.",
         attemptsLeft: 5 - stored.attempts
       }, 400);
@@ -192,30 +266,68 @@ app.post("/verify-otp", async (c) => {
     // OTP is valid — delete it
     await kv.delete(otpKey);
 
-    // Look up customer by email in DB (if exists)
+    // Look up customer in DB (if exists)
     const db = c.get("db");
     let customerId: string | undefined;
     let customerName = name;
-    let customerPhone = phone;
+
+    let resolvedEmail = method === "email" ? identifier : undefined;
+    let resolvedPhone = method === "phone" ? identifier : undefined;
+    let isNewUser = false;
 
     try {
-      const existing = await db.select().from(customers).where(eq(customers.email, email)).get();
+      // Search via email if it's an email auth, otherwise search via phone
+      const existing = method === "email"
+        ? await db.select().from(customers).where(eq(customers.email, identifier)).get()
+        : await db.select().from(customers).where(eq(customers.phone, identifier)).get();
+
       if (existing) {
         customerId = existing.id;
         customerName = existing.name || name;
-        customerPhone = existing.phone || phone;
+        resolvedEmail = existing.email || resolvedEmail;
+        resolvedPhone = existing.phone || resolvedPhone;
+      } else {
+        if (method === "email") {
+          if (!phone) {
+            return c.json({ error: "Phone number is required for registration." }, 400);
+          }
+          // Prevent duplicates/account takeover
+          const phoneExists = await db.select().from(customers).where(eq(customers.phone, phone)).get();
+          if (phoneExists) {
+            return c.json({ error: "This phone number is already registered. Please sign in with WhatsApp." }, 400);
+          }
+        }
+
+        // Create new customer record
+        customerId = nanoid();
+
+        const insertPayload: any = {
+          id: customerId,
+          name: customerName,
+          status: "active",
+        };
+
+        if (resolvedEmail) insertPayload.email = resolvedEmail;
+        if (method === "email" && phone) {
+          insertPayload.phone = phone;
+          resolvedPhone = phone; // Ensure session gets the phone
+        }
+        if (method === "phone") insertPayload.phone = resolvedPhone;
+
+        await db.insert(customers).values(insertPayload);
+        isNewUser = true;
       }
     } catch (dbError) {
-      console.warn("[CustomerAuth] DB lookup failed (non-critical):", dbError);
+      console.warn("[CustomerAuth] DB lookup/insert failed (non-critical):", dbError);
     }
 
     // Create session
     const sessionToken = nanoid(48);
     const session: CustomerSession = {
       token: sessionToken,
-      email,
+      email: resolvedEmail || "", // Fallback due to legacy strict typings on the session table
       name: customerName,
-      phone: customerPhone,
+      phone: resolvedPhone,
       customerId,
       createdAt: Date.now(),
       expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000,
@@ -225,24 +337,28 @@ app.post("/verify-otp", async (c) => {
     await kv.put(sessionKey, JSON.stringify(session), { expirationTtl: SESSION_TTL_SECONDS });
 
     const cookieHeader = buildSetCookieHeader(sessionToken, SESSION_TTL_SECONDS);
+    const authIndicatorCookie = `cs_auth=1; Max-Age=${SESSION_TTL_SECONDS}; Path=/; SameSite=Strict; Secure`;
 
     return new Response(
       JSON.stringify({
         success: true,
         customer: {
-          email: session.email,
+          identifier: identifier,
           name: session.name,
+          email: session.email,
           phone: session.phone,
           customerId: session.customerId,
         },
+        isNewUser
       }),
       {
         status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Set-Cookie": cookieHeader,
-        },
-      },
+        headers: new Headers([
+          ["Content-Type", "application/json"],
+          ["Set-Cookie", cookieHeader],
+          ["Set-Cookie", authIndicatorCookie]
+        ]),
+      }
     );
   } catch (error) {
     console.error("[CustomerAuth] verify-otp error:", error);
@@ -304,18 +420,267 @@ app.post("/logout", async (c) => {
       await kv.delete(`${SESSION_PREFIX}${token}`);
     }
 
-    const clearCookie = `${COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict; Secure`;
+    const clearTokCookie = `${COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict; Secure`;
+    const clearAuthCookie = `cs_auth=; Max-Age=0; Path=/; SameSite=Strict; Secure`;
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Set-Cookie": clearCookie,
-      },
+      headers: new Headers([
+        ["Content-Type", "application/json"],
+        ["Set-Cookie", clearTokCookie],
+        ["Set-Cookie", clearAuthCookie]
+      ]),
     });
   } catch (error) {
     console.error("[CustomerAuth] logout error:", error);
     return c.json({ success: true }, 200);
+  }
+});
+
+// ─── PUT /profile ─────────────────────────────────────────────────────────────
+// Update customer profile (name, phone, delivery address).
+// Requires valid cs_tok session cookie.
+// Body: { name?, phone?, address?, cityName?, zoneName?, areaName? }
+
+app.put("/profile", async (c) => {
+  try {
+    const cookieHeader = c.req.header("Cookie") || null;
+    const token = getSessionCookie(cookieHeader);
+
+    if (!token) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
+
+    const kv = c.env.CACHE;
+    const sessionKey = `${SESSION_PREFIX}${token}`;
+    const sessionRaw = await kv.get(sessionKey, "text");
+
+    if (!sessionRaw) {
+      return c.json({ error: "Session expired. Please log in again." }, 401);
+    }
+
+    const session = JSON.parse(sessionRaw) as CustomerSession;
+
+    if (Date.now() > session.expiresAt) {
+      await kv.delete(sessionKey);
+      return c.json({ error: "Session expired. Please log in again." }, 401);
+    }
+
+    const body = await c.req.json() as {
+      name?: string;
+      address?: string;
+      cityName?: string;
+      zoneName?: string;
+    };
+
+    // Sanitize inputs
+    const updates: Record<string, string | undefined> = {};
+    if (body.name?.trim()) updates.name = body.name.trim();
+    if (body.address?.trim()) updates.address = body.address.trim();
+    if (body.cityName?.trim()) updates.cityName = body.cityName.trim();
+    if (body.zoneName?.trim()) updates.zoneName = body.zoneName.trim();
+
+    // Update customer record in DB if customerId exists
+    if (session.customerId) {
+      const db = c.get("db");
+      const dbUpdates: Record<string, string | number> = {
+        updatedAt: Math.floor(Date.now() / 1000),
+      };
+      if (updates.name) dbUpdates.name = updates.name;
+      if (updates.address) dbUpdates.address = updates.address;
+      if (updates.cityName) dbUpdates.cityName = updates.cityName;
+      if (updates.zoneName) dbUpdates.zoneName = updates.zoneName;
+
+      await db
+        .update(customers)
+        .set(dbUpdates)
+        .where(eq(customers.id, session.customerId));
+    }
+
+    // Update session in KV
+    const updatedSession: CustomerSession = {
+      ...session,
+      name: updates.name || session.name,
+    };
+
+    // Store updated session with remaining TTL
+    const remainingTtl = Math.max(
+      60,
+      Math.floor((session.expiresAt - Date.now()) / 1000),
+    );
+    await kv.put(sessionKey, JSON.stringify(updatedSession), {
+      expirationTtl: remainingTtl,
+    });
+
+    return c.json({
+      success: true,
+      customer: {
+        email: updatedSession.email,
+        name: updatedSession.name,
+        phone: updatedSession.phone,
+        address: updates.address,
+        cityName: updates.cityName,
+        zoneName: updates.zoneName,
+      },
+    });
+  } catch (error) {
+    console.error("[CustomerAuth] /profile error:", error);
+    return c.json({ error: "Failed to update profile" }, 500);
+  }
+});
+
+// ─── GET /orders ──────────────────────────────────────────────────────────────
+// Returns orders belonging to the logged-in customer (matched by phone number).
+// Requires valid cs_tok session cookie.
+
+app.get("/orders", async (c) => {
+  try {
+    const cookieHeader = c.req.header("Cookie") || null;
+    const token = getSessionCookie(cookieHeader);
+
+    if (!token) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
+
+    const kv = c.env.CACHE;
+    const sessionKey = `${SESSION_PREFIX}${token}`;
+    const sessionRaw = await kv.get(sessionKey, "text");
+
+    if (!sessionRaw) {
+      return c.json({ error: "Session expired. Please log in again." }, 401);
+    }
+
+    const session = JSON.parse(sessionRaw) as CustomerSession;
+
+    if (Date.now() > session.expiresAt) {
+      await kv.delete(sessionKey);
+      return c.json({ error: "Session expired. Please log in again." }, 401);
+    }
+
+    const db = c.get("db");
+    const { orders, orderItems, products, productVariants, productImages } = await import("@/db/schema");
+    const { eq, or, sql, desc } = await import("drizzle-orm");
+
+    // ── Fetch full customer profile from DB ──────────────────────────────
+    let customerProfile: {
+      id?: string;
+      name: string;
+      email: string;
+      phone?: string;
+      address?: string | null;
+      cityName?: string | null;
+      zoneName?: string | null;
+      city?: string | null;
+      zone?: string | null;
+    } = {
+      name: session.name || "Customer",
+      email: session.email,
+      phone: session.phone,
+    };
+
+    if (session.customerId) {
+      const dbCustomer = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, session.customerId))
+        .get();
+
+      if (dbCustomer) {
+        customerProfile = {
+          id: dbCustomer.id,
+          name: dbCustomer.name || session.name || "Customer",
+          email: dbCustomer.email || session.email,
+          phone: dbCustomer.phone || session.phone,
+          address: dbCustomer.address,
+          cityName: dbCustomer.cityName,
+          zoneName: dbCustomer.zoneName,
+          city: dbCustomer.city,
+          zone: dbCustomer.zone,
+        };
+      }
+    }
+
+    // ── Match orders EXCLUSIVELY by customerId to perfectly mirror Admin Dashboard ──
+    if (!session.customerId) {
+      return c.json({ success: true, orders: [], customer: customerProfile });
+    }
+
+    const whereClause = eq(orders.customerId, session.customerId);
+
+    const customerOrders = await db
+      .select({
+        id: orders.id,
+        status: orders.status,
+        totalAmount: orders.totalAmount,
+        shippingCharge: orders.shippingCharge,
+        discountAmount: orders.discountAmount,
+        paymentStatus: orders.paymentStatus,
+        paymentMethod: orders.paymentMethod,
+        fulfillmentStatus: orders.fulfillmentStatus,
+        shippingAddress: orders.shippingAddress,
+        cityName: orders.cityName,
+        zoneName: orders.zoneName,
+        notes: orders.notes,
+        createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
+      })
+      .from(orders)
+      .where(whereClause!)
+      .orderBy(desc(orders.createdAt))
+      .limit(50);
+
+    // Fetch items for all orders in one batch
+    const orderIds = customerOrders.map((o) => o.id);
+    let itemsByOrder = new Map<string, any[]>();
+
+    if (orderIds.length > 0) {
+      const allItems = await db
+        .select({
+          orderId: orderItems.orderId,
+          productId: orderItems.productId,
+          variantId: orderItems.variantId,
+          quantity: orderItems.quantity,
+          price: orderItems.price,
+          productName: products.name,
+          productSlug: products.slug,
+          productImage: sql<string>`(
+            SELECT ${productImages.url}
+            FROM ${productImages}
+            WHERE ${productImages.productId} = ${products.id}
+            AND ${productImages.isPrimary} = 1
+            LIMIT 1
+          )`.as("productImage"),
+          variantSize: productVariants.size,
+          variantColor: productVariants.color,
+        })
+        .from(orderItems)
+        .leftJoin(products, eq(products.id, orderItems.productId))
+        .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+        .where(sql`${orderItems.orderId} IN ${orderIds}`);
+
+      for (const item of allItems) {
+        const list = itemsByOrder.get(item.orderId) || [];
+        list.push(item);
+        itemsByOrder.set(item.orderId, list);
+      }
+    }
+
+    // Format response
+    const formattedOrders = customerOrders.map((order) => ({
+      ...order,
+      createdAt: order.createdAt
+        ? new Date(order.createdAt * 1000).toISOString()
+        : null,
+      items: itemsByOrder.get(order.id) || [],
+    }));
+
+    return c.json({
+      success: true,
+      orders: formattedOrders,
+      customer: customerProfile,
+    });
+  } catch (error) {
+    console.error("[CustomerAuth] /orders error:", error);
+    return c.json({ error: "Failed to fetch orders" }, 500);
   }
 });
 
