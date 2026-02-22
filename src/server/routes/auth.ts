@@ -10,33 +10,44 @@ interface User {
   role: string;
 }
 
+// Constant-time secret comparison — hash both values to SHA-256 then compare bytes
+async function timingSafeCompare(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [hashA, hashB] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(a)),
+    crypto.subtle.digest("SHA-256", encoder.encode(b)),
+  ]);
+  const viewA = new Uint8Array(hashA);
+  const viewB = new Uint8Array(hashB);
+  if (viewA.length !== viewB.length) return false;
+  let result = 0;
+  for (let i = 0; i < viewA.length; i++) {
+    result |= viewA[i] ^ viewB[i];
+  }
+  return result === 0;
+}
+
 // Create a Hono app with typed context
 const app = new Hono<{
+  Bindings: Env;
   Variables: {
     user: User;
   };
 }>();
 
-// System API token for service-to-service communication
-const API_TOKEN =
-  process.env.API_TOKEN || "default-api-token-change-in-production";
-
-// SECURITY: Block startup if using default API token in production
-if (
-  process.env.NODE_ENV === "production" &&
-  API_TOKEN === "default-api-token-change-in-production"
-) {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Using default API token in production. Set API_TOKEN environment variable.",
-  );
-}
-
 // Get token for service-to-service communication
-app.get("/token", (c) => {
+app.get("/token", async (c) => {
+  // Read API_TOKEN from Cloudflare Worker env bindings (c.env) first,
+  // falling back to process.env for local dev compatibility.
+  const API_TOKEN =
+    c.env.API_TOKEN ||
+    process.env.API_TOKEN ||
+    "default-api-token-change-in-production";
+
   // Check if request has the correct API token
   const apiToken = c.req.header("X-API-Token");
 
-  if (apiToken !== API_TOKEN) {
+  if (!apiToken || !(await timingSafeCompare(apiToken, API_TOKEN))) {
     return c.json(
       {
         success: false,

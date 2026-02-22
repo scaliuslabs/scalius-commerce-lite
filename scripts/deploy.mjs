@@ -30,8 +30,8 @@ const local = args.includes("--local");
 // ── Read wrangler.jsonc (strip // comments so JSON.parse works) ──────────────
 function readWranglerConfig() {
   const raw = readFileSync(resolve(root, "wrangler.jsonc"), "utf8");
-  // Strip single-line // comments to turn JSONC into valid JSON
-  const stripped = raw.replace(/\/\/[^\n]*/g, "");
+  // Strip single-line // comments to turn JSONC into valid JSON, ignoring http:// and https://
+  const stripped = raw.replace(/(?<!https?:)\/\/[^\n]*/g, "");
   return JSON.parse(stripped);
 }
 
@@ -56,7 +56,7 @@ function run(cmd, label) {
   if (!d1?.database_name) {
     console.error(
       "✗ No d1_databases[0].database_name found in wrangler.jsonc.\n" +
-        "  Add a D1 database binding before deploying."
+      "  Add a D1 database binding before deploying."
     );
     process.exit(1);
   }
