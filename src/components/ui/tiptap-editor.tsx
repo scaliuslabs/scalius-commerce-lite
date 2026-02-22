@@ -3,7 +3,6 @@ import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
 import Link from "@tiptap/extension-link";
-import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
@@ -11,6 +10,8 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
+import Youtube from "@tiptap/extension-youtube";
+import { ResizableImage } from "./tiptap-extensions/resizable-image";
 import { cn } from "@/lib/utils";
 import {
   Bold,
@@ -36,19 +37,15 @@ import {
   Rows,
   Columns,
   Maximize,
+  Minimize2,
   ChevronsLeftRight,
+  TextQuote,
+  Youtube as YoutubeIcon,
 } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "./alert-dialog";
+import { Tooltip, TooltipTrigger, TooltipContent } from "./tooltip";
 import { Switch } from "./switch";
 
 interface TiptapEditorProps {
@@ -59,17 +56,59 @@ interface TiptapEditorProps {
   compact?: boolean;
 }
 
+function ToolbarButton({
+  onClick,
+  isActive,
+  disabled,
+  tooltip,
+  buttonSize,
+  children,
+}: {
+  onClick: () => void;
+  isActive?: boolean;
+  disabled?: boolean;
+  tooltip: string;
+  buttonSize: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onClick}
+          disabled={disabled}
+          className={cn(buttonSize, isActive && "bg-accent")}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={5}>
+        <p className="text-xs">{tooltip}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 const MenuBar = ({
   editor,
   toggleModal,
   compact = false,
+  isFullscreen = false,
 }: {
   editor: Editor | null;
   toggleModal: () => void;
   compact?: boolean;
+  isFullscreen?: boolean;
 }) => {
   const [linkUrl, setLinkUrl] = useState<string>("");
   const [imageUrl, setImageUrl] = useState<string>("");
+  const [videoUrl, setVideoUrl] = useState<string>("");
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [imageOpen, setImageOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
   const [tableRows, setTableRows] = useState<string>("3");
   const [tableCols, setTableCols] = useState<string>("3");
   const [tableWithHeader, setTableWithHeader] = useState<boolean>(true);
@@ -80,23 +119,41 @@ const MenuBar = ({
 
   const setLink = () => {
     if (linkUrl) {
-      editor
-        .chain()
-        .focus()
-        .extendMarkRange("link")
-        .setLink({ href: linkUrl })
-        .run();
-      setLinkUrl("");
+      setLinkOpen(false);
+      requestAnimationFrame(() => {
+        editor
+          .chain()
+          .focus()
+          .extendMarkRange("link")
+          .setLink({ href: linkUrl })
+          .run();
+        setLinkUrl("");
+      });
     } else {
       editor.chain().focus().unsetLink().run();
+      setLinkOpen(false);
     }
   };
 
   const addImage = () => {
-    if (imageUrl) {
-      editor.chain().focus().setImage({ src: imageUrl }).run();
-      setImageUrl("");
-    }
+    if (!imageUrl) return;
+    const url = imageUrl;
+    setImageUrl("");
+    setImageOpen(false);
+    requestAnimationFrame(() => {
+      editor.chain().focus().setImage({ src: url }).run();
+    });
+  };
+
+  const addVideo = () => {
+    if (!videoUrl) return;
+    const url = videoUrl;
+    setVideoUrl("");
+    setVideoOpen(false);
+    requestAnimationFrame(() => {
+      editor.chain().focus().run();
+      editor.commands.setYoutubeVideo({ src: url });
+    });
   };
 
   const addTable = () => {
@@ -119,48 +176,50 @@ const MenuBar = ({
   return (
     <div className={cn("border border-input rounded-t-md bg-background flex flex-wrap items-center justify-between", padding, gapSize)}>
       <div className={cn("flex flex-wrap items-center", gapSize)}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        {/* Text formatting */}
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
-          className={cn(buttonSize, editor.isActive("bold") ? "bg-accent" : "")}
+          isActive={editor.isActive("bold")}
+          tooltip="Bold (Ctrl+B)"
+          buttonSize={buttonSize}
+
         >
           <Bold className={iconSize} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={cn(buttonSize, editor.isActive("italic") ? "bg-accent" : "")}
+          isActive={editor.isActive("italic")}
+          tooltip="Italic (Ctrl+I)"
+          buttonSize={buttonSize}
+
         >
           <Italic className={iconSize} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
-          className={cn(buttonSize, editor.isActive("underline") ? "bg-accent" : "")}
+          isActive={editor.isActive("underline")}
+          tooltip="Underline (Ctrl+U)"
+          buttonSize={buttonSize}
+
         >
           <UnderlineIcon className={iconSize} />
-        </Button>
+        </ToolbarButton>
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        <Popover>
+        {/* Links, images, video */}
+        <Popover open={linkOpen} onOpenChange={setLinkOpen}>
           <PopoverTrigger asChild>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className={cn(buttonSize, editor.isActive("link") ? "bg-accent" : "")}
+              className={cn(buttonSize, editor.isActive("link") && "bg-accent")}
             >
               <LinkIcon className={iconSize} />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-2">
+          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
             <div className="flex gap-2">
               <Input
                 type="url"
@@ -168,21 +227,27 @@ const MenuBar = ({
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
                 className="flex-1"
+                onKeyDown={(e) => e.key === "Enter" && setLink()}
               />
               <Button type="button" size="sm" onClick={setLink}>
-                Set Link
+                Set
               </Button>
             </div>
           </PopoverContent>
         </Popover>
 
-        <Popover>
+        <Popover open={imageOpen} onOpenChange={setImageOpen}>
           <PopoverTrigger asChild>
-            <Button type="button" variant="ghost" size="icon">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={buttonSize}
+            >
               <ImageIcon className={iconSize} />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-2">
+          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
             <div className="flex gap-2">
               <Input
                 type="url"
@@ -190,127 +255,163 @@ const MenuBar = ({
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 className="flex-1"
+                onKeyDown={(e) => e.key === "Enter" && addImage()}
               />
               <Button type="button" size="sm" onClick={addImage}>
-                Add Image
+                Add
               </Button>
             </div>
           </PopoverContent>
         </Popover>
 
+        <Popover open={videoOpen} onOpenChange={setVideoOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={buttonSize}
+            >
+              <YoutubeIcon className={iconSize} />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
+            <div className="flex gap-2">
+              <Input
+                type="url"
+                placeholder="https://youtube.com/watch?v=..."
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                className="flex-1"
+                onKeyDown={(e) => e.key === "Enter" && addVideo()}
+              />
+              <Button type="button" size="sm" onClick={addVideo}>
+                Embed
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Supports YouTube and Vimeo URLs
+            </p>
+          </PopoverContent>
+        </Popover>
+
         <div className="w-px h-6 bg-border mx-1" />
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        {/* Alignment */}
+        <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
-          className={cn(buttonSize, editor.isActive({ textAlign: "left" }) ? "bg-accent" : "")}
+          isActive={editor.isActive({ textAlign: "left" })}
+          tooltip="Align left"
+          buttonSize={buttonSize}
+
         >
           <AlignLeft className={iconSize} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("center").run()}
-          className={
-            editor.isActive({ textAlign: "center" }) ? "bg-accent" : ""
-          }
+          isActive={editor.isActive({ textAlign: "center" })}
+          tooltip="Align center"
+          buttonSize={buttonSize}
+
         >
           <AlignCenter className={iconSize} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("right").run()}
-          className={cn(buttonSize, editor.isActive({ textAlign: "right" }) ? "bg-accent" : "")}
+          isActive={editor.isActive({ textAlign: "right" })}
+          tooltip="Align right"
+          buttonSize={buttonSize}
+
         >
           <AlignRight className={iconSize} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-          className={
-            editor.isActive({ textAlign: "justify" }) ? "bg-accent" : ""
-          }
+          isActive={editor.isActive({ textAlign: "justify" })}
+          tooltip="Justify"
+          buttonSize={buttonSize}
+
         >
           <AlignJustify className={iconSize} />
-        </Button>
+        </ToolbarButton>
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() =>
-            editor.chain().focus().toggleHeading({ level: 1 }).run()
-          }
-          className={
-            editor.isActive("heading", { level: 1 }) ? "bg-accent" : ""
-          }
+        {/* Headings */}
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+          isActive={editor.isActive("heading", { level: 1 })}
+          tooltip="Heading 1"
+          buttonSize={buttonSize}
+
         >
           <Heading1 className={iconSize} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() =>
-            editor.chain().focus().toggleHeading({ level: 2 }).run()
-          }
-          className={
-            editor.isActive("heading", { level: 2 }) ? "bg-accent" : ""
-          }
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          isActive={editor.isActive("heading", { level: 2 })}
+          tooltip="Heading 2"
+          buttonSize={buttonSize}
+
         >
           <Heading2 className={iconSize} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() =>
-            editor.chain().focus().toggleHeading({ level: 3 }).run()
-          }
-          className={
-            editor.isActive("heading", { level: 3 }) ? "bg-accent" : ""
-          }
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          isActive={editor.isActive("heading", { level: 3 })}
+          tooltip="Heading 3"
+          buttonSize={buttonSize}
+
         >
           <Heading3 className={iconSize} />
-        </Button>
+        </ToolbarButton>
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        {/* Lists & blockquote */}
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={cn(buttonSize, editor.isActive("bulletList") ? "bg-accent" : "")}
+          isActive={editor.isActive("bulletList")}
+          tooltip="Bullet list"
+          buttonSize={buttonSize}
+
         >
           <List className={iconSize} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={cn(buttonSize, editor.isActive("orderedList") ? "bg-accent" : "")}
+          isActive={editor.isActive("orderedList")}
+          tooltip="Numbered list"
+          buttonSize={buttonSize}
+
         >
           <ListOrdered className={iconSize} />
-        </Button>
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          isActive={editor.isActive("blockquote")}
+          tooltip="Blockquote"
+          buttonSize={buttonSize}
+
+        >
+          <TextQuote className={iconSize} />
+        </ToolbarButton>
 
         <div className="w-px h-6 bg-border mx-1" />
 
+        {/* Table */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button type="button" variant="ghost" size="icon">
-              <TableIcon className={iconSize} />
-            </Button>
+            <span>
+              <ToolbarButton
+                onClick={() => {}}
+                tooltip="Insert table"
+                buttonSize={buttonSize}
+      
+              >
+                <TableIcon className={iconSize} />
+              </ToolbarButton>
+            </span>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-2 space-y-2">
             <div className="grid grid-cols-2 gap-2 items-center">
@@ -492,37 +593,40 @@ const MenuBar = ({
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        {/* History */}
+        <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().undo()}
+          tooltip="Undo (Ctrl+Z)"
+          buttonSize={buttonSize}
+
         >
           <Undo className={iconSize} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().redo()}
+          tooltip="Redo (Ctrl+Shift+Z)"
+          buttonSize={buttonSize}
+
         >
           <Redo className={iconSize} />
-        </Button>
+        </ToolbarButton>
       </div>
 
-      <div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={toggleModal}
-          title="Open in fullscreen"
-        >
-          <Maximize className={iconSize} />
-        </Button>
-      </div>
+      {/* Fullscreen toggle */}
+      {!isFullscreen && (
+        <div>
+          <ToolbarButton
+            onClick={toggleModal}
+            tooltip="Fullscreen"
+            buttonSize={buttonSize}
+  
+          >
+            <Maximize className={iconSize} />
+          </ToolbarButton>
+        </div>
+      )}
     </div>
   );
 };
@@ -535,14 +639,30 @@ export function TiptapEditor({
   compact = false,
 }: TiptapEditorProps) {
   const [isMounted, setIsMounted] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const toggleModal = () => {
-    setIsModalOpen(!isModalOpen);
+  // Handle Escape key and body scroll lock for fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsFullscreen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [isFullscreen]);
+
+  const toggleFullscreen = () => {
+    setIsFullscreen((prev) => !prev);
   };
 
   const editorInstance = useEditor({
@@ -560,29 +680,13 @@ export function TiptapEditor({
           },
         },
         listItem: {},
-        blockquote: false,
         code: false,
         codeBlock: false,
         strike: false,
         horizontalRule: false,
       }),
       Heading.configure({
-        levels: [1, 2, 3, 4, 5, 6],
-        HTMLAttributes: (level: number) => {
-          alert(`Standalone Heading style TEST for level ${level}`);
-          return {
-            style: {
-              color: level === 1 ? "magenta" : level === 2 ? "cyan" : "lime",
-              fontSize: `${5 - level}rem`,
-              border: "4px solid yellow",
-              padding: "8px",
-              display: "block",
-              margin: "12px 0",
-              backgroundColor: "#333",
-            },
-            class: `debug-standalone-heading-level-${level}`,
-          };
-        },
+        levels: [1, 2, 3],
       }),
       Link.configure({
         openOnClick: false,
@@ -590,19 +694,17 @@ export function TiptapEditor({
           class: "text-primary underline",
         },
       }),
-      Image.configure({
-        inline: true,
-        allowBase64: true,
-        HTMLAttributes: {
-          class: "max-w-full h-auto rounded-md border",
-        },
-      }),
+      ResizableImage,
       Placeholder.configure({
         placeholder,
       }),
       Underline,
       TextAlign.configure({
         types: ["heading", "paragraph"],
+      }),
+      Youtube.configure({
+        inline: false,
+        allowFullscreen: true,
       }),
       Table.configure({
         resizable: true,
@@ -618,7 +720,7 @@ export function TiptapEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-sm max-w-none p-4 min-h-[200px] focus-visible:outline-none",
+          "max-w-none p-4 min-h-[200px] focus-visible:outline-none text-sm",
       },
     },
     immediatelyRender: false,
@@ -630,50 +732,73 @@ export function TiptapEditor({
     }
   }, [content, editorInstance, isMounted]);
 
-  const editorUI = (currentEditor: Editor | null) => (
-    <div className={cn("border rounded-md flex flex-col", className)}>
-      {currentEditor && (
-        <MenuBar editor={currentEditor} toggleModal={toggleModal} compact={compact} />
-      )}
-      <div className="border-t overflow-y-auto" style={{ maxHeight: '300px' }}>
-        <EditorContent editor={currentEditor} className="prose-sm max-w-none" />
-      </div>
-    </div>
-  );
-
   if (!isMounted) {
     return (
       <div className={cn("border rounded-md", className)}>
         <div className="border border-input rounded-t-md p-1 bg-background h-10"></div>
-        <div className="prose prose-sm max-w-none p-4 min-h-[200px] focus-visible:outline-none border-t">
+        <div className="max-w-none p-4 min-h-[200px] focus-visible:outline-none text-sm border-t">
           <div className="text-muted-foreground">{placeholder}</div>
         </div>
       </div>
     );
   }
 
-  if (isModalOpen) {
-    return (
-      <AlertDialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <AlertDialogContent className="max-w-4xl w-full h-[90vh] flex flex-col p-0">
-          <AlertDialogHeader className="p-4 border-b">
-            <AlertDialogTitle>Edit Content</AlertDialogTitle>
-          </AlertDialogHeader>
-          {editorInstance && (
-            <MenuBar editor={editorInstance} toggleModal={toggleModal} compact={compact} />
-          )}
-          <div className="flex-grow overflow-y-auto p-0 border-t">
-            <EditorContent editor={editorInstance} />
+  return (
+    <div
+      className={cn(
+        "flex flex-col bg-background",
+        isFullscreen
+          ? "fixed inset-0 z-[100]"
+          : "border rounded-md",
+        !isFullscreen && className,
+      )}
+    >
+      {/* Fullscreen header */}
+      {isFullscreen && (
+        <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
+          <span className="text-sm font-medium text-muted-foreground">
+            Editing Content
+          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              Press <kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Esc</kbd> to exit
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsFullscreen(false)}
+              className="gap-1.5"
+            >
+              <Minimize2 className="h-3.5 w-3.5" />
+              Exit Fullscreen
+            </Button>
           </div>
-          <AlertDialogFooter className="p-4 border-t">
-            <AlertDialogCancel onClick={() => setIsModalOpen(false)}>
-              Close
-            </AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    );
-  }
+        </div>
+      )}
 
-  return editorUI(editorInstance);
+      {/* Toolbar */}
+      {editorInstance && (
+        <MenuBar
+          editor={editorInstance}
+          toggleModal={toggleFullscreen}
+          compact={isFullscreen ? false : compact}
+          isFullscreen={isFullscreen}
+        />
+      )}
+
+      {/* Editor content — always mounted, never unmounts */}
+      <div
+        className={cn(
+          "overflow-y-auto border-t",
+          isFullscreen ? "flex-1" : "",
+        )}
+        style={!isFullscreen ? { maxHeight: "300px" } : undefined}
+      >
+        <div className={isFullscreen ? "max-w-4xl mx-auto px-8 py-6" : ""}>
+          <EditorContent editor={editorInstance} className="max-w-none" />
+        </div>
+      </div>
+    </div>
+  );
 }
