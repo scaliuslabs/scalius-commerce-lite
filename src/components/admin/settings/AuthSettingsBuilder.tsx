@@ -27,7 +27,9 @@ export default function AuthSettingsBuilder() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    const [authVerificationMethod, setAuthVerificationMethod] = useState<"email" | "phone" | "both">("email");
+    const [authVerificationMethod, setAuthVerificationMethod] = useState<
+        "email" | "phone" | "both"
+    >("email");
     const [guestCheckoutEnabled, setGuestCheckoutEnabled] = useState(true);
 
     const [whatsappAccessToken, setWhatsappAccessToken] = useState("");
@@ -46,7 +48,7 @@ export default function AuthSettingsBuilder() {
             if (res.ok) {
                 const data = await res.json();
                 setAuthVerificationMethod(data.authVerificationMethod || "email");
-                setGuestCheckoutEnabled(data.guestCheckoutEnabled !== false); // default true
+                setGuestCheckoutEnabled(data.guestCheckoutEnabled !== false);
                 setWhatsappAccessToken(data.whatsappAccessToken || "");
                 setWhatsappPhoneNumberId(data.whatsappPhoneNumberId || "");
                 setWhatsappTemplateName(data.whatsappTemplateName || "auth_otp");
@@ -59,8 +61,8 @@ export default function AuthSettingsBuilder() {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => {
+        e?.preventDefault();
         setSaving(true);
 
         try {
@@ -72,7 +74,7 @@ export default function AuthSettingsBuilder() {
                     guestCheckoutEnabled,
                     whatsappAccessToken,
                     whatsappPhoneNumberId,
-                    whatsappTemplateName
+                    whatsappTemplateName,
                 }),
             });
 
@@ -84,7 +86,7 @@ export default function AuthSettingsBuilder() {
                 toast.error(err.message || "Failed to save auth settings");
             }
         } catch {
-            toast.error("An error occurred while saving user settings");
+            toast.error("An error occurred while saving");
         } finally {
             setSaving(false);
         }
@@ -92,41 +94,28 @@ export default function AuthSettingsBuilder() {
 
     if (loading) {
         return (
-            <div className="flex justify-center p-8">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
         );
     }
 
     return (
-        <div className="space-y-6 max-w-2xl">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Authentication & Checkout</h2>
-                    <p className="text-muted-foreground">
-                        Configure how customers log in and whether they can checkout as guests.
-                    </p>
-                </div>
-                <Button onClick={handleSubmit} disabled={saving}>
-                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                </Button>
-            </div>
-
+        <div className="space-y-5 max-w-2xl">
             <Card>
-                <CardHeader>
-                    <CardTitle>Global Access Rules</CardTitle>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Global Access Rules</CardTitle>
                     <CardDescription>
-                        Control fundamental account requirements during the storefront flow.
+                        Control account requirements during the storefront checkout flow.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-5">
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <Label>Enable Guest Checkout</Label>
-                            <p className="text-sm text-muted-foreground">
-                                If disabled, users MUST create an account or login to proceed to the payment stage.
+                            <Label>Guest Checkout</Label>
+                            <p className="text-xs text-muted-foreground">
+                                When disabled, users must create an account to proceed to
+                                payment.
                             </p>
                         </div>
                         <Switch
@@ -135,17 +124,20 @@ export default function AuthSettingsBuilder() {
                         />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Authentication Verification Method</Label>
-                        <p className="text-sm text-muted-foreground mb-2">
-                            Select which channels can receive One-Time Passwords (OTPs). "Both" allows the customer to choose. Phone strictly uses WhatsApp.
+                    <div className="space-y-1.5">
+                        <Label>Verification Method</Label>
+                        <p className="text-xs text-muted-foreground mb-1.5">
+                            OTP delivery channel. "Both" lets the customer choose. Phone uses
+                            WhatsApp.
                         </p>
                         <Select
                             value={authVerificationMethod}
-                            onValueChange={(val: "email" | "phone" | "both") => setAuthVerificationMethod(val)}
+                            onValueChange={(val: "email" | "phone" | "both") =>
+                                setAuthVerificationMethod(val)
+                            }
                         >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select allowed modes" />
+                            <SelectTrigger className="w-full max-w-xs">
+                                <SelectValue placeholder="Select mode" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="email">Email Only</SelectItem>
@@ -157,74 +149,93 @@ export default function AuthSettingsBuilder() {
                 </CardContent>
             </Card>
 
-            {(authVerificationMethod === "phone" || authVerificationMethod === "both") && (
-                <Card className="border-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.05)] dark:bg-green-950/10">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            Meta WhatsApp Cloud API
-                            {accessTokenConfigured && (
-                                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                            )}
-                        </CardTitle>
-                        <CardDescription>
-                            Configure standard WhatsApp Business API settings to dispatch OTP messages.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <Alert>
-                            <AlertDescription className="text-sm">
-                                <strong>Important:</strong> You must create an approved message template inside your Meta Business Manager.
-                                The template should expect one variable: {"{{1}}"} where the 6-digit OTP will be injected.
-                                See <a href="https://developers.facebook.com/docs/whatsapp/cloud-api/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">Meta Docs <ExternalLink className="h-3 w-3" /></a>.
-                            </AlertDescription>
-                        </Alert>
+            {(authVerificationMethod === "phone" ||
+                authVerificationMethod === "both") && (
+                    <Card className="border-green-500/20 dark:bg-green-950/10">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                                Meta WhatsApp Cloud API
+                                {accessTokenConfigured && (
+                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                )}
+                            </CardTitle>
+                            <CardDescription>
+                                Configure WhatsApp Business API for OTP delivery.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <Alert>
+                                <AlertDescription className="text-sm">
+                                    Create an approved message template with one variable{" "}
+                                    {"{{1}}"} for the OTP code.{" "}
+                                    <a
+                                        href="https://developers.facebook.com/docs/whatsapp/cloud-api/"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                                    >
+                                        Meta Docs <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                </AlertDescription>
+                            </Alert>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="wa-access-token">Permanent System User Access Token</Label>
-                            <Input
-                                id="wa-access-token"
-                                type="password"
-                                placeholder={accessTokenConfigured ? MASKED_VALUE : "EAAxXXXXXXXXXXXXXXXXXXXXXX"}
-                                value={whatsappAccessToken}
-                                onChange={(e) => setWhatsappAccessToken(e.target.value)}
-                                className="font-mono"
-                            />
-                            {accessTokenConfigured && whatsappAccessToken === MASKED_VALUE && (
-                                <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                                    <CheckCircle2 className="h-3 w-3" /> Token configured.
-                                </p>
-                            )}
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="wa-phone-id">Phone Number ID</Label>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="wa-access-token">
+                                    Permanent System User Access Token
+                                </Label>
                                 <Input
-                                    id="wa-phone-id"
-                                    placeholder="e.g. 1045934589234"
-                                    value={whatsappPhoneNumberId}
-                                    onChange={(e) => setWhatsappPhoneNumberId(e.target.value)}
+                                    id="wa-access-token"
+                                    type="password"
+                                    placeholder={
+                                        accessTokenConfigured
+                                            ? MASKED_VALUE
+                                            : "EAAxXXXXXXXXXXXXXXXXXXXXXX"
+                                    }
+                                    value={whatsappAccessToken}
+                                    onChange={(e) => setWhatsappAccessToken(e.target.value)}
+                                    className="font-mono"
                                 />
+                                {accessTokenConfigured &&
+                                    whatsappAccessToken === MASKED_VALUE && (
+                                        <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                                            <CheckCircle2 className="h-3 w-3" /> Token configured.
+                                        </p>
+                                    )}
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="wa-template">Message Template Name</Label>
-                                <Input
-                                    id="wa-template"
-                                    placeholder="e.g. auth_otp"
-                                    value={whatsappTemplateName}
-                                    onChange={(e) => setWhatsappTemplateName(e.target.value)}
-                                />
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="wa-phone-id">Phone Number ID</Label>
+                                    <Input
+                                        id="wa-phone-id"
+                                        placeholder="e.g. 1045934589234"
+                                        value={whatsappPhoneNumberId}
+                                        onChange={(e) => setWhatsappPhoneNumberId(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="wa-template">Message Template Name</Label>
+                                    <Input
+                                        id="wa-template"
+                                        placeholder="e.g. auth_otp"
+                                        value={whatsappTemplateName}
+                                        onChange={(e) => setWhatsappTemplateName(e.target.value)}
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        </CardContent>
+                    </Card>
+                )}
 
-                    </CardContent>
-                </Card>
-            )}
-
-            <div className="flex justify-end pb-4">
-                <Button onClick={handleSubmit} disabled={saving} size="lg">
+            <div className="flex justify-end pt-4 border-t border-border">
+                <Button
+                    onClick={() => handleSubmit()}
+                    disabled={saving}
+                    className="min-w-[140px]"
+                >
                     {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Auth Configurations
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Auth Settings
                 </Button>
             </div>
         </div>

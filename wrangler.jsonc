@@ -80,6 +80,7 @@
     "BETTER_AUTH_URL": "https://dash.wrygo.com",
     "STOREFRONT_URL": "https://store.wrygo.com",
     "CDN_DOMAIN_URL": "cloud.wrygo.com",
+    "R2_PUBLIC_URL": "https://cloud.wrygo.com",
     "PURGE_URL": "https://store.wrygo.com/api/purge-cache"
   }
 }

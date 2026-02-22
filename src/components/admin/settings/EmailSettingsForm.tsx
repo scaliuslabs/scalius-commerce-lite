@@ -1,4 +1,3 @@
-// src/components/admin/settings/EmailSettingsForm.tsx
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -43,8 +42,8 @@ export default function EmailSettingsForm() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setSaving(true);
 
     try {
@@ -70,42 +69,27 @@ export default function EmailSettingsForm() {
 
   if (loading) {
     return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Email Settings</h2>
-          <p className="text-muted-foreground">
-            Configure transactional email delivery via Resend.
-          </p>
-        </div>
-        <Button onClick={handleSubmit} disabled={saving}>
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          <Save className="mr-2 h-4 w-4" />
-          Save Changes
-        </Button>
-      </div>
-
+    <div className="space-y-5 max-w-2xl">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
             Resend API Key
             {apiKeyConfigured && (
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
             )}
           </CardTitle>
           <CardDescription>
-            Used to send transactional emails (verification, password reset,
-            2FA codes).
+            Used for transactional emails (verification, password reset, 2FA).
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           <Alert>
             <AlertDescription className="text-sm">
               <strong>Where to find:</strong>{" "}
@@ -117,10 +101,10 @@ export default function EmailSettingsForm() {
               >
                 resend.com/api-keys <ExternalLink className="h-3 w-3" />
               </a>{" "}
-              → Create a new API key with "Sending access".
+              → Create a key with "Sending access".
             </AlertDescription>
           </Alert>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="resend-api-key">API Key</Label>
             <Input
               id="resend-api-key"
@@ -132,8 +116,8 @@ export default function EmailSettingsForm() {
             />
             {apiKeyConfigured && apiKey === MASKED_VALUE && (
               <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" /> API key configured. Type a
-                new key to replace it.
+                <CheckCircle2 className="h-3 w-3" /> Configured. Type a new key
+                to replace.
               </p>
             )}
           </div>
@@ -141,18 +125,16 @@ export default function EmailSettingsForm() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Sender Email Address</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Sender Email Address</CardTitle>
           <CardDescription>
-            The "From" address shown on outgoing emails. Must be verified in
-            your Resend account.
+            The "From" address on outgoing emails. Must be verified in Resend.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           <Alert>
             <AlertDescription className="text-sm">
-              <strong>Note:</strong> The domain used in this address must be
-              verified in Resend. See{" "}
+              The domain must be verified at{" "}
               <a
                 href="https://resend.com/domains"
                 target="_blank"
@@ -164,7 +146,7 @@ export default function EmailSettingsForm() {
               .
             </AlertDescription>
           </Alert>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="email-sender">Sender Address</Label>
             <Input
               id="email-sender"
@@ -177,9 +159,14 @@ export default function EmailSettingsForm() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end pb-4">
-        <Button onClick={handleSubmit} disabled={saving} size="lg">
+      <div className="flex justify-end pt-4 border-t border-border">
+        <Button
+          onClick={() => handleSubmit()}
+          disabled={saving}
+          className="min-w-[140px]"
+        >
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Save className="mr-2 h-4 w-4" />
           Save Email Settings
         </Button>
       </div>
