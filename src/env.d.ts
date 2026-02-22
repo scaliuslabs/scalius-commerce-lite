@@ -248,6 +248,7 @@ interface Env {
   // Variables
   BETTER_AUTH_URL?: string;
   PUBLIC_API_BASE_URL?: string;
+  STOREFRONT_URL?: string;
   R2_PUBLIC_URL?: string;
   CDN_DOMAIN_URL?: string;
   PURGE_URL?: string;

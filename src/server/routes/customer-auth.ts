@@ -15,7 +15,7 @@ import { Hono } from "hono";
 import { nanoid } from "nanoid";
 import { sendEmail } from "@/lib/email";
 import { customers, siteSettings } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const COOKIE_NAME = "cs_tok";
 const SESSION_PREFIX = "cust_session:";
@@ -55,8 +55,39 @@ function getSessionCookie(cookieHeader: string | null): string | null {
   return match ? match[1] : null;
 }
 
-function buildSetCookieHeader(token: string, maxAge: number): string {
-  return `${COOKIE_NAME}=${token}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Strict; Secure`;
+function getRootDomainAttr(url?: string): string {
+  if (!url) return "";
+  try {
+    const hostname = new URL(url).hostname;
+    const parts = hostname.split(".");
+    if (parts.length >= 2 && parts[parts.length - 1] !== "localhost") {
+      return `; Domain=.${parts.slice(-2).join(".")}`;
+    }
+  } catch { }
+  return "";
+}
+
+/** Detect production from STOREFRONT_URL (not process.env.NODE_ENV which is unreliable in CF Workers). */
+function isProduction(env: Env): boolean {
+  const url = env.STOREFRONT_URL as string | undefined;
+  if (!url) return false;
+  try {
+    const hostname = new URL(url).hostname;
+    return hostname !== "localhost" && !hostname.startsWith("127.") && !hostname.startsWith("192.168.");
+  } catch { return false; }
+}
+
+function buildSetCookieHeader(token: string, maxAge: number, domainAttr: string, sameSitePolicy: string): string {
+  return `${COOKIE_NAME}=${token}; Max-Age=${maxAge}; Path=/${domainAttr}; HttpOnly; SameSite=${sameSitePolicy}; Secure`;
+}
+
+/** Compute cookie config once — reused by verify-otp, logout, etc. */
+function getCookieConfig(env: Env): { sameSite: string; domainAttr: string } {
+  const isProd = isProduction(env);
+  return {
+    sameSite: isProd ? "None" : "Lax",
+    domainAttr: isProd ? getRootDomainAttr(env.STOREFRONT_URL as string) : "",
+  };
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -314,6 +345,9 @@ app.post("/verify-otp", async (c) => {
         }
         if (method === "phone") insertPayload.phone = resolvedPhone;
 
+        insertPayload.createdAt = sql`unixepoch()`;
+        insertPayload.updatedAt = sql`unixepoch()`;
+
         await db.insert(customers).values(insertPayload);
         isNewUser = true;
       }
@@ -336,30 +370,23 @@ app.post("/verify-otp", async (c) => {
     const sessionKey = `${SESSION_PREFIX}${sessionToken}`;
     await kv.put(sessionKey, JSON.stringify(session), { expirationTtl: SESSION_TTL_SECONDS });
 
-    const cookieHeader = buildSetCookieHeader(sessionToken, SESSION_TTL_SECONDS);
-    const authIndicatorCookie = `cs_auth=1; Max-Age=${SESSION_TTL_SECONDS}; Path=/; SameSite=Strict; Secure`;
+    const { sameSite, domainAttr } = getCookieConfig(c.env);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        customer: {
-          identifier: identifier,
-          name: session.name,
-          email: session.email,
-          phone: session.phone,
-          customerId: session.customerId,
-        },
-        isNewUser
-      }),
-      {
-        status: 200,
-        headers: new Headers([
-          ["Content-Type", "application/json"],
-          ["Set-Cookie", cookieHeader],
-          ["Set-Cookie", authIndicatorCookie]
-        ]),
-      }
-    );
+    // Use c.header() to ensure Hono middleware (CORS) applies to the response
+    c.header("Set-Cookie", buildSetCookieHeader(sessionToken, SESSION_TTL_SECONDS, domainAttr, sameSite));
+    c.header("Set-Cookie", `cs_auth=1; Max-Age=${SESSION_TTL_SECONDS}; Path=/${domainAttr}; SameSite=${sameSite}; Secure`, { append: true });
+
+    return c.json({
+      success: true,
+      customer: {
+        identifier: identifier,
+        name: session.name,
+        email: session.email,
+        phone: session.phone,
+        customerId: session.customerId,
+      },
+      isNewUser
+    });
   } catch (error) {
     console.error("[CustomerAuth] verify-otp error:", error);
     return c.json({ error: "Verification failed" }, 500);
@@ -411,30 +438,31 @@ app.get("/me", async (c) => {
 // ─── POST /logout ─────────────────────────────────────────────────────────────
 
 app.post("/logout", async (c) => {
+  const { sameSite, domainAttr } = getCookieConfig(c.env);
+
+  // Always clear cookies first — even if KV delete fails, the user must be logged out.
+  // Host-only clears (catch cookies set without domain attr):
+  c.header("Set-Cookie", `${COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=${sameSite}; Secure`);
+  c.header("Set-Cookie", `cs_auth=; Max-Age=0; Path=/; SameSite=${sameSite}; Secure`, { append: true });
+
+  // Domain-scoped clears (catch cookies set with domain=.wrygo.com):
+  if (domainAttr) {
+    c.header("Set-Cookie", `${COOKIE_NAME}=; Max-Age=0; Path=/${domainAttr}; HttpOnly; SameSite=${sameSite}; Secure`, { append: true });
+    c.header("Set-Cookie", `cs_auth=; Max-Age=0; Path=/${domainAttr}; SameSite=${sameSite}; Secure`, { append: true });
+  }
+
+  // Delete KV session (best-effort — cookie clear above is the primary logout mechanism)
   try {
     const cookieHeader = c.req.header("Cookie") || null;
     const token = getSessionCookie(cookieHeader);
-
     if (token) {
-      const kv = c.env.CACHE;
-      await kv.delete(`${SESSION_PREFIX}${token}`);
+      await c.env.CACHE.delete(`${SESSION_PREFIX}${token}`);
     }
-
-    const clearTokCookie = `${COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict; Secure`;
-    const clearAuthCookie = `cs_auth=; Max-Age=0; Path=/; SameSite=Strict; Secure`;
-
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: new Headers([
-        ["Content-Type", "application/json"],
-        ["Set-Cookie", clearTokCookie],
-        ["Set-Cookie", clearAuthCookie]
-      ]),
-    });
   } catch (error) {
-    console.error("[CustomerAuth] logout error:", error);
-    return c.json({ success: true }, 200);
+    console.error("[CustomerAuth] KV session delete failed:", error);
   }
+
+  return c.json({ success: true });
 });
 
 // ─── PUT /profile ─────────────────────────────────────────────────────────────
@@ -469,6 +497,8 @@ app.put("/profile", async (c) => {
     const body = await c.req.json() as {
       name?: string;
       address?: string;
+      city?: string;
+      zone?: string;
       cityName?: string;
       zoneName?: string;
     };
@@ -477,17 +507,21 @@ app.put("/profile", async (c) => {
     const updates: Record<string, string | undefined> = {};
     if (body.name?.trim()) updates.name = body.name.trim();
     if (body.address?.trim()) updates.address = body.address.trim();
+    if (body.city?.trim()) updates.city = body.city.trim();
+    if (body.zone?.trim()) updates.zone = body.zone.trim();
     if (body.cityName?.trim()) updates.cityName = body.cityName.trim();
     if (body.zoneName?.trim()) updates.zoneName = body.zoneName.trim();
 
     // Update customer record in DB if customerId exists
     if (session.customerId) {
       const db = c.get("db");
-      const dbUpdates: Record<string, string | number> = {
-        updatedAt: Math.floor(Date.now() / 1000),
+      const dbUpdates: Record<string, string | Date> = {
+        updatedAt: new Date(),
       };
       if (updates.name) dbUpdates.name = updates.name;
       if (updates.address) dbUpdates.address = updates.address;
+      if (updates.city) dbUpdates.city = updates.city;
+      if (updates.zone) dbUpdates.zone = updates.zone;
       if (updates.cityName) dbUpdates.cityName = updates.cityName;
       if (updates.zoneName) dbUpdates.zoneName = updates.zoneName;
 
