@@ -119,16 +119,37 @@
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
+  table-layout: fixed;
 }
 
 .rich-content th,
 .rich-content td {
   border: 1px solid var(--border);
   padding: 0.5rem;
+  vertical-align: top;
 }
 
 .rich-content th {
   background-color: var(--muted);
+}
+
+/* Images inside table cells should be constrained */
+.rich-content td img,
+.rich-content th img {
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+}
+
+/* Prevent excessive spacing inside table cells */
+.rich-content td > *:first-child,
+.rich-content th > *:first-child {
+  margin-top: 0;
+}
+
+.rich-content td > *:last-child,
+.rich-content th > *:last-child {
+  margin-bottom: 0;
 }
 
 /* Horizontal rule */

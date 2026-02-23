@@ -209,16 +209,23 @@ const MenuBar = ({
 
         {/* Links, images, video */}
         <Popover open={linkOpen} onOpenChange={setLinkOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(buttonSize, editor.isActive("link") && "bg-accent")}
-            >
-              <LinkIcon className={iconSize} />
-            </Button>
-          </PopoverTrigger>
+          <Tooltip open={linkOpen ? false : undefined}>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(buttonSize, editor.isActive("link") && "bg-accent")}
+                >
+                  <LinkIcon className={iconSize} />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={5}>
+              <p className="text-xs">Insert link</p>
+            </TooltipContent>
+          </Tooltip>
           <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
             <div className="flex gap-2">
               <Input
@@ -237,16 +244,23 @@ const MenuBar = ({
         </Popover>
 
         <Popover open={imageOpen} onOpenChange={setImageOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={buttonSize}
-            >
-              <ImageIcon className={iconSize} />
-            </Button>
-          </PopoverTrigger>
+          <Tooltip open={imageOpen ? false : undefined}>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={buttonSize}
+                >
+                  <ImageIcon className={iconSize} />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={5}>
+              <p className="text-xs">Insert image</p>
+            </TooltipContent>
+          </Tooltip>
           <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
             <div className="flex gap-2">
               <Input
@@ -265,16 +279,23 @@ const MenuBar = ({
         </Popover>
 
         <Popover open={videoOpen} onOpenChange={setVideoOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={buttonSize}
-            >
-              <YoutubeIcon className={iconSize} />
-            </Button>
-          </PopoverTrigger>
+          <Tooltip open={videoOpen ? false : undefined}>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={buttonSize}
+                >
+                  <YoutubeIcon className={iconSize} />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={5}>
+              <p className="text-xs">Embed video</p>
+            </TooltipContent>
+          </Tooltip>
           <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
             <div className="flex gap-2">
               <Input
