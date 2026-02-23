@@ -200,7 +200,14 @@ app.route("/categories", categoryRoutes); // Categories are now public (category
 app.route("/cache", cacheControlRoutes);
 app.route("/orders", orderRoutes);
 
-// Payment routes — public (order ID acts as token; no customer auth required)
+// Payment routes — mixed auth: session/intent creation is public,
+// capture/cancel/refund are admin-only operations.
+app.use("/payment/stripe/capture/*", authMiddleware);
+app.use("/payment/stripe/cancel/*", authMiddleware);
+app.use("/payment/stripe/refund", authMiddleware);
+app.use("/payment/sslcommerz/refund", authMiddleware);
+app.use("/payment/sslcommerz/refund-status/*", authMiddleware);
+
 app.route("/payment/stripe", stripePaymentRoutes);
 app.route("/payment/sslcommerz", sslcommerzPaymentRoutes);
 

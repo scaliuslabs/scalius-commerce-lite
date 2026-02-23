@@ -87,6 +87,7 @@ app.post("/", async (c) => {
       currency: payload.currency,
       cardType: payload.card_type,
       cardBrand: payload.card_brand,
+      paymentType: payload.value_a, // Set during session creation (full/deposit/balance)
     };
   } else if (isTerminalFailure) {
     console.warn(`[ssl-webhook] IPN terminal failure for order ${tranId}: ${validation.status}`);
