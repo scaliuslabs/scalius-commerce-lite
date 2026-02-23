@@ -9,11 +9,14 @@ import type {
 } from "./types";
 
 // Module-level singleton — Stripe client is stateless and reusable.
+// Tracks the key used to create it so credential rotations take effect.
 let _stripe: Stripe | null = null;
+let _stripeKey: string | null = null;
 
 export function getStripe(secretKey: string): Stripe {
-  if (!_stripe) {
+  if (!_stripe || _stripeKey !== secretKey) {
     _stripe = new Stripe(secretKey);
+    _stripeKey = secretKey;
   }
   return _stripe;
 }

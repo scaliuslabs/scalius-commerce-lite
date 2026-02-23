@@ -11,6 +11,7 @@ import { getKv } from "@/server/utils/kv-cache";
 import {
   upsertSetting,
   invalidateSSLCommerzCache,
+  invalidatePaymentMethodsCache,
 } from "@/lib/payment/gateway-settings";
 
 const MASKED = "••••••••••••";
@@ -75,8 +76,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     await Promise.all(ops);
 
-    // Invalidate KV cache
-    await invalidateSSLCommerzCache(getKv());
+    // Invalidate KV cache.
+    // Also invalidate payment methods cache since it cross-checks SSLCommerz credentials.
+    const kv = getKv();
+    await Promise.all([
+      invalidateSSLCommerzCache(kv),
+      invalidatePaymentMethodsCache(kv),
+    ]);
 
     return Response.json({ message: "SSLCommerz settings saved successfully" });
   } catch (error) {
