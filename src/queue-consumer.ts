@@ -54,6 +54,7 @@ export type PaymentQueueMessage =
       currency: string;
       cardType?: string;
       cardBrand?: string;
+      paymentType?: string;
     }
   | {
       type: "payment.sslcommerz.failed";
@@ -117,7 +118,7 @@ async function processQueueMessage(
       await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "stripe",
-        paymentType: "full",
+        paymentType: (payload.metadata?.paymentType as "full" | "deposit" | "balance") ?? "full",
         stripePaymentIntentId: payload.paymentIntentId,
         amount: amountInMajor,
         metadata: { currency: payload.currency },
@@ -149,7 +150,7 @@ async function processQueueMessage(
       await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "sslcommerz",
-        paymentType: "full",
+        paymentType: (payload.paymentType as "full" | "deposit" | "balance") ?? "full",
         sslcommerzTranId: payload.tranId,
         sslcommerzValId: payload.valId,
         sslcommerzBankTranId: payload.bankTranId,
