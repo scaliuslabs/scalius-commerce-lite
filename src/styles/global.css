@@ -757,6 +757,25 @@ header {
   background-color: var(--muted);
 }
 
+/* Images inside table cells should be constrained */
+.ProseMirror td img,
+.ProseMirror th img {
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+}
+
+/* Prevent excessive spacing inside table cells */
+.ProseMirror td > *:first-child,
+.ProseMirror th > *:first-child {
+  margin-top: 0;
+}
+
+.ProseMirror td > *:last-child,
+.ProseMirror th > *:last-child {
+  margin-bottom: 0;
+}
+
 .ProseMirror .column-resize-handle {
   position: absolute;
   right: -2px;

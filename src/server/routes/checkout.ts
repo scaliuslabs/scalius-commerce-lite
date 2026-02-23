@@ -7,6 +7,7 @@
 import { Hono } from "hono";
 import { getStripeSettings, getSSLCommerzSettings } from "@/lib/payment/gateway-settings";
 import { getDb } from "@/db";
+import { siteSettings } from "@/db/schema";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -32,10 +33,14 @@ app.get("/config", async (c) => {
     const db = getDb(c.env);
     const kv: KVNamespace | undefined = (c.env as any).CACHE;
 
-    // Fetch gateway settings in parallel (DB → KV cached)
-    const [stripeSettings, sslSettings] = await Promise.all([
+    // Fetch gateway settings + site settings in parallel (DB → KV cached)
+    const [stripeSettings, sslSettings, siteSettingsRow] = await Promise.all([
       getStripeSettings(db, kv).catch(() => null),
       getSSLCommerzSettings(db, kv).catch(() => null),
+      db.select({
+        guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
+        authVerificationMethod: siteSettings.authVerificationMethod,
+      }).from(siteSettings).limit(1).then((rows) => rows[0] ?? null).catch(() => null),
     ]);
 
     const gateways: Array<{
@@ -71,12 +76,18 @@ app.get("/config", async (c) => {
       currencies: ["bdt"],
     });
 
-    return c.json({ gateways });
+    return c.json({
+      gateways,
+      guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,
+      authVerificationMethod: siteSettingsRow?.authVerificationMethod ?? "email",
+    });
   } catch (error) {
     console.error("Error fetching checkout config:", error);
     // Degrade gracefully — always offer COD as a fallback
     return c.json({
       gateways: [{ id: "cod", name: "Cash on Delivery", currencies: ["bdt"] }],
+      guestCheckoutEnabled: true,
+      authVerificationMethod: "email",
     });
   }
 });
