@@ -274,16 +274,47 @@ app.get("/refund-status/:refundRefId", async (c) => {
 // These just redirect the customer to the appropriate storefront page
 // ---------------------------------------------------------------------------
 
+// SSLCommerz POSTs to these callback URLs with form-urlencoded body.
+// Also handle GET for manual navigation / edge cases.
+
+async function extractTranId(c: any): Promise<string> {
+  if (c.req.method === "POST") {
+    try {
+      const body = await c.req.parseBody();
+      return (body as Record<string, string>).tran_id ?? "";
+    } catch { /* fall through */ }
+  }
+  return c.req.query("tran_id") ?? "";
+}
+
+app.post("/success", async (c) => {
+  const tran_id = await extractTranId(c);
+  const origin = new URL(c.req.url).origin;
+  return c.redirect(`${origin}/order-confirmed?orderId=${encodeURIComponent(tran_id)}`);
+});
+
 app.get("/success", async (c) => {
   const tran_id = c.req.query("tran_id") ?? "";
   const origin = new URL(c.req.url).origin;
   return c.redirect(`${origin}/order-confirmed?orderId=${encodeURIComponent(tran_id)}`);
 });
 
+app.post("/fail", async (c) => {
+  const tran_id = await extractTranId(c);
+  const origin = new URL(c.req.url).origin;
+  return c.redirect(`${origin}/payment-failed?orderId=${encodeURIComponent(tran_id)}`);
+});
+
 app.get("/fail", async (c) => {
   const tran_id = c.req.query("tran_id") ?? "";
   const origin = new URL(c.req.url).origin;
   return c.redirect(`${origin}/payment-failed?orderId=${encodeURIComponent(tran_id)}`);
+});
+
+app.post("/cancel", async (c) => {
+  const tran_id = await extractTranId(c);
+  const origin = new URL(c.req.url).origin;
+  return c.redirect(`${origin}/payment-cancelled?orderId=${encodeURIComponent(tran_id)}`);
 });
 
 app.get("/cancel", async (c) => {

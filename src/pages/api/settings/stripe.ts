@@ -11,6 +11,7 @@ import { getKv } from "@/server/utils/kv-cache";
 import {
   upsertSetting,
   invalidateStripeCache,
+  invalidatePaymentMethodsCache,
 } from "@/lib/payment/gateway-settings";
 
 const MASKED = "••••••••••••";
@@ -74,8 +75,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     await Promise.all(ops);
 
-    // Invalidate KV cache so next request reads fresh settings
-    await invalidateStripeCache(getKv());
+    // Invalidate KV cache so next request reads fresh settings.
+    // Also invalidate payment methods cache since it cross-checks Stripe credentials.
+    const kv = getKv();
+    await Promise.all([
+      invalidateStripeCache(kv),
+      invalidatePaymentMethodsCache(kv),
+    ]);
 
     return Response.json({ message: "Stripe settings saved successfully" });
   } catch (error) {
