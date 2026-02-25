@@ -753,4 +753,48 @@ app.get(
   },
 );
 
+// =============================================
+// GET /storefront/csp
+// Fetches the dynamic Content Security Policy allowed domains
+// =============================================
+app.get(
+  "/csp",
+  cacheMiddleware({
+    ttl: 3600000,
+    keyPrefix: "api:storefront:csp:",
+    varyByQuery: false,
+    methods: ["GET"],
+  }),
+  async (c) => {
+    try {
+      const db = c.get("db");
+
+      const row = await db
+        .select({ value: settings.value })
+        .from(settings)
+        .where(
+          and(
+            eq(settings.key, "csp_allowed_domains"),
+            eq(settings.category, "security"),
+          )
+        )
+        .get();
+
+      return c.json({
+        success: true,
+        cspAllowedDomains: row?.value || "",
+      });
+    } catch (error) {
+      console.error("Error fetching CSP settings:", error);
+      return c.json(
+        {
+          success: false,
+          error: "Failed to fetch CSP settings",
+        },
+        500,
+      );
+    }
+  },
+);
+
 export { app as storefrontRoutes };
