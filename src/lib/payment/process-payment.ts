@@ -17,6 +17,7 @@ import { deductMultiple } from "@/lib/inventory/deduct";
 import { releaseMultiple } from "@/lib/inventory/release";
 import { checkAndAlertLowStock } from "@/lib/inventory/alerts";
 import type { ProcessPaymentParams, PaymentGateway } from "./types";
+import { getCurrencyConfig } from "@/lib/currency";
 
 /**
  * Process a confirmed payment event.
@@ -86,12 +87,15 @@ export async function processPaymentConfirmed(
       ? PaymentStatus.PAID
       : PaymentStatus.PARTIAL;
 
+    // Fetch currency config
+    const currencyConfig = await getCurrencyConfig(db);
+
     // 1. Record this payment transaction
     await db.insert(orderPayments).values({
       id: crypto.randomUUID(),
       orderId: params.orderId,
       amount: params.amount,
-      currency: "BDT",
+      currency: currencyConfig.code,
       paymentMethod: params.paymentGateway,
       paymentType: params.paymentType,
       status: "succeeded",
@@ -217,11 +221,12 @@ export async function processPaymentFailed(
     }
 
     // Record the failed attempt
+    const currencyConfig = await getCurrencyConfig(db);
     await db.insert(orderPayments).values({
       id: crypto.randomUUID(),
       orderId,
       amount: 0,
-      currency: "BDT",
+      currency: currencyConfig.code,
       paymentMethod: gateway,
       paymentType: "full",
       status: "failed",

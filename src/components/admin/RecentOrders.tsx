@@ -28,6 +28,7 @@ import {
   Package, // For Empty State
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns"; // For relative dates
+import { useCurrency } from "@/hooks/useCurrency";
 
 // Refined Order Interface (assuming createdAt is a Date object or string that can be parsed)
 interface Order {
@@ -113,6 +114,7 @@ const parseOrderDate = (date: string | Date): Date | null => {
 };
 
 export function RecentOrders({ orders }: RecentOrdersProps) {
+  const { symbol } = useCurrency();
   return (
     <Card className="border-0 shadow-none bg-transparent">
       {/* --- Enhanced Card Header --- */}
@@ -232,7 +234,7 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
                       {/* Amount Cell */}
                       <TableCell className="py-3.5 px-4 text-right">
                         <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                          ৳{order.totalAmount.toLocaleString("en-US")}
+                          {symbol}{order.totalAmount.toLocaleString("en-US")}
                         </span>
                       </TableCell>
 

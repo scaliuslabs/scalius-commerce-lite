@@ -37,6 +37,7 @@ import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import { Checkbox } from "../ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrency } from "@/hooks/useCurrency";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -115,6 +116,7 @@ export function CustomerList({
   showTrashed = false,
 }: CustomerListProps) {
   const { toast } = useToast();
+  const { symbol } = useCurrency();
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [sort, setSort] = useState(initialSort);
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(
@@ -607,7 +609,7 @@ export function CustomerList({
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2 text-sm">
-                            <span className="text-muted-foreground">৳</span>
+                            <span className="text-muted-foreground">{symbol}</span>
                             {customer.totalSpent.toLocaleString()}
                           </div>
                         </TableCell>

@@ -36,6 +36,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 import { Separator } from "../ui/separator";
 import { ScrollArea } from "../ui/scroll-area";
 import { Avatar, AvatarFallback } from "../ui/avatar";
@@ -221,6 +222,7 @@ export function CustomerHistoryView({
   history,
   orders,
 }: CustomerHistoryViewProps) {
+  const { symbol } = useCurrency();
   const ITEMS_PER_PAGE = 5; // Define items per page
   const [displayedOrdersCount, setDisplayedOrdersCount] =
     useState(ITEMS_PER_PAGE);
@@ -372,7 +374,7 @@ export function CustomerHistoryView({
                   <span>Total Spent</span>
                 </div>
                 <p className="text-xl font-semibold">
-                  ৳
+                  {symbol}
                   {customer.totalSpent.toLocaleString(undefined, {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
@@ -460,7 +462,7 @@ export function CustomerHistoryView({
                           })}
                         </TableCell>
                         <TableCell className="font-medium">
-                          ৳
+                          {symbol}
                           {order.totalAmount.toLocaleString(undefined, {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,

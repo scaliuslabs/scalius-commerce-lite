@@ -73,6 +73,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 import type { ShippingMethod } from "@/db/schema"; // Import the type
 
 type SortField =
@@ -94,6 +95,7 @@ interface ManagerShippingMethod extends ShippingMethod {
 
 export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
   const { toast } = useToast();
+  const { symbol } = useCurrency();
   const [methods, setMethods] = useState<ManagerShippingMethod[]>([]);
   const [pagination, setPagination] = useState({
     total: 0,
@@ -836,7 +838,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
                       {method.name}
                     </TableCell>
                     <TableCell className="py-2 text-xs">
-                      ৳{method.fee.toLocaleString()}
+                      {symbol}{method.fee.toLocaleString()}
                     </TableCell>
                     <TableCell className="py-2 text-xs text-muted-foreground truncate max-w-xs">
                       {method.description || "-"}
@@ -1016,7 +1018,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
             </div>
             <div>
               <Label htmlFor="fee" className="text-xs">
-                Fee (৳)
+                Fee ({symbol})
               </Label>
               <Input
                 id="fee"

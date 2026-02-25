@@ -1,6 +1,7 @@
 // src/components/admin/ProductForm/variants/BulkVariantGenerator.tsx
 
 import { useState, useMemo } from "react";
+import { useCurrency } from "@/hooks/useCurrency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +52,7 @@ export function BulkVariantGenerator({
   onGenerate,
   disabled,
 }: BulkVariantGeneratorProps) {
+  const { symbol } = useCurrency();
   const [open, setOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -527,7 +529,7 @@ export function BulkVariantGenerator({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="percentage">Percentage (%)</SelectItem>
-                    <SelectItem value="flat">Flat Amount (৳)</SelectItem>
+                    <SelectItem value="flat">Flat Amount ({symbol})</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -635,7 +637,7 @@ export function BulkVariantGenerator({
                             {variant.color || "—"}
                           </TableCell>
                           <TableCell className="text-right text-sm font-medium">
-                            ৳{variant.price.toLocaleString()}
+                            {symbol}{variant.price.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right text-sm">
                             {variant.stock}

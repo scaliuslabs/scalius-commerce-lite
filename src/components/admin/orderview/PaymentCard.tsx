@@ -27,6 +27,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrency } from "@/hooks/useCurrency";
 import {
   CreditCard,
   Banknote,
@@ -106,6 +107,7 @@ interface PaymentCardProps {
 
 export function PaymentCard({ order }: PaymentCardProps) {
   const { toast } = useToast();
+  const { symbol } = useCurrency();
   const [payments, setPayments] = React.useState<OrderPayment[]>([]);
   const [plan, setPlan] = React.useState<PaymentPlan | null>(null);
   const [codTracking, setCodTracking] = React.useState<CODTracking | null>(null);
@@ -250,7 +252,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
 
       toast({
         title: "Refund Issued",
-        description: `Successfully initiated refund of ৳${amount}.`,
+        description: `Successfully initiated refund of ${symbol}${amount}.`,
       });
 
       setIsRefundDialogOpen(false);
@@ -302,34 +304,34 @@ export function PaymentCard({ order }: PaymentCardProps) {
           <div className="space-y-1.5 text-sm rounded-lg bg-muted/30 p-3">
             <div className="flex justify-between text-muted-foreground">
               <span>Order total</span>
-              <span>৳{order.totalAmount.toLocaleString()}</span>
+              <span>{symbol}{order.totalAmount.toLocaleString()}</span>
             </div>
             {order.shippingCharge > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Shipping</span>
-                <span>৳{order.shippingCharge.toLocaleString()}</span>
+                <span>{symbol}{order.shippingCharge.toLocaleString()}</span>
               </div>
             )}
             {(order.discountAmount ?? 0) > 0 && (
               <div className="flex justify-between text-green-600">
                 <span>Discount</span>
-                <span>-৳{(order.discountAmount ?? 0).toLocaleString()}</span>
+                <span>-{symbol}{(order.discountAmount ?? 0).toLocaleString()}</span>
               </div>
             )}
             <div className="flex justify-between font-semibold border-t border-border pt-1.5 mt-1.5">
               <span>Grand total</span>
-              <span>৳{grandTotal.toLocaleString()}</span>
+              <span>{symbol}{grandTotal.toLocaleString()}</span>
             </div>
             {(order.paidAmount ?? 0) > 0 && (
               <div className="flex justify-between text-green-600">
                 <span>Paid</span>
-                <span>৳{(order.paidAmount ?? 0).toLocaleString()}</span>
+                <span>{symbol}{(order.paidAmount ?? 0).toLocaleString()}</span>
               </div>
             )}
             {(order.balanceDue ?? 0) > 0 && (
               <div className="flex justify-between text-amber-600 font-medium">
                 <span>Balance due</span>
-                <span>৳{(order.balanceDue ?? 0).toLocaleString()}</span>
+                <span>{symbol}{(order.balanceDue ?? 0).toLocaleString()}</span>
               </div>
             )}
           </div>
@@ -341,13 +343,13 @@ export function PaymentCard({ order }: PaymentCardProps) {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Deposit</span>
                 <span className={plan.depositPaidAt ? "text-green-600" : "text-amber-600"}>
-                  ৳{plan.depositAmount.toLocaleString()} {plan.depositPaidAt ? "✓" : "(pending)"}
+                  {symbol}{plan.depositAmount.toLocaleString()} {plan.depositPaidAt ? "✓" : "(pending)"}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Balance</span>
                 <span className={plan.balancePaidAt ? "text-green-600" : "text-amber-600"}>
-                  ৳{plan.balanceDue.toLocaleString()} {plan.balancePaidAt ? "✓" : plan.balanceDueDate ? `due ${plan.balanceDueDate}` : "(pending)"}
+                  {symbol}{plan.balanceDue.toLocaleString()} {plan.balancePaidAt ? "✓" : plan.balanceDueDate ? `due ${plan.balanceDueDate}` : "(pending)"}
                 </span>
               </div>
             </div>
@@ -379,7 +381,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   {codTracking.collectedAmount && (
                     <div className="flex justify-between text-green-600">
                       <span>Collected amount</span>
-                      <span>৳{codTracking.collectedAmount.toLocaleString()}</span>
+                      <span>{symbol}{codTracking.collectedAmount.toLocaleString()}</span>
                     </div>
                   )}
                   {codTracking.failureReason && (
@@ -522,7 +524,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="collectedAmount">Amount collected (৳)</Label>
+              <Label htmlFor="collectedAmount">Amount collected ({symbol})</Label>
               <Input
                 id="collectedAmount"
                 type="number"
@@ -612,12 +614,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
             <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">
               <div className="flex justify-between">
                 <span>Maximum refundable:</span>
-                <span className="font-medium text-foreground">৳{(order.paidAmount ?? 0).toLocaleString()}</span>
+                <span className="font-medium text-foreground">{symbol}{(order.paidAmount ?? 0).toLocaleString()}</span>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="refundAmount">Refund Amount (৳)</Label>
+              <Label htmlFor="refundAmount">Refund Amount ({symbol})</Label>
               <Input
                 id="refundAmount"
                 type="number"

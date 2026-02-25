@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { motion } from "framer-motion";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface StatsCardProps {
   title: string;
@@ -137,20 +138,20 @@ interface DashboardStatsProps {
   initialDailyData: DailyActivityDataPoint[];
 }
 
-const chartConfig = {
+const getChartConfig = (symbol: string): ChartConfig => ({
   orders: {
     label: "Orders",
     color: "var(--chart-2)",
   },
   revenue: {
-    label: "Revenue (৳)",
+    label: `Revenue (${symbol})`,
     color: "var(--chart-1)",
   },
   newCustomers: {
     label: "New Customers",
     color: "var(--chart-3)",
   },
-} satisfies ChartConfig;
+});
 
 // Define animation variants
 const containerVariants = {
@@ -177,7 +178,7 @@ const cardVariants = {
 };
 
 // Custom Tooltip Content Component
-const CustomTooltipContent = ({ active, payload, label }: any) => {
+const CustomTooltipContent = ({ active, payload, label, symbol = "৳", chartConfig }: any) => {
   if (active && payload && payload.length) {
     const formattedLabel = new Date(label).toLocaleDateString("en-US", {
       month: "short",
@@ -195,11 +196,11 @@ const CustomTooltipContent = ({ active, payload, label }: any) => {
             <div className="space-y-1.5">
               {payload.map((item: any, index: number) => {
                 const config =
-                  chartConfig[item.name as keyof typeof chartConfig];
+                  chartConfig[item.name as string];
                 const value = item.value;
                 const formattedValue =
                   item.name === "revenue"
-                    ? `৳${Number(value).toLocaleString()}`
+                    ? `${symbol}${Number(value).toLocaleString()}`
                     : Number(value).toLocaleString();
 
                 return (
@@ -239,6 +240,8 @@ export function DashboardStats({
   initialDailyData,
 }: DashboardStatsProps & { currentMonth: { customerGrowth?: number } }) {
 
+  const { symbol } = useCurrency();
+  const chartConfig = React.useMemo(() => getChartConfig(symbol), [symbol]);
   const [timeRange, setTimeRange] = React.useState("90d");
   const [isMounted, setIsMounted] = React.useState(false);
 
@@ -274,7 +277,7 @@ export function DashboardStats({
         <motion.div variants={cardVariants}>
           <StatsCard
             title="Monthly Revenue"
-            value={`৳${currentMonth.revenue.toLocaleString()}`}
+            value={`${symbol}${currentMonth.revenue.toLocaleString()}`}
             description="Revenue this month"
             icon={<DollarSign className="h-5 w-5" />}
             trend={{
@@ -421,7 +424,7 @@ export function DashboardStats({
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
-                  tickFormatter={(value) => `৳${Number(value) / 1000}k`}
+                  tickFormatter={(value) => `${symbol}${Number(value) / 1000}k`}
                   domain={["auto", "auto"]}
                 />
                 <YAxis
@@ -435,7 +438,7 @@ export function DashboardStats({
                 />
                 <ChartTooltip
                   cursor={false}
-                  content={<CustomTooltipContent />}
+                  content={<CustomTooltipContent symbol={symbol} chartConfig={chartConfig} />}
                 />
                 <Area
                   dataKey="revenue"

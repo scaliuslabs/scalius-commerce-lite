@@ -19,6 +19,7 @@ import {
   querySSLCommerzRefundStatus,
 } from "@/lib/payment/sslcommerz";
 import { getSSLCommerzSettings } from "@/lib/payment/gateway-settings";
+import { getCurrencyConfig } from "@/lib/currency";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -29,7 +30,7 @@ const sessionSchema = z.object({
   orderId: z.string().min(1),
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
   depositAmount: z.number().positive().optional(),
-  currency: z.string().default("BDT"),
+  currency: z.string().optional(),
   /** Base URL for redirect callbacks (e.g. https://example.com) */
   baseUrl: z.string().url().optional(),
 });
@@ -75,6 +76,12 @@ app.post("/session", async (c) => {
     .get();
 
   if (!order) return c.json({ success: false, error: "Order not found" }, 404);
+
+  // Resolve currency from settings if not provided in the request
+  if (!body.currency) {
+    const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
+    body.currency = currencyConfig.code;
+  }
 
   if (order.paymentStatus === PaymentStatus.PAID) {
     return c.json({ success: false, error: "Order is already fully paid" }, 400);
@@ -287,40 +294,48 @@ async function extractTranId(c: any): Promise<string> {
   return c.req.query("tran_id") ?? "";
 }
 
+/** Resolve the storefront base URL (never the admin dashboard). */
+function getStorefrontUrl(c: any): string {
+  const envUrl = c.env?.STOREFRONT_URL;
+  if (envUrl) return envUrl.replace(/\/+$/, ""); // trim trailing slash
+  // Fallback: if STOREFRONT_URL is not set, use request origin (shouldn't happen in production)
+  return new URL(c.req.url).origin;
+}
+
 app.post("/success", async (c) => {
   const tran_id = await extractTranId(c);
-  const origin = new URL(c.req.url).origin;
-  return c.redirect(`${origin}/order-confirmed?orderId=${encodeURIComponent(tran_id)}`);
+  const storefront = getStorefrontUrl(c);
+  return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(tran_id)}&payment=sslcommerz`);
 });
 
 app.get("/success", async (c) => {
   const tran_id = c.req.query("tran_id") ?? "";
-  const origin = new URL(c.req.url).origin;
-  return c.redirect(`${origin}/order-confirmed?orderId=${encodeURIComponent(tran_id)}`);
+  const storefront = getStorefrontUrl(c);
+  return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(tran_id)}&payment=sslcommerz`);
 });
 
 app.post("/fail", async (c) => {
   const tran_id = await extractTranId(c);
-  const origin = new URL(c.req.url).origin;
-  return c.redirect(`${origin}/payment-failed?orderId=${encodeURIComponent(tran_id)}`);
+  const storefront = getStorefrontUrl(c);
+  return c.redirect(`${storefront}/cart?error=payment_failed&orderId=${encodeURIComponent(tran_id)}`);
 });
 
 app.get("/fail", async (c) => {
   const tran_id = c.req.query("tran_id") ?? "";
-  const origin = new URL(c.req.url).origin;
-  return c.redirect(`${origin}/payment-failed?orderId=${encodeURIComponent(tran_id)}`);
+  const storefront = getStorefrontUrl(c);
+  return c.redirect(`${storefront}/cart?error=payment_failed&orderId=${encodeURIComponent(tran_id)}`);
 });
 
 app.post("/cancel", async (c) => {
   const tran_id = await extractTranId(c);
-  const origin = new URL(c.req.url).origin;
-  return c.redirect(`${origin}/payment-cancelled?orderId=${encodeURIComponent(tran_id)}`);
+  const storefront = getStorefrontUrl(c);
+  return c.redirect(`${storefront}/cart?error=payment_cancelled&orderId=${encodeURIComponent(tran_id)}`);
 });
 
 app.get("/cancel", async (c) => {
   const tran_id = c.req.query("tran_id") ?? "";
-  const origin = new URL(c.req.url).origin;
-  return c.redirect(`${origin}/payment-cancelled?orderId=${encodeURIComponent(tran_id)}`);
+  const storefront = getStorefrontUrl(c);
+  return c.redirect(`${storefront}/cart?error=payment_cancelled&orderId=${encodeURIComponent(tran_id)}`);
 });
 
 export const sslcommerzPaymentRoutes = app;

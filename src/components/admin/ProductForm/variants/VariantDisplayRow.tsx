@@ -12,6 +12,7 @@ import {
   getStockStatus,
   hasDiscount,
 } from "./utils/variantHelpers";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface VariantDisplayRowProps {
   variant: ProductVariant;
@@ -32,6 +33,7 @@ export function VariantDisplayRow({
   onDuplicate,
   isAnyRowEditing,
 }: VariantDisplayRowProps) {
+  const { symbol } = useCurrency();
   const stockStatus = getStockStatus(variant.stock);
   const hasVariantDiscount = hasDiscount(variant);
 
@@ -65,7 +67,7 @@ export function VariantDisplayRow({
 
       <TableCell className="text-sm">{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
 
-      <TableCell className="text-sm font-medium">৳{variant.price.toLocaleString()}</TableCell>
+      <TableCell className="text-sm font-medium">{symbol}{variant.price.toLocaleString()}</TableCell>
 
       <TableCell>
         <div className="flex items-center gap-2">
@@ -83,7 +85,7 @@ export function VariantDisplayRow({
         </div>
       </TableCell>
 
-      <TableCell className="text-sm">{getDiscountDisplay(variant)}</TableCell>
+      <TableCell className="text-sm">{getDiscountDisplay(variant, symbol)}</TableCell>
 
       <TableCell className="text-sm text-muted-foreground">
         {formatDate(variant.updatedAt)}

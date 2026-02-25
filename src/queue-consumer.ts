@@ -18,58 +18,59 @@ import { sendEmail } from "@/lib/email";
 
 export type PaymentQueueMessage =
   | {
-      type: "payment.stripe.confirmed";
-      orderId: string;
-      paymentIntentId: string;
-      amount: number; // in cents
-      currency: string;
-      metadata?: Record<string, string>;
-    }
+    type: "payment.stripe.confirmed";
+    orderId: string;
+    paymentIntentId: string;
+    amount: number; // in cents
+    currency: string;
+    chargeId?: string;
+    metadata?: Record<string, string>;
+  }
   | {
-      type: "payment.stripe.failed";
-      orderId: string;
-      paymentIntentId: string;
-      failureCode?: string;
-      failureMessage?: string;
-    }
+    type: "payment.stripe.failed";
+    orderId: string;
+    paymentIntentId: string;
+    failureCode?: string;
+    failureMessage?: string;
+  }
   | {
-      type: "payment.stripe.canceled";
-      orderId: string;
-      paymentIntentId: string;
-    }
+    type: "payment.stripe.canceled";
+    orderId: string;
+    paymentIntentId: string;
+  }
   | {
-      type: "payment.stripe.refunded";
-      orderId: string;
-      paymentIntentId: string;
-      amountRefunded: number; // in cents
-      chargeId: string;
-    }
+    type: "payment.stripe.refunded";
+    orderId: string;
+    paymentIntentId: string;
+    amountRefunded: number; // in cents
+    chargeId: string;
+  }
   | {
-      type: "payment.sslcommerz.confirmed";
-      orderId: string;
-      tranId: string;
-      valId: string;
-      bankTranId: string;
-      amount: number;
-      currency: string;
-      cardType?: string;
-      cardBrand?: string;
-      paymentType?: string;
-    }
+    type: "payment.sslcommerz.confirmed";
+    orderId: string;
+    tranId: string;
+    valId: string;
+    bankTranId: string;
+    amount: number;
+    currency: string;
+    cardType?: string;
+    cardBrand?: string;
+    paymentType?: string;
+  }
   | {
-      type: "payment.sslcommerz.failed";
-      orderId: string;
-      tranId: string;
-      status: string;
-    }
+    type: "payment.sslcommerz.failed";
+    orderId: string;
+    tranId: string;
+    status: string;
+  }
   | {
-      type: "order.notification";
-      orderId: string;
-      customerEmail?: string;
-      customerName: string;
-      notificationType: "order_created" | "order_confirmed" | "order_shipped" | "order_delivered";
-      data?: Record<string, unknown>;
-    };
+    type: "order.notification";
+    orderId: string;
+    customerEmail?: string;
+    customerName: string;
+    notificationType: "order_created" | "order_confirmed" | "order_shipped" | "order_delivered";
+    data?: Record<string, unknown>;
+  };
 
 // ── Queue batch handler ────────────────────────────────────────────────────
 
@@ -120,6 +121,7 @@ async function processQueueMessage(
         paymentGateway: "stripe",
         paymentType: (payload.metadata?.paymentType as "full" | "deposit" | "balance") ?? "full",
         stripePaymentIntentId: payload.paymentIntentId,
+        stripeChargeId: payload.chargeId,
         amount: amountInMajor,
         metadata: { currency: payload.currency },
       });

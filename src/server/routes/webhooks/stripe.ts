@@ -84,12 +84,17 @@ function buildQueueMessage(event: Stripe.Event): PaymentQueueMessage | null {
       const orderId = pi.metadata?.orderId;
       if (!orderId) return null;
 
+      const chargeId = typeof pi.latest_charge === "string"
+        ? pi.latest_charge
+        : (pi.latest_charge as any)?.id ?? undefined;
+
       return {
         type: "payment.stripe.confirmed",
         orderId,
         paymentIntentId: pi.id,
         amount: pi.amount_received, // in cents — queue consumer converts to major unit
         currency: pi.currency,
+        chargeId,
         metadata: pi.metadata as Record<string, string>,
       };
     }

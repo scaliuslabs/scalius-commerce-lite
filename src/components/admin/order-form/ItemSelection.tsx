@@ -12,6 +12,7 @@ import { FormLabel } from "@/components/ui/form";
 import { Plus } from "lucide-react";
 import type { Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface ItemSelectionProps {
   selectedProduct: Product;
@@ -33,6 +34,7 @@ export function ItemSelection({
   calculateDiscountedPrice,
 }: ItemSelectionProps) {
   const { refs } = useOrderForm();
+  const { symbol } = useCurrency();
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 p-4 border rounded-md bg-muted/20 items-end">
@@ -41,10 +43,10 @@ export function ItemSelection({
         {selectedProduct.discountPercentage ? (
           <div className="flex items-center gap-2 mt-1 text-sm">
             <span className="line-through text-muted-foreground">
-              ৳{selectedProduct.price.toLocaleString()}
+              {symbol}{selectedProduct.price.toLocaleString()}
             </span>
             <span className="text-green-600 font-medium">
-              ৳
+              {symbol}
               {parseFloat(
                 calculateDiscountedPrice(selectedProduct, null)
               ).toLocaleString()}
@@ -55,7 +57,7 @@ export function ItemSelection({
           </div>
         ) : (
           <div className="mt-1 text-sm">
-            ৳{selectedProduct.price.toLocaleString()}
+            {symbol}{selectedProduct.price.toLocaleString()}
           </div>
         )}
       </div>
@@ -110,13 +112,13 @@ export function ItemSelection({
                         <span className="ml-4">
                           {selectedProduct.discountPercentage ? (
                             <span className="text-green-600">
-                              ৳
+                              {symbol}
                               {parseFloat(
                                 calculateDiscountedPrice(selectedProduct, variant.id)
                               ).toLocaleString()}
                             </span>
                           ) : (
-                            <span>৳{variant.price.toLocaleString()}</span>
+                            <span>{symbol}{variant.price.toLocaleString()}</span>
                           )}
                         </span>
                       </div>

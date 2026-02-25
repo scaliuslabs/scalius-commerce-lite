@@ -46,6 +46,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Separator } from "../../ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrency } from "@/hooks/useCurrency";
 
 
 // --- Interfaces (Unchanged) ---
@@ -114,6 +115,7 @@ export function AmountOffProductsForm({
   initialSelectedCollections = [],
 }: AmountOffProductsFormProps) {
   const { toast } = useToast();
+  const { symbol } = useCurrency();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedProducts, setSelectedProducts] = React.useState<Product[]>(
     initialSelectedProducts,
@@ -346,7 +348,7 @@ export function AmountOffProductsForm({
                       <SelectContent className="rounded-xl bg-background">
                         <SelectItem value="percentage">Percentage</SelectItem>
                         <SelectItem value="fixed_amount">
-                          Fixed Amount (৳)
+                          Fixed Amount ({symbol})
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -369,7 +371,7 @@ export function AmountOffProductsForm({
                           placeholder={
                             form.watch("valueType") === "percentage"
                               ? "e.g., 15 for 15%"
-                              : "e.g., 500 for ৳500"
+                              : `e.g., 500 for ${symbol}500`
                           }
                           {...field}
                           onChange={(e) => {
@@ -384,7 +386,7 @@ export function AmountOffProductsForm({
                             <Percent className="h-4 w-4 text-muted-foreground" />
                           ) : (
                             <span className="text-sm text-muted-foreground">
-                              ৳
+                              {symbol}
                             </span>
                           )}
                         </div>
@@ -472,7 +474,7 @@ export function AmountOffProductsForm({
                         />
                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
                           <span className="text-sm text-muted-foreground">
-                            ৳
+                            {symbol}
                           </span>
                         </div>
                       </div>
@@ -821,7 +823,7 @@ export function AmountOffProductsForm({
               <div className="font-medium">
                 {form.watch("valueType") === "percentage"
                   ? `${form.watch("discountValue") || 0}% off`
-                  : `৳${form.watch("discountValue") || 0} off`}
+                  : `${symbol}${form.watch("discountValue") || 0} off`}
               </div>
               <div className="text-muted-foreground">Applies to</div>
               <div className="font-medium">
@@ -832,7 +834,7 @@ export function AmountOffProductsForm({
               <div className="text-muted-foreground">Min. purchase</div>
               <div className="font-medium">
                 {form.watch("minPurchaseAmount")
-                  ? `৳${form.watch("minPurchaseAmount")}`
+                  ? `${symbol}${form.watch("minPurchaseAmount")}`
                   : "None"}
               </div>
               <div className="text-muted-foreground">Usage limit</div>

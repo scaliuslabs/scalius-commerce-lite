@@ -29,6 +29,7 @@ const ASTRO_ADMIN_WRITE_PATHS_FOR_CACHE_CLEAR = [
   "/api/settings/payment-methods",
   "/api/settings/stripe",
   "/api/settings/sslcommerz",
+  "/api/settings/currency",
   "/api/settings/auth",
 ];
 

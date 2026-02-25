@@ -11,6 +11,7 @@ import type {
   RecordCODCollectionParams,
   RecordCODFailureParams,
 } from "./types";
+import { getCurrencyConfig } from "@/lib/currency";
 
 /**
  * Create a COD tracking record when a COD order is placed.
@@ -67,12 +68,15 @@ export async function recordCODCollection(
       })
       .where(eq(codTracking.orderId, params.orderId));
 
+    // Fetch currency config
+    const currencyConfig = await getCurrencyConfig(db);
+
     // Record the payment transaction
     await db.insert(orderPayments).values({
       id: crypto.randomUUID(),
       orderId: params.orderId,
       amount: params.collectedAmount,
-      currency: "BDT",
+      currency: currencyConfig.code,
       paymentMethod: "cod",
       paymentType: "full",
       status: "succeeded",
