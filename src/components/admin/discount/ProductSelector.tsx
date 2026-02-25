@@ -13,6 +13,7 @@ import { Button } from "../../ui/button";
 import { Check, ChevronsUpDown, Loader2, Tag, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "../../ui/badge";
+import { useCurrency } from "@/hooks/useCurrency";
 
 // Product interface based on what's used in OrderForm
 interface Product {
@@ -45,6 +46,7 @@ export function ProductSelector({
   isLoading = false,
   maxItems,
 }: ProductSelectorProps) {
+  const { symbol } = useCurrency();
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
@@ -233,7 +235,7 @@ export function ProductSelector({
                           <span className="truncate">{product.name}</span>
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          ৳{product.price}
+                          {symbol}{product.price}
                         </div>
                       </div>
                     </CommandItem>

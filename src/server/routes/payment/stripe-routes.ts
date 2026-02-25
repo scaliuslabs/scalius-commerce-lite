@@ -18,6 +18,7 @@ import {
   createRefund,
 } from "@/lib/payment/stripe";
 import { getStripeSettings } from "@/lib/payment/gateway-settings";
+import { getCurrencyConfig } from "@/lib/currency";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -29,7 +30,7 @@ const intentSchema = z.object({
   orderId: z.string().min(1),
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
   depositAmount: z.number().positive().optional(),
-  currency: z.string().length(3).default("bdt"),
+  currency: z.string().length(3).optional(),
   manualCapture: z.boolean().default(false),
 });
 
@@ -70,6 +71,12 @@ app.post("/intent", async (c) => {
 
   if (!order) return c.json({ success: false, error: "Order not found" }, 404);
 
+  // Resolve currency from settings if not provided in the request
+  if (!body.currency) {
+    const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
+    body.currency = currencyConfig.code.toLowerCase();
+  }
+
   if (order.paymentStatus === PaymentStatus.PAID) {
     return c.json({ success: false, error: "Order is already fully paid" }, 400);
   }
@@ -94,7 +101,7 @@ app.post("/intent", async (c) => {
     chargeAmount = order.totalAmount;
   }
 
-  // Convert to smallest currency unit (e.g. 1 BDT = 100 paisa)
+  // Convert to smallest currency unit (e.g. 1 unit = 100 subunits)
   const amountInSmallestUnit = Math.round(chargeAmount * 100);
 
   const result = await createPaymentIntent(stripe.secretKey, {

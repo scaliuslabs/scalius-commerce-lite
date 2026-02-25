@@ -75,7 +75,7 @@ app.post("/", async (c) => {
   let message: PaymentQueueMessage | null = null;
 
   if (isValid) {
-    const amount = parseFloat(validation.store_amount ?? validation.amount ?? "0");
+    const amount = parseFloat(validation.amount ?? validation.store_amount ?? "0");
 
     message = {
       type: "payment.sslcommerz.confirmed",

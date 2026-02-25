@@ -24,6 +24,7 @@ import { OrderItemsPopover } from "./OrderItemsPopover";
 import { OrderStatusSelector } from "./OrderStatusSelector";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { FraudCheckIndicator } from "./FraudCheckIndicator";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface OrderTableRowProps {
   order: OrderListItem;
@@ -114,6 +115,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
   onStatusUpdate,
   onShipmentStatusUpdated,
 }: OrderTableRowProps) {
+  const { symbol } = useCurrency();
   const rowClassName = `group border-b border-[var(--border)] transition-colors duration-150 hover:bg-[var(--muted)]/80 ${order.status.toLowerCase() === "delivered"
     ? "border-l-3 border-l-emerald-500"
     : order.status.toLowerCase() === "shipped"
@@ -204,7 +206,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
       <TableCell className="py-4">
         <div className="space-y-1.5">
           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            ৳{order.totalAmount.toLocaleString()}
+            {symbol}{order.totalAmount.toLocaleString()}
           </span>
           {(order.discountAmount ?? 0) > 0 && (
             <div className="flex items-center gap-1 text-xs">
@@ -212,7 +214,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
                 variant="secondary"
                 className="bg-[var(--muted)] text-[var(--muted-foreground)] transition-all duration-200 hover:bg-[var(--muted)]/80"
               >
-                -৳{(order.discountAmount ?? 0).toLocaleString()}
+                -{symbol}{(order.discountAmount ?? 0).toLocaleString()}
               </Badge>
             </div>
           )}

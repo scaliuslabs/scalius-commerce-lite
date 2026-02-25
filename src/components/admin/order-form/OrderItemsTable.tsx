@@ -11,9 +11,11 @@ import { Trash, ShoppingBag } from "lucide-react";
 import type { OrderItem } from "./types";
 import { useOrderForm } from "./OrderFormContext";
 import { updateOrderItems } from "@/store/orderStore";
+import { useCurrency } from "@/hooks/useCurrency";
 
 export function OrderItemsTable() {
   const { form, products } = useOrderForm();
+  const { symbol } = useCurrency();
   
   // Directly get the items from the form state.
   // We'll use form.watch() to re-render the component when items change.
@@ -81,9 +83,9 @@ export function OrderItemsTable() {
                       : "—"}
                   </TableCell>
                   <TableCell>{item.quantity}</TableCell>
-                  <TableCell>৳{item.price.toLocaleString()}</TableCell>
+                  <TableCell>{symbol}{item.price.toLocaleString()}</TableCell>
                   <TableCell className="font-medium">
-                    ৳{(item.price * item.quantity).toLocaleString()}
+                    {symbol}{(item.price * item.quantity).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button

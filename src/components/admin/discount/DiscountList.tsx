@@ -65,6 +65,7 @@ import {
 import { Badge } from "../../ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 
 // --- Type Definitions (Unchanged) ---
 type SortField =
@@ -127,12 +128,13 @@ function buildDiscountSummary(
   discount: DiscountItem,
   getTypeLabel: (type: string) => string,
   getDiscountValueDisplay: (discount: DiscountItem) => string,
+  symbol: string = "৳",
 ): string[] {
   const lines: string[] = [];
   lines.push(`Type: ${getTypeLabel(discount.type)}`);
   lines.push(`Value: ${getDiscountValueDisplay(discount)}`);
   if (discount.minPurchaseAmount) {
-    lines.push(`Min purchase: ৳${discount.minPurchaseAmount.toLocaleString()}`);
+    lines.push(`Min purchase: ${symbol}${discount.minPurchaseAmount.toLocaleString()}`);
   }
   if (discount.minQuantity) {
     lines.push(`Min quantity: ${discount.minQuantity}`);
@@ -171,6 +173,7 @@ const DiscountRow = React.memo(
     formatDate,
     getTypeLabel,
     getDiscountValueDisplay,
+    symbol,
   }: {
     discount: DiscountItem;
     isSelected: boolean;
@@ -184,8 +187,9 @@ const DiscountRow = React.memo(
     formatDate: (date: string | null) => string;
     getTypeLabel: (type: string) => string;
     getDiscountValueDisplay: (discount: DiscountItem) => string;
+    symbol: string;
   }) => {
-    const summaryLines = buildDiscountSummary(discount, getTypeLabel, getDiscountValueDisplay);
+    const summaryLines = buildDiscountSummary(discount, getTypeLabel, getDiscountValueDisplay, symbol);
 
     return (
       <TableRow
@@ -317,7 +321,7 @@ const DiscountRow = React.memo(
                 <div className="flex items-center gap-1">
                   <span className="font-medium">
                     {discount.totalDiscountAmount !== undefined
-                      ? `৳${discount.totalDiscountAmount.toLocaleString()}`
+                      ? `${symbol}${discount.totalDiscountAmount.toLocaleString()}`
                       : "-"}
                   </span>
                 </div>
@@ -478,6 +482,7 @@ export function DiscountList({
   showTrashed = false,
 }: DiscountListProps) {
   const { toast } = useToast();
+  const { symbol } = useCurrency();
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [sort, setSort] = useState(initialSort);
   const [selectedDiscounts, setSelectedDiscounts] = useState<Set<string>>(
@@ -802,13 +807,13 @@ export function DiscountList({
       case "percentage":
         return `${discount.discountValue}% off`;
       case "fixed_amount":
-        return `৳${discount.discountValue.toFixed(2)} off`; // Use currency symbol
+        return `${symbol}${discount.discountValue.toFixed(2)} off`;
       case "free":
         return "Free";
       default:
         return discount.discountValue.toString();
     }
-  }, []);
+  }, [symbol]);
 
   const handleSelectItem = useCallback((id: string, checked: boolean) => {
     setSelectedDiscounts((prev) => {
@@ -1168,6 +1173,7 @@ export function DiscountList({
                     formatDate={formatDate}
                     getTypeLabel={getTypeLabel}
                     getDiscountValueDisplay={getDiscountValueDisplay}
+                    symbol={symbol}
                   />
                 ))
               )}

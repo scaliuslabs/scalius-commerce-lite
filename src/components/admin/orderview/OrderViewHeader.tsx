@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { Order } from "./types";
 import { getStatusBadgeClass, formatDate } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface OrderViewHeaderProps {
   order: Order;
@@ -46,6 +47,7 @@ const InfoItem = ({
 );
 
 export function OrderViewHeader({ order }: OrderViewHeaderProps) {
+  const { symbol } = useCurrency();
   const getStatusBadge = (status: string) => {
     const { badgeClass } = getStatusBadgeClass(status);
     return (
@@ -151,7 +153,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             </InfoItem>
             <InfoItem icon={DollarSign} label="Grand Total">
               <span className="font-semibold">
-                ৳{grandTotal.toLocaleString()}
+                {symbol}{grandTotal.toLocaleString()}
               </span>
             </InfoItem>
             {order.paymentStatus && (

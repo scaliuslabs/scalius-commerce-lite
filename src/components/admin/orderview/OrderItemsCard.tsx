@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, ArrowRight } from "lucide-react";
 import type { Order, OrderItem } from "./types";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface OrderItemsCardProps {
   order: Order;
 }
 
-const OrderItemRow = ({ item }: { item: OrderItem }) => (
+const OrderItemRow = ({ item, symbol }: { item: OrderItem; symbol: string }) => (
   <div
     key={item.id}
     className="flex items-center gap-4 p-4 transition-colors hover:bg-muted/5"
@@ -47,10 +48,10 @@ const OrderItemRow = ({ item }: { item: OrderItem }) => (
         </div>
         <div className="shrink-0 text-right">
           <p className="font-medium text-foreground">
-            ৳{(item.price * item.quantity).toLocaleString()}
+            {symbol}{(item.price * item.quantity).toLocaleString()}
           </p>
           <p className="text-xs text-muted-foreground">
-            ৳{item.price.toLocaleString()} × {item.quantity}
+            {symbol}{item.price.toLocaleString()} × {item.quantity}
           </p>
         </div>
       </div>
@@ -78,6 +79,7 @@ const SummaryRow = ({
 );
 
 export function OrderItemsCard({ order }: OrderItemsCardProps) {
+  const { symbol } = useCurrency();
   const grandTotal =
     order.totalAmount + order.shippingCharge - (order.discountAmount ?? 0);
 
@@ -92,7 +94,7 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
       <CardContent className="p-0">
         <div className="divide-y divide-border">
           {order.items.map((item) => (
-            <OrderItemRow key={item.id} item={item} />
+            <OrderItemRow key={item.id} item={item} symbol={symbol} />
           ))}
         </div>
 
@@ -101,25 +103,25 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
           <div className="ml-auto w-full space-y-1.5 sm:w-72">
             <SummaryRow
               label="Subtotal"
-              value={`৳${order.totalAmount.toLocaleString()}`}
+              value={`${symbol}${order.totalAmount.toLocaleString()}`}
             />
             {order.shippingCharge > 0 && (
               <SummaryRow
                 label="Shipping"
-                value={`৳${order.shippingCharge.toLocaleString()}`}
+                value={`${symbol}${order.shippingCharge.toLocaleString()}`}
               />
             )}
             {(order.discountAmount ?? 0) > 0 && (
               <SummaryRow
                 label="Discount"
-                value={`-৳${order.discountAmount?.toLocaleString()}`}
+                value={`-${symbol}${order.discountAmount?.toLocaleString()}`}
                 isDestructive
               />
             )}
             <div className="flex justify-between border-t border-border pt-1.5">
               <span className="font-medium text-foreground">Total</span>
               <span className="font-medium text-foreground">
-                ৳{grandTotal.toLocaleString()}
+                {symbol}{grandTotal.toLocaleString()}
               </span>
             </div>
           </div>

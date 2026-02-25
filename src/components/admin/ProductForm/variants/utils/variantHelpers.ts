@@ -226,11 +226,11 @@ export function formatDate(date: Date | string): string {
 /**
  * Get discount display string
  */
-export function getDiscountDisplay(variant: ProductVariant): string {
+export function getDiscountDisplay(variant: ProductVariant, symbol: string = "৳"): string {
   if (variant.discountType === "percentage" && variant.discountPercentage) {
     return `${variant.discountPercentage}%`;
   } else if (variant.discountType === "flat" && variant.discountAmount) {
-    return `৳${variant.discountAmount}`;
+    return `${symbol}${variant.discountAmount}`;
   }
   return "—";
 }

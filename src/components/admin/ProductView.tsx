@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { RichContent } from "../ui/rich-content";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface ProductVariant {
   id: string;
@@ -64,6 +65,7 @@ interface ProductViewProps {
 
 export function ProductView({ product }: ProductViewProps) {
   const { getStorefrontPath } = useStorefrontUrl();
+  const { symbol } = useCurrency();
   const primaryImage = product.images.find((img) => img.isPrimary);
   const otherImages = product.images.filter((img) => !img.isPrimary);
 
@@ -109,7 +111,7 @@ export function ProductView({ product }: ProductViewProps) {
                       Base Price
                     </div>
                     <div className="text-base font-medium text-foreground">
-                      ৳{product.price.toLocaleString()}
+                      {symbol}{product.price.toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -327,7 +329,7 @@ export function ProductView({ product }: ProductViewProps) {
                             Price
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            ৳{variant.price.toLocaleString()}
+                            {symbol}{variant.price.toLocaleString()}
                           </div>
                         </div>
                         <div>

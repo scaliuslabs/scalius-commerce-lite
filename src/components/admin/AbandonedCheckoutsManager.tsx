@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useCurrency } from "@/hooks/useCurrency";
 import {
   Table,
   TableBody,
@@ -82,8 +83,8 @@ type SortKey = keyof AbandonedCheckout;
 
 // --- Utility Functions ---
 
-const formatCurrency = (amount: number) => {
-  return `৳${amount.toFixed(2)}`;
+const formatCurrency = (amount: number, sym: string) => {
+  return `${sym}${amount.toFixed(2)}`;
 };
 
 const timeSince = (date: Date | null): string => {
@@ -159,6 +160,7 @@ const CheckoutRow = React.memo(
     onViewDetails: (checkout: AbandonedCheckout) => void;
     onDelete: (id: string) => void;
   }) => {
+    const { symbol } = useCurrency();
     const { stage, variant } = getCheckoutStage(checkout);
     const { items, total } = useMemo(
       () => parseCheckoutData(checkout.checkoutData),
@@ -189,7 +191,7 @@ const CheckoutRow = React.memo(
           <Badge variant={variant}>{stage}</Badge>
         </TableCell>
         <TableCell>
-          {items.length} item(s) / {formatCurrency(total)}
+          {items.length} item(s) / {formatCurrency(total, symbol)}
         </TableCell>
         <TableCell className="text-muted-foreground">
           {timeSince(updatedAt)}
@@ -222,6 +224,7 @@ const DetailsModal = ({
   checkout: AbandonedCheckout | null;
   onClose: () => void;
 }) => {
+  const { symbol } = useCurrency();
   if (!checkout) return null;
 
   const { items, total, customerInfo } = parseCheckoutData(
@@ -291,12 +294,12 @@ const DetailsModal = ({
                         <p className="font-semibold">{item.name}</p>
                         <p className="text-xs text-muted-foreground">
                           Qty: {item.quantity} &times;{" "}
-                          {formatCurrency(item.price)}
+                          {formatCurrency(item.price, symbol)}
                         </p>
                       </div>
                     </div>
                     <p className="font-mono text-sm font-semibold">
-                      {formatCurrency(item.price * item.quantity)}
+                      {formatCurrency(item.price * item.quantity, symbol)}
                     </p>
                   </div>
                 ))
@@ -309,7 +312,7 @@ const DetailsModal = ({
             {items.length > 0 && (
               <div className="flex justify-between font-bold text-lg border-t pt-3 mt-3">
                 <span>Total</span>
-                <span>{formatCurrency(total)}</span>
+                <span>{formatCurrency(total, symbol)}</span>
               </div>
             )}
           </div>
@@ -325,6 +328,7 @@ const DetailsModal = ({
 };
 
 export function AbandonedCheckoutsManager() {
+  const { symbol } = useCurrency();
   const [checkouts, setCheckouts] = useState<AbandonedCheckout[]>([]);
   const [pagination, setPagination] = useState({
     page: 1,

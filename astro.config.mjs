@@ -13,6 +13,10 @@ export default defineConfig({
   // Disable dev toolbar to prevent errors
   devToolbar: { enabled: false },
 
+  security: {
+    checkOrigin: false,
+  },
+
   image: {
     // Allow images from R2 bucket domain
     domains: [
@@ -46,8 +50,8 @@ export default defineConfig({
       alias:
         process.env.NODE_ENV === "production"
           ? {
-              "react-dom/server": "react-dom/server.edge",
-            }
+            "react-dom/server": "react-dom/server.edge",
+          }
           : undefined,
     },
     ssr: {

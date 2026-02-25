@@ -1,6 +1,7 @@
 // src/components/admin/ProductForm/variants/VariantTemplateSelector.tsx
 
 import { useState } from "react";
+import { useCurrency } from "@/hooks/useCurrency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +39,7 @@ export function VariantTemplateSelector({
   disabled,
 }: VariantTemplateSelectorProps) {
   const { templates, saveTemplate, deleteTemplate } = useVariantTemplates();
+  const { symbol } = useCurrency();
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
 
@@ -162,7 +164,7 @@ export function VariantTemplateSelector({
                         </Badge>
                       )}
                       <Badge variant="secondary">
-                        Price: ৳{template.price}
+                        Price: {symbol}{template.price}
                       </Badge>
                       <Badge variant="secondary">Stock: {template.stock}</Badge>
                     </div>
@@ -235,7 +237,7 @@ export function VariantTemplateSelector({
                         Weight: {tempVariant.weight}g
                       </Badge>
                     )}
-                    <Badge variant="outline">Price: ৳{tempVariant.price}</Badge>
+                    <Badge variant="outline">Price: {symbol}{tempVariant.price}</Badge>
                     <Badge variant="outline">Stock: {tempVariant.stock}</Badge>
                     {tempVariant.discountPercentage && (
                       <Badge variant="outline">
@@ -244,7 +246,7 @@ export function VariantTemplateSelector({
                     )}
                     {tempVariant.discountAmount && (
                       <Badge variant="outline">
-                        Discount: ৳{tempVariant.discountAmount}
+                        Discount: {symbol}{tempVariant.discountAmount}
                       </Badge>
                     )}
                   </div>

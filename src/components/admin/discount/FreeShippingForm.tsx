@@ -35,6 +35,7 @@ import {
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrency } from "@/hooks/useCurrency";
 
 function generateDiscountCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -67,6 +68,7 @@ interface FreeShippingFormProps {
 
 export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
   const { toast } = useToast();
+  const { symbol } = useCurrency();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormValues>({
@@ -353,7 +355,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                     <FormControl>
                       <div className="relative">
                         <div className="absolute left-3 top-2.5 text-muted-foreground">
-                          ৳
+                          {symbol}
                         </div>
                         <Input
                           type="number"
@@ -550,7 +552,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
               <span className="text-muted-foreground">Min. purchase</span>
               <span className="font-medium">
                 {form.watch("minPurchaseAmount")
-                  ? `৳${form.watch("minPurchaseAmount")}`
+                  ? `${symbol}${form.watch("minPurchaseAmount")}`
                   : "None"}
               </span>
               <span className="text-muted-foreground">Usage limit</span>

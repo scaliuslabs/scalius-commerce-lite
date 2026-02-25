@@ -29,9 +29,11 @@ import {
   updateDiscountAmount,
 } from "../../../store/orderStore";
 import { useOrderForm } from "./OrderFormContext";
+import { useCurrency } from "@/hooks/useCurrency";
 
 export function SummarySection() {
   const { form, isEdit, refs, handleKeyDown } = useOrderForm();
+  const { symbol } = useCurrency();
   const calculations = useStore(orderCalculations);
 
   return (
@@ -114,7 +116,7 @@ export function SummarySection() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal:</span>
                 <span className="font-medium">
-                  ৳
+                  {symbol}
                   {calculations.subtotal.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
@@ -124,7 +126,7 @@ export function SummarySection() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping Charge:</span>
                 <span className="font-medium">
-                  ৳
+                  {symbol}
                   {calculations.shippingCharge.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
@@ -135,7 +137,7 @@ export function SummarySection() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Additional Discount:</span>
                   <span className="font-medium text-destructive">
-                    -৳
+                    -{symbol}
                     {(calculations.discountAmount ?? 0).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
@@ -146,7 +148,7 @@ export function SummarySection() {
               <div className="flex justify-between border-t pt-2 mt-2">
                 <span className="text-lg font-bold">Grand Total:</span>
                 <span className="text-lg font-bold">
-                  ৳
+                  {symbol}
                   {calculations.total.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,

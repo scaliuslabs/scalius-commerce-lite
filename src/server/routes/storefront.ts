@@ -12,6 +12,7 @@ import {
   heroSliders,
   analytics,
   pages,
+  settings,
   type Analytics,
 } from "@/db/schema";
 import { eq, isNull, and, inArray, asc, sql } from "drizzle-orm";
@@ -255,73 +256,73 @@ app.get(
         // 0. Specific products by ID
         productIdsArr.length > 0
           ? db
-              .select(buildProductSelect())
-              .from(products)
-              .where(
-                and(
-                  inArray(products.id, productIdsArr),
-                  eq(products.isActive, true),
-                  isNull(products.deletedAt),
-                ),
-              )
+            .select(buildProductSelect())
+            .from(products)
+            .where(
+              and(
+                inArray(products.id, productIdsArr),
+                eq(products.isActive, true),
+                isNull(products.deletedAt),
+              ),
+            )
           : db
-              .select({ id: sql`NULL` })
-              .from(products)
-              .where(sql`1 = 0`),
+            .select({ id: sql`NULL` })
+            .from(products)
+            .where(sql`1 = 0`),
 
         // 1. Products by category
         categoryIdsArr.length > 0
           ? db
-              .select(buildProductSelect())
-              .from(products)
-              .where(
-                and(
-                  inArray(products.categoryId, categoryIdsArr),
-                  eq(products.isActive, true),
-                  isNull(products.deletedAt),
-                ),
-              )
+            .select(buildProductSelect())
+            .from(products)
+            .where(
+              and(
+                inArray(products.categoryId, categoryIdsArr),
+                eq(products.isActive, true),
+                isNull(products.deletedAt),
+              ),
+            )
           : db
-              .select({ id: sql`NULL` })
-              .from(products)
-              .where(sql`1 = 0`),
+            .select({ id: sql`NULL` })
+            .from(products)
+            .where(sql`1 = 0`),
 
         // 2. Category metadata
         categoryIdsArr.length > 0
           ? db
-              .select({
-                id: categories.id,
-                name: categories.name,
-                slug: categories.slug,
-              })
-              .from(categories)
-              .where(
-                and(
-                  inArray(categories.id, categoryIdsArr),
-                  isNull(categories.deletedAt),
-                ),
-              )
+            .select({
+              id: categories.id,
+              name: categories.name,
+              slug: categories.slug,
+            })
+            .from(categories)
+            .where(
+              and(
+                inArray(categories.id, categoryIdsArr),
+                isNull(categories.deletedAt),
+              ),
+            )
           : db
-              .select({ id: sql`NULL` })
-              .from(categories)
-              .where(sql`1 = 0`),
+            .select({ id: sql`NULL` })
+            .from(categories)
+            .where(sql`1 = 0`),
 
         // 3. Featured products
         featuredIdsArr.length > 0
           ? db
-              .select(buildProductSelect())
-              .from(products)
-              .where(
-                and(
-                  inArray(products.id, featuredIdsArr),
-                  eq(products.isActive, true),
-                  isNull(products.deletedAt),
-                ),
-              )
+            .select(buildProductSelect())
+            .from(products)
+            .where(
+              and(
+                inArray(products.id, featuredIdsArr),
+                eq(products.isActive, true),
+                isNull(products.deletedAt),
+              ),
+            )
           : db
-              .select({ id: sql`NULL` })
-              .from(products)
-              .where(sql`1 = 0`),
+            .select({ id: sql`NULL` })
+            .from(products)
+            .where(sql`1 = 0`),
       ]);
 
       // Create lookup maps
@@ -543,9 +544,15 @@ app.get(
             sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = true`,
           )
           .orderBy(pages.title),
+
+        // 4. Currency settings
+        db
+          .select({ key: settings.key, value: settings.value })
+          .from(settings)
+          .where(eq(settings.category, "currency")),
       ]);
 
-      const [analyticsResults, settingsResults, categoriesData, pagesData] =
+      const [analyticsResults, settingsResults, categoriesData, pagesData, currencyResults] =
         batchResults;
 
       // === PROCESS ANALYTICS ===
@@ -570,12 +577,12 @@ app.get(
       );
 
       // === PROCESS HEADER ===
-      const settings = settingsResults[0] as any;
+      const siteSettingsData = settingsResults[0] as any;
       let headerData: any = null;
       let navigationData: NestedNavigationItem[] = [];
 
-      if (settings?.headerConfig) {
-        const headerConfig = JSON.parse(settings.headerConfig);
+      if (siteSettingsData?.headerConfig) {
+        const headerConfig = JSON.parse(siteSettingsData.headerConfig);
 
         // Normalize social links
         let socialLinks: SocialLink[] = [];
@@ -660,8 +667,8 @@ app.get(
       // === PROCESS FOOTER ===
       let footerData: any = null;
 
-      if (settings?.footerConfig) {
-        const footerConfig = JSON.parse(settings.footerConfig);
+      if (siteSettingsData?.footerConfig) {
+        const footerConfig = JSON.parse(siteSettingsData.footerConfig);
 
         // Normalize social links
         let footerSocialLinks: SocialLink[] = [];
@@ -709,6 +716,18 @@ app.get(
         };
       }
 
+      // === PROCESS CURRENCY ===
+      const currencyMap = Object.fromEntries(
+        (currencyResults as any[]).map((r: any) => [r.key, r.value]),
+      );
+      const currencyData = {
+        code: currencyMap.currency_code ?? "BDT",
+        symbol: currencyMap.currency_symbol ?? "\u09F3",
+        usdExchangeRate: currencyMap.usd_exchange_rate
+          ? parseFloat(currencyMap.usd_exchange_rate)
+          : 1,
+      };
+
       // === RETURN CONSOLIDATED RESPONSE ===
       return c.json({
         success: true,
@@ -717,6 +736,7 @@ app.get(
           header: headerData,
           navigation: navigationData,
           footer: footerData,
+          currency: currencyData,
         },
       });
     } catch (error) {

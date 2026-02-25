@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { ProductFormValues } from "./types";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface PricingAvailabilitySectionProps {
   form: UseFormReturn<ProductFormValues>;
@@ -33,6 +34,7 @@ interface PricingAvailabilitySectionProps {
 export function PricingAvailabilitySection({
   form,
 }: PricingAvailabilitySectionProps) {
+  const { symbol } = useCurrency();
   const discountType = form.watch("discountType");
 
   return (
@@ -136,7 +138,7 @@ export function PricingAvailabilitySection({
                 name="discountAmount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Discount Amount (৳)</FormLabel>
+                    <FormLabel>Discount Amount ({symbol})</FormLabel>
                     <FormControl>
                       <Input
                         type="number"

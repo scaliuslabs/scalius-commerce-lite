@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, X } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
 import type { Product } from "./types";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface ProductSearchProps {
   searchTerm: string;
@@ -42,6 +43,7 @@ export function ProductSearch({
   calculateDiscountedPrice,
 }: ProductSearchProps) {
   const { refs } = useOrderForm();
+  const { symbol } = useCurrency();
   const [productSearchOpen, setProductSearchOpen] = React.useState(false);
 
   return (
@@ -123,10 +125,10 @@ export function ProductSearch({
                           {product.discountPercentage ? (
                             <>
                               <span className="line-through text-xs text-muted-foreground">
-                                ৳{product.price.toLocaleString()}
+                                {symbol}{product.price.toLocaleString()}
                               </span>
                               <span className="text-xs text-green-600 font-medium">
-                                ৳
+                                {symbol}
                                 {parseFloat(
                                   calculateDiscountedPrice(product, null)
                                 ).toLocaleString()}
@@ -137,7 +139,7 @@ export function ProductSearch({
                             </>
                           ) : (
                             <span className="text-xs">
-                              ৳{product.price.toLocaleString()}
+                              {symbol}{product.price.toLocaleString()}
                             </span>
                           )}
                         </div>

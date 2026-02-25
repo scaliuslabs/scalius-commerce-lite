@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Loader2, X, Save } from "lucide-react";
 import { variantFormSchema, type VariantFormValues, type ProductVariant } from "./types";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface VariantFormRowProps {
   initialData?: ProductVariant;
@@ -29,6 +30,7 @@ export function VariantFormRow({
   onCancel,
   isSubmitting,
 }: VariantFormRowProps) {
+  const { symbol } = useCurrency();
   const isEditMode = !!initialData?.id;
 
   const form = useForm<VariantFormValues>({
@@ -206,7 +208,7 @@ export function VariantFormRow({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="percentage">%</SelectItem>
-                        <SelectItem value="flat">৳</SelectItem>
+                        <SelectItem value="flat">{symbol}</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormControl>

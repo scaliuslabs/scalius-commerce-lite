@@ -17,12 +17,14 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import type { ProductFormValues } from "./types";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface PricingCardProps {
   form: UseFormReturn<ProductFormValues>;
 }
 
 export function PricingCard({ form }: PricingCardProps) {
+  const { symbol } = useCurrency();
   const discountType = form.watch("discountType");
 
   return (
@@ -135,7 +137,7 @@ export function PricingCard({ form }: PricingCardProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs text-muted-foreground font-normal">
-                      Amount (৳)
+                      Amount ({symbol})
                     </FormLabel>
                     <FormControl>
                       <Input

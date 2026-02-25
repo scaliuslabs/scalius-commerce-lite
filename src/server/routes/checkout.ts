@@ -7,7 +7,8 @@
 import { Hono } from "hono";
 import { getStripeSettings, getSSLCommerzSettings } from "@/lib/payment/gateway-settings";
 import { getDb } from "@/db";
-import { siteSettings } from "@/db/schema";
+import { siteSettings, settings } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -33,15 +34,23 @@ app.get("/config", async (c) => {
     const db = getDb(c.env);
     const kv: KVNamespace | undefined = (c.env as any).CACHE;
 
-    // Fetch gateway settings + site settings in parallel (DB → KV cached)
-    const [stripeSettings, sslSettings, siteSettingsRow] = await Promise.all([
+    // Fetch gateway settings + site settings + currency settings in parallel (DB → KV cached)
+    const [stripeSettings, sslSettings, siteSettingsRow, currencyRows] = await Promise.all([
       getStripeSettings(db, kv).catch(() => null),
       getSSLCommerzSettings(db, kv).catch(() => null),
       db.select({
         guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
         authVerificationMethod: siteSettings.authVerificationMethod,
       }).from(siteSettings).limit(1).then((rows) => rows[0] ?? null).catch(() => null),
+      db.select({ key: settings.key, value: settings.value })
+        .from(settings)
+        .where(eq(settings.category, "currency"))
+        .all()
+        .catch(() => [] as { key: string; value: string }[]),
     ]);
+
+    const currencyMap = Object.fromEntries(currencyRows.map((r) => [r.key, r.value]));
+    const localCurrencyCode = (currencyMap.currency_code ?? "bdt").toLowerCase();
 
     const gateways: Array<{
       id: string;
@@ -56,7 +65,7 @@ app.get("/config", async (c) => {
         id: "stripe",
         name: "Card Payment",
         publishableKey: stripeSettings.publishableKey,
-        currencies: ["bdt", "usd", "eur", "gbp"],
+        currencies: [localCurrencyCode, "usd", "eur", "gbp"],
       });
     }
 
@@ -64,7 +73,7 @@ app.get("/config", async (c) => {
       gateways.push({
         id: "sslcommerz",
         name: "Online Payment",
-        currencies: ["bdt"],
+        currencies: [localCurrencyCode],
         sandbox: sslSettings.sandbox,
       });
     }
@@ -73,7 +82,7 @@ app.get("/config", async (c) => {
     gateways.push({
       id: "cod",
       name: "Cash on Delivery",
-      currencies: ["bdt"],
+      currencies: [localCurrencyCode],
     });
 
     return c.json({

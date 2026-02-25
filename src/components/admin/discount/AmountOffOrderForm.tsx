@@ -45,6 +45,7 @@ import {
   TooltipTrigger,
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
+import { useCurrency } from "@/hooks/useCurrency";
 
 // --- Form Schema (Unchanged) ---
 const formSchema = z
@@ -185,6 +186,7 @@ export function AmountOffOrderForm({
   onCancel,
 }: AmountOffOrderFormProps) {
   const { toast } = useToast();
+  const { symbol } = useCurrency();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormValues>({
@@ -391,7 +393,7 @@ export function AmountOffOrderForm({
                             Percentage (%)
                           </SelectItem>
                           <SelectItem value="fixed_amount">
-                            Fixed Amount (৳)
+                            Fixed Amount ({symbol})
                           </SelectItem>
                         </SelectContent>
                       </Select>
@@ -427,7 +429,7 @@ export function AmountOffOrderForm({
                           )}
                           {valueType === "fixed_amount" && (
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
-                              ৳
+                              {symbol}
                             </span>
                           )}
                         </div>
@@ -456,7 +458,7 @@ export function AmountOffOrderForm({
                     <FormControl>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
-                          ৳
+                          {symbol}
                         </span>
                         <Input
                           type="number"
@@ -692,12 +694,12 @@ export function AmountOffOrderForm({
                 <span className="font-medium">
                   {valueType === "percentage"
                     ? `${form.watch("discountValue") || 0}% off entire order`
-                    : `৳${form.watch("discountValue") || 0} off entire order`}
+                    : `${symbol}${form.watch("discountValue") || 0} off entire order`}
                 </span>
                 <span className="text-muted-foreground">Min. purchase</span>
                 <span className="font-medium">
                   {form.watch("minPurchaseAmount")
-                    ? `৳${form.watch("minPurchaseAmount")}`
+                    ? `${symbol}${form.watch("minPurchaseAmount")}`
                     : "None"}
                 </span>
                 <span className="text-muted-foreground">Usage limit</span>

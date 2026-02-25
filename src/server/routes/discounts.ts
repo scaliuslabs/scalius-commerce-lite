@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { eq, sql, and, isNull, count, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { getCurrencyConfig } from "@/lib/currency";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -142,6 +143,7 @@ async function isDiscountValid(
   total?: number,
   cartItems: any[] = [],
   customerPhone?: string,
+  currencySymbol: string = "\u09F3",
 ) {
   // Get current timestamp
   const currentTime = Math.floor(Date.now() / 1000);
@@ -178,7 +180,7 @@ async function isDiscountValid(
   ) {
     return {
       valid: false,
-      error: `Minimum purchase amount of ৳${discount.minPurchaseAmount} not met`,
+      error: `Minimum purchase amount of ${currencySymbol}${discount.minPurchaseAmount} not met`,
       minPurchaseAmount: discount.minPurchaseAmount,
     };
   }
@@ -494,6 +496,9 @@ app.get("/validate", async (c) => {
       }
     }
 
+    // Fetch currency config for dynamic symbol
+    const currencyConfig = await getCurrencyConfig(db);
+
     // Validate the discount code
     const validationResult = await isDiscountValid(
       db,
@@ -501,6 +506,7 @@ app.get("/validate", async (c) => {
       total ? Number(total) : undefined,
       cartItems,
       customerPhone,
+      currencyConfig.symbol,
     );
 
     // If valid, calculate the discount amount

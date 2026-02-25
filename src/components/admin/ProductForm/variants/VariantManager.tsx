@@ -1,6 +1,7 @@
 // src/components/admin/ProductForm/variants/VariantManager.tsx
 
 import { useState, useEffect, useMemo } from "react";
+import { useCurrency } from "@/hooks/useCurrency";
 import {
   Card,
   CardContent,
@@ -49,6 +50,7 @@ export function VariantManager({
   productSlug,
   variants,
 }: VariantManagerProps) {
+  const { symbol } = useCurrency();
   const [localVariants, setLocalVariants] =
     useState<ProductVariant[]>(variants);
 
@@ -300,7 +302,7 @@ export function VariantManager({
                   <span>
                     Avg:{" "}
                     <span className="font-medium text-foreground">
-                      ৳{stats.averagePrice.toFixed(2)}
+                      {symbol}{stats.averagePrice.toFixed(2)}
                     </span>
                   </span>
 

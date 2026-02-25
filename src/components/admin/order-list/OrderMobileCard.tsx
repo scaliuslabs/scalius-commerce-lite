@@ -18,6 +18,7 @@ import { OrderStatusSelector } from "./OrderStatusSelector";
 import { OrderItemsPopover } from "./OrderItemsPopover";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { FraudCheckIndicator } from "./FraudCheckIndicator";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface OrderMobileCardProps {
   order: OrderListItem;
@@ -86,6 +87,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
   onStatusUpdate,
   onShipmentStatusUpdated,
 }: OrderMobileCardProps) {
+  const { symbol } = useCurrency();
   return (
     <Card
       className={`mb-3 overflow-hidden border transition-all duration-200 ${
@@ -142,11 +144,11 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
           </div>
           <div className="text-right">
             <div className="text-base font-bold text-[var(--foreground)]">
-              ৳{order.totalAmount.toLocaleString()}
+              {symbol}{order.totalAmount.toLocaleString()}
             </div>
             {(order.discountAmount ?? 0) > 0 && (
               <Badge variant="secondary" className="text-xs mt-1">
-                -৳{(order.discountAmount ?? 0).toLocaleString()}
+                -{symbol}{(order.discountAmount ?? 0).toLocaleString()}
               </Badge>
             )}
             <div className="flex items-center justify-end gap-1 mt-1">

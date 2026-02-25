@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
 import { Badge } from "../../ui/badge";
 import { LoaderCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrency } from "@/hooks/useCurrency";
 
 // Type for the items fetched for the popover
 type PopoverOrderItem = {
@@ -27,6 +28,7 @@ export function OrderItemsPopover({
   itemCount,
 }: OrderItemsPopoverProps) {
   const { toast } = useToast();
+  const { symbol } = useCurrency();
   const [isOpen, setIsOpen] = React.useState(false);
   const [items, setItems] = React.useState<PopoverOrderItem[] | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -102,10 +104,10 @@ export function OrderItemsPopover({
                   </div>
                   <div className="text-right shrink-0 whitespace-nowrap">
                     <p className="text-[var(--muted-foreground)]">
-                      {item.quantity} x ৳{item.price.toLocaleString()}
+                      {item.quantity} x {symbol}{item.price.toLocaleString()}
                     </p>
                     <p className="font-medium text-[var(--foreground)]">
-                      ৳{(item.quantity * item.price).toLocaleString()}
+                      {symbol}{(item.quantity * item.price).toLocaleString()}
                     </p>
                   </div>
                 </div>

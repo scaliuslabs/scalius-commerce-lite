@@ -473,8 +473,8 @@ const createOrderSchema = z.object({
   city: z.string().min(1, "City is required"),
   zone: z.string().min(1, "Zone is required"),
   area: z.string().nullable(),
-  cityName: z.string().optional(),
-  zoneName: z.string().optional(),
+  cityName: z.string().nullable().optional(),
+  zoneName: z.string().nullable().optional(),
   areaName: z.string().nullable().optional(),
   notes: z
     .string()
@@ -566,7 +566,7 @@ app.post("/", async (c) => {
           .from(deliveryLocations)
           .where(
             and(
-              sql`${deliveryLocations.id} IN (${locationIds.join(",")})`,
+              sql`${deliveryLocations.id} IN ${locationIds}`,
               isNull(deliveryLocations.deletedAt),
             ),
           ),
@@ -1020,8 +1020,8 @@ const updateOrderSchema = z.object({
   city: z.string().min(1, "City is required"),
   zone: z.string().min(1, "Zone is required"),
   area: z.string().nullable(),
-  cityName: z.string().optional(),
-  zoneName: z.string().optional(),
+  cityName: z.string().nullable().optional(),
+  zoneName: z.string().nullable().optional(),
   areaName: z.string().nullable().optional(),
   notes: z
     .string()
@@ -1070,7 +1070,7 @@ app.put("/:id", async (c) => {
       .from(deliveryLocations)
       .where(
         and(
-          sql`${deliveryLocations.id} IN (${locationIds.join(",")})`,
+          sql`${deliveryLocations.id} IN ${locationIds}`,
           isNull(deliveryLocations.deletedAt),
         ),
       );

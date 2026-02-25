@@ -5,6 +5,7 @@ import { StorefrontUrlBuilder } from "../StorefrontUrlBuilder";
 import { SecuritySettingsBuilder } from "../SecuritySettingsBuilder";
 import EmailSettingsForm from "./EmailSettingsForm";
 import AuthSettingsBuilder from "./AuthSettingsBuilder";
+import CurrencySettingsBuilder from "./CurrencySettingsBuilder";
 import { Loader2 } from "lucide-react";
 import type { HeaderConfig } from "../header-builder/types";
 import type { FooterConfig } from "../footer-builder/types";
@@ -39,6 +40,7 @@ const tabs = [
     { value: "seo", label: "SEO" },
     { value: "storefront", label: "Storefront" },
     { value: "email", label: "Email" },
+    { value: "currency", label: "Currency" },
     { value: "auth", label: "Auth & Access" },
     { value: "security", label: "Security" },
 ] as const;
@@ -116,6 +118,10 @@ export default function GeneralSettingsPage({
 
                     <TabsContent value="email" className="mt-0">
                         {mountedTabs.has("email") && <EmailSettingsForm />}
+                    </TabsContent>
+
+                    <TabsContent value="currency" className="mt-0">
+                        {mountedTabs.has("currency") && <CurrencySettingsBuilder />}
                     </TabsContent>
 
                     <TabsContent value="auth" className="mt-0">
