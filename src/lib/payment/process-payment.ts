@@ -10,6 +10,7 @@ import {
   paymentPlans,
   webhookEvents,
   PaymentStatus,
+  OrderStatus,
   InventoryPool,
 } from "@/db/schema";
 import type { Database } from "@/db";
@@ -44,6 +45,7 @@ export async function processPaymentConfirmed(
         paidAmount: orders.paidAmount,
         balanceDue: orders.balanceDue,
         paymentStatus: orders.paymentStatus,
+        status: orders.status,
         inventoryPool: orders.inventoryPool,
       })
       .from(orders)
@@ -110,14 +112,20 @@ export async function processPaymentConfirmed(
     });
 
     // 2. Update order totals and payment status
+    const orderUpdates: any = {
+      paidAmount: newPaidAmount,
+      balanceDue: newBalanceDue,
+      paymentStatus: newPaymentStatus,
+      updatedAt: sql`unixepoch()`,
+    };
+
+    if (order.status === OrderStatus.INCOMPLETE) {
+      orderUpdates.status = OrderStatus.PENDING;
+    }
+
     await db
       .update(orders)
-      .set({
-        paidAmount: newPaidAmount,
-        balanceDue: newBalanceDue,
-        paymentStatus: newPaymentStatus,
-        updatedAt: sql`unixepoch()`,
-      })
+      .set(orderUpdates)
       .where(eq(orders.id, params.orderId));
 
     // 3. Update payment plan if this is a deposit or balance payment

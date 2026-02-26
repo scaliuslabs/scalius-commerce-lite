@@ -44,9 +44,8 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         baseUrl: this.credentials.baseUrl.trim(),
       };
 
-      const testUrl = this.credentials.baseUrl.endsWith("/")
-        ? `${this.credentials.baseUrl}status_by_invoice/test`
-        : `${this.credentials.baseUrl}/status_by_invoice/test`;
+      const baseUrl = this.credentials.baseUrl.replace(/\/$/, "");
+      const testUrl = `${baseUrl}/status_by_invoice/test`;
 
       const response = await fetch(testUrl, {
         method: "GET",
@@ -80,9 +79,8 @@ export class SteadfastProvider implements DeliveryProviderInterface {
     } catch (error) {
       return {
         success: false,
-        message: `Connection failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        message: `Connection failed: ${error instanceof Error ? error.message : String(error)
+          }`,
       };
     }
   }
@@ -112,9 +110,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
       const codAmount =
         options?.codAmount !== undefined
           ? options.codAmount
-          : order.totalAmount +
-            order.shippingCharge -
-            (order.discountAmount || 0);
+          : (order.balanceDue ?? (order.totalAmount - (order.paidAmount || 0)));
 
       // Construct the full address
       const addressParts = [
@@ -134,9 +130,9 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         note: options?.note || order.notes || undefined,
       };
 
-      const createOrderUrl = this.credentials.baseUrl.endsWith("/")
-        ? `${this.credentials.baseUrl}create_order`
-        : `${this.credentials.baseUrl}/create_order`;
+      // Ensure baseUrl does not eagerly have a trailing slash, or handle it cleanly.
+      const baseUrl = this.credentials.baseUrl.replace(/\/$/, "");
+      const createOrderUrl = `${baseUrl}/create_order`;
 
       const response = await fetch(createOrderUrl, {
         method: "POST",
@@ -150,9 +146,21 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         try {
           responseData = JSON.parse(responseText);
         } catch (jsonError) {
+          // If it's an HTML error page from Laravel, try to extract the error message
+          let errorMessage = "Invalid JSON response";
+          if (responseText.includes("<!DOCTYPE html>")) {
+            const titleMatch = responseText.match(/<title>(.*?)<\/title>/);
+            const messageMatch = responseText.match(/"message"\s*:\s*"([^"]+)"/); // Sometimes embedded in JS
+            if (messageMatch && messageMatch[1]) {
+              errorMessage = `Server Error: ${messageMatch[1]}`;
+            } else if (titleMatch && titleMatch[1]) {
+              errorMessage = `HTML Server Error: ${titleMatch[1]}`;
+            }
+          }
+          console.error(`[SteadfastAPI] Shipment failed. HTML Error:`, responseText);
           return {
             success: false,
-            message: `Invalid JSON response: ${responseText.substring(0, 100)}...`,
+            message: `${errorMessage}`,
           };
         }
       } catch (parseError) {
@@ -187,9 +195,8 @@ export class SteadfastProvider implements DeliveryProviderInterface {
     } catch (error) {
       return {
         success: false,
-        message: `Failed to create shipment: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        message: `Failed to create shipment: ${error instanceof Error ? error.message : String(error)
+          }`,
       };
     }
   }

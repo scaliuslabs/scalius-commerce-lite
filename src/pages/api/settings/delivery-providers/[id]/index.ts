@@ -108,3 +108,29 @@ export const POST: APIRoute = async ({ params }) => {
     return safeErrorResponse(error, 500);
   }
 };
+
+export const DELETE: APIRoute = async ({ params }) => {
+  try {
+    const { id } = params;
+
+    if (!id) {
+      return new Response(
+        JSON.stringify({ error: "Provider ID is required" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const { db } = await import("@/db");
+    const { deliveryProviders } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+
+    await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return safeErrorResponse(error, 500);
+  }
+};

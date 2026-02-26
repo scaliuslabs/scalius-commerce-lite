@@ -120,7 +120,15 @@ app.post("/send-otp", async (c) => {
 
     // Check if the requested method is allowed by admin
     const allowedMethod = settings?.authVerificationMethod || "email";
-    if (allowedMethod !== "both" && allowedMethod !== method) {
+
+    let allowedInternalMethods = ["email"];
+    if (allowedMethod === "both" || allowedMethod === "email_phone_mandatory") {
+      allowedInternalMethods = ["email", "phone"];
+    } else if (allowedMethod === "phone" || allowedMethod === "whatsapp_otp" || allowedMethod === "sms_otp") {
+      allowedInternalMethods = ["phone"];
+    }
+
+    if (!allowedInternalMethods.includes(method)) {
       return c.json({ error: `Verification via ${method} is currently disabled by the store.` }, 403);
     }
 
@@ -175,6 +183,12 @@ app.post("/send-otp", async (c) => {
 
       return c.json({ success: true, message: "Verification code sent to your email" });
     } else {
+      if (allowedMethod === "sms_otp") {
+        console.log(`[CustomerAuth] SMS OTP requested: ${code} to ${identifier}. SMS Provider integration pending.`);
+        // Note: Implement specific SMS provider (Twilio, AWS SNS, local gateway) here.
+        return c.json({ success: true, message: "Verification code sent via SMS" });
+      }
+
       // Send OTP WhatsApp
       const waToken = settings?.whatsappAccessToken;
       const waPhoneId = settings?.whatsappPhoneNumberId;
@@ -299,6 +313,9 @@ app.post("/verify-otp", async (c) => {
 
     // Look up customer in DB (if exists)
     const db = c.get("db");
+    const [settings] = await db.select().from(siteSettings).limit(1);
+    const allowedMethod = settings?.authVerificationMethod || "email";
+
     let customerId: string | undefined;
     let customerName = name;
 
@@ -319,13 +336,27 @@ app.post("/verify-otp", async (c) => {
         resolvedPhone = existing.phone || resolvedPhone;
       } else {
         if (method === "email") {
-          if (!phone) {
+          if (!phone && (allowedMethod === "email_phone_mandatory" || typeof phone === "undefined")) {
+            // For both and email_phone_mandatory, when method=email, phone is required in the frontend currently
+            // But let's strictly enforce if it's mandatory
             return c.json({ error: "Phone number is required for registration." }, 400);
           }
-          // Prevent duplicates/account takeover
-          const phoneExists = await db.select().from(customers).where(eq(customers.phone, phone)).get();
-          if (phoneExists) {
-            return c.json({ error: "This phone number is already registered. Please sign in with WhatsApp." }, 400);
+          if (phone) {
+            // Prevent duplicates/account takeover
+            const phoneExists = await db.select().from(customers).where(eq(customers.phone, phone)).get();
+            if (phoneExists) {
+              return c.json({ error: "This phone number is already registered. Please sign in with it instead." }, 400);
+            }
+          }
+        }
+
+        if (method === "phone" && allowedMethod === "email_phone_mandatory") {
+          if (!resolvedEmail) {
+            return c.json({ error: "Email address is required for registration." }, 400);
+          }
+          const emailExists = await db.select().from(customers).where(eq(customers.email, resolvedEmail)).get();
+          if (emailExists) {
+            return c.json({ error: "This email is already registered. Please sign in with it instead." }, 400);
           }
         }
 

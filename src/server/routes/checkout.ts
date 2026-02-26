@@ -41,6 +41,9 @@ app.get("/config", async (c) => {
       db.select({
         guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
         authVerificationMethod: siteSettings.authVerificationMethod,
+        checkoutMode: siteSettings.checkoutMode,
+        partialPaymentEnabled: siteSettings.partialPaymentEnabled,
+        partialPaymentAmount: siteSettings.partialPaymentAmount,
       }).from(siteSettings).limit(1).then((rows) => rows[0] ?? null).catch(() => null),
       db.select({ key: settings.key, value: settings.value })
         .from(settings)
@@ -60,7 +63,9 @@ app.get("/config", async (c) => {
       sandbox?: boolean;
     }> = [];
 
-    if (stripeSettings?.enabled && stripeSettings.publishableKey) {
+    const checkoutMode = siteSettingsRow?.checkoutMode ?? "all";
+
+    if (stripeSettings?.enabled && stripeSettings.publishableKey && checkoutMode !== "guest_cod_only") {
       gateways.push({
         id: "stripe",
         name: "Card Payment",
@@ -69,7 +74,7 @@ app.get("/config", async (c) => {
       });
     }
 
-    if (sslSettings?.enabled) {
+    if (sslSettings?.enabled && checkoutMode !== "guest_cod_only") {
       gateways.push({
         id: "sslcommerz",
         name: "Online Payment",
@@ -78,17 +83,22 @@ app.get("/config", async (c) => {
       });
     }
 
-    // COD is always available as a fallback
-    gateways.push({
-      id: "cod",
-      name: "Cash on Delivery",
-      currencies: [localCurrencyCode],
-    });
+    // COD is available unless gateways_only mode is strictly enforced
+    if (checkoutMode !== "gateways_only") {
+      gateways.push({
+        id: "cod",
+        name: "Cash on Delivery",
+        currencies: [localCurrencyCode],
+      });
+    }
 
     return c.json({
       gateways,
       guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,
       authVerificationMethod: siteSettingsRow?.authVerificationMethod ?? "email",
+      checkoutMode,
+      partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
+      partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0,
     });
   } catch (error) {
     console.error("Error fetching checkout config:", error);
@@ -97,6 +107,9 @@ app.get("/config", async (c) => {
       gateways: [{ id: "cod", name: "Cash on Delivery", currencies: ["bdt"] }],
       guestCheckoutEnabled: true,
       authVerificationMethod: "email",
+      checkoutMode: "all",
+      partialPaymentEnabled: false,
+      partialPaymentAmount: 0,
     });
   }
 });

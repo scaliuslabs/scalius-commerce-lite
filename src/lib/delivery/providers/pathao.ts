@@ -65,8 +65,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          `Failed to get access token: ${
-            errorData.message || response.statusText
+          `Failed to get access token: ${errorData.message || response.statusText
           }`,
         );
       }
@@ -82,8 +81,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       return this.accessToken;
     } catch (error) {
       throw new Error(
-        `Failed to obtain Pathao access token: ${
-          error instanceof Error ? error.message : String(error)
+        `Failed to obtain Pathao access token: ${error instanceof Error ? error.message : String(error)
         }`,
       );
     }
@@ -134,9 +132,8 @@ export class PathaoProvider implements DeliveryProviderInterface {
     } catch (error) {
       return {
         success: false,
-        message: `Connection failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        message: `Connection failed: ${error instanceof Error ? error.message : String(error)
+          }`,
       };
     }
   }
@@ -156,9 +153,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       const amountToCollect =
         options?.codAmount !== undefined
           ? options.codAmount
-          : order.totalAmount +
-            order.shippingCharge -
-            (order.discountAmount || 0);
+          : (order.balanceDue ?? (order.totalAmount - (order.paidAmount || 0)));
 
       if (!order.city || !order.zone) {
         return {
@@ -177,9 +172,10 @@ export class PathaoProvider implements DeliveryProviderInterface {
       );
 
       if (!externalLocationIds.city || !externalLocationIds.zone) {
+        console.error(`[PathaoProvider] Missing external location mappings. City: ${order.city} -> ${externalLocationIds.city}, Zone: ${order.zone} -> ${externalLocationIds.zone}, Area: ${order.area} -> ${externalLocationIds.area}`);
         return {
           success: false,
-          message: `Missing external location IDs: ${!externalLocationIds.city ? "city" : ""} ${!externalLocationIds.zone ? "zone" : ""}`,
+          message: `Pathao requires precisely mapped numeric location IDs. Missing mapping for: ${!externalLocationIds.city ? "city" : ""} ${!externalLocationIds.zone ? "zone" : ""}. Please configure these in the Admin Dashboard locations view.`,
         };
       }
 
@@ -246,9 +242,8 @@ export class PathaoProvider implements DeliveryProviderInterface {
     } catch (error) {
       return {
         success: false,
-        message: `Failed to create shipment: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        message: `Failed to create shipment: ${error instanceof Error ? error.message : String(error)
+          }`,
       };
     }
   }
