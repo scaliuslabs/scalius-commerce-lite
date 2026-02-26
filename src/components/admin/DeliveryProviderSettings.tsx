@@ -32,6 +32,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Loader2,
   Plus,
   Pencil,
@@ -396,8 +402,8 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                   type="button"
                   onClick={() => handleSelect(provider)}
                   className={`w-full text-left px-4 py-3 transition-colors hover:bg-muted/50 ${selectedProvider?.id === provider.id
-                      ? "bg-muted/60 border-l-2 border-l-primary"
-                      : "border-l-2 border-l-transparent"
+                    ? "bg-muted/60 border-l-2 border-l-primary"
+                    : "border-l-2 border-l-transparent"
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -807,6 +813,41 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                   </Button>
                 </div>
               )}
+
+              {/* Integration Guide Section */}
+              <div className="pt-6 border-t border-border mt-6">
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="guide">
+                    <AccordionTrigger className="text-sm font-medium text-muted-foreground uppercase tracking-wider py-2 hover:no-underline">
+                      Integration Guide & Documentation
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-4 text-muted-foreground">
+                      {formData.type === "pathao" ? (
+                        <div className="space-y-4">
+                          <p><strong className="text-foreground">Pathao Courier Integration</strong></p>
+                          <p>To use Pathao, you need to configure your API credentials and accurately map your internal delivery locations to Pathao's numeric IDs.</p>
+                          <ul className="list-disc pl-5 space-y-2">
+                            <li><strong className="text-foreground">Credentials:</strong> Obtain your Client ID, Client Secret, Username, and Password from the Pathao Merchant Portal.</li>
+                            <li><strong className="text-foreground">Store ID:</strong> Your Pathao Store ID where shipments will be originated.</li>
+                            <li><strong className="text-foreground">Locations Mapping (CRITICAL):</strong> Pathao requires precise numeric IDs for City, Zone, and Area. If you do not configure these in the <a href="/admin/settings/delivery-locations" className="text-primary hover:underline">Delivery Locations</a> page (in the <em>External IDs</em> JSON field mapping such as <code>{`{"pathao": 123}`}</code>), shipments will fail to create.</li>
+                          </ul>
+                          <p>Common IDs: Dhaka City (1), Chittagong City (2). Please refer to Pathao API docs for your specific zone and area IDs.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <p><strong className="text-foreground">Steadfast Courier Integration</strong></p>
+                          <p>To use Steadfast, provide your API Key and Secret Key obtained from the Steadfast Merchant Dashboard.</p>
+                          <ul className="list-disc pl-5 space-y-2">
+                            <li><strong className="text-foreground">Credentials:</strong> Generate <code>Api-Key</code> and <code>Secret-Key</code> from the Steadfast portal.</li>
+                            <li><strong className="text-foreground">Base URL:</strong> Normally <code>https://portal.steadfast.com.bd/api/v1</code> or <code>https://portal.packzy.com/api/v1</code> depending on your account.</li>
+                            <li><strong className="text-foreground">Location mapping:</strong> Steadfast does not strictly require predefined numeric area codes in the same way, but ensuring full text addresses are passed covers most routing.</li>
+                          </ul>
+                        </div>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
             </CardContent>
           </>
         )}

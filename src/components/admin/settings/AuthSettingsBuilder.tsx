@@ -27,10 +27,11 @@ export default function AuthSettingsBuilder() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    const [authVerificationMethod, setAuthVerificationMethod] = useState<
-        "email" | "phone" | "both"
-    >("email");
+    const [authVerificationMethod, setAuthVerificationMethod] = useState<string>("email");
     const [guestCheckoutEnabled, setGuestCheckoutEnabled] = useState(true);
+    const [checkoutMode, setCheckoutMode] = useState<string>("all");
+    const [partialPaymentEnabled, setPartialPaymentEnabled] = useState(false);
+    const [partialPaymentAmount, setPartialPaymentAmount] = useState<number>(0);
 
     const [whatsappAccessToken, setWhatsappAccessToken] = useState("");
     const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState("");
@@ -52,6 +53,9 @@ export default function AuthSettingsBuilder() {
                 setWhatsappAccessToken(data.whatsappAccessToken || "");
                 setWhatsappPhoneNumberId(data.whatsappPhoneNumberId || "");
                 setWhatsappTemplateName(data.whatsappTemplateName || "auth_otp");
+                setCheckoutMode(data.checkoutMode || "all");
+                setPartialPaymentEnabled(data.partialPaymentEnabled || false);
+                setPartialPaymentAmount(data.partialPaymentAmount || 0);
                 setAccessTokenConfigured(!!data.whatsappAccessToken);
             }
         } catch {
@@ -75,6 +79,9 @@ export default function AuthSettingsBuilder() {
                     whatsappAccessToken,
                     whatsappPhoneNumberId,
                     whatsappTemplateName,
+                    checkoutMode,
+                    partialPaymentEnabled,
+                    partialPaymentAmount,
                 }),
             });
 
@@ -132,9 +139,7 @@ export default function AuthSettingsBuilder() {
                         </p>
                         <Select
                             value={authVerificationMethod}
-                            onValueChange={(val: "email" | "phone" | "both") =>
-                                setAuthVerificationMethod(val)
-                            }
+                            onValueChange={(val) => setAuthVerificationMethod(val)}
                         >
                             <SelectTrigger className="w-full max-w-xs">
                                 <SelectValue placeholder="Select mode" />
@@ -143,14 +148,69 @@ export default function AuthSettingsBuilder() {
                                 <SelectItem value="email">Email Only</SelectItem>
                                 <SelectItem value="phone">WhatsApp Only</SelectItem>
                                 <SelectItem value="both">Both (User's Choice)</SelectItem>
+                                <SelectItem value="email_phone_mandatory">Email + WhatsApp (Mandatory)</SelectItem>
+                                <SelectItem value="sms_otp">SMS OTP (Custom Integration)</SelectItem>
                             </SelectContent>
                         </Select>
+                    </div>
+
+                    <div className="space-y-1.5 pt-4 border-t border-border">
+                        <Label>Checkout Mode</Label>
+                        <p className="text-xs text-muted-foreground mb-1.5">
+                            Determine if customers are forced to use specific payment methods or flows.
+                        </p>
+                        <Select
+                            value={checkoutMode}
+                            onValueChange={(val) => setCheckoutMode(val)}
+                        >
+                            <SelectTrigger className="w-full max-w-xs">
+                                <SelectValue placeholder="Select checkout mode" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Standard (All Methods)</SelectItem>
+                                <SelectItem value="guest_cod_only">Guest COD Only (Fastest)</SelectItem>
+                                <SelectItem value="gateways_only">Online Gateways Only (No COD)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-4 pt-4 border-t border-border">
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <Label>Partial Payment / Advance Deposit</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Require customers to pay a specific amount upfront to confirm their order. Useful for COD orders.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={partialPaymentEnabled}
+                                onCheckedChange={setPartialPaymentEnabled}
+                            />
+                        </div>
+
+                        {partialPaymentEnabled && (
+                            <div className="space-y-1.5 pl-4 border-l-2 border-primary/20">
+                                <Label htmlFor="partial-payment-amount">Advance Amount Required</Label>
+                                <Input
+                                    id="partial-payment-amount"
+                                    type="number"
+                                    min="0"
+                                    className="max-w-xs"
+                                    placeholder="e.g. 200"
+                                    value={partialPaymentAmount}
+                                    onChange={(e) => setPartialPaymentAmount(Number(e.target.value))}
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Customers must pay this flat amount via an online gateway to successfully place an order.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>
 
             {(authVerificationMethod === "phone" ||
-                authVerificationMethod === "both") && (
+                authVerificationMethod === "both" || authVerificationMethod === "email_phone_mandatory") && (
                     <Card className="border-green-500/20 dark:bg-green-950/10">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-base flex items-center gap-2">

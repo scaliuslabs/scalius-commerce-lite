@@ -23,6 +23,9 @@ export const GET: APIRoute = async () => {
                 whatsappAccessToken: settings.whatsappAccessToken ? MASKED_VALUE : "",
                 whatsappPhoneNumberId: settings.whatsappPhoneNumberId || "",
                 whatsappTemplateName: settings.whatsappTemplateName || "",
+                checkoutMode: settings.checkoutMode,
+                partialPaymentEnabled: settings.partialPaymentEnabled,
+                partialPaymentAmount: settings.partialPaymentAmount,
             }),
             {
                 status: 200,
@@ -47,12 +50,18 @@ export const POST: APIRoute = async ({ request }) => {
             whatsappAccessToken,
             whatsappPhoneNumberId,
             whatsappTemplateName,
+            checkoutMode,
+            partialPaymentEnabled,
+            partialPaymentAmount,
         } = body as {
-            authVerificationMethod?: "email" | "phone" | "both";
+            authVerificationMethod?: "email" | "phone" | "both" | "email_phone_mandatory" | "whatsapp_otp" | "sms_otp";
             guestCheckoutEnabled?: boolean;
             whatsappAccessToken?: string;
             whatsappPhoneNumberId?: string;
             whatsappTemplateName?: string;
+            checkoutMode?: "guest_cod_only" | "gateways_only" | "all";
+            partialPaymentEnabled?: boolean;
+            partialPaymentAmount?: number;
         };
 
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
@@ -70,6 +79,9 @@ export const POST: APIRoute = async ({ request }) => {
         if (guestCheckoutEnabled !== undefined) updates.guestCheckoutEnabled = guestCheckoutEnabled;
         if (whatsappPhoneNumberId !== undefined) updates.whatsappPhoneNumberId = whatsappPhoneNumberId;
         if (whatsappTemplateName !== undefined) updates.whatsappTemplateName = whatsappTemplateName;
+        if (checkoutMode !== undefined) updates.checkoutMode = checkoutMode;
+        if (partialPaymentEnabled !== undefined) updates.partialPaymentEnabled = partialPaymentEnabled;
+        if (partialPaymentAmount !== undefined) updates.partialPaymentAmount = partialPaymentAmount;
 
         // Only update WhatsApp Token if it's not the masked value
         if (whatsappAccessToken && whatsappAccessToken !== MASKED_VALUE) {

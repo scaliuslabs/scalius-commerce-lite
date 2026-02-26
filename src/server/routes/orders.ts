@@ -13,6 +13,7 @@ import {
   discounts,
   PaymentMethod,
   PaymentStatus,
+  OrderStatus,
   FulfillmentStatus,
   InventoryPool,
 } from "@/db/schema";
@@ -83,6 +84,8 @@ app.get("/", async (c) => {
 
     if (status) {
       whereConditions.push(sql`${orders.status} = ${status}`);
+    } else {
+      whereConditions.push(sql`${orders.status} != ${OrderStatus.INCOMPLETE}`);
     }
 
     if (paymentStatus) {
@@ -836,7 +839,7 @@ app.post("/", async (c) => {
       totalAmount,
       shippingCharge: data.shippingCharge,
       discountAmount: data.discountAmount || 0,
-      status: "pending" as const,
+      status: data.paymentMethod === PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.INCOMPLETE,
       // Payment fields
       paymentMethod: data.paymentMethod,
       paymentStatus: PaymentStatus.UNPAID,

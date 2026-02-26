@@ -89,6 +89,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     );
 
     if (!shipment.success) {
+      console.error(`[AstroAPI] Failed to create shipment for order ${orderId}: ${shipment.message}`);
       return new Response(
         JSON.stringify({
           error: "Failed to create shipment",

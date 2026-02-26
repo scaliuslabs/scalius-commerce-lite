@@ -97,7 +97,6 @@ app.post("/orders/:id/shipments", async (c) => {
       return c.json({ error: "Provider ID is required" }, 400);
     }
 
-    // Create shipment using the delivery service
     const result = await deliveryService.createShipment(
       orderId,
       providerId,
@@ -105,7 +104,8 @@ app.post("/orders/:id/shipments", async (c) => {
     );
 
     if (!result.success) {
-      return c.json({ error: result.message }, 400);
+      console.error(`[ShippingAPI] Shipment creation failed for order ${orderId} (Provider: ${providerId}):`, result.message, result.data);
+      return c.json({ error: result.message, details: result.data }, 400);
     }
 
     // Get the created shipment with provider name to match original API format
