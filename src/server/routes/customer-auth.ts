@@ -122,7 +122,7 @@ app.post("/send-otp", async (c) => {
     const allowedMethod = settings?.authVerificationMethod || "email";
 
     let allowedInternalMethods = ["email"];
-    if (allowedMethod === "both" || allowedMethod === "email_phone_mandatory") {
+    if (allowedMethod === "both") {
       allowedInternalMethods = ["email", "phone"];
     } else if (allowedMethod === "phone" || allowedMethod === "whatsapp_otp" || allowedMethod === "sms_otp") {
       allowedInternalMethods = ["phone"];
@@ -336,9 +336,8 @@ app.post("/verify-otp", async (c) => {
         resolvedPhone = existing.phone || resolvedPhone;
       } else {
         if (method === "email") {
-          if (!phone && (allowedMethod === "email_phone_mandatory" || typeof phone === "undefined")) {
-            // For both and email_phone_mandatory, when method=email, phone is required in the frontend currently
-            // But let's strictly enforce if it's mandatory
+          // The phone number is the core identity of a customer and is always required to create an account
+          if (!phone) {
             return c.json({ error: "Phone number is required for registration." }, 400);
           }
           if (phone) {
@@ -350,15 +349,6 @@ app.post("/verify-otp", async (c) => {
           }
         }
 
-        if (method === "phone" && allowedMethod === "email_phone_mandatory") {
-          if (!resolvedEmail) {
-            return c.json({ error: "Email address is required for registration." }, 400);
-          }
-          const emailExists = await db.select().from(customers).where(eq(customers.email, resolvedEmail)).get();
-          if (emailExists) {
-            return c.json({ error: "This email is already registered. Please sign in with it instead." }, 400);
-          }
-        }
 
         // Create new customer record
         customerId = nanoid();

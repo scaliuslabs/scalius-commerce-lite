@@ -54,7 +54,7 @@ export const POST: APIRoute = async ({ request }) => {
             partialPaymentEnabled,
             partialPaymentAmount,
         } = body as {
-            authVerificationMethod?: "email" | "phone" | "both" | "email_phone_mandatory" | "whatsapp_otp" | "sms_otp";
+            authVerificationMethod?: "email" | "phone" | "both" | "whatsapp_otp" | "sms_otp";
             guestCheckoutEnabled?: boolean;
             whatsappAccessToken?: string;
             whatsappPhoneNumberId?: string;
