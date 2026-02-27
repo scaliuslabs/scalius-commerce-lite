@@ -1,5 +1,5 @@
 // src/contexts/PermissionContext.tsx
-import React, { createContext, useContext, useMemo, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, useEffect, type ReactNode } from "react";
 import type { PermissionName } from "@/lib/rbac/types";
 
 // Extend Window interface for TypeScript

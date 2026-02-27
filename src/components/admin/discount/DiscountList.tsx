@@ -426,10 +426,6 @@ const DiscountRow = React.memo(
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => {
-                      // Navigate to create page with type pre-selected, code will need to be changed
-                      const params = new URLSearchParams({
-                        duplicate: discount.id,
-                      });
                       window.location.href = `/admin/discounts/${discount.id}/edit?duplicate=true`;
                     }}
                   >

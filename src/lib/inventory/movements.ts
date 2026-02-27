@@ -1,7 +1,6 @@
 // src/lib/inventory/movements.ts
 // Records stock movement audit log entries.
 
-import { sql } from "drizzle-orm";
 import { inventoryMovements } from "@/db/schema";
 import type { Database } from "@/db";
 import type { MovementEntry } from "./types";

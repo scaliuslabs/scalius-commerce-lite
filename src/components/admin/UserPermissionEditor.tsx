@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +25,7 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Shield, AlertTriangle, Crown, Plus, X } from "lucide-react";
+import { Loader2, Shield, AlertTriangle, Crown, X } from "lucide-react";
 import { toast } from "sonner";
 
 interface Role {
@@ -78,7 +77,6 @@ export function UserPermissionEditor({
   const [roles, setRoles] = useState<Role[]>([]);
   const [groupedPermissions, setGroupedPermissions] = useState<GroupedPermissions>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
 
   // Local state for editing
   const [assignedRoleIds, setAssignedRoleIds] = useState<Set<string>>(

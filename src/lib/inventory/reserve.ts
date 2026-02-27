@@ -3,7 +3,7 @@
 // Reserves stock by incrementing reservedStock WITHOUT decrementing stock.
 // Stock is permanently deducted only on payment confirmation.
 
-import { eq, and, sql, gte } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { productVariants } from "@/db/schema";
 import type { Database } from "@/db";
 import { recordMovement } from "./movements";

@@ -78,7 +78,7 @@ interface GroupedPermissions {
 
 export function RolesManagement() {
   const [roles, setRoles] = useState<Role[]>([]);
-  const [allPermissions, setAllPermissions] = useState<PermissionMetadata[]>([]);
+  const [, setAllPermissions] = useState<PermissionMetadata[]>([]);
   const [groupedPermissions, setGroupedPermissions] = useState<GroupedPermissions>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -249,7 +249,6 @@ export function RolesManagement() {
                 key={role.id}
                 role={role}
                 canManage={canManageRoles}
-                groupedPermissions={groupedPermissions}
                 onEdit={() => setEditingRole(role)}
                 onDelete={() => handleDeleteRole(role.id)}
               />
@@ -288,13 +287,11 @@ export function RolesManagement() {
 function RoleCard({
   role,
   canManage,
-  groupedPermissions,
   onEdit,
   onDelete,
 }: {
   role: Role;
   canManage: boolean;
-  groupedPermissions: GroupedPermissions;
   onEdit: () => void;
   onDelete: () => void;
 }) {

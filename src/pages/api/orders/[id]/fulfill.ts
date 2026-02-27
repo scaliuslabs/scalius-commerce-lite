@@ -14,7 +14,7 @@ import {
   ItemFulfillmentStatus,
   OrderStatus,
 } from "@/db/schema";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export const GET: APIRoute = async ({ params }) => {
   const { id } = params;

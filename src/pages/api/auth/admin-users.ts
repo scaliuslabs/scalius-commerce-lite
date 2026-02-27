@@ -4,7 +4,7 @@
 import type { APIRoute } from "astro";
 import { getDb } from "@/db";
 import { user, roles, userRoles, userPermissions, permissions } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { createAuth } from "@/lib/auth";
 import { sendAdminInviteEmail } from "@/lib/email";
 import { assignRoleToUser } from "@/lib/rbac/helpers";

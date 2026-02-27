@@ -1,6 +1,6 @@
 // src/components/auth/TwoFactorSetup.tsx
 // Simple email-based 2FA setup - sends code to email automatically
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

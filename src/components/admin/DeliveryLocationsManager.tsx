@@ -6,7 +6,6 @@ import { Input } from "../ui/input";
 import {
   Loader2,
   Plus,
-  Upload,
   Search,
   Edit,
   Trash2,

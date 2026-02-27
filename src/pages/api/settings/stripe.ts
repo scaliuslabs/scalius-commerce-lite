@@ -6,7 +6,7 @@
 import type { APIRoute } from "astro";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getKv } from "@/server/utils/kv-cache";
 import {
   upsertSetting,

@@ -1,5 +1,5 @@
 // src/lib/rbac/helpers.ts
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { Database } from "@/db";
 import {
   user,
