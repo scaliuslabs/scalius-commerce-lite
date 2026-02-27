@@ -86,7 +86,7 @@ export async function handleQueueBatch(
 
   // Process each message independently
   const results = await Promise.allSettled(
-    batch.messages.map((msg) => processQueueMessage(msg, db, env)),
+    batch.messages.map((msg) => processQueueMessage(msg, db)),
   );
 
   // Ack successful messages, retry failed ones
@@ -108,7 +108,6 @@ export async function handleQueueBatch(
 async function processQueueMessage(
   msg: Message<PaymentQueueMessage>,
   db: ReturnType<typeof getDb>,
-  env: Env,
 ): Promise<void> {
   const payload = msg.body;
   console.log(`[Queue] Processing message type=${payload.type} id=${msg.id}`);

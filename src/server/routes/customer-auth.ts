@@ -22,7 +22,6 @@ const SESSION_PREFIX = "cust_session:";
 const OTP_PREFIX = "cust_otp:";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
-const OTP_LENGTH = 6;
 
 interface CustomerSession {
   token: string;
@@ -141,7 +140,6 @@ app.post("/send-otp", async (c) => {
       const existing = JSON.parse(existingOtpRaw) as StoredOtp;
       const now = Date.now();
       const minWait = 2 * 60 * 1000; // 2 minutes
-      const timeLeft = Math.ceil((existing.expiresAt - now + OTP_TTL_SECONDS * 1000 - minWait * 1000 / 1000) / 1000);
       if (existing.expiresAt - now > (OTP_TTL_SECONDS - 120) * 1000) {
         // OTP was created less than 2 min ago
         return c.json({
@@ -314,7 +312,6 @@ app.post("/verify-otp", async (c) => {
     // Look up customer in DB (if exists)
     const db = c.get("db");
     const [settings] = await db.select().from(siteSettings).limit(1);
-    const allowedMethod = settings?.authVerificationMethod || "email";
 
     let customerId: string | undefined;
     let customerName = name;
@@ -614,7 +611,7 @@ app.get("/orders", async (c) => {
 
     const db = c.get("db");
     const { orders, orderItems, products, productVariants, productImages } = await import("@/db/schema");
-    const { eq, or, sql, desc } = await import("drizzle-orm");
+    const { eq, sql, desc } = await import("drizzle-orm");
 
     // ── Fetch full customer profile from DB ──────────────────────────────
     let customerProfile: {

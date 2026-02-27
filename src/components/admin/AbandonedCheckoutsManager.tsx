@@ -328,7 +328,7 @@ const DetailsModal = ({
 };
 
 export function AbandonedCheckoutsManager() {
-  const { symbol } = useCurrency();
+  useCurrency();
   const [checkouts, setCheckouts] = useState<AbandonedCheckout[]>([]);
   const [pagination, setPagination] = useState({
     page: 1,

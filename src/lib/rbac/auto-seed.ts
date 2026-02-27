@@ -8,7 +8,6 @@ import {
   permissions,
   roles,
   rolePermissions,
-  userRoles,
 } from "@/db/schema";
 import { PERMISSIONS, getAllPermissions } from "./permissions";
 

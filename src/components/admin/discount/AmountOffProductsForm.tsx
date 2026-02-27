@@ -32,7 +32,7 @@ import {
 } from "../../ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
 import { Calendar } from "../../ui/calendar";
-import { CalendarIcon, Percent, RefreshCw, Copy } from "lucide-react";
+import { CalendarIcon, Percent, RefreshCw } from "lucide-react";
 import { Checkbox } from "../../ui/checkbox";
 import { Switch } from "../../ui/switch";
 import {

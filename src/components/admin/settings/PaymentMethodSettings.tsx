@@ -1,7 +1,7 @@
 // src/components/admin/settings/PaymentMethodSettings.tsx
 // Admin component for configuring which payment methods are available on the storefront.
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     Card,
     CardContent,

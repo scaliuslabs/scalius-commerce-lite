@@ -7,7 +7,7 @@
 import type { APIRoute } from "astro";
 import { db } from "@/db";
 import { productLowStockAlerts, productVariants, products } from "@/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { acknowledgeLowStockAlert } from "@/lib/inventory/alerts";
 
 export const GET: APIRoute = async ({ url }) => {

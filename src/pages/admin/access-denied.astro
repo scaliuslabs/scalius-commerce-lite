@@ -2,8 +2,6 @@
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { ShieldAlert } from "lucide-react";
 
-// Get the attempted URL from query params (set by middleware redirect)
-const attemptedUrl = Astro.url.searchParams.get("from") || "";
 ---
 
 <AdminLayout title="Access Denied">

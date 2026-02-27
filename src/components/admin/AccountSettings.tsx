@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Loader2,
-  Lock,
   Shield,
   ShieldCheck,
   ShieldOff,
@@ -47,7 +46,6 @@ import {
 import { toast } from "sonner";
 import { MediaManager, type MediaFile } from "./MediaManager";
 import { RolesManagement } from "./RolesManagement";
-import { PermissionGate } from "./PermissionGate";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { UserPermissionEditor } from "./UserPermissionEditor";

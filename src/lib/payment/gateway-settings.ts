@@ -4,7 +4,7 @@
 //
 // Settings are set by the admin dashboard (not environment variables).
 
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { settings } from "@/db/schema";
 import type { Database } from "@/db";
 

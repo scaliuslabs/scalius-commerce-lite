@@ -6,7 +6,7 @@
 
 import type { APIRoute } from "astro";
 import { db } from "@/db";
-import { codTracking, orders, OrderStatus, PaymentStatus } from "@/db/schema";
+import { codTracking, orders, OrderStatus } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import {
   recordCODCollection,

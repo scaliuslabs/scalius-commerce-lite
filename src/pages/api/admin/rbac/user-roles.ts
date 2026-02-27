@@ -9,10 +9,8 @@ import { getDb } from "@/db";
 import { user, roles, userRoles } from "@/db/schema";
 import {
   hasPermission,
-  isSuperAdmin,
   assignRoleToUser,
   removeRoleFromUser,
-  clearPermissionCache,
 } from "@/lib/rbac/helpers";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 
