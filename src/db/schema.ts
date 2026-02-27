@@ -834,7 +834,7 @@ export const siteSettings = sqliteTable("site_settings", {
   robotsTxt: text("robots_txt"),
   storefrontUrl: text("storefront_url").default("/"),
   // Auth & Guest Checkout Settings
-  authVerificationMethod: text("auth_verification_method", { enum: ["email", "phone", "both", "email_phone_mandatory", "whatsapp_otp", "sms_otp"] }).notNull().default("email"),
+  authVerificationMethod: text("auth_verification_method", { enum: ["email", "phone", "both", "whatsapp_otp", "sms_otp"] }).notNull().default("email"),
   guestCheckoutEnabled: integer("guest_checkout_enabled", { mode: "boolean" }).notNull().default(true),
   checkoutMode: text("checkout_mode", { enum: ["guest_cod_only", "gateways_only", "all"] }).notNull().default("all"),
   partialPaymentEnabled: integer("partial_payment_enabled", { mode: "boolean" }).notNull().default(false),

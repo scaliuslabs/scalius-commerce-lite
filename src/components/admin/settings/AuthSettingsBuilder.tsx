@@ -144,11 +144,10 @@ export default function AuthSettingsBuilder() {
                                 <SelectValue placeholder="Select verification method" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="email">Email Verification Only</SelectItem>
-                                <SelectItem value="email_phone_mandatory">Email Verification (Phone Number Required)</SelectItem>
-                                <SelectItem value="phone">WhatsApp OTP Verification (Email Optional)</SelectItem>
-                                <SelectItem value="both">Both (Customer's Choice)</SelectItem>
-                                <SelectItem value="sms_otp">SMS OTP Verification (Coming Soon)</SelectItem>
+                                <SelectItem value="email">Email OTP (Phone collected at signup)</SelectItem>
+                                <SelectItem value="phone">WhatsApp OTP (Phone verified, Email optional)</SelectItem>
+                                <SelectItem value="both">Both Options (Customer's Pick)</SelectItem>
+                                <SelectItem value="sms_otp">SMS OTP (Coming Soon)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -209,7 +208,7 @@ export default function AuthSettingsBuilder() {
             </Card>
 
             {(authVerificationMethod === "phone" ||
-                authVerificationMethod === "both" || authVerificationMethod === "email_phone_mandatory") && (
+                authVerificationMethod === "both") && (
                     <Card className="border-green-500/20 dark:bg-green-950/10">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-base flex items-center gap-2">
