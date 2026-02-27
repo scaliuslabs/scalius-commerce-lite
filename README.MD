@@ -94,6 +94,44 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 
 ### Architecture overview
 
+```mermaid
+flowchart TB
+    subgraph Admin [Admin Dashboard]
+        AdminPages[Astro Pages /admin]
+        AdminComponents[React Components]
+        AdminAPI[Astro API Routes /api/*]
+    end
+
+    subgraph Storefront [Storefront]
+        StorefrontPages[Astro/React Pages]
+        StorefrontAPI[Direct fetch to /api/v1]
+    end
+
+    subgraph Backend [Backend - Cloudflare Worker]
+        HonoApp[Hono App /api/v1/*]
+        AstroIntegration[hono-integration.ts]
+        QueueConsumer[Queue Consumer]
+    end
+
+    subgraph Data [Data Layer]
+        D1[(Cloudflare D1)]
+        KV[(KV Cache/Session)]
+        R2[(R2 Media)]
+    end
+
+    AdminPages --> AdminAPI
+    AdminComponents --> AdminAPI
+    AdminAPI --> D1
+    AdminAPI -->|Cache invalidation| KV
+    StorefrontPages --> StorefrontAPI
+    StorefrontAPI --> HonoApp
+    AstroIntegration --> HonoApp
+    HonoApp --> D1
+    HonoApp --> KV
+    HonoApp --> R2
+    QueueConsumer --> D1
+```
+
 #### Admin (Astro pages + React)
 
 - Admin pages live in `src/pages/admin/**` and render through `src/layouts/AdminLayout.astro`.
@@ -113,6 +151,7 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 - API docs:
   - Swagger UI is served at `/api/v1/docs`
   - OpenAPI spec is served at `/api/v1/openapi.json`
+  - The OpenAPI spec is manually maintained and may lag behind route changes. Use the live API for authoritative behavior.
 
 ### Project structure (high level)
 
@@ -151,7 +190,7 @@ From `package.json`:
 
 ```bash
 pnpm dev              # astro dev --host
-pnpm build            # astro check && astro build && pnpm db:generate
+pnpm build            # astro check && astro build && pnpm db:generate && node scripts/build-with-queue.mjs
 pnpm start            # wrangler dev (Cloudflare Workers local runtime)
 pnpm deploy           # node scripts/deploy.mjs (build + migrate + deploy)
 
@@ -163,11 +202,16 @@ pnpm db:studio        # drizzle-kit studio
 pnpm generate:sdk     # tsx src/scripts/generate-openapi-json.ts && openapi-ts
 ```
 
+The deployable entry point is `./dist/worker-with-queue.js` (set in `wrangler.jsonc` main). The build script bundles the queue consumer and wraps the Astro worker to support Cloudflare Queues.
+
 ### Environment variables
 
-This project uses Cloudflare Workers bindings for databases and storage (declared in `wrangler.jsonc`). Only secrets and runtime configuration need to be set as environment variables/secrets.
+This project uses Cloudflare Workers bindings for databases and storage (declared in `wrangler.jsonc`). Configuration can be set in two ways:
 
-For local development, create a `.dev.vars` file. In production, set these in the Cloudflare dashboard or via `wrangler secret put`.
+- **`wrangler.jsonc` `vars`**: For production, many variables (e.g. `PUBLIC_API_BASE_URL`, `BETTER_AUTH_URL`, `STOREFRONT_URL`, `CDN_DOMAIN_URL`, `R2_PUBLIC_URL`, `PURGE_URL`) can be set in the `vars` block of `wrangler.jsonc`. These are non-secret values.
+- **Secrets**: For sensitive values (e.g. `BETTER_AUTH_SECRET`, `JWT_SECRET`, `API_TOKEN`), use `wrangler secret put <NAME>` or the Cloudflare dashboard.
+
+For local development, create a `.dev.vars` file. Secrets go in `.dev.vars`; non-secret vars can also be set there or inherited from wrangler.
 
 #### Core (required)
 
@@ -237,11 +281,13 @@ The following bindings are declared in `wrangler.jsonc` and are automatically av
 
 | Binding | Type | Purpose |
 |---------|------|---------|
-| `DB` | D1Database | Primary SQLite database (replaces Turso/libSQL) |
-| `CACHE` | KVNamespace | API response cache (replaces Upstash Redis) |
+| `DB` | D1Database | Primary SQLite database |
+| `CACHE` | KVNamespace | API response cache |
 | `SESSION` | KVNamespace | Astro session storage |
 | `SHARED_AUTH_CACHE` | KVNamespace | Firebase access token cache |
 | `BUCKET` | R2Bucket | Media file storage |
+| `PAYMENT_EVENTS_QUEUE` | Queue | Payment event processing (producer) |
+| `ORDER_NOTIFICATIONS_QUEUE` | Queue | Order notification processing (producer) |
 | `ASSETS` | Fetcher | Static asset serving |
 
 ### Local development
@@ -429,7 +475,18 @@ This repo can generate a typed TS client from the Hono OpenAPI spec:
 pnpm generate:sdk
 ```
 
+The storefront (`scalius-commerce-storefront`) currently uses direct `fetch` calls via `createApiUrl` in `src/lib/api/` and does not use this SDK. The SDK is available for future use or external integrations.
+
 See `src/lib/sdk/README.md` for usage patterns and security notes.
+
+### Queues
+
+The backend uses Cloudflare Queues for async processing:
+
+- **`payment-events`**: Payment gateway webhook events (Stripe, SSLCommerz, etc.)
+- **`order-notifications`**: Order notifications (e.g. push notifications for new orders)
+
+The build script (`scripts/build-with-queue.mjs`) bundles the queue consumer (`src/queue-consumer.ts`) and wraps the Astro worker. The deployable entry `dist/worker-with-queue.js` exports both `fetch` (HTTP handler) and `queue` (queue batch handler). Queue bindings are declared in `wrangler.jsonc`.
 
 ### Deployment (Cloudflare Workers)
 
@@ -442,7 +499,13 @@ pnpm deploy
 
 This runs `scripts/deploy.mjs` which handles building, migrations, and deploying to Cloudflare Workers via Wrangler.
 
-`wrangler.jsonc` defines worker compatibility flags, D1/KV/R2 bindings, and static assets binding.
+`wrangler.jsonc` defines the main entry (`./dist/worker-with-queue.js`), worker compatibility flags, D1/KV/R2/Queue bindings, and static assets binding.
+
+### Maintenance notes
+
+- **`/api/v1/auth/test`**: Debug endpoint in `src/server/routes/auth.ts`; consider removing for production.
+- **OpenAPI spec**: Manually maintained in `src/server/openapi/`; may not match all Hono routes.
+- **Legacy migration**: `migrations/migrate-collections-data.ts` uses Turso/libSQL for one-off data migration only; the live database is Cloudflare D1.
 
 ### Troubleshooting
 

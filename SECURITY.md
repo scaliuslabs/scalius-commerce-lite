@@ -38,14 +38,14 @@ We are committed to resolving security issues promptly. Here is what you can exp
 ## Scope
 
 ### In Scope
-*   Authentication and Authorization bypasses (issues with our implementation of Clerk/JWTs).
+*   Authentication and Authorization bypasses (issues with our implementation of Better Auth / JWTs).
 *   SQL Injection (issues within our Drizzle ORM usage).
 *   Cross-Site Scripting (XSS) in the Admin Dashboard or Storefront.
 *   Insecure Direct Object References (IDOR) in API endpoints.
 *   Sensitive data exposure (PII, API keys).
 
 ### Out of Scope
-*   Vulnerabilities in third-party providers (e.g., Clerk, Cloudflare, OpenRouter, Turso) unless caused by our misconfiguration.
+*   Vulnerabilities in third-party providers (e.g., Cloudflare, OpenRouter, Firebase) unless caused by our misconfiguration.
 *   Social engineering or phishing attacks.
 *   Denial of Service (DoS) attacks.
 *   Spam or automated operational noise.
