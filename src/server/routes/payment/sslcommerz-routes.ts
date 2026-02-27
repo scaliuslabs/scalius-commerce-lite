@@ -2,22 +2,14 @@
 // Hono routes for SSLCommerz payment operations.
 // Credentials are loaded from the DB settings table (set via admin dashboard).
 //
-// POST /payment/sslcommerz/session              - Initiate payment session (storefront)
-// POST /payment/sslcommerz/refund               - Issue refund (admin)
-// GET  /payment/sslcommerz/refund-status/:refId  - Query refund status
-// GET  /payment/sslcommerz/success              - Redirect handler after payment
-// GET  /payment/sslcommerz/fail                 - Redirect handler after failure
-// GET  /payment/sslcommerz/cancel               - Redirect handler after cancel
+// POST /payment/sslcommerz/session - Initiate payment session (storefront)
+// GET/POST /payment/sslcommerz/success, fail, cancel - Redirect handlers after payment
 
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import { orders, orderPayments, paymentPlans, PaymentStatus, OrderStatus } from "@/db/schema";
-import {
-  initSSLCommerzSession,
-  initiateSSLCommerzRefund,
-  querySSLCommerzRefundStatus,
-} from "@/lib/payment/sslcommerz";
+import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@/db/schema";
+import { initSSLCommerzSession } from "@/lib/payment/sslcommerz";
 import { getSSLCommerzSettings } from "@/lib/payment/gateway-settings";
 import { getCurrencyConfig } from "@/lib/currency";
 
@@ -159,120 +151,6 @@ app.post("/session", async (c) => {
     gatewayUrl: result.gatewayUrl,
     sessionKey: result.sessionKey,
   });
-});
-
-// ---------------------------------------------------------------------------
-// POST /payment/sslcommerz/refund
-// Issue a refund for an SSLCommerz payment (admin).
-// Requires the bank_tran_id from the original IPN validation.
-// ---------------------------------------------------------------------------
-const refundSchema = z.object({
-  orderId: z.string().min(1),
-  amount: z.number().positive("Refund amount must be positive"),
-  remarks: z.string().min(1, "Refund remarks are required").default("Customer refund request"),
-});
-
-app.post("/refund", async (c) => {
-  const db = c.get("db");
-  const ssl = await getSSLCommerzSettings(db, c.env.CACHE);
-  if (!ssl) return c.json({ success: false, error: "SSLCommerz not configured" }, 503);
-
-  let body: z.infer<typeof refundSchema>;
-  try {
-    body = refundSchema.parse(await c.req.json());
-  } catch {
-    return c.json({ success: false, error: "Invalid request body" }, 400);
-  }
-
-  // Find the payment record with bank_tran_id
-  const payment = await db
-    .select({
-      id: orderPayments.id,
-      amount: orderPayments.amount,
-      sslcommerzBankTranId: orderPayments.sslcommerzBankTranId,
-    })
-    .from(orderPayments)
-    .where(eq(orderPayments.orderId, body.orderId))
-    .get();
-
-  if (!payment || !payment.sslcommerzBankTranId) {
-    return c.json({
-      success: false,
-      error: "No SSLCommerz payment found for this order. bank_tran_id is required for refunds.",
-    }, 400);
-  }
-
-  if (body.amount > payment.amount) {
-    return c.json({
-      success: false,
-      error: `Refund amount (${body.amount}) exceeds payment amount (${payment.amount})`,
-    }, 400);
-  }
-
-  const refundTranId = `REF-${body.orderId}-${Date.now()}`;
-
-  const result = await initiateSSLCommerzRefund(
-    ssl.storeId,
-    ssl.storePassword,
-    ssl.sandbox,
-    {
-      bankTranId: payment.sslcommerzBankTranId,
-      refundAmount: body.amount,
-      refundRemarks: body.remarks,
-      refundTranId,
-    }
-  );
-
-  if (!result.success) {
-    return c.json({ success: false, error: result.error }, 500);
-  }
-
-  // Update order payment status
-  const order = await db
-    .select({ totalAmount: orders.totalAmount, paidAmount: orders.paidAmount })
-    .from(orders)
-    .where(eq(orders.id, body.orderId))
-    .get();
-
-  if (order) {
-    const isFullRefund = body.amount >= (order.paidAmount ?? order.totalAmount);
-    await db
-      .update(orders)
-      .set({
-        paymentStatus: isFullRefund ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL,
-        paidAmount: Math.max(0, (order.paidAmount ?? 0) - body.amount),
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(orders.id, body.orderId));
-  }
-
-  return c.json({
-    success: true,
-    refundRefId: result.refundRefId,
-    refundTranId,
-    status: result.status,
-  });
-});
-
-// ---------------------------------------------------------------------------
-// GET /payment/sslcommerz/refund-status/:refundRefId
-// Query SSLCommerz refund processing status.
-// ---------------------------------------------------------------------------
-app.get("/refund-status/:refundRefId", async (c) => {
-  const db = c.get("db");
-  const ssl = await getSSLCommerzSettings(db, c.env.CACHE);
-  if (!ssl) return c.json({ success: false, error: "SSLCommerz not configured" }, 503);
-
-  const { refundRefId } = c.req.param();
-
-  const result = await querySSLCommerzRefundStatus(
-    ssl.storeId,
-    ssl.storePassword,
-    ssl.sandbox,
-    refundRefId
-  );
-
-  return c.json({ success: true, ...result });
 });
 
 // ---------------------------------------------------------------------------

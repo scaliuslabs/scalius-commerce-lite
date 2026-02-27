@@ -151,13 +151,4 @@ app.get("/token-stats", (c) => {
   });
 });
 
-// Test endpoint to verify auth routes are working
-app.get("/test", (c) => {
-  return c.json({
-    success: true,
-    message: "Auth routes are working correctly",
-    user: c.get("user"),
-  });
-});
-
 export default app;
