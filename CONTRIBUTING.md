@@ -21,14 +21,14 @@ Before diving in, please understand that this is a **hybrid** application:
 
 1.  **Admin Dashboard (Astro + React):** Located in `src/pages/admin` and `src/components/admin`.
 2.  **Storefront API (Hono):** Located in `src/server`. This is mounted via an Astro integration.
-3.  **Database (Turso/libSQL):** We use Drizzle ORM.
+3.  **Database (Cloudflare D1 + Drizzle ORM):** We use Drizzle ORM with Cloudflare D1 (SQLite).
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 *   **Node.js** (Latest LTS recommended)
 *   **pnpm** (We use pnpm for package management)
-*   **Turso Account** (or a local SQLite setup)
+*   **Cloudflare account** (for D1, KV, R2 bindings when using `pnpm start` for local dev)
 
 ### Local Setup
 
@@ -45,20 +45,21 @@ Before diving in, please understand that this is a **hybrid** application:
     ```
 
 3.  **Environment Variables**
-    Copy the example environment file (if available) or create a `.env` file based on the README. At a minimum, you need:
+    Create a `.dev.vars` file for local development. See the README and `.env.example` for the full list. At a minimum, you need:
     ```env
-    TURSO_DATABASE_URL=...
-    TURSO_AUTH_TOKEN=...
-    PUBLIC_CLERK_PUBLISHABLE_KEY=...
-    CLERK_SECRET_KEY=...
+    BETTER_AUTH_SECRET=your-secret-key
+    BETTER_AUTH_URL=http://localhost:4321
+    JWT_SECRET=your-jwt-secret
+    API_TOKEN=your-api-token
     ```
 
 4.  **Database Setup**
-    Push the schema to your database:
+    Generate migrations and apply them to your local D1 database:
     ```bash
     pnpm db:generate
-    pnpm db:sync
+    pnpm db:migrate:local
     ```
+    For remote D1: `pnpm db:migrate:remote`
 
 5.  **Run Development Server**
     ```bash
