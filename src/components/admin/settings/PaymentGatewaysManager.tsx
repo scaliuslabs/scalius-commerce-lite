@@ -1,7 +1,7 @@
 // src/components/admin/settings/PaymentGatewaysManager.tsx
 // Unified compact payment gateway management - toggles + credentials in one view.
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +29,7 @@ import {
     Info,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -69,21 +70,21 @@ const METHOD_META = {
         desc: "Accept card payments globally",
         icon: CreditCard,
         color: "text-violet-600",
-        bg: "bg-violet-50 dark:bg-violet-950/30",
+        bg: "bg-violet-50 dark:bg-violet-500/10",
     },
     sslcommerz: {
         label: "SSLCommerz",
         desc: "BD payments (bKash, Nagad, cards)",
         icon: Shield,
         color: "text-blue-600",
-        bg: "bg-blue-50 dark:bg-blue-950/30",
+        bg: "bg-blue-50 dark:bg-blue-500/10",
     },
     cod: {
         label: "Cash on Delivery",
         desc: "Collect payment on delivery",
         icon: Banknote,
         color: "text-green-600",
-        bg: "bg-green-50 dark:bg-green-950/30",
+        bg: "bg-green-50 dark:bg-green-500/10",
     },
 } as const;
 
@@ -163,9 +164,6 @@ export default function PaymentGatewaysManager() {
     const [sslConfigured, setSslConfigured] = useState({ password: false });
     const [savingSsl, setSavingSsl] = useState(false);
 
-    // --- Active credentials tab ---
-    const [credTab, setCredTab] = useState<"stripe" | "sslcommerz" | "cod">("stripe");
-
     // --- Load all data in parallel ---
     const loadAll = useCallback(async () => {
         setLoading(true);
@@ -201,26 +199,30 @@ export default function PaymentGatewaysManager() {
 
     useEffect(() => { loadAll(); }, [loadAll]);
 
-    // --- Toggle method active/inactive ---
-    const toggleMethod = (method: MethodKey) => {
-        setEnabledMethods((prev) => {
-            const next = new Set(prev);
-            if (next.has(method)) {
-                if (next.size <= 1) {
-                    toast.error("At least one payment method must be enabled");
-                    return prev;
-                }
-                next.delete(method);
-                if (defaultMethod === method) setDefaultMethod(Array.from(next)[0] as MethodKey);
-            } else {
-                next.add(method);
+    // --- Helper to sync method toggle with global list ---
+    const toggleMethod = (method: MethodKey, isActive: boolean) => {
+        let nextMethods = new Set(enabledMethods);
+        if (isActive) {
+            nextMethods.add(method);
+        } else {
+            if (nextMethods.size <= 1) {
+                toast.error("At least one payment method must be enabled.");
+                return;
             }
-            return next;
-        });
+            nextMethods.delete(method);
+            if (defaultMethod === method) {
+                setDefaultMethod(Array.from(nextMethods)[0] as MethodKey);
+            }
+        }
+
+        setEnabledMethods(nextMethods);
+
+        if (method === "stripe") setStripe(prev => ({ ...prev, enabled: isActive }));
+        if (method === "sslcommerz") setSsl(prev => ({ ...prev, enabled: isActive }));
     };
 
-    // --- Save methods ---
-    const saveMethods = async () => {
+    // --- Save methods (Global state) ---
+    const saveMethods = async (silent = false) => {
         setSavingMethods(true);
         try {
             const res = await fetch("/api/settings/payment-methods", {
@@ -228,13 +230,16 @@ export default function PaymentGatewaysManager() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ enabledMethods: Array.from(enabledMethods), defaultMethod }),
             });
-            if (res.ok) { toast.success("Payment methods saved"); await loadAll(); }
-            else { const e = await res.json() as any; toast.error(e.error || "Save failed"); }
-        } catch { toast.error("Error saving payment methods"); }
-        finally { setSavingMethods(false); }
+            if (!res.ok) throw new Error("Failed to save methods");
+            if (!silent) toast.success("Storefront settings updated");
+        } catch {
+            if (!silent) toast.error("Error saving payment methods");
+        } finally {
+            setSavingMethods(false);
+        }
     };
 
-    // --- Save Stripe ---
+    // --- Save Stripe (Combines stripe settings + methods config) ---
     const saveStripe = async () => {
         setSavingStripe(true);
         try {
@@ -243,8 +248,13 @@ export default function PaymentGatewaysManager() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(stripe),
             });
-            if (res.ok) { toast.success("Stripe settings saved"); await loadAll(); }
-            else { const e = await res.json() as any; toast.error(e.message || "Save failed"); }
+            if (res.ok) {
+                await saveMethods(true); // Sync the global enabled state
+                toast.success("Stripe settings saved");
+                await loadAll();
+            } else {
+                const e = await res.json() as any; toast.error(e.message || "Save failed");
+            }
         } catch { toast.error("Error saving Stripe settings"); }
         finally { setSavingStripe(false); }
     };
@@ -258,8 +268,13 @@ export default function PaymentGatewaysManager() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(ssl),
             });
-            if (res.ok) { toast.success("SSLCommerz settings saved"); await loadAll(); }
-            else { const e = await res.json() as any; toast.error(e.message || "Save failed"); }
+            if (res.ok) {
+                await saveMethods(true);
+                toast.success("SSLCommerz settings saved");
+                await loadAll();
+            } else {
+                const e = await res.json() as any; toast.error(e.message || "Save failed");
+            }
         } catch { toast.error("Error saving SSLCommerz settings"); }
         finally { setSavingSsl(false); }
     };
@@ -271,21 +286,21 @@ export default function PaymentGatewaysManager() {
     const getStatusBadge = (method: MethodKey) => {
         if (method === "cod") {
             return enabledMethods.has("cod") ? (
-                <Badge variant="default" className="text-xs gap-1"><CheckCircle2 className="h-3 w-3" /> Active</Badge>
+                <Badge variant="default" className="text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" /> Active</Badge>
             ) : (
                 <Badge variant="secondary" className="text-xs">Inactive</Badge>
             );
         }
         if (method === "stripe") {
-            if (!stripeStatus?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">No credentials</Badge>;
+            if (!stripeStatus?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">Needs Setup</Badge>;
             if (!enabledMethods.has("stripe")) return <Badge variant="secondary" className="text-xs">Inactive</Badge>;
             const isLive = stripe.secretKey && stripe.secretKey !== MASKED_VALUE && stripe.secretKey.startsWith("sk_live_");
-            return <Badge variant="default" className="text-xs gap-1"><CheckCircle2 className="h-3 w-3" />{isLive ? "Live" : "Test"}</Badge>;
+            return <Badge variant="default" className="text-xs bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{isLive ? "Live" : "Test"}</Badge>;
         }
         if (method === "sslcommerz") {
-            if (!sslStatus?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">No credentials</Badge>;
+            if (!sslStatus?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">Needs Setup</Badge>;
             if (!enabledMethods.has("sslcommerz")) return <Badge variant="secondary" className="text-xs">Inactive</Badge>;
-            return <Badge variant="default" className="text-xs gap-1"><CheckCircle2 className="h-3 w-3" />{ssl.sandbox ? "Sandbox" : "Live"}</Badge>;
+            return <Badge variant="default" className="text-xs bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{ssl.sandbox ? "Sandbox" : "Live"}</Badge>;
         }
         return null;
     };
@@ -301,59 +316,18 @@ export default function PaymentGatewaysManager() {
     const allMethods: MethodKey[] = ["stripe", "sslcommerz", "cod"];
 
     return (
-        <div className="space-y-6 max-w-4xl">
+        <div className="space-y-6 max-w-3xl">
 
-            {/* ─── Section 1: Active payment methods ─── */}
-            <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/5">
-                    <div>
-                        <h2 className="font-semibold text-sm">Active on Storefront</h2>
-                        <p className="text-xs text-muted-foreground mt-0.5">Toggle which methods customers see at checkout</p>
-                    </div>
-                    <Button size="sm" onClick={saveMethods} disabled={savingMethods}>
-                        {savingMethods ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-                        Save
-                    </Button>
-                </div>
-
-                <div className="divide-y divide-border">
-                    {allMethods.map((method) => {
-                        const meta = METHOD_META[method];
-                        const Icon = meta.icon;
-                        const isEnabled = enabledMethods.has(method);
-                        const hasNoCredentials = method !== "cod" && !(method === "stripe" ? stripeStatus?.configured : sslStatus?.configured);
-
-                        return (
-                            <div key={method} className={`flex items-center gap-4 px-5 py-3.5 transition-colors ${isEnabled ? "" : "opacity-60"}`}>
-                                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isEnabled ? meta.bg : "bg-muted"}`}>
-                                    <Icon className={`h-4 w-4 ${isEnabled ? meta.color : "text-muted-foreground"}`} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium">{meta.label}</span>
-                                        {getStatusBadge(method)}
-                                        {isEnabled && hasNoCredentials && (
-                                            <Badge variant="destructive" className="text-xs gap-1">
-                                                <AlertTriangle className="h-3 w-3" /> No credentials
-                                            </Badge>
-                                        )}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">{meta.desc}</p>
-                                </div>
-                                <Switch
-                                    checked={isEnabled}
-                                    onCheckedChange={() => toggleMethod(method)}
-                                    aria-label={`Enable ${meta.label}`}
-                                />
-                            </div>
-                        );
-                    })}
-                </div>
-
-                <div className="flex items-center gap-4 px-5 py-3.5 border-t border-border bg-muted/5">
-                    <span className="text-sm text-muted-foreground">Default at checkout</span>
+            {/* General Preferences */}
+            <Card>
+                <CardHeader className="pb-3 border-b border-border">
+                    <CardTitle className="text-base font-semibold">Gateway Preferences</CardTitle>
+                    <CardDescription>Configure which payment method is selected by default.</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4 flex items-center justify-between pb-4">
+                    <span className="text-sm font-medium">Default Payment Method</span>
                     <Select value={defaultMethod} onValueChange={(v) => setDefaultMethod(v as MethodKey)}>
-                        <SelectTrigger className="h-8 w-44 text-sm">
+                        <SelectTrigger className="w-[200px] h-9">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -364,219 +338,216 @@ export default function PaymentGatewaysManager() {
                             ))}
                         </SelectContent>
                     </Select>
-                </div>
-            </div>
+                </CardContent>
+                <CardFooter className="pt-0 justify-end">
+                    <Button variant="secondary" size="sm" onClick={() => saveMethods()} disabled={savingMethods}>
+                        {savingMethods ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                        Save Preference
+                    </Button>
+                </CardFooter>
+            </Card>
 
-            {/* ─── Section 2: Credential configuration ─── */}
-            <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-border bg-muted/5">
-                    <h2 className="font-semibold text-sm">Gateway Credentials</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Stored securely in the database — never in environment variables</p>
-                </div>
-
-                {/* Tabs */}
-                <div className="flex border-b border-border">
-                    {(["stripe", "sslcommerz", "cod"] as const).map((tab) => {
-                        const meta = METHOD_META[tab];
-                        const Icon = meta.icon;
-                        const isActive = credTab === tab;
-                        return (
-                            <button
-                                key={tab}
-                                onClick={() => setCredTab(tab)}
-                                className={`flex items-center gap-2 px-5 py-3 text-sm border-b-2 transition-colors ${isActive
-                                    ? "border-primary text-foreground font-medium"
-                                    : "border-transparent text-muted-foreground hover:text-foreground"
-                                    }`}
-                            >
-                                <Icon className="h-3.5 w-3.5" />
-                                {meta.label}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Stripe credentials */}
-                {credTab === "stripe" && (
-                    <div className="p-5 space-y-5">
-                        {/* Enable toggle */}
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium">Enable Stripe</p>
-                                <p className="text-xs text-muted-foreground">Toggle Stripe as active payment method</p>
+            {/* --- STRIPE --- */}
+            <Card className="overflow-hidden border-violet-500/20 dark:border-violet-500/10">
+                <div className="flex items-center justify-between p-5 bg-violet-50/50 dark:bg-violet-950/10 border-b border-border">
+                    <div className="flex items-center gap-4">
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${METHOD_META.stripe.bg}`}>
+                            <METHOD_META.stripe.icon className={`h-5 w-5 ${METHOD_META.stripe.color}`} />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-base font-medium">{METHOD_META.stripe.label}</h3>
+                                {getStatusBadge("stripe")}
                             </div>
-                            <Switch
-                                checked={stripe.enabled}
-                                onCheckedChange={(v) => setStripe((s) => ({ ...s, enabled: v }))}
+                            <p className="text-xs text-muted-foreground mt-0.5">{METHOD_META.stripe.desc}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Label htmlFor="toggle-stripe" className="text-sm">Enable gateway</Label>
+                        <Switch
+                            id="toggle-stripe"
+                            checked={enabledMethods.has("stripe")}
+                            onCheckedChange={(v) => toggleMethod("stripe", v)}
+                        />
+                    </div>
+                </div>
+
+                <CardContent className="p-5 space-y-4 pt-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="stripe-secret" className="flex items-center gap-1.5 text-sm">
+                                Secret Key
+                                {stripeConfigured.secret && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                            </Label>
+                            <PasswordInput
+                                id="stripe-secret"
+                                value={stripe.secretKey}
+                                onChange={(v) => setStripe((s) => ({ ...s, secretKey: v }))}
+                                placeholder="sk_live_... or sk_test_..."
+                                configured={stripeConfigured.secret}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-primary hover:underline">
+                                    dashboard.stripe.com/apikeys <ExternalLink className="h-2.5 w-2.5" />
+                                </a>
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="stripe-pub" className="text-sm">Publishable Key</Label>
+                            <Input
+                                id="stripe-pub"
+                                type="text"
+                                value={stripe.publishableKey}
+                                onChange={(e) => setStripe((s) => ({ ...s, publishableKey: e.target.value }))}
+                                placeholder="pk_live_... or pk_test_..."
+                                className="font-mono"
                             />
                         </div>
 
-                        <Separator />
-
-                        {/* Credential fields in a compact grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="stripe-secret" className="flex items-center gap-1.5 text-sm">
-                                    Secret Key
-                                    {stripeConfigured.secret && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
-                                </Label>
-                                <PasswordInput
-                                    id="stripe-secret"
-                                    value={stripe.secretKey}
-                                    onChange={(v) => setStripe((s) => ({ ...s, secretKey: v }))}
-                                    placeholder="sk_live_... or sk_test_..."
-                                    configured={stripeConfigured.secret}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-primary hover:underline">
-                                        dashboard.stripe.com/apikeys <ExternalLink className="h-2.5 w-2.5" />
-                                    </a>
-                                </p>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <Label htmlFor="stripe-pub" className="text-sm">Publishable Key</Label>
-                                <Input
-                                    id="stripe-pub"
-                                    type="text"
-                                    value={stripe.publishableKey}
-                                    onChange={(e) => setStripe((s) => ({ ...s, publishableKey: e.target.value }))}
-                                    placeholder="pk_live_... or pk_test_..."
-                                    className="font-mono"
-                                />
-                                <p className="text-xs text-muted-foreground">Safe to expose to browser</p>
-                            </div>
-
-                            <div className="space-y-1.5 sm:col-span-2">
-                                <Label htmlFor="stripe-webhook" className="flex items-center gap-1.5 text-sm">
-                                    Webhook Secret
-                                    {stripeConfigured.webhook && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
-                                </Label>
-                                <PasswordInput
-                                    id="stripe-webhook"
-                                    value={stripe.webhookSecret}
-                                    onChange={(v) => setStripe((s) => ({ ...s, webhookSecret: v }))}
-                                    placeholder="whsec_..."
-                                    configured={stripeConfigured.webhook}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Add endpoint <code className="text-xs bg-muted px-1 rounded">/api/v1/webhooks/stripe</code> in{" "}
-                                    <a href="https://dashboard.stripe.com/webhooks" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-primary hover:underline">
-                                        Stripe webhooks <ExternalLink className="h-2.5 w-2.5" />
-                                    </a>
-                                </p>
-                            </div>
-                        </div>
-
-                        {stripe.secretKey && stripe.secretKey !== MASKED_VALUE && stripe.secretKey.startsWith("sk_live_") && (
-                            <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                                <span><strong>Live key detected.</strong> Real cards will be charged.</span>
-                            </div>
-                        )}
-
-                        <div className="flex justify-end">
-                            <Button onClick={saveStripe} disabled={savingStripe} size="sm">
-                                {savingStripe ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-                                Save Stripe
-                            </Button>
+                        <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor="stripe-webhook" className="flex items-center gap-1.5 text-sm">
+                                Webhook Secret
+                                {stripeConfigured.webhook && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                            </Label>
+                            <PasswordInput
+                                id="stripe-webhook"
+                                value={stripe.webhookSecret}
+                                onChange={(v) => setStripe((s) => ({ ...s, webhookSecret: v }))}
+                                placeholder="whsec_..."
+                                configured={stripeConfigured.webhook}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Add endpoint <code className="text-xs bg-muted px-1 rounded">/api/v1/webhooks/stripe</code> in Stripe webhooks setting.
+                            </p>
                         </div>
                     </div>
-                )}
 
-                {/* SSLCommerz credentials */}
-                {credTab === "sslcommerz" && (
-                    <div className="p-5 space-y-5">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium">Enable SSLCommerz</p>
-                                <p className="text-xs text-muted-foreground">Toggle SSLCommerz as active payment method</p>
+                    {stripe.secretKey && stripe.secretKey !== MASKED_VALUE && stripe.secretKey.startsWith("sk_live_") && stripe.enabled && (
+                        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                            <span><strong>Live key detected.</strong> Real cards will be charged.</span>
+                        </div>
+                    )}
+                </CardContent>
+                <CardFooter className="bg-muted/10 border-t border-border py-3 flex justify-end">
+                    <Button onClick={saveStripe} disabled={savingStripe} size="sm">
+                        {savingStripe ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
+                        Save Stripe Configuration
+                    </Button>
+                </CardFooter>
+            </Card>
+
+            {/* --- SSLCOMMERZ --- */}
+            <Card className="overflow-hidden border-blue-500/20 dark:border-blue-500/10">
+                <div className="flex items-center justify-between p-5 bg-blue-50/50 dark:bg-blue-950/10 border-b border-border">
+                    <div className="flex items-center gap-4">
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${METHOD_META.sslcommerz.bg}`}>
+                            <METHOD_META.sslcommerz.icon className={`h-5 w-5 ${METHOD_META.sslcommerz.color}`} />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-base font-medium">{METHOD_META.sslcommerz.label}</h3>
+                                {getStatusBadge("sslcommerz")}
                             </div>
-                            <Switch
-                                checked={ssl.enabled}
-                                onCheckedChange={(v) => setSsl((s) => ({ ...s, enabled: v }))}
+                            <p className="text-xs text-muted-foreground mt-0.5">{METHOD_META.sslcommerz.desc}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Label htmlFor="toggle-ssl" className="text-sm">Enable gateway</Label>
+                        <Switch
+                            id="toggle-ssl"
+                            checked={enabledMethods.has("sslcommerz")}
+                            onCheckedChange={(v) => toggleMethod("sslcommerz", v)}
+                        />
+                    </div>
+                </div>
+
+                <CardContent className="p-5 space-y-4 pt-5">
+                    <div className="flex items-center justify-between pb-2">
+                        <div>
+                            <p className="text-sm font-medium">Sandbox Mode</p>
+                            <p className="text-xs text-muted-foreground">Use test credentials to simulate payments</p>
+                        </div>
+                        <Switch
+                            checked={ssl.sandbox}
+                            onCheckedChange={(v) => setSsl((s) => ({ ...s, sandbox: v }))}
+                        />
+                    </div>
+
+                    {!ssl.sandbox && ssl.enabled && (
+                        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive mb-2">
+                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                            <span><strong>Live mode enabled.</strong> Real customer payments will be processed.</span>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="ssl-store-id" className="text-sm">Store ID</Label>
+                            <Input
+                                id="ssl-store-id"
+                                type="text"
+                                value={ssl.storeId}
+                                onChange={(e) => setSsl((s) => ({ ...s, storeId: e.target.value }))}
+                                placeholder="your_store_id"
+                                className="font-mono"
                             />
                         </div>
 
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium">Sandbox Mode</p>
-                                <p className="text-xs text-muted-foreground">Use test credentials (disable in production)</p>
-                            </div>
-                            <Switch
-                                checked={ssl.sandbox}
-                                onCheckedChange={(v) => setSsl((s) => ({ ...s, sandbox: v }))}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="ssl-password" className="flex items-center gap-1.5 text-sm">
+                                Store Password
+                                {sslConfigured.password && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                            </Label>
+                            <PasswordInput
+                                id="ssl-password"
+                                value={ssl.storePassword}
+                                onChange={(v) => setSsl((s) => ({ ...s, storePassword: v }))}
+                                placeholder="your_store_password"
+                                configured={sslConfigured.password}
                             />
                         </div>
+                    </div>
+                </CardContent>
+                <CardFooter className="bg-muted/10 border-t border-border py-3 flex justify-end">
+                    <Button onClick={saveSsl} disabled={savingSsl} size="sm">
+                        {savingSsl ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
+                        Save SSLCommerz Configuration
+                    </Button>
+                </CardFooter>
+            </Card>
 
-                        {!ssl.sandbox && (
-                            <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                                <span><strong>Live mode.</strong> Real transactions will be processed.</span>
-                            </div>
-                        )}
-
-                        <Separator />
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="ssl-store-id" className="text-sm">Store ID</Label>
-                                <Input
-                                    id="ssl-store-id"
-                                    type="text"
-                                    value={ssl.storeId}
-                                    onChange={(e) => setSsl((s) => ({ ...s, storeId: e.target.value }))}
-                                    placeholder="your_store_id"
-                                    className="font-mono"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    <a href="https://dashboard.sslcommerz.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-primary hover:underline">
-                                        dashboard.sslcommerz.com <ExternalLink className="h-2.5 w-2.5" />
-                                    </a>
-                                </p>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <Label htmlFor="ssl-password" className="flex items-center gap-1.5 text-sm">
-                                    Store Password
-                                    {sslConfigured.password && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
-                                </Label>
-                                <PasswordInput
-                                    id="ssl-password"
-                                    value={ssl.storePassword}
-                                    onChange={(v) => setSsl((s) => ({ ...s, storePassword: v }))}
-                                    placeholder="your_store_password"
-                                    configured={sslConfigured.password}
-                                />
-                                <p className="text-xs text-muted-foreground">Webhook: <code className="text-xs bg-muted px-1 rounded">/api/v1/webhooks/sslcommerz</code></p>
-                            </div>
+            {/* --- CASH ON DELIVERY --- */}
+            <Card className="overflow-hidden border-green-500/20 dark:border-green-500/10">
+                <div className="flex items-center justify-between p-5 bg-green-50/50 dark:bg-green-950/10">
+                    <div className="flex items-center gap-4">
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${METHOD_META.cod.bg}`}>
+                            <METHOD_META.cod.icon className={`h-5 w-5 ${METHOD_META.cod.color}`} />
                         </div>
-
-                        <div className="flex justify-end">
-                            <Button onClick={saveSsl} disabled={savingSsl} size="sm">
-                                {savingSsl ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-                                Save SSLCommerz
-                            </Button>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-base font-medium">{METHOD_META.cod.label}</h3>
+                                {getStatusBadge("cod")}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">{METHOD_META.cod.desc}</p>
                         </div>
                     </div>
-                )}
-
-                {/* COD — no credentials */}
-                {credTab === "cod" && (
-                    <div className="p-5">
-                        <div className="flex items-start gap-3 rounded-lg bg-muted/40 border border-border px-5 py-4">
-                            <Info className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                            <div>
-                                <p className="text-sm font-medium">No credentials required</p>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Cash on Delivery doesn't require any API keys or external setup. 
-                                    Toggle it active/inactive using the switch in the <strong>Active on Storefront</strong> section above.
-                                </p>
-                            </div>
-                        </div>
+                    <div className="flex items-center gap-3">
+                        <Label htmlFor="toggle-cod" className="text-sm">Enable COD</Label>
+                        <Switch
+                            id="toggle-cod"
+                            checked={enabledMethods.has("cod")}
+                            onCheckedChange={async (v) => {
+                                toggleMethod("cod", v);
+                                // For COD, we autosave because there is no other configuration to submit.
+                                setTimeout(() => saveMethods(true), 100);
+                            }}
+                        />
                     </div>
-                )}
-            </div>
+                </div>
+            </Card>
+
         </div>
     );
 }

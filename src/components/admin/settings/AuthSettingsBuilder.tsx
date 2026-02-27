@@ -121,8 +121,7 @@ export default function AuthSettingsBuilder() {
                         <div className="space-y-0.5">
                             <Label>Guest Checkout</Label>
                             <p className="text-xs text-muted-foreground">
-                                When disabled, users must create an account to proceed to
-                                payment.
+                                When enabled, customers can checkout without logging in (subject to the Checkout Mode allowed below).
                             </p>
                         </div>
                         <Switch
@@ -131,25 +130,25 @@ export default function AuthSettingsBuilder() {
                         />
                     </div>
 
-                    <div className="space-y-1.5">
-                        <Label>Verification Method</Label>
+
+                    <div className="space-y-1.5 pt-4 border-t border-border">
+                        <Label>Account Verification Method</Label>
                         <p className="text-xs text-muted-foreground mb-1.5">
-                            OTP delivery channel. "Both" lets the customer choose. Phone uses
-                            WhatsApp.
+                            How customers verify their identity when creating an account or logging in.
                         </p>
                         <Select
                             value={authVerificationMethod}
                             onValueChange={(val) => setAuthVerificationMethod(val)}
                         >
                             <SelectTrigger className="w-full max-w-xs">
-                                <SelectValue placeholder="Select mode" />
+                                <SelectValue placeholder="Select verification method" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="email">Email Only</SelectItem>
-                                <SelectItem value="phone">WhatsApp Only</SelectItem>
-                                <SelectItem value="both">Both (User's Choice)</SelectItem>
-                                <SelectItem value="email_phone_mandatory">Email + WhatsApp (Mandatory)</SelectItem>
-                                <SelectItem value="sms_otp">SMS OTP (Custom Integration)</SelectItem>
+                                <SelectItem value="email">Email Verification Only</SelectItem>
+                                <SelectItem value="email_phone_mandatory">Email Verification (Phone Number Required)</SelectItem>
+                                <SelectItem value="phone">WhatsApp OTP Verification (Email Optional)</SelectItem>
+                                <SelectItem value="both">Both (Customer's Choice)</SelectItem>
+                                <SelectItem value="sms_otp">SMS OTP Verification (Coming Soon)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -157,7 +156,7 @@ export default function AuthSettingsBuilder() {
                     <div className="space-y-1.5 pt-4 border-t border-border">
                         <Label>Checkout Mode</Label>
                         <p className="text-xs text-muted-foreground mb-1.5">
-                            Determine if customers are forced to use specific payment methods or flows.
+                            Determine which payment flows and methods are available to customers at checkout.
                         </p>
                         <Select
                             value={checkoutMode}
@@ -167,8 +166,8 @@ export default function AuthSettingsBuilder() {
                                 <SelectValue placeholder="Select checkout mode" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">Standard (All Methods)</SelectItem>
-                                <SelectItem value="guest_cod_only">Guest COD Only (Fastest)</SelectItem>
+                                <SelectItem value="all">Standard (All Methods Available)</SelectItem>
+                                <SelectItem value="guest_cod_only">Fast COD Only (Direct from Cart)</SelectItem>
                                 <SelectItem value="gateways_only">Online Gateways Only (No COD)</SelectItem>
                             </SelectContent>
                         </Select>
