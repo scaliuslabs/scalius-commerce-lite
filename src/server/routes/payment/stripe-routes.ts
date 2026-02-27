@@ -2,21 +2,13 @@
 // Hono routes for Stripe payment operations.
 // Credentials are loaded from the DB settings table (set via admin dashboard).
 //
-// POST /payment/stripe/intent       - Create PaymentIntent (storefront)
-// POST /payment/stripe/capture/:id  - Capture manual PI (admin)
-// POST /payment/stripe/cancel/:id   - Cancel PI
-// POST /payment/stripe/refund       - Issue refund (admin)
+// POST /payment/stripe/intent - Create PaymentIntent (storefront)
 
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@/db/schema";
-import {
-  createPaymentIntent,
-  capturePaymentIntent,
-  cancelPaymentIntent,
-  createRefund,
-} from "@/lib/payment/stripe";
+import { createPaymentIntent } from "@/lib/payment/stripe";
 import { getStripeSettings } from "@/lib/payment/gateway-settings";
 import { getCurrencyConfig } from "@/lib/currency";
 
@@ -144,81 +136,6 @@ app.post("/intent", async (c) => {
     amount: chargeAmount,
     currency: body.currency,
   });
-});
-
-// ---------------------------------------------------------------------------
-// POST /payment/stripe/capture/:paymentIntentId
-// Capture a manually-authorized PaymentIntent (admin).
-// ---------------------------------------------------------------------------
-app.post("/capture/:paymentIntentId", async (c) => {
-  const db = c.get("db");
-  const stripe = await getStripeSettings(db, c.env.CACHE);
-  if (!stripe) return c.json({ success: false, error: "Stripe not configured" }, 503);
-
-  const { paymentIntentId } = c.req.param();
-  const body = await c.req.json().catch(() => ({})) as { amountToCapture?: number };
-
-  const result = await capturePaymentIntent(
-    stripe.secretKey,
-    paymentIntentId,
-    body.amountToCapture ? Math.round(body.amountToCapture * 100) : undefined
-  );
-
-  return c.json(result, result.success ? 200 : 500);
-});
-
-// ---------------------------------------------------------------------------
-// POST /payment/stripe/cancel/:paymentIntentId
-// Cancel an uncaptured PaymentIntent.
-// ---------------------------------------------------------------------------
-app.post("/cancel/:paymentIntentId", async (c) => {
-  const db = c.get("db");
-  const stripe = await getStripeSettings(db, c.env.CACHE);
-  if (!stripe) return c.json({ success: false, error: "Stripe not configured" }, 503);
-
-  const { paymentIntentId } = c.req.param();
-  const result = await cancelPaymentIntent(stripe.secretKey, paymentIntentId);
-
-  if (result.success) {
-    await db
-      .update(orders)
-      .set({ paymentIntentId: null, updatedAt: sql`unixepoch()` })
-      .where(eq(orders.paymentIntentId, paymentIntentId));
-  }
-
-  return c.json(result, result.success ? 200 : 500);
-});
-
-// ---------------------------------------------------------------------------
-// POST /payment/stripe/refund
-// Issue a partial or full refund for a captured charge (admin).
-// ---------------------------------------------------------------------------
-const refundSchema = z.object({
-  chargeId: z.string().min(1),
-  amount: z.number().positive().optional(),
-  reason: z.enum(["duplicate", "fraudulent", "requested_by_customer"]).optional(),
-});
-
-app.post("/refund", async (c) => {
-  const db = c.get("db");
-  const stripe = await getStripeSettings(db, c.env.CACHE);
-  if (!stripe) return c.json({ success: false, error: "Stripe not configured" }, 503);
-
-  let body: z.infer<typeof refundSchema>;
-  try {
-    body = refundSchema.parse(await c.req.json());
-  } catch {
-    return c.json({ success: false, error: "Invalid request body" }, 400);
-  }
-
-  const result = await createRefund(
-    stripe.secretKey,
-    body.chargeId,
-    body.amount ? Math.round(body.amount * 100) : undefined,
-    body.reason
-  );
-
-  return c.json(result, result.success ? 200 : 500);
 });
 
 export const stripePaymentRoutes = app;
