@@ -3,7 +3,7 @@ import type { APIContext as BaseAPIContext } from "astro";
 // ✅ CORRECTED: Directly import the ExecutionContext type.
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import app from "./index";
-import { invalidateCacheWithRelationships } from "./utils/cache-invalidation";
+import { getGroupsForPath, invalidateGroups } from "./utils/cache-invalidation";
 
 export const prerender = false;
 
@@ -129,7 +129,9 @@ export async function DELETE(context: BaseAPIContext) {
 }
 
 export async function PATCH(context: BaseAPIContext) {
-  return handleRequest(context as APIContextWithLocals);
+  const response = await handleRequest(context as APIContextWithLocals);
+  await invalidateCacheForRequest(context, response);
+  return response;
 }
 
 export async function OPTIONS(context: BaseAPIContext) {
@@ -144,20 +146,16 @@ async function invalidateCacheForRequest(
 
   try {
     const url = new URL(context.request.url);
-    const pathParts = url.pathname.split("/").filter(Boolean);
+    // Map the /api/v1/* path back to /api/* for group lookup
+    const apiPath = url.pathname.replace(/^\/api\/v1/, "/api");
+    const groups = getGroupsForPath(apiPath);
 
-    if (pathParts.length < 3 || pathParts[0] !== "api" || pathParts[1] !== "v1") return;
+    if (groups.length === 0) return;
 
-    const resourceType = pathParts[2];
-    if (!resourceType || resourceType === "cache") return;
+    const runtimeEnv = (context.locals as any).runtime?.env as Env | undefined;
+    const kv = runtimeEnv?.CACHE as KVNamespace | undefined;
 
-    const validResourceTypes = [
-      "products", "categories", "collections", "hero", "navigation", "pages", "footer", "header", "search"
-    ];
-
-    if (validResourceTypes.includes(resourceType)) {
-      await invalidateCacheWithRelationships(resourceType);
-    }
+    await invalidateGroups(groups, kv);
   } catch (error) {
     console.error("Error invalidating cache:", error);
   }

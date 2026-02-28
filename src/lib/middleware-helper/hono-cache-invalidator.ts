@@ -1,43 +1,36 @@
 // src/lib/middleware-helper/hono-cache-invalidator.ts
-import { invalidateEntireCache } from "@/server/utils/cache-invalidation";
+import {
+  getGroupsForPath,
+  invalidateGroups,
+  shouldBumpStorefrontVersion,
+  getStorefrontPrefixesForGroups,
+  ADMIN_PATH_TO_GROUPS,
+} from "@/server/utils/cache-invalidation";
+import { getCache, setCache } from "@/server/utils/kv-cache";
 import type { APIContext } from "astro";
 
 const WRITE_METHODS = ["POST", "PUT", "DELETE", "PATCH"];
 
-const ASTRO_ADMIN_WRITE_PATHS_FOR_CACHE_CLEAR = [
-  "/api/products",
-  "/api/categories",
-  "/api/collections",
-  "/api/pages",
-  "/api/widgets",
-  "/api/navigation",
-  "/api/shipments",
-  "/api/analytics",
-  "/api/orders",
-  "/api/discounts",
-  "/api/customers",
-  "/api/attributes",
-  "/api/settings/header",
-  "/api/settings/footer",
-  "/api/settings/hero-sliders",
-  "/api/settings/delivery-locations",
-  "/api/admin/settings/shipping-methods",
-  "/api/settings/seo",
-  "/api/settings/security",
-  "/api/admin/settings/checkout-languages",
-  "/api/settings/meta-conversion",
-  "/api/settings/payment-methods",
-  "/api/settings/stripe",
-  "/api/settings/sslcommerz",
-  "/api/settings/currency",
-  "/api/settings/auth",
-];
+// Derive the set of admin write paths from the group mapping.
+// Paths that should NOT trigger cache invalidation are excluded by simply
+// not being present in ADMIN_PATH_TO_GROUPS.
+const ADMIN_WRITE_PATHS = Object.keys(ADMIN_PATH_TO_GROUPS);
+
+// Debounce settings
+const DEBOUNCE_KEY = "_invalidation_debounce";
+const DEBOUNCE_MS = 2000;
 
 /**
  * Triggers the storefront's cache purge endpoint.
- * Uses PURGE_URL / PURGE_TOKEN from the Cloudflare Workers runtime env.
+ * - With groups: sends POST with selective purge payload.
+ * - Without groups: sends GET for a full purge (backwards compatible).
  */
-async function triggerStorefrontCachePurge(runtimeEnv?: Env): Promise<void> {
+async function triggerStorefrontCachePurge(
+  runtimeEnv?: Env,
+  groups?: string[],
+  prefixes?: string[],
+  bumpVersion?: boolean,
+): Promise<void> {
   const purgeUrl = runtimeEnv?.PURGE_URL;
   const purgeToken = runtimeEnv?.PURGE_TOKEN;
 
@@ -59,10 +52,23 @@ async function triggerStorefrontCachePurge(runtimeEnv?: Env): Promise<void> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    const response = await fetch(urlWithToken.toString(), {
-      method: "GET",
-      signal: controller.signal,
-    });
+    let response: Response;
+
+    if (groups && groups.length > 0) {
+      // Selective purge via POST
+      response = await fetch(urlWithToken.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groups, prefixes, bumpVersion }),
+        signal: controller.signal,
+      });
+    } else {
+      // Full purge via GET (backwards compatible)
+      response = await fetch(urlWithToken.toString(), {
+        method: "GET",
+        signal: controller.signal,
+      });
+    }
 
     clearTimeout(timeoutId);
 
@@ -104,17 +110,38 @@ export async function invalidateHonoCacheIfNeeded(
     response.status >= 200 &&
     response.status < 300
   ) {
-    const shouldInvalidate = ASTRO_ADMIN_WRITE_PATHS_FOR_CACHE_CLEAR.some(
-      (path) => url.pathname.startsWith(path),
+    const shouldInvalidate = ADMIN_WRITE_PATHS.some((path) =>
+      url.pathname.startsWith(path),
     );
 
     if (shouldInvalidate) {
-      console.log(
-        `[Cache Invalidator] Detected admin write to ${url.pathname}. Triggering full cache invalidation.`,
-      );
+      const groups = getGroupsForPath(url.pathname);
+
+      if (groups.length === 0) return;
 
       const runtimeEnv = (locals as any).runtime?.env as Env | undefined;
       const kv = runtimeEnv?.CACHE as KVNamespace | undefined;
+
+      // KV-based debounce: skip if the same group set was invalidated within DEBOUNCE_MS
+      const debounceKey = `${DEBOUNCE_KEY}:${groups.sort().join(",")}`;
+      const lastInvalidation = await getCache<number>(debounceKey, kv);
+
+      if (lastInvalidation && Date.now() - lastInvalidation < DEBOUNCE_MS) {
+        console.log(
+          `[Cache Invalidator] Debounced invalidation for [${groups.join(", ")}] – skipping.`,
+        );
+        return;
+      }
+
+      // Set debounce marker (KV min TTL is 60s, that's fine)
+      await setCache(debounceKey, Date.now(), 60, kv);
+
+      console.log(
+        `[Cache Invalidator] Detected admin write to ${url.pathname}. Invalidating groups: [${groups.join(", ")}].`,
+      );
+
+      const bumpVersion = shouldBumpStorefrontVersion(groups);
+      const prefixes = getStorefrontPrefixesForGroups(groups);
 
       const runtimeCtx = (locals as any).runtime?.ctx;
       const waitUntil = runtimeCtx?.waitUntil?.bind(runtimeCtx);
@@ -122,18 +149,17 @@ export async function invalidateHonoCacheIfNeeded(
       if (waitUntil) {
         waitUntil(
           Promise.allSettled([
-            invalidateEntireCache(kv),
-            triggerStorefrontCachePurge(runtimeEnv),
+            invalidateGroups(groups, kv),
+            triggerStorefrontCachePurge(runtimeEnv, groups, prefixes, bumpVersion),
           ]),
         );
       } else {
-        // Fallback for local dev or if runtime context is not available
         console.warn(
           "[Cache Invalidator] Could not find 'waitUntil'. Background tasks may not complete reliably.",
         );
         Promise.allSettled([
-          invalidateEntireCache(kv),
-          triggerStorefrontCachePurge(runtimeEnv),
+          invalidateGroups(groups, kv),
+          triggerStorefrontCachePurge(runtimeEnv, groups, prefixes, bumpVersion),
         ]);
       }
     }
