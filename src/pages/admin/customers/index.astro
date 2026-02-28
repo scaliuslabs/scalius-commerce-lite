@@ -64,19 +64,24 @@ const orderCustomers = await db
   .where(sql`${orders.customerId} IS NULL`)
   .groupBy(orders.customerPhone, orders.customerName, orders.customerEmail);
 
-// Create missing customers
-for (const customer of orderCustomers) {
-  // Check if customer exists
-  const existingCustomer = await db
-    .select()
-    .from(customers)
-    .where(eq(customers.phone, customer.phone))
-    .get();
+if (orderCustomers.length > 0) {
+  // Get all unique phone numbers from orderCustomers
+  const phones = [...new Set(orderCustomers.map((c) => c.phone).filter(Boolean))] as string[];
 
-  if (!existingCustomer) {
-    await db.insert(customers).values({
+  // Fetch existing customers in one query
+  const existingCustomers = await db
+    .select({ phone: customers.phone })
+    .from(customers)
+    .where(inArray(customers.phone, phones));
+
+  const existingPhoneSet = new Set(existingCustomers.map((c) => c.phone));
+
+  // Filter out customers that already exist
+  const newCustomersToInsert = orderCustomers
+    .filter((c) => c.phone && !existingPhoneSet.has(c.phone))
+    .map((customer) => ({
       id: "cust_" + nanoid(),
-      name: customer.name,
+      name: customer.name ?? "Unknown",
       phone: customer.phone,
       email: customer.email,
       address: null,
@@ -91,7 +96,11 @@ for (const customer of orderCustomers) {
       createdAt: sql`CAST(strftime('%s','now') AS INTEGER)`,
       updatedAt: sql`CAST(strftime('%s','now') AS INTEGER)`,
       deletedAt: null,
-    });
+    }));
+
+  // Bulk insert new customers
+  if (newCustomersToInsert.length > 0) {
+    await db.insert(customers).values(newCustomersToInsert);
   }
 }
 

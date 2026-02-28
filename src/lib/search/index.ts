@@ -37,175 +37,6 @@ export type SearchResult =
   | PageSearchResult
   | CategorySearchResult;
 
-/**
- * Fetch all products with their primary images and category names
- * Used for search and indexing
- */
-async function fetchProducts(
-  searchQuery?: string,
-  options?: {
-    limit?: number;
-    categoryId?: string;
-    minPrice?: number;
-    maxPrice?: number;
-  },
-): Promise<ProductSearchResult[]> {
-  try {
-    // Build conditions for product search
-    const conditions = [];
-    conditions.push(
-      sql`${products.deletedAt} IS NULL AND ${products.isActive} = 1`,
-    );
-
-    if (searchQuery && searchQuery.trim() !== "") {
-      const cond = ftsMatch("products_fts", "products", searchQuery);
-      if (cond) conditions.push(cond);
-    }
-
-    if (options?.categoryId) {
-      conditions.push(eq(products.categoryId, options.categoryId));
-    }
-
-    if (typeof options?.minPrice === "number") {
-      conditions.push(gte(products.price, options.minPrice));
-    }
-
-    if (typeof options?.maxPrice === "number") {
-      conditions.push(lte(products.price, options.maxPrice));
-    }
-
-    // Query the database for products with their categories
-    const productsData = await db
-      .select({
-        id: products.id,
-        name: products.name,
-        description: products.description,
-        price: products.price,
-        slug: products.slug,
-        categoryId: products.categoryId,
-        categoryName: categories.name,
-      })
-      .from(products)
-      .leftJoin(categories, eq(products.categoryId, categories.id))
-      .where(and(...conditions))
-      .limit(options?.limit || 100);
-
-    // Get all product IDs from the query result
-    const productIds = productsData.map((product) => product.id);
-
-    // Ensure we have at least one product ID to avoid empty query errors
-    if (productIds.length === 0) {
-      return [];
-    }
-
-    console.log(`Found ${productIds.length} products, fetching images...`);
-
-    // Fetch primary images in a separate query
-    const primaryImages = await db
-      .select({
-        productId: productImages.productId,
-        url: productImages.url,
-      })
-      .from(productImages)
-      .where(
-        and(
-          inArray(productImages.productId, productIds),
-          eq(productImages.isPrimary, true),
-        ),
-      );
-
-    // Create a map of product ID to image URL for quick lookup
-    const imageUrlMap = new Map<string, string>();
-    for (const img of primaryImages) {
-      if (img.productId && img.url) {
-        imageUrlMap.set(img.productId, img.url);
-      }
-    }
-
-    // Add image URLs to the product data
-    const productsWithImages = productsData.map((product) => ({
-      ...product,
-      imageUrl: imageUrlMap.get(product.id) || null,
-      type: "product" as const,
-    }));
-
-    return productsWithImages;
-  } catch (error) {
-    console.error("Error fetching products with images:", error);
-    throw error;
-  }
-}
-
-/**
- * Fetch all published pages
- * Used for search and indexing
- */
-async function fetchPages(
-  searchQuery?: string,
-  limit?: number,
-): Promise<PageSearchResult[]> {
-  const conditions = [];
-  conditions.push(sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = 1`);
-
-  if (searchQuery && searchQuery.trim() !== "") {
-    const cond = ftsMatch("pages_fts", "pages", searchQuery);
-    if (cond) conditions.push(cond);
-  }
-
-  const allPages = await db
-    .select({
-      id: pages.id,
-      title: pages.title,
-      slug: pages.slug,
-      content: pages.content,
-    })
-    .from(pages)
-    .where(and(...conditions))
-    .limit(limit || 100);
-
-  return allPages.map((page) => ({
-    ...page,
-    type: "page" as const,
-  }));
-}
-
-/**
- * Fetch all categories
- * Used for search and indexing
- */
-async function fetchCategories(
-  searchQuery?: string,
-  limit?: number,
-): Promise<CategorySearchResult[]> {
-  const conditions = [];
-  conditions.push(sql`${categories.deletedAt} IS NULL`);
-
-  if (searchQuery && searchQuery.trim() !== "") {
-    const cond = ftsMatch("categories_fts", "categories", searchQuery);
-    if (cond) conditions.push(cond);
-  }
-
-  const allCategories = await db
-    .select({
-      id: categories.id,
-      name: categories.name,
-      slug: categories.slug,
-      description: categories.description,
-    })
-    .from(categories)
-    .where(and(...conditions))
-    .limit(limit || 100);
-
-  return allCategories.map((category) => ({
-    ...category,
-    type: "category" as const,
-  }));
-}
-
-/**
- * Search function that queries the database directly
- * This replaces the MeiliSearch implementation with a direct database search
- */
 export async function search(
   query: string,
   options?: {
@@ -226,34 +57,143 @@ export async function search(
   const limit = options?.limit || 10;
   const searchPages = options?.searchPages !== false;
   const searchCategories = options?.searchCategories !== false;
+  const hasValidQuery = query && query.trim() !== "";
 
   try {
-    // Execute searches in parallel
-    const searchPromises: [
-      Promise<ProductSearchResult[]>,
-      Promise<PageSearchResult[]> | Promise<[]>,
-      Promise<CategorySearchResult[]> | Promise<[]>,
-    ] = [
-        fetchProducts(query, {
-          limit,
-          categoryId: options?.categoryId,
-          minPrice: options?.minPrice,
-          maxPrice: options?.maxPrice,
-        }),
-        searchPages ? fetchPages(query, limit) : Promise.resolve([]),
-        searchCategories ? fetchCategories(query, limit) : Promise.resolve([]),
-      ];
+    // Build Product Query
+    const productConditions = [];
+    productConditions.push(
+      sql`${products.deletedAt} IS NULL AND ${products.isActive} = 1`,
+    );
+    if (hasValidQuery) {
+      const cond = ftsMatch("products_fts", "products", query);
+      if (cond) productConditions.push(cond);
+    }
+    if (options?.categoryId) {
+      productConditions.push(eq(products.categoryId, options.categoryId));
+    }
+    if (typeof options?.minPrice === "number") {
+      productConditions.push(gte(products.price, options.minPrice));
+    }
+    if (typeof options?.maxPrice === "number") {
+      productConditions.push(lte(products.price, options.maxPrice));
+    }
 
-    const [products, pages, categories] = await Promise.all(searchPromises);
+    const productQuery = db
+      .select({
+        id: products.id,
+        name: products.name,
+        description: products.description,
+        price: products.price,
+        slug: products.slug,
+        categoryId: products.categoryId,
+        categoryName: categories.name,
+      })
+      .from(products)
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .where(and(...productConditions))
+      .limit(limit);
+
+    // Build Pages Query
+    const pageConditions = [sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = 1`];
+    if (hasValidQuery) {
+      const pageCond = ftsMatch("pages_fts", "pages", query);
+      if (pageCond) pageConditions.push(pageCond);
+    }
+    const pageQuery = searchPages
+      ? db
+        .select({
+          id: pages.id,
+          title: pages.title,
+          slug: pages.slug,
+          content: pages.content,
+        })
+        .from(pages)
+        .where(and(...pageConditions))
+        .limit(limit)
+      : db.select({ id: sql`NULL` }).from(pages).where(sql`1 = 0`); // Dummy query
+
+    // Build Categories Query
+    const categoryConditions = [sql`${categories.deletedAt} IS NULL`];
+    if (hasValidQuery) {
+      const catCond = ftsMatch("categories_fts", "categories", query);
+      if (catCond) categoryConditions.push(catCond);
+    }
+    const categoryQuery = searchCategories
+      ? db
+        .select({
+          id: categories.id,
+          name: categories.name,
+          slug: categories.slug,
+          description: categories.description,
+        })
+        .from(categories)
+        .where(and(...categoryConditions))
+        .limit(limit)
+      : db.select({ id: sql`NULL` }).from(categories).where(sql`1 = 0`); // Dummy query
+
+    // Execute searches in a single Turso batch
+    const [productsResult, pagesResult, categoriesResult] = await db.batch([
+      productQuery,
+      pageQuery,
+      categoryQuery,
+    ]);
+
+    // N+1 fix for images: we fetch them after just for the returned rows
+    let formattedProducts: ProductSearchResult[] = [];
+    if (productsResult.length > 0) {
+      const productIds = productsResult.map(p => p.id);
+      const primaryImages = await db
+        .select({
+          productId: productImages.productId,
+          url: productImages.url,
+        })
+        .from(productImages)
+        .where(
+          and(
+            inArray(productImages.productId, productIds),
+            eq(productImages.isPrimary, true),
+          ),
+        );
+
+      const imageUrlMap = new Map<string, string>();
+      for (const img of primaryImages) {
+        if (img.productId && img.url) {
+          imageUrlMap.set(img.productId, img.url);
+        }
+      }
+
+      formattedProducts = productsResult.map((product) => ({
+        ...product,
+        imageUrl: imageUrlMap.get(product.id) || null,
+        type: "product" as const,
+      })) as ProductSearchResult[];
+    }
+
+    // Format pages
+    const formattedPages = (searchPages ? pagesResult : []).filter(
+      (p: any) => p.id !== null
+    ).map((page: any) => ({
+      ...page,
+      type: "page" as const,
+    })) as PageSearchResult[];
+
+    // Format categories
+    const formattedCategories = (searchCategories ? categoriesResult : []).filter(
+      (c: any) => c.id !== null
+    ).map((category: any) => ({
+      ...category,
+      type: "category" as const,
+    })) as CategorySearchResult[];
 
     console.log(
-      `Search for "${query}" found products: ${products.length}, pages: ${pages.length}, categories: ${categories.length}`,
+      `Search for "${query}" found products: ${formattedProducts.length}, pages: ${formattedPages.length}, categories: ${formattedCategories.length}`,
     );
 
     return {
-      products,
-      pages,
-      categories,
+      products: formattedProducts,
+      pages: formattedPages,
+      categories: formattedCategories,
     };
   } catch (error) {
     console.error("Search error:", error);

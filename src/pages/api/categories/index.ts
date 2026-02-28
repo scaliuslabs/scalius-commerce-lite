@@ -68,8 +68,8 @@ export const GET: APIRoute = async ({ request }: APIContext) => {
     // Calculate pagination
     const offset = (page - 1) * limit;
 
-    // Get paginated results with proper timestamp handling
-    const results = await db
+    // Build the results query
+    const resultsQuery = db
       .select({
         id: categories.id,
         name: categories.name,
@@ -103,8 +103,8 @@ export const GET: APIRoute = async ({ request }: APIContext) => {
         })(),
       );
 
-    // Get product counts for these categories in a separate query
-    const productCounts = await db
+    // Build the product counts query
+    const countsQuery = db
       .select({
         categoryId: products.categoryId,
         count: sql<number>`count(*)`.as("count"),
@@ -112,6 +112,9 @@ export const GET: APIRoute = async ({ request }: APIContext) => {
       .from(products)
       .where(and(isNull(products.deletedAt), eq(products.isActive, true)))
       .groupBy(products.categoryId);
+
+    // Execute queries in parallel using db.batch to avoid roundtrips to Turso
+    const [results, productCounts] = await db.batch([resultsQuery, countsQuery]);
 
     // Create a map of category ID to product count
     const countMap = new Map(

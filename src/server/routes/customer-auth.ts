@@ -139,7 +139,6 @@ app.post("/send-otp", async (c) => {
     if (existingOtpRaw) {
       const existing = JSON.parse(existingOtpRaw) as StoredOtp;
       const now = Date.now();
-      const minWait = 2 * 60 * 1000; // 2 minutes
       if (existing.expiresAt - now > (OTP_TTL_SECONDS - 120) * 1000) {
         // OTP was created less than 2 min ago
         return c.json({
@@ -311,7 +310,6 @@ app.post("/verify-otp", async (c) => {
 
     // Look up customer in DB (if exists)
     const db = c.get("db");
-    const [settings] = await db.select().from(siteSettings).limit(1);
 
     let customerId: string | undefined;
     let customerName = name;
