@@ -6,7 +6,7 @@ import { getOrders } from "@/lib/admin";
 import type { OrderListItem } from "@/lib/admin";
 import { db } from "@/db";
 import { deliveryLocations } from "@/db/schema";
-import { and, isNull, sql } from "drizzle-orm";
+import { and, isNull, sql, inArray } from "drizzle-orm";
 
 const searchParams = Astro.url.searchParams;
 const page = parseInt(searchParams.get("page") || "1");
@@ -54,7 +54,7 @@ if (locationIds.length > 0) {
     .from(deliveryLocations)
     .where(
       and(
-        sql`${deliveryLocations.id} IN (${locationIds.join(",")})`,
+        inArray(deliveryLocations.id, locationIds),
         isNull(deliveryLocations.deletedAt),
       ),
     );

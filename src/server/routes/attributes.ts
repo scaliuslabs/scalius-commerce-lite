@@ -7,7 +7,7 @@ import {
   products,
   categories,
 } from "@/db/schema";
-import { eq, and, isNull, inArray, sql } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { ftsMatch } from "@/lib/search/fts5";
 import { cacheMiddleware } from "../middleware/cache";
 

@@ -277,7 +277,7 @@ export async function getProducts(options: {
   const productIds = productResults.map((p) => p.id);
 
   // Fetch variant counts, image counts, primary images, and SKUs in parallel
-  const [variantCounts, imageCounts, primaryImages, productSkus] = await Promise.all([
+  const [variantCounts, imageCounts, primaryImages, productSkus] = await db.batch([
     // Variant counts
     db
       .select({
@@ -598,7 +598,7 @@ export async function getOrders(options: {
   // Fetch item counts and shipments in parallel
   const orderIds = results.map((r) => r.id);
 
-  const [itemCounts, shipments] = await Promise.all([
+  const [itemCounts, shipments] = await db.batch([
     // Item counts
     db
       .select({
@@ -633,7 +633,20 @@ export async function getOrders(options: {
         )
         .where(inArray(deliveryShipments.orderId, orderIds))
         .orderBy(desc(deliveryShipments.createdAt))
-      : Promise.resolve([]),
+      : db.select({
+        orderId: sql<string>`NULL`.as("orderId"),
+        id: sql<string>`NULL`.as("id"),
+        providerId: sql<string | null>`NULL`.as("providerId"),
+        providerType: sql<string | null>`NULL`.as("providerType"),
+        status: sql<string>`NULL`.as("status"),
+        rawStatus: sql<string | null>`NULL`.as("rawStatus"),
+        externalId: sql<string | null>`NULL`.as("externalId"),
+        trackingId: sql<string | null>`NULL`.as("trackingId"),
+        lastChecked: sql<Date | null>`NULL`.as("lastChecked"),
+        updatedAt: sql<Date | null>`NULL`.as("updatedAt"),
+        createdAt: sql<Date | null>`NULL`.as("createdAt"),
+        providerName: sql<string | null>`NULL`.as("providerName"),
+      }).from(deliveryShipments).where(sql`1=0`)
   ]);
 
   // Create item count map
