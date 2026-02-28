@@ -3,24 +3,17 @@ import { Sun, Moon } from "lucide-react";
 import { Switch } from "./switch";
 
 export function DarkModeToggle({ className = "" }: { className?: string }) {
-  // SSR-safe: check for window
-  const [isDark, setIsDark] = React.useState(false);
+  // Start as null to avoid FOUC — don't render icons until we know the theme
+  const [isDark, setIsDark] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
-    const root = window.document.documentElement;
-    const stored = localStorage.getItem("theme");
-    // Default to light mode
-    if (stored === "dark") {
-      root.classList.add("dark");
-      setIsDark(true);
-    } else {
-      root.classList.remove("dark");
-      setIsDark(false);
-    }
+    // Read the actual state from the DOM (already set by the inline theme script)
+    const dark = document.documentElement.classList.contains("dark");
+    setIsDark(dark);
   }, []);
 
   const toggleTheme = React.useCallback(() => {
-    const root = window.document.documentElement;
+    const root = document.documentElement;
     if (root.classList.contains("dark")) {
       root.classList.remove("dark");
       localStorage.setItem("theme", "light");
@@ -31,6 +24,11 @@ export function DarkModeToggle({ className = "" }: { className?: string }) {
       setIsDark(true);
     }
   }, []);
+
+  // Don't render until we know the actual theme — prevents flash
+  if (isDark === null) {
+    return <div className={`flex items-center justify-between ${className}`} style={{ minWidth: 76, height: 20 }} />;
+  }
 
   return (
     <div className={`flex items-center justify-between ${className}`}>
