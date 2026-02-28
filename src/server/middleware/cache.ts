@@ -5,6 +5,16 @@ import { getCache, setCache, getCacheType } from "../utils/kv-cache";
 // Default TTL in seconds (1 hour)
 const DEFAULT_CACHE_TTL = 3600;
 
+/**
+ * Default Cache-Control for storefront API responses.
+ * - max-age=0: Browser revalidates on revisit so users see changes after KV invalidation.
+ * - stale-while-revalidate=120: Serve stale for 2 min while revalidating (Cloudflare async SWR, browsers).
+ * - stale-if-error=300: Serve stale for 5 min on origin errors (resilience).
+ * @see https://developers.cloudflare.com/changelog/post/2026-02-26-async-stale-while-revalidate/
+ */
+const DEFAULT_CACHE_CONTROL =
+  "public, max-age=0, stale-while-revalidate=120, stale-if-error=300";
+
 export interface CacheOptions {
   ttl?: number;
   keyPrefix?: string;
@@ -13,6 +23,8 @@ export interface CacheOptions {
   varyByQuery?: boolean;
   varyByAuth?: boolean;
   cacheCondition?: (c: any) => boolean;
+  /** Override Cache-Control. Default ensures browser revalidation for consistency with KV invalidation. */
+  cacheControl?: string;
 }
 
 /**
@@ -29,6 +41,7 @@ export const cacheMiddleware = (
     varyByQuery = true,
     varyByAuth = false,
     cacheCondition,
+    cacheControl = DEFAULT_CACHE_CONTROL,
   } = options;
 
   return async (c, next) => {
@@ -71,12 +84,7 @@ export const cacheMiddleware = (
         const headers = new Headers(cached.headers);
         headers.set("X-Cache", "HIT");
         headers.set("X-Cache-Type", getCacheType(kv));
-        if (!headers.has("Cache-Control")) {
-          headers.set(
-            "Cache-Control",
-            `public, max-age=${Math.min(ttl, 300)}`,
-          );
-        }
+        headers.set("Cache-Control", cacheControl);
         return new Response(cached.body, { status: cached.status, headers });
       }
     } catch (error) {
@@ -86,15 +94,15 @@ export const cacheMiddleware = (
     // Cache miss – add headers and execute handler
     c.header("X-Cache", "MISS");
     c.header("X-Cache-Type", getCacheType(kv));
-    c.header("Cache-Control", `public, max-age=${Math.min(ttl, 300)}`);
+    c.header("Cache-Control", cacheControl);
 
     await next();
 
     const response = c.res;
     if (!response.ok) return;
 
-    const cacheControl = response.headers.get("Cache-Control");
-    if (cacheControl?.includes("no-store")) return;
+    const resCacheControl = response.headers.get("Cache-Control");
+    if (resCacheControl?.includes("no-store")) return;
 
     try {
       const cloned = response.clone();

@@ -60,7 +60,8 @@ export const GET: APIRoute = async ({ request, url }) => {
           status: 200,
           headers: {
             "Content-Type": "application/json",
-            "Cache-Control": "public, max-age=60", // Cache empty results for 1 minute
+            "Cache-Control":
+              "public, max-age=0, stale-while-revalidate=120, stale-if-error=300",
           },
         },
       );
@@ -96,7 +97,8 @@ export const GET: APIRoute = async ({ request, url }) => {
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "public, max-age=300, stale-while-revalidate=600", // Cache for 5 minutes, stale for 10
+          "Cache-Control":
+            "public, max-age=0, stale-while-revalidate=120, stale-if-error=300",
         },
       },
     );
