@@ -14,7 +14,6 @@ import {
   desc,
   asc,
   isNull,
-  like,
   and,
   isNotNull,
   eq,
@@ -22,6 +21,7 @@ import {
   sum,
 } from "drizzle-orm";
 import { z } from "zod";
+import { ftsMatch } from "@/lib/search/fts5";
 
 const discountTypeEnum = z.nativeEnum(DiscountType);
 const discountValueTypeEnum = z.nativeEnum(DiscountValueType);
@@ -84,7 +84,8 @@ export const GET: APIRoute = async ({ request }) => {
 
     let conditions = [];
     if (search) {
-      conditions.push(like(discounts.code, `%${search}%`));
+      const cond = ftsMatch("discounts_fts", "discounts", search);
+      if (cond) conditions.push(cond);
     }
     if (showTrashed) {
       conditions.push(isNotNull(discounts.deletedAt));

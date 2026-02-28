@@ -2,7 +2,8 @@ import type { APIRoute } from "astro";
 import { db } from "../../../db";
 import { pages } from "../../../db/schema";
 import { nanoid } from "nanoid";
-import { sql, desc, asc, isNull, like, and, isNotNull } from "drizzle-orm";
+import { sql, desc, asc, isNull, and, isNotNull } from "drizzle-orm";
+import { ftsMatch } from "@/lib/search/fts5";
 import { z } from "zod";
 
 const createPageSchema = z.object({
@@ -48,7 +49,8 @@ export const GET: APIRoute = async ({ request }) => {
 
     // Handle search
     if (search) {
-      conditions.push(like(pages.title, `%${search}%`));
+      const cond = ftsMatch("pages_fts", "pages", search);
+      if (cond) conditions.push(cond);
     }
 
     // Handle trashed items

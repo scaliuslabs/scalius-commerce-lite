@@ -4,6 +4,7 @@ import { CustomerList } from "../../../components/admin/CustomerList";
 import { db } from "../../../db";
 import { customers, orders, deliveryLocations } from "../../../db/schema";
 import { sql, eq, and, isNull, inArray } from "drizzle-orm";
+import { ftsMatch } from "@/lib/search/fts5";
 import { nanoid } from "nanoid";
 
 const searchParams = Astro.url.searchParams;
@@ -32,11 +33,8 @@ if (showTrashed) {
 }
 
 if (search) {
-  whereConditions.push(
-    sql`(${customers.name} LIKE ${`%${search}%`} OR ${
-      customers.phone
-    } LIKE ${`%${search}%`} OR ${customers.email} LIKE ${`%${search}%`})`
-  );
+  const cond = ftsMatch("customers_fts", "customers", search);
+  if (cond) whereConditions.push(cond);
 }
 
 // Get total count for pagination

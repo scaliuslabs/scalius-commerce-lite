@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { products, productImages, categories, pages } from "@/db/schema";
-import { eq, sql, and, inArray, or, like, gte, lte } from "drizzle-orm";
+import { eq, sql, and, inArray, gte, lte } from "drizzle-orm";
+import { ftsMatch } from "./fts5";
 
 // Types for search results
 export type ProductSearchResult = {
@@ -57,13 +58,8 @@ async function fetchProducts(
     );
 
     if (searchQuery && searchQuery.trim() !== "") {
-      // Search in name and description
-      conditions.push(
-        or(
-          like(products.name, `%${searchQuery}%`),
-          like(products.description, `%${searchQuery}%`),
-        ),
-      );
+      const cond = ftsMatch("products_fts", "products", searchQuery);
+      if (cond) conditions.push(cond);
     }
 
     if (options?.categoryId) {
@@ -152,13 +148,8 @@ async function fetchPages(
   conditions.push(sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = 1`);
 
   if (searchQuery && searchQuery.trim() !== "") {
-    // Search in title and content
-    conditions.push(
-      or(
-        like(pages.title, `%${searchQuery}%`),
-        like(pages.content, `%${searchQuery}%`),
-      ),
-    );
+    const cond = ftsMatch("pages_fts", "pages", searchQuery);
+    if (cond) conditions.push(cond);
   }
 
   const allPages = await db
@@ -190,13 +181,8 @@ async function fetchCategories(
   conditions.push(sql`${categories.deletedAt} IS NULL`);
 
   if (searchQuery && searchQuery.trim() !== "") {
-    // Search in name and description
-    conditions.push(
-      or(
-        like(categories.name, `%${searchQuery}%`),
-        like(categories.description, `%${searchQuery}%`),
-      ),
-    );
+    const cond = ftsMatch("categories_fts", "categories", searchQuery);
+    if (cond) conditions.push(cond);
   }
 
   const allCategories = await db

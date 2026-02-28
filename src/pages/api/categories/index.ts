@@ -3,6 +3,7 @@ import { db } from "../../../db";
 import { categories, products } from "../../../db/schema";
 import { nanoid } from "nanoid";
 import { sql, and, isNull, isNotNull, eq, desc, asc } from "drizzle-orm";
+import { ftsMatch } from "@/lib/search/fts5";
 import { z } from "zod";
 
 const createCategorySchema = z.object({
@@ -54,11 +55,8 @@ export const GET: APIRoute = async ({ request }: APIContext) => {
     }
 
     if (search) {
-      whereConditions.push(
-        sql`(${categories.name} LIKE ${`%${search}%`} OR ${
-          categories.description
-        } LIKE ${`%${search}%`})`,
-      );
+      const cond = ftsMatch("categories_fts", "categories", search);
+      if (cond) whereConditions.push(cond);
     }
 
     // Get total count for pagination
