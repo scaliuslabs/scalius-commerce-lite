@@ -37,6 +37,8 @@ import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import "../styles/global.css";
 import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
+import { CacheNukeButton } from "@/components/admin/CacheNukeButton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button.tsx";
 import SideBar from "@/components/admin/adminLayout/SideBar.astro";
 import { generateAdminBreadcrumbs } from "@/lib/adminBreadCrumb";
@@ -353,13 +355,15 @@ const navSections: NavSection[] = allNavSections
 
             <Breadcrumb items={breadcrumbItems} client:idle />
           </div>
-          <div class="flex items-center gap-12">
-            <DarkModeToggle
-              client:idle
-              className="h-8 w-8 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-            />
-            <UserMenu user={userData} client:idle />
-          </div>
+          <TooltipProvider client:idle>
+            <div class="flex items-center">
+              <CacheNukeButton client:idle />
+              <div class="h-5 w-px bg-border mx-2.5"></div>
+              <DarkModeToggle client:idle />
+              <div class="h-5 w-px bg-border mx-2.5"></div>
+              <UserMenu user={userData} client:idle />
+            </div>
+          </TooltipProvider>
         </header>
 
         <!-- Main content area -->

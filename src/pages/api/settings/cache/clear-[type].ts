@@ -13,17 +13,17 @@ export const POST: APIRoute = async ({ params, request }) => {
       });
     }
 
-    // Validate cache type
+    // Validate cache type against all invalidation group names
     const validCacheTypes = [
       "products",
       "categories",
       "collections",
-      "footer",
-      "header",
-      "hero",
-      "navigation",
       "pages",
+      "layout",
+      "homepage",
+      "checkout",
       "search",
+      "attributes",
     ];
 
     if (!validCacheTypes.includes(type)) {
@@ -101,9 +101,9 @@ export const POST: APIRoute = async ({ params, request }) => {
 
     const authToken = tokenData.data.token;
 
-    // Now clear specific cache with the JWT auth token
-    const clearUrl = `${apiBaseUrl}/cache/clear-${type}`;
-    console.log(`Requesting specific cache clear from: ${clearUrl}`);
+    // Clear group cache via the new clear-group endpoint
+    const clearUrl = `${apiBaseUrl}/cache/clear-group`;
+    console.log(`Requesting group cache clear from: ${clearUrl} for group: ${type}`);
 
     const response = await fetch(clearUrl, {
       method: "POST",
@@ -114,8 +114,7 @@ export const POST: APIRoute = async ({ params, request }) => {
         Referer: apiOrigin,
         "X-Requested-With": "XMLHttpRequest",
       },
-      // Empty body as JSON to ensure proper content type
-      body: JSON.stringify({}),
+      body: JSON.stringify({ groups: [type] }),
     });
 
     if (!response.ok) {
