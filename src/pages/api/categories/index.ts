@@ -59,16 +59,15 @@ export const GET: APIRoute = async ({ request }: APIContext) => {
       if (cond) whereConditions.push(cond);
     }
 
-    // Get total count for pagination
-    const [{ count }] = await db
+    const offset = (page - 1) * limit;
+    const whereClause =
+      whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+    const countQuery = db
       .select({ count: sql<number>`count(*)` })
       .from(categories)
-      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
+      .where(whereClause);
 
-    // Calculate pagination
-    const offset = (page - 1) * limit;
-
-    // Build the results query
     const resultsQuery = db
       .select({
         id: categories.id,
@@ -83,7 +82,7 @@ export const GET: APIRoute = async ({ request }: APIContext) => {
         deletedAt: sql<number>`CAST(${categories.deletedAt} AS INTEGER)`,
       })
       .from(categories)
-      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .where(whereClause)
       .limit(limit)
       .offset(offset)
       .orderBy(
@@ -103,7 +102,6 @@ export const GET: APIRoute = async ({ request }: APIContext) => {
         })(),
       );
 
-    // Build the product counts query
     const countsQuery = db
       .select({
         categoryId: products.categoryId,
@@ -113,8 +111,11 @@ export const GET: APIRoute = async ({ request }: APIContext) => {
       .where(and(isNull(products.deletedAt), eq(products.isActive, true)))
       .groupBy(products.categoryId);
 
-    // Execute queries in parallel using db.batch to avoid roundtrips to Turso
-    const [results, productCounts] = await db.batch([resultsQuery, countsQuery]);
+    const [[{ count }], results, productCounts] = await db.batch([
+      countQuery,
+      resultsQuery,
+      countsQuery,
+    ]);
 
     // Create a map of category ID to product count
     const countMap = new Map(

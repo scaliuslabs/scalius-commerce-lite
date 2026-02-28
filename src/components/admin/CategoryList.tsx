@@ -122,9 +122,11 @@ export function CategoryList({
 }: CategoryListProps) {
   const { toast } = useToast();
   const { getStorefrontPath } = useStorefrontUrl();
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [categories, setCategories] = useState(initialCategories || []);
   const [pagination, setPagination] = useState(initialPagination);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const [localSearch, setLocalSearch] = useState(initialSearchQuery);
   const [sort, setSort] = useState(initialSort);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(),
@@ -134,8 +136,10 @@ export function CategoryList({
   const [isConfirmBulkDeleteOpen, setIsConfirmBulkDeleteOpen] = useState(false);
   const [isConfirmBulkRestoreOpen, setIsConfirmBulkRestoreOpen] =
     useState(false);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const searchTimeoutRef = React.useRef<number | undefined>(undefined);
+  const prevSearchQueryRef = React.useRef(initialSearchQuery);
 
-  // Update state if props change (e.g., after navigation)
   useEffect(() => {
     setCategories(initialCategories || []);
   }, [initialCategories]);
@@ -145,7 +149,10 @@ export function CategoryList({
   }, [initialPagination]);
 
   useEffect(() => {
-    // Sync state with URL params on mount/hydration
+    setLocalSearch(searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
     const url = new URL(window.location.href);
     setSearchQuery(url.searchParams.get("search") || initialSearchQuery);
     setSort({
@@ -153,6 +160,102 @@ export function CategoryList({
       order: (url.searchParams.get("order") || initialSort.order) as SortOrder,
     });
   }, [initialSearchQuery, initialSort.field, initialSort.order]);
+
+  const fetchCategories = useCallback(
+    async (params: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort?: SortField;
+      order?: SortOrder;
+    }) => {
+      setIsLoadingCategories(true);
+      try {
+        const url = new URL("/api/categories", window.location.origin);
+        if (params.page) url.searchParams.set("page", params.page.toString());
+        if (params.limit) url.searchParams.set("limit", params.limit.toString());
+        if (params.search) url.searchParams.set("search", params.search);
+        if (params.sort) url.searchParams.set("sort", params.sort);
+        if (params.order) url.searchParams.set("order", params.order);
+        if (showTrashed) url.searchParams.set("trashed", "true");
+
+        const res = await fetch(url.toString());
+        if (!res.ok) throw new Error("Failed to fetch categories");
+        const data = await res.json();
+
+        const parsed = (data.categories || []).map((c: any) => ({
+          ...c,
+          createdAt: c.createdAt ? new Date(c.createdAt) : null,
+          updatedAt: c.updatedAt ? new Date(c.updatedAt) : null,
+          deletedAt: c.deletedAt ? new Date(c.deletedAt) : null,
+        }));
+        setCategories(parsed);
+        setPagination(data.pagination || initialPagination);
+
+        const urlToUpdate = new URL(window.location.href);
+        if (params.page) urlToUpdate.searchParams.set("page", params.page.toString());
+        if (params.limit) urlToUpdate.searchParams.set("limit", params.limit.toString());
+        if (params.search) urlToUpdate.searchParams.set("search", params.search);
+        else urlToUpdate.searchParams.delete("search");
+        if (params.sort) urlToUpdate.searchParams.set("sort", params.sort);
+        if (params.order) urlToUpdate.searchParams.set("order", params.order);
+        if (showTrashed) urlToUpdate.searchParams.set("trashed", "true");
+        else urlToUpdate.searchParams.delete("trashed");
+        window.history.pushState({}, "", urlToUpdate.toString());
+      } catch (err) {
+        console.error("Error fetching categories:", err);
+        toast({
+          title: "Error",
+          description: "Failed to load categories. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    },
+    [showTrashed, initialPagination, toast],
+  );
+
+  useEffect(() => {
+    if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = window.setTimeout(() => {
+      if (localSearch !== searchQuery) setSearchQuery(localSearch);
+    }, 500);
+    return () => {
+      if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
+    };
+  }, [localSearch, searchQuery]);
+
+  useEffect(() => {
+    if (searchQuery !== prevSearchQueryRef.current) {
+      prevSearchQueryRef.current = searchQuery;
+      fetchCategories({
+        page: 1,
+        limit: pagination.limit,
+        search: searchQuery.trim() || undefined,
+        sort: sort.field,
+        order: sort.order,
+      });
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+        const t = e.target as HTMLElement;
+        if (t.tagName !== "INPUT" && t.tagName !== "TEXTAREA") {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      }
+      if (e.key === "Escape" && document.activeElement === searchInputRef.current) {
+        setLocalSearch("");
+        searchInputRef.current?.blur();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, []);
 
   // Derived state & memoized values
   const displayStats = useMemo(() => {
@@ -182,49 +285,56 @@ export function CategoryList({
     return "indeterminate";
   }, [selectedCategories.size, categories.length]);
 
-  // Callbacks
   const handleSearch = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      const url = new URL(window.location.href);
-      if (searchQuery.trim()) {
-        url.searchParams.set("search", searchQuery.trim());
-      } else {
-        url.searchParams.delete("search");
-      }
-      url.searchParams.delete("page");
-      window.location.href = url.toString();
+    (e?: React.FormEvent) => {
+      e?.preventDefault();
+      setSearchQuery(localSearch);
     },
-    [searchQuery],
+    [localSearch],
   );
 
-  const handleSort = useCallback((field: SortField) => {
-    const url = new URL(window.location.href);
-    const currentOrder = url.searchParams.get("order");
-    const currentSort = url.searchParams.get("sort");
-    const newOrder =
-      currentSort === field && currentOrder === "asc" ? "desc" : "asc";
-    url.searchParams.set("sort", field);
-    url.searchParams.set("order", newOrder);
-    window.location.href = url.toString();
-  }, []);
+  const handleSort = useCallback(
+    (field: SortField) => {
+      const newOrder =
+        sort.field === field && sort.order === "asc" ? "desc" : "asc";
+      setSort({ field, order: newOrder });
+      fetchCategories({
+        page: pagination.page,
+        limit: pagination.limit,
+        search: searchQuery.trim() || undefined,
+        sort: field,
+        order: newOrder,
+      });
+    },
+    [fetchCategories, pagination.page, pagination.limit, searchQuery, sort.field, sort.order],
+  );
 
   const handlePageChange = useCallback(
     (newPage: number) => {
       if (newPage < 1 || newPage > pagination.totalPages) return;
-      const url = new URL(window.location.href);
-      url.searchParams.set("page", newPage.toString());
-      window.location.href = url.toString();
+      fetchCategories({
+        page: newPage,
+        limit: pagination.limit,
+        search: searchQuery.trim() || undefined,
+        sort: sort.field,
+        order: sort.order,
+      });
     },
-    [pagination.totalPages],
+    [fetchCategories, pagination.totalPages, pagination.limit, searchQuery, sort.field, sort.order],
   );
 
-  const handleLimitChange = useCallback((newLimit: number) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("limit", newLimit.toString());
-    url.searchParams.delete("page"); // Reset to page 1 on limit change
-    window.location.href = url.toString();
-  }, []);
+  const handleLimitChange = useCallback(
+    (newLimit: number) => {
+      fetchCategories({
+        page: 1,
+        limit: newLimit,
+        search: searchQuery.trim() || undefined,
+        sort: sort.field,
+        order: sort.order,
+      });
+    },
+    [fetchCategories, searchQuery, sort.field, sort.order],
+  );
 
   const handleDelete = useCallback(async () => {
     if (!categoryToDelete) return;
@@ -548,11 +658,15 @@ export function CategoryList({
   );
 
   const clearFilters = useCallback(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("search");
-    url.searchParams.delete("page");
-    window.location.href = url.toString();
-  }, []);
+    setLocalSearch("");
+    setSearchQuery("");
+    fetchCategories({
+      page: 1,
+      limit: pagination.limit,
+      sort: sort.field,
+      order: sort.order,
+    });
+  }, [fetchCategories, pagination.limit, sort.field, sort.order]);
 
   const toggleTrash = useCallback(() => {
     const url = new URL(window.location.href);
@@ -610,7 +724,7 @@ export function CategoryList({
     [sort],
   );
 
-  const hasActiveFilters = searchQuery.trim().length > 0;
+  const hasActiveFilters = localSearch.trim().length > 0;
 
   return (
     <Card className="border-none shadow-none">
@@ -713,6 +827,9 @@ export function CategoryList({
           {/* Toolbar: Search, Filter, Bulk Actions */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div className="flex flex-1 items-center w-full sm:w-auto space-x-1.5">
+              <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50 shrink-0">
+                Press <kbd className="px-1.5 py-0.5 bg-background border border-border rounded text-xs font-mono">/</kbd> to search
+              </div>
               <form
                 onSubmit={handleSearch}
                 className="flex-1 sm:flex-initial sm:max-w-xs w-full"
@@ -720,10 +837,11 @@ export function CategoryList({
                 <div className="relative">
                   <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
+                    ref={searchInputRef}
                     type="search"
                     placeholder="Search categories..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={localSearch}
+                    onChange={(e) => setLocalSearch(e.target.value)}
                     className="pl-7 h-7 w-full text-sm"
                   />
                 </div>
@@ -797,7 +915,15 @@ export function CategoryList({
         </div>
 
         {/* Table */}
-        <div className="border-t">
+        <div className="border-t relative">
+          {isLoadingCategories && (
+            <div className="absolute inset-0 bg-(--background)/80 backdrop-blur-sm z-10 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                <p className="text-sm text-muted-foreground">Loading categories...</p>
+              </div>
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
