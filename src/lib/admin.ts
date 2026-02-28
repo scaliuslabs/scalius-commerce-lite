@@ -12,7 +12,8 @@ import {
   deliveryShipments,
   deliveryProviders,
 } from "../db/schema";
-import { and, sql, desc, like, eq, asc, gte, inArray } from "drizzle-orm";
+import { and, sql, desc, eq, asc, gte, inArray } from "drizzle-orm";
+import { ftsMatch, sanitizeFtsQuery } from "@/lib/search/fts5";
 import type {
   Product,
   ProductVariant,
@@ -200,10 +201,12 @@ export async function getProducts(options: {
   }
 
   if (search) {
-    // Add SKU to search condition if search term is provided
-    whereConditions.push(
-      sql`(${products.name} LIKE ${`%${search}%`} OR EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.sku} LIKE ${`%${search}%`}))`,
-    );
+    const sanitized = sanitizeFtsQuery(search);
+    if (sanitized) {
+      whereConditions.push(
+        sql`(${sql.raw("products")}.rowid IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ${sanitized}) OR EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${sql.raw("product_variants")}.rowid IN (SELECT rowid FROM product_variants_fts WHERE product_variants_fts MATCH ${sanitized})))`,
+      );
+    }
   }
 
   if (categoryId) {
@@ -507,10 +510,8 @@ export async function getOrders(options: {
   }
 
   if (search) {
-    whereConditions.push(
-      sql`(${orders.customerName} LIKE ${`%${search}%`} OR ${orders.customerPhone
-        } LIKE ${`%${search}%`} OR ${orders.id} LIKE ${`%${search}%`})`,
-    );
+    const cond = ftsMatch("orders_fts", "orders", search);
+    if (cond) whereConditions.push(cond);
   }
 
   if (status) {
@@ -1018,7 +1019,8 @@ export async function getDiscounts(options: {
   }
 
   if (search) {
-    whereConditions.push(like(discounts.code, `%${search}%`));
+    const cond = ftsMatch("discounts_fts", "discounts", search);
+    if (cond) whereConditions.push(cond);
   }
 
   if (type) {

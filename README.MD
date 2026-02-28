@@ -71,7 +71,7 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 
 - **Runtime / framework**: Astro (SSR, Cloudflare adapter) + React
 - **Storefront API**: Hono (Swagger UI + OpenAPI)
-- **Database**: Cloudflare D1 (SQLite) + Drizzle ORM
+- **Database**: Cloudflare D1 (SQLite) + Drizzle ORM + FTS5 full-text search
 - **UI**: Tailwind CSS v4 + shadcn/ui (`src/components/ui/**`)
 - **Auth**: Better Auth (email/password + mandatory 2FA)
 - **Caching**: Cloudflare KV (with in-memory fallback) for Hono API response caching
@@ -259,12 +259,6 @@ Resend API key and sender address are configured via the admin dashboard at **Se
 
 In development without a Resend API key configured in the dashboard, emails are logged to console.
 
-#### Search reindex auth (optional)
-
-Some reindex endpoints expect a bearer secret in production:
-
-- `SERVICE_PASSWORD_MEILISEARCH`
-
 #### AI / OpenRouter (optional)
 
 OpenRouter API key is stored in the DB settings table (`key=openrouter_api_key`, `category=integrations`), not in env.
@@ -351,6 +345,16 @@ pnpm db:migrate:remote  # apply migrations to remote D1
 ```
 
 The deploy script (`scripts/deploy.mjs`) handles migrations automatically when running `pnpm deploy`.
+
+### Full-text search (FTS5)
+
+All text search (admin dashboard, storefront API, command palette) uses **SQLite FTS5** for fast, indexed full-text search instead of `LIKE '%term%'` scans.
+
+- **FTS5 tables**: `products_fts`, `product_variants_fts`, `categories_fts`, `pages_fts`, `orders_fts`, `customers_fts`, `discounts_fts`, `abandoned_checkouts_fts`
+- **External content**: Each FTS5 table is linked to its source table via `content=` / `content_rowid='rowid'`, so no data is duplicated — only the search index is stored.
+- **Auto-sync**: INSERT/UPDATE/DELETE triggers keep FTS5 indexes in sync automatically.
+- **Query features**: Prefix matching (typing "shi" matches "shirt"), multi-word AND queries ("blue shirt" requires both words), all via the shared helper in `src/lib/search/fts5.ts`.
+- **Migration**: `migrations/0016_fts5_search.sql`
 
 ### Authentication
 

@@ -11,7 +11,8 @@ import {
   productAttributeValues,
   productRichContent,
 } from "@/db/schema";
-import { eq, sql, and, isNull, desc, like, inArray, or } from "drizzle-orm";
+import { eq, sql, and, isNull, desc, inArray, or } from "drizzle-orm";
+import { ftsMatch } from "@/lib/search/fts5";
 import { cacheMiddleware } from "../middleware/cache";
 
 const app = new Hono();
@@ -134,7 +135,8 @@ app.get("/", async (c) => {
       conditions.push(eq(products.categoryId, category));
     }
     if (search) {
-      conditions.push(like(products.name, `%${search}%`));
+      const cond = ftsMatch("products_fts", "products", search);
+      if (cond) conditions.push(cond);
     }
     if (minPrice !== undefined) {
       conditions.push(sql`${products.price} >= ${minPrice}`);
@@ -780,7 +782,8 @@ app.get("/category/:categorySlug", async (c) => {
     ];
 
     if (search) {
-      conditions.push(like(products.name, `%${search}%`));
+      const cond = ftsMatch("products_fts", "products", search);
+      if (cond) conditions.push(cond);
     }
     if (minPrice !== undefined) {
       conditions.push(sql`${products.price} >= ${minPrice}`);
@@ -927,7 +930,8 @@ app.get("/search", async (c) => {
     ];
 
     if (search) {
-      whereConditions.push(like(products.name, `%${search}%`));
+      const cond = ftsMatch("products_fts", "products", search);
+      if (cond) whereConditions.push(cond);
     }
 
     const [{ count }] = await db

@@ -8,6 +8,7 @@ import {
   categories,
 } from "@/db/schema";
 import { eq, and, isNull, inArray, sql } from "drizzle-orm";
+import { ftsMatch } from "@/lib/search/fts5";
 import { cacheMiddleware } from "../middleware/cache";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -247,8 +248,10 @@ app.get("/search-filters", async (c) => {
     let searchConditions = [
       eq(products.isActive, true),
       isNull(products.deletedAt),
-      sql`${products.name} LIKE ${`%${query.trim()}%`}`,
     ];
+
+    const ftsCond = ftsMatch("products_fts", "products", query.trim());
+    if (ftsCond) searchConditions.push(ftsCond);
 
     // If categoryId is provided, add it to conditions
     if (categoryId) {

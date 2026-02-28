@@ -1,7 +1,8 @@
 import type { APIRoute } from "astro";
 import { db } from "@/db";
 import { abandonedCheckouts, orders, OrderStatus, type AbandonedCheckout } from "@/db/schema";
-import { and, sql, inArray, desc, asc, like, or, count, eq } from "drizzle-orm";
+import { and, sql, inArray, desc, asc, count, eq } from "drizzle-orm";
+import { ftsMatch } from "@/lib/search/fts5";
 import { z } from "zod";
 
 // Helper to determine if a checkout is "empty" (no customer info, no items)
@@ -76,13 +77,8 @@ export const GET: APIRoute = async ({ url }) => {
 
     const whereConditions = [];
     if (search) {
-      whereConditions.push(
-        or(
-          like(abandonedCheckouts.customerPhone, `%${search}%`),
-          like(abandonedCheckouts.checkoutId, `%${search}%`),
-          like(abandonedCheckouts.checkoutData, `%${search}%`)
-        )
-      );
+      const cond = ftsMatch("abandoned_checkouts_fts", "abandoned_checkouts", search);
+      if (cond) whereConditions.push(cond);
     }
 
     const combinedWhere = whereConditions.length > 0 ? and(...whereConditions) : undefined;

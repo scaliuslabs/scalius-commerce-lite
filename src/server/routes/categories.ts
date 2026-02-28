@@ -8,7 +8,8 @@ import {
   productAttributes,
   productAttributeValues,
 } from "@/db/schema";
-import { eq, isNull, sql, and, desc, like, inArray, or } from "drizzle-orm";
+import { eq, isNull, sql, and, desc, inArray, or } from "drizzle-orm";
+import { ftsMatch } from "@/lib/search/fts5";
 import { cacheMiddleware } from "../middleware/cache";
 
 // Create a Hono app for category routes
@@ -185,7 +186,8 @@ app.get("/:slug/products", async (c) => {
 
     // Apply search filter
     if (search) {
-      conditions.push(like(products.name, `%${search}%`));
+      const cond = ftsMatch("products_fts", "products", search);
+      if (cond) conditions.push(cond);
     }
 
     // Apply price range filters
