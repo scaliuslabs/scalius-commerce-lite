@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
 import { z } from "zod";
+import { toast } from "sonner";
 import {
   Form,
   FormControl,
@@ -14,15 +15,13 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../ui/card";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
-import { Button } from "../ui/button";
-import { Loader2 } from "lucide-react";
 import { LocationSelector } from "./LocationSelector";
+import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 
 const customerFormSchema = z.object({
   id: z.string().optional(),
@@ -58,7 +57,6 @@ export function CustomerForm({
   defaultValues,
   isEdit = false,
 }: CustomerFormProps) {
-  console.log("CustomerForm received defaultValues:", defaultValues);
   const [isInitializing, setIsInitializing] = React.useState(
     isEdit &&
       defaultValues &&
@@ -91,12 +89,6 @@ export function CustomerForm({
 
       // Force a rerender of the form after a short delay
       const timer = setTimeout(() => {
-        console.log("Running manual initialization with values:", {
-          city: defaultValues.city,
-          zone: defaultValues.zone,
-          area: defaultValues.area,
-        });
-
         // First set city to trigger city dropdown to populate
         if (defaultValues.city) {
           form.setValue("city", defaultValues.city, { shouldDirty: false });
@@ -122,17 +114,6 @@ export function CustomerForm({
     }
   }, [isEdit, defaultValues, isInitializing, form]);
 
-  // Monitor location fields for debugging
-  React.useEffect(() => {
-    const subscription = form.watch((value, { name, type }) => {
-      if (name === "city" || name === "zone" || name === "area") {
-        console.log(`Field ${name} changed via ${type}:`, value[name]);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [form]);
-
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleSubmit: SubmitHandler<CustomerFormValues> = async (values) => {
@@ -157,10 +138,13 @@ export function CustomerForm({
       }
 
       await response.json();
+      toast.success(isEdit ? "Customer updated successfully" : "Customer created successfully");
       window.location.href = "/admin/customers";
     } catch (error) {
       console.error("Error submitting form:", error);
-      alert("Failed to save customer. Please try again.");
+      toast.error("Failed to save customer", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -168,121 +152,112 @@ export function CustomerForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-            <CardDescription>
-              Enter the customer's basic details.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Enter customer name" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      <FormStickyHeader
+        title="Customers"
+        entityName={form.watch("name")}
+        isEdit={isEdit}
+        isSubmitting={isSubmitting || !!isInitializing}
+        isDirty={form.formState.isDirty}
+        cancelUrl="/admin/customers"
+        newUrl="/admin/customers/new"
+        newLabel="New Customer"
+        onSave={() => form.handleSubmit(handleSubmit)()}
+      />
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+          {/* Left Column (2/3) */}
+          <div className="lg:col-span-2 space-y-4">
+            <Card>
+              <CardHeader className="pb-3 pt-4 px-4">
+                <CardTitle className="text-base">Basic Information</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter customer name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter phone number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter phone number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email (Optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="email"
-                        placeholder="Enter email address"
-                        {...field}
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </CardContent>
-        </Card>
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email (Optional)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="email"
+                            placeholder="Enter email address"
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Address Information</CardTitle>
-            <CardDescription>
-              Enter the customer's address details.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter address"
-                      className="h-20"
-                      {...field}
-                      value={field.value || ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          {/* Right Column (1/3) */}
+          <div className="space-y-3">
+            <Card>
+              <CardHeader className="pb-3 pt-4 px-4">
+                <CardTitle className="text-base">Address</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Enter address"
+                          className="h-20"
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <LocationSelector />
+                <LocationSelector />
 
-            <input type="hidden" {...form.register("cityName")} />
-            <input type="hidden" {...form.register("zoneName")} />
-            <input type="hidden" {...form.register("areaName")} />
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            className="md:w-auto"
-            disabled={isSubmitting || isInitializing}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isEdit ? "Updating..." : "Creating..."}
-              </>
-            ) : isInitializing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading location data...
-              </>
-            ) : (
-              <>{isEdit ? "Update Customer" : "Create Customer"}</>
-            )}
-          </Button>
+                <input type="hidden" {...form.register("cityName")} />
+                <input type="hidden" {...form.register("zoneName")} />
+                <input type="hidden" {...form.register("areaName")} />
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </form>
     </Form>

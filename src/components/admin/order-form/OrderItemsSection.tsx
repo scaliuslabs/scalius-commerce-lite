@@ -132,11 +132,11 @@ export function OrderItemsSection() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Order Items</CardTitle>
-        <CardDescription>Add products to the order.</CardDescription>
+      <CardHeader className="pb-3 pt-4 px-4">
+        <CardTitle className="text-base">Order Items</CardTitle>
+        <CardDescription className="text-xs">Add products to the order.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="px-4 pb-4 space-y-3">
         <div className="space-y-4">
           <ProductSearch
             searchTerm={searchTerm}

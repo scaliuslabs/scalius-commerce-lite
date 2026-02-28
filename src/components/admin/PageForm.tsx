@@ -16,7 +16,6 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../ui/card";
@@ -24,10 +23,12 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
-import { Loader2, ExternalLink, Save } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { TiptapEditor } from "../ui/tiptap-editor";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
+import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 
 const pageFormSchema = z.object({
   id: z.string().optional(),
@@ -158,320 +159,303 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-            <CardDescription>
-              Enter the basic details of your page.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <FormStickyHeader
+        title="Pages"
+        entityName={form.watch("title")}
+        isEdit={isEdit}
+        isSubmitting={isSubmitting}
+        isDirty={form.formState.isDirty}
+        cancelUrl="/admin/pages"
+        newUrl="/admin/pages/new"
+        newLabel="New Page"
+        saveLabel={isEdit ? "Save Page" : "Create Page"}
+        onSave={() => form.handleSubmit(handleSubmit)()}
+      />
+
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+          {/* Left Column (2/3) */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Title field (standalone) */}
             <FormField
               control={form.control}
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Page Title</FormLabel>
+                  <FormLabel className="text-sm font-medium">
+                    Title <span className="text-destructive">*</span>
+                  </FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter page title" {...field} />
+                    <Input placeholder="Page title" {...field} className="text-base" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="slug"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Slug</FormLabel>
-                  <FormControl>
-                    <Input placeholder="page-url-slug" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    The URL-friendly version of the title. Auto-generated but
-                    can be edited.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="sortOrder"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Sort Order</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      {...field}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        field.onChange(value === "" ? 0 : parseInt(value, 10));
-                      }}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Pages with lower sort order will appear first in navigation.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Display Options</CardTitle>
-            <CardDescription>
-              Control the visibility of standard layout elements on this page.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="hideHeader"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Hide Header</FormLabel>
-                    <FormDescription>
-                      If checked, the main site header will not be displayed on
-                      this page.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="hideFooter"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Hide Footer</FormLabel>
-                    <FormDescription>
-                      If checked, the main site footer will not be displayed on
-                      this page.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="hideTitle"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Hide Page Title</FormLabel>
-                    <FormDescription>
-                      If checked, the page's main title will be hidden from the
-                      content area.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="isPublished"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">
-                      Published Status
-                    </FormLabel>
-                    <FormDescription>
-                      Page will be visible on the site
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Page Content</CardTitle>
-            <CardDescription>
-              Create the content for your page using the rich text editor.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-3 space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Page Content</CardTitle>
-                    <CardDescription>
-                      Create the content for your page using the rich text
-                      editor.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <FormField
-                      control={form.control}
-                      name="content"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            {isClient && (
-                              <TiptapEditor
-                                content={field.value}
-                                onChange={field.onChange}
-                                placeholder="Write your page content here..."
-                              />
-                            )}
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>SEO Information</CardTitle>
-            <CardDescription>
-              Optimize your page for search engines.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="metaTitle"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Meta Title</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="SEO title (optional)"
-                      {...field}
-                      value={field.value || ""}
-                      onChange={(e) => {
-                        field.onChange(e.target.value || null);
-                      }}
-                    />
-                  </FormControl>
-                  {field.value && (
-                    <CharacterCounter
-                      current={field.value.length}
-                      recommended={60}
-                      max={70}
-                    />
+            {/* Page Content card */}
+            <Card>
+              <CardHeader className="pb-3 pt-4 px-4">
+                <CardTitle className="text-base">Content</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <FormField
+                  control={form.control}
+                  name="content"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        {isClient && (
+                          <TiptapEditor
+                            content={field.value}
+                            onChange={field.onChange}
+                            placeholder="Write your page content here..."
+                            compact={true}
+                          />
+                        )}
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                  <FormDescription>
-                    Leave empty to use the page title. Recommended: 50-60
-                    characters.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="metaDescription"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Meta Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="SEO description (optional)"
-                      {...field}
-                      value={field.value || ""}
-                      rows={3}
-                      onChange={(e) => {
-                        field.onChange(e.target.value || null);
-                      }}
-                    />
-                  </FormControl>
-                  {field.value && (
-                    <CharacterCounter
-                      current={field.value.length}
-                      recommended={160}
-                      max={200}
-                    />
-                  )}
-                  <FormDescription>
-                    A brief description of the page for search engines.
-                    Recommended: 150-160 characters.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-between items-center">
-          <div>
-            {isEdit && slug && (
-              <Button variant="outline" type="button" asChild>
-                <a
-                  href={storefrontPageUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" /> Preview Page
-                </a>
-              </Button>
-            )}
+                />
+              </CardContent>
+            </Card>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" type="button" asChild>
-              <a href="/admin/pages">Cancel</a>
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  {isEdit ? "Update Page" : "Create Page"}
-                </>
-              )}
-            </Button>
+
+          {/* Right Column (1/3) */}
+          <div className="space-y-3">
+            {/* Status & Display card */}
+            <Card>
+              <CardHeader className="pb-3 pt-4 px-4">
+                <CardTitle className="text-base">Status & Display</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                <FormField
+                  control={form.control}
+                  name="isPublished"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">
+                          Published Status
+                        </FormLabel>
+                        <FormDescription>
+                          Page will be visible on the site
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="hideHeader"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">Hide Header</FormLabel>
+                        <FormDescription>
+                          Hide the main site header on this page
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="hideFooter"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">Hide Footer</FormLabel>
+                        <FormDescription>
+                          Hide the main site footer on this page
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="hideTitle"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">Hide Page Title</FormLabel>
+                        <FormDescription>
+                          Hide the page title from the content area
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            {/* URL & Settings card */}
+            <Card>
+              <CardHeader className="pb-3 pt-4 px-4">
+                <CardTitle className="text-base">URL & Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                <FormField
+                  control={form.control}
+                  name="slug"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Slug</FormLabel>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">/pages/</span>
+                        <FormControl>
+                          <Input placeholder="page-url-slug" {...field} className="h-9" />
+                        </FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="sortOrder"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Sort Order</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          {...field}
+                          className="h-9"
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            field.onChange(value === "" ? 0 : parseInt(value, 10));
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Lower values appear first in navigation.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {isEdit && slug && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2 text-sm font-medium"
+                    asChild
+                  >
+                    <a
+                      href={storefrontPageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      View on Storefront
+                    </a>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* SEO card (collapsible) */}
+            <CollapsibleCard
+              title="Search Engine Listing"
+              description="Optimize for search engines"
+              defaultOpen={false}
+            >
+              <FormField
+                control={form.control}
+                name="metaTitle"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Meta Title</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="SEO title (optional)"
+                        {...field}
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          field.onChange(e.target.value || null);
+                        }}
+                      />
+                    </FormControl>
+                    {field.value && (
+                      <CharacterCounter
+                        current={field.value.length}
+                        recommended={60}
+                        max={70}
+                      />
+                    )}
+                    <FormDescription>
+                      Leave empty to use the page title. Recommended: 50-60
+                      characters.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="metaDescription"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Meta Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="SEO description (optional)"
+                        {...field}
+                        value={field.value || ""}
+                        rows={3}
+                        onChange={(e) => {
+                          field.onChange(e.target.value || null);
+                        }}
+                      />
+                    </FormControl>
+                    {field.value && (
+                      <CharacterCounter
+                        current={field.value.length}
+                        recommended={160}
+                        max={200}
+                      />
+                    )}
+                    <FormDescription>
+                      A brief description of the page for search engines.
+                      Recommended: 150-160 characters.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CollapsibleCard>
           </div>
         </div>
       </form>

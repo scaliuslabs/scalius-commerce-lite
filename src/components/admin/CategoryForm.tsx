@@ -16,7 +16,6 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../ui/card";
@@ -25,12 +24,12 @@ import { Textarea } from "../ui/textarea";
 import { TiptapEditor } from "../ui/tiptap-editor";
 import { Button } from "../ui/button";
 import {
-  Loader2,
   X,
   ExternalLink,
-  Save
 } from "lucide-react";
 import { MediaManager } from "./MediaManager";
+import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
@@ -72,6 +71,13 @@ export function CategoryForm({
   defaultValues,
   isEdit = false,
 }: CategoryFormProps) {
+  const [isClient, setIsClient] = React.useState(false);
+  const { getStorefrontPath } = useStorefrontUrl();
+
+  React.useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
     defaultValues: {
@@ -87,7 +93,6 @@ export function CategoryForm({
   });
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const { getStorefrontPath } = useStorefrontUrl();
 
   // Auto-generate slug from name - ONLY if slug hasn't been manually edited
   React.useEffect(() => {
@@ -183,280 +188,251 @@ export function CategoryForm({
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Category Image</CardTitle>
-            <CardDescription>
-              Add an image for your category (optional).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <FormField
-              control={form.control}
-              name="image"
-              render={({ field }) => (
-                <FormItem>
-                  <div className="space-y-4">
-                    {field.value && (
-                      <div className="relative aspect-video w-full max-w-sm">
-                        <img
-                          src={getOptimizedImageUrl(field.value.url)}
-                          alt={field.value.filename}
-                          className="h-full w-full rounded-md object-cover"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          className="absolute -right-2 -top-2 h-6 w-6"
-                          onClick={() => field.onChange(null)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
+    <>
+      <FormStickyHeader
+        title="Categories"
+        entityName={form.watch("name")}
+        isEdit={isEdit}
+        isSubmitting={isSubmitting}
+        isDirty={form.formState.isDirty}
+        cancelUrl="/admin/categories"
+        newUrl="/admin/categories/new"
+        newLabel="New Category"
+        onSave={() => form.handleSubmit(handleSubmit)()}
+      />
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+            {/* Left Column (2/3) */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Name field (standalone, not in a card) */}
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Name <span className="text-destructive">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Category name"
+                        {...field}
+                        className="text-base"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Description Card */}
+              <Card>
+                <CardHeader className="pb-3 pt-4 px-4">
+                  <CardTitle className="text-base">Description</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          {isClient ? (
+                            <TiptapEditor
+                              content={field.value || ""}
+                              onChange={field.onChange}
+                              placeholder="Enter category description with rich formatting..."
+                              compact={true}
+                            />
+                          ) : (
+                            <div
+                              className="border rounded-md p-4"
+                              style={{ minHeight: "200px" }}
+                            >
+                              <div className="text-muted-foreground text-sm">
+                                Loading editor...
+                              </div>
+                            </div>
+                          )}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                    <MediaManager
-                      selectedFiles={field.value ? [field.value] : []}
-                      onSelect={(file) => field.onChange(file)}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
+                  />
+                </CardContent>
+              </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-            <CardDescription>
-              Enter the basic details of your category.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Enter category name"
-                      {...field}
-                      onChange={(e) => {
-                        field.onChange(e);
-                        // Auto-generate slug ONLY for new categories and when slug hasn't been manually edited
-                        if (!isEdit && !form.getValues("slugEdited")) {
-                          const slug = e.target.value
-                            .toLowerCase()
-                            .replace(/[^\w\s-]/g, "")
-                            .replace(/\s+/g, "-")
-                            .replace(/^-+|-+$/g, "")
-                            .replace(/-+/g, "-");
-                          form.setValue("slug", slug, {
-                            shouldValidate: true,
-                          });
-                        }
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              {/* Image Card (collapsible) */}
+              <CollapsibleCard
+                title="Category Image"
+                description="Add an image for your category (optional)"
+                defaultOpen={true}
+              >
+                <FormField
+                  control={form.control}
+                  name="image"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="space-y-4">
+                        {field.value && (
+                          <div className="relative aspect-video w-full max-w-sm">
+                            <img
+                              src={getOptimizedImageUrl(field.value.url)}
+                              alt={field.value.filename}
+                              className="h-full w-full rounded-md object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute -right-2 -top-2 h-6 w-6"
+                              onClick={() => field.onChange(null)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                        <MediaManager
+                          selectedFiles={field.value ? [field.value] : []}
+                          onSelect={(file) => field.onChange(file)}
+                        />
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CollapsibleCard>
+            </div>
 
-            <FormField
-              control={form.control}
-              name="slug"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Slug</FormLabel>
-                  <div className="flex items-center space-x-2">
-                    <div className="grow flex items-center rounded-md border border-input bg-background px-3 text-sm ring-offset-background">
-                      <span className="text-muted-foreground/80 font-medium">
-                        /categories/
-                      </span>
+            {/* Right Column (1/3) */}
+            <div className="space-y-3">
+              {/* Slug Card */}
+              <Card>
+                <CardHeader className="pb-3 pt-4 px-4">
+                  <CardTitle className="text-base">URL & Slug</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="slug"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center space-x-2">
+                          <div className="grow flex items-center rounded-md border border-input bg-background px-3 text-sm ring-offset-background">
+                            <span className="text-muted-foreground/80 font-medium">
+                              /categories/
+                            </span>
+                            <FormControl>
+                              <input
+                                className="grow bg-transparent py-2 outline-none placeholder:text-muted-foreground"
+                                placeholder="category-url-slug"
+                                {...field}
+                                onChange={(e) => {
+                                  field.onChange(e);
+                                  // Mark slug as manually edited
+                                  form.setValue("slugEdited", true, {
+                                    shouldValidate: false,
+                                  });
+                                }}
+                              />
+                            </FormControl>
+                          </div>
+                        </div>
+                        <FormDescription className="text-xs text-muted-foreground/80">
+                          Auto-generated from the name but can be edited.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {isEdit && form.watch("slug") && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 text-sm font-medium w-full"
+                      asChild
+                    >
+                      <a
+                        href={getStorefrontPath(
+                          `/categories/${form.watch("slug")}`,
+                        )}
+                        target="_blank"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        View on Storefront
+                      </a>
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* SEO Card (collapsible) */}
+              <CollapsibleCard
+                title="Search Engine Listing"
+                description="Optimize for search engines"
+                defaultOpen={false}
+              >
+                <FormField
+                  control={form.control}
+                  name="metaTitle"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Meta Title</FormLabel>
                       <FormControl>
-                        <input
-                          className="grow bg-transparent py-2 outline-none placeholder:text-muted-foreground"
-                          placeholder="category-url-slug"
+                        <Input
+                          placeholder="e.g., Shop Premium Electronics | Your Store Name"
                           {...field}
-                          onChange={(e) => {
-                            field.onChange(e);
-                            // Mark slug as manually edited
-                            form.setValue("slugEdited", true, {
-                              shouldValidate: false,
-                            });
-                          }}
+                          value={field.value || ""}
                         />
                       </FormControl>
-                    </div>
-                    {isEdit && field.value && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="gap-2 text-sm font-medium"
-                        asChild
-                      >
-                        <a
-                          href={getStorefrontPath(`/categories/${field.value}`)}
-                          target="_blank"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                          View
-                        </a>
-                      </Button>
-                    )}
-                  </div>
-                  <FormDescription className="text-sm text-muted-foreground/80">
-                    The URL-friendly version of the name. Auto-generated from
-                    the name but can be edited.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <TiptapEditor
-                      content={field.value || ""}
-                      onChange={field.onChange}
-                      placeholder="Enter category description with rich formatting..."
-                      className="min-h-[250px]"
-                    />
-                  </FormControl>
-                  <FormDescription className="text-xs text-muted-foreground">
-                    Add a detailed description of this category using rich text
-                    formatting. This helps customers understand what products
-                    they'll find here.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>SEO Information</CardTitle>
-            <CardDescription>
-              Optimize your category for search engines.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="metaTitle"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Meta Title</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., Shop Premium Electronics | Your Store Name"
-                      {...field}
-                      value={field.value || ""}
-                    />
-                  </FormControl>
-                  {field.value && (
-                    <CharacterCounter
-                      current={field.value.length}
-                      recommended={60}
-                      max={70}
-                    />
+                      {field.value && (
+                        <CharacterCounter
+                          current={field.value.length}
+                          recommended={60}
+                          max={70}
+                        />
+                      )}
+                      <FormMessage />
+                    </FormItem>
                   )}
-                  <FormDescription className="text-xs text-muted-foreground">
-                    The title that appears in search engine results. Keep it
-                    under 60 characters for best results.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                />
 
-            <FormField
-              control={form.control}
-              name="metaDescription"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Meta Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="e.g., Discover our curated collection of premium electronics with fast shipping and expert support."
-                      className="resize-none"
-                      {...field}
-                      value={field.value || ""}
-                      rows={3}
-                    />
-                  </FormControl>
-                  {field.value && (
-                    <CharacterCounter
-                      current={field.value.length}
-                      recommended={160}
-                      max={200}
-                    />
+                <FormField
+                  control={form.control}
+                  name="metaDescription"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Meta Description</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="e.g., Discover our curated collection of premium electronics with fast shipping and expert support."
+                          className="resize-none"
+                          {...field}
+                          value={field.value || ""}
+                          rows={3}
+                        />
+                      </FormControl>
+                      {field.value && (
+                        <CharacterCounter
+                          current={field.value.length}
+                          recommended={160}
+                          max={200}
+                        />
+                      )}
+                      <FormMessage />
+                    </FormItem>
                   )}
-                  <FormDescription className="text-xs text-muted-foreground">
-                    A brief summary that appears in search results. Aim for
-                    150-160 characters to avoid truncation.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-between items-center">
-          <div>
-            {isEdit && form.getValues("slug") && (
-              <Button variant="outline" type="button" asChild>
-                <a
-                  href={getStorefrontPath(
-                    `/categories/${form.getValues("slug")}`,
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Preview Category
-                </a>
-              </Button>
-            )}
+                />
+              </CollapsibleCard>
+            </div>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" type="button" asChild>
-              <a href="/admin/categories">Cancel</a>
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  {isEdit ? "Update Category" : "Create Category"}
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      </form>
-    </Form>
+        </form>
+      </Form>
+    </>
   );
 }

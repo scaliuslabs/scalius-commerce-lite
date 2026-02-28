@@ -39,14 +39,12 @@ export function CustomerInfoSection() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Customer Information</CardTitle>
-        <CardDescription>
-          Enter the customer's contact and shipping details.
-        </CardDescription>
+      <CardHeader className="pb-3 pt-4 px-4">
+        <CardTitle className="text-base">Customer Information</CardTitle>
+        <CardDescription className="text-xs">Contact and shipping details</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
+      <CardContent className="px-4 pb-4 space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
           <FormField
             control={form.control}
             name="customerName"
@@ -139,7 +137,7 @@ export function CustomerInfoSection() {
           )}
         />
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-3">
           <FormField
             control={form.control}
             name="city"

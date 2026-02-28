@@ -4,10 +4,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
 import { Form } from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { OrderStatus } from "../../db/schema";
 import { generateOrderId } from "@/lib/order-utils";
+import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import {
   updateOrderItems,
   updateShippingCharge,
@@ -21,36 +21,10 @@ import {
   type DeliveryLocation,
   type OrderFormProps,
 } from "./order-form/types";
-import { OrderFormProvider, useOrderForm } from "./order-form/OrderFormContext";
+import { OrderFormProvider } from "./order-form/OrderFormContext";
 import { CustomerInfoSection } from "./order-form/CustomerInfoSection";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
-
-// A small component for the final action buttons
-function FormActions() {
-  const { isSubmitting, isEdit, form, refs } = useOrderForm();
-  return (
-    <div className="flex justify-end space-x-4">
-      <Button variant="outline" type="button" asChild>
-        <a href="/admin/orders">Cancel</a>
-      </Button>
-      <div className="flex flex-col items-end gap-1">
-        <Button
-          ref={refs.submitButtonRef}
-          type="submit"
-          disabled={isSubmitting || form.getValues("items").length === 0}
-          className="px-8"
-        >
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isEdit ? "Update Order" : "Create Order"}
-        </Button>
-        <span className="text-xs text-muted-foreground">
-          Press Ctrl+Enter to submit
-        </span>
-      </div>
-    </div>
-  );
-}
 
 export function OrderForm({
   products,
@@ -217,43 +191,55 @@ export function OrderForm({
         throw new Error(errorData.message || "Failed to save order");
       }
 
+      toast.success(isEdit ? "Order updated successfully" : "Order created successfully");
       window.location.href = "/admin/orders";
     } catch (error) {
       console.error("Error submitting form:", error);
-      alert(
-        `Failed to save order: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      toast.error("Failed to save order", {
+        description: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
-        <OrderFormProvider
-          form={form}
-          products={products}
-          isEdit={isEdit}
-          locations={locations}
-          setLocations={setLocations}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-          loadZones={loadZones}
-          loadAreas={loadAreas}
-          isSubmitting={isSubmitting}
-        >
-          <CustomerInfoSection />
-          <OrderItemsSection />
-          <SummarySection />
+    <>
+      <FormStickyHeader
+        title="Orders"
+        entityName={isEdit ? `Order #${defaultValues?.id || ""}` : undefined}
+        isEdit={isEdit}
+        isSubmitting={isSubmitting}
+        isDirty={form.formState.isDirty}
+        cancelUrl="/admin/orders"
+        newUrl="/admin/orders/new"
+        newLabel="New Order"
+        onSave={() => form.handleSubmit(handleSubmit)()}
+      />
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6 space-y-4">
+          <OrderFormProvider
+            form={form}
+            products={products}
+            isEdit={isEdit}
+            locations={locations}
+            setLocations={setLocations}
+            isLoading={isLoading}
+            setIsLoading={setIsLoading}
+            loadZones={loadZones}
+            loadAreas={loadAreas}
+            isSubmitting={isSubmitting}
+          >
+            <CustomerInfoSection />
+            <OrderItemsSection />
+            <SummarySection />
 
-          <input type="hidden" {...form.register("cityName")} />
-          <input type="hidden" {...form.register("zoneName")} />
-          <input type="hidden" {...form.register("areaName")} />
-
-          <FormActions />
-        </OrderFormProvider>
-      </form>
-    </Form>
+            <input type="hidden" {...form.register("cityName")} />
+            <input type="hidden" {...form.register("zoneName")} />
+            <input type="hidden" {...form.register("areaName")} />
+          </OrderFormProvider>
+        </form>
+      </Form>
+    </>
   );
 }
