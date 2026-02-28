@@ -39,12 +39,12 @@ export function SummarySection() {
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle>Order Summary</CardTitle>
-          <CardDescription>Review and finalize the order.</CardDescription>
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-base">Order Summary</CardTitle>
+          <CardDescription className="text-xs">Review and finalize the order.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+        <CardContent className="px-4 pb-4 space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
             <FormField
               control={form.control}
               name="shippingCharge"
@@ -162,11 +162,11 @@ export function SummarySection() {
 
       {isEdit && (
         <Card>
-          <CardHeader>
-            <CardTitle>Order Status</CardTitle>
-            <CardDescription>Update the current status of the order.</CardDescription>
+          <CardHeader className="pb-3 pt-4 px-4">
+            <CardTitle className="text-base">Order Status</CardTitle>
+            <CardDescription className="text-xs">Update the current status of the order.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-4">
             <FormField
               control={form.control}
               name="status"

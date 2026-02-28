@@ -93,14 +93,7 @@ const defaultValues = {
 ---
 
 <AdminLayout title={`Edit Order #${order.id}`}>
-  <div class="container space-y-8 py-6">
-    <div class="mb-6">
-      <h1 class="text-3xl font-bold">Edit Order</h1>
-      <p class="text-muted-foreground">
-        Make changes to your order information.
-      </p>
-    </div>
-
+  <div class="container max-w-7xl py-4 pb-8">
     <OrderForm
       client:idle
       products={productsWithVariants}

@@ -15,12 +15,7 @@ const defaultValues = {
 ---
 
 <AdminLayout title="New Customer">
-  <div class="container py-6">
-    <div class="mb-6">
-      <h1 class="text-3xl font-bold">Create New Customer</h1>
-      <p class="text-muted-foreground">Add a new customer to your store.</p>
-    </div>
-
+  <div class="container max-w-7xl py-4 pb-8">
     <CustomerForm client:idle defaultValues={defaultValues} isEdit={false} />
   </div>
 </AdminLayout>
