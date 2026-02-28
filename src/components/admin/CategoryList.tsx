@@ -659,47 +659,51 @@ export function CategoryList({
         {/* Stats Row - Only show if we have stats and not in trash view */}
         {stats && !showTrashed && (
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-100 dark:border-blue-800 p-2 flex items-center space-x-2">
-              <div className="rounded-full bg-blue-100 dark:bg-blue-900 p-2">
-                <Tag className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
-                  Total Categories
-                </p>
-                <p className="text-base font-bold text-foreground">
-                  {displayStats.totalCategories}
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg border border-purple-100 dark:border-purple-800 p-2 flex items-center space-x-2">
-              <div className="rounded-full bg-purple-100 dark:bg-purple-900 p-2">
-                <ShoppingBag className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
-                  Products
-                </p>
-                <p className="text-base font-bold text-foreground">
-                  {displayStats.totalProducts}
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-orange-50 dark:bg-orange-900/30 rounded-lg border border-orange-100 dark:border-orange-800 p-2 flex items-center space-x-2">
-              <div className="rounded-full bg-orange-100 dark:bg-orange-900 p-2">
-                <ImageIcon className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
-                  With Images
-                </p>
-                <p className="text-base font-bold text-foreground">
-                  {displayStats.categoriesWithImages}
-                </p>
-              </div>
-            </div>
+            <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+              <CardContent className="p-2 flex items-center space-x-2">
+                <div className={cn("rounded-full p-2", "bg-blue-100 dark:bg-blue-900/30")}>
+                  <Tag className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Total Categories
+                  </p>
+                  <p className="text-base font-bold text-foreground">
+                    {displayStats.totalCategories}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+              <CardContent className="p-2 flex items-center space-x-2">
+                <div className={cn("rounded-full p-2", "bg-purple-100 dark:bg-purple-900/30")}>
+                  <ShoppingBag className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Products
+                  </p>
+                  <p className="text-base font-bold text-foreground">
+                    {displayStats.totalProducts}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+              <CardContent className="p-2 flex items-center space-x-2">
+                <div className={cn("rounded-full p-2", "bg-orange-100 dark:bg-orange-900/30")}>
+                  <ImageIcon className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    With Images
+                  </p>
+                  <p className="text-base font-bold text-foreground">
+                    {displayStats.categoriesWithImages}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </CardHeader>
