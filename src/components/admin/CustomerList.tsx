@@ -117,7 +117,9 @@ export function CustomerList({
 }: CustomerListProps) {
   const { toast } = useToast();
   const { symbol } = useCurrency();
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const [localSearch, setLocalSearch] = useState(initialSearchQuery);
   const [sort, setSort] = useState(initialSort);
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(
     new Set(),
@@ -126,6 +128,9 @@ export function CustomerList({
     { action: "delete" | "bulk-delete"; id?: string } | undefined
   >();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const searchTimeoutRef = React.useRef<number | undefined>(undefined);
+  const prevSearchQueryRef = React.useRef(initialSearchQuery);
 
   const [displayCustomers, setDisplayCustomers] = useState<Customer[]>(
     initialCustomers || [],
@@ -141,6 +146,10 @@ export function CustomerList({
   }, [initialPagination]);
 
   useEffect(() => {
+    setLocalSearch(searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
     const url = new URL(window.location.href);
     setSort({
       field: (url.searchParams.get("sort") || initialSort.field) as SortField,
@@ -151,57 +160,172 @@ export function CustomerList({
     setSearchQuery(url.searchParams.get("search") || initialSearchQuery);
   }, [initialSort, initialSearchQuery]);
 
-  const updateUrlParams = useCallback(
-    (params: Record<string, string | null>) => {
-      const url = new URL(window.location.href);
-      for (const key in params) {
-        const value = params[key];
-        if (value) {
-          url.searchParams.set(key, value);
-        } else {
-          url.searchParams.delete(key);
-        }
+  const fetchCustomers = useCallback(
+    async (params: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort?: SortField;
+      order?: "asc" | "desc";
+    }) => {
+      setIsLoadingCustomers(true);
+      try {
+        const url = new URL("/api/customers", window.location.origin);
+        if (params.page) url.searchParams.set("page", params.page.toString());
+        if (params.limit) url.searchParams.set("limit", params.limit.toString());
+        if (params.search) url.searchParams.set("search", params.search);
+        if (params.sort) url.searchParams.set("sort", params.sort);
+        if (params.order) url.searchParams.set("order", params.order);
+        if (showTrashed) url.searchParams.set("trashed", "true");
+
+        const res = await fetch(url.toString());
+        if (!res.ok) throw new Error("Failed to fetch customers");
+        const data = await res.json();
+
+        const parsed = (data.customers || []).map((c: any) => ({
+          ...c,
+          lastOrderAt: c.lastOrderAt ? new Date(c.lastOrderAt) : null,
+          createdAt: c.createdAt ? new Date(c.createdAt) : new Date(0),
+          updatedAt: c.updatedAt ? new Date(c.updatedAt) : new Date(0),
+        }));
+        setDisplayCustomers(parsed);
+        setCurrentPagination(data.pagination || initialPagination);
+
+        const urlToUpdate = new URL(window.location.href);
+        if (params.page) urlToUpdate.searchParams.set("page", params.page.toString());
+        if (params.limit) urlToUpdate.searchParams.set("limit", params.limit.toString());
+        if (params.search) urlToUpdate.searchParams.set("search", params.search);
+        else urlToUpdate.searchParams.delete("search");
+        if (params.sort) urlToUpdate.searchParams.set("sort", params.sort);
+        if (params.order) urlToUpdate.searchParams.set("order", params.order);
+        if (showTrashed) urlToUpdate.searchParams.set("trashed", "true");
+        else urlToUpdate.searchParams.delete("trashed");
+        window.history.pushState({}, "", urlToUpdate.toString());
+      } catch (err) {
+        console.error("Error fetching customers:", err);
+        toast({
+          title: "Error",
+          description: "Failed to load customers. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingCustomers(false);
       }
-      window.location.href = url.toString();
     },
-    [],
+    [showTrashed, initialPagination, toast],
   );
 
+  useEffect(() => {
+    if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = window.setTimeout(() => {
+      if (localSearch !== searchQuery) setSearchQuery(localSearch);
+    }, 500);
+    return () => {
+      if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
+    };
+  }, [localSearch, searchQuery]);
+
+  useEffect(() => {
+    if (searchQuery !== prevSearchQueryRef.current) {
+      prevSearchQueryRef.current = searchQuery;
+      fetchCustomers({
+        page: 1,
+        limit: currentPagination.limit,
+        search: searchQuery.trim() || undefined,
+        sort: sort.field,
+        order: sort.order,
+      });
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+        const t = e.target as HTMLElement;
+        if (t.tagName !== "INPUT" && t.tagName !== "TEXTAREA") {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      }
+      if (e.key === "Escape" && document.activeElement === searchInputRef.current) {
+        setLocalSearch("");
+        searchInputRef.current?.blur();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, []);
+
   const handleSearch = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      updateUrlParams({ search: searchQuery.trim(), page: null });
+    (e?: React.FormEvent) => {
+      e?.preventDefault();
+      setSearchQuery(localSearch);
     },
-    [searchQuery, updateUrlParams],
+    [localSearch],
   );
 
   const handleSort = useCallback(
     (field: SortField) => {
       const newOrder =
         sort.field === field && sort.order === "asc" ? "desc" : "asc";
-      updateUrlParams({ sort: field, order: newOrder });
+      setSort({ field, order: newOrder });
+      fetchCustomers({
+        page: currentPagination.page,
+        limit: currentPagination.limit,
+        search: searchQuery.trim() || undefined,
+        sort: field,
+        order: newOrder,
+      });
     },
-    [sort, updateUrlParams],
+    [
+      fetchCustomers,
+      currentPagination.page,
+      currentPagination.limit,
+      searchQuery,
+      sort.field,
+      sort.order,
+    ],
   );
 
   const handlePageChange = useCallback(
     (newPage: number) => {
       if (newPage < 1 || newPage > currentPagination.totalPages) return;
-      updateUrlParams({ page: newPage.toString() });
+      fetchCustomers({
+        page: newPage,
+        limit: currentPagination.limit,
+        search: searchQuery.trim() || undefined,
+        sort: sort.field,
+        order: sort.order,
+      });
     },
-    [currentPagination.totalPages, updateUrlParams],
+    [
+      fetchCustomers,
+      currentPagination.totalPages,
+      currentPagination.limit,
+      searchQuery,
+      sort.field,
+      sort.order,
+    ],
   );
 
   const handleLimitChange = useCallback(
     (newLimit: number) => {
-      updateUrlParams({ limit: newLimit.toString(), page: null });
+      fetchCustomers({
+        page: 1,
+        limit: newLimit,
+        search: searchQuery.trim() || undefined,
+        sort: sort.field,
+        order: sort.order,
+      });
     },
-    [updateUrlParams],
+    [fetchCustomers, searchQuery, sort.field, sort.order],
   );
 
   const toggleTrashView = useCallback(() => {
-    updateUrlParams({ trashed: showTrashed ? null : "true", page: null });
-  }, [showTrashed, updateUrlParams]);
+    window.location.href = showTrashed
+      ? "/admin/customers"
+      : "/admin/customers?trashed=true";
+  }, [showTrashed]);
 
   const performApiAction = useCallback(
     async (
@@ -400,14 +524,14 @@ export function CustomerList({
         <div className="flex flex-col items-center justify-center gap-2">
           <Users className="h-10 w-10 text-muted-foreground/40" />
           <p className="text-lg font-medium text-muted-foreground">
-            {searchQuery
+            {localSearch.trim()
               ? "No Customers Match Your Search"
               : showTrashed
                 ? "Trash is Empty"
                 : "No Customers Found"}
           </p>
           <p className="text-sm text-muted-foreground">
-            {searchQuery
+            {localSearch.trim()
               ? "Try adjusting your search query."
               : showTrashed
                 ? "Deleted customer records will appear here."
@@ -466,14 +590,18 @@ export function CustomerList({
           </div>
         </CardHeader>
         <div className="p-4 flex items-center justify-between gap-4 bg-muted/20">
+          <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50 shrink-0">
+            Press <kbd className="px-1.5 py-0.5 bg-background border border-border rounded text-xs font-mono">/</kbd> to search
+          </div>
           <form onSubmit={handleSearch} className="flex-1">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
+                ref={searchInputRef}
                 type="search"
                 placeholder="Search by name, phone, or email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={localSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
                 className="pl-8 w-full max-w-md"
               />
             </div>
@@ -496,7 +624,15 @@ export function CustomerList({
             </div>
           )}
         </div>
-        <CardContent className="p-0">
+        <CardContent className="p-0 relative">
+          {isLoadingCustomers && (
+            <div className="absolute inset-0 bg-(--background)/80 backdrop-blur-sm z-10 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                <p className="text-sm text-muted-foreground">Loading customers...</p>
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>

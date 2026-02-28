@@ -200,12 +200,16 @@ export async function getProducts(options: {
     whereConditions.push(sql`${products.deletedAt} IS NULL`);
   }
 
+  let rankExpression = undefined;
   if (search) {
     const sanitized = sanitizeFtsQuery(search);
     if (sanitized) {
       whereConditions.push(
         sql`(${sql.raw("products")}.rowid IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ${sanitized}) OR EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${sql.raw("product_variants")}.rowid IN (SELECT rowid FROM product_variants_fts WHERE product_variants_fts MATCH ${sanitized})))`,
       );
+      // FTS5 rank is more negative for better matches. 
+      // If no MATCH on products_fts (e.g. variant matched), rank is NULL, so we coalesce to 0.
+      rankExpression = sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitized}), 0) ASC`;
     }
   }
 
@@ -213,15 +217,16 @@ export async function getProducts(options: {
     whereConditions.push(eq(products.categoryId, categoryId));
   }
 
-  // Get total count for pagination
-  const [{ count }] = await db
+  const whereClause =
+    whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+  const countQuery = db
     .select({ count: sql<number>`count(distinct ${products.id})` })
     .from(products)
     .leftJoin(categories, eq(categories.id, products.categoryId))
-    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
+    .where(whereClause);
 
-  // Step 1: Fetch main product data
-  const productResults = await db
+  const productResultsQuery = db
     .select({
       id: products.id,
       name: products.name,
@@ -234,15 +239,18 @@ export async function getProducts(options: {
       createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
       deletedAt: sql<number>`CAST(${products.deletedAt} AS INTEGER)`,
-      categoryName: categories.name, // Fetch category name directly
+      categoryName: sql<string>`${categories.name}`.as("categoryName"),
     })
     .from(products)
     .leftJoin(categories, eq(categories.id, products.categoryId))
-    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+    .where(whereClause)
     .limit(limit)
     .offset(offset)
     .orderBy(
       (() => {
+        if (rankExpression) {
+          return rankExpression;
+        }
         const sortField = (() => {
           switch (sort) {
             case "name":
@@ -250,7 +258,7 @@ export async function getProducts(options: {
             case "price":
               return products.price;
             case "category":
-              return categories.name; // Sorting by category name
+              return categories.name;
             case "createdAt":
               return products.createdAt;
             case "updatedAt":
@@ -261,6 +269,11 @@ export async function getProducts(options: {
         return order === "asc" ? asc(sortField) : desc(sortField);
       })(),
     );
+
+  const [[{ count }], productResults] = await db.batch([
+    countQuery,
+    productResultsQuery,
+  ]);
 
   if (productResults.length === 0) {
     return {
@@ -509,9 +522,14 @@ export async function getOrders(options: {
     whereConditions.push(sql`${orders.deletedAt} IS NULL`);
   }
 
+  let rankExpression = undefined;
   if (search) {
     const cond = ftsMatch("orders_fts", "orders", search);
-    if (cond) whereConditions.push(cond);
+    if (cond) {
+      whereConditions.push(cond);
+      const sanitized = sanitizeFtsQuery(search);
+      rankExpression = sql`(SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}) ASC`;
+    }
   }
 
   if (status) {
@@ -575,6 +593,8 @@ export async function getOrders(options: {
     .offset(offset)
     .orderBy(
       (() => {
+        if (rankExpression) return rankExpression;
+
         const sortField = (() => {
           switch (sort) {
             case "customerName":

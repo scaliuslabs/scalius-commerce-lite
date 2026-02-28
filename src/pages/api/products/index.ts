@@ -63,6 +63,7 @@ export const GET: APIRoute = async ({ url }) => {
     const limit = parseInt(searchParams.get("limit") || "10");
     const sort = (searchParams.get("sort") || "updatedAt") as any;
     const order = (searchParams.get("order") || "desc") as any;
+    const showTrashed = searchParams.get("trashed") === "true";
 
     const { products, pagination } = await getProducts({
       search,
@@ -71,7 +72,7 @@ export const GET: APIRoute = async ({ url }) => {
       limit,
       sort,
       order,
-      showTrashed: false,
+      showTrashed,
     });
 
     return new Response(JSON.stringify({ products, pagination }), {

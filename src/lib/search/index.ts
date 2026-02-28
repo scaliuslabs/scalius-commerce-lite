@@ -87,7 +87,7 @@ export async function search(
         price: products.price,
         slug: products.slug,
         categoryId: products.categoryId,
-        categoryName: categories.name,
+        categoryName: sql<string>`${categories.name}`.as("categoryName"),
       })
       .from(products)
       .leftJoin(categories, eq(products.categoryId, categories.id))
