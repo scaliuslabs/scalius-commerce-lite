@@ -72,15 +72,13 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Settings - Account is always accessible (own account management)
   // "/admin/settings/account" is intentionally NOT listed here
   "/admin/settings": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/settings/theme": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/notifications": { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   "/admin/settings/hero-sliders": { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-  "/admin/settings/delivery-locations": { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
+  "/admin/settings/checkout": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/delivery-providers": { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW },
   "/admin/settings/fraud-checker": { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
-  "/admin/settings/shipping-methods": { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW },
-  "/admin/settings/checkout-languages": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/meta-conversion": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  "/admin/settings/payment-gateways": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/cache": { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
 };
 
@@ -90,36 +88,36 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   pattern: RegExp;
   config: PagePermissionConfig;
 }> = [
-  // Products
-  { pattern: /^\/admin\/products\/[^/]+\/edit$/, config: { permission: PERMISSIONS.PRODUCTS_EDIT } },
-  { pattern: /^\/admin\/products\/[^/]+$/, config: { permission: PERMISSIONS.PRODUCTS_VIEW } },
+    // Products
+    { pattern: /^\/admin\/products\/[^/]+\/edit$/, config: { permission: PERMISSIONS.PRODUCTS_EDIT } },
+    { pattern: /^\/admin\/products\/[^/]+$/, config: { permission: PERMISSIONS.PRODUCTS_VIEW } },
 
-  // Categories
-  { pattern: /^\/admin\/categories\/[^/]+\/edit$/, config: { permission: PERMISSIONS.CATEGORIES_EDIT } },
+    // Categories
+    { pattern: /^\/admin\/categories\/[^/]+\/edit$/, config: { permission: PERMISSIONS.CATEGORIES_EDIT } },
 
-  // Collections
-  { pattern: /^\/admin\/collections\/[^/]+\/edit$/, config: { permission: PERMISSIONS.COLLECTIONS_EDIT } },
+    // Collections
+    { pattern: /^\/admin\/collections\/[^/]+\/edit$/, config: { permission: PERMISSIONS.COLLECTIONS_EDIT } },
 
-  // Orders
-  { pattern: /^\/admin\/orders\/[^/]+\/edit$/, config: { permission: PERMISSIONS.ORDERS_EDIT } },
-  { pattern: /^\/admin\/orders\/[^/]+$/, config: { permission: PERMISSIONS.ORDERS_VIEW } },
+    // Orders
+    { pattern: /^\/admin\/orders\/[^/]+\/edit$/, config: { permission: PERMISSIONS.ORDERS_EDIT } },
+    { pattern: /^\/admin\/orders\/[^/]+$/, config: { permission: PERMISSIONS.ORDERS_VIEW } },
 
-  // Customers
-  { pattern: /^\/admin\/customers\/[^/]+\/edit$/, config: { permission: PERMISSIONS.CUSTOMERS_EDIT } },
-  { pattern: /^\/admin\/customers\/[^/]+\/history$/, config: { permission: PERMISSIONS.CUSTOMERS_VIEW_HISTORY } },
+    // Customers
+    { pattern: /^\/admin\/customers\/[^/]+\/edit$/, config: { permission: PERMISSIONS.CUSTOMERS_EDIT } },
+    { pattern: /^\/admin\/customers\/[^/]+\/history$/, config: { permission: PERMISSIONS.CUSTOMERS_VIEW_HISTORY } },
 
-  // Discounts
-  { pattern: /^\/admin\/discounts\/[^/]+\/edit$/, config: { permission: PERMISSIONS.DISCOUNTS_EDIT } },
+    // Discounts
+    { pattern: /^\/admin\/discounts\/[^/]+\/edit$/, config: { permission: PERMISSIONS.DISCOUNTS_EDIT } },
 
-  // Analytics
-  { pattern: /^\/admin\/analytics\/[^/]+\/edit$/, config: { permission: PERMISSIONS.ANALYTICS_EDIT } },
+    // Analytics
+    { pattern: /^\/admin\/analytics\/[^/]+\/edit$/, config: { permission: PERMISSIONS.ANALYTICS_EDIT } },
 
-  // Pages
-  { pattern: /^\/admin\/pages\/[^/]+\/edit$/, config: { permission: PERMISSIONS.PAGES_EDIT } },
+    // Pages
+    { pattern: /^\/admin\/pages\/[^/]+\/edit$/, config: { permission: PERMISSIONS.PAGES_EDIT } },
 
-  // Widgets (single dynamic segment, no /edit)
-  { pattern: /^\/admin\/widgets\/[^/]+$/, config: { permission: PERMISSIONS.WIDGETS_EDIT } },
-];
+    // Widgets (single dynamic segment, no /edit)
+    { pattern: /^\/admin\/widgets\/[^/]+$/, config: { permission: PERMISSIONS.WIDGETS_EDIT } },
+  ];
 
 /**
  * Get the permission config for a given admin page route.

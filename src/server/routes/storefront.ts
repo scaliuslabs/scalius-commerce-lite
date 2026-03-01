@@ -550,9 +550,21 @@ app.get(
           .select({ key: settings.key, value: settings.value })
           .from(settings)
           .where(eq(settings.category, "currency")),
+
+        // 5. Theme color overrides
+        db
+          .select({ value: settings.value })
+          .from(settings)
+          .where(
+            and(
+              eq(settings.category, "theme"),
+              eq(settings.key, "storefront_colors"),
+            ),
+          )
+          .limit(1),
       ]);
 
-      const [analyticsResults, settingsResults, categoriesData, pagesData, currencyResults] =
+      const [analyticsResults, settingsResults, categoriesData, pagesData, currencyResults, themeResults] =
         batchResults;
 
       // === PROCESS ANALYTICS ===
@@ -728,6 +740,17 @@ app.get(
           : 1,
       };
 
+      // === PROCESS THEME ===
+      let themeColors: Record<string, string> = {};
+      const themeRow = (themeResults as any[])[0];
+      if (themeRow?.value) {
+        try {
+          themeColors = JSON.parse(themeRow.value);
+        } catch {
+          // ignore corrupt JSON
+        }
+      }
+
       // === RETURN CONSOLIDATED RESPONSE ===
       return c.json({
         success: true,
@@ -737,6 +760,7 @@ app.get(
           navigation: navigationData,
           footer: footerData,
           currency: currencyData,
+          theme: { colors: themeColors },
         },
       });
     } catch (error) {

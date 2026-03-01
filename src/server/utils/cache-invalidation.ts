@@ -101,6 +101,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/settings/hero-sliders": ["homepage"],
   "/api/settings/seo": ["homepage"],
   "/api/settings/security": ["layout"],
+  "/api/settings/theme": ["layout"],
   "/api/settings/currency": ["layout", "products"],
   "/api/settings/auth": ["checkout"],
   "/api/settings/delivery-locations": ["checkout"],
