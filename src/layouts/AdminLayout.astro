@@ -31,6 +31,7 @@ import {
   UserCog,
   CreditCard,
   Warehouse,
+  Palette,
 } from "lucide-react";
 
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
@@ -204,6 +205,12 @@ const allNavSections: NavSection[] = [
             requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
           },
           {
+            name: "Theme",
+            href: "/admin/settings/theme",
+            icon: Palette,
+            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+          },
+          {
             name: "Account",
             href: "/admin/settings/account",
             icon: UserCog,
@@ -222,10 +229,10 @@ const allNavSections: NavSection[] = [
             requiredPermission: PERMISSIONS.SETTINGS_HEADER_EDIT,
           },
           {
-            name: "Delivery Locations",
-            href: "/admin/settings/delivery-locations",
-            icon: MapPinned,
-            requiredPermission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW,
+            name: "Checkout",
+            href: "/admin/settings/checkout",
+            icon: CreditCard,
+            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
           },
           {
             name: "Delivery Providers",
@@ -240,27 +247,9 @@ const allNavSections: NavSection[] = [
             requiredPermission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
           },
           {
-            name: "Shipping Methods",
-            href: "/admin/settings/shipping-methods",
-            icon: PackageCheck,
-            requiredPermission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
-          },
-          {
-            name: "Checkout Languages",
-            href: "/admin/settings/checkout-languages",
-            icon: Globe,
-            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
             name: "Meta Conversions",
             href: "/admin/settings/meta-conversion",
             icon: BarChart3,
-            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Payment Gateways",
-            href: "/admin/settings/payment-gateways",
-            icon: CreditCard,
             requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
           },
           {
