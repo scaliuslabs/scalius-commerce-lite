@@ -14,6 +14,7 @@ import {
   phoneNumberSchema,
   calculateCustomerStats,
 } from "../../../lib/customer-utils";
+import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 
 const updateOrderSchema = z.object({
   customerName: z
@@ -109,6 +110,8 @@ export const PUT: APIRoute = async ({ request, params }) => {
         id: orders.id,
         customerId: orders.customerId,
         customerPhone: orders.customerPhone,
+        status: orders.status,
+        inventoryAction: orders.inventoryAction,
       })
       .from(orders)
       .where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`)
@@ -129,68 +132,73 @@ export const PUT: APIRoute = async ({ request, params }) => {
       .from(orderItems)
       .where(eq(orderItems.orderId, id));
 
-    // First, restore stock for removed/modified items
-    for (const existingItem of existingItems) {
-      if (existingItem.variantId) {
-        const matchingNewItem = data.items.find(
-          (item) =>
-            item.variantId === existingItem.variantId &&
-            item.quantity === existingItem.quantity,
-        );
+    // Only adjust stock if this order has actively deducted stock
+    const hasActiveDeduction = existingOrder.inventoryAction === "deducted";
 
-        if (!matchingNewItem) {
-          // Item was removed or quantity changed, restore stock
-          await db
-            .update(productVariants)
-            .set({
-              stock: sql`${productVariants.stock} + ${existingItem.quantity}`,
-              updatedAt: sql`unixepoch()`,
-            })
-            .where(eq(productVariants.id, existingItem.variantId));
+    if (hasActiveDeduction) {
+      // First, restore stock for removed/modified items
+      for (const existingItem of existingItems) {
+        if (existingItem.variantId) {
+          const matchingNewItem = data.items.find(
+            (item) =>
+              item.variantId === existingItem.variantId &&
+              item.quantity === existingItem.quantity,
+          );
+
+          if (!matchingNewItem) {
+            // Item was removed or quantity changed, restore stock
+            await db
+              .update(productVariants)
+              .set({
+                stock: sql`${productVariants.stock} + ${existingItem.quantity}`,
+                updatedAt: sql`unixepoch()`,
+              })
+              .where(eq(productVariants.id, existingItem.variantId));
+          }
         }
       }
-    }
 
-    // Then, check and update stock for new/modified items
-    for (const item of data.items) {
-      if (item.variantId) {
-        const existingItem = existingItems.find(
-          (ei) => ei.variantId === item.variantId,
-        );
-        const quantityDiff = existingItem
-          ? item.quantity - existingItem.quantity
-          : item.quantity;
+      // Then, check and update stock for new/modified items
+      for (const item of data.items) {
+        if (item.variantId) {
+          const existingItem = existingItems.find(
+            (ei) => ei.variantId === item.variantId,
+          );
+          const quantityDiff = existingItem
+            ? item.quantity - existingItem.quantity
+            : item.quantity;
 
-        if (quantityDiff !== 0) {
-          const variant = await db
-            .select()
-            .from(productVariants)
-            .where(
-              and(
-                eq(productVariants.id, item.variantId),
-                isNull(productVariants.deletedAt),
-              ),
-            )
-            .get();
+          if (quantityDiff !== 0) {
+            const variant = await db
+              .select()
+              .from(productVariants)
+              .where(
+                and(
+                  eq(productVariants.id, item.variantId),
+                  isNull(productVariants.deletedAt),
+                ),
+              )
+              .get();
 
-          if (!variant) {
-            throw new Error(`Variant ${item.variantId} not found`);
+            if (!variant) {
+              throw new Error(`Variant ${item.variantId} not found`);
+            }
+
+            if (variant.stock < quantityDiff) {
+              throw new Error(
+                `Insufficient stock for variant ${item.variantId}. Available: ${variant.stock}, Additional Requested: ${quantityDiff}`,
+              );
+            }
+
+            // Update variant stock
+            await db
+              .update(productVariants)
+              .set({
+                stock: variant.stock - quantityDiff,
+                updatedAt: sql`unixepoch()`,
+              })
+              .where(eq(productVariants.id, item.variantId));
           }
-
-          if (variant.stock < quantityDiff) {
-            throw new Error(
-              `Insufficient stock for variant ${item.variantId}. Available: ${variant.stock}, Additional Requested: ${quantityDiff}`,
-            );
-          }
-
-          // Update variant stock
-          await db
-            .update(productVariants)
-            .set({
-              stock: variant.stock - quantityDiff,
-              updatedAt: sql`unixepoch()`,
-            })
-            .where(eq(productVariants.id, item.variantId));
         }
       }
     }
@@ -240,6 +248,12 @@ export const PUT: APIRoute = async ({ request, params }) => {
       }
     }
 
+    // Handle inventory side-effects if status changed
+    let newInventoryAction = existingOrder.inventoryAction;
+    if (data.status !== existingOrder.status) {
+      newInventoryAction = await applyInventoryForStatusChange(db, id, data.status);
+    }
+
     // Update order
     const [order] = await db
       .update(orders)
@@ -259,6 +273,7 @@ export const PUT: APIRoute = async ({ request, params }) => {
         shippingCharge: data.shippingCharge,
         discountAmount: data.discountAmount,
         status: data.status,
+        inventoryAction: newInventoryAction,
         customerId,
         updatedAt: sql`unixepoch()`,
       })
@@ -355,14 +370,14 @@ export const DELETE: APIRoute = async ({ params }) => {
       );
     }
 
-    // Check if order exists and get its items
-    const existingOrder = await db
-      .select({ id: orders.id })
+    // Check if order exists and get its inventory state
+    const orderToDelete = await db
+      .select({ id: orders.id, inventoryAction: orders.inventoryAction })
       .from(orders)
       .where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`)
       .get();
 
-    if (!existingOrder) {
+    if (!orderToDelete) {
       return new Response(
         JSON.stringify({
           error: "Order not found",
@@ -371,27 +386,30 @@ export const DELETE: APIRoute = async ({ params }) => {
       );
     }
 
-    // Get order items to restore stock
-    const items = await db
-      .select({
-        variantId: orderItems.variantId,
-        quantity: orderItems.quantity,
-      })
-      .from(orderItems)
-      .where(eq(orderItems.orderId, id));
+    // Only restore stock if it was actively deducted and not already restored
+    if (orderToDelete.inventoryAction === "deducted") {
+      const items = await db
+        .select({
+          variantId: orderItems.variantId,
+          quantity: orderItems.quantity,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, id));
 
-    // Restore stock for all variants in the order
-    for (const item of items) {
-      if (item.variantId) {
-        // Update variant stock
-        await db
-          .update(productVariants)
-          .set({
-            stock: sql`${productVariants.stock} + ${item.quantity}`,
-            updatedAt: sql`unixepoch()`,
-          })
-          .where(eq(productVariants.id, item.variantId));
+      for (const item of items) {
+        if (item.variantId) {
+          await db
+            .update(productVariants)
+            .set({
+              stock: sql`${productVariants.stock} + ${item.quantity}`,
+              updatedAt: sql`unixepoch()`,
+            })
+            .where(eq(productVariants.id, item.variantId));
+        }
       }
+    } else if (orderToDelete.inventoryAction === "reserved") {
+      // Release reservations instead
+      await applyInventoryForStatusChange(db, id, "cancelled");
     }
 
     // Soft delete the order
@@ -399,6 +417,7 @@ export const DELETE: APIRoute = async ({ params }) => {
       .update(orders)
       .set({
         deletedAt: sql`unixepoch()`,
+        inventoryAction: "restored",
       })
       .where(eq(orders.id, id));
 

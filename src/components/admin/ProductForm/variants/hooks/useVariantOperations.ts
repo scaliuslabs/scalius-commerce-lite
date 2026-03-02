@@ -20,6 +20,18 @@ export interface UseVariantOperationsReturn {
     productId: string,
     variants: BulkGeneratedVariant[]
   ) => Promise<ProductVariant[]>;
+  bulkUpdateVariants: (
+    productId: string,
+    updates: Array<{
+      id: string;
+      size?: string | null;
+      color?: string | null;
+      weight?: number | null;
+      sku?: string;
+      price?: number;
+      stock?: number;
+    }>
+  ) => Promise<boolean>;
   duplicateVariant: (productId: string, variantId: string) => Promise<ProductVariant | null>;
   isLoading: boolean;
 }
@@ -184,6 +196,50 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     }
   };
 
+  const bulkUpdateVariants = async (
+    productId: string,
+    updates: Array<{
+      id: string;
+      size?: string | null;
+      color?: string | null;
+      weight?: number | null;
+      sku?: string;
+      price?: number;
+      stock?: number;
+    }>
+  ): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/products/${productId}/variants/bulk-update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "Failed to update variants");
+      }
+
+      toast({
+        title: "Success!",
+        description: "Variants updated successfully.",
+      });
+
+      return true;
+    } catch (error) {
+      console.error("Failed to bulk update variants:", error);
+      toast({
+        title: "Update Failed",
+        description: error instanceof Error ? error.message : "Could not update variants.",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const bulkCreateVariants = async (
     productId: string,
     variants: BulkGeneratedVariant[]
@@ -276,6 +332,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     updateVariant,
     deleteVariant,
     bulkDeleteVariants,
+    bulkUpdateVariants,
     bulkCreateVariants,
     duplicateVariant,
     isLoading,

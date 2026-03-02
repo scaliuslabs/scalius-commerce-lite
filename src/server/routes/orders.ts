@@ -26,6 +26,7 @@ import { DeliveryService } from "@/lib/delivery/service";
 import { cacheMiddleware } from "../middleware/cache";
 import { reserveMultiple, releaseMultiple } from "@/lib/inventory";
 import { initCODTracking } from "@/lib/payment/cod";
+import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 
 // Create a Hono app for order routes, typed with Env bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -518,6 +519,7 @@ app.post("/", async (c) => {
       // Fulfillment fields
       fulfillmentStatus: FulfillmentStatus.PENDING,
       inventoryPool: data.inventoryPool,
+      inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
       customerId,
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
@@ -579,6 +581,12 @@ app.post("/", async (c) => {
     if (data.paymentMethod === PaymentMethod.COD) {
       await initCODTracking(db, { orderId }).catch((err) =>
         console.error("[orders] COD tracking init failed:", err)
+      );
+
+      // COD orders start as PENDING, so we must immediately apply inventory logic
+      // to convert their reservations into permanent deductions.
+      await applyInventoryForStatusChange(db, orderId, OrderStatus.PENDING).catch((err) =>
+        console.error("[orders] Inventory deduction failed for COD order:", err)
       );
     }
 

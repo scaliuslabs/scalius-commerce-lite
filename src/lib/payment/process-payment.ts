@@ -14,11 +14,10 @@ import {
   InventoryPool,
 } from "@/db/schema";
 import type { Database } from "@/db";
-import { deductMultiple } from "@/lib/inventory/deduct";
 import { releaseMultiple } from "@/lib/inventory/release";
-import { checkAndAlertLowStock } from "@/lib/inventory/alerts";
 import type { ProcessPaymentParams, PaymentGateway } from "./types";
 import { getCurrencyConfig } from "@/lib/currency";
+import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 
 /**
  * Process a confirmed payment event.
@@ -84,6 +83,8 @@ export async function processPaymentConfirmed(
     const newBalanceDue = Math.max(0, order.totalAmount - newPaidAmount);
     const isFullyPaid = newBalanceDue <= 0.01; // Allow tiny float drift
 
+    console.log(`[process-payment] Order ${params.orderId}: amount=${params.amount}, totalAmount=${order.totalAmount}, paidAmount=${order.paidAmount}, newPaidAmount=${newPaidAmount}, newBalanceDue=${newBalanceDue}, isFullyPaid=${isFullyPaid}`);
+
     // Determine new payment status
     const newPaymentStatus = isFullyPaid
       ? PaymentStatus.PAID
@@ -112,23 +113,26 @@ export async function processPaymentConfirmed(
     });
 
     // 2. Update order totals and payment status
+    const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
     const orderUpdates: any = {
+      status: newStatus,
       paidAmount: newPaidAmount,
       balanceDue: newBalanceDue,
       paymentStatus: newPaymentStatus,
       updatedAt: sql`unixepoch()`,
     };
 
-    if (order.status === OrderStatus.INCOMPLETE) {
-      orderUpdates.status = OrderStatus.PENDING;
-    }
-
     await db
       .update(orders)
       .set(orderUpdates)
       .where(eq(orders.id, params.orderId));
 
-    // 3. Update payment plan if this is a deposit or balance payment
+    // 3. Apply central inventory transitions (e.g. reserving -> deducted because status is now active)
+    await applyInventoryForStatusChange(db, params.orderId, newStatus).catch((err) =>
+      console.error(`[process-payment] Failed to apply inventory transition for ${params.orderId}:`, err)
+    );
+
+    // 4. Update payment plan if this is a deposit or balance payment
     if (params.paymentType === "deposit") {
       await db
         .update(paymentPlans)
@@ -148,48 +152,6 @@ export async function processPaymentConfirmed(
         })
         .where(eq(paymentPlans.orderId, params.orderId));
     }
-
-    // 4. On full payment: permanently deduct inventory
-    if (isFullyPaid) {
-      const items = await db
-        .select({
-          variantId: orderItems.variantId,
-          quantity: orderItems.quantity,
-        })
-        .from(orderItems)
-        .where(eq(orderItems.orderId, params.orderId))
-        .all();
-
-      const pool = (order.inventoryPool ?? InventoryPool.REGULAR) as
-        | "regular"
-        | "preorder"
-        | "backorder";
-
-      const entries = items
-        .filter((i) => i.variantId !== null)
-        .map((i) => ({
-          variantId: i.variantId as string,
-          quantity: i.quantity,
-          pool,
-        }));
-
-      if (entries.length > 0) {
-        const deductResult = await deductMultiple(db, entries, params.orderId);
-        if (!deductResult.success) {
-          // Log but don't fail the payment — stock can be reconciled later
-          console.error(
-            `[process-payment] Inventory deduction failed for order ${params.orderId}:`,
-            deductResult.error
-          );
-        }
-
-        // 5. Check low-stock alerts for each variant
-        for (const entry of entries) {
-          await checkAndAlertLowStock(db, entry.variantId);
-        }
-      }
-    }
-
     return { success: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Payment processing error";
@@ -287,6 +249,12 @@ export async function releaseOrderInventory(
     if (entries.length > 0) {
       await releaseMultiple(db, entries, orderId);
     }
+
+    // Mark inventory as restored
+    await db
+      .update(orders)
+      .set({ inventoryAction: "restored" })
+      .where(eq(orders.id, orderId));
   } catch (err) {
     console.error(`[process-payment] Inventory release error for order ${orderId}:`, err);
   }

@@ -13,6 +13,7 @@ import {
   recordCODFailure,
   markCODReturned,
 } from "@/lib/payment/cod";
+import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 
 export const GET: APIRoute = async ({ params }) => {
   const { id: orderId } = params;
@@ -97,6 +98,8 @@ export const POST: APIRoute = async ({ params, request }) => {
         if (!result.success) {
           return Response.json({ error: result.error }, { status: 500 });
         }
+        // Restore inventory idempotently before changing status
+        await applyInventoryForStatusChange(db, orderId, OrderStatus.RETURNED);
         await db
           .update(orders)
           .set({ status: OrderStatus.RETURNED, updatedAt: sql`unixepoch()` })

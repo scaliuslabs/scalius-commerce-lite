@@ -39,6 +39,7 @@ export const GET: APIRoute = async ({ params }) => {
         sku: productVariants.sku,
         price: productVariants.price,
         stock: productVariants.stock,
+        reservedStock: productVariants.reservedStock,
         discountType: productVariants.discountType,
         discountPercentage: productVariants.discountPercentage,
         discountAmount: productVariants.discountAmount,

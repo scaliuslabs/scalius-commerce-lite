@@ -152,12 +152,12 @@ export const GET: APIRoute = async ({ url }) => {
         // Convert latestShipment dates if present
         latestShipment: order.latestShipment
           ? {
-              ...order.latestShipment,
-              lastChecked:
-                order.latestShipment.lastChecked instanceof Date
-                  ? order.latestShipment.lastChecked.toISOString()
-                  : order.latestShipment.lastChecked,
-            }
+            ...order.latestShipment,
+            lastChecked:
+              order.latestShipment.lastChecked instanceof Date
+                ? order.latestShipment.lastChecked.toISOString()
+                : order.latestShipment.lastChecked,
+          }
           : null,
       };
     });
@@ -383,6 +383,7 @@ export const POST: APIRoute = async ({ request }) => {
         discountAmount: data.discountAmount,
         status: "pending",
         customerId,
+        inventoryAction: "deducted",
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
       })

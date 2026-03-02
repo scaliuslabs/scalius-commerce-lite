@@ -188,11 +188,19 @@ export function VariantFormRow({
                     className="h-9"
                   />
                 </FormControl>
+                {isEditMode && initialData && (
+                  <p className="text-[10px] text-muted-foreground px-1 mt-0.5">
+                    Avail: {(field.value ?? 0) - (initialData.reservedStock ?? 0)}
+                  </p>
+                )}
                 <FormMessage className="text-xs px-1" />
               </FormItem>
             )}
           />
         </TableCell>
+
+        {/* Empty Available column cell in edit mode */}
+        <TableCell className="p-2 align-top"></TableCell>
 
         <TableCell className="p-2 align-top">
           <div className="flex gap-1">

@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../../db";
 import { orders } from "../../../../db/schema";
 import { eq, sql } from "drizzle-orm";
+import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   try {
@@ -27,11 +28,15 @@ export const PUT: APIRoute = async ({ params, request }) => {
       );
     }
 
-    // Update order status
+    // Apply inventory side-effects based on status transition (idempotent)
+    const newInventoryAction = await applyInventoryForStatusChange(db, id, status);
+
+    // Update order status and inventoryAction together
     await db
       .update(orders)
       .set({
         status,
+        inventoryAction: newInventoryAction,
         updatedAt: sql`unixepoch()`,
       })
       .where(eq(orders.id, id));

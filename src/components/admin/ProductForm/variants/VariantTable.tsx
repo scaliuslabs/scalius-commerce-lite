@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { VariantDisplayRow } from "./VariantDisplayRow";
 import { VariantFormRow } from "./VariantFormRow";
+import { VariantBulkEditRow } from "./VariantBulkEditRow";
 import type { ProductVariant, VariantFormValues } from "./types";
 
 interface VariantTableProps {
@@ -30,6 +31,9 @@ interface VariantTableProps {
   onCancelEdit: () => void;
   isAnyRowEditing: boolean;
   onAddVariant: () => void;
+  isBulkEditing?: boolean;
+  draftUpdates?: Record<string, any>;
+  onBulkEditChange?: (variantId: string, field: string, value: any) => void;
 }
 
 export function VariantTable({
@@ -47,6 +51,9 @@ export function VariantTable({
   onCancelEdit,
   isAnyRowEditing,
   onAddVariant,
+  isBulkEditing,
+  draftUpdates,
+  onBulkEditChange,
 }: VariantTableProps) {
   const allSelected = variants.length > 0 && selectedVariants.size === variants.length;
   const someSelected = selectedVariants.size > 0 && selectedVariants.size < variants.length;
@@ -76,7 +83,8 @@ export function VariantTable({
               <TableHead className="min-w-[70px] py-2 text-xs font-medium">Color</TableHead>
               <TableHead className="min-w-[80px] py-2 text-xs font-medium">Weight</TableHead>
               <TableHead className="min-w-[90px] py-2 text-xs font-medium">Price</TableHead>
-              <TableHead className="min-w-[140px] py-2 text-xs font-medium">Stock</TableHead>
+              <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items in your warehouse">On Hand</TableHead>
+              {!isBulkEditing && <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items minus items reserved by active orders">Available</TableHead>}
               <TableHead className="min-w-[100px] py-2 text-xs font-medium">Discount</TableHead>
               <TableHead className="min-w-[110px] py-2 text-xs font-medium">Updated</TableHead>
               <TableHead className="w-[80px] py-2 text-xs font-medium text-right pr-3">Actions</TableHead>
@@ -102,8 +110,19 @@ export function VariantTable({
               </TableRow>
             )}
 
-            {variants.map((variant) =>
-              editingVariantId === variant.id ? (
+            {variants.map((variant) => {
+              if (isBulkEditing) {
+                return (
+                  <VariantBulkEditRow
+                    key={variant.id}
+                    variant={variant}
+                    draftUpdate={draftUpdates?.[variant.id]}
+                    onChange={onBulkEditChange!}
+                  />
+                );
+              }
+
+              return editingVariantId === variant.id ? (
                 <VariantFormRow
                   key={variant.id}
                   initialData={variant}
@@ -122,8 +141,8 @@ export function VariantTable({
                   onDuplicate={onDuplicate}
                   isAnyRowEditing={isAnyRowEditing}
                 />
-              )
-            )}
+              );
+            })}
 
             {isAdding && (
               <VariantFormRow

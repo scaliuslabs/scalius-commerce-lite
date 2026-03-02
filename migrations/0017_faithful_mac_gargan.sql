@@ -1,0 +1,1 @@
+ALTER TABLE `orders` ADD `inventory_action` text DEFAULT 'none' NOT NULL;

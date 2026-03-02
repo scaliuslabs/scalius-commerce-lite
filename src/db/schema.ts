@@ -546,6 +546,7 @@ export const orders = sqliteTable("orders", {
   // Fulfillment fields
   fulfillmentStatus: text("fulfillment_status").notNull().default(FulfillmentStatus.PENDING),
   inventoryPool: text("inventory_pool").notNull().default(InventoryPool.REGULAR),
+  inventoryAction: text("inventory_action").notNull().default("none"), // none | reserved | deducted | restored
   expectedDelivery: text("expected_delivery"), // ISO date string for pre-orders
   // Relations
   customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),

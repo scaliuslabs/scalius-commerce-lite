@@ -9,6 +9,7 @@ import { createRefund as stripeRefund } from "./stripe";
 import { initiateSSLCommerzRefund } from "./sslcommerz";
 import { getStripeSettings, getSSLCommerzSettings } from "./gateway-settings";
 import { releaseOrderInventory } from "./process-payment";
+import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 import type { Database } from "@/db";
 
 export interface RefundRequest {
@@ -205,6 +206,9 @@ export async function processReturn(
             error: `Cannot return an order in '${order.status}' status. Order must be delivered, completed, or shipped.`,
         };
     }
+
+    // Always restore inventory on return (idempotent — safe to call multiple times)
+    await applyInventoryForStatusChange(db, params.orderId, OrderStatus.RETURNED);
 
     // Set order status to RETURNED
     await db
