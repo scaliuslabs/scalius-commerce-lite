@@ -1,7 +1,15 @@
 //src/components/admin/ProductView.tsx
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Package,
   Pencil,
@@ -10,6 +18,8 @@ import {
   ImageIcon,
   DollarSign,
   PercentIcon,
+  ExternalLink,
+  Info
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RichContent } from "../ui/rich-content";
@@ -25,6 +35,7 @@ interface ProductVariant {
   sku: string;
   price: number;
   stock: number;
+  reservedStock: number;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
@@ -71,280 +82,233 @@ export function ProductView({ product }: ProductViewProps) {
 
   return (
     <div className="container max-w-[1400px] space-y-4 py-4">
-      {/* Header */}
-      <div className="relative rounded-xl bg-card border border-border p-4 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-12">
-          {/* Product Info */}
-          <div className="lg:col-span-8">
-            <div className="flex items-center gap-3 mb-3">
-              <h2 className="text-xl font-semibold text-foreground">
-                {product.name}
-              </h2>
-              <Badge
-                variant={product.isActive ? "default" : "secondary"}
-                className={cn(
-                  "text-xs font-medium",
-                  product.isActive
-                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
-                    : "bg-muted text-muted-foreground",
-                )}
-              >
-                {product.isActive ? "Active" : "Inactive"}
-              </Badge>
-              {product.freeDelivery && (
+      {/* Header Card */}
+      <Card className="border-none shadow-none bg-transparent sm:bg-card">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col lg:flex-row gap-6 lg:items-start justify-between">
+            <div className="flex-1 space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                  {product.name}
+                </h1>
                 <Badge
-                  variant="secondary"
-                  className="bg-blue-50 text-xs font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-400"
-                >
-                  Free Delivery
-                </Badge>
-              )}
-            </div>
-            <div className="grid gap-4">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-                    <DollarSign className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Base Price
-                    </div>
-                    <div className="text-base font-medium text-foreground">
-                      {symbol}{product.price.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                {product.discountPercentage &&
-                  product.discountPercentage > 0 && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-                        <PercentIcon className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground">
-                          Discount
-                        </div>
-                        <div className="text-base font-medium text-green-600 dark:text-green-400">
-                          {product.discountPercentage}% OFF
-                        </div>
-                      </div>
-                    </div>
+                  variant={product.isActive ? "default" : "secondary"}
+                  className={cn(
+                    "rounded-md px-2 py-0.5 text-xs font-semibold",
+                    product.isActive
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 hover:bg-emerald-50"
+                      : "bg-muted text-muted-foreground",
                   )}
+                >
+                  {product.isActive ? "Active" : "Draft"}
+                </Badge>
+                {product.freeDelivery && (
+                  <Badge
+                    variant="outline"
+                    className="rounded-md px-2 py-0.5 text-xs font-semibold border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-900/30 dark:text-blue-400"
+                  >
+                    Free Delivery
+                  </Badge>
+                )}
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-                    <Tag className="h-4 w-4 text-primary" />
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <DollarSign className="h-4 w-4" />
+                  <span>Base Price:</span>
+                  <span className="font-semibold text-foreground">{symbol}{product.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
+                {product.discountPercentage && product.discountPercentage > 0 && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <PercentIcon className="h-4 w-4 text-green-600 dark:text-green-500" />
+                    <span>Discount:</span>
+                    <span className="font-semibold text-green-600 dark:text-green-500">{product.discountPercentage}% OFF</span>
                   </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Category
-                    </div>
-                    <div className="text-base text-foreground">
-                      {product.category.name}
-                    </div>
-                  </div>
+                )}
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Tag className="h-4 w-4" />
+                  <span>Category:</span>
+                  <span className="font-medium text-foreground">{product.category.name}</span>
                 </div>
               </div>
 
               {product.description && (
-                <RichContent
-                  content={product.description}
-                  variant="product"
-                  className="mt-4"
-                />
-              )}
-
-              {(product.metaTitle || product.metaDescription) && (
-                <div className="space-y-2 rounded-lg bg-muted/30 p-3">
-                  <h3 className="text-sm font-medium text-foreground">
-                    SEO Info
-                  </h3>
-                  {product.metaTitle && (
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Meta Title
-                      </div>
-                      <div className="text-sm text-foreground">
-                        {product.metaTitle}
-                      </div>
-                    </div>
-                  )}
-                  {product.metaDescription && (
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Meta Description
-                      </div>
-                      <div className="text-sm text-foreground">
-                        {product.metaDescription}
-                      </div>
-                    </div>
-                  )}
+                <div className="pt-2">
+                  <RichContent
+                    content={product.description}
+                    variant="product"
+                    className="text-sm text-foreground/90 max-w-3xl"
+                  />
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Actions */}
-          <div className="lg:col-span-4 flex flex-col items-end justify-between">
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="h-8 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
-              >
+            <div className="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0">
+              <Button size="sm" asChild className="h-8 text-xs font-medium w-full sm:w-auto">
                 <a href={`/admin/products/${product.id}/edit`}>
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="mr-2 h-3.5 w-3.5" />
                   Edit Product
                 </a>
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="h-8 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
-              >
-                <a
-                  href={getStorefrontPath(`/products/${product.slug}`)}
-                  target="_blank"
-                >
-                  <Package className="h-4 w-4" />
-                  View Live
+              <Button variant="outline" size="sm" asChild className="h-8 text-xs font-medium w-full sm:w-auto">
+                <a href={getStorefrontPath(`/products/${product.slug}`)} target="_blank" rel="noreferrer">
+                  <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                  View in Store
                 </a>
               </Button>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              Last updated {product.updatedAt.toLocaleDateString()}
+              <div className="text-[10px] text-muted-foreground text-center sm:text-left lg:text-right mt-1 lg:mt-2">
+                Last updated {product.updatedAt.toLocaleDateString()}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="grid gap-4 lg:grid-cols-12">
-        {/* Left Column - Images */}
-        <div className="lg:col-span-4">
-          <Card className="overflow-hidden">
-            <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ImageIcon className="h-4 w-4" />
-                Product Images
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Left Column - Meta & Images */}
+        <div className="lg:col-span-1 space-y-4">
+          <Card>
+            <CardHeader className="p-4 border-b">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                Media
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4">
-              <div className="space-y-4">
-                {primaryImage && (
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground mb-2">
-                      Primary Image
-                    </div>
-                    <div className="aspect-square overflow-hidden rounded-lg border border-border bg-background">
-                      <img
-                        src={getOptimizedImageUrl(primaryImage.url)}
-                        alt={primaryImage.alt || product.name}
-                        className="h-full w-full object-cover object-center"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </div>
+            <CardContent className="p-4 space-y-4">
+              {primaryImage ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Primary</div>
+                  <div className="aspect-square overflow-hidden rounded-md border bg-muted/30">
+                    <img
+                      src={getOptimizedImageUrl(primaryImage.url)}
+                      alt={primaryImage.alt || product.name}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
                   </div>
-                )}
+                </div>
+              ) : (
+                <div className="aspect-square rounded-md border border-dashed flex items-center justify-center bg-muted/10 text-muted-foreground text-xs">
+                  No primary image
+                </div>
+              )}
 
-                {otherImages.length > 0 && (
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground mb-2">
-                      Additional Images
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {otherImages.map((image) => (
-                        <div
-                          key={image.id}
-                          className="aspect-square overflow-hidden rounded-lg border border-border bg-background"
-                        >
-                          <img
-                            src={getOptimizedImageUrl(image.url)}
-                            alt={image.alt || product.name}
-                            className="h-full w-full object-cover object-center"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        </div>
-                      ))}
-                    </div>
+              {otherImages.length > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Gallery</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {otherImages.map((image) => (
+                      <div key={image.id} className="aspect-square overflow-hidden rounded-md border bg-muted/30">
+                        <img
+                          src={getOptimizedImageUrl(image.url)}
+                          alt={image.alt || product.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {(product.metaTitle || product.metaDescription) && (
+            <Card>
+              <CardHeader className="p-4 border-b">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  Search Engine Optimization
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                {product.metaTitle && (
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Meta Title</div>
+                    <div className="text-xs font-medium text-foreground bg-muted/50 p-2 rounded-md border border-border/50">{product.metaTitle}</div>
+                  </div>
+                )}
+                {product.metaDescription && (
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Meta Description</div>
+                    <div className="text-xs text-foreground bg-muted/50 p-2 rounded-md border border-border/50">{product.metaDescription}</div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Right Column - Variants */}
-        <div className="lg:col-span-8">
-          <Card className="overflow-hidden">
-            <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Layers className="h-4 w-4" />
-                Product Variants ({product.variants.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y divide-border">
-                {product.variants.length === 0 ? (
-                  <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-                    No variants available
-                  </div>
-                ) : (
-                  product.variants.map((variant) => (
-                    <div
-                      key={variant.id}
-                      className="flex items-center gap-4 p-4 transition-colors hover:bg-muted/5"
-                    >
-                      <div className="flex-1 min-w-0 grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                          <div className="text-sm font-medium text-foreground">
-                            SKU
-                          </div>
-                          <div className="text-sm font-mono text-muted-foreground">
-                            {variant.sku}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-foreground">
-                            Attributes
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {[
-                              variant.size && `Size: ${variant.size}`,
-                              variant.color && `Color: ${variant.color}`,
-                              variant.weight &&
-                                `Weight: ${variant.weight.toLocaleString()}g`,
-                            ]
-                              .filter(Boolean)
-                              .join(", ") || "-"}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-foreground">
-                            Price
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {symbol}{variant.price.toLocaleString()}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-foreground">
-                            Stock
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {variant.stock} units
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
+        {/* Right Column - Variants Table */}
+        <div className="lg:col-span-2">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="p-4 border-b">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-muted-foreground" />
+                  Variants & Inventory
+                </CardTitle>
+                <Badge variant="secondary" className="font-normal text-[10px] px-1.5 h-5">{product.variants.length} Total</Badge>
               </div>
+            </CardHeader>
+            <CardContent className="p-0 flex-1 overflow-auto">
+              {product.variants.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <Package className="h-8 w-8 mb-2 opacity-20" />
+                  <p className="text-sm">No variants configured.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead className="text-xs font-medium py-2 h-8 pl-4">SKU</TableHead>
+                      <TableHead className="text-xs font-medium py-2 h-8">Attributes</TableHead>
+                      <TableHead className="text-xs font-medium py-2 h-8 text-right">Price</TableHead>
+                      <TableHead className="text-xs font-medium py-2 h-8 text-right">On Hand</TableHead>
+                      <TableHead className="text-xs font-medium py-2 h-8 text-right">Reserved</TableHead>
+                      <TableHead className="text-xs font-medium py-2 h-8 text-right pr-4">Available</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {product.variants.map((v) => {
+                      const available = v.stock - v.reservedStock;
+                      return (
+                        <TableRow key={v.id} className="hover:bg-muted/30">
+                          <TableCell className="py-2.5 pl-4 font-mono text-xs font-medium">{v.sku}</TableCell>
+                          <TableCell className="py-2.5 text-xs text-muted-foreground">
+                            {[
+                              v.size && `Size: ${v.size}`,
+                              v.color && `Color: ${v.color}`,
+                              v.weight && `${v.weight}g`,
+                            ].filter(Boolean).join(" • ") || "—"}
+                          </TableCell>
+                          <TableCell className="py-2.5 text-xs font-medium text-right text-foreground">
+                            {symbol}{v.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="py-2.5 text-xs text-right text-muted-foreground">{v.stock}</TableCell>
+                          <TableCell className="py-2.5 text-right">
+                            {v.reservedStock > 0 ? (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium border-amber-200 text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800 h-5">
+                                {v.reservedStock}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground opacity-30">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2.5 text-right pr-4">
+                            <span className={cn(
+                              "text-xs font-bold",
+                              available <= 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-500"
+                            )}>
+                              {available}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </div>

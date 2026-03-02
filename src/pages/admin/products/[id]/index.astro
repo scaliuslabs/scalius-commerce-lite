@@ -53,6 +53,7 @@ const variants = await db
     sku: productVariants.sku,
     price: productVariants.price,
     stock: productVariants.stock,
+    reservedStock: productVariants.reservedStock,
     createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
     updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
     deletedAt: sql<number>`CAST(${productVariants.deletedAt} AS INTEGER)`,

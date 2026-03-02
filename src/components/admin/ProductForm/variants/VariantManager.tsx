@@ -271,11 +271,11 @@ export function VariantManager({
 
   return (
     <>
-      <Card className="relative">
-        <CardHeader className="pb-3 pt-4 px-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between cursor-default">
-            <div className="space-y-1">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+      <Card className="border-none shadow-none bg-transparent sm:bg-card">
+        <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2 border-b">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
                 Product Variants
                 {stats.total > 0 && (
                   <span className="text-xs font-normal text-muted-foreground">
@@ -283,40 +283,34 @@ export function VariantManager({
                   </span>
                 )}
               </CardTitle>
-              <CardDescription className="text-xs">
-                Manage size, color, and inventory.
+              <CardDescription className="mt-0 text-xs text-muted-foreground">
+                Manage size, color, inventory, and variant-specific pricing.
               </CardDescription>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex shrink-0 items-center gap-1.5 flex-wrap sm:flex-nowrap w-full sm:w-auto mt-2 sm:mt-0">
               {/* Stats Row */}
               {stats.total > 0 && (
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground bg-muted/40 px-3 py-1.5 rounded-md border">
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50 whitespace-nowrap overflow-x-auto hide-scrollbar hidden sm:flex">
                   <span>
-                    Stock:{" "}
-                    <span className="font-medium text-foreground">
-                      {stats.totalStock}
-                    </span>
+                    Stock: <span className="font-medium text-foreground">{stats.totalStock}</span>
                   </span>
-                  <span className="text-muted-foreground/30">|</span>
+                  <span className="text-border">|</span>
                   <span>
-                    Avg:{" "}
-                    <span className="font-medium text-foreground">
-                      {symbol}{stats.averagePrice.toFixed(2)}
-                    </span>
+                    Avg: <span className="font-medium text-foreground">{symbol}{stats.averagePrice.toFixed(2)}</span>
                   </span>
 
                   {(stats.lowStockCount > 0 || stats.outOfStockCount > 0) && (
-                    <span className="text-muted-foreground/30">|</span>
+                    <span className="text-border">|</span>
                   )}
 
                   {stats.lowStockCount > 0 && (
-                    <span className="font-medium text-amber-600 dark:text-amber-500 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">
+                    <span className="font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1 py-0 rounded">
                       {stats.lowStockCount} Low
                     </span>
                   )}
                   {stats.outOfStockCount > 0 && (
-                    <span className="font-medium text-destructive bg-destructive/10 px-1.5 py-0.5 rounded">
+                    <span className="font-medium text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-400 px-1 py-0 rounded border border-red-200 dark:border-red-900">
                       {stats.outOfStockCount} Out
                     </span>
                   )}
@@ -329,17 +323,17 @@ export function VariantManager({
                   size="sm"
                   onClick={() => setIsSortModalOpen(true)}
                   disabled={isAnyRowEditing}
-                  className="h-8 text-xs gap-2 ml-auto sm:ml-0"
+                  className="h-7 text-xs ml-auto sm:ml-0"
                 >
-                  <ArrowUpDown className="h-3.5 w-3.5" />
-                  Reorder Values
+                  <ArrowUpDown className="h-3.5 w-3.5 mr-1" />
+                  Reorder
                 </Button>
               )}
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-3 p-4">
+        <CardContent className="space-y-2 p-0">
           <VariantActionsToolbar
             productSlug={productSlug}
             variants={localVariants}
@@ -381,7 +375,7 @@ export function VariantManager({
 
           {/* Variant count footer */}
           {localVariants.length > 0 && !isAdding && (
-            <div className="pt-1 text-xs text-muted-foreground text-center">
+            <div className="p-2 sm:p-3 border-t text-xs text-muted-foreground text-center sm:text-left">
               {filteredAndSortedVariants.length !== localVariants.length ? (
                 <span>
                   Showing {filteredAndSortedVariants.length} of{" "}

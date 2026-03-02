@@ -439,6 +439,7 @@ app.get("/:slug", async (c) => {
           sku: productVariants.sku,
           price: productVariants.price,
           stock: productVariants.stock,
+          reservedStock: productVariants.reservedStock,
           discountType: productVariants.discountType,
           discountPercentage: productVariants.discountPercentage,
           discountAmount: productVariants.discountAmount,
@@ -612,31 +613,31 @@ app.get("/:slug", async (c) => {
     const formattedVariants =
       variants.length > 0
         ? variants.map((variant) => ({
-            ...variant,
-            createdAt: unixToDate(variant.createdAt)?.toISOString() || null,
-            updatedAt: unixToDate(variant.updatedAt)?.toISOString() || null,
-            deletedAt: variant.deletedAt
-              ? unixToDate(variant.deletedAt)?.toISOString()
-              : null,
-          }))
+          ...variant,
+          createdAt: unixToDate(variant.createdAt)?.toISOString() || null,
+          updatedAt: unixToDate(variant.updatedAt)?.toISOString() || null,
+          deletedAt: variant.deletedAt
+            ? unixToDate(variant.deletedAt)?.toISOString()
+            : null,
+        }))
         : [
-            {
-              id: "default",
-              productId: product.id,
-              size: null,
-              color: null,
-              weight: null,
-              sku: `SKU-${product.id}`,
-              price: product.price,
-              stock: 100,
-              discountType: "percentage",
-              discountPercentage: 0,
-              discountAmount: 0,
-              createdAt: unixToDate(product.createdAt)?.toISOString() || null,
-              updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
-              deletedAt: null,
-            },
-          ];
+          {
+            id: "default",
+            productId: product.id,
+            size: null,
+            color: null,
+            weight: null,
+            sku: `SKU-${product.id}`,
+            price: product.price,
+            stock: 100,
+            discountType: "percentage",
+            discountPercentage: 0,
+            discountAmount: 0,
+            createdAt: unixToDate(product.createdAt)?.toISOString() || null,
+            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
+            deletedAt: null,
+          },
+        ];
 
     const features = extractFeatures(product.description);
 
@@ -705,6 +706,7 @@ app.get("/:productId/variants", async (c) => {
         sku: productVariants.sku,
         price: productVariants.price,
         stock: productVariants.stock,
+        reservedStock: productVariants.reservedStock,
         discountType: productVariants.discountType,
         discountPercentage: productVariants.discountPercentage,
         discountAmount: productVariants.discountAmount,
@@ -965,33 +967,33 @@ app.get("/search", async (c) => {
     const variants =
       productIds.length > 0
         ? await db
-            .select({
-              id: productVariants.id,
-              productId: productVariants.productId,
-              size: productVariants.size,
-              color: productVariants.color,
-              weight: productVariants.weight,
-              sku: productVariants.sku,
-              price: productVariants.price,
-              stock: productVariants.stock,
-              discountType: productVariants.discountType,
-              discountPercentage: productVariants.discountPercentage,
-              discountAmount: productVariants.discountAmount,
-              colorSortOrder: productVariants.colorSortOrder,
-              sizeSortOrder: productVariants.sizeSortOrder,
-            })
-            .from(productVariants)
-            .where(
-              and(
-                inArray(productVariants.productId, productIds),
-                isNull(productVariants.deletedAt),
-              ),
-            )
-            .orderBy(
-              productVariants.colorSortOrder,
-              productVariants.sizeSortOrder,
-              productVariants.createdAt,
-            )
+          .select({
+            id: productVariants.id,
+            productId: productVariants.productId,
+            size: productVariants.size,
+            color: productVariants.color,
+            weight: productVariants.weight,
+            sku: productVariants.sku,
+            price: productVariants.price,
+            stock: productVariants.stock,
+            discountType: productVariants.discountType,
+            discountPercentage: productVariants.discountPercentage,
+            discountAmount: productVariants.discountAmount,
+            colorSortOrder: productVariants.colorSortOrder,
+            sizeSortOrder: productVariants.sizeSortOrder,
+          })
+          .from(productVariants)
+          .where(
+            and(
+              inArray(productVariants.productId, productIds),
+              isNull(productVariants.deletedAt),
+            ),
+          )
+          .orderBy(
+            productVariants.colorSortOrder,
+            productVariants.sizeSortOrder,
+            productVariants.createdAt,
+          )
         : [];
 
     const productsWithVariants = results.map((product) => ({
