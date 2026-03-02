@@ -34,6 +34,9 @@ interface VariantActionsToolbarProps {
   onBulkDelete: () => void;
   onBulkGenerate: (variants: BulkGeneratedVariant[]) => Promise<void>;
   onImport: (variants: BulkGeneratedVariant[]) => Promise<void>;
+  isBulkEditing?: boolean;
+  onToggleBulkEdit?: () => void;
+  onSaveBulkEdit?: () => void;
   disabled?: boolean;
 }
 
@@ -50,6 +53,9 @@ export function VariantActionsToolbar({
   onBulkDelete,
   onBulkGenerate,
   onImport,
+  isBulkEditing,
+  onToggleBulkEdit,
+  onSaveBulkEdit,
   disabled,
 }: VariantActionsToolbarProps) {
   const [showFilters, setShowFilters] = useState(false);
@@ -129,25 +135,43 @@ export function VariantActionsToolbar({
             </div>
           )}
 
-          <div className="flex items-center gap-2">
-            <VariantImportExport
-              variants={variants}
-              existingSkus={variants.map((v) => v.sku)}
-              onImport={onImport}
-              disabled={disabled}
-            />
+          <div className="flex items-center gap-2 shrink-0">
+            {isBulkEditing ? (
+              <>
+                <Button variant="ghost" size="sm" onClick={onToggleBulkEdit} className="h-8 text-xs">
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={onSaveBulkEdit} className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+                  Save Changes
+                </Button>
+              </>
+            ) : (
+              <>
+                {variants.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={onToggleBulkEdit} disabled={disabled} className="h-8 text-xs">
+                    Spreadsheet Edit
+                  </Button>
+                )}
+                <VariantImportExport
+                  variants={variants}
+                  existingSkus={variants.map((v) => v.sku)}
+                  onImport={onImport}
+                  disabled={disabled}
+                />
 
-            <BulkVariantGenerator
-              productSlug={productSlug}
-              existingVariants={variants}
-              onGenerate={onBulkGenerate}
-              disabled={disabled}
-            />
+                <BulkVariantGenerator
+                  productSlug={productSlug}
+                  existingVariants={variants}
+                  onGenerate={onBulkGenerate}
+                  disabled={disabled}
+                />
 
-            <Button size="sm" onClick={onAddVariant} disabled={disabled} className="h-8 text-xs">
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add Variant
-            </Button>
+                <Button size="sm" onClick={onAddVariant} disabled={disabled} className="h-8 text-xs bg-primary text-primary-foreground">
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Add Variant
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>

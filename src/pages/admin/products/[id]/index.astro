@@ -8,6 +8,7 @@ import {
   categories,
   productVariants,
   productImages,
+  productRichContent,
 } from "../../../../db/schema";
 import { eq, sql } from "drizzle-orm";
 
@@ -75,6 +76,17 @@ const images = await db
   .where(eq(productImages.productId, id as string))
   .orderBy(productImages.sortOrder);
 
+// Get additional info (sections)
+const additionalInfo = await db
+  .select({
+    id: productRichContent.id,
+    title: productRichContent.title,
+    content: productRichContent.content,
+  })
+  .from(productRichContent)
+  .where(eq(productRichContent.productId, id as string))
+  .orderBy(productRichContent.sortOrder);
+
 // Format dates and ensure category is not null
 const formattedProduct = {
   ...product,
@@ -94,6 +106,7 @@ const formattedProduct = {
     ...image,
     createdAt: new Date(image.createdAt * 1000),
   })),
+  additionalInfo,
 };
 ---
 

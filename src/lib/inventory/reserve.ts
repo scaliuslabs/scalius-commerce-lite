@@ -113,16 +113,16 @@ export async function reserveStock(
     const updateSet =
       pool === "preorder"
         ? {
-            preorderStock: sql`${productVariants.preorderStock} - ${quantity}`,
-            reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
-            version: sql`${productVariants.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-          }
+          preorderStock: sql`${productVariants.preorderStock} - ${quantity}`,
+          reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
+          version: sql`${productVariants.version} + 1`,
+          updatedAt: sql`unixepoch()`,
+        }
         : {
-            reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
-            version: sql`${productVariants.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-          };
+          reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
+          version: sql`${productVariants.version} + 1`,
+          updatedAt: sql`unixepoch()`,
+        };
 
     const result = await db
       .update(productVariants)
@@ -132,9 +132,10 @@ export async function reserveStock(
           eq(productVariants.id, variantId),
           eq(productVariants.version, variant.version)
         )
-      ) as unknown as { rowsAffected: number };
+      )
+      .returning({ id: productVariants.id });
 
-    if (result.rowsAffected > 0) {
+    if (result.length > 0) {
       // Success — log movement
       const newStock = pool === "preorder"
         ? variant.preorderStock - quantity

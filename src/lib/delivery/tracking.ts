@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { deliveryShipments, orders } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 
 /**
  * Utility for tracking shipment status changes
@@ -104,6 +105,9 @@ export class ShipmentTracker {
 
       // Update order status if it has changed
       if (newOrderStatus !== order.status) {
+        // Apply inventory side-effects before updating the status
+        await applyInventoryForStatusChange(db, order.id, newOrderStatus);
+
         await db
           .update(orders)
           .set({

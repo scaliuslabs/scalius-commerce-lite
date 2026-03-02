@@ -62,17 +62,17 @@ export async function deductStock(
     const updateSet =
       pool === "regular"
         ? {
-            stock: sql`MAX(0, ${productVariants.stock} - ${quantity})`,
-            reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
-            version: sql`${productVariants.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-          }
+          stock: sql`MAX(0, ${productVariants.stock} - ${quantity})`,
+          reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
+          version: sql`${productVariants.version} + 1`,
+          updatedAt: sql`unixepoch()`,
+        }
         : {
-            // preorder & backorder: physical stock counter unchanged; just release hold
-            reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
-            version: sql`${productVariants.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-          };
+          // preorder & backorder: physical stock counter unchanged; just release hold
+          reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
+          version: sql`${productVariants.version} + 1`,
+          updatedAt: sql`unixepoch()`,
+        };
 
     const result = await db
       .update(productVariants)
@@ -82,15 +82,16 @@ export async function deductStock(
           eq(productVariants.id, variantId),
           eq(productVariants.version, variant.version)
         )
-      ) as unknown as { rowsAffected: number };
+      )
+      .returning({ id: productVariants.id });
 
-    if (result.rowsAffected > 0) {
+    if (result.length > 0) {
       const newStock =
         pool === "regular"
           ? Math.max(0, variant.stock - quantity)
           : pool === "preorder"
-          ? variant.preorderStock
-          : variant.stock;
+            ? variant.preorderStock
+            : variant.stock;
 
       await recordMovement(db, {
         variantId,

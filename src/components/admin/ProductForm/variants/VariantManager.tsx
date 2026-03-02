@@ -62,6 +62,9 @@ export function VariantManager({
     new Set(),
   );
 
+  const [isBulkEditing, setIsBulkEditing] = useState(false);
+  const [draftBulkUpdates, setDraftBulkUpdates] = useState<Record<string, any>>({});
+
   // Filter and Sort State
   const [searchTerm, setSearchTerm] = useState("");
   const [sort, setSort] = useState<VariantSort>({
@@ -80,6 +83,7 @@ export function VariantManager({
     updateVariant,
     deleteVariant,
     bulkDeleteVariants,
+    bulkUpdateVariants,
     bulkCreateVariants,
     duplicateVariant,
     isLoading,
@@ -157,6 +161,53 @@ export function VariantManager({
   const handleCancelEdit = () => {
     setIsAdding(false);
     setEditingVariantId(null);
+  };
+
+  // Bulk Edit Mode
+  const handleToggleBulkEdit = () => {
+    if (isBulkEditing) {
+      setIsBulkEditing(false);
+      setDraftBulkUpdates({});
+    } else {
+      setIsBulkEditing(true);
+      setDraftBulkUpdates({});
+      setIsAdding(false);
+      setEditingVariantId(null);
+    }
+  };
+
+  const handleBulkEditChange = (variantId: string, field: string, value: any) => {
+    setDraftBulkUpdates((prev) => ({
+      ...prev,
+      [variantId]: {
+        ...(prev[variantId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveBulkEdit = async () => {
+    const updates = Object.entries(draftBulkUpdates).map(([id, changes]) => ({
+      id,
+      ...changes,
+    }));
+
+    if (updates.length === 0) {
+      handleToggleBulkEdit();
+      return;
+    }
+
+    const success = await bulkUpdateVariants(productId, updates);
+    if (success) {
+      setLocalVariants((prev) =>
+        prev.map((v) => {
+          const update = draftBulkUpdates[v.id];
+          return update ? { ...v, ...update } : v;
+        })
+      );
+      window.dispatchEvent(new CustomEvent("variantChanged"));
+      handleToggleBulkEdit();
+    }
   };
 
   // Delete single variant
@@ -272,7 +323,7 @@ export function VariantManager({
   return (
     <>
       <Card className="border-none shadow-none bg-transparent sm:bg-card">
-        <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2 border-b">
+        <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
               <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
@@ -350,7 +401,10 @@ export function VariantManager({
             onBulkDelete={handleBulkDelete}
             onBulkGenerate={handleBulkGenerate}
             onImport={handleImport}
-            disabled={isAnyRowEditing}
+            disabled={isAnyRowEditing || isBulkEditing}
+            isBulkEditing={isBulkEditing}
+            onToggleBulkEdit={handleToggleBulkEdit}
+            onSaveBulkEdit={handleSaveBulkEdit}
           />
 
           <VariantTable
@@ -371,6 +425,9 @@ export function VariantManager({
               setIsAdding(true);
               setEditingVariantId(null);
             }}
+            isBulkEditing={isBulkEditing}
+            draftUpdates={draftBulkUpdates}
+            onBulkEditChange={handleBulkEditChange}
           />
 
           {/* Variant count footer */}

@@ -11,6 +11,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Package,
   Pencil,
   Tag,
@@ -69,6 +75,11 @@ interface ProductViewProps {
     category: {
       name: string;
     };
+    additionalInfo?: {
+      id: string;
+      title: string;
+      content: string;
+    }[];
     variants: ProductVariant[];
     images: ProductImage[];
   };
@@ -134,11 +145,54 @@ export function ProductView({ product }: ProductViewProps) {
 
               {product.description && (
                 <div className="pt-2">
-                  <RichContent
-                    content={product.description}
-                    variant="product"
-                    className="text-sm text-foreground/90 max-w-3xl"
-                  />
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="description" className="border-none">
+                      <AccordionTrigger className="py-2 text-sm font-semibold hover:no-underline text-foreground transition-colors justify-start gap-2 border rounded-lg px-4 bg-muted/20 data-[state=open]:rounded-b-none data-[state=open]:bg-muted/40">
+                        Product Description
+                      </AccordionTrigger>
+                      <AccordionContent className="pt-4 pb-4 px-4 border border-t-0 rounded-b-lg">
+                        <RichContent
+                          content={product.description}
+                          variant="product"
+                          className="text-sm text-foreground/90 max-w-3xl"
+                        />
+                      </AccordionContent>
+                    </AccordionItem>
+                    {product.additionalInfo?.map((info) => (
+                      <AccordionItem key={info.id} value={`info-${info.id}`} className="border-none mt-2">
+                        <AccordionTrigger className="py-2 text-sm font-semibold hover:no-underline text-foreground transition-colors justify-start gap-2 border rounded-lg px-4 bg-muted/20 data-[state=open]:rounded-b-none data-[state=open]:bg-muted/40">
+                          {info.title}
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-4 pb-4 px-4 border border-t-0 rounded-b-lg">
+                          <RichContent
+                            content={info.content}
+                            variant="product"
+                            className="text-sm text-foreground/90 max-w-3xl"
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </div>
+              )}
+              {!product.description && product.additionalInfo && product.additionalInfo.length > 0 && (
+                <div className="pt-2">
+                  <Accordion type="single" collapsible className="w-full">
+                    {product.additionalInfo.map((info) => (
+                      <AccordionItem key={info.id} value={`info-${info.id}`} className="border-none mb-2">
+                        <AccordionTrigger className="py-2 text-sm font-semibold hover:no-underline text-foreground transition-colors justify-start gap-2 border rounded-lg px-4 bg-muted/20 data-[state=open]:rounded-b-none data-[state=open]:bg-muted/40">
+                          {info.title}
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-4 pb-4 px-4 border border-t-0 rounded-b-lg">
+                          <RichContent
+                            content={info.content}
+                            variant="product"
+                            className="text-sm text-foreground/90 max-w-3xl"
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
                 </div>
               )}
             </div>

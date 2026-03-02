@@ -18,12 +18,13 @@ export interface MovementEntry {
   variantId: string;
   orderId?: string;
   type:
-    | "reserved"
-    | "deducted"
-    | "released"
-    | "adjusted"
-    | "preorder_reserved"
-    | "preorder_deducted";
+  | "reserved"
+  | "deducted"
+  | "released"
+  | "adjusted"
+  | "restored"
+  | "preorder_reserved"
+  | "preorder_deducted";
   quantity: number;
   previousStock: number;
   newStock: number;

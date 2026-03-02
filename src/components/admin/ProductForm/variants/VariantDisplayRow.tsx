@@ -86,14 +86,23 @@ export function VariantDisplayRow({
         {symbol}{variant.price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </TableCell>
 
+      {/* On Hand */}
       <TableCell className="py-2">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-medium">{availableStock}</span>
-          {variant.reservedStock > 0 && (
-            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap" title={`${variant.stock} on hand, ${variant.reservedStock} reserved`}>
-              ({variant.reservedStock} rsv)
-            </span>
-          )}
+        <span className="text-xs font-medium text-foreground">{variant.stock}</span>
+        {variant.reservedStock > 0 && (
+          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium ml-1" title={`${variant.reservedStock} reserved by orders`}>
+            ({variant.reservedStock} rsv)
+          </span>
+        )}
+      </TableCell>
+
+      {/* Available */}
+      <TableCell className="py-2">
+        <div className="flex items-center gap-1">
+          <span className={cn(
+            "text-xs font-semibold",
+            availableStock <= 0 ? "text-red-600 dark:text-red-400" : availableStock <= 5 ? "text-amber-600 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-500"
+          )}>{availableStock}</span>
           {stockStatus === "out-of-stock" && (
             <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800">
               OUT
