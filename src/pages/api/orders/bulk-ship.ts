@@ -1,6 +1,10 @@
 import type { APIRoute } from "astro";
 import { DeliveryService } from "@/lib/delivery/service";
 import { safeErrorResponse } from "@/lib/error-utils";
+import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
+import { db } from "@/db";
+import { orders, OrderStatus, FulfillmentStatus } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 
 // Initialize the service
 const deliveryService = new DeliveryService();
@@ -37,30 +41,47 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // Process shipments in parallel
-    const results = await Promise.all(
-      orderIds.map(async (orderId) => {
-        try {
-          const shipment = await deliveryService.createShipment(
-            orderId,
-            providerId,
-            options,
-          );
+    // Process shipments sequentially to avoid inventory race conditions
+    const results = [];
+    for (const orderId of orderIds) {
+      try {
+        const shipment = await deliveryService.createShipment(
+          orderId,
+          providerId,
+          options,
+        );
 
-          return {
-            orderId,
-            success: true,
-            shipment,
-          };
-        } catch (error) {
-          return {
-            orderId,
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-          };
+        // If shipment was successful, update order status to shipped
+        // and trigger permanent inventory deduction
+        if (shipment.success) {
+          const newInventoryAction = await applyInventoryForStatusChange(
+            db, orderId, OrderStatus.SHIPPED
+          );
+          await db
+            .update(orders)
+            .set({
+              status: OrderStatus.SHIPPED,
+              fulfillmentStatus: FulfillmentStatus.COMPLETE,
+              inventoryAction: newInventoryAction,
+              updatedAt: sql`unixepoch()`,
+            })
+            .where(eq(orders.id, orderId));
         }
-      }),
-    );
+
+        results.push({
+          orderId,
+          success: shipment.success,
+          shipment: shipment.success ? shipment : undefined,
+          error: shipment.success ? undefined : shipment.message,
+        });
+      } catch (error) {
+        results.push({
+          orderId,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     // Count successes and failures
     const successCount = results.filter((result) => result.success).length;

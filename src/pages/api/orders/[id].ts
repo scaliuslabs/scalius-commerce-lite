@@ -15,6 +15,8 @@ import {
   calculateCustomerStats,
 } from "../../../lib/customer-utils";
 import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
+import { reserveMultiple, releaseMultiple } from "@/lib/inventory";
+import type { ReservationEntry } from "@/lib/inventory";
 
 const updateOrderSchema = z.object({
   customerName: z
@@ -104,7 +106,7 @@ export const PUT: APIRoute = async ({ request, params }) => {
       areaName,
     });
 
-    // Get existing order with its items
+    // Get existing order with its items and inventory pool
     const existingOrder = await db
       .select({
         id: orders.id,
@@ -112,6 +114,7 @@ export const PUT: APIRoute = async ({ request, params }) => {
         customerPhone: orders.customerPhone,
         status: orders.status,
         inventoryAction: orders.inventoryAction,
+        inventoryPool: orders.inventoryPool,
       })
       .from(orders)
       .where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`)
@@ -132,11 +135,37 @@ export const PUT: APIRoute = async ({ request, params }) => {
       .from(orderItems)
       .where(eq(orderItems.orderId, id));
 
-    // Only adjust stock if this order has actively deducted stock
-    const hasActiveDeduction = existingOrder.inventoryAction === "deducted";
+    // --- Inventory adjustment based on current state ---
+    const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
 
-    if (hasActiveDeduction) {
-      // First, restore stock for removed/modified items
+    if (existingOrder.inventoryAction === "reserved") {
+      // Release old reservations, then re-reserve new items
+      // Uses inventory modules with optimistic locking and movement logging
+      const oldEntries: ReservationEntry[] = existingItems
+        .filter((i) => i.variantId)
+        .map((i) => ({ variantId: i.variantId!, quantity: i.quantity, pool }));
+
+      const newEntries: ReservationEntry[] = data.items
+        .filter((i) => i.variantId)
+        .map((i) => ({ variantId: i.variantId!, quantity: i.quantity, pool }));
+
+      if (oldEntries.length > 0) {
+        await releaseMultiple(db, oldEntries, id);
+      }
+
+      if (newEntries.length > 0) {
+        const reserveResult = await reserveMultiple(db, newEntries, id);
+        if (!reserveResult.success) {
+          // Re-reserve the old items to restore original state
+          if (oldEntries.length > 0) {
+            await reserveMultiple(db, oldEntries, id);
+          }
+          throw new Error(reserveResult.error ?? "Insufficient stock for updated items");
+        }
+      }
+    } else if (existingOrder.inventoryAction === "deducted") {
+      // Order was shipped — physical stock has been deducted.
+      // Use quantity-diff approach for stock adjustments.
       for (const existingItem of existingItems) {
         if (existingItem.variantId) {
           const matchingNewItem = data.items.find(
@@ -158,7 +187,6 @@ export const PUT: APIRoute = async ({ request, params }) => {
         }
       }
 
-      // Then, check and update stock for new/modified items
       for (const item of data.items) {
         if (item.variantId) {
           const existingItem = existingItems.find(
@@ -190,7 +218,6 @@ export const PUT: APIRoute = async ({ request, params }) => {
               );
             }
 
-            // Update variant stock
             await db
               .update(productVariants)
               .set({
@@ -202,6 +229,7 @@ export const PUT: APIRoute = async ({ request, params }) => {
         }
       }
     }
+    // For "none" or "restored": no inventory adjustments needed
 
     // Calculate total amount
     const totalAmount =
