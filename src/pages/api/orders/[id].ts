@@ -386,29 +386,10 @@ export const DELETE: APIRoute = async ({ params }) => {
       );
     }
 
-    // Only restore stock if it was actively deducted and not already restored
-    if (orderToDelete.inventoryAction === "deducted") {
-      const items = await db
-        .select({
-          variantId: orderItems.variantId,
-          quantity: orderItems.quantity,
-        })
-        .from(orderItems)
-        .where(eq(orderItems.orderId, id));
-
-      for (const item of items) {
-        if (item.variantId) {
-          await db
-            .update(productVariants)
-            .set({
-              stock: sql`${productVariants.stock} + ${item.quantity}`,
-              updatedAt: sql`unixepoch()`,
-            })
-            .where(eq(productVariants.id, item.variantId));
-        }
-      }
-    } else if (orderToDelete.inventoryAction === "reserved") {
-      // Release reservations instead
+    // Centralized inventory handling:
+    //   - "reserved" → releases reservations (reservedStock--)
+    //   - "deducted" (shipped) → no-op (admin must manually adjust)
+    if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
       await applyInventoryForStatusChange(db, id, "cancelled");
     }
 

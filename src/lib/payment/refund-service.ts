@@ -8,7 +8,6 @@ import { orders, orderPayments, PaymentStatus, OrderStatus } from "@/db/schema";
 import { createRefund as stripeRefund } from "./stripe";
 import { initiateSSLCommerzRefund } from "./sslcommerz";
 import { getStripeSettings, getSSLCommerzSettings } from "./gateway-settings";
-import { releaseOrderInventory } from "./process-payment";
 import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 import type { Database } from "@/db";
 
@@ -156,9 +155,11 @@ export async function processRefund(
         })
         .where(eq(orders.id, params.orderId));
 
-    // 5. Release inventory on full refund
+    // 5. Handle inventory on full refund:
+    //    - If still reserved (pre-ship): release reservations
+    //    - If already deducted (shipped): do NOT auto-restore (admin must manually adjust)
     if (isFullRefund) {
-        await releaseOrderInventory(db, params.orderId);
+        await applyInventoryForStatusChange(db, params.orderId, "cancelled");
     }
 
     return {

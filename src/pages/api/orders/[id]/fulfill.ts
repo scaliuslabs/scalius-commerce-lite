@@ -15,6 +15,7 @@ import {
   OrderStatus,
 } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 
 export const GET: APIRoute = async ({ params }) => {
   const { id } = params;
@@ -154,6 +155,13 @@ export const POST: APIRoute = async ({ params, request }) => {
     writes.push(db.update(orders).set(orderUpdate).where(eq(orders.id, orderId)));
 
     await db.batch(writes as any);
+
+    // If the order was auto-set to shipped, trigger permanent stock deduction
+    if (isFinalShipment && order.status === OrderStatus.CONFIRMED) {
+      await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED).catch((err) =>
+        console.error(`[fulfill] Inventory deduction failed for order ${orderId}:`, err)
+      );
+    }
 
     return Response.json({
       success: true,
