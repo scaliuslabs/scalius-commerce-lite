@@ -4,7 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { Pencil, Trash2, Copy } from "lucide-react";
+import { Pencil, Trash2, Copy, MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import type { ProductVariant } from "./types";
 import {
   formatDate,
@@ -13,6 +20,7 @@ import {
   hasDiscount,
 } from "./utils/variantHelpers";
 import { useCurrency } from "@/hooks/useCurrency";
+import { cn } from "@/lib/utils";
 
 interface VariantDisplayRowProps {
   variant: ProductVariant;
@@ -34,100 +42,111 @@ export function VariantDisplayRow({
   isAnyRowEditing,
 }: VariantDisplayRowProps) {
   const { symbol } = useCurrency();
-  const stockStatus = getStockStatus(variant.stock);
+  const availableStock = variant.stock - variant.reservedStock;
+  const stockStatus = getStockStatus(availableStock);
   const hasVariantDiscount = hasDiscount(variant);
 
   return (
     <TableRow
       key={variant.id}
       data-state={isSelected ? "selected" : undefined}
-      className="group hover:bg-muted/30 transition-colors"
+      className={cn(
+        "group transition-colors hover:bg-muted/50",
+        isSelected && "bg-muted"
+      )}
     >
-      <TableCell className="p-2">
+      <TableCell className="w-10 pl-3 pr-1 py-2">
         <Checkbox
           checked={isSelected}
           onCheckedChange={() => onToggleSelection(variant.id)}
           aria-label={`Select variant ${variant.sku}`}
           disabled={isAnyRowEditing}
+          className="h-3.5 w-3.5"
         />
       </TableCell>
 
-      <TableCell className="font-medium font-mono text-sm">
-        {variant.sku}
-        {hasVariantDiscount && (
-          <Badge variant="secondary" className="ml-2 text-[10px] px-1 py-0">
-            SALE
-          </Badge>
-        )}
+      <TableCell className="py-2">
+        <div className="font-medium font-mono text-xs text-foreground flex items-center gap-1.5">
+          {variant.sku}
+          {hasVariantDiscount && (
+            <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 leading-none bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800">
+              SALE
+            </Badge>
+          )}
+        </div>
       </TableCell>
 
-      <TableCell className="text-sm">{variant.size || "—"}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">{variant.size || "—"}</TableCell>
 
-      <TableCell className="text-sm">{variant.color || "—"}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">{variant.color || "—"}</TableCell>
 
-      <TableCell className="text-sm">{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
 
-      <TableCell className="text-sm font-medium">{symbol}{variant.price.toLocaleString()}</TableCell>
+      <TableCell className="py-2 text-xs font-medium text-foreground">
+        {symbol}{variant.price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </TableCell>
 
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <span className="text-sm">{variant.stock}</span>
+      <TableCell className="py-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-medium">{availableStock}</span>
+          {variant.reservedStock > 0 && (
+            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap" title={`${variant.stock} on hand, ${variant.reservedStock} reserved`}>
+              ({variant.reservedStock} rsv)
+            </span>
+          )}
           {stockStatus === "out-of-stock" && (
-            <Badge variant="destructive" className="text-[10px] px-1 py-0">
+            <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800">
               OUT
             </Badge>
           )}
           {stockStatus === "low" && (
-            <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-yellow-500/10 text-yellow-700">
+            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800">
               LOW
             </Badge>
           )}
         </div>
       </TableCell>
 
-      <TableCell className="text-sm">{getDiscountDisplay(variant, symbol)}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground whitespace-nowrap">{getDiscountDisplay(variant, symbol)}</TableCell>
 
-      <TableCell className="text-sm text-muted-foreground">
+      <TableCell className="py-2 text-xs text-muted-foreground whitespace-nowrap">
         {formatDate(variant.updatedAt)}
       </TableCell>
 
-      <TableCell className="text-right">
-        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => onDuplicate(variant.id)}
-            disabled={isAnyRowEditing}
-            aria-label={`Duplicate variant ${variant.sku}`}
-            title="Duplicate"
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => onEdit(variant.id)}
-            disabled={isAnyRowEditing}
-            aria-label={`Edit variant ${variant.sku}`}
-            title="Edit"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            onClick={() => onDelete(variant.id)}
-            disabled={isAnyRowEditing}
-            aria-label={`Delete variant ${variant.sku}`}
-            title="Delete"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
+      <TableCell className="text-right pr-3 py-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 transition-opacity"
+              disabled={isAnyRowEditing}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+              <span className="sr-only">Variant Actions</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[160px]">
+            <DropdownMenuItem onClick={() => onEdit(variant.id)}>
+              <Pencil className="mr-2 h-3.5 w-3.5" />
+              Edit Variant
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onDuplicate(variant.id)}>
+              <Copy className="mr-2 h-3.5 w-3.5" />
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onDelete(variant.id)}
+              className="text-destructive focus:text-destructive focus:bg-destructive/10"
+            >
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Delete Variant
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </TableCell>
     </TableRow>
   );
 }
+

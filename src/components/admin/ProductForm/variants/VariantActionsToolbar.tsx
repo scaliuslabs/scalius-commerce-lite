@@ -77,20 +77,20 @@ export function VariantActionsToolbar({
       {/* Top Row - Main Actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Left Side - Search and Filter */}
-        <div className="flex items-center gap-2 flex-1 min-w-[300px]">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <div className="flex items-center gap-2 flex-1 min-w-[250px]">
+          <div className="relative flex-1 max-w-[280px]">
+            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search variants (SKU, size, color)..."
+              placeholder="Search variants..."
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-9"
+              className="pl-8 h-8 text-xs"
             />
             {searchTerm && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-1 top-1 h-7 w-7"
+                className="absolute right-1 top-1 h-6 w-6"
                 onClick={() => onSearchChange("")}
               >
                 <X className="h-3 w-3" />
@@ -102,63 +102,68 @@ export function VariantActionsToolbar({
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
-            className="gap-2"
+            className="h-8 text-xs px-2.5 gap-1.5"
           >
-            <Filter className="h-4 w-4" />
-            {showFilters ? "Hide" : "Filter"}
+            <Filter className="h-3.5 w-3.5" />
+            {showFilters ? "Hide Filter" : "Filter"}
           </Button>
         </div>
 
         {/* Right Side - Actions */}
         <div className="flex items-center gap-2">
           {selectedCount > 0 && (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">{selectedCount} selected</Badge>
+            <div className="flex items-center gap-2 mr-1">
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal">
+                {selectedCount} selected
+              </Badge>
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={onBulkDelete}
                 disabled={disabled}
+                className="h-8 text-xs px-2.5"
               >
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                 Delete
               </Button>
             </div>
           )}
 
-          <VariantImportExport
-            variants={variants}
-            existingSkus={variants.map((v) => v.sku)}
-            onImport={onImport}
-            disabled={disabled}
-          />
+          <div className="flex items-center gap-2">
+            <VariantImportExport
+              variants={variants}
+              existingSkus={variants.map((v) => v.sku)}
+              onImport={onImport}
+              disabled={disabled}
+            />
 
-          <BulkVariantGenerator
-            productSlug={productSlug}
-            existingVariants={variants}
-            onGenerate={onBulkGenerate}
-            disabled={disabled}
-          />
+            <BulkVariantGenerator
+              productSlug={productSlug}
+              existingVariants={variants}
+              onGenerate={onBulkGenerate}
+              disabled={disabled}
+            />
 
-          <Button size="sm" onClick={onAddVariant} disabled={disabled}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Variant
-          </Button>
+            <Button size="sm" onClick={onAddVariant} disabled={disabled} className="h-8 text-xs">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add Variant
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Second Row - Sort and Filters (Collapsible) */}
       {showFilters && (
-        <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/50 rounded-md">
+        <div className="flex flex-wrap items-center gap-2.5 p-2 bg-muted/40 rounded-md border text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">
-              Sort by:
+            <span className="text-muted-foreground whitespace-nowrap font-medium">
+              Sort by
             </span>
             <Select value={sortField} onValueChange={handleSortFieldChange}>
-              <SelectTrigger className="w-[140px] h-8">
+              <SelectTrigger className="w-[130px] h-7 text-xs bg-background">
                 <SelectValue placeholder="Sort by..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="text-xs">
                 {sortOptions.map((option) => (
                   <SelectItem key={option.field} value={option.field}>
                     {option.label}
@@ -168,20 +173,14 @@ export function VariantActionsToolbar({
             </Select>
 
             <Select value={sortOrder} onValueChange={handleSortOrderChange}>
-              <SelectTrigger className="w-[120px] h-8">
+              <SelectTrigger className="w-[110px] h-7 text-xs bg-background">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="text-xs">
                 <SelectItem value="asc">Ascending</SelectItem>
                 <SelectItem value="desc">Descending</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="flex-1" />
-
-          <div className="text-sm text-muted-foreground">
-            {variants.length} variant{variants.length !== 1 ? "s" : ""}
           </div>
         </div>
       )}

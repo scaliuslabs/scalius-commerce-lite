@@ -259,6 +259,7 @@ export function duplicateVariant(
     sku: variant.sku + skuSuffix,
     price: variant.price,
     stock: variant.stock,
+    reservedStock: 0,
     discountType: variant.discountType,
     discountPercentage: variant.discountPercentage,
     discountAmount: variant.discountAmount,
@@ -276,12 +277,12 @@ export function isSkuUnique(sku: string, variants: ProductVariant[], excludeId?:
  * Get variant statistics
  */
 export function getVariantStats(variants: ProductVariant[]) {
-  const totalStock = variants.reduce((sum, v) => sum + v.stock, 0);
-  const totalValue = variants.reduce((sum, v) => sum + v.price * v.stock, 0);
+  const totalStock = variants.reduce((sum, v) => sum + (v.stock - (v.reservedStock ?? 0)), 0);
+  const totalValue = variants.reduce((sum, v) => sum + v.price * (v.stock - (v.reservedStock ?? 0)), 0);
   const averagePrice =
     variants.length > 0 ? variants.reduce((sum, v) => sum + v.price, 0) / variants.length : 0;
-  const lowStockCount = variants.filter((v) => getStockStatus(v.stock) === "low").length;
-  const outOfStockCount = variants.filter((v) => getStockStatus(v.stock) === "out-of-stock")
+  const lowStockCount = variants.filter((v) => getStockStatus(v.stock - (v.reservedStock ?? 0)) === "low").length;
+  const outOfStockCount = variants.filter((v) => getStockStatus(v.stock - (v.reservedStock ?? 0)) === "out-of-stock")
     .length;
 
   return {

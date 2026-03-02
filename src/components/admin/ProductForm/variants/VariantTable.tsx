@@ -57,7 +57,7 @@ export function VariantTable({
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
-              <TableHead className="w-[40px] py-2 px-2">
+              <TableHead className="w-10 pl-3 pr-1 py-1.5 align-middle">
                 <Checkbox
                   checked={allSelected}
                   ref={(el) => {
@@ -68,17 +68,18 @@ export function VariantTable({
                   onCheckedChange={onToggleAllSelection}
                   disabled={isAnyRowEditing}
                   aria-label="Select all variants"
+                  className="h-3.5 w-3.5"
                 />
               </TableHead>
-              <TableHead className="min-w-[120px] py-2 text-xs">SKU</TableHead>
-              <TableHead className="min-w-[70px] py-2 text-xs">Size</TableHead>
-              <TableHead className="min-w-[70px] py-2 text-xs">Color</TableHead>
-              <TableHead className="min-w-[80px] py-2 text-xs">Weight</TableHead>
-              <TableHead className="min-w-[90px] py-2 text-xs">Price</TableHead>
-              <TableHead className="min-w-[70px] py-2 text-xs">Stock</TableHead>
-              <TableHead className="min-w-[90px] py-2 text-xs">Discount</TableHead>
-              <TableHead className="min-w-[100px] py-2 text-xs">Updated</TableHead>
-              <TableHead className="w-[120px] py-2 text-xs text-right">Actions</TableHead>
+              <TableHead className="min-w-[120px] py-2 text-xs font-medium">SKU</TableHead>
+              <TableHead className="min-w-[70px] py-2 text-xs font-medium">Size</TableHead>
+              <TableHead className="min-w-[70px] py-2 text-xs font-medium">Color</TableHead>
+              <TableHead className="min-w-[80px] py-2 text-xs font-medium">Weight</TableHead>
+              <TableHead className="min-w-[90px] py-2 text-xs font-medium">Price</TableHead>
+              <TableHead className="min-w-[140px] py-2 text-xs font-medium">Stock</TableHead>
+              <TableHead className="min-w-[100px] py-2 text-xs font-medium">Discount</TableHead>
+              <TableHead className="min-w-[110px] py-2 text-xs font-medium">Updated</TableHead>
+              <TableHead className="w-[80px] py-2 text-xs font-medium text-right pr-3">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
