@@ -6,26 +6,18 @@
 // call applyInventoryForStatusChange() instead of manually adjusting stock.
 
 import { eq, sql } from "drizzle-orm";
-import { orders, orderItems, productVariants, InventoryPool } from "@/db/schema";
+import { orders, orderItems, InventoryPool } from "@/db/schema";
 import type { Database } from "@/db";
 import { releaseMultiple } from "./release";
 import { deductMultiple } from "./deduct";
-import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
 
 // The set of order statuses that mean "this order is dead / returned"
 const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
 
-// The set of order statuses that mean "this order is confirmed / active" 
-// (Triggers permanent stock deduction from reservations)
-const STOCK_DEDUCT_STATUSES = new Set([
-    "pending",
-    "processing",
-    "confirmed",
-    "shipped",
-    "delivered",
-    "completed"
-]);
+// Stock is only permanently deducted when the order ships.
+// Pre-ship statuses (pending, processing, confirmed) keep stock as "reserved".
+const STOCK_DEDUCT_STATUSES = new Set(["shipped"]);
 
 /**
  * Inventory action values tracked on each order:
@@ -80,10 +72,10 @@ export async function applyInventoryForStatusChange(
         }
 
         if (currentAction === "deducted") {
-            // Restore physical stock (stock++)
-            await restoreOrderStock(db, orderId);
-            await updateInventoryAction(db, orderId, "restored");
-            return "restored";
+            // Stock was already permanently deducted (order was shipped).
+            // Do NOT auto-restore — admin must manually adjust inventory
+            // after physically confirming stock is returned to warehouse.
+            return "deducted";
         }
 
         // currentAction is "none" or "restored" → no-op (nothing to undo)
@@ -183,52 +175,6 @@ async function releaseOrderReservations(
     }
 }
 
-/**
- * Restore physical stock for all items in an order.
- * Used when a paid/shipped order is cancelled or returned.
- */
-async function restoreOrderStock(
-    db: Database,
-    orderId: string,
-): Promise<void> {
-    const items = await db
-        .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
-        .from(orderItems)
-        .where(eq(orderItems.orderId, orderId))
-        .all();
-
-    for (const item of items) {
-        if (item.variantId) {
-            // Read current stock for movement logging
-            const variant = await db
-                .select({ stock: productVariants.stock })
-                .from(productVariants)
-                .where(eq(productVariants.id, item.variantId))
-                .get();
-
-            const previousStock = variant?.stock ?? 0;
-            const newStock = previousStock + item.quantity;
-
-            await db
-                .update(productVariants)
-                .set({
-                    stock: sql`${productVariants.stock} + ${item.quantity}`,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(eq(productVariants.id, item.variantId));
-
-            await recordMovement(db, {
-                variantId: item.variantId,
-                orderId,
-                type: "restored",
-                quantity: item.quantity,
-                previousStock,
-                newStock,
-                notes: `Stock restored — order ${orderId} cancelled/returned`,
-            });
-        }
-    }
-}
 
 /**
  * Update the inventoryAction field on an order.

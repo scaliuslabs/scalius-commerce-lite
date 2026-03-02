@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../db";
-import { orders, orderItems, productVariants } from "../../../db/schema";
+import { orders, orderItems } from "../../../db/schema";
 import { sql, eq } from "drizzle-orm";
 import { z } from "zod";
 import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
@@ -34,29 +34,10 @@ export const POST: APIRoute = async ({ request }) => {
 
       if (!order) continue;
 
-      if (order.inventoryAction === "deducted") {
-        // Restore physical stock
-        const items = await db
-          .select({
-            variantId: orderItems.variantId,
-            quantity: orderItems.quantity,
-          })
-          .from(orderItems)
-          .where(eq(orderItems.orderId, orderId));
-
-        for (const item of items) {
-          if (item.variantId) {
-            await db
-              .update(productVariants)
-              .set({
-                stock: sql`${productVariants.stock} + ${item.quantity}`,
-                updatedAt: sql`unixepoch()`,
-              })
-              .where(eq(productVariants.id, item.variantId));
-          }
-        }
-      } else if (order.inventoryAction === "reserved") {
-        // Release reservations
+      // Centralized inventory handling:
+      //   - "reserved" → releases reservations (reservedStock--)
+      //   - "deducted" (shipped) → no-op (admin must manually adjust)
+      if (order.inventoryAction === "reserved" || order.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, orderId, "cancelled");
       }
       // "restored" or "none" → no-op (nothing to undo)
