@@ -21,7 +21,7 @@ const clientActions = `
     async saveProvider(provider) {
       try {
         const method = provider.id ? 'PUT' : 'POST';
-        const response = await fetch('/api/settings/fraud-checker', {
+        const response = await fetch('/api/v1/admin/fraud-checker', {
           method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(provider)

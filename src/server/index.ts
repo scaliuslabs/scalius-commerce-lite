@@ -53,6 +53,11 @@ import { adminDiscountRoutes } from "./routes/admin/discounts";
 import { adminMediaRoutes } from "./routes/admin/media";
 import { adminInventoryRoutes } from "./routes/admin/inventory";
 import { adminNavigationRoutes } from "./routes/admin/navigation";
+import { adminSearchRoutes } from "./routes/admin/search";
+import { adminShipmentRoutes } from "./routes/admin/shipments";
+import { adminAnalyticsRoutes } from "./routes/admin/analytics";
+import { adminFraudCheckerRoutes } from "./routes/admin/fraud-checker";
+import { adminRbacRoutes } from "./routes/admin/rbac";
 
 // Create typed Hono app with Cloudflare Workers Env bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -230,6 +235,11 @@ app.route("/admin/discounts", adminDiscountRoutes);
 app.route("/admin/media", adminMediaRoutes);
 app.route("/admin/inventory", adminInventoryRoutes);
 app.route("/admin/navigation", adminNavigationRoutes);
+app.route("/admin/search", adminSearchRoutes);
+app.route("/admin/shipments", adminShipmentRoutes);
+app.route("/admin/analytics", adminAnalyticsRoutes);
+app.route("/admin/fraud-checker", adminFraudCheckerRoutes);
+app.route("/admin/rbac", adminRbacRoutes);
 
 // Payment routes — session/intent creation is public (storefront)
 app.route("/payment/stripe", stripePaymentRoutes);

@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
 import { z } from "zod";
-import { 
+import {
   Form,
   FormControl,
   FormDescription,
@@ -77,8 +77,8 @@ export function AnalyticsForm({
     try {
       setIsSubmitting(true);
       const endpoint = isEdit
-        ? `/api/analytics/${values.id}`
-        : "/api/analytics";
+        ? `/api/v1/admin/analytics/${values.id}`
+        : "/api/v1/admin/analytics";
       const method = isEdit ? "PUT" : "POST";
 
       const response = await fetch(endpoint, {

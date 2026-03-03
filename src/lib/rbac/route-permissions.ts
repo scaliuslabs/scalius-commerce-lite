@@ -195,12 +195,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Shipments API
   // =============================================
-  "/api/shipments/*": {
+  "/api/v1/admin/shipments/*": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
     DELETE: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
-  "/api/shipments/*/check-status": {
+  "/api/v1/admin/shipments/*/check-status": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
@@ -392,17 +392,17 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Analytics API
   // =============================================
-  "/api/analytics": {
+  "/api/v1/admin/analytics": {
     GET: { permission: PERMISSIONS.ANALYTICS_VIEW },
     POST: { permission: PERMISSIONS.ANALYTICS_CREATE },
   },
-  "/api/analytics/*": {
+  "/api/v1/admin/analytics/*": {
     GET: { permission: PERMISSIONS.ANALYTICS_VIEW },
     PUT: { permission: PERMISSIONS.ANALYTICS_EDIT },
     PATCH: { permission: PERMISSIONS.ANALYTICS_EDIT },
     DELETE: { permission: PERMISSIONS.ANALYTICS_EDIT },
   },
-  "/api/analytics/*/toggle": {
+  "/api/v1/admin/analytics/*/toggle": {
     POST: { permission: PERMISSIONS.ANALYTICS_TOGGLE },
   },
 
@@ -483,16 +483,16 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PUT: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
   },
-  "/api/settings/fraud-checker": {
+  "/api/v1/admin/fraud-checker": {
     GET: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT },
   },
-  "/api/settings/fraud-checker/*": {
+  "/api/v1/admin/fraud-checker/*": {
     GET: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT },
   },
-  "/api/settings/fraud-checker/*/test": {
+  "/api/v1/admin/fraud-checker/*/test": {
     POST: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
   },
   "/api/settings/cache/stats": {
@@ -572,11 +572,11 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Search API
   // =============================================
-  "/api/search": {
+  "/api/v1/admin/search": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     POST: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
-  "/api/search/reindex": {
+  "/api/v1/admin/search/reindex": {
     POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
   },
 
@@ -611,26 +611,26 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // RBAC API
   // =============================================
-  "/api/admin/rbac/roles": {
+  "/api/v1/admin/rbac/roles": {
     GET: { anyOf: [PERMISSIONS.TEAM_VIEW, PERMISSIONS.TEAM_MANAGE_ROLES] },
     POST: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
   },
-  "/api/admin/rbac/roles/*": {
+  "/api/v1/admin/rbac/roles/*": {
     GET: { anyOf: [PERMISSIONS.TEAM_VIEW, PERMISSIONS.TEAM_MANAGE_ROLES] },
     PUT: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
     DELETE: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
   },
-  "/api/admin/rbac/permissions": {
+  "/api/v1/admin/rbac/permissions": {
     GET: { anyOf: [PERMISSIONS.TEAM_VIEW, PERMISSIONS.TEAM_MANAGE_ROLES] },
   },
-  "/api/admin/rbac/my-permissions": {
+  "/api/v1/admin/rbac/my-permissions": {
     GET: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Any authenticated user can view their own permissions
   },
-  "/api/admin/rbac/user-roles": {
+  "/api/v1/admin/rbac/user-roles": {
     POST: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
     DELETE: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
   },
-  "/api/admin/rbac/user-permissions": {
+  "/api/v1/admin/rbac/user-permissions": {
     POST: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
     DELETE: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
   },
