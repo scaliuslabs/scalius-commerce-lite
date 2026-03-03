@@ -113,6 +113,12 @@ flowchart TB
         QueueConsumer[Queue Consumer]
     end
 
+    subgraph Queues [Cloudflare Queues]
+        OrderQueue[Order Ingest Queue]
+        AuthOTPQueue[Auth OTP Queue]
+        NotificationQueue[Events & Notifications]
+    end
+
     subgraph Data [Data Layer]
         D1[(Cloudflare D1)]
         KV[(KV Cache/Session)]
@@ -129,6 +135,8 @@ flowchart TB
     HonoApp --> D1
     HonoApp --> KV
     HonoApp --> R2
+    HonoApp -->|Enqueue jobs| Queues
+    Queues -->|Consume batches| QueueConsumer
     QueueConsumer --> D1
 ```
 
@@ -282,6 +290,8 @@ The following bindings are declared in `wrangler.jsonc` and are automatically av
 | `BUCKET` | R2Bucket | Media file storage |
 | `PAYMENT_EVENTS_QUEUE` | Queue | Payment event processing (producer) |
 | `ORDER_NOTIFICATIONS_QUEUE` | Queue | Order notification processing (producer) |
+| `AUTH_OTP_QUEUE` | Queue | Async email/OTP delivery (producer/consumer) |
+| `ORDER_INGEST_QUEUE` | Queue | High-concurrency async order creation (producer/consumer) |
 | `ASSETS` | Fetcher | Static asset serving |
 
 ### Local development
@@ -489,6 +499,8 @@ The backend uses Cloudflare Queues for async processing:
 
 - **`payment-events`**: Payment gateway webhook events (Stripe, SSLCommerz, etc.)
 - **`order-notifications`**: Order notifications (e.g. push notifications for new orders)
+- **`auth-otp`**: Async block-free delivery for authentication OTP emails
+- **`order-ingest`**: High-concurrency order creation with D1 batched inventory reservations to prevent lockups
 
 The build script (`scripts/build-with-queue.mjs`) bundles the queue consumer (`src/queue-consumer.ts`) and wraps the Astro worker. The deployable entry `dist/worker-with-queue.js` exports both `fetch` (HTTP handler) and `queue` (queue batch handler). Queue bindings are declared in `wrangler.jsonc`.
 
