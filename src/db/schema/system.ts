@@ -1,0 +1,125 @@
+// src/db/schema/system.ts
+// System/platform tables: settings, siteSettings, analytics, adminFcmTokens,
+// shippingMethods, checkoutLanguages.
+
+import { sql } from "drizzle-orm";
+import { sqliteTable, text, integer, real, unique } from "drizzle-orm/sqlite-core";
+import type { InferSelectModel } from "drizzle-orm";
+
+export const settings = sqliteTable(
+    "settings",
+    {
+        id: text("id").primaryKey(),
+        key: text("key").notNull(),
+        value: text("value").notNull(),
+        type: text("type").notNull(),
+        category: text("category").notNull(),
+        updatedAt: integer("updated_at", { mode: "timestamp" })
+            .notNull()
+            .default(sql`CURRENT_TIMESTAMP`),
+        expiresAt: integer("expires_at", { mode: "timestamp" }),
+    },
+    (table) => [unique("settings_key_category").on(table.key, table.category)],
+);
+
+export const siteSettings = sqliteTable("site_settings", {
+    id: text("id").primaryKey(),
+    logo: text("logo"),
+    favicon: text("favicon"),
+    siteName: text("site_name").notNull(),
+    siteDescription: text("site_description"),
+    headerConfig: text("header_config").notNull(),
+    footerConfig: text("footer_config").notNull(),
+    socialLinks: text("social_links"),
+    contactInfo: text("contact_info"),
+    siteTitle: text("site_title"),
+    homepageTitle: text("homepage_title"),
+    homepageMetaDescription: text("homepage_meta_description"),
+    robotsTxt: text("robots_txt"),
+    storefrontUrl: text("storefront_url").default("/"),
+    authVerificationMethod: text("auth_verification_method", { enum: ["email", "phone", "both", "whatsapp_otp", "sms_otp"] }).notNull().default("email"),
+    guestCheckoutEnabled: integer("guest_checkout_enabled", { mode: "boolean" }).notNull().default(true),
+    checkoutMode: text("checkout_mode", { enum: ["guest_cod_only", "gateways_only", "all"] }).notNull().default("all"),
+    partialPaymentEnabled: integer("partial_payment_enabled", { mode: "boolean" }).notNull().default(false),
+    partialPaymentAmount: real("partial_payment_amount").notNull().default(0),
+    whatsappAccessToken: text("whatsapp_access_token"),
+    whatsappPhoneNumberId: text("whatsapp_phone_number_id"),
+    whatsappTemplateName: text("whatsapp_template_name").default("auth_otp"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const analytics = sqliteTable("analytics", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    type: text("type").notNull(),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    usePartytown: integer("use_partytown", { mode: "boolean" }).notNull().default(true),
+    config: text("config").notNull(),
+    location: text("location").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    token: text("token").notNull().unique(),
+    deviceInfo: text("device_info"),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    lastUsed: integer("last_used", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`(cast(strftime('%s','now') as int))`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`(cast(strftime('%s','now') as int))`),
+});
+
+export const shippingMethods = sqliteTable("shipping_methods", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull().unique(),
+    fee: real("fee").notNull().default(0),
+    description: text("description"),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`(cast(strftime('%s','now') as int))`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`(cast(strftime('%s','now') as int))`),
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
+});
+
+export const checkoutLanguages = sqliteTable("checkout_languages", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    code: text("code").notNull().unique(),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    languageData: text("language_data").notNull(),
+    fieldVisibility: text("field_visibility").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`(cast(strftime('%s','now') as int))`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`(cast(strftime('%s','now') as int))`),
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
+});
+
+export type Setting = InferSelectModel<typeof settings>;
+export type SiteSettings = InferSelectModel<typeof siteSettings>;
+export type Analytics = InferSelectModel<typeof analytics>;
+export type AdminFcmToken = InferSelectModel<typeof adminFcmTokens>;
+export type ShippingMethod = InferSelectModel<typeof shippingMethods>;
+export type CheckoutLanguage = InferSelectModel<typeof checkoutLanguages>;

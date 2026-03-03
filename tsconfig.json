@@ -8,6 +8,15 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@modules/*": [
+        "./src/modules/*"
+      ],
+      "@db/*": [
+        "./src/db/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
       ]
     }
   },

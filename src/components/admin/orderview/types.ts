@@ -1,4 +1,4 @@
-import type { DeliveryProvider, DeliveryShipment } from "@/db/schema";
+import type { DeliveryProviderRecord, DeliveryShipment } from "@/db/schema";
 
 export interface OrderItem {
   id: string;
@@ -34,7 +34,7 @@ export interface Order {
   zoneName?: string;
   areaName?: string | null;
   shipments?: DeliveryShipment[];
-  deliveryProviders?: DeliveryProvider[];
+  deliveryProviders?: DeliveryProviderRecord[];
   // Payment fields
   paymentMethod?: string | null;
   paymentStatus?: string | null;

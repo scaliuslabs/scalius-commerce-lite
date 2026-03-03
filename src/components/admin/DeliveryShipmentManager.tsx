@@ -1,6 +1,6 @@
 import { type FC, useState, useEffect } from "react";
-import type { DeliveryProvider, DeliveryShipment, Order } from "@/db/schema";
-import { toast } from "sonner"; 
+import type { DeliveryProviderRecord, DeliveryShipment, Order } from "@/db/schema";
+import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 import ShipmentStatusIndicator from "./ShipmentStatusIndicator";
 
@@ -12,7 +12,7 @@ interface ExtendedDeliveryShipment extends DeliveryShipment {
 
 interface DeliveryShipmentManagerProps {
   order: Order;
-  providers: DeliveryProvider[];
+  providers: DeliveryProviderRecord[];
   shipments: ExtendedDeliveryShipment[];
 }
 
@@ -156,13 +156,13 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
         prev.map((s) =>
           s.id === shipmentId
             ? {
-                ...s,
-                status: result.data.status,
-                rawStatus: result.data.rawStatus,
-                metadata: result.data.metadata,
-                lastChecked:
-                  result.data.lastChecked || new Date().toISOString(),
-              }
+              ...s,
+              status: result.data.status,
+              rawStatus: result.data.rawStatus,
+              metadata: result.data.metadata,
+              lastChecked:
+                result.data.lastChecked || new Date().toISOString(),
+            }
             : s,
         ),
       );
@@ -248,10 +248,10 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
             prev.map((s) =>
               s.id === updatedShipment.id
                 ? {
-                    ...s,
-                    status: updatedShipment.status,
-                    lastChecked: updatedShipment.lastChecked,
-                  }
+                  ...s,
+                  status: updatedShipment.status,
+                  lastChecked: updatedShipment.lastChecked,
+                }
                 : s,
             ),
           );

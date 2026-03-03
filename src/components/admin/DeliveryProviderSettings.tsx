@@ -1,5 +1,5 @@
 import { type FC, useState } from "react";
-import type { DeliveryProvider, DeliveryProviderType } from "@/db/schema";
+import type { DeliveryProviderRecord, DeliveryProviderType } from "@/db/schema";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,7 +82,7 @@ const DEFAULT_CONFIG = {
 };
 
 interface DeliveryProviderSettingsProps {
-  providers: DeliveryProvider[];
+  providers: DeliveryProviderRecord[];
 }
 
 // API helpers (replaces the old window.deliveryProviderActions inline script)
@@ -159,9 +159,9 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
   providers: initialProviders,
 }) => {
   const [providers, setProviders] =
-    useState<DeliveryProvider[]>(initialProviders);
+    useState<DeliveryProviderRecord[]>(initialProviders);
   const [selectedProvider, setSelectedProvider] =
-    useState<DeliveryProvider | null>(null);
+    useState<DeliveryProviderRecord | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -171,7 +171,7 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
 
   // Form state
   const [formData, setFormData] = useState<
-    Omit<DeliveryProvider, "createdAt" | "updatedAt">
+    Omit<DeliveryProviderRecord, "createdAt" | "updatedAt">
   >({
     id: "",
     name: "",
@@ -181,7 +181,7 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
     isActive: false,
   });
 
-  const resetForm = (provider?: DeliveryProvider) => {
+  const resetForm = (provider?: DeliveryProviderRecord) => {
     if (provider) {
       setFormData({
         id: provider.id,
@@ -360,7 +360,7 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
     if (selectedProvider) resetForm(selectedProvider);
   };
 
-  const handleSelect = (provider: DeliveryProvider) => {
+  const handleSelect = (provider: DeliveryProviderRecord) => {
     setSelectedProvider(provider);
     resetForm(provider);
     setIsEditing(false);
