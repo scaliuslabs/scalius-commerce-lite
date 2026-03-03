@@ -169,8 +169,8 @@ export function CollectionForm({
     try {
       setIsSubmitting(true);
       const endpoint = isEdit
-        ? `/api/collections/${values.id}`
-        : "/api/collections";
+        ? `/api/v1/admin/collections/${values.id}`
+        : "/api/v1/admin/collections";
       const method = isEdit ? "PUT" : "POST";
 
       const response = await fetch(endpoint, {

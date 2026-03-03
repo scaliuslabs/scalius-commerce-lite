@@ -52,7 +52,7 @@ export function CollectionSelector({
   useEffect(() => {
     const fetchCollections = async () => {
       try {
-        const response = await fetch("/api/collections?limit=50");
+        const response = await fetch("/api/v1/admin/collections?limit=50");
         const data = await response.json();
         // Handle both response formats: { data: [...] } from Astro API and { collections: [...] } from Hono API
         const collectionsArray = data.data || data.collections || [];

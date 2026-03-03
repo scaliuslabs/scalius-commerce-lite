@@ -26,6 +26,7 @@ import { polarWebhookRoutes } from "./routes/webhooks/polar";
 import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
 import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
 import { authMiddleware } from "./middleware/auth";
+import { adminAuthMiddleware } from "./middleware/admin-auth";
 import { locationRoutes } from "./routes/locations";
 import { discountRoutes } from "./routes/discounts";
 import { widgetRoutes } from "./routes/widgets";
@@ -41,6 +42,13 @@ import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { openApiSpec } from "./openapi";
 import { getCorsOriginContext } from "@/shared/cors-helper";
+
+// Admin routes
+import { adminCategoryRoutes } from "./routes/admin/categories";
+import { adminCollectionRoutes } from "./routes/admin/collections";
+import { adminCustomerRoutes } from "./routes/admin/customers";
+import { adminPageRoutes } from "./routes/admin/pages";
+import { adminWidgetRoutes } from "./routes/admin/widgets";
 
 // Create typed Hono app with Cloudflare Workers Env bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -144,9 +152,9 @@ app.route("/shipping-methods", shippingMethodRoutes);
 app.route("/seo", seoRoutes);
 app.route("/checkout-languages", checkoutLanguageRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
-app.route("/meta", metaConversionsRoutes); // Register the new route
-app.route("/storefront", storefrontRoutes); // Consolidated homepage/layout endpoints
-app.route("/checkout", checkoutRoutes);    // Public checkout config (enabled gateways)
+app.route("/meta", metaConversionsRoutes);
+app.route("/storefront", storefrontRoutes);
+app.route("/checkout", checkoutRoutes);
 app.route("/customer-auth", customerAuthRoutes);
 
 // Add health check endpoint (relative path '/health')
@@ -199,9 +207,21 @@ app.use("/orders/*", authMiddleware);
 
 // Register routes (mix of public and protected)
 app.route("/products", productRoutes);
-app.route("/categories", categoryRoutes); // Categories are now public (category listing and products)
+app.route("/categories", categoryRoutes);
 app.route("/cache", cacheControlRoutes);
 app.route("/orders", orderRoutes);
+
+// --- Admin System ---
+// The /admin/* routes are strictly protected by adminAuthMiddleware.
+// It verifies either a Better Auth session (Astro SSR) or a JWT Bearer token (Decoupled Hono).
+app.use("/admin/*", adminAuthMiddleware);
+
+// Register Admin routes
+app.route("/admin/categories", adminCategoryRoutes);
+app.route("/admin/collections", adminCollectionRoutes);
+app.route("/admin/customers", adminCustomerRoutes);
+app.route("/admin/pages", adminPageRoutes);
+app.route("/admin/widgets", adminWidgetRoutes);
 
 // Payment routes — session/intent creation is public (storefront)
 app.route("/payment/stripe", stripePaymentRoutes);

@@ -171,7 +171,7 @@ export function CategoryList({
     }) => {
       setIsLoadingCategories(true);
       try {
-        const url = new URL("/api/categories", window.location.origin);
+        const url = new URL("/api/v1/admin/categories", window.location.origin);
         if (params.page) url.searchParams.set("page", params.page.toString());
         if (params.limit) url.searchParams.set("limit", params.limit.toString());
         if (params.search) url.searchParams.set("search", params.search);
@@ -343,7 +343,7 @@ export function CategoryList({
     setCategoryToDelete(null); // Close dialog optimistically
 
     try {
-      const response = await fetch(`/api/categories/${idToDelete}`, {
+      const response = await fetch(`/api/v1/admin/categories/${idToDelete}`, {
         method: "DELETE",
       });
 
@@ -405,7 +405,7 @@ export function CategoryList({
     setCategoryToDelete(null);
 
     try {
-      const response = await fetch(`/api/categories/${idToDelete}/permanent`, {
+      const response = await fetch(`/api/v1/admin/categories/${idToDelete}/permanent`, {
         method: "DELETE",
       });
 
@@ -467,7 +467,7 @@ export function CategoryList({
     async (id: string) => {
       setIsActionLoading(true);
       try {
-        const response = await fetch(`/api/categories/${id}/restore`, {
+        const response = await fetch(`/api/v1/admin/categories/${id}/restore`, {
           method: "POST",
         });
         if (!response.ok) throw new Error("Failed to restore category");
@@ -514,7 +514,7 @@ export function CategoryList({
     setIsConfirmBulkDeleteOpen(false); // Close dialog
 
     try {
-      const response = await fetch("/api/categories/bulk-delete", {
+      const response = await fetch("/api/v1/admin/categories/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -597,7 +597,7 @@ export function CategoryList({
     setIsConfirmBulkRestoreOpen(false);
 
     try {
-      const response = await fetch("/api/categories/bulk-restore", {
+      const response = await fetch("/api/v1/admin/categories/bulk-restore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

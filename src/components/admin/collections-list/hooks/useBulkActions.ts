@@ -14,11 +14,11 @@ export function useBulkActions(onRefresh: () => void) {
       setIsActionLoading(true);
 
       const endpointMap = {
-        trash: "/api/collections/bulk-delete",
-        delete: "/api/collections/bulk-delete",
-        restore: "/api/collections/bulk-restore",
-        activate: "/api/collections/bulk-activate",
-        deactivate: "/api/collections/bulk-deactivate",
+        trash: "/api/v1/admin/collections/bulk-delete",
+        delete: "/api/v1/admin/collections/bulk-delete",
+        restore: "/api/v1/admin/collections/bulk-restore",
+        activate: "/api/v1/admin/collections/bulk-activate",
+        deactivate: "/api/v1/admin/collections/bulk-deactivate",
       };
 
       let body: any = { collectionIds: Array.from(selectedIds) };

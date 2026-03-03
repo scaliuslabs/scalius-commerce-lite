@@ -35,7 +35,7 @@ export function useCollections(
     });
 
     try {
-      const response = await fetch(`/api/collections?${params.toString()}`);
+      const response = await fetch(`/api/v1/admin/collections?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch collections");
       const data = await response.json();
       setCollections(data.data || data.collections || []);

@@ -14,7 +14,7 @@ export function useCollectionActions(
     async (id: string, data: Partial<CollectionItem>) => {
       setSavingStates((prev) => ({ ...prev, [id]: true }));
       try {
-        const response = await fetch(`/api/collections/${id}`, {
+        const response = await fetch(`/api/v1/admin/collections/${id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -43,8 +43,8 @@ export function useCollectionActions(
     async (id: string, name: string, showTrashed: boolean) => {
       setIsActionLoading(true);
       const apiEndpoint = showTrashed
-        ? `/api/collections/${id}/permanent`
-        : `/api/collections/${id}`;
+        ? `/api/v1/admin/collections/${id}/permanent`
+        : `/api/v1/admin/collections/${id}`;
       const successMessage = showTrashed
         ? `Collection "${name}" permanently deleted.`
         : `Collection "${name}" moved to trash.`;
@@ -78,7 +78,7 @@ export function useCollectionActions(
     async (id: string) => {
       setIsActionLoading(true);
       try {
-        const response = await fetch(`/api/collections/${id}/restore`, {
+        const response = await fetch(`/api/v1/admin/collections/${id}/restore`, {
           method: "POST",
         });
         if (!response.ok) throw new Error("Failed to restore collection");
@@ -96,7 +96,7 @@ export function useCollectionActions(
   const handleReorder = useCallback(
     async (updatedOrder: { id: string; sortOrder: number }[]) => {
       try {
-        const response = await fetch("/api/collections/reorder", {
+        const response = await fetch("/api/v1/admin/collections/reorder", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(updatedOrder),

@@ -170,7 +170,7 @@ export function CustomerList({
     }) => {
       setIsLoadingCustomers(true);
       try {
-        const url = new URL("/api/customers", window.location.origin);
+        const url = new URL("/api/v1/admin/customers", window.location.origin);
         if (params.page) url.searchParams.set("page", params.page.toString());
         if (params.limit) url.searchParams.set("limit", params.limit.toString());
         if (params.search) url.searchParams.set("search", params.search);
@@ -369,7 +369,7 @@ export function CustomerList({
 
   const handleDelete = (id: string) => {
     performApiAction(
-      () => fetch(`/api/customers/${id}`, { method: "DELETE" }),
+      () => fetch(`/api/v1/admin/customers/${id}`, { method: "DELETE" }),
       {
         successTitle: "Customer Moved to Trash",
         successDescription: "The customer record has been moved to the trash.",
@@ -387,7 +387,7 @@ export function CustomerList({
 
   const handlePermanentDelete = (id: string) => {
     performApiAction(
-      () => fetch(`/api/customers/${id}/permanent`, { method: "DELETE" }),
+      () => fetch(`/api/v1/admin/customers/${id}/permanent`, { method: "DELETE" }),
       {
         successTitle: "Customer Permanently Deleted",
         successDescription: "The customer record has been permanently removed.",
@@ -405,7 +405,7 @@ export function CustomerList({
 
   const handleRestore = (id: string) => {
     performApiAction(
-      () => fetch(`/api/customers/${id}/restore`, { method: "POST" }),
+      () => fetch(`/api/v1/admin/customers/${id}/restore`, { method: "POST" }),
       {
         successTitle: "Customer Restored",
         successDescription: "The customer has been successfully restored.",
@@ -425,7 +425,7 @@ export function CustomerList({
     const ids = Array.from(selectedCustomers);
     performApiAction(
       () =>
-        fetch("/api/customers/bulk-delete", {
+        fetch("/api/v1/admin/customers/bulk-delete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ customerIds: ids, permanent: showTrashed }),
