@@ -1,5 +1,5 @@
 import { useState, useEffect, type FC } from "react";
-import type { DeliveryProvider } from "@/db/schema";
+import type { DeliveryProviderRecord } from "@/db/schema";
 import { toast } from "sonner";
 
 interface ShipmentFormProps {
@@ -13,7 +13,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
   onSuccess,
   onCancel,
 }) => {
-  const [providers, setProviders] = useState<DeliveryProvider[]>([]);
+  const [providers, setProviders] = useState<DeliveryProviderRecord[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -31,7 +31,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
         const data = await response.json();
         // Only show active providers
         const activeProviders = data.filter(
-          (p: DeliveryProvider) => p.isActive,
+          (p: DeliveryProviderRecord) => p.isActive,
         );
         setProviders(activeProviders);
 
