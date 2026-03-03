@@ -36,7 +36,6 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-    DialogTrigger,
 } from "@/components/ui/dialog";
 
 const MASKED_VALUE = "••••••••••••";

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, RotateCcw, Save, Palette, Check } from "lucide-react";
+import { Loader2, RotateCcw, Save, Palette } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Default storefront colors (must match global.css :root vars in storefront).
@@ -304,7 +304,6 @@ export default function ThemeSettingsPage() {
                             {COLOR_FIELDS.map((field) => {
                                 const val = colors[field.key] || "";
                                 const bgColor = val || "#e5e5e5";
-                                const isHexVal = isHex(val) || val === "";
 
                                 return (
                                     <div

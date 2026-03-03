@@ -13,7 +13,6 @@ import {
   DiscountValueType,
 } from "@/db/schema";
 import { eq, sql, and, isNull, count, inArray } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { getCurrencyConfig } from "@/lib/currency";
 
 const app = new Hono<{ Bindings: Env }>();

@@ -50,7 +50,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
     fetchProviders();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
 
     if (!selectedProviderId) {

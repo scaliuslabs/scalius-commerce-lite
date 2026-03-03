@@ -27,7 +27,7 @@ export function SetupForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleCreateAccount = async (e: React.FormEvent) => {
+  const handleCreateAccount = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -113,7 +113,7 @@ export function SetupForm() {
     }
   };
 
-  const handleVerify2FA = async (e: React.FormEvent) => {
+  const handleVerify2FA = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);

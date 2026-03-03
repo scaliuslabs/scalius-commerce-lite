@@ -51,7 +51,7 @@ export default function SSLCommerzSettingsForm() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setSaving(true);
 

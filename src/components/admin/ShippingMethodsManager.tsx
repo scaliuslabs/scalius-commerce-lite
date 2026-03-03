@@ -201,7 +201,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
   }, []);
 
   const handleSearch = useCallback(
-    (e?: React.FormEvent) => {
+    (e?: React.SyntheticEvent) => {
       if (e) e.preventDefault();
       const url = new URL(window.location.href);
       if (searchQuery.trim()) {
@@ -293,7 +293,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
     setIsFormOpen(true);
   };
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setIsActionLoading(true);
     const url = editingMethod

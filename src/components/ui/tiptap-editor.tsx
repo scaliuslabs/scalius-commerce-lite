@@ -40,7 +40,7 @@ import {
   Minimize2,
   ChevronsLeftRight,
   TextQuote,
-  Youtube as YoutubeIcon,
+  Video as VideoIcon,
 } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
@@ -288,7 +288,7 @@ const MenuBar = ({
                   size="icon"
                   className={buttonSize}
                 >
-                  <YoutubeIcon className={iconSize} />
+                  <VideoIcon className={iconSize} />
                 </Button>
               </PopoverTrigger>
             </TooltipTrigger>
@@ -425,10 +425,10 @@ const MenuBar = ({
           <PopoverTrigger asChild>
             <span>
               <ToolbarButton
-                onClick={() => {}}
+                onClick={() => { }}
                 tooltip="Insert table"
                 buttonSize={buttonSize}
-      
+
               >
                 <TableIcon className={iconSize} />
               </ToolbarButton>
@@ -642,7 +642,7 @@ const MenuBar = ({
             onClick={toggleModal}
             tooltip="Fullscreen"
             buttonSize={buttonSize}
-  
+
           >
             <Maximize className={iconSize} />
           </ToolbarButton>
