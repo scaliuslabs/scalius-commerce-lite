@@ -96,8 +96,8 @@ export function UserPermissionEditor({
       setIsLoading(true);
       try {
         const [rolesRes, permsRes] = await Promise.all([
-          fetch("/api/admin/rbac/roles"),
-          fetch("/api/admin/rbac/permissions"),
+          fetch("/api/v1/admin/rbac/roles"),
+          fetch("/api/v1/admin/rbac/permissions"),
         ]);
 
         if (rolesRes.ok) {
@@ -136,7 +136,7 @@ export function UserPermissionEditor({
 
   const handleAddRole = async (roleId: string) => {
     try {
-      const response = await fetch("/api/admin/rbac/user-roles", {
+      const response = await fetch("/api/v1/admin/rbac/user-roles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, roleId }),
@@ -158,7 +158,7 @@ export function UserPermissionEditor({
 
   const handleRemoveRole = async (roleId: string) => {
     try {
-      const response = await fetch("/api/admin/rbac/user-roles", {
+      const response = await fetch("/api/v1/admin/rbac/user-roles", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, roleId }),
@@ -184,7 +184,7 @@ export function UserPermissionEditor({
 
   const handleSetOverride = async (permission: string, granted: boolean) => {
     try {
-      const response = await fetch("/api/admin/rbac/user-permissions", {
+      const response = await fetch("/api/v1/admin/rbac/user-permissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, permission, granted }),
@@ -223,7 +223,7 @@ export function UserPermissionEditor({
 
   const handleRemoveOverride = async (permission: string) => {
     try {
-      const response = await fetch("/api/admin/rbac/user-permissions", {
+      const response = await fetch("/api/v1/admin/rbac/user-permissions", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, permission }),

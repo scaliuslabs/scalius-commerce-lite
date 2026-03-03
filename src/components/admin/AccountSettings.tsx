@@ -480,8 +480,8 @@ function ChangePasswordSection() {
                     <div
                       key={i}
                       className={`h-1 flex-1 rounded-full transition-colors ${i <= passwordStrength.strength
-                          ? passwordStrength.color
-                          : "bg-muted"
+                        ? passwordStrength.color
+                        : "bg-muted"
                         }`}
                     />
                   ))}
@@ -793,8 +793,8 @@ function TwoFactorSection({ user }: { user: User }) {
                   type="button"
                   onClick={() => setSelectedMethod("totp")}
                   className={`p-4 border rounded-xl text-left transition-all ${selectedMethod === "totp"
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "hover:bg-muted/50 hover:border-muted-foreground/20"
+                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                    : "hover:bg-muted/50 hover:border-muted-foreground/20"
                     }`}
                 >
                   <div className="flex items-center gap-3">
@@ -815,8 +815,8 @@ function TwoFactorSection({ user }: { user: User }) {
                   type="button"
                   onClick={() => setSelectedMethod("email")}
                   className={`p-4 border rounded-xl text-left transition-all ${selectedMethod === "email"
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "hover:bg-muted/50 hover:border-muted-foreground/20"
+                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                    : "hover:bg-muted/50 hover:border-muted-foreground/20"
                     }`}
                 >
                   <div className="flex items-center gap-3">
@@ -1119,7 +1119,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
 
   const fetchRoles = async () => {
     try {
-      const response = await fetch("/api/admin/rbac/roles");
+      const response = await fetch("/api/v1/admin/rbac/roles");
       const result = await response.json();
       if (response.ok) {
         // Filter out super_admin role - it shouldn't be assignable

@@ -93,8 +93,8 @@ export function RolesManagement() {
       setIsLoading(true);
       try {
         const [rolesRes, permsRes] = await Promise.all([
-          fetch("/api/admin/rbac/roles"),
-          fetch("/api/admin/rbac/permissions"),
+          fetch("/api/v1/admin/rbac/roles"),
+          fetch("/api/v1/admin/rbac/permissions"),
         ]);
 
         if (rolesRes.ok) {
@@ -125,7 +125,7 @@ export function RolesManagement() {
     permissions: string[];
   }) => {
     try {
-      const response = await fetch("/api/admin/rbac/roles", {
+      const response = await fetch("/api/v1/admin/rbac/roles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(roleData),
@@ -157,7 +157,7 @@ export function RolesManagement() {
     }
   ) => {
     try {
-      const response = await fetch(`/api/admin/rbac/roles/${roleId}`, {
+      const response = await fetch(`/api/v1/admin/rbac/roles/${roleId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -182,7 +182,7 @@ export function RolesManagement() {
 
   const handleDeleteRole = async (roleId: string) => {
     try {
-      const response = await fetch(`/api/admin/rbac/roles/${roleId}`, {
+      const response = await fetch(`/api/v1/admin/rbac/roles/${roleId}`, {
         method: "DELETE",
       });
 
