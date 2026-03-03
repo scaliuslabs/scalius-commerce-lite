@@ -94,7 +94,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/collections": ["collections"],
   "/api/v1/admin/pages": ["pages"],
   "/api/v1/admin/widgets": ["homepage"],
-  "/api/navigation": ["layout"],
+  "/api/v1/admin/navigation": ["layout"],
   "/api/analytics": ["layout"],
   "/api/settings/header": ["layout"],
   "/api/settings/footer": ["layout"],
