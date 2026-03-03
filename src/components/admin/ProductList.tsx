@@ -62,7 +62,7 @@ import {
   X,
   Copy,
 } from "lucide-react";
-import type { ProductListItem } from "@/lib/admin";
+import type { ProductListItem } from "@/modules/products";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,

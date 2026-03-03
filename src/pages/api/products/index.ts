@@ -5,7 +5,7 @@ import { products, productImages, productRichContent, productAttributeValues } f
 import { nanoid } from "nanoid";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
-import { getProducts } from "../../../lib/admin";
+import { getProducts } from "@/modules/products";
 
 const createProductSchema = z.object({
   name: z.string().min(3).max(100),

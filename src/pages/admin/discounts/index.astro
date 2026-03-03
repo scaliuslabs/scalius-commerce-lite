@@ -3,7 +3,7 @@
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { DiscountList } from "@/components/admin/discount/DiscountList";
 // Cannot import DiscountItem as it's not exported, define locally
-import { getDiscounts } from "@/lib/admin";
+import { getDiscounts } from "@/modules/marketing";
 
 // Local type definition matching DiscountListProps['discounts'] expected structure
 interface DiscountItem {

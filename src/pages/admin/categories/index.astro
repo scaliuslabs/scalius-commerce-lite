@@ -1,7 +1,7 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { CategoryList } from "../../../components/admin/CategoryList";
-import { getCategoryStats } from "../../../lib/admin";
+import { getCategoryStats } from "@/modules/products";
 import { db } from "../../../db";
 import { categories, products } from "../../../db/schema";
 import { sql, and, isNull, isNotNull, eq, desc, asc } from "drizzle-orm";

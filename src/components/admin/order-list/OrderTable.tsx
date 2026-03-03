@@ -1,4 +1,4 @@
-import type { OrderListItem } from "@/lib/admin";
+import type { OrderListItem } from "@/modules/orders";
 import {
   Table,
   TableBody,

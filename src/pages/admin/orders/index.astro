@@ -2,8 +2,8 @@
 // src/pages/admin/orders/index.astro
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { OrderList } from "@/components/admin/OrderList";
-import { getOrders } from "@/lib/admin";
-import type { OrderListItem } from "@/lib/admin";
+import { getOrders } from "@/modules/orders";
+import type { OrderListItem } from "@/modules/orders";
 import { db } from "@/db";
 import { deliveryLocations } from "@/db/schema";
 import { and, isNull, inArray } from "drizzle-orm";
