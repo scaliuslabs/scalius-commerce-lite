@@ -16,7 +16,10 @@ import {
   OrderStatus,
   FulfillmentStatus,
   InventoryPool,
+  siteSettings,
+  shippingMethods,
 } from "@/db/schema";
+import { isDiscountValid, calculateDiscountAmount } from "./discounts";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { nanoid } from "nanoid";
@@ -171,6 +174,7 @@ const createOrderSchema = z.object({
   shippingCharge: z
     .number()
     .min(0, "Shipping charge must be greater than or equal to 0"),
+  shippingMethodId: z.string().optional().nullable(),
   paymentMethod: z
     .enum([PaymentMethod.STRIPE, PaymentMethod.SSLCOMMERZ, PaymentMethod.POLAR, PaymentMethod.COD])
     .default(PaymentMethod.COD),
@@ -296,8 +300,23 @@ app.post("/", async (c) => {
       readBatch.push(db.select().from(products).limit(0));
     }
 
+    // 6. Settings (for partial payment checks)
+    readBatch.push(db.select().from(siteSettings).limit(1));
+
+    // 7. Shipping Method
+    if (data.shippingMethodId) {
+      readBatch.push(
+        db
+          .select()
+          .from(shippingMethods)
+          .where(eq(shippingMethods.id, data.shippingMethodId)),
+      );
+    } else {
+      readBatch.push(db.select().from(shippingMethods).limit(0));
+    }
+
     // Execute Read Batch
-    const readResults = await db.batch(readBatch as [any, any, any, any, any]);
+    const readResults = await db.batch(readBatch as [any, any, any, any, any, any, any]);
 
     // Unpack Results
     const variants =
@@ -335,6 +354,12 @@ app.post("/", async (c) => {
       }[])
       : [];
     const productMap = new Map(productList.map((p) => [p.id, p]));
+
+    const settingsList = readResults[5] as any[];
+    const settings = settingsList.length > 0 ? settingsList[0] : null;
+
+    const shippingMethodList = readResults[6] as any[];
+    const shippingMethod = shippingMethodList.length > 0 ? shippingMethodList[0] : null;
 
     // Validation (Pre-Check)
     const variantMap = new Map(variants.map((v: any) => [v.id, v]));
@@ -394,8 +419,46 @@ app.post("/", async (c) => {
     // Round to 2 decimal places to avoid floating-point drift
     serverItemTotal = Math.round(serverItemTotal * 100) / 100;
 
+    // Determine exact shipping charge to use securely from DB
+    const verifiedShippingCharge = shippingMethod ? shippingMethod.fee : (data.shippingCharge || 0);
+
+    // ------------------------------------------------------------------
+    // DISCOUNTS VERIFICATION
+    // Determine exact discount securely via the discounts service engine
+    // ------------------------------------------------------------------
+    let verifiedDiscountAmount = 0;
+    if (data.discountCode) {
+      const validationResponse = await isDiscountValid(
+        db,
+        data.discountCode,
+        serverItemTotal + verifiedShippingCharge, // Note: some rules check grand total
+        data.items,
+        data.customerPhone
+      );
+
+      if (validationResponse && validationResponse.valid && validationResponse.discount) {
+        verifiedDiscountAmount = calculateDiscountAmount(
+          db,
+          validationResponse.discount,
+          serverItemTotal + verifiedShippingCharge,
+          data.items,
+          verifiedShippingCharge
+        );
+      } else {
+        throw new Error(`VALIDATION_ERROR:Discount code ${data.discountCode} is invalid or expired.`);
+      }
+    }
+
     const totalAmount =
-      serverItemTotal + data.shippingCharge - (data.discountAmount || 0);
+      serverItemTotal + verifiedShippingCharge - verifiedDiscountAmount;
+
+    // ------------------------------------------------------------------
+    // PARTIAL PAYMENT SECURITY CHECK
+    // ------------------------------------------------------------------
+    const isPartialEnabled = settings?.partialPaymentEnabled ?? false;
+    if (isPartialEnabled && data.paymentMethod === PaymentMethod.COD) {
+      throw new Error("VALIDATION_ERROR:Advance deposit is required. COD cannot be selected for the full amount directly.");
+    }
 
     // Process Location Data
     const locationMap = new Map(
@@ -507,9 +570,11 @@ app.post("/", async (c) => {
       areaName,
       notes: data.notes,
       totalAmount,
-      shippingCharge: data.shippingCharge,
-      discountAmount: data.discountAmount || 0,
-      status: data.paymentMethod === PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.INCOMPLETE,
+      shippingCharge: verifiedShippingCharge,
+      discountAmount: verifiedDiscountAmount,
+      status: (isPartialEnabled && data.paymentMethod === PaymentMethod.COD)
+        ? OrderStatus.INCOMPLETE
+        : data.paymentMethod === PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.INCOMPLETE,
       // Payment fields
       paymentMethod: data.paymentMethod,
       paymentStatus: PaymentStatus.UNPAID,

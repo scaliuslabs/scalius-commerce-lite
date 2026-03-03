@@ -137,7 +137,7 @@ async function expandCollectionsToProductIds(
 }
 
 // Helper function to check if a discount is valid
-async function isDiscountValid(
+export async function isDiscountValid(
   db: any,
   code: string,
   total?: number,
@@ -334,7 +334,7 @@ async function isDiscountValid(
 }
 
 // Calculate the discount amount for a validated discount
-function calculateDiscountAmount(
+export function calculateDiscountAmount(
   db: any,
   discount: {
     id: string;
@@ -530,13 +530,13 @@ app.get("/validate", async (c) => {
 
           withOrderDiscounts:
             validationResult.discount.type ===
-              DiscountType.AMOUNT_OFF_PRODUCTS ||
+            DiscountType.AMOUNT_OFF_PRODUCTS ||
             !!validationResult.discount.combineWithOrderDiscounts,
 
           withShippingDiscounts:
             validationResult.discount.type === DiscountType.AMOUNT_OFF_ORDER ||
             validationResult.discount.type ===
-              DiscountType.AMOUNT_OFF_PRODUCTS ||
+            DiscountType.AMOUNT_OFF_PRODUCTS ||
             !!validationResult.discount.combineWithShippingDiscounts,
         },
       };
@@ -556,40 +556,6 @@ app.get("/validate", async (c) => {
       return c.json({ valid: false, error: error.errors }, 400);
     }
     return c.json({ valid: false, error: "Failed to validate discount" }, 500);
-  }
-});
-
-// Add an endpoint to record discount usage
-app.post("/usage", async (c) => {
-  try {
-    const db = c.get("db");
-    const body = await c.req.json();
-    const { discountId, orderId, customerId, amountDiscounted } = body;
-
-    if (!discountId || !orderId || !amountDiscounted) {
-      return c.json({ success: false, error: "Missing required fields" }, 400);
-    }
-
-    // Generate a unique ID for the usage record using nanoid
-    const usageId = `du_${nanoid()}`;
-
-    // Insert the usage record
-    await db.insert(discountUsage).values({
-      id: usageId,
-      discountId,
-      orderId,
-      customerId,
-      amountDiscounted,
-      createdAt: sql`CURRENT_TIMESTAMP`,
-    });
-
-    return c.json({ success: true, id: usageId });
-  } catch (error) {
-    console.error("Error recording discount usage:", error);
-    return c.json(
-      { success: false, error: "Failed to record discount usage" },
-      500,
-    );
   }
 });
 

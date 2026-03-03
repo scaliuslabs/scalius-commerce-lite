@@ -14,9 +14,7 @@ import {
   Menu,
   Settings,
   SlidersHorizontal,
-  MapPinned,
   Truck,
-  PackageCheck,
   Database,
   ShoppingBag,
   BadgePercent,
@@ -24,7 +22,6 @@ import {
   Users,
   PanelLeftClose,
   PanelLeftOpen,
-  Globe,
   ShieldCheck,
   Clock3,
   Bell,
@@ -399,7 +396,7 @@ const navSections: NavSection[] = allNavSections
       }
     </script>
 
-    <script define:vars={{ firebaseConfig, userId: user.id, permissions: permissionsArray, isSuperAdmin: userData.isSuperAdmin }}>
+    <script is:inline define:vars={{ firebaseConfig, userId: user.id, permissions: permissionsArray, isSuperAdmin: userData.isSuperAdmin }}>
       // Store config in window for the module script to access
       window.__FIREBASE_CONFIG__ = firebaseConfig;
       window.__USER_ID__ = userId;

@@ -2,7 +2,7 @@
 // Rebuilt Inventory Management Dashboard (Premium UI/UX).
 
 import { useState, useEffect, useCallback } from "react";
-import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, ChevronDown, ChevronUp, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
+import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -126,6 +126,7 @@ export function InventoryManager() {
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [stats, setStats] = useState<InventoryStats | null>(null);
   const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [movementsPagination, setMovementsPagination] = useState<Pagination | null>(null);
   const [search, setSearch] = useState("");
   const [localSearch, setLocalSearch] = useState("");
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
@@ -145,7 +146,7 @@ export function InventoryManager() {
           search,
           status: stockFilter,
           page: String(pagination?.page || 1),
-          limit: "50",
+          limit: String(pagination?.limit || 50),
           sort: sort.field,
           order: sort.order
         });
@@ -155,16 +156,22 @@ export function InventoryManager() {
         setStats(data.stats || null);
         setPagination(data.pagination || null);
       } else if (activeTab === "movements") {
-        const res = await fetch("/api/inventory?section=movements&limit=100");
+        const params = new URLSearchParams({
+          section: "movements",
+          page: String(movementsPagination?.page || 1),
+          limit: String(movementsPagination?.limit || 50),
+        });
+        const res = await fetch(`/api/inventory?${params}`);
         const data = await res.json();
         setMovements(data.movements || []);
+        setMovementsPagination(data.pagination || null);
       }
     } catch (err) {
       console.error("Failed to fetch inventory data:", err);
     } finally {
       setLoading(false);
     }
-  }, [activeTab, search, stockFilter, pagination?.page, sort.field, sort.order, refreshKey]);
+  }, [activeTab, search, stockFilter, pagination?.page, pagination?.limit, movementsPagination?.page, movementsPagination?.limit, sort.field, sort.order, refreshKey]);
 
   useEffect(() => {
     fetchData();
@@ -383,6 +390,12 @@ export function InventoryManager() {
                 </TableBody>
               </Table>
             </div>
+            <PaginationControls
+              pagination={pagination}
+              onPageChange={(page) => setPagination(prev => prev ? { ...prev, page } : null)}
+              onLimitChange={(limit) => setPagination(prev => prev ? { ...prev, limit, page: 1 } : null)}
+              itemName="variants"
+            />
           </div>
         )}
 
@@ -438,6 +451,12 @@ export function InventoryManager() {
                 </TableBody>
               </Table>
             </div>
+            <PaginationControls
+              pagination={movementsPagination}
+              onPageChange={(page) => setMovementsPagination(prev => prev ? { ...prev, page } : null)}
+              onLimitChange={(limit) => setMovementsPagination(prev => prev ? { ...prev, limit, page: 1 } : null)}
+              itemName="movements"
+            />
           </div>
         )}
       </CardContent>
@@ -455,6 +474,64 @@ export function InventoryManager() {
 }
 
 // ---------- Sub-components ----------
+
+function PaginationControls({
+  pagination,
+  onPageChange,
+  onLimitChange,
+  itemName
+}: {
+  pagination: Pagination | null;
+  onPageChange: (p: number) => void;
+  onLimitChange: (l: number) => void;
+  itemName: string;
+}) {
+  if (!pagination || pagination.totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between pt-3">
+      <div className="text-xs text-muted-foreground hidden sm:block">
+        Showing {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} {itemName}
+      </div>
+      <div className="flex items-center space-x-2 lg:space-x-3">
+        <div className="flex items-center space-x-1.5">
+          <p className="text-xs font-medium text-muted-foreground whitespace-nowrap">Rows</p>
+          <Select value={String(pagination.limit)} onValueChange={(v) => onLimitChange(Number(v))}>
+            <SelectTrigger className="h-7 w-[70px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="text-xs">
+              {[10, 20, 50, 100].map(size => (
+                <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex w-[80px] items-center justify-center text-xs font-medium text-muted-foreground">
+          Page {pagination.page} of {pagination.totalPages}
+        </div>
+        <div className="flex items-center space-x-0.5">
+          <Button
+            variant="outline"
+            className="h-7 w-7 p-0"
+            onClick={() => onPageChange(pagination.page - 1)}
+            disabled={pagination.page === 1}
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="outline"
+            className="h-7 w-7 p-0"
+            onClick={() => onPageChange(pagination.page + 1)}
+            disabled={pagination.page >= pagination.totalPages}
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ label, value, icon: Icon, iconBgColor, iconTextColor }: { label: string; value: number; icon: any; iconBgColor: string; iconTextColor: string }) {
   return (
