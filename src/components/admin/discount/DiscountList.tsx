@@ -517,7 +517,7 @@ export function DiscountList({
 
   // --- Callbacks for actions (Unchanged logic, only adjusted state updates) ---
   const handleSearch = useCallback(
-    (e: React.FormEvent) => {
+    (e: React.SyntheticEvent) => {
       e.preventDefault();
       const url = new URL(window.location.href);
       if (searchQuery.trim()) {

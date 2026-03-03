@@ -516,7 +516,7 @@ export function ProductList({
   }, [selectedProducts.size, products.length]);
 
   const handleSearch = useCallback(
-    (e?: React.FormEvent) => {
+    (e?: React.SyntheticEvent) => {
       e?.preventDefault();
       setSearchQuery(localSearch);
     },

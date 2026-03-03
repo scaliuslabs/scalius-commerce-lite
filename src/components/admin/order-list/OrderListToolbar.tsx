@@ -26,7 +26,7 @@ import { DateRangePickerWithPresets } from "./DateRangePickerWithPresets";
 interface OrderListToolbarProps {
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
-  onSearchSubmit: (e: React.FormEvent) => void;
+  onSearchSubmit: (e: React.SyntheticEvent) => void;
   selectedOrdersCount: number;
   onBulkDeleteClick: () => void;
   onBulkShipClick: () => void;

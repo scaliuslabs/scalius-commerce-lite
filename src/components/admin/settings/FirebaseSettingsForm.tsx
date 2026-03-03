@@ -149,7 +149,7 @@ export default function FirebaseSettingsForm() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setSaving(true);
 

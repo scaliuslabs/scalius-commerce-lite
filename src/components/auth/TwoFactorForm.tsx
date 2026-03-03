@@ -77,7 +77,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
     }
   };
 
-  const handleVerify = async (e: React.FormEvent) => {
+  const handleVerify = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);

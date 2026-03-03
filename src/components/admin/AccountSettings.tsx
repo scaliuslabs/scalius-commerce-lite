@@ -355,7 +355,7 @@ function ChangePasswordSection() {
 
   const passwordStrength = getPasswordStrength(newPassword);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -1135,7 +1135,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
     fetchRoles();
   }, []);
 
-  const handleAddUser = async (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError(null);
     setIsAdding(true);

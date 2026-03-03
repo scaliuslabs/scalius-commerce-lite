@@ -2,7 +2,7 @@
 // Rebuilt Inventory Management Dashboard (Premium UI/UX).
 
 import { useState, useEffect, useCallback } from "react";
-import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
+import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, ChevronLeft, ChevronRight, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -134,8 +134,7 @@ export function InventoryManager() {
   const [loading, setLoading] = useState(true);
   const [adjustingVariant, setAdjustingVariant] = useState<InventoryVariant | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const searchTimeoutRef = useState<number | undefined>(undefined)[0];
-
+  
   // Fetch data
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -486,7 +485,7 @@ function PaginationControls({
   onLimitChange: (l: number) => void;
   itemName: string;
 }) {
-  if (!pagination || pagination.totalPages <= 1) return null;
+  if (!pagination || pagination.total === 0) return null;
 
   return (
     <div className="flex items-center justify-between pt-3">

@@ -277,7 +277,7 @@ export function OrderList({
     }
   };
 
-  const handleSearch = (e?: React.FormEvent) => {
+  const handleSearch = (e?: React.SyntheticEvent) => {
     if (e) e.preventDefault();
     fetchOrders({
       page: 1, // Reset to first page on search
