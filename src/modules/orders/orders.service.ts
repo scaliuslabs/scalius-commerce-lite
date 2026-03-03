@@ -1,18 +1,25 @@
 // src/modules/orders/orders.service.ts
-// Admin order query service.
-// Extracted from src/lib/admin.ts.
+// Admin order service: queries and CRUD mutations.
 
 import { db } from "@/db";
 import {
     orders,
     orderItems,
+    customers,
+    customerHistory,
     products,
     productVariants,
     deliveryShipments,
     deliveryProviders,
+    deliveryLocations,
 } from "@/db/schema";
-import { sql, desc, eq, inArray } from "drizzle-orm";
+
+import { sql, desc, eq, inArray, isNull, and } from "drizzle-orm";
 import { ftsMatch, sanitizeFtsQuery } from "@/lib/search/fts5";
+import { generateOrderId } from "@/shared/order-utils";
+import { calculateCustomerStats } from "@/shared/customer-utils";
+import { nanoid } from "nanoid";
+import type { CreateOrderInput } from "./orders.validation";
 
 // ─────────────────────────────────────────
 // Types
@@ -437,4 +444,162 @@ export async function getOrderDetails(
         items: formattedItems,
         latestShipment: null,
     };
+}
+
+// ─────────────────────────────────────────
+// Write operations
+// ─────────────────────────────────────────
+
+/**
+ * Creates an order in the admin context (manual order entry).
+ * Handles customer lookup/creation, location name resolution,
+ * order row insertion, and order items insertion.
+ */
+export async function createOrder(data: CreateOrderInput): Promise<{ id: string }> {
+    // Calculate total amount
+    const totalAmount =
+        data.items.reduce((sum, item) => sum + item.price * item.quantity, 0) +
+        data.shippingCharge -
+        (data.discountAmount || 0);
+
+    // Resolve location names
+    const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
+    const locationMap = new Map<string, string>();
+    if (locationIds.length > 0) {
+        const locationResults = await db
+            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
+            .from(deliveryLocations)
+            .where(and(
+                sql`${deliveryLocations.id} IN (${locationIds.join(",")})`,
+                isNull(deliveryLocations.deletedAt),
+            ));
+        locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
+    }
+
+    const cityName = data.cityName || (data.city ? locationMap.get(data.city) || data.city : "");
+    const zoneName = data.zoneName || (data.zone ? locationMap.get(data.zone) || data.zone : "");
+    const areaName = data.areaName || (data.area ? locationMap.get(data.area) || null : null);
+
+    // Get or create customer
+    const existingCustomer = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.phone, data.customerPhone))
+        .get();
+
+    let customerId = existingCustomer?.id;
+
+    if (!existingCustomer) {
+        const [newCustomer] = await db
+            .insert(customers)
+            .values({
+                id: "cust_" + nanoid(),
+                name: data.customerName,
+                phone: data.customerPhone,
+                email: data.customerEmail,
+                address: data.shippingAddress,
+                city: data.city,
+                zone: data.zone,
+                area: data.area,
+                totalOrders: 1,
+                totalSpent: totalAmount,
+                lastOrderAt: sql`unixepoch()`,
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            })
+            .returning();
+
+        customerId = newCustomer.id;
+
+        await db.insert(customerHistory).values({
+            id: "hist_" + nanoid(),
+            customerId,
+            name: data.customerName,
+            email: data.customerEmail,
+            phone: data.customerPhone,
+            address: data.shippingAddress,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            changeType: "created",
+            createdAt: sql`unixepoch()`,
+        });
+    } else {
+        const customerOrders = await db
+            .select({ totalAmount: orders.totalAmount, createdAt: orders.createdAt })
+            .from(orders)
+            .where(eq(orders.customerId, existingCustomer.id));
+
+        const allOrders = [
+            ...customerOrders,
+            { totalAmount, createdAt: Math.floor(Date.now() / 1000) },
+        ];
+        const stats = calculateCustomerStats(allOrders);
+
+        await db.update(customers)
+            .set({
+                totalOrders: stats.totalOrders,
+                totalSpent: stats.totalSpent,
+                lastOrderAt: stats.lastOrderAt ? sql`${Math.floor(stats.lastOrderAt.getTime() / 1000)}` : null,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(eq(customers.id, existingCustomer.id));
+
+        await db.insert(customerHistory).values({
+            id: "hist_" + nanoid(),
+            customerId: existingCustomer.id,
+            name: data.customerName,
+            email: data.customerEmail,
+            phone: data.customerPhone,
+            address: data.shippingAddress,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            changeType: "updated",
+            createdAt: sql`unixepoch()`,
+        });
+    }
+
+    // Create order
+    const [order] = await db.insert(orders)
+        .values({
+            id: generateOrderId(),
+            customerName: data.customerName,
+            customerPhone: data.customerPhone,
+            customerEmail: data.customerEmail,
+            shippingAddress: data.shippingAddress,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            cityName,
+            zoneName,
+            areaName,
+            notes: data.notes,
+            totalAmount,
+            shippingCharge: data.shippingCharge,
+            discountAmount: data.discountAmount,
+            status: "pending",
+            customerId,
+            inventoryAction: "deducted",
+            createdAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .returning();
+
+    // Create order items
+    if (data.items.length > 0) {
+        await db.insert(orderItems).values(
+            data.items.map((item) => ({
+                id: generateOrderId(),
+                orderId: order.id,
+                productId: item.productId,
+                variantId: item.variantId,
+                quantity: item.quantity,
+                price: item.price,
+                createdAt: sql`unixepoch()`,
+            })),
+        );
+    }
+
+    return { id: order.id };
 }

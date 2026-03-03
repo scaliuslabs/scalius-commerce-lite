@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
-import { FraudCheckerService } from "@/lib/fraud-checker/service";
+import { FraudCheckerService } from "@/modules/fraud-checker/service";
+
 
 const fraudCheckerService = new FraudCheckerService();
 
