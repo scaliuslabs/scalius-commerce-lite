@@ -41,7 +41,7 @@ const clientActions = `
     
     async deleteProvider(id) {
       try {
-        const response = await fetch(\`/api/settings/fraud-checker/\${id}\`, {
+        const response = await fetch(\`/api/v1/admin/settings/fraud-checker/\${id}\`, {
           method: 'DELETE'
         });
         
@@ -59,7 +59,7 @@ const clientActions = `
     
     async testProvider(id) {
       try {
-        const response = await fetch(\`/api/settings/fraud-checker/\${id}/test\`, {
+        const response = await fetch(\`/api/v1/admin/settings/fraud-checker/\${id}/test\`, {
           method: 'POST'
         });
         

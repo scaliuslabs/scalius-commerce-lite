@@ -45,7 +45,7 @@ export default function AuthSettingsBuilder() {
 
     const fetchSettings = async () => {
         try {
-            const res = await fetch("/api/settings/auth");
+            const res = await fetch("/api/v1/admin/settings/auth");
             if (res.ok) {
                 const data = await res.json();
                 setAuthVerificationMethod(data.authVerificationMethod || "email");
@@ -70,7 +70,7 @@ export default function AuthSettingsBuilder() {
         setSaving(true);
 
         try {
-            const res = await fetch("/api/settings/auth", {
+            const res = await fetch("/api/v1/admin/settings/auth", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

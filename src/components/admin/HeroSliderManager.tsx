@@ -266,7 +266,7 @@ export function HeroSliderManager() {
 
   const fetchSliders = async () => {
     try {
-      const response = await fetch("/api/settings/hero-sliders");
+      const response = await fetch("/api/v1/admin/settings/hero-sliders");
       const data = await response.json();
       if (data.success) {
         const desktop = data.data.find((s: HeroSlider) => s.type === "desktop");
@@ -314,7 +314,7 @@ export function HeroSliderManager() {
 
   const handleCreate = async (type: "desktop" | "mobile") => {
     try {
-      const response = await fetch("/api/settings/hero-sliders", {
+      const response = await fetch("/api/v1/admin/settings/hero-sliders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -352,7 +352,7 @@ export function HeroSliderManager() {
     else setMobileSlider({ ...slider, ...updates });
 
     try {
-      const response = await fetch(`/api/settings/hero-sliders/${slider.id}`, {
+      const response = await fetch(`/api/v1/admin/settings/hero-sliders/${slider.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),

@@ -97,7 +97,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
         await onSave(config);
       } else {
         const apiUrl =
-          typeof onSave === "string" ? onSave : "/api/settings/header";
+          typeof onSave === "string" ? onSave : "/api/v1/admin/settings/header";
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

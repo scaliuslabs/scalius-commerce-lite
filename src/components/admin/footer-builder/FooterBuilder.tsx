@@ -89,7 +89,7 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
         await onSave(config);
       } else {
         const apiUrl =
-          typeof onSave === "string" ? onSave : "/api/settings/footer";
+          typeof onSave === "string" ? onSave : "/api/v1/admin/settings/footer";
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

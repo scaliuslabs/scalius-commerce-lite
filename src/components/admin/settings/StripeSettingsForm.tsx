@@ -36,7 +36,7 @@ export default function StripeSettingsForm() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("/api/settings/stripe");
+      const res = await fetch("/api/v1/admin/settings/stripe");
       if (res.ok) {
         const data = await res.json();
         setSecretKey(data.secretKey || "");
@@ -58,7 +58,7 @@ export default function StripeSettingsForm() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/settings/stripe", {
+      const res = await fetch("/api/v1/admin/settings/stripe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ secretKey, publishableKey, webhookSecret, enabled }),

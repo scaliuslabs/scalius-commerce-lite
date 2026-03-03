@@ -32,7 +32,7 @@ export function SeoSettingsBuilder() {
     const fetchSeoConfig = async () => {
       setIsFetching(true);
       try {
-        const response = await fetch("/api/settings/seo");
+        const response = await fetch("/api/v1/admin/settings/seo");
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.details || "Failed to fetch SEO settings");
@@ -69,7 +69,7 @@ export function SeoSettingsBuilder() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/settings/seo", {
+      const response = await fetch("/api/v1/admin/settings/seo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),

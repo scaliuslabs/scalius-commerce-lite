@@ -127,7 +127,7 @@ export function DeliveryLocationsManager() {
   ) => {
     try {
       setLoading(true);
-      let url = `/api/settings/delivery-locations?type=${activeTab}&page=${page}&limit=${limit}`;
+      let url = `/api/v1/admin/settings/delivery-locations?type=${activeTab}&page=${page}&limit=${limit}`;
 
       if (selectedParent && (activeTab === "zone" || activeTab === "area")) {
         url += `&parentId=${selectedParent}`;
@@ -163,7 +163,7 @@ export function DeliveryLocationsManager() {
     try {
       setLoadingParents(true);
       const response = await fetch(
-        `/api/settings/delivery-locations?type=${parentType}&limit=500`,
+        `/api/v1/admin/settings/delivery-locations?type=${parentType}&limit=500`,
       );
 
       if (!response.ok) {
@@ -223,8 +223,8 @@ export function DeliveryLocationsManager() {
 
       const method = editMode ? "PUT" : "POST";
       const url = editMode
-        ? `/api/settings/delivery-locations/${editingLocation!.id}`
-        : "/api/settings/delivery-locations";
+        ? `/api/v1/admin/settings/delivery-locations/${editingLocation!.id}`
+        : "/api/v1/admin/settings/delivery-locations";
 
       const response = await fetch(url, {
         method,
@@ -287,7 +287,7 @@ export function DeliveryLocationsManager() {
 
     try {
       const response = await fetch(
-        `/api/settings/delivery-locations/${deletingLocationId}`,
+        `/api/v1/admin/settings/delivery-locations/${deletingLocationId}`,
         {
           method: "DELETE",
         },
@@ -316,7 +316,7 @@ export function DeliveryLocationsManager() {
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      const response = await fetch(`/api/settings/delivery-locations/${id}`, {
+      const response = await fetch(`/api/v1/admin/settings/delivery-locations/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -398,7 +398,7 @@ export function DeliveryLocationsManager() {
     if (selectedLocationIds.length === 0) return;
 
     try {
-      const response = await fetch("/api/settings/delivery-locations", {
+      const response = await fetch("/api/v1/admin/settings/delivery-locations", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -433,7 +433,7 @@ export function DeliveryLocationsManager() {
   const confirmCleanAll = async () => {
     try {
       // This will be a new API endpoint or a modified existing one
-      const response = await fetch("/api/settings/delivery-locations/all", {
+      const response = await fetch("/api/v1/admin/settings/delivery-locations/all", {
         method: "DELETE",
       });
 
