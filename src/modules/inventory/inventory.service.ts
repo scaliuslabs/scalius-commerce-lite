@@ -1,53 +1,36 @@
-// src/pages/api/inventory/index.ts
-// Admin API: Full inventory overview.
-//
-// GET - List all product variants with stock data, product names, search & filtering
-//       Powers the rebuilt /admin/inventory dashboard.
-
-import type { APIRoute } from "astro";
-import { db } from "@/db";
-import {
-    productVariants,
-    products,
-    inventoryMovements,
-    productLowStockAlerts,
-} from "@/db/schema";
+import { productVariants, products, inventoryMovements, productLowStockAlerts } from "@/db/schema";
 import { eq, sql, and, isNull, desc, or, like } from "drizzle-orm";
+import { recordMovement } from "./movements";
+import { checkAndAlertLowStock } from "./alerts";
 
-export const GET: APIRoute = async ({ url }) => {
-    try {
-        const search = url.searchParams.get("search") ?? "";
-        const status = url.searchParams.get("status") ?? "all"; // all | low | out | reserved
-        const page = parseInt(url.searchParams.get("page") || "1");
-        const limit = parseInt(url.searchParams.get("limit") || "50");
-        const section = url.searchParams.get("section") ?? "variants"; // variants | movements | alerts
+export const InventoryService = {
+    async getInventoryOverview(db: any, params: {
+        section: string;
+        search: string;
+        status: string;
+        page: number;
+        limit: number;
+        alertStatus?: string;
+    }) {
+        const { section, search, status, page, limit, alertStatus } = params;
         const offset = (page - 1) * limit;
 
-        // --- Section: All Variants with Stock Data ---
         if (section === "variants") {
-            const conditions = [isNull(productVariants.deletedAt)];
+            const conditions: any[] = [isNull(productVariants.deletedAt)];
 
-            // Stock status filters
             if (status === "low") {
-                conditions.push(
-                    sql`(${productVariants.stock} - ${productVariants.reservedStock}) > 0 AND (${productVariants.stock} - ${productVariants.reservedStock}) <= COALESCE(${productVariants.lowStockThreshold}, 5)`
-                );
+                conditions.push(sql`(${productVariants.stock} - ${productVariants.reservedStock}) > 0 AND (${productVariants.stock} - ${productVariants.reservedStock}) <= COALESCE(${productVariants.lowStockThreshold}, 5)`);
             } else if (status === "out") {
-                conditions.push(
-                    sql`(${productVariants.stock} - ${productVariants.reservedStock}) <= 0`
-                );
+                conditions.push(sql`(${productVariants.stock} - ${productVariants.reservedStock}) <= 0`);
             } else if (status === "reserved") {
                 conditions.push(sql`${productVariants.reservedStock} > 0`);
             }
 
-            // Search by product name or SKU
             if (search) {
-                conditions.push(
-                    or(
-                        like(productVariants.sku, `%${search}%`),
-                        sql`${products.name} LIKE ${"%" + search + "%"}`
-                    )!
-                );
+                conditions.push(or(
+                    like(productVariants.sku, `%${search}%`),
+                    sql`${products.name} LIKE ${"%" + search + "%"}`
+                ));
             }
 
             const variants = await db
@@ -68,14 +51,11 @@ export const GET: APIRoute = async ({ url }) => {
                 .from(productVariants)
                 .leftJoin(products, eq(products.id, productVariants.productId))
                 .where(and(...conditions))
-                .orderBy(
-                    sql`(${productVariants.stock} - ${productVariants.reservedStock}) ASC`
-                )
+                .orderBy(sql`(${productVariants.stock} - ${productVariants.reservedStock}) ASC`)
                 .limit(limit)
                 .offset(offset)
                 .all();
 
-            // Get total count for pagination
             const countResult = await db
                 .select({ count: sql<number>`count(*)` })
                 .from(productVariants)
@@ -83,7 +63,6 @@ export const GET: APIRoute = async ({ url }) => {
                 .where(and(...conditions))
                 .get();
 
-            // Get summary stats
             const statsResult = await db
                 .select({
                     totalVariants: sql<number>`count(*)`,
@@ -97,7 +76,7 @@ export const GET: APIRoute = async ({ url }) => {
                 .where(isNull(productVariants.deletedAt))
                 .get();
 
-            return Response.json({
+            return {
                 variants,
                 pagination: {
                     page,
@@ -113,15 +92,11 @@ export const GET: APIRoute = async ({ url }) => {
                     outOfStockCount: 0,
                     lowStockCount: 0,
                 },
-            });
+            };
         }
 
-        // --- Section: Recent Inventory Movements ---
         if (section === "movements") {
-            const countResult = await db
-                .select({ count: sql<number>`count(*)` })
-                .from(inventoryMovements)
-                .get();
+            const countResult = await db.select({ count: sql<number>`count(*)` }).from(inventoryMovements).get();
 
             const movements = await db
                 .select({
@@ -135,22 +110,18 @@ export const GET: APIRoute = async ({ url }) => {
                     notes: inventoryMovements.notes,
                     createdBy: inventoryMovements.createdBy,
                     createdAt: inventoryMovements.createdAt,
-                    // Join variant SKU + product name
                     variantSku: productVariants.sku,
                     productName: products.name,
                 })
                 .from(inventoryMovements)
-                .leftJoin(
-                    productVariants,
-                    eq(productVariants.id, inventoryMovements.variantId)
-                )
+                .leftJoin(productVariants, eq(productVariants.id, inventoryMovements.variantId))
                 .leftJoin(products, eq(products.id, productVariants.productId))
                 .orderBy(desc(inventoryMovements.createdAt))
                 .limit(limit)
                 .offset(offset)
                 .all();
 
-            return Response.json({
+            return {
                 movements,
                 pagination: {
                     page,
@@ -158,13 +129,11 @@ export const GET: APIRoute = async ({ url }) => {
                     total: countResult?.count ?? 0,
                     totalPages: Math.ceil((countResult?.count ?? 0) / limit),
                 },
-            });
+            };
         }
 
-        // --- Section: Low Stock Alerts ---
         if (section === "alerts") {
-            const alertStatus = url.searchParams.get("alertStatus") ?? "active";
-
+            const aStatus = alertStatus ?? "active";
             const alerts = await db
                 .select({
                     id: productLowStockAlerts.id,
@@ -183,24 +152,89 @@ export const GET: APIRoute = async ({ url }) => {
                 })
                 .from(productLowStockAlerts)
                 .leftJoin(products, eq(products.id, productLowStockAlerts.productId))
-                .leftJoin(
-                    productVariants,
-                    eq(productVariants.id, productLowStockAlerts.variantId)
-                )
+                .leftJoin(productVariants, eq(productVariants.id, productLowStockAlerts.variantId))
                 .where(
-                    alertStatus === "all"
+                    aStatus === "all"
                         ? sql`1=1`
-                        : eq(productLowStockAlerts.alertStatus, alertStatus)
+                        : eq(productLowStockAlerts.alertStatus, aStatus)
                 )
                 .orderBy(desc(productLowStockAlerts.createdAt))
                 .all();
 
-            return Response.json({ alerts });
+            return { alerts };
         }
 
-        return Response.json({ error: "Invalid section parameter" }, { status: 400 });
-    } catch (error) {
-        console.error("Error fetching inventory data:", error);
-        return Response.json({ error: "Failed to fetch inventory data" }, { status: 500 });
+        const err = new Error("Invalid section parameter");
+        (err as any).statusCode = 400;
+        throw err;
+    },
+
+    async adjustInventory(db: any, variantId: string, payload: {
+        delta: number;
+        reason: string;
+        notes?: string;
+        pool?: string;
+    }, adminUserId?: string) {
+        const pool = payload.pool ?? "stock";
+        const delta = Math.round(payload.delta);
+
+        const variant = await db
+            .select({
+                id: productVariants.id,
+                stock: productVariants.stock,
+                preorderStock: productVariants.preorderStock,
+            })
+            .from(productVariants)
+            .where(eq(productVariants.id, variantId))
+            .get();
+
+        if (!variant) {
+            const err = new Error("Variant not found");
+            (err as any).statusCode = 404;
+            throw err;
+        }
+
+        const previousStock = pool === "preorderStock" ? variant.preorderStock : variant.stock;
+
+        const updateSet = pool === "preorderStock"
+            ? {
+                preorderStock: sql`MAX(0, ${productVariants.preorderStock} + ${delta})`,
+                version: sql`${productVariants.version} + 1`,
+                updatedAt: sql`unixepoch()`,
+            }
+            : {
+                stock: sql`MAX(0, ${productVariants.stock} + ${delta})`,
+                version: sql`${productVariants.version} + 1`,
+                updatedAt: sql`unixepoch()`,
+            };
+
+        await db
+            .update(productVariants)
+            .set(updateSet)
+            .where(eq(productVariants.id, variantId));
+
+        const newStock = Math.max(0, previousStock + delta);
+
+        await recordMovement(db, {
+            variantId,
+            type: "adjusted",
+            quantity: delta,
+            previousStock,
+            newStock,
+            notes: `Manual adjustment (${payload.reason})${payload.notes ? `: ${payload.notes}` : ""}`,
+            createdBy: adminUserId,
+        });
+
+        if (delta < 0 && pool === "stock") {
+            await checkAndAlertLowStock(db, variantId);
+        }
+
+        return {
+            success: true,
+            variantId,
+            previousStock,
+            newStock,
+            delta,
+        };
     }
 };

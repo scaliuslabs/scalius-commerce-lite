@@ -7,3 +7,5 @@ export { releaseReservation, releaseMultiple } from "./release";
 export { recordMovement } from "./movements";
 export { checkAndAlertLowStock } from "./alerts";
 export type { StockOperationResult, ReservationEntry } from "./types";
+export * from "./inventory.service";
+export * from "./inventory.schema";

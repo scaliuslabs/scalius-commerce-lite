@@ -134,7 +134,7 @@ export function InventoryManager() {
   const [loading, setLoading] = useState(true);
   const [adjustingVariant, setAdjustingVariant] = useState<InventoryVariant | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  
+
   // Fetch data
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -149,7 +149,7 @@ export function InventoryManager() {
           sort: sort.field,
           order: sort.order
         });
-        const res = await fetch(`/api/inventory?${params}`);
+        const res = await fetch(`/api/v1/admin/inventory?${params}`);
         const data = await res.json();
         setVariants(data.variants || []);
         setStats(data.stats || null);
@@ -160,7 +160,7 @@ export function InventoryManager() {
           page: String(movementsPagination?.page || 1),
           limit: String(movementsPagination?.limit || 50),
         });
-        const res = await fetch(`/api/inventory?${params}`);
+        const res = await fetch(`/api/v1/admin/inventory?${params}`);
         const data = await res.json();
         setMovements(data.movements || []);
         setMovementsPagination(data.pagination || null);
@@ -560,7 +560,7 @@ function AdjustModal({ variant, onClose, onSubmit }: { variant: InventoryVariant
     if (delta === 0) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/inventory/${variant.id}/adjust`, {
+      const res = await fetch(`/api/v1/admin/inventory/${variant.id}/adjust`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ delta, reason, notes: notes || undefined }),
