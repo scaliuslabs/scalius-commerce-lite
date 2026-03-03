@@ -172,7 +172,7 @@ const createOrderSchema = z.object({
     .number()
     .min(0, "Shipping charge must be greater than or equal to 0"),
   paymentMethod: z
-    .enum([PaymentMethod.STRIPE, PaymentMethod.SSLCOMMERZ, PaymentMethod.COD])
+    .enum([PaymentMethod.STRIPE, PaymentMethod.SSLCOMMERZ, PaymentMethod.POLAR, PaymentMethod.COD])
     .default(PaymentMethod.COD),
   inventoryPool: z
     .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])

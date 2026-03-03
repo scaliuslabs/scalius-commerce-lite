@@ -64,6 +64,21 @@ export type PaymentQueueMessage =
     status: string;
   }
   | {
+    type: "payment.polar.confirmed";
+    orderId: string;
+    checkoutId: string;
+    amount?: number; // in cents
+    currency?: string;
+    paymentType?: string;
+    metadata?: Record<string, string>;
+  }
+  | {
+    type: "payment.polar.failed";
+    orderId: string;
+    checkoutId: string;
+    reason?: string;
+  }
+  | {
     type: "order.notification";
     orderId: string;
     customerEmail?: string;
@@ -165,6 +180,26 @@ async function processQueueMessage(
     case "payment.sslcommerz.failed": {
       await processPaymentFailed(db, payload.orderId, "sslcommerz");
       console.log(`[Queue] SSLCommerz payment failed for order ${payload.orderId}`);
+      break;
+    }
+
+    case "payment.polar.confirmed": {
+      const amountInMajor = (payload.amount ?? 0) / 100; // Convert cents to major currency unit
+      await processPaymentConfirmed(db, {
+        orderId: payload.orderId,
+        paymentGateway: "polar",
+        paymentType: (payload.paymentType as "full" | "deposit" | "balance") ?? "full",
+        polarCheckoutId: payload.checkoutId,
+        amount: amountInMajor,
+        metadata: { currency: payload.currency ?? "usd", ...payload.metadata },
+      });
+      console.log(`[Queue] Polar payment confirmed for order ${payload.orderId}`);
+      break;
+    }
+
+    case "payment.polar.failed": {
+      await processPaymentFailed(db, payload.orderId, "polar");
+      console.log(`[Queue] Polar payment failed for order ${payload.orderId}`);
       break;
     }
 

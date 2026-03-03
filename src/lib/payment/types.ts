@@ -1,7 +1,7 @@
 // src/lib/payment/types.ts
 // Shared types for payment gateway integrations.
 
-export type PaymentGateway = "stripe" | "sslcommerz" | "cod";
+export type PaymentGateway = "stripe" | "sslcommerz" | "polar" | "cod";
 export type PaymentType = "full" | "deposit" | "balance";
 export type PaymentResult = "succeeded" | "failed" | "pending" | "cancelled";
 
@@ -94,6 +94,43 @@ export interface SSLCommerzValidationResult {
 }
 
 // ---------------------------------------------------------------------------
+// Polar
+// ---------------------------------------------------------------------------
+
+export interface CreatePolarCheckoutParams {
+  orderId: string;
+  amount: number; // In cents (smallest currency unit)
+  currency: string; // ISO 4217 lowercase
+  productId: string; // Polar product ID (required by Polar)
+  paymentType: PaymentType;
+  successUrl: string;
+  cancelUrl?: string;
+  customerName?: string;
+  customerEmail?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface PolarCheckoutResult {
+  success: boolean;
+  checkoutUrl?: string; // Redirect customer to this URL
+  checkoutId?: string; // Polar checkout session ID
+  error?: string;
+}
+
+export interface PolarRefundParams {
+  polarOrderId: string; // The ID of the order within Polar, which usually matches checkoutId
+  amount: number; // In cents. Must be explicitly provided.
+  reason?: "fraudulent" | "customer_request" | "duplicate" | "other" | "service_disruption" | "satisfaction_guarantee" | "dispute_prevention";
+  comment?: string;
+}
+
+export interface PolarRefundResult {
+  success: boolean;
+  refundId?: string; // Polar refund ID
+  error?: string;
+}
+
+// ---------------------------------------------------------------------------
 // COD
 // ---------------------------------------------------------------------------
 
@@ -128,5 +165,6 @@ export interface ProcessPaymentParams {
   sslcommerzTranId?: string;
   sslcommerzValId?: string;
   sslcommerzBankTranId?: string;
+  polarCheckoutId?: string;
   metadata?: Record<string, unknown>;
 }

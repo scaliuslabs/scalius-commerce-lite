@@ -11,6 +11,7 @@ import {
     getActivePaymentMethods,
     getStripeSettings,
     getSSLCommerzSettings,
+    getPolarSettings,
     invalidatePaymentMethodsCache,
 } from "@/lib/payment/gateway-settings";
 import { z } from "zod";
@@ -18,8 +19,8 @@ import { z } from "zod";
 const CATEGORY = "payment_methods";
 
 const updateSchema = z.object({
-    enabledMethods: z.array(z.enum(["stripe", "sslcommerz", "cod"])).min(1, "At least one payment method is required"),
-    defaultMethod: z.enum(["stripe", "sslcommerz", "cod"]),
+    enabledMethods: z.array(z.enum(["stripe", "sslcommerz", "polar", "cod"])).min(1, "At least one payment method is required"),
+    defaultMethod: z.enum(["stripe", "sslcommerz", "polar", "cod"]),
 });
 
 export const GET: APIRoute = async () => {
@@ -30,6 +31,7 @@ export const GET: APIRoute = async () => {
         // Also return credential status for the UI
         const stripeSettings = await getStripeSettings(db);
         const sslSettings = await getSSLCommerzSettings(db);
+        const polarSettings = await getPolarSettings(db);
 
         return Response.json({
             ...config,
@@ -41,6 +43,10 @@ export const GET: APIRoute = async () => {
                 sslcommerz: {
                     configured: !!sslSettings,
                     enabled: sslSettings?.enabled ?? false,
+                },
+                polar: {
+                    configured: !!polarSettings,
+                    enabled: polarSettings?.enabled ?? false,
                 },
                 cod: {
                     configured: true,

@@ -7,7 +7,8 @@ import { eq, sql, desc } from "drizzle-orm";
 import { orders, orderPayments, PaymentStatus, OrderStatus } from "@/db/schema";
 import { createRefund as stripeRefund } from "./stripe";
 import { initiateSSLCommerzRefund } from "./sslcommerz";
-import { getStripeSettings, getSSLCommerzSettings } from "./gateway-settings";
+import { createPolarRefund } from "./polar";
+import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "./gateway-settings";
 import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
 import type { Database } from "@/db";
 
@@ -17,7 +18,7 @@ export interface RefundRequest {
     amount?: number;
     reason: string;
     /** Override gateway detection (useful for multi-gateway orders) */
-    gateway?: "stripe" | "sslcommerz";
+    gateway?: "stripe" | "sslcommerz" | "polar";
 }
 
 export interface RefundResult {
@@ -137,6 +138,31 @@ export async function processRefund(
             return { success: false, gateway, amount: refundAmount, isFullRefund, error: result.error };
         }
         refundId = result.refundRefId ?? refundTranId;
+    } else if (gateway === "polar") {
+        if (!payment.polarCheckoutId) {
+            return { success: false, gateway, amount: refundAmount, isFullRefund, error: "No Polar order ID found on payment record" };
+        }
+
+        const polar = await getPolarSettings(db, kv);
+        if (!polar) {
+            return { success: false, gateway, amount: refundAmount, isFullRefund, error: "Polar is not configured" };
+        }
+
+        const result = await createPolarRefund(
+            polar,
+            {
+                polarOrderId: payment.polarCheckoutId,
+                amount: Math.round(refundAmount * 100),
+                reason: params.reason === "duplicate" ? "duplicate"
+                    : params.reason === "fraudulent" ? "fraudulent"
+                        : "customer_request"
+            }
+        );
+
+        if (!result.success) {
+            return { success: false, gateway, amount: refundAmount, isFullRefund, error: result.error };
+        }
+        refundId = result.refundId;
     } else if (gateway === "cod") {
         // COD "refund" is just a status update — no gateway API call needed
         refundId = `COD-REFUND-${Date.now()}`;
