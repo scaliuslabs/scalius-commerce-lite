@@ -9,8 +9,8 @@ export function usePageActions(fetchPages: () => void) {
     async (id: string, title: string, showTrashed: boolean) => {
       setIsActionLoading(true);
       const apiEndpoint = showTrashed
-        ? `/api/pages/${id}/permanent`
-        : `/api/pages/${id}`;
+        ? `/api/v1/admin/pages/${id}/permanent`
+        : `/api/v1/admin/pages/${id}`;
       const successMessage = showTrashed
         ? `Page "${title}" permanently deleted.`
         : `Page "${title}" moved to trash.`;
@@ -42,7 +42,7 @@ export function usePageActions(fetchPages: () => void) {
     async (id: string) => {
       setIsActionLoading(true);
       try {
-        const response = await fetch(`/api/pages/${id}/restore`, {
+        const response = await fetch(`/api/v1/admin/pages/${id}/restore`, {
           method: "POST",
         });
         if (!response.ok) {

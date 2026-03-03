@@ -119,8 +119,8 @@ export function CategoryForm({
     try {
       setIsSubmitting(true);
       const endpoint = isEdit
-        ? `/api/categories/${values.id}`
-        : "/api/categories";
+        ? `/api/v1/admin/categories/${values.id}`
+        : "/api/v1/admin/categories";
       const method = isEdit ? "PUT" : "POST";
 
       const response = await fetch(endpoint, {

@@ -76,60 +76,60 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Categories API
   // =============================================
-  "/api/categories": {
+  "/api/v1/admin/categories": {
     GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
     POST: { permission: PERMISSIONS.CATEGORIES_CREATE },
   },
-  "/api/categories/bulk-delete": {
+  "/api/v1/admin/categories/bulk-delete": {
     POST: { permission: PERMISSIONS.CATEGORIES_DELETE },
     DELETE: { permission: PERMISSIONS.CATEGORIES_DELETE },
   },
-  "/api/categories/bulk-restore": {
+  "/api/v1/admin/categories/bulk-restore": {
     POST: { permission: PERMISSIONS.CATEGORIES_RESTORE },
   },
-  "/api/categories/*": {
+  "/api/v1/admin/categories/*": {
     GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
     PUT: { permission: PERMISSIONS.CATEGORIES_EDIT },
     PATCH: { permission: PERMISSIONS.CATEGORIES_EDIT },
     DELETE: { permission: PERMISSIONS.CATEGORIES_DELETE },
   },
-  "/api/categories/*/restore": {
+  "/api/v1/admin/categories/*/restore": {
     POST: { permission: PERMISSIONS.CATEGORIES_RESTORE },
   },
-  "/api/categories/*/permanent": {
+  "/api/v1/admin/categories/*/permanent": {
     DELETE: { permission: PERMISSIONS.CATEGORIES_PERMANENT_DELETE },
   },
 
   // =============================================
   // Collections API
   // =============================================
-  "/api/collections": {
+  "/api/v1/admin/collections": {
     GET: { permission: PERMISSIONS.COLLECTIONS_VIEW },
     POST: { permission: PERMISSIONS.COLLECTIONS_CREATE },
   },
-  "/api/collections/bulk-activate": {
+  "/api/v1/admin/collections/bulk-activate": {
     POST: { permission: PERMISSIONS.COLLECTIONS_TOGGLE_STATUS },
   },
-  "/api/collections/bulk-deactivate": {
+  "/api/v1/admin/collections/bulk-deactivate": {
     POST: { permission: PERMISSIONS.COLLECTIONS_TOGGLE_STATUS },
   },
-  "/api/collections/bulk-delete": {
+  "/api/v1/admin/collections/bulk-delete": {
     POST: { permission: PERMISSIONS.COLLECTIONS_DELETE },
     DELETE: { permission: PERMISSIONS.COLLECTIONS_DELETE },
   },
-  "/api/collections/bulk-restore": {
+  "/api/v1/admin/collections/bulk-restore": {
     POST: { permission: PERMISSIONS.COLLECTIONS_RESTORE },
   },
-  "/api/collections/*": {
+  "/api/v1/admin/collections/*": {
     GET: { permission: PERMISSIONS.COLLECTIONS_VIEW },
     PUT: { permission: PERMISSIONS.COLLECTIONS_EDIT },
     PATCH: { permission: PERMISSIONS.COLLECTIONS_EDIT },
     DELETE: { permission: PERMISSIONS.COLLECTIONS_DELETE },
   },
-  "/api/collections/*/restore": {
+  "/api/v1/admin/collections/*/restore": {
     POST: { permission: PERMISSIONS.COLLECTIONS_RESTORE },
   },
-  "/api/collections/*/permanent": {
+  "/api/v1/admin/collections/*/permanent": {
     DELETE: { permission: PERMISSIONS.COLLECTIONS_DELETE },
   },
 
@@ -208,27 +208,27 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Customers API
   // =============================================
-  "/api/customers": {
+  "/api/v1/admin/customers": {
     GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
     POST: { permission: PERMISSIONS.CUSTOMERS_CREATE },
   },
-  "/api/customers/bulk-delete": {
+  "/api/v1/admin/customers/bulk-delete": {
     POST: { permission: PERMISSIONS.CUSTOMERS_DELETE },
     DELETE: { permission: PERMISSIONS.CUSTOMERS_DELETE },
   },
-  "/api/customers/sync": {
+  "/api/v1/admin/customers/sync": {
     POST: { permission: PERMISSIONS.CUSTOMERS_SYNC },
   },
-  "/api/customers/*": {
+  "/api/v1/admin/customers/*": {
     GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
     PUT: { permission: PERMISSIONS.CUSTOMERS_EDIT },
     PATCH: { permission: PERMISSIONS.CUSTOMERS_EDIT },
     DELETE: { permission: PERMISSIONS.CUSTOMERS_DELETE },
   },
-  "/api/customers/*/restore": {
+  "/api/v1/admin/customers/*/restore": {
     POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
   },
-  "/api/customers/*/permanent": {
+  "/api/v1/admin/customers/*/permanent": {
     DELETE: { permission: PERMISSIONS.CUSTOMERS_DELETE },
   },
 
@@ -252,80 +252,80 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Pages API
   // =============================================
-  "/api/pages": {
+  "/api/v1/admin/pages": {
     GET: { permission: PERMISSIONS.PAGES_VIEW },
     POST: { permission: PERMISSIONS.PAGES_CREATE },
   },
-  "/api/pages/bulk-delete": {
+  "/api/v1/admin/pages/bulk-delete": {
     POST: { permission: PERMISSIONS.PAGES_DELETE },
     DELETE: { permission: PERMISSIONS.PAGES_DELETE },
   },
-  "/api/pages/bulk-restore": {
+  "/api/v1/admin/pages/bulk-restore": {
     POST: { permission: PERMISSIONS.PAGES_EDIT },
   },
-  "/api/pages/bulk-publish": {
+  "/api/v1/admin/pages/bulk-publish": {
     POST: { permission: PERMISSIONS.PAGES_PUBLISH },
   },
-  "/api/pages/bulk-unpublish": {
+  "/api/v1/admin/pages/bulk-unpublish": {
     POST: { permission: PERMISSIONS.PAGES_PUBLISH },
   },
-  "/api/pages/*": {
+  "/api/v1/admin/pages/*": {
     GET: { permission: PERMISSIONS.PAGES_VIEW },
     PUT: { permission: PERMISSIONS.PAGES_EDIT },
     PATCH: { permission: PERMISSIONS.PAGES_EDIT },
     DELETE: { permission: PERMISSIONS.PAGES_DELETE },
   },
-  "/api/pages/*/restore": {
+  "/api/v1/admin/pages/*/restore": {
     POST: { permission: PERMISSIONS.PAGES_EDIT },
   },
-  "/api/pages/*/permanent": {
+  "/api/v1/admin/pages/*/permanent": {
     DELETE: { permission: PERMISSIONS.PAGES_DELETE },
   },
 
   // =============================================
   // Widgets API
   // =============================================
-  "/api/widgets": {
+  "/api/v1/admin/widgets": {
     GET: { permission: PERMISSIONS.WIDGETS_VIEW },
     POST: { permission: PERMISSIONS.WIDGETS_CREATE },
   },
-  "/api/widgets/bulk-delete": {
+  "/api/v1/admin/widgets/bulk-delete": {
     POST: { permission: PERMISSIONS.WIDGETS_DELETE },
     DELETE: { permission: PERMISSIONS.WIDGETS_DELETE },
   },
-  "/api/widgets/bulk-restore": {
+  "/api/v1/admin/widgets/bulk-restore": {
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
-  "/api/widgets/bulk-activate": {
+  "/api/v1/admin/widgets/bulk-activate": {
     POST: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
   },
-  "/api/widgets/bulk-deactivate": {
+  "/api/v1/admin/widgets/bulk-deactivate": {
     POST: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
   },
-  "/api/widgets/*": {
+  "/api/v1/admin/widgets/*": {
     GET: { permission: PERMISSIONS.WIDGETS_VIEW },
     PUT: { permission: PERMISSIONS.WIDGETS_EDIT },
     PATCH: { permission: PERMISSIONS.WIDGETS_EDIT },
     DELETE: { permission: PERMISSIONS.WIDGETS_DELETE },
   },
-  "/api/widgets/*/restore": {
+  "/api/v1/admin/widgets/*/restore": {
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
-  "/api/widgets/*/permanent": {
+  "/api/v1/admin/widgets/*/permanent": {
     DELETE: { permission: PERMISSIONS.WIDGETS_DELETE },
   },
-  "/api/widgets/*/toggle-status": {
+  "/api/v1/admin/widgets/*/toggle-status": {
     POST: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
     PUT: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
   },
-  "/api/widgets/*/history": {
+  "/api/v1/admin/widgets/*/history": {
     GET: { permission: PERMISSIONS.WIDGETS_VIEW },
   },
-  "/api/widgets/*/history/*": {
+  "/api/v1/admin/widgets/*/history/*": {
     GET: { permission: PERMISSIONS.WIDGETS_VIEW },
     DELETE: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
-  "/api/widgets/*/history/restore": {
+  "/api/v1/admin/widgets/*/history/restore": {
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
 

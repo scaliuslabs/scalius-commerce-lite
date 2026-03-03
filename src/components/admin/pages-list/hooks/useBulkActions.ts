@@ -16,11 +16,11 @@ export function useBulkActions(
       setIsBulkActionLoading(true);
 
       const endpointMap = {
-        trash: "/api/pages/bulk-delete",
-        delete: "/api/pages/bulk-delete",
-        restore: "/api/pages/bulk-restore",
-        publish: "/api/pages/bulk-publish",
-        unpublish: "/api/pages/bulk-unpublish",
+        trash: "/api/v1/admin/pages/bulk-delete",
+        delete: "/api/v1/admin/pages/bulk-delete",
+        restore: "/api/v1/admin/pages/bulk-restore",
+        publish: "/api/v1/admin/pages/bulk-publish",
+        unpublish: "/api/v1/admin/pages/bulk-unpublish",
       };
 
       let body: any = { pageIds: Array.from(selectedIds) };

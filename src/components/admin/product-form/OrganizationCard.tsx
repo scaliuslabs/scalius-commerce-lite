@@ -149,7 +149,7 @@ function CategoryCombobox({
       .replace(/[^a-z0-9-]/g, "");
 
     try {
-      const response = await fetch("/api/categories", {
+      const response = await fetch("/api/v1/admin/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

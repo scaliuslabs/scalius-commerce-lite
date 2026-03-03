@@ -16,7 +16,7 @@ export function useWidgetActions(
   const handleUpdate = async (widgetId: string, data: Partial<WidgetItem>) => {
     setSavingStates((prev) => ({ ...prev, [widgetId]: true }));
     try {
-      const response = await fetch(`/api/widgets/${widgetId}`, {
+      const response = await fetch(`/api/v1/admin/widgets/${widgetId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -53,8 +53,8 @@ export function useWidgetActions(
     setIsActionLoading(true);
     try {
       const url = isPermanent
-        ? `/api/widgets/${widgetId}/permanent`
-        : `/api/widgets/${widgetId}`;
+        ? `/api/v1/admin/widgets/${widgetId}/permanent`
+        : `/api/v1/admin/widgets/${widgetId}`;
 
       const response = await fetch(url, { method: "DELETE" });
 
@@ -84,7 +84,7 @@ export function useWidgetActions(
     setIsActionLoading(true);
     setSavingStates((prev) => ({ ...prev, [widgetId]: true }));
     try {
-      const response = await fetch(`/api/widgets/${widgetId}/restore`, {
+      const response = await fetch(`/api/v1/admin/widgets/${widgetId}/restore`, {
         method: "POST",
       });
 

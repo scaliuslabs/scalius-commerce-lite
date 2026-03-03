@@ -40,23 +40,23 @@ export function useBulkActions(fetchWidgets: () => Promise<void>) {
 
       switch (action) {
         case "trash":
-          endpoint = "/api/widgets/bulk-delete";
+          endpoint = "/api/v1/admin/widgets/bulk-delete";
           successMessage = `${selectedIds.size} widget(s) moved to trash.`;
           break;
         case "delete":
-          endpoint = "/api/widgets/bulk-delete";
+          endpoint = "/api/v1/admin/widgets/bulk-delete";
           successMessage = `${selectedIds.size} widget(s) permanently deleted.`;
           break;
         case "restore":
-          endpoint = "/api/widgets/bulk-restore";
+          endpoint = "/api/v1/admin/widgets/bulk-restore";
           successMessage = `${selectedIds.size} widget(s) restored.`;
           break;
         case "activate":
-          endpoint = "/api/widgets/bulk-activate";
+          endpoint = "/api/v1/admin/widgets/bulk-activate";
           successMessage = `${selectedIds.size} widget(s) activated.`;
           break;
         case "deactivate":
-          endpoint = "/api/widgets/bulk-deactivate";
+          endpoint = "/api/v1/admin/widgets/bulk-deactivate";
           successMessage = `${selectedIds.size} widget(s) deactivated.`;
           break;
       }

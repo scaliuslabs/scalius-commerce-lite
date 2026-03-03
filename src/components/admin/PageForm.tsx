@@ -96,7 +96,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
         values.publishedAt = new Date();
       }
 
-      const endpoint = isEdit ? `/api/pages/${values.id}` : "/api/pages";
+      const endpoint = isEdit ? `/api/v1/admin/pages/${values.id}` : "/api/v1/admin/pages";
       const method = isEdit ? "PUT" : "POST";
 
       const response = await fetch(endpoint, {

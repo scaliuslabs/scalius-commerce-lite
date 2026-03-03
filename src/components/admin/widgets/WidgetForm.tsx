@@ -310,7 +310,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const openHistory = async () => {
     if (widget?.id) {
       setIsHistoryOpen(true);
-      const response = await fetch(`/api/widgets/${widget.id}/history`);
+      const response = await fetch(`/api/v1/admin/widgets/${widget.id}/history`);
       const data = await response.json();
       setHistory(data);
     }
@@ -319,7 +319,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const handleRestore = async (historyId: string) => {
     if (!widget?.id) return;
     try {
-      const response = await fetch(`/api/widgets/${widget.id}/history/restore`, {
+      const response = await fetch(`/api/v1/admin/widgets/${widget.id}/history/restore`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ historyId }),
@@ -338,7 +338,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const handleDeleteHistory = async (historyId: string) => {
     if (!widget?.id) return;
     try {
-      const response = await fetch(`/api/widgets/${widget.id}/history/${historyId}`, {
+      const response = await fetch(`/api/v1/admin/widgets/${widget.id}/history/${historyId}`, {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -359,7 +359,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
    * Form submission with AI context persistence
    */
   const onSubmit = async (data: WidgetFormValues) => {
-    const apiUrl = isCreateMode ? '/api/widgets' : `/api/widgets/${widget?.id}`;
+    const apiUrl = isCreateMode ? '/api/v1/admin/widgets' : `/api/v1/admin/widgets/${widget?.id}`;
     const method = isCreateMode ? 'POST' : 'PUT';
 
     // Build AI context with all state

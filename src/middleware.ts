@@ -11,6 +11,7 @@ import { getRoutePermission } from "@/lib/rbac/route-permissions";
 import { hasPageAccess } from "@/lib/rbac/page-permissions";
 
 const protectedApiPatterns = [
+  /^\/api\/v1\/admin(\/.*)?$/,
   /^\/api\/admin(\/.*)?$/,
   /^\/api\/analytics(\/.*)?$/,
   /^\/api\/categories(\/.*)?$/,
@@ -108,7 +109,7 @@ const authMiddleware = defineMiddleware(async (context, next) => {
     }
   }
 
-  if (pathname.startsWith("/api/v1")) {
+  if (pathname.startsWith("/api/v1") && !pathname.startsWith("/api/v1/admin")) {
     const response = await next();
     return response || new Response();
   }

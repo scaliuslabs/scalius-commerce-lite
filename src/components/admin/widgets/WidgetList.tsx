@@ -145,7 +145,7 @@ export const WidgetList: React.FC<WidgetListProps> = ({
   const handleToggleStatus = async (widgetId: string, currentStatus: boolean) => {
     setProcessingWidgets(prev => new Set(prev).add(widgetId));
     try {
-      const response = await fetch(`/api/widgets/${widgetId}/toggle-status`, { method: 'PATCH' });
+      const response = await fetch(`/api/v1/admin/widgets/${widgetId}/toggle-status`, { method: 'PATCH' });
       if (!response.ok) throw new Error("Failed to toggle status.");
       
       const updatedWidget = await response.json();
@@ -165,16 +165,16 @@ export const WidgetList: React.FC<WidgetListProps> = ({
   
   const handleAction = async (action: 'softDelete' | 'restore' | 'permanentDelete', widgetId: string) => {
     setIsProcessing(true);
-    let url = `/api/widgets/${widgetId}`;
+    let url = `/api/v1/admin/widgets/${widgetId}`;
     let method = 'DELETE';
     let successMessage = "Widget moved to trash.";
 
     if (action === 'restore') {
-      url = `/api/widgets/${widgetId}/restore`;
+      url = `/api/v1/admin/widgets/${widgetId}/restore`;
       method = 'POST';
       successMessage = "Widget restored successfully.";
     } else if (action === 'permanentDelete') {
-      url = `/api/widgets/${widgetId}/permanent`;
+      url = `/api/v1/admin/widgets/${widgetId}/permanent`;
       method = 'DELETE';
       successMessage = "Widget permanently deleted.";
     }

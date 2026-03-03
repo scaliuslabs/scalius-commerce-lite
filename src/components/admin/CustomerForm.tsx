@@ -120,8 +120,8 @@ export function CustomerForm({
     try {
       setIsSubmitting(true);
       const endpoint = isEdit
-        ? `/api/customers/${values.id}`
-        : "/api/customers";
+        ? `/api/v1/admin/customers/${values.id}`
+        : "/api/v1/admin/customers";
       const method = isEdit ? "PUT" : "POST";
 
       const response = await fetch(endpoint, {

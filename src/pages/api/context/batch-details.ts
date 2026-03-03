@@ -14,7 +14,7 @@ import {
   type ProductAttributeValue,
 } from "@/db/schema";
 import { inArray, eq, isNull } from "drizzle-orm";
-import { getStorefrontPath } from "@/shared/storefront-url";
+import * as SettingsService from "@/modules/settings/settings.service";
 
 interface VariantWithBuyNowUrl extends ProductVariant {
   buyNowUrl: string;
@@ -53,7 +53,7 @@ interface CategoryContextDetail extends Category {
   url: string;
 }
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const body = await request.json();
     const { productIds, categoryIds, allCategories } = body as {
@@ -64,6 +64,9 @@ export const POST: APIRoute = async ({ request }) => {
 
     let productsData: ProductContextDetail[] = [];
     let fetchedCategories: Category[] = [];
+
+    // Use KV for settings cache if available via context
+    const kv = (locals as any)?.runtime?.env?.CACHE;
 
     if (productIds && productIds.length > 0) {
       const productResults = await db
@@ -100,25 +103,23 @@ export const POST: APIRoute = async ({ request }) => {
               .where(inArray(productAttributeValues.productId, allProductIds)),
             allCategoryIds.length > 0
               ? db
-                  .select()
-                  .from(categories)
-                  .where(inArray(categories.id, allCategoryIds))
+                .select()
+                .from(categories)
+                .where(inArray(categories.id, allCategoryIds))
               : Promise.resolve([]),
           ]);
 
         const categoriesWithUrls = await Promise.all(
           categoryResults.map(async (cat) => ({
             ...cat,
-            url: await getStorefrontPath(`/categories/${cat.slug}`),
+            url: await SettingsService.getStorefrontPath(db, `/categories/${cat.slug}`, kv),
           })),
         );
         const categoryMap = new Map(categoriesWithUrls.map((c) => [c.id, c]));
 
         for (const product of productResults) {
-          const productUrl = await getStorefrontPath(
-            `/products/${product.slug}`,
-          );
-          const buyNowUrl = await getStorefrontPath(`/buy/${product.slug}`);
+          const productUrl = await SettingsService.getStorefrontPath(db, `/products/${product.slug}`, kv);
+          const buyNowUrl = await SettingsService.getStorefrontPath(db, `/buy/${product.slug}`, kv);
           const productCategory = product.categoryId
             ? categoryMap.get(product.categoryId)
             : null;
@@ -135,7 +136,7 @@ export const POST: APIRoute = async ({ request }) => {
 
               return {
                 ...variant,
-                buyNowUrl: await getStorefrontPath(`/buy/${product.slug}?variant=${variant.id}`),
+                buyNowUrl: await SettingsService.getStorefrontPath(db, `/buy/${product.slug}?variant=${variant.id}`, kv),
                 finalPrice,
               };
             })
@@ -155,11 +156,11 @@ export const POST: APIRoute = async ({ request }) => {
             finalPrice: productFinalPrice,
             category: productCategory
               ? {
-                  id: productCategory.id,
-                  name: productCategory.name,
-                  slug: productCategory.slug,
-                  url: productCategory.url,
-                }
+                id: productCategory.id,
+                name: productCategory.name,
+                slug: productCategory.slug,
+                url: productCategory.url,
+              }
               : null,
             images: images.filter((img) => img.productId === product.id),
             variants: variantsWithBuyNowUrls,
@@ -189,7 +190,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     const categoriesData: CategoryContextDetail[] = await Promise.all(
       fetchedCategories.map(async (cat) => {
-        const url = await getStorefrontPath(`/categories/${cat.slug}`);
+        const url = await SettingsService.getStorefrontPath(db, `/categories/${cat.slug}`, kv);
         return { ...cat, url };
       }),
     );
