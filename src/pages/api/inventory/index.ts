@@ -118,6 +118,11 @@ export const GET: APIRoute = async ({ url }) => {
 
         // --- Section: Recent Inventory Movements ---
         if (section === "movements") {
+            const countResult = await db
+                .select({ count: sql<number>`count(*)` })
+                .from(inventoryMovements)
+                .get();
+
             const movements = await db
                 .select({
                     id: inventoryMovements.id,
@@ -145,7 +150,15 @@ export const GET: APIRoute = async ({ url }) => {
                 .offset(offset)
                 .all();
 
-            return Response.json({ movements });
+            return Response.json({
+                movements,
+                pagination: {
+                    page,
+                    limit,
+                    total: countResult?.count ?? 0,
+                    totalPages: Math.ceil((countResult?.count ?? 0) / limit),
+                },
+            });
         }
 
         // --- Section: Low Stock Alerts ---
