@@ -1,0 +1,17 @@
+// src/modules/media/media.schema.ts
+import { z } from "zod";
+
+export const updateMediaSchema = z.object({
+    filename: z.string().optional(),
+    folderId: z.string().nullable().optional(),
+});
+
+export const moveMediaSchema = z.object({
+    fileIds: z.array(z.string()).min(1, "File IDs are required"),
+    folderId: z.string().nullable().optional(),
+});
+
+export const createFolderSchema = z.object({
+    name: z.string().min(1, "Folder name is required"),
+    parentId: z.string().nullable().optional(),
+});

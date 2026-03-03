@@ -244,8 +244,8 @@ export function AmountOffOrderForm({
     try {
       const method = discountId ? "PUT" : "POST";
       const url = discountId
-        ? `/api/discounts/${discountId}`
-        : "/api/discounts";
+        ? `/api/v1/admin/discounts/${discountId}`
+        : "/api/v1/admin/discounts";
 
       const response = await fetch(url, {
         method,
@@ -258,7 +258,7 @@ export function AmountOffOrderForm({
       if (!response.ok) {
         throw new Error(
           responseData?.error ||
-            `Failed to ${discountId ? "update" : "create"} discount (Status: ${response.status})`,
+          `Failed to ${discountId ? "update" : "create"} discount (Status: ${response.status})`,
         );
       }
 
@@ -452,7 +452,7 @@ export function AmountOffOrderForm({
                           className="pl-7"
                           {...field}
                           value={field.value ?? ""} // Handle null for empty input
-                          // onChange handled by zod coerce
+                        // onChange handled by zod coerce
                         />
                       </div>
                     </FormControl>
@@ -486,7 +486,7 @@ export function AmountOffOrderForm({
                         placeholder="Unlimited"
                         {...field}
                         value={field.value ?? ""}
-                        // onChange handled by zod coerce
+                      // onChange handled by zod coerce
                       />
                     </FormControl>
                     <FormDescription>
@@ -634,7 +634,7 @@ export function AmountOffOrderForm({
                             mode="single"
                             selected={
                               field.value instanceof Date &&
-                              !isNaN(field.value.getTime())
+                                !isNaN(field.value.getTime())
                                 ? field.value
                                 : undefined
                             }

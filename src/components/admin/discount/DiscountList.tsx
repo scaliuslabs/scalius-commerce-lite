@@ -228,11 +228,11 @@ const DiscountRow = React.memo(
             className={cn(
               "text-xs font-medium",
               discount.type === "amount_off_products" &&
-                "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700",
+              "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700",
               discount.type === "amount_off_order" &&
-                "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700",
+              "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700",
               discount.type === "free_shipping" &&
-                "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-700",
+              "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-700",
             )}
           >
             {discount.type === "amount_off_products" && (
@@ -561,7 +561,7 @@ export function DiscountList({
     setDeleteConfirmation(null);
 
     try {
-      const response = await fetch(`/api/discounts/${idToDelete}`, {
+      const response = await fetch(`/api/v1/admin/discounts/${idToDelete}`, {
         method: "DELETE",
       });
 
@@ -602,7 +602,7 @@ export function DiscountList({
     setPermanentDeleteConfirmation(null);
 
     try {
-      const response = await fetch(`/api/discounts/${idToDelete}/permanent`, {
+      const response = await fetch(`/api/v1/admin/discounts/${idToDelete}/permanent`, {
         method: "DELETE",
       });
 
@@ -638,7 +638,7 @@ export function DiscountList({
   const handleRestore = useCallback(
     async (id: string) => {
       try {
-        const response = await fetch(`/api/discounts/${id}/restore`, {
+        const response = await fetch(`/api/v1/admin/discounts/${id}/restore`, {
           method: "POST",
         });
 
@@ -685,7 +685,7 @@ export function DiscountList({
     setBulkDeleteConfirmation(false);
 
     try {
-      const response = await fetch(`/api/discounts/bulk-delete`, {
+      const response = await fetch(`/api/v1/admin/discounts/bulk-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -834,7 +834,7 @@ export function DiscountList({
   const handleToggleStatus = useCallback(
     async (id: string, currentStatus: boolean) => {
       try {
-        const response = await fetch(`/api/discounts/${id}/toggle-status`, {
+        const response = await fetch(`/api/v1/admin/discounts/${id}/toggle-status`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ isActive: !currentStatus }),
@@ -1169,7 +1169,7 @@ export function DiscountList({
                   {currentPagination.total === 0
                     ? 0
                     : (currentPagination.page - 1) * currentPagination.limit +
-                      1}
+                    1}
                 </span>{" "}
                 to{" "}
                 <span className="font-medium text-gray-700 dark:text-gray-300">

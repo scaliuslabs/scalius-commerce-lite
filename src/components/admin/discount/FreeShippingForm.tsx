@@ -114,8 +114,8 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
     try {
       const method = discountId ? "PUT" : "POST";
       const url = discountId
-        ? `/api/discounts/${discountId}`
-        : "/api/discounts";
+        ? `/api/v1/admin/discounts/${discountId}`
+        : "/api/v1/admin/discounts";
 
       const payload = {
         ...ensuredValues,
@@ -136,7 +136,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
           errorData?.error ||
-            `Failed to ${discountId ? "update" : "create"} discount`,
+          `Failed to ${discountId ? "update" : "create"} discount`,
         );
       }
 
@@ -240,7 +240,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                             )}
                           >
                             {field.value &&
-                            !isNaN(new Date(field.value).getTime()) ? (
+                              !isNaN(new Date(field.value).getTime()) ? (
                               format(new Date(field.value), "PPP")
                             ) : (
                               <span>Pick a date</span>
@@ -254,7 +254,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                           mode="single"
                           selected={
                             field.value instanceof Date &&
-                            !isNaN(field.value.getTime())
+                              !isNaN(field.value.getTime())
                               ? field.value
                               : undefined
                           }
@@ -293,7 +293,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                             )}
                           >
                             {field.value &&
-                            !isNaN(new Date(field.value).getTime()) ? (
+                              !isNaN(new Date(field.value).getTime()) ? (
                               format(new Date(field.value), "PPP")
                             ) : (
                               <span>No end date</span>
@@ -307,7 +307,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                           mode="single"
                           selected={
                             field.value instanceof Date &&
-                            !isNaN(field.value.getTime())
+                              !isNaN(field.value.getTime())
                               ? field.value
                               : undefined
                           }
@@ -318,7 +318,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                               form
                                 .getValues("startDate")
                                 ?.setHours(0, 0, 0, 0) ||
-                                new Date().setHours(0, 0, 0, 0),
+                              new Date().setHours(0, 0, 0, 0),
                             )
                           }
                           initialFocus

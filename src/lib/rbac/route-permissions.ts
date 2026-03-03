@@ -235,17 +235,17 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Discounts API (SENSITIVE)
   // =============================================
-  "/api/discounts": {
+  "/api/v1/admin/discounts": {
     GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
     POST: { permission: PERMISSIONS.DISCOUNTS_CREATE },
   },
-  "/api/discounts/*": {
+  "/api/v1/admin/discounts/*": {
     GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
     PUT: { permission: PERMISSIONS.DISCOUNTS_EDIT },
     PATCH: { permission: PERMISSIONS.DISCOUNTS_EDIT },
     DELETE: { permission: PERMISSIONS.DISCOUNTS_DELETE },
   },
-  "/api/discounts/*/toggle": {
+  "/api/v1/admin/discounts/*/toggle": {
     POST: { permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS },
   },
 
@@ -332,19 +332,19 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Media API
   // =============================================
-  "/api/media": {
+  "/api/v1/admin/media": {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
-  "/api/media/*": {
+  "/api/v1/admin/media/*": {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
     DELETE: { permission: PERMISSIONS.MEDIA_DELETE },
   },
-  "/api/media/folders": {
+  "/api/v1/admin/media/folders": {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
     POST: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
   },
-  "/api/media/folders/*": {
+  "/api/v1/admin/media/folders/*": {
     PUT: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
     DELETE: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
   },

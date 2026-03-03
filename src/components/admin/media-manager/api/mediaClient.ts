@@ -38,7 +38,7 @@ export class MediaApiClient {
       params.append("sortOrder", filters.sortOrder);
     }
 
-    const response = await fetch(`/api/media?${params.toString()}`);
+    const response = await fetch(`/api/v1/admin/media?${params.toString()}`);
 
     if (!response.ok) {
       throw new Error("Failed to load files");
@@ -56,10 +56,10 @@ export class MediaApiClient {
   ): Promise<
     | MediaFile[]
     | {
-        files: MediaFile[];
-        warnings?: Array<{ filename: string; error: string }>;
-        summary?: string;
-      }
+      files: MediaFile[];
+      warnings?: Array<{ filename: string; error: string }>;
+      summary?: string;
+    }
   > {
     try {
       const formData = new FormData();
@@ -72,7 +72,7 @@ export class MediaApiClient {
         formData.append("folderId", folderId);
       }
 
-      const response = await fetch("/api/media/upload", {
+      const response = await fetch("/api/v1/admin/media/upload", {
         method: "POST",
         body: formData,
       });
@@ -140,7 +140,7 @@ export class MediaApiClient {
    * Delete a single media file
    */
   static async deleteFile(fileId: string): Promise<void> {
-    const response = await fetch(`/api/media/${fileId}`, {
+    const response = await fetch(`/api/v1/admin/media/${fileId}`, {
       method: "DELETE",
     });
 
@@ -177,7 +177,7 @@ export class MediaApiClient {
    * Fetch all folders
    */
   static async fetchFolders(): Promise<MediaFolder[]> {
-    const response = await fetch("/api/media/folders");
+    const response = await fetch("/api/v1/admin/media/folders");
 
     if (!response.ok) {
       throw new Error("Failed to load folders");
@@ -194,7 +194,7 @@ export class MediaApiClient {
     name: string,
     parentId?: string | null,
   ): Promise<MediaFolder> {
-    const response = await fetch("/api/media/folders", {
+    const response = await fetch("/api/v1/admin/media/folders", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -215,7 +215,7 @@ export class MediaApiClient {
    * Delete a folder
    */
   static async deleteFolder(folderId: string): Promise<void> {
-    const response = await fetch(`/api/media/folders/${folderId}`, {
+    const response = await fetch(`/api/v1/admin/media/folders/${folderId}`, {
       method: "DELETE",
     });
 
@@ -232,7 +232,7 @@ export class MediaApiClient {
     fileIds: string[],
     folderId: string | null,
   ): Promise<void> {
-    const response = await fetch("/api/media/move", {
+    const response = await fetch("/api/v1/admin/media/move", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -253,7 +253,7 @@ export class MediaApiClient {
     fileId: string,
     updates: { filename?: string; folderId?: string | null },
   ): Promise<MediaFile> {
-    const response = await fetch(`/api/media/${fileId}`, {
+    const response = await fetch(`/api/v1/admin/media/${fileId}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
