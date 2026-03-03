@@ -25,6 +25,12 @@ declare global {
     // Cloudflare Email Workers binding (optional)
     EMAIL?: SendEmail;
 
+    // Cloudflare Queue bindings
+    PAYMENT_EVENTS_QUEUE: any;
+    ORDER_NOTIFICATIONS_QUEUE: any;
+    AUTH_OTP_QUEUE: any;
+    ORDER_INGEST_QUEUE: any;
+
     // Secrets
     BETTER_AUTH_SECRET: string;
     API_TOKEN?: string;

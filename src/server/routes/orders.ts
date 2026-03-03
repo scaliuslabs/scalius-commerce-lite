@@ -4,12 +4,10 @@ import {
   orders,
   orderItems,
   customers,
-  customerHistory,
   productVariants,
   deliveryLocations,
   products,
   productImages,
-  discountUsage,
   discounts,
   PaymentMethod,
   PaymentStatus,
@@ -27,8 +25,8 @@ import { generateOrderId } from "@/lib/order-utils";
 import { phoneNumberSchema } from "@/lib/customer-utils";
 import { DeliveryService } from "@/lib/delivery/service";
 import { cacheMiddleware } from "../middleware/cache";
-import { reserveMultiple, releaseMultiple } from "@/lib/inventory";
-import { initCODTracking } from "@/lib/payment/cod";
+// import { reserveMultiple, releaseMultiple } from "@/lib/inventory";
+// import { initCODTracking } from "@/lib/payment/cod";
 
 // Create a Hono app for order routes, typed with Env bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -181,6 +179,61 @@ const createOrderSchema = z.object({
   inventoryPool: z
     .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
     .default(InventoryPool.REGULAR),
+});
+
+// GET - Poll checkout status for async order ingestion
+app.get("/status/:token", async (c) => {
+  try {
+    const token = c.req.param("token");
+    c.header("Cache-Control", "no-cache, no-store, must-revalidate");
+    c.header("Pragma", "no-cache");
+    c.header("Expires", "0");
+
+    if (!token || !token.startsWith("chk_")) {
+      return c.json({ error: "Invalid checkout token" }, 400);
+    }
+
+    if (!c.env.CACHE) {
+      console.warn("[Orders] Polling endpoint hit but CACHE KV is not bound!");
+      return c.json({ status: "processing" }); // Fallback
+    }
+
+    const kvKey = `checkout_status:${token}`;
+    const statusStr = await c.env.CACHE.get(kvKey);
+
+    if (!statusStr) {
+      // If we don't have it yet, it might still be in the queue waiting to be processed
+      // Return 202 instead of 404 so storefront keeps polling
+      return c.json({ status: "processing", message: "Order is waiting in queue." }, 202);
+    }
+
+    const statusData = JSON.parse(statusStr);
+
+    // KV Eventual Consistency Fallback:
+    // If KV still thinks we are "processing", the queue might have ALREADY finished inserting the order
+    // but the KV edge cache replication to this user's region is lagging.
+    // Let's explicitly check the D1 backend to be 100% sure!
+    if (statusData.status === "processing" && statusData.orderId) {
+      const db = c.get("db");
+      const orderExists = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(eq(orders.id, statusData.orderId))
+        .limit(1);
+
+      if (orderExists.length > 0) {
+        // The order is safely in D1! Bypass the lagging KV and return success instantly!
+        return c.json({ status: "completed", orderId: statusData.orderId }, 200);
+      }
+    }
+
+    // Once completed/failed (or confirmed still processing via D1), we return the status
+    return c.json(statusData, 200);
+
+  } catch (err) {
+    console.error("Error checking order status:", err);
+    return c.json({ error: "Failed to check order status" }, 500);
+  }
 });
 
 // POST - Create a new order
@@ -469,218 +522,83 @@ app.post("/", async (c) => {
     const areaName = locationMap.get(data.area || "") || data.areaName || null;
 
     // ------------------------------------------------------------------
-    // 2. Batched Write Transaction
-    // Use db.batch() for all writes effectively executing in 1 roundtrip.
+    // 2. Queue Dispatch (Replaces Batched Write Transaction)
+    // Send the fully validated payload to the Queue Consumer to batch write!
     // ------------------------------------------------------------------
 
-    // Prepare IDs upfront
     const orderId = generateOrderId();
-    let customerId = existingCustomer
-      ? existingCustomer.id
-      : "cust_" + nanoid();
+    const checkoutToken = `chk_${nanoid()}`;
 
-    // A. Reserve inventory using optimistic locking (replaces direct stock decrement)
-    // This handles concurrent order creation safely via version-checked atomic updates.
-    const reservationEntries = data.items
-      .filter((item) => item.variantId !== null)
-      .map((item) => ({
-        variantId: item.variantId as string,
+    // Assemble the complete payload exactly as the DB requires
+    const queuePayload = {
+      type: "order.ingest",
+      checkoutToken,
+      existingCustomer: existingCustomer ? { id: existingCustomer.id } : null,
+      orderData: {
+        id: orderId,
+        customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        customerEmail: data.customerEmail,
+        shippingAddress: data.shippingAddress,
+        city: data.city,
+        zone: data.zone,
+        area: data.area,
+        cityName,
+        zoneName,
+        areaName,
+        notes: data.notes,
+        totalAmount,
+        shippingCharge: verifiedShippingCharge,
+        discountAmount: verifiedDiscountAmount,
+        status: (isPartialEnabled && data.paymentMethod === PaymentMethod.COD)
+          ? OrderStatus.INCOMPLETE
+          : data.paymentMethod === PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.INCOMPLETE,
+        paymentMethod: data.paymentMethod,
+        paymentStatus: PaymentStatus.UNPAID,
+        paidAmount: 0,
+        balanceDue: totalAmount,
+        fulfillmentStatus: FulfillmentStatus.PENDING,
+        inventoryPool: data.inventoryPool,
+        inventoryAction: data.items.some(item => item.variantId !== null) ? "reserved" : "none",
+      },
+      items: data.items.map(item => ({
+        productId: item.productId,
+        variantId: item.variantId,
         quantity: item.quantity,
-        pool: data.inventoryPool as "regular" | "preorder" | "backorder",
-      }));
-
-    if (reservationEntries.length > 0) {
-      const reserveResult = await reserveMultiple(db, reservationEntries, orderId);
-      if (!reserveResult.success) {
-        const failedResult = reserveResult.results.find((r) => !r.success);
-        throw new Error(`INSUFFICIENT_STOCK:${failedResult?.error ?? "Insufficient stock"}`);
-      }
-    }
-
-    const writeBatch: any[] = [];
-
-    // B. Customer Upsert
-    if (!existingCustomer) {
-      // Create new customer
-      writeBatch.push(
-        db.insert(customers).values({
-          id: customerId,
-          name: data.customerName,
-          phone: data.customerPhone,
-          email: data.customerEmail,
-          address: data.shippingAddress,
-          city: data.city,
-          zone: data.zone,
-          area: data.area,
-          cityName,
-          zoneName,
-          areaName,
-          totalOrders: 1,
-          totalSpent: totalAmount,
-          lastOrderAt: sql`unixepoch()`,
-          createdAt: sql`unixepoch()`,
-          updatedAt: sql`unixepoch()`,
-        }),
-      );
-      writeBatch.push(
-        db.insert(customerHistory).values({
-          id: "hist_" + nanoid(),
-          customerId: customerId,
-          name: data.customerName,
-          email: data.customerEmail,
-          phone: data.customerPhone,
-          address: data.shippingAddress,
-          city: data.city,
-          zone: data.zone,
-          area: data.area,
-          cityName,
-          zoneName,
-          areaName,
-          changeType: "created",
-          createdAt: sql`unixepoch()`,
-        }),
-      );
-    } else {
-      // Update existing customer stats
-      writeBatch.push(
-        db
-          .update(customers)
-          .set({
-            totalOrders: sql`${customers.totalOrders} + 1`,
-            totalSpent: sql`${customers.totalSpent} + ${totalAmount}`,
-            lastOrderAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-          })
-          .where(eq(customers.id, existingCustomer.id)),
-      );
-    }
-
-    // C. Create Order
-    const newOrderData = {
-      id: orderId,
-      customerName: data.customerName,
-      customerPhone: data.customerPhone,
-      customerEmail: data.customerEmail,
-      shippingAddress: data.shippingAddress,
-      city: data.city,
-      zone: data.zone,
-      area: data.area,
-      cityName,
-      zoneName,
-      areaName,
-      notes: data.notes,
-      totalAmount,
-      shippingCharge: verifiedShippingCharge,
-      discountAmount: verifiedDiscountAmount,
-      status: (isPartialEnabled && data.paymentMethod === PaymentMethod.COD)
-        ? OrderStatus.INCOMPLETE
-        : data.paymentMethod === PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.INCOMPLETE,
-      // Payment fields
-      paymentMethod: data.paymentMethod,
-      paymentStatus: PaymentStatus.UNPAID,
-      paidAmount: 0,
-      balanceDue: totalAmount,
-      // Fulfillment fields
-      fulfillmentStatus: FulfillmentStatus.PENDING,
-      inventoryPool: data.inventoryPool,
-      inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
-      customerId,
-      createdAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
+        price: item.price,
+        productName: item.productName ?? null,
+        variantLabel: item.variantLabel ?? null,
+      })),
+      discountUsage: appliedDiscount && data.discountAmount && data.discountAmount > 0 ? {
+        discountId: appliedDiscount.id,
+        amountDiscounted: data.discountAmount,
+      } : null,
+      requestUrl,
     };
 
-    writeBatch.push(db.insert(orders).values(newOrderData));
+    // Dispatch to Cloudflare Queue
+    await c.env.ORDER_INGEST_QUEUE.send(queuePayload);
 
-    // D. Create Order Items (with product/variant name snapshots)
-    if (data.items.length > 0) {
-      writeBatch.push(
-        db.insert(orderItems).values(
-          data.items.map((item) => ({
-            id: "item_" + nanoid(),
-            orderId: orderId,
-            productId: item.productId,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            price: item.price,
-            // Snapshot product/variant labels at order time so they survive future edits
-            productName: item.productName ?? null,
-            variantLabel: item.variantLabel ?? null,
-            fulfillmentStatus: "pending" as const,
-            createdAt: sql`unixepoch()`,
-          })),
-        ),
-      );
-    }
-
-    // E. Log Discount Usage
-    if (appliedDiscount && data.discountAmount && data.discountAmount > 0) {
-      writeBatch.push(
-        db.insert(discountUsage).values({
-          id: "du_" + nanoid(),
-          discountId: appliedDiscount.id,
-          orderId: orderId,
-          customerId: customerId,
-          amountDiscounted: data.discountAmount,
-          createdAt: sql`unixepoch()`,
-        }),
-      );
-    }
-
-    // Execute Write Batch (1 Roundtrip)
-    try {
-      await db.batch(writeBatch as any);
-    } catch (batchError) {
-      // Write batch failed — release the reservations we just placed
-      if (reservationEntries.length > 0) {
-        await releaseMultiple(db, reservationEntries, orderId).catch((releaseErr) =>
-          console.error("[orders] Reservation release failed after batch error:", releaseErr)
-        );
-      }
-      throw batchError;
-    }
-
-    // ------------------------------------------------------------------
-    // 3. Post-write: initialize COD tracking for COD orders
-    // ------------------------------------------------------------------
-    if (data.paymentMethod === PaymentMethod.COD) {
-      await initCODTracking(db, { orderId }).catch((err) =>
-        console.error("[orders] COD tracking init failed:", err)
-      );
-    }
-
-    // Background Notification... logic remains same (executionCtx)
-    if (c.executionCtx) {
-      const { sendOrderNotification } = await import(
-        "@/lib/notification-utils"
-      );
-      c.executionCtx.waitUntil(
-        sendOrderNotification(
-          { id: orderId, customerName: newOrderData.customerName },
-          c.env,
-          requestUrl,
-        ),
-      );
-    } else {
-      const { sendOrderNotification } = await import(
-        "@/lib/notification-utils"
-      );
-      sendOrderNotification(
-        { id: orderId, customerName: newOrderData.customerName },
-        c.env,
-        requestUrl,
-      ).catch((err) => console.error("Notification error:", err));
-    }
+    // Write initial pending state to KV so the Storefront can poll it
+    const kvKey = `checkout_status:${checkoutToken}`;
+    await c.env.CACHE.put(
+      kvKey,
+      JSON.stringify({ status: "processing", orderId }),
+      { expirationTtl: 300 } // 5 minutes TTL
+    );
 
     return c.json(
       {
         success: true,
         data: {
-          id: orderId,
+          checkoutToken,
+          orderId,
           paymentMethod: data.paymentMethod,
           totalAmount,
+          message: "Order placed in processing queue"
         },
       },
-      201,
+      202,
     );
   } catch (error) {
     console.error("Error creating order:", error);
