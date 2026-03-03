@@ -5,7 +5,7 @@
 // No auth required: publishable keys and enabled flags are public-facing information.
 
 import { Hono } from "hono";
-import { getStripeSettings, getSSLCommerzSettings } from "@/lib/payment/gateway-settings";
+import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "@/lib/payment/gateway-settings";
 import { getDb } from "@/db";
 import { siteSettings, settings } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -35,9 +35,10 @@ app.get("/config", async (c) => {
     const kv: KVNamespace | undefined = (c.env as any).CACHE;
 
     // Fetch gateway settings + site settings + currency settings in parallel (DB → KV cached)
-    const [stripeSettings, sslSettings, siteSettingsRow, currencyRows] = await Promise.all([
+    const [stripeSettings, sslSettings, polarSettings, siteSettingsRow, currencyRows] = await Promise.all([
       getStripeSettings(db, kv).catch(() => null),
       getSSLCommerzSettings(db, kv).catch(() => null),
+      getPolarSettings(db, kv).catch(() => null),
       db.select({
         guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
         authVerificationMethod: siteSettings.authVerificationMethod,
@@ -80,6 +81,15 @@ app.get("/config", async (c) => {
         name: "Online Payment",
         currencies: [localCurrencyCode],
         sandbox: sslSettings.sandbox,
+      });
+    }
+
+    if (polarSettings?.enabled && checkoutMode !== "guest_cod_only") {
+      gateways.push({
+        id: "polar",
+        name: "Polar",
+        currencies: [localCurrencyCode, "usd"],
+        sandbox: polarSettings.sandbox,
       });
     }
 

@@ -3,7 +3,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { CustomerList } from "../../../components/admin/CustomerList";
 import { db } from "../../../db";
 import { customers, orders, deliveryLocations } from "../../../db/schema";
-import { sql, eq, and, isNull, inArray } from "drizzle-orm";
+import { sql, and, isNull, inArray } from "drizzle-orm";
 import { ftsMatch } from "@/lib/search/fts5";
 import { nanoid } from "nanoid";
 

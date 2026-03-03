@@ -77,6 +77,14 @@ export async function processPaymentConfirmed(
         .get();
       if (existing) return { success: true };
     }
+    if (params.polarCheckoutId) {
+      const existing = await db
+        .select({ id: orderPayments.id })
+        .from(orderPayments)
+        .where(eq(orderPayments.polarCheckoutId, params.polarCheckoutId))
+        .get();
+      if (existing) return { success: true };
+    }
 
     const now = new Date();
     const newPaidAmount = (order.paidAmount ?? 0) + params.amount;
@@ -107,6 +115,7 @@ export async function processPaymentConfirmed(
       sslcommerzTranId: params.sslcommerzTranId ?? null,
       sslcommerzValId: params.sslcommerzValId ?? null,
       sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
+      polarCheckoutId: params.polarCheckoutId ?? null,
       metadata: params.metadata ? JSON.stringify(params.metadata) : null,
       createdAt: now,
       updatedAt: now,

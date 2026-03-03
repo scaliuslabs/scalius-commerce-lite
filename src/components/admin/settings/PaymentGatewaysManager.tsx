@@ -21,13 +21,23 @@ import {
     CreditCard,
     Banknote,
     Shield,
+    Zap,
     CheckCircle2,
     AlertTriangle,
     ExternalLink,
     Eye,
     EyeOff,
+    HelpCircle,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -39,11 +49,12 @@ interface GatewayStatus {
 }
 
 interface PaymentMethodsData {
-    enabledMethods: ("stripe" | "sslcommerz" | "cod")[];
-    defaultMethod: "stripe" | "sslcommerz" | "cod";
+    enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
+    defaultMethod: "stripe" | "sslcommerz" | "polar" | "cod";
     gatewayStatus: {
         stripe: GatewayStatus;
         sslcommerz: GatewayStatus;
+        polar: GatewayStatus;
         cod: GatewayStatus;
     };
 }
@@ -62,6 +73,14 @@ interface SSLCommerzData {
     enabled: boolean;
 }
 
+interface PolarData {
+    accessToken: string;
+    webhookSecret: string;
+    productId: string;
+    sandbox: boolean;
+    enabled: boolean;
+}
+
 const METHOD_META = {
     stripe: {
         label: "Stripe",
@@ -76,6 +95,13 @@ const METHOD_META = {
         icon: Shield,
         color: "text-blue-600",
         bg: "bg-blue-50 dark:bg-blue-500/10",
+    },
+    polar: {
+        label: "Polar",
+        desc: "Global digital payments",
+        icon: Zap,
+        color: "text-indigo-600",
+        bg: "bg-indigo-50 dark:bg-indigo-500/10",
     },
     cod: {
         label: "Cash on Delivery",
@@ -162,14 +188,27 @@ export default function PaymentGatewaysManager() {
     const [sslConfigured, setSslConfigured] = useState({ password: false });
     const [savingSsl, setSavingSsl] = useState(false);
 
+    // --- Polar state ---
+    const [polar, setPolar] = useState<PolarData>({
+        accessToken: "",
+        webhookSecret: "",
+        productId: "",
+        sandbox: true,
+        enabled: false,
+    });
+    const [polarConfigured, setPolarConfigured] = useState({ token: false, webhook: false });
+    const [savingPolar, setSavingPolar] = useState(false);
+    const [showPolarHelp, setShowPolarHelp] = useState(false);
+
     // --- Load all data in parallel ---
     const loadAll = useCallback(async () => {
         setLoading(true);
         try {
-            const [methodsRes, stripeRes, sslRes] = await Promise.all([
+            const [methodsRes, stripeRes, sslRes, polarRes] = await Promise.all([
                 fetch("/api/settings/payment-methods"),
                 fetch("/api/settings/stripe"),
                 fetch("/api/settings/sslcommerz"),
+                fetch("/api/settings/polar"),
             ]);
 
             if (methodsRes.ok) {
@@ -187,6 +226,11 @@ export default function PaymentGatewaysManager() {
                 const d = await sslRes.json() as SSLCommerzData;
                 setSsl(d);
                 setSslConfigured({ password: !!d.storePassword });
+            }
+            if (polarRes.ok) {
+                const d = await polarRes.json() as PolarData;
+                setPolar(d);
+                setPolarConfigured({ token: !!d.accessToken, webhook: !!d.webhookSecret });
             }
         } catch {
             toast.error("Failed to load payment settings");
@@ -217,6 +261,7 @@ export default function PaymentGatewaysManager() {
 
         if (method === "stripe") setStripe(prev => ({ ...prev, enabled: isActive }));
         if (method === "sslcommerz") setSsl(prev => ({ ...prev, enabled: isActive }));
+        if (method === "polar") setPolar(prev => ({ ...prev, enabled: isActive }));
     };
 
     // --- Save methods (Global state) ---
@@ -277,9 +322,30 @@ export default function PaymentGatewaysManager() {
         finally { setSavingSsl(false); }
     };
 
+    // --- Save Polar ---
+    const savePolar = async () => {
+        setSavingPolar(true);
+        try {
+            const res = await fetch("/api/settings/polar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(polar),
+            });
+            if (res.ok) {
+                await saveMethods(true);
+                toast.success("Polar settings saved");
+                await loadAll();
+            } else {
+                const e = await res.json() as any; toast.error(e.message || "Save failed");
+            }
+        } catch { toast.error("Error saving Polar settings"); }
+        finally { setSavingPolar(false); }
+    };
+
     // --- Status helpers ---
     const stripeStatus = methods?.gatewayStatus.stripe;
     const sslStatus = methods?.gatewayStatus.sslcommerz;
+    const polarStatus = methods?.gatewayStatus.polar;
 
     const getStatusBadge = (method: MethodKey) => {
         if (method === "cod") {
@@ -300,6 +366,11 @@ export default function PaymentGatewaysManager() {
             if (!enabledMethods.has("sslcommerz")) return <Badge variant="secondary" className="text-xs">Inactive</Badge>;
             return <Badge variant="default" className="text-xs bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{ssl.sandbox ? "Sandbox" : "Live"}</Badge>;
         }
+        if (method === "polar") {
+            if (!polarStatus?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">Needs Setup</Badge>;
+            if (!enabledMethods.has("polar")) return <Badge variant="secondary" className="text-xs">Inactive</Badge>;
+            return <Badge variant="default" className="text-xs bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{polar.sandbox ? "Sandbox" : "Live"}</Badge>;
+        }
         return null;
     };
 
@@ -311,7 +382,7 @@ export default function PaymentGatewaysManager() {
         );
     }
 
-    const allMethods: MethodKey[] = ["stripe", "sslcommerz", "cod"];
+    const allMethods: MethodKey[] = ["stripe", "sslcommerz", "polar", "cod"];
 
     return (
         <div className="space-y-6 max-w-3xl">
@@ -516,6 +587,114 @@ export default function PaymentGatewaysManager() {
                 </CardFooter>
             </Card>
 
+            {/* --- POLAR --- */}
+            <Card className="overflow-hidden border-indigo-500/20 dark:border-indigo-500/10">
+                <div className="flex items-center justify-between p-5 bg-indigo-50/50 dark:bg-indigo-950/10 border-b border-border">
+                    <div className="flex items-center gap-4">
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${METHOD_META.polar.bg}`}>
+                            <METHOD_META.polar.icon className={`h-5 w-5 ${METHOD_META.polar.color}`} />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-base font-medium">{METHOD_META.polar.label}</h3>
+                                {getStatusBadge("polar")}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">{METHOD_META.polar.desc}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground h-7" onClick={() => setShowPolarHelp(true)}>
+                            <HelpCircle className="h-3.5 w-3.5" /> Setup Guide
+                        </Button>
+                        <Label htmlFor="toggle-polar" className="text-sm">Enable gateway</Label>
+                        <Switch
+                            id="toggle-polar"
+                            checked={enabledMethods.has("polar")}
+                            onCheckedChange={(v) => toggleMethod("polar", v)}
+                        />
+                    </div>
+                </div>
+
+                <CardContent className="p-5 space-y-4 pt-5">
+                    <div className="flex items-center justify-between pb-2">
+                        <div>
+                            <p className="text-sm font-medium">Sandbox Mode</p>
+                            <p className="text-xs text-muted-foreground">Use test credentials to simulate payments</p>
+                        </div>
+                        <Switch
+                            checked={polar.sandbox}
+                            onCheckedChange={(v) => setPolar((s) => ({ ...s, sandbox: v }))}
+                        />
+                    </div>
+
+                    {!polar.sandbox && polar.enabled && (
+                        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive mb-2">
+                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                            <span><strong>Live mode enabled.</strong> Real customer payments will be processed.</span>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor="polar-token" className="flex items-center gap-1.5 text-sm">
+                                Access Token
+                                {polarConfigured.token && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                            </Label>
+                            <PasswordInput
+                                id="polar-token"
+                                value={polar.accessToken}
+                                onChange={(v) => setPolar((s) => ({ ...s, accessToken: v }))}
+                                placeholder="polar_pat_..."
+                                configured={polarConfigured.token}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                <a href="https://polar.sh/settings" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-primary hover:underline">
+                                    polar.sh/settings <ExternalLink className="h-2.5 w-2.5" />
+                                </a>
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="polar-webhook" className="flex items-center gap-1.5 text-sm">
+                                Webhook Secret
+                                {polarConfigured.webhook && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                            </Label>
+                            <PasswordInput
+                                id="polar-webhook"
+                                value={polar.webhookSecret}
+                                onChange={(v) => setPolar((s) => ({ ...s, webhookSecret: v }))}
+                                placeholder="polar_whs_..."
+                                configured={polarConfigured.webhook}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Add endpoint <code className="text-xs bg-muted px-1 rounded">/api/v1/webhooks/polar</code> in Polar webhook settings.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="polar-product" className="text-sm">Product ID</Label>
+                            <Input
+                                id="polar-product"
+                                type="text"
+                                value={polar.productId}
+                                onChange={(e) => setPolar((s) => ({ ...s, productId: e.target.value }))}
+                                placeholder="prod_..."
+                                className="font-mono"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Create a generic product on Polar and paste its ID here.
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+                <CardFooter className="bg-muted/10 border-t border-border py-3 flex justify-end">
+                    <Button onClick={savePolar} disabled={savingPolar} size="sm">
+                        {savingPolar ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
+                        Save Polar Configuration
+                    </Button>
+                </CardFooter>
+            </Card>
+
             {/* --- CASH ON DELIVERY --- */}
             <Card className="overflow-hidden border-green-500/20 dark:border-green-500/10">
                 <div className="flex items-center justify-between p-5 bg-green-50/50 dark:bg-green-950/10">
@@ -545,6 +724,97 @@ export default function PaymentGatewaysManager() {
                     </div>
                 </div>
             </Card>
+
+            {/* --- Polar Setup Instructions Dialog --- */}
+            <Dialog open={showPolarHelp} onOpenChange={setShowPolarHelp}>
+                <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Zap className="h-5 w-5 text-indigo-600" />
+                            Polar Setup Guide
+                        </DialogTitle>
+                        <DialogDescription>
+                            Follow these steps to integrate Polar with your store.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 text-sm">
+                        <div className="space-y-2">
+                            <h4 className="font-semibold flex items-center gap-2">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold dark:bg-indigo-900 dark:text-indigo-300">1</span>
+                                Create a Polar Account
+                            </h4>
+                            <p className="text-muted-foreground pl-7">
+                                Sign up at{" "}
+                                <a href="https://polar.sh" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5">
+                                    polar.sh <ExternalLink className="h-3 w-3" />
+                                </a>{" "}
+                                and create an organization for your store.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <h4 className="font-semibold flex items-center gap-2">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold dark:bg-indigo-900 dark:text-indigo-300">2</span>
+                                Generate an Access Token
+                            </h4>
+                            <p className="text-muted-foreground pl-7">
+                                Go to{" "}
+                                <a href="https://polar.sh/settings" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5">
+                                    Organization Settings <ExternalLink className="h-3 w-3" />
+                                </a>
+                                {" "}&rarr; <strong>Access Tokens</strong> &rarr; Create a new token with <code className="bg-muted px-1 rounded text-xs">checkouts:write</code> scope. Paste it in the <strong>Access Token</strong> field.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <h4 className="font-semibold flex items-center gap-2">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold dark:bg-indigo-900 dark:text-indigo-300">3</span>
+                                Create a Generic Product
+                            </h4>
+                            <p className="text-muted-foreground pl-7">
+                                In Polar Dashboard &rarr; <strong>Products</strong> &rarr; Create a product (e.g., &quot;Store Order&quot;). The name and price can be anything &mdash; our system uses <strong>ad-hoc pricing</strong> to send the real order total at checkout.
+                            </p>
+                            <p className="text-muted-foreground pl-7">
+                                Click the <strong>&hellip; menu</strong> &rarr; <strong>Copy Product ID</strong> and paste it in the <strong>Product ID</strong> field.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <h4 className="font-semibold flex items-center gap-2">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold dark:bg-indigo-900 dark:text-indigo-300">4</span>
+                                Configure Webhooks
+                            </h4>
+                            <p className="text-muted-foreground pl-7">
+                                In Polar Dashboard &rarr; <strong>Settings</strong> &rarr; <strong>Webhooks</strong> &rarr; Add endpoint:
+                            </p>
+                            <div className="pl-7">
+                                <code className="block bg-muted px-3 py-2 rounded text-xs break-all">
+                                    https://your-domain.com/api/v1/webhooks/polar
+                                </code>
+                            </div>
+                            <p className="text-muted-foreground pl-7">
+                                Select events: <code className="bg-muted px-1 rounded text-xs">checkout.updated</code> and <code className="bg-muted px-1 rounded text-xs">order.paid</code>. Copy the generated <strong>webhook secret</strong> and paste it in the <strong>Webhook Secret</strong> field.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <h4 className="font-semibold flex items-center gap-2">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold dark:bg-indigo-900 dark:text-indigo-300">5</span>
+                                Enable & Save
+                            </h4>
+                            <p className="text-muted-foreground pl-7">
+                                Toggle <strong>Enable gateway</strong> on, then click <strong>Save Polar Configuration</strong>. Customers will now see Polar as a payment option on checkout.
+                            </p>
+                        </div>
+
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 mt-2">
+                            <p className="text-amber-800 dark:text-amber-200 text-xs">
+                                <strong>💡 Tip:</strong> Start with <strong>Sandbox Mode</strong> enabled to test payments without charging real customers. Switch to live mode once everything works.
+                            </p>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
         </div>
     );

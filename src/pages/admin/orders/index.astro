@@ -6,7 +6,7 @@ import { getOrders } from "@/lib/admin";
 import type { OrderListItem } from "@/lib/admin";
 import { db } from "@/db";
 import { deliveryLocations } from "@/db/schema";
-import { and, isNull, sql, inArray } from "drizzle-orm";
+import { and, isNull, inArray } from "drizzle-orm";
 
 const searchParams = Astro.url.searchParams;
 const page = parseInt(searchParams.get("page") || "1");

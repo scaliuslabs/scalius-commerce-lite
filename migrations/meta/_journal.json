@@ -127,6 +127,13 @@
       "when": 1772434425796,
       "tag": "0017_faithful_mac_gargan",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1772501344803,
+      "tag": "0018_add-polar-checkout-id",
+      "breakpoints": true
     }
   ]
 }

@@ -241,6 +241,7 @@ export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 export const PaymentMethod = {
   STRIPE: "stripe",
   SSLCOMMERZ: "sslcommerz",
+  POLAR: "polar",
   COD: "cod",
 } as const;
 
@@ -608,6 +609,8 @@ export const orderPayments = sqliteTable("order_payments", {
   sslcommerzTranId: text("sslcommerz_tran_id"),
   sslcommerzValId: text("sslcommerz_val_id"),
   sslcommerzBankTranId: text("sslcommerz_bank_tran_id"),
+  // Polar-specific fields
+  polarCheckoutId: text("polar_checkout_id"),
   // COD-specific fields
   codCollectedBy: text("cod_collected_by"),
   codCollectedAt: integer("cod_collected_at", { mode: "timestamp" }),
@@ -624,6 +627,7 @@ export const orderPayments = sqliteTable("order_payments", {
   index("order_payments_order_id_idx").on(table.orderId),
   index("order_payments_stripe_pi_idx").on(table.stripePaymentIntentId),
   index("order_payments_ssl_tran_idx").on(table.sslcommerzTranId),
+  index("order_payments_polar_checkout_idx").on(table.polarCheckoutId),
 ]);
 
 // Payment plan for deposit + balance orders

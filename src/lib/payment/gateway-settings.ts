@@ -28,6 +28,14 @@ export interface SSLCommerzSettings {
   enabled: boolean;
 }
 
+export interface PolarSettings {
+  accessToken: string;
+  webhookSecret: string;
+  productId: string;
+  sandbox: boolean;
+  enabled: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Generic helper: bulk-read all keys for a category
 // ---------------------------------------------------------------------------
@@ -128,6 +136,47 @@ export async function invalidateSSLCommerzCache(kv?: KVNamespace): Promise<void>
 }
 
 // ---------------------------------------------------------------------------
+// Polar
+// ---------------------------------------------------------------------------
+
+const POLAR_CATEGORY = "polar";
+const POLAR_CACHE_KEY = "gw:polar";
+
+export async function getPolarSettings(
+  db: Database,
+  kv?: KVNamespace
+): Promise<PolarSettings | null> {
+  if (kv) {
+    const cached = await kv.get<PolarSettings>(POLAR_CACHE_KEY, "json");
+    if (cached) return cached;
+  }
+
+  const values = await readCategory(db, POLAR_CATEGORY);
+  if (!values.access_token || !values.product_id) return null;
+
+  const polarSettings: PolarSettings = {
+    accessToken: values.access_token,
+    webhookSecret: values.webhook_secret ?? "",
+    productId: values.product_id,
+    sandbox: values.sandbox !== "false",
+    enabled: values.enabled !== "false",
+  };
+
+  if (kv) {
+    await kv.put(POLAR_CACHE_KEY, JSON.stringify(polarSettings), {
+      expirationTtl: CACHE_TTL,
+    });
+  }
+
+  return polarSettings;
+}
+
+/** Invalidate the Polar settings KV cache. */
+export async function invalidatePolarCache(kv?: KVNamespace): Promise<void> {
+  await kv?.delete(POLAR_CACHE_KEY);
+}
+
+// ---------------------------------------------------------------------------
 // Upsert helpers (used by admin API routes)
 // ---------------------------------------------------------------------------
 
@@ -161,9 +210,9 @@ const PAYMENT_METHODS_CACHE_KEY = "gw:payment_methods";
 
 export interface PaymentMethodsConfig {
   /** Which payment methods are enabled for the storefront */
-  enabledMethods: ("stripe" | "sslcommerz" | "cod")[];
+  enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
   /** Default payment method shown first on checkout */
-  defaultMethod: "stripe" | "sslcommerz" | "cod";
+  defaultMethod: "stripe" | "sslcommerz" | "polar" | "cod";
 }
 
 /**
@@ -187,7 +236,7 @@ export async function getActivePaymentMethods(
   const values = await readCategory(db, PAYMENT_METHODS_CATEGORY);
 
   // Parse enabled methods (default: COD only)
-  let enabledMethods: ("stripe" | "sslcommerz" | "cod")[];
+  let enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
   try {
     enabledMethods = values.enabled_methods
       ? JSON.parse(values.enabled_methods)
@@ -199,7 +248,7 @@ export async function getActivePaymentMethods(
   const defaultMethod = (values.default_method as PaymentMethodsConfig["defaultMethod"]) ?? "cod";
 
   // Cross-check: only include methods with valid credentials
-  const validMethods: ("stripe" | "sslcommerz" | "cod")[] = [];
+  const validMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[] = [];
 
   for (const method of enabledMethods) {
     if (method === "cod") {
@@ -216,6 +265,12 @@ export async function getActivePaymentMethods(
       const ssl = await getSSLCommerzSettings(db);
       if (ssl && ssl.enabled) {
         validMethods.push("sslcommerz");
+      }
+    }
+    if (method === "polar") {
+      const polar = await getPolarSettings(db);
+      if (polar && polar.enabled) {
+        validMethods.push("polar");
       }
     }
   }
