@@ -35,7 +35,7 @@ export default function SSLCommerzSettingsForm() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("/api/settings/sslcommerz");
+      const res = await fetch("/api/v1/admin/settings/sslcommerz");
       if (res.ok) {
         const data = await res.json();
         setStoreId(data.storeId || "");
@@ -56,7 +56,7 @@ export default function SSLCommerzSettingsForm() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/settings/sslcommerz", {
+      const res = await fetch("/api/v1/admin/settings/sslcommerz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storeId, storePassword, sandbox, enabled }),

@@ -36,7 +36,7 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
 
 
   useEffect(() => {
-    fetch("/api/settings/openrouter")
+    fetch("/api/v1/admin/settings/openrouter")
       .then(res => res.json())
       .then(data => {
         if (data.apiKey) {

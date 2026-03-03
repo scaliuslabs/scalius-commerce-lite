@@ -34,7 +34,7 @@ const defaultValues = {
 // Define the submit handler function
 const handleSubmit = `async function(values) {
   try {
-    const response = await fetch("/api/products", {
+    const response = await fetch("/api/v1/products", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

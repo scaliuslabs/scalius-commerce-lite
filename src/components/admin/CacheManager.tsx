@@ -103,9 +103,9 @@ export function CacheManager() {
     try {
       setLoading(true);
       const [statsRes, timestampsRes, groupsRes] = await Promise.all([
-        fetch("/api/settings/cache/stats"),
-        fetch("/api/settings/cache/last-cleared"),
-        fetch("/api/settings/cache/groups"),
+        fetch("/api/v1/cache/stats"),
+        fetch("/api/v1/cache/last-cleared"),
+        fetch("/api/v1/cache/groups"),
       ]);
 
       if (statsRes.ok) {
@@ -137,7 +137,7 @@ export function CacheManager() {
   const clearGroup = async (groupName: string) => {
     try {
       setClearingGroup(groupName);
-      const response = await fetch(`/api/settings/cache/clear-${groupName}`, {
+      const response = await fetch(`/api/v1/cache/clear-${groupName}`, {
         method: "POST",
       });
 
@@ -159,7 +159,7 @@ export function CacheManager() {
   const clearAll = async () => {
     try {
       setClearingAll(true);
-      const response = await fetch("/api/settings/cache/clear", {
+      const response = await fetch("/api/v1/cache/clear", {
         method: "POST",
       });
 

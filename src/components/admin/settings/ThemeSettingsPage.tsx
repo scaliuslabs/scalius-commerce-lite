@@ -177,7 +177,7 @@ export default function ThemeSettingsPage() {
     const fetchColors = useCallback(async () => {
         try {
             setLoading(true);
-            const res = await fetch("/api/settings/theme");
+            const res = await fetch("/api/v1/admin/settings/theme");
             if (!res.ok) throw new Error("Failed to load");
             const data = await res.json();
             setColors(data.colors || {});
@@ -224,7 +224,7 @@ export default function ThemeSettingsPage() {
             for (const [k, v] of Object.entries(colors)) {
                 if (v && v.trim()) cleaned[k] = v.trim();
             }
-            const res = await fetch("/api/settings/theme", {
+            const res = await fetch("/api/v1/admin/settings/theme", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ colors: cleaned }),

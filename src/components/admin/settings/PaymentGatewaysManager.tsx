@@ -204,10 +204,10 @@ export default function PaymentGatewaysManager() {
         setLoading(true);
         try {
             const [methodsRes, stripeRes, sslRes, polarRes] = await Promise.all([
-                fetch("/api/settings/payment-methods"),
-                fetch("/api/settings/stripe"),
-                fetch("/api/settings/sslcommerz"),
-                fetch("/api/settings/polar"),
+                fetch("/api/v1/admin/settings/payment-methods"),
+                fetch("/api/v1/admin/settings/stripe"),
+                fetch("/api/v1/admin/settings/sslcommerz"),
+                fetch("/api/v1/admin/settings/polar"),
             ]);
 
             if (methodsRes.ok) {
@@ -267,7 +267,7 @@ export default function PaymentGatewaysManager() {
     const saveMethods = async (silent = false) => {
         setSavingMethods(true);
         try {
-            const res = await fetch("/api/settings/payment-methods", {
+            const res = await fetch("/api/v1/admin/settings/payment-methods", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ enabledMethods: Array.from(enabledMethods), defaultMethod }),
@@ -285,7 +285,7 @@ export default function PaymentGatewaysManager() {
     const saveStripe = async () => {
         setSavingStripe(true);
         try {
-            const res = await fetch("/api/settings/stripe", {
+            const res = await fetch("/api/v1/admin/settings/stripe", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(stripe),
@@ -305,7 +305,7 @@ export default function PaymentGatewaysManager() {
     const saveSsl = async () => {
         setSavingSsl(true);
         try {
-            const res = await fetch("/api/settings/sslcommerz", {
+            const res = await fetch("/api/v1/admin/settings/sslcommerz", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(ssl),
@@ -325,7 +325,7 @@ export default function PaymentGatewaysManager() {
     const savePolar = async () => {
         setSavingPolar(true);
         try {
-            const res = await fetch("/api/settings/polar", {
+            const res = await fetch("/api/v1/admin/settings/polar", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(polar),

@@ -25,7 +25,7 @@ export function CacheNukeButton() {
   const handleClearAll = async () => {
     try {
       setClearing(true);
-      const response = await fetch("/api/settings/cache/clear", {
+      const response = await fetch("/api/v1/cache/clear", {
         method: "POST",
       });
 

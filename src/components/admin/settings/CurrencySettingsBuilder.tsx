@@ -83,7 +83,7 @@ export default function CurrencySettingsBuilder() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("/api/settings/currency");
+      const res = await fetch("/api/v1/admin/settings/currency");
       if (res.ok) {
         const data = await res.json();
         setCurrencyCode(data.currencyCode || "BDT");
@@ -110,7 +110,7 @@ export default function CurrencySettingsBuilder() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/settings/currency", {
+      const res = await fetch("/api/v1/admin/settings/currency", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

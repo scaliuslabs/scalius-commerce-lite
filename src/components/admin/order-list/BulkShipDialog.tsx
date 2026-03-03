@@ -49,7 +49,7 @@ export function BulkShipDialog({
       const fetchProviders = async () => {
         setIsLoadingProviders(true);
         try {
-          const response = await fetch("/api/settings/delivery-providers");
+          const response = await fetch("/api/v1/admin/settings/delivery-providers");
           if (!response.ok) {
             throw new Error("Failed to fetch providers");
           }

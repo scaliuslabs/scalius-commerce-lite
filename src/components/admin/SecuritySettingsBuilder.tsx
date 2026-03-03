@@ -14,7 +14,7 @@ export function SecuritySettingsBuilder() {
     useEffect(() => {
         const fetchSecuritySettings = async () => {
             try {
-                const response = await fetch("/api/settings/security");
+                const response = await fetch("/api/v1/admin/settings/security");
                 if (response.ok) {
                     const data = await response.json();
                     setCspAllowedDomains(data.cspAllowedDomains || "");
@@ -33,7 +33,7 @@ export function SecuritySettingsBuilder() {
         setIsLoading(true);
 
         try {
-            const response = await fetch("/api/settings/security", {
+            const response = await fetch("/api/v1/admin/settings/security", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ cspAllowedDomains: cspAllowedDomains.trim() }),

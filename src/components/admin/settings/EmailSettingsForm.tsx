@@ -28,7 +28,7 @@ export default function EmailSettingsForm() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("/api/settings/email");
+      const res = await fetch("/api/v1/admin/settings/email");
       if (res.ok) {
         const data = await res.json();
         setApiKey(data.apiKey || "");
@@ -47,7 +47,7 @@ export default function EmailSettingsForm() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/settings/email", {
+      const res = await fetch("/api/v1/admin/settings/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey, sender }),

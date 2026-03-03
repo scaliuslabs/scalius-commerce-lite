@@ -76,7 +76,7 @@ export default function PaymentMethodSettings() {
 
     const fetchData = useCallback(async () => {
         try {
-            const res = await fetch("/api/settings/payment-methods");
+            const res = await fetch("/api/v1/admin/settings/payment-methods");
             if (res.ok) {
                 const json = await res.json() as PaymentMethodsData;
                 setData(json);
@@ -119,7 +119,7 @@ export default function PaymentMethodSettings() {
         setSaving(true);
         try {
             const methods = Array.from(enabledMethods);
-            const res = await fetch("/api/settings/payment-methods", {
+            const res = await fetch("/api/v1/admin/settings/payment-methods", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

@@ -101,7 +101,7 @@ export const WidgetList: React.FC<WidgetListProps> = ({
 
   useEffect(() => {
     if (isSettingsOpen) {
-      fetch("/api/settings/openrouter")
+      fetch("/api/v1/admin/settings/openrouter")
         .then(res => res.json())
         .then(data => setOpenRouterApiKey(data.apiKey || ""));
     }
@@ -110,7 +110,7 @@ export const WidgetList: React.FC<WidgetListProps> = ({
   const handleSaveApiKey = async () => {
     setIsSavingKey(true);
     try {
-      const response = await fetch("/api/settings/openrouter", {
+      const response = await fetch("/api/v1/admin/settings/openrouter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey: openRouterApiKey }),

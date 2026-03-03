@@ -55,7 +55,7 @@ export default function FirebaseSettingsForm() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("/api/settings/firebase");
+      const res = await fetch("/api/v1/admin/settings/firebase");
       if (res.ok) {
         const data = await res.json();
         if (data.serviceAccount && data.serviceAccount.includes("••••")) {
@@ -166,7 +166,7 @@ export default function FirebaseSettingsForm() {
         payload.serviceAccount = serviceAccountJson;
       }
 
-      const res = await fetch("/api/settings/firebase", {
+      const res = await fetch("/api/v1/admin/settings/firebase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

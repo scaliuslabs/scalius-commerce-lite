@@ -88,7 +88,7 @@ interface DeliveryProviderSettingsProps {
 // API helpers (replaces the old window.deliveryProviderActions inline script)
 async function apiSaveProvider(provider: any) {
   const method = provider.id ? "PUT" : "POST";
-  const response = await fetch("/api/settings/delivery-providers", {
+  const response = await fetch("/api/v1/admin/settings/delivery-providers", {
     method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(provider),
@@ -101,7 +101,7 @@ async function apiSaveProvider(provider: any) {
 }
 
 async function apiDeleteProvider(id: string) {
-  const response = await fetch(`/api/settings/delivery-providers/${id}`, {
+  const response = await fetch(`/api/v1/admin/settings/delivery-providers/${id}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -112,7 +112,7 @@ async function apiDeleteProvider(id: string) {
 }
 
 async function apiTestProvider(id: string) {
-  const response = await fetch(`/api/settings/delivery-providers/${id}`, {
+  const response = await fetch(`/api/v1/admin/settings/delivery-providers/${id}`, {
     method: "POST",
   });
   if (!response.ok) {
@@ -133,7 +133,7 @@ async function apiTestCredentials(
   config: any
 ) {
   const response = await fetch(
-    "/api/settings/delivery-providers/create-test",
+    "/api/v1/admin/settings/delivery-providers/create-test",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

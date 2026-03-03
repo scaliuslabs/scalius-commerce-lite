@@ -62,7 +62,7 @@ export const useAiContext = (
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch("/api/categories?limit=200");
+        const response = await fetch("/api/v1/admin/categories?limit=200");
         if (response.ok) {
           const data = await response.json();
           setAllCategoriesList(data.categories || []);

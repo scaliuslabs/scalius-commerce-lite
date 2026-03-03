@@ -68,7 +68,7 @@ export function LocationSelector() {
       try {
         // Load cities
         const response = await fetch(
-          "/api/settings/delivery-locations?type=city",
+          "/api/v1/admin/settings/delivery-locations?type=city",
         );
         if (!response.ok) throw new Error("Failed to load cities");
         const result = await response.json();
@@ -79,7 +79,7 @@ export function LocationSelector() {
           setLoadingZones(true);
           try {
             const zoneResponse = await fetch(
-              `/api/settings/delivery-locations?type=zone&parentId=${initialCity}`,
+              `/api/v1/admin/settings/delivery-locations?type=zone&parentId=${initialCity}`,
             );
             if (!zoneResponse.ok) throw new Error("Failed to load zones");
             const zoneResult = await zoneResponse.json();
@@ -90,7 +90,7 @@ export function LocationSelector() {
               setLoadingAreas(true);
               try {
                 const areaResponse = await fetch(
-                  `/api/settings/delivery-locations?type=area&parentId=${initialZone}`,
+                  `/api/v1/admin/settings/delivery-locations?type=area&parentId=${initialZone}`,
                 );
                 if (!areaResponse.ok) throw new Error("Failed to load areas");
                 const areaResult = await areaResponse.json();
@@ -214,7 +214,7 @@ export function LocationSelector() {
     try {
       setLoadingZones(true);
       const response = await fetch(
-        `/api/settings/delivery-locations?type=zone&parentId=${cityId}`,
+        `/api/v1/admin/settings/delivery-locations?type=zone&parentId=${cityId}`,
       );
 
       if (!response.ok) {
@@ -234,7 +234,7 @@ export function LocationSelector() {
     try {
       setLoadingAreas(true);
       const response = await fetch(
-        `/api/settings/delivery-locations?type=area&parentId=${zoneId}`,
+        `/api/v1/admin/settings/delivery-locations?type=area&parentId=${zoneId}`,
       );
 
       if (!response.ok) {

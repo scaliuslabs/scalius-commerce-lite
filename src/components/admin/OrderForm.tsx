@@ -99,7 +99,7 @@ export function OrderForm({
 
   const loadCities = async () => {
     try {
-      const res = await fetch("/api/settings/delivery-locations?type=city");
+      const res = await fetch("/api/v1/admin/settings/delivery-locations?type=city");
       if (!res.ok) throw new Error("Failed to load cities");
       const data = await res.json();
       setLocations((prev) => ({ ...prev, cities: data.data || [] }));
@@ -118,7 +118,7 @@ export function OrderForm({
     setIsLoading((prev) => ({ ...prev, zones: true }));
     try {
       const res = await fetch(
-        `/api/settings/delivery-locations?type=zone&parentId=${cityId}`,
+        `/api/v1/admin/settings/delivery-locations?type=zone&parentId=${cityId}`,
       );
       if (!res.ok) throw new Error("Failed to load zones");
       const data = await res.json();
@@ -140,7 +140,7 @@ export function OrderForm({
     setIsLoading((prev) => ({ ...prev, areas: true }));
     try {
       const res = await fetch(
-        `/api/settings/delivery-locations?type=area&parentId=${zoneId}`,
+        `/api/v1/admin/settings/delivery-locations?type=area&parentId=${zoneId}`,
       );
       if (!res.ok) throw new Error("Failed to load areas");
       const data = await res.json();

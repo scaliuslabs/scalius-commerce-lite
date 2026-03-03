@@ -19,7 +19,7 @@ export function StorefrontUrlBuilder({
   useEffect(() => {
     const fetchStorefrontUrl = async () => {
       try {
-        const response = await fetch("/api/settings/storefront-url");
+        const response = await fetch("/api/v1/admin/settings/storefront-url");
         if (response.ok) {
           const data = await response.json();
           setStorefrontUrl(data.storefrontUrl || "/");
@@ -36,7 +36,7 @@ export function StorefrontUrlBuilder({
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/settings/storefront-url", {
+      const response = await fetch("/api/v1/admin/settings/storefront-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storefrontUrl: storefrontUrl || "/" }),
