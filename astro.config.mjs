@@ -83,7 +83,16 @@ export default defineConfig({
         "lucide-react",
       ],
       // Enable Node.js compatibility for Cloudflare Workers
-      external: ["node:buffer", "node:crypto", "node:util", "node:stream"],
+      external: [
+        "node:buffer",
+        "node:crypto",
+        "node:util",
+        "node:stream",
+        "node:fs/promises",
+        "node:path",
+        "node:url",
+        "node:async_hooks"
+      ],
       resolve: {
         // Prioritize 'workerd' and 'node' conditions over 'browser'
         // This prevents Vite from picking up the browser-specific build of react-dom/server

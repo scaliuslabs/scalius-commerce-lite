@@ -27,6 +27,9 @@ const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
 
+// Suppress punycode deprecation warnings which corrupt Wrangler's STDOUT API payloads on Node >= 21
+process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --no-warnings=DEP0040";
+
 // ── Read wrangler.jsonc (strip // comments so JSON.parse works) ──────────────
 function readWranglerConfig() {
   const raw = readFileSync(resolve(root, "wrangler.jsonc"), "utf8");
@@ -68,7 +71,7 @@ function run(cmd, label) {
     console.log(`\n🗄  Applying D1 migrations → "${dbName}" (${target})\n`);
     try {
       run(
-        `npx wrangler d1 migrations apply ${dbName} --${target}`,
+        `pnpm exec wrangler d1 migrations apply ${dbName} --${target}`,
         `Apply migrations → ${dbName} (${target})`
       );
       console.log("\n✓ Migrations applied.");
@@ -89,12 +92,12 @@ function run(cmd, label) {
 
     // 2. Apply all pending D1 migrations (no-op if schema is up to date)
     run(
-      `npx wrangler d1 migrations apply ${dbName} --remote`,
+      `pnpm exec wrangler d1 migrations apply ${dbName} --remote`,
       `Apply D1 migrations → ${dbName}`
     );
 
     // 3. Deploy the Worker
-    run("npx wrangler deploy", "Deploy Worker to Cloudflare");
+    run("pnpm exec wrangler deploy", "Deploy Worker to Cloudflare");
 
     console.log("\n✓ Deploy complete.");
   } catch {

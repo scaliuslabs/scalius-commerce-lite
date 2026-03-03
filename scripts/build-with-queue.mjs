@@ -28,7 +28,7 @@ console.log("[build-with-queue] Bundling queue consumer...");
 try {
   execSync(
     [
-      "npx esbuild",
+      "pnpm exec esbuild",
       "src/queue-consumer.ts",
       "--bundle",
       "--platform=browser",
