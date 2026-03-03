@@ -114,7 +114,6 @@ const locationArray = Array.from(locationIds).filter(Boolean) as string[];
 const locationMap = new Map<string, string>();
 
 if (locationArray.length > 0) {
-  console.log("Location IDs to lookup:", locationArray);
 
   // Create a more robust SQL query with parameters for each ID
   const locations = await db
@@ -127,10 +126,6 @@ if (locationArray.length > 0) {
       )}) AND ${deliveryLocations.deletedAt} IS NULL`
     );
 
-  console.log(
-    "Locations found:",
-    locations.map((l) => ({ id: l.id, name: l.name }))
-  );
 
   // Create a map of ID to location name
   locations.forEach((location) => {
