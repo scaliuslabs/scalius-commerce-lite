@@ -2,7 +2,7 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle } from "lucide-react";
-import type { OrderListItem } from "../../lib/admin";
+import type { OrderListItem } from "@/modules/orders";
 import type { DateRange } from "react-day-picker";
 import { OrderListToolbar } from "./order-list/OrderListToolbar";
 import { OrderTable } from "./order-list/OrderTable";

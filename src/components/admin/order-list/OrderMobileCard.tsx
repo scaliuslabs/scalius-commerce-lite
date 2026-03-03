@@ -1,5 +1,5 @@
 import React from "react";
-import type { OrderListItem } from "../../../lib/admin";
+import type { OrderListItem } from "@/modules/orders";
 import { Card, CardContent } from "../../ui/card";
 import { Checkbox } from "../../ui/checkbox";
 import { Badge } from "../../ui/badge";

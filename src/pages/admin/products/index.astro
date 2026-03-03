@@ -2,7 +2,7 @@
 // src/pages/admin/products/index.astro
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { ProductList } from "../../../components/admin/ProductList";
-import { getProducts, getProductStats } from "../../../lib/admin";
+import { getProducts, getProductStats } from "@/modules/products";
 import { db } from "../../../db";
 import { categories as categoriesTable } from "../../../db/schema";
 import { sql } from "drizzle-orm";

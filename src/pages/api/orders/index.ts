@@ -16,7 +16,7 @@ import {
   calculateCustomerStats,
 } from "@/shared/customer-utils";
 import { nanoid } from "nanoid";
-import { getOrders } from "../../../lib/admin";
+import { getOrders } from "@/modules/orders";
 
 const createOrderSchema = z.object({
   customerName: z

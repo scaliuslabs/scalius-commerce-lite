@@ -1,5 +1,5 @@
 import React from "react";
-import type { OrderListItem } from "../../../lib/admin";
+import type { OrderListItem } from "@/modules/orders";
 import { TableCell, TableRow } from "../../ui/table";
 import { Checkbox } from "../../ui/checkbox";
 import {

@@ -5,11 +5,7 @@ import { DashboardStats } from "../../components/admin/DashboardStats";
 import { RecentOrders } from "../../components/admin/RecentOrders";
 import { QuickActions } from "../../components/admin/QuickActions";
 import { WelcomeBanner } from "../../components/admin/WelcomeBanner";
-import {
-  getDashboardStats,
-  getRecentOrders,
-  getDailyActivityData,
-} from "../../lib/admin";
+import { getDashboardStats, getRecentOrders, getDailyActivityData } from "@/modules/analytics";
 
 // Parallel fetch for faster dashboard load (vs sequential)
 const [stats, recentOrders, dailyActivityData] = await Promise.all([
