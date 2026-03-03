@@ -106,7 +106,7 @@ export function AddNavItemDialog({
       setIsLoading(true);
       try {
         const [navRes, attrRes] = await Promise.all([
-          fetch("/api/navigation/items"),
+          fetch("/api/v1/admin/navigation/items"),
           fetch("/api/admin/attributes?limit=100"),
         ]);
 
@@ -412,7 +412,7 @@ export function AddNavItemDialog({
                           >
                             <Checkbox
                               checked={selectedCategories.has(cat.id)}
-                              onCheckedChange={() => {}}
+                              onCheckedChange={() => { }}
                             />
                             <div className="flex-1">
                               <div className="font-medium">{cat.name}</div>
@@ -485,7 +485,7 @@ export function AddNavItemDialog({
                           >
                             <Checkbox
                               checked={selectedPages.has(page.id)}
-                              onCheckedChange={() => {}}
+                              onCheckedChange={() => { }}
                             />
                             <div className="flex-1">
                               <div className="font-medium">{page.name}</div>
@@ -589,12 +589,12 @@ export function AddNavItemDialog({
                                       prev.map((f) =>
                                         f.id === filter.id
                                           ? {
-                                              ...f,
-                                              attributeId: val,
-                                              attributeName: attr?.name || "",
-                                              attributeSlug: attr?.slug || "",
-                                              value: "",
-                                            }
+                                            ...f,
+                                            attributeId: val,
+                                            attributeName: attr?.name || "",
+                                            attributeSlug: attr?.slug || "",
+                                            value: "",
+                                          }
                                           : f,
                                       ),
                                     );
@@ -765,7 +765,7 @@ export function AddNavItemDialog({
             <Plus className="h-4 w-4 mr-2" />
             Add Item
             {(activeType === "category" && selectedCategories.size > 1) ||
-            (activeType === "page" && selectedPages.size > 1)
+              (activeType === "page" && selectedPages.size > 1)
               ? "s"
               : ""}
           </Button>
