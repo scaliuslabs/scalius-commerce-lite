@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
-import { createLocation } from "@/lib/delivery-locations";
+import { createLocation } from "@/modules/delivery/locations";
+
 import { z } from "zod";
 import { db } from "@/db";
 import { deliveryLocations } from "@/db/schema";

@@ -1,5 +1,6 @@
 import { type FC, useState } from "react";
-import type { FraudCheckerProvider } from "@/lib/fraud-checker/service";
+import type { FraudCheckerProvider } from "@/modules/fraud-checker/service";
+
 import { toast } from "sonner";
 
 interface FraudCheckerSettingsProps {
@@ -185,18 +186,16 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
               {providers.map((provider) => (
                 <li
                   key={provider.id}
-                  className={`p-2 rounded cursor-pointer ${
-                    selectedProvider?.id === provider.id
+                  className={`p-2 rounded cursor-pointer ${selectedProvider?.id === provider.id
                       ? "bg-background border border-gray-300"
                       : "hover:bg-background border border-transparent"
-                  }`}
+                    }`}
                   onClick={() => handleSelect(provider)}
                 >
                   <div className="flex items-center space-x-2">
                     <span
-                      className={`w-2 h-2 rounded-full ${
-                        provider.isActive ? "bg-green-500" : "bg-gray-300"
-                      }`}
+                      className={`w-2 h-2 rounded-full ${provider.isActive ? "bg-green-500" : "bg-gray-300"
+                        }`}
                     ></span>
                     <span className="font-medium">{provider.name}</span>
                   </div>

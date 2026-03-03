@@ -12,6 +12,7 @@
 
 import { getDb } from "@/db";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@/modules/payments/process-payment";
+import { sendOrderNotificationEmail } from "@/modules/notifications/notifications.service";
 import { sendEmail } from "@/integrations/email";
 import { nanoid } from "nanoid";
 import { sql, eq } from "drizzle-orm";
@@ -544,42 +545,5 @@ async function processQueueMessage(
   }
 }
 
-// ── Email notification helper ──────────────────────────────────────────────
 
-async function sendOrderNotificationEmail(
-  email: string,
-  name: string,
-  orderId: string,
-  type: "order_created" | "order_confirmed" | "order_shipped" | "order_delivered",
-  data?: Record<string, unknown>,
-): Promise<void> {
-  const subjects: Record<string, string> = {
-    order_created: `Order #${orderId} Received`,
-    order_confirmed: `Order #${orderId} Confirmed`,
-    order_shipped: `Order #${orderId} Shipped`,
-    order_delivered: `Order #${orderId} Delivered`,
-  };
-
-  const messages: Record<string, string> = {
-    order_created: `Thank you for your order, ${name}! We've received your order <strong>#${orderId}</strong> and will process it shortly.`,
-    order_confirmed: `Great news, ${name}! Your order <strong>#${orderId}</strong> has been confirmed and is being prepared.`,
-    order_shipped: `Your order <strong>#${orderId}</strong> is on its way, ${name}! ${data?.trackingId ? `Tracking ID: <strong>${data.trackingId}</strong>` : ""}`,
-    order_delivered: `Your order <strong>#${orderId}</strong> has been delivered, ${name}! We hope you love your purchase.`,
-  };
-
-  await sendEmail({
-    to: email,
-    subject: subjects[type] || `Order #${orderId} Update`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>${subjects[type] || "Order Update"}</h2>
-        <p>${messages[type] || `Your order #${orderId} has been updated.`}</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #999; font-size: 12px;">
-          This is an automated email regarding your order from our store.
-        </p>
-      </div>
-    `,
-    text: `${name}, ${messages[type]?.replace(/<[^>]+>/g, "") || `Order #${orderId} updated.`}`,
-  });
-}
+// (sendOrderNotificationEmail is now in src/modules/notifications/notifications.service.ts)
