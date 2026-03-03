@@ -113,7 +113,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/admin/settings/checkout-languages": ["checkout"],
   "/api/admin/settings/meta-conversions": ["layout"],
   "/api/admin/attributes": ["attributes", "products", "categories"],
-  "/api/discounts": ["products"],
+  "/api/v1/admin/discounts": ["products"],
 };
 
 // ---------------------------------------------------------------------------

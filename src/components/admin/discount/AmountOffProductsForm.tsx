@@ -181,8 +181,8 @@ export function AmountOffProductsForm({
     try {
       const method = discountId ? "PUT" : "POST";
       const url = discountId
-        ? `/api/discounts/${discountId}`
-        : "/api/discounts";
+        ? `/api/v1/admin/discounts/${discountId}`
+        : "/api/v1/admin/discounts";
 
       const { appliesTo, ...restOfValues } = ensuredValues;
       const payload = {
@@ -204,7 +204,7 @@ export function AmountOffProductsForm({
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
           errorData?.error ||
-            `Failed to ${discountId ? "update" : "create"} discount`,
+          `Failed to ${discountId ? "update" : "create"} discount`,
         );
       }
 
@@ -676,7 +676,7 @@ export function AmountOffProductsForm({
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {field.value &&
-                            !isNaN(new Date(field.value).getTime()) ? (
+                              !isNaN(new Date(field.value).getTime()) ? (
                               format(new Date(field.value), "PPP") // Format: Sep 15, 2023
                             ) : (
                               <span>Pick a date</span>
@@ -689,7 +689,7 @@ export function AmountOffProductsForm({
                           mode="single"
                           selected={
                             field.value instanceof Date &&
-                            !isNaN(field.value.getTime())
+                              !isNaN(field.value.getTime())
                               ? field.value
                               : undefined
                           }
@@ -726,7 +726,7 @@ export function AmountOffProductsForm({
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
                               {field.value &&
-                              !isNaN(new Date(field.value).getTime()) ? (
+                                !isNaN(new Date(field.value).getTime()) ? (
                                 format(new Date(field.value), "PPP")
                               ) : (
                                 <span>No end date</span>
@@ -739,7 +739,7 @@ export function AmountOffProductsForm({
                             mode="single"
                             selected={
                               field.value instanceof Date &&
-                              !isNaN(field.value.getTime())
+                                !isNaN(field.value.getTime())
                                 ? field.value
                                 : undefined
                             }
@@ -752,28 +752,28 @@ export function AmountOffProductsForm({
                                 : false;
                             }}
                           />
-                        {/* Add a clear button */}
-                        {field.value && (
-                          <div className="p-2 border-t border-border">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="w-full justify-center"
-                              onClick={() => field.onChange(null)}
-                            >
-                              Clear end date
-                            </Button>
-                          </div>
-                        )}
-                      </PopoverContent>
-                    </Popover>
-                    <FormDescription>
-                      Optional. Discount expires at 11:59 PM on this day.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                );
+                          {/* Add a clear button */}
+                          {field.value && (
+                            <div className="p-2 border-t border-border">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="w-full justify-center"
+                                onClick={() => field.onChange(null)}
+                              >
+                                Clear end date
+                              </Button>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                      <FormDescription>
+                        Optional. Discount expires at 11:59 PM on this day.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  );
                 }}
               />
             </div>
