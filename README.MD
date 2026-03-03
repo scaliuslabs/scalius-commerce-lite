@@ -56,7 +56,7 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 - **Admin dashboard (UI)**: `src/pages/admin/**` (Astro pages) + `src/components/admin/**` (React components).
 - **Admin CRUD APIs (Astro API routes)**: `src/pages/api/**` (file-based endpoints, protected by Better Auth via `src/middleware.ts`).
 - **Storefront API (Hono)**: `src/server/**` (Hono app + routes), mounted at `/api/v1/**` via the custom Astro integration in `src/integrations/hono-integration.ts`.
-- **Database (Drizzle + D1)**: schema in `src/db/schema.ts`, connection in `src/db/index.ts`, migrations in `migrations/**`.
+- **Database (Drizzle + D1)**: schema split across 11 domain files in `src/db/schema/` (barrel: `src/db/schema/index.ts`), connection in `src/db/index.ts`, migrations in `migrations/**`.
 
 ### Key URLs
 
@@ -164,15 +164,15 @@ flowchart TB
 ### Project structure (high level)
 
 ```text
-src/                     # App code (Astro UI + APIs + Hono)
+src/
   pages/
     admin/               # Admin dashboard pages (Astro)
     api/                 # Admin CRUD endpoints (Astro API routes)
-    auth/                # Authentication pages (login, setup, 2FA)
-    health.ts            # App health endpoint
+    auth/                # Auth pages (login, setup, 2FA)
+    health.ts
   components/
     admin/               # Admin React components
-    auth/                # Authentication React components
+    auth/                # Auth React components
     ui/                  # shadcn/ui components
   server/
     index.ts             # Hono app (storefront API)
@@ -180,13 +180,55 @@ src/                     # App code (Astro UI + APIs + Hono)
     routes/              # Hono route modules
     middleware/          # Hono middleware (auth + caching)
     openapi/             # OpenAPI spec builder
-    utils/               # KV cache / JWT / etc
-  lib/
+    utils/               # KV cache / JWT helpers
+  modules/               # Domain business logic (DDD)
+    ai/                  # AI config, prompt helpers, context schema
+    analytics/           # Dashboard stats service
+    delivery/            # Delivery service, factory, providers, tracking
+    inventory/           # Stock reserve/deduct/release/alerts
+    marketing/           # Discounts service
+    orders/              # Orders service
+    payments/            # Stripe, SSLCommerz, Polar, COD, refunds
+    products/            # Products service
+  integrations/          # Third-party service integrations
+    firebase/            # Firebase Admin + client
+    meta/                # Meta Conversions API
+    analytics.ts         # Analytics tracking
+    email.ts             # Resend email
+    storage.ts           # Cloudflare R2 uploads
+  shared/                # Pure utility functions (no DB, no side effects)
+    utils.ts             # cn(), date helpers, etc.
+    currency.ts          # Currency formatting
+    cors-helper.ts       # CORS origin helpers
+    rate-limit.ts        # Rate limiting
+    error-utils.ts       # Error formatting
+    storefront-url.ts    # URL builders
+    image-optimizer.ts   # Cloudflare Image Resizing
+    # … and more (tag-parser, json-repair, html-section-parser, etc.)
+  lib/                   # Auth + RBAC + search (remain here by design)
     auth.ts              # Better Auth configuration
     auth-client.ts       # Better Auth client for React
-    email.ts             # Resend email integration (key fetched from DB)
+    rbac/                # RBAC helpers, permissions, page guards
+    search/              # FTS5 query helpers
+    middleware-helper/   # CSP + Hono cache invalidator
+    fraud-checker/       # Fraud detection service
+    notification-utils.ts
+    delivery-locations.ts
+    adminBreadCrumb.ts
   db/
-    schema.ts            # Drizzle schema (SQLite/D1)
+    schema/              # Drizzle schema split by domain (11 files)
+      index.ts           # Barrel — re-exports all 11 domain files
+      enums.ts           # Shared const enums
+      auth.ts            # user, session, account, verification, twoFactor
+      rbac.ts            # permissions, roles, userRoles
+      products.ts        # products, variants, images, categories…
+      customers.ts
+      orders.ts          # orders, orderItems, payments, codTracking…
+      inventory.ts       # movements, lowStockAlerts
+      delivery.ts        # deliveryProviders, deliveryShipments
+      marketing.ts       # discounts, discountUsage, metaConversions
+      content.ts         # pages, widgets, heroSliders
+      system.ts          # settings, siteSettings, shippingMethods…
     index.ts             # getDb() (Cloudflare D1)
 migrations/              # Drizzle migration SQL + snapshots
 scripts/                 # Build and deployment scripts
@@ -343,7 +385,7 @@ This runs your built output in a local `workerd` environment via `wrangler dev`.
 ### Database & migrations (Drizzle + Cloudflare D1)
 
 - Drizzle config: `drizzle.config.ts`
-- Schema: `src/db/schema.ts`
+- Schema: `src/db/schema/` (11 domain files, barrel at `src/db/schema/index.ts`)
 - Migrations: `migrations/**`
 
 Recommended workflow:
@@ -363,7 +405,7 @@ All text search (admin dashboard, storefront API, command palette) uses **SQLite
 - **FTS5 tables**: `products_fts`, `product_variants_fts`, `categories_fts`, `pages_fts`, `orders_fts`, `customers_fts`, `discounts_fts`, `abandoned_checkouts_fts`
 - **External content**: Each FTS5 table is linked to its source table via `content=` / `content_rowid='rowid'`, so no data is duplicated — only the search index is stored.
 - **Auto-sync**: INSERT/UPDATE/DELETE triggers keep FTS5 indexes in sync automatically.
-- **Query features**: Prefix matching (typing "shi" matches "shirt"), multi-word AND queries ("blue shirt" requires both words), all via the shared helper in `src/lib/search/fts5.ts`.
+- **Query features**: Prefix matching (typing "shi" matches "shirt"), multi-word AND queries ("blue shirt" requires both words), all via the shared helper in `src/lib/search/fts5.ts`. (FTS5 helpers remain in `src/lib/search/` — they are framework-level infrastructure, not domain logic.)
 - **Migration**: `migrations/0016_fts5_search.sql`
 
 ### Authentication
@@ -405,7 +447,7 @@ This project uses [Better Auth](https://better-auth.com) for authentication with
 
 - Source: `src/server/**`
 - Docs: `/api/v1/docs` and `/api/v1/openapi.json`
-- CORS: configured in `src/server/index.ts` using `src/lib/cors-helper.ts`
+- CORS: configured in `src/server/index.ts` using `src/shared/cors-helper.ts`
 - Caching: many GET routes use `cacheMiddleware` (`src/server/middleware/cache.ts`)
 - Public vs protected:
   - **Public (no JWT)**: most read-only storefront data (products, categories, collections, pages, layout data, etc.)
@@ -443,7 +485,7 @@ curl -sS \
 There are two complementary mechanisms:
 
 - **Hono-side invalidation for Hono writes**: `src/server/astro-handler.ts` can invalidate related cache keys after successful `/api/v1` write requests.
-- **Admin-side invalidation for Astro admin writes**: `src/lib/middleware-helper/hono-cache-invalidator.ts` watches successful writes to admin endpoints like `/api/products`, `/api/categories`, `/api/collections`, etc. and triggers:
+- **Admin-side invalidation for Astro admin writes**: `src/lib/middleware-helper/hono-cache-invalidator.ts` (remains in `src/lib/` — it is middleware infrastructure) watches successful writes to admin endpoints like `/api/products`, `/api/categories`, `/api/collections`, etc. and triggers:
   - backend KV cache invalidation
   - optional external storefront purge (if `PURGE_URL` + `PURGE_TOKEN` are set)
 
@@ -452,7 +494,7 @@ In Cloudflare Workers, invalidations are scheduled via `ctx.waitUntil()` when av
 ### Media uploads (R2)
 
 - Upload endpoint: `POST /api/media/upload` (multipart form field `files`)
-- Storage implementation: `src/lib/storage.ts` (native R2 bucket binding)
+- Storage implementation: `src/integrations/storage.ts` (native R2 bucket binding)
 - The R2 bucket binding (`BUCKET`) is declared in `wrangler.jsonc`
 
 If `R2_PUBLIC_URL` is not set, uploaded file URLs will be incomplete. Set this to the public base URL of your R2 bucket.
@@ -472,6 +514,7 @@ To set up notifications:
 Implementation details:
 - Client initializes FCM inside `src/layouts/AdminLayout.astro` and posts tokens to `POST /api/admin/fcm-token`
 - Server sends order notifications in the background from Hono order creation via `src/lib/notification-utils.ts`
+- Firebase admin/client SDK: `src/integrations/firebase/`
 
 ### AI generation (OpenRouter)
 
