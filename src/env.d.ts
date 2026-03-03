@@ -235,6 +235,8 @@ interface Env {
   // Cloudflare Queue bindings
   PAYMENT_EVENTS_QUEUE: Queue<any>;
   ORDER_NOTIFICATIONS_QUEUE: Queue<any>;
+  AUTH_OTP_QUEUE: Queue<any>;
+  ORDER_INGEST_QUEUE: Queue<any>;
 
   // Secrets (set via `wrangler secret put`)
   BETTER_AUTH_SECRET: string;

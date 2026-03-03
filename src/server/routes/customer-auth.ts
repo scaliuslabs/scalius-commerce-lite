@@ -13,7 +13,7 @@
 
 import { Hono } from "hono";
 import { nanoid } from "nanoid";
-import { sendEmail } from "@/lib/email";
+// import { sendEmail } from "@/lib/email"; - Removed, now handled by queue consumer
 import { customers, siteSettings } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 
@@ -178,98 +178,35 @@ app.post("/send-otp", async (c) => {
 
     await kv.put(otpKey, JSON.stringify(storedOtp), { expirationTtl: OTP_TTL_SECONDS });
 
-    switch (method) {
-      case "email":
-        // Send OTP email
-        await sendEmail({
-          to: identifier,
-          subject: "Your login code",
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-              <h2 style="font-size: 20px; margin-bottom: 8px;">Your login code</h2>
-              <p style="color: #555; margin-bottom: 24px;">Hi ${name}, enter this code to sign in:</p>
-              <div style="background: #f5f5f5; border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 24px;">
-                <span style="font-size: 40px; font-weight: 700; letter-spacing: 10px; font-family: monospace; color: #111;">${code}</span>
-              </div>
-              <p style="color: #888; font-size: 13px;">This code expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
-            </div>
-          `,
-          text: `Your login code is: ${code}\n\nExpires in 5 minutes.`,
-        });
-        return c.json({ success: true, message: "Verification code sent to your email" });
-
-      case "phone":
-        switch (allowedMethod) {
-          case "whatsapp_otp": {
-            const waToken = settings?.whatsappAccessToken;
-            const waPhoneId = settings?.whatsappPhoneNumberId;
-            const waTemplate = settings?.whatsappTemplateName || "auth_otp";
-
-            if (!waToken || !waPhoneId) {
-              console.error("[CustomerAuth] WhatsApp API keys missing in DB settings.");
-              return c.json({ error: "WhatsApp verification is currently unavailable. Contact store support." }, 500);
-            }
-
-            const waRes = await fetch(`https://graph.facebook.com/v19.0/${waPhoneId}/messages`, {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${waToken}`,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                messaging_product: "whatsapp",
-                to: identifier.replace("+", ""), // FB API expects number without '+'
-                type: "template",
-                template: {
-                  name: waTemplate,
-                  language: { code: "en_US" },
-                  components: [
-                    {
-                      type: "body",
-                      parameters: [
-                        { type: "text", text: code }
-                      ]
-                    },
-                    {
-                      type: "button",
-                      sub_type: "url",
-                      index: "0",
-                      parameters: [
-                        { type: "text", text: code }
-                      ]
-                    }
-                  ]
-                }
-              })
-            });
-
-            if (!waRes.ok) {
-              const err = await waRes.text();
-              console.error("[CustomerAuth] WhatsApp API failed:", err);
-              return c.json({ error: "Failed to deliver WhatsApp verification code." }, 500);
-            }
-
-            return c.json({ success: true, message: "Verification code sent via WhatsApp" });
-          }
-
-          case "sms_otp":
-          default: {
-            console.log(`[CustomerAuth] SMS OTP requested: ${code} to ${identifier}. SMS Provider integration pending.`);
-            // TODO: In the future, read SMS provider choice from settings and switch here:
-            // const smsProvider = settings?.smsProvider || "twilio";
-            // switch (smsProvider) { 
-            //   case "twilio": // implement Twilio
-            //   case "sns":    // implement AWS SNS
-            //   case "msg91":  // implement MSG91
-            //   case "local":  // implement Local Bulk SMS
-            // }
-            return c.json({ success: true, message: "Verification code sent via SMS" });
-          }
-        }
-
-      default:
-        return c.json({ error: "Invalid method" }, 400);
+    if (method === "phone" && allowedMethod === "whatsapp_otp") {
+      const waToken = settings?.whatsappAccessToken;
+      const waPhoneId = settings?.whatsappPhoneNumberId;
+      if (!waToken || !waPhoneId) {
+        console.error("[CustomerAuth] WhatsApp API keys missing in DB settings.");
+        return c.json({ error: "WhatsApp verification is currently unavailable. Contact store support." }, 500);
+      }
     }
+
+    // Push payload to Cloudflare Queue for async delivery (prevents 504 timeouts on flash sales)
+    await c.env.AUTH_OTP_QUEUE.send({
+      type: "auth.send_otp",
+      method,
+      allowedMethod,
+      identifier,
+      code,
+      name,
+      waToken: settings?.whatsappAccessToken,
+      waPhoneId: settings?.whatsappPhoneNumberId,
+      waTemplate: settings?.whatsappTemplateName || "auth_otp",
+    });
+
+    const successMessage = method === "email"
+      ? "Verification code sent to your email"
+      : allowedMethod === "whatsapp_otp"
+        ? "Verification code sent via WhatsApp"
+        : "Verification code sent via SMS";
+
+    return c.json({ success: true, message: successMessage });
 
   } catch (error) {
     console.error("[CustomerAuth] send-otp error:", error);
