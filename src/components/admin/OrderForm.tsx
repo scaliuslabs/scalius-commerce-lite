@@ -6,7 +6,7 @@ import type { SubmitHandler } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { toast } from "sonner";
 import { OrderStatus } from "../../db/schema";
-import { generateOrderId } from "@/lib/order-utils";
+import { generateOrderId } from "@/shared/order-utils";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import {
   updateOrderItems,

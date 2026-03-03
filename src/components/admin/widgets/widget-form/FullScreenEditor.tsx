@@ -35,10 +35,10 @@ import {
   FileText,
   History
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/shared/utils';
 import { toast } from 'sonner';
 import { AiContextManager } from './AiContextManager';
-import type { ImprovementHistoryEntry } from '@/lib/ai-context-schema';
+import type { ImprovementHistoryEntry } from '@/modules/ai/ai-context-schema';
 
 export type EditorMode = 'generation-preview' | 'improvement' | 'live-preview';
 

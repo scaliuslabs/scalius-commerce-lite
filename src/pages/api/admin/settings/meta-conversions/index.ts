@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { metaConversionsSettings } from "@/db/schema";
 import { sql, eq } from "drizzle-orm";
 import { z } from "zod";
-import { clearCapiSettingsCache } from "@/lib/meta/conversions-api";
+import { clearCapiSettingsCache } from "@/integrations/meta/conversions-api";
 
 // SECURITY: Masked value for sensitive fields
 const MASKED_VALUE = "••••••••••••";

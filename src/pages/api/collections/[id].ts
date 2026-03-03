@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { collections } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { safeErrorResponse } from "@/lib/error-utils";
+import { safeErrorResponse } from "@/shared/error-utils";
 
 const updateCollectionSchema = z.object({
   name: z

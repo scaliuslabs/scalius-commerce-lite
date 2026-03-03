@@ -6,7 +6,7 @@ import { cacheMiddleware } from "../middleware/cache";
 import {
   processAnalyticsScript,
   shouldUsePartytown,
-} from "../../lib/analytics";
+} from "@/integrations/analytics";
 
 const app = new Hono<{ Bindings: Env }>();
 

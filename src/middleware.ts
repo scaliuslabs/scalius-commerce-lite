@@ -99,7 +99,7 @@ const authMiddleware = defineMiddleware(async (context, next) => {
     const [{ getDb }, { initKv }, { initStorage }] = await Promise.all([
       import("@/db"),
       import("@/server/utils/kv-cache"),
-      import("@/lib/storage"),
+      import("@/integrations/storage"),
     ]);
     getDb(runtimeEnv);
     if (runtimeEnv.CACHE) initKv(runtimeEnv.CACHE);

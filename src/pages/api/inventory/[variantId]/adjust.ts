@@ -7,8 +7,8 @@ import type { APIRoute } from "astro";
 import { db } from "@/db";
 import { productVariants } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { recordMovement } from "@/lib/inventory/movements";
-import { checkAndAlertLowStock } from "@/lib/inventory/alerts";
+import { recordMovement } from "@/modules/inventory/movements";
+import { checkAndAlertLowStock } from "@/modules/inventory/alerts";
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const { variantId } = params;

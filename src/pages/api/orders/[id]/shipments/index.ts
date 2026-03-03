@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
-import { DeliveryService } from "@/lib/delivery/service";
+import { DeliveryService } from "@/modules/delivery/service";
 import { db } from "@/db";
 import { deliveryShipments } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { safeErrorResponse } from "@/lib/error-utils";
+import { safeErrorResponse } from "@/shared/error-utils";
 
 // Initialize the service
 const deliveryService = new DeliveryService();

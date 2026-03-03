@@ -72,8 +72,8 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { Checkbox } from "../ui/checkbox";
-import { cn } from "@/lib/utils";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { cn } from "@/shared/utils";
+import { getOptimizedImageUrl } from "@/shared/image-optimizer";
 
 interface Category {
   id: string;

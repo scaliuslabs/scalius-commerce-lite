@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Trash2, Undo, XCircle, Filter, Edit3 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { AttributeRowProps } from "../types";
 
 export function AttributeRow({

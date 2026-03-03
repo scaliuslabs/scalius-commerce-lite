@@ -12,8 +12,8 @@ import {
   recordCODCollection,
   recordCODFailure,
   markCODReturned,
-} from "@/lib/payment/cod";
-import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
+} from "@/modules/payments/cod";
+import { applyInventoryForStatusChange } from "@/modules/inventory/inventory-transitions";
 
 export const GET: APIRoute = async ({ params }) => {
   const { id: orderId } = params;

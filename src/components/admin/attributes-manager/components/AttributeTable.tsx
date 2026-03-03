@@ -10,7 +10,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowUpDown, Tags, Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { AttributeRow } from "./AttributeRow";
 import type { AttributeTableProps } from "../types";
 

@@ -13,7 +13,7 @@
 
 import { Hono } from "hono";
 import { nanoid } from "nanoid";
-// import { sendEmail } from "@/lib/email"; - Removed, now handled by queue consumer
+// import { sendEmail } from "@/integrations/email"; - Removed, now handled by queue consumer
 import { customers, siteSettings } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 

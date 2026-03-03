@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { parseTagBasedResponse, validateParsedWidget } from '@/lib/tag-parser';
-import { parseJSONSafely, validateWidgetJSON } from '@/lib/json-repair';
+import { parseTagBasedResponse, validateParsedWidget } from '@/shared/tag-parser';
+import { parseJSONSafely, validateWidgetJSON } from '@/shared/json-repair';
 
 interface WidgetPasteModalProps {
   isOpen: boolean;

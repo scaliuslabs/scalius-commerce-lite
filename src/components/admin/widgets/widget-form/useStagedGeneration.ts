@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { parseJSONSafely, validateWidgetJSON } from '@/lib/json-repair';
-import { parseTagBasedResponse, validateParsedWidget } from '@/lib/tag-parser';
+import { parseJSONSafely, validateWidgetJSON } from '@/shared/json-repair';
+import { parseTagBasedResponse, validateParsedWidget } from '@/shared/tag-parser';
 
 interface GenerationPlan {
   totalSections: number;

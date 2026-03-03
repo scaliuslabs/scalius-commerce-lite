@@ -9,7 +9,7 @@ import {
 import { Button } from "../../ui/button";
 import { Tag, Percent, Truck } from "lucide-react";
 import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 interface DiscountType {
   id: string;

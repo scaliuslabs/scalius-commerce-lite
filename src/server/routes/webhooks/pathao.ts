@@ -9,9 +9,9 @@ import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { deliveryShipments } from "@/db/schema";
 import { getDb } from "@/db";
-import { mapProviderStatus } from "@/lib/delivery/status-mapper";
-import { ShipmentTracker } from "@/lib/delivery/tracking";
-import { recordWebhookEvent } from "@/lib/payment/process-payment";
+import { mapProviderStatus } from "@/modules/delivery/status-mapper";
+import { ShipmentTracker } from "@/modules/delivery/tracking";
+import { recordWebhookEvent } from "@/modules/payments/process-payment";
 
 const app = new Hono<{ Bindings: Env }>();
 

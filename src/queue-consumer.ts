@@ -11,13 +11,13 @@
 // automatically (up to max_retries = 3).
 
 import { getDb } from "@/db";
-import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@/lib/payment/process-payment";
-import { sendEmail } from "@/lib/email";
+import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@/modules/payments/process-payment";
+import { sendEmail } from "@/integrations/email";
 import { nanoid } from "nanoid";
 import { sql, eq } from "drizzle-orm";
 import { orders, orderItems, customers, customerHistory, discountUsage } from "@/db/schema";
-import { reserveMultiple, releaseMultiple } from "@/lib/inventory";
-import { initCODTracking } from "@/lib/payment/cod";
+import { reserveMultiple, releaseMultiple } from "@/modules/inventory";
+import { initCODTracking } from "@/modules/payments/cod";
 
 // ── Message types ──────────────────────────────────────────────────────────
 

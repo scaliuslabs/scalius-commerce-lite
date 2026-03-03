@@ -1,7 +1,7 @@
 // src/components/admin/pages-list/components/PageStatistics.tsx
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, CheckCircle, FileEdit } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { PageStatisticsProps } from "../types";
 
 const StatCard = ({

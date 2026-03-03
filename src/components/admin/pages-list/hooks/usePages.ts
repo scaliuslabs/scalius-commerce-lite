@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
-import { unixToDate } from "@/lib/utils";
+import { unixToDate } from "@/shared/utils";
 import type { PageItem, Pagination, SortField, SortOrder } from "../types";
 
 export function usePages(showTrashed: boolean) {

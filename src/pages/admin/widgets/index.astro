@@ -6,7 +6,7 @@ import { PlusCircle, Trash2 } from "lucide-react";
 import { db } from "@/db";
 import { widgets, collections } from "@/db/schema";
 import { eq, isNull, asc, and, like, sql } from "drizzle-orm";
-import { unixToDate } from "@/lib/utils";
+import { unixToDate } from "@/shared/utils";
 
 const searchParams = Astro.url.searchParams;
 const search = searchParams.get("search") || "";

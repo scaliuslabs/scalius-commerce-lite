@@ -9,7 +9,7 @@ import {
 import { nanoid } from "nanoid";
 import { sql, and, isNull, inArray, asc, desc } from "drizzle-orm";
 import { z } from "zod";
-import { phoneNumberSchema } from "../../../lib/customer-utils";
+import { phoneNumberSchema } from "@/shared/customer-utils";
 import { ftsMatch } from "@/lib/search/fts5";
 
 export const GET: APIRoute = async ({ url }) => {

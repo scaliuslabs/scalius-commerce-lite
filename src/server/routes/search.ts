@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { search } from "@/lib/search/index";
 import { cacheMiddleware } from "../middleware/cache";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit } from "@/shared/rate-limit";
 
 // Create a Hono app for search routes
 const app = new Hono();

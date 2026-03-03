@@ -11,7 +11,7 @@ import {
 } from "../../../../db/schema";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import { OrderView } from "@/components/admin/OrderView";
-import { DeliveryService } from "@/lib/delivery/service";
+import { DeliveryService } from "@/modules/delivery/service";
 
 // Get order ID from URL
 const { id } = Astro.params;

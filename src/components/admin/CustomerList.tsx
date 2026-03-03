@@ -38,7 +38,7 @@ import { Badge } from "../ui/badge";
 import { Checkbox } from "../ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrency } from "@/hooks/useCurrency";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import {
   AlertTriangle,
   ArrowDown,

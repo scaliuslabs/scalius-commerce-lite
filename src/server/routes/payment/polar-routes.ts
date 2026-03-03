@@ -6,10 +6,10 @@ import { Hono } from "hono";
 import { type Database } from "@/db";
 import { orders, paymentPlans, PaymentMethod } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getPolarSettings } from "@/lib/payment/gateway-settings";
-import { createPolarCheckout } from "@/lib/payment/polar";
+import { getPolarSettings } from "@/modules/payments/gateway-settings";
+import { createPolarCheckout } from "@/modules/payments/polar";
 import { getKv } from "../../utils/kv-cache";
-import { getCurrencyConfig } from "@/lib/currency";
+import { getCurrencyConfig } from "@/shared/currency";
 
 export const polarPaymentRoutes = new Hono<{ Bindings: Env }>();
 

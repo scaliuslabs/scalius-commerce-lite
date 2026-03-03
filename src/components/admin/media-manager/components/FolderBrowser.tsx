@@ -15,7 +15,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Folder, FolderPlus, Home, Trash2 } from "lucide-react";
 import type { MediaFolder } from "../types";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import {
   AlertDialog,
   AlertDialogAction,

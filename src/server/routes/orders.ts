@@ -21,12 +21,12 @@ import { isDiscountValid, calculateDiscountAmount } from "./discounts";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { generateOrderId } from "@/lib/order-utils";
-import { phoneNumberSchema } from "@/lib/customer-utils";
-import { DeliveryService } from "@/lib/delivery/service";
+import { generateOrderId } from "@/shared/order-utils";
+import { phoneNumberSchema } from "@/shared/customer-utils";
+import { DeliveryService } from "@/modules/delivery/service";
 import { cacheMiddleware } from "../middleware/cache";
-// import { reserveMultiple, releaseMultiple } from "@/lib/inventory";
-// import { initCODTracking } from "@/lib/payment/cod";
+// import { reserveMultiple, releaseMultiple } from "@/modules/inventory";
+// import { initCODTracking } from "@/modules/payments/cod";
 
 const app = new Hono<{ Bindings: Env }>();
 const deliveryService = new DeliveryService();

@@ -1,7 +1,7 @@
 // src/components/admin/attributes-manager/components/AttributeStatistics.tsx
 import { Card, CardContent } from "@/components/ui/card";
 import { Tags, Filter, Info } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { AttributeStatisticsProps } from "../types";
 
 const StatCard = ({

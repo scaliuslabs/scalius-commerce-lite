@@ -14,8 +14,8 @@
 
 import { Hono } from "hono";
 import type Stripe from "stripe";
-import { verifyStripeWebhook } from "@/lib/payment/stripe";
-import { getStripeSettings } from "@/lib/payment/gateway-settings";
+import { verifyStripeWebhook } from "@/modules/payments/stripe";
+import { getStripeSettings } from "@/modules/payments/gateway-settings";
 import { getDb } from "@/db";
 import type { PaymentQueueMessage } from "@/queue-consumer";
 

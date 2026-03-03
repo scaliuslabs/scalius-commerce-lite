@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
-import { createProvider } from "@/lib/delivery/factory";
+import { createProvider } from "@/modules/delivery/factory";
 import { nanoid } from "nanoid";
-import { safeErrorResponse } from "@/lib/error-utils";
+import { safeErrorResponse } from "@/shared/error-utils";
 
 export const POST: APIRoute = async ({ request }) => {
   try {

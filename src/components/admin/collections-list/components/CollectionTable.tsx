@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowUpDown, Layers, Plus } from "lucide-react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { CollectionRow } from "./CollectionRow";
 import type { CollectionTableProps } from "../types";
 

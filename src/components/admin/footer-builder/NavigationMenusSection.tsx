@@ -16,7 +16,7 @@ import {
   Draggable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { NavigationBuilder } from "../navigation";
 import type { FooterMenu, NavigationItem } from "./types";
 

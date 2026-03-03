@@ -36,7 +36,7 @@ import {
   Package,
 } from "lucide-react";
 import { nanoid } from "nanoid";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { NavigationItem, NavigationSource } from "./types";
 
 type NavItemType = "category" | "page" | "dynamic" | "custom" | "label";

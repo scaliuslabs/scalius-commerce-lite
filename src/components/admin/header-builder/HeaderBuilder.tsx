@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { nanoid } from "nanoid";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 import { BrandingSection } from "./BrandingSection";
 import { TopBarSection } from "./TopBarSection";

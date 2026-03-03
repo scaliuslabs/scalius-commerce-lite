@@ -32,7 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
 import { Calendar } from "../../ui/calendar";
 import { CalendarIcon, Percent, Loader2, Info, RefreshCw } from "lucide-react";
 import { Checkbox } from "../../ui/checkbox";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { format } from "date-fns";
 import { Separator } from "../../ui/separator";
 import { useToast } from "@/hooks/use-toast";

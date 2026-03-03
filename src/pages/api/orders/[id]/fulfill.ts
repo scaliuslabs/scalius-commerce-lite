@@ -15,7 +15,7 @@ import {
   OrderStatus,
 } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
+import { applyInventoryForStatusChange } from "@/modules/inventory/inventory-transitions";
 
 export const GET: APIRoute = async ({ params }) => {
   const { id } = params;

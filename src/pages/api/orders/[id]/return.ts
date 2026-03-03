@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { db } from "@/db";
-import { processReturn } from "@/lib/payment/refund-service";
+import { processReturn } from "@/modules/payments/refund-service";
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
     const { id: orderId } = params;

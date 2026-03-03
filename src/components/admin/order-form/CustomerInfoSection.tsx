@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { useOrderForm } from "./OrderFormContext";
 
 export function CustomerInfoSection() {

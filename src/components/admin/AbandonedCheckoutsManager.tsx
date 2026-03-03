@@ -48,7 +48,7 @@ import {
   MapPin,
   Package,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { AbandonedCheckout } from "@/db/schema";
 import {
   Pagination,

@@ -63,7 +63,7 @@ import {
 } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { useCurrency } from "@/hooks/useCurrency";
 
 type SortField =

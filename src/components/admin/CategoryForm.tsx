@@ -32,7 +32,7 @@ import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getOptimizedImageUrl } from "@/shared/image-optimizer";
 
 const categoryFormSchema = z.object({
   id: z.string().optional(),

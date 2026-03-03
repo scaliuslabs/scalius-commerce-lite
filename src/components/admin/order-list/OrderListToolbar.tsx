@@ -12,7 +12,7 @@ import {
   Download,
   RefreshCw,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import {
   Select,
   SelectContent,

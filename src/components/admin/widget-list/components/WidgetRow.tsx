@@ -12,7 +12,7 @@ import {
   Pencil,
   Copy,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { WidgetRowProps } from "../types";
 
 const placementRuleLabels: Record<string, string> = {

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { FraudCheckerService } from "@/lib/fraud-checker/service";
-import { safeErrorResponse } from "@/lib/error-utils";
+import { safeErrorResponse } from "@/shared/error-utils";
 
 const fraudCheckerService = new FraudCheckerService();
 

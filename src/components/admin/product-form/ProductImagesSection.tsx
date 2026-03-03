@@ -14,7 +14,7 @@ import {
 import { Info, ChevronDown} from "lucide-react";
 import { MediaManager } from "../MediaManager";
 import { DraggableImageGallery } from "../DraggableImageGallery";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { ProductFormValues } from "./types";
 import { useToast } from "@/hooks/use-toast";
 

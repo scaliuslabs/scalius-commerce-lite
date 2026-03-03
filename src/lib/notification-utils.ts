@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { adminFcmTokens, settings } from "@/db/schema";
-import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
+import { getFirebaseAdminMessaging } from "@/integrations/firebase/admin";
 import { eq, sql, and } from "drizzle-orm";
 
 interface OrderNotificationData {

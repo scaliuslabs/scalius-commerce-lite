@@ -18,7 +18,7 @@ import {
   GridIcon,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { CollectionRowProps } from "../types";
 
 export const CollectionRow = forwardRef<

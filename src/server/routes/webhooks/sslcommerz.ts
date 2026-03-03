@@ -13,10 +13,10 @@
 // - Gateway credentials loaded from DB settings (not env vars).
 
 import { Hono } from "hono";
-import { validateSSLCommerzIPN } from "@/lib/payment/sslcommerz";
-import { getSSLCommerzSettings } from "@/lib/payment/gateway-settings";
+import { validateSSLCommerzIPN } from "@/modules/payments/sslcommerz";
+import { getSSLCommerzSettings } from "@/modules/payments/gateway-settings";
 import { getDb } from "@/db";
-import type { SSLCommerzIPNPayload } from "@/lib/payment/types";
+import type { SSLCommerzIPNPayload } from "@/modules/payments/types";
 import type { PaymentQueueMessage } from "@/queue-consumer";
 
 const app = new Hono<{ Bindings: Env }>();

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Wand2, ChevronDown, Clipboard, ChevronsUpDown, Check, Eye, Headphones, Layers } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/shared/utils';
 import { AiContextManager } from './AiContextManager';
 import { useAiContext } from './useAiContext';
 import { useAiGenerator } from './useAiGenerator';

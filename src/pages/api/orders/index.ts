@@ -10,11 +10,11 @@ import {
 } from "../../../db/schema";
 import { sql, eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { generateOrderId } from "../../../lib/order-utils";
+import { generateOrderId } from "@/shared/order-utils";
 import {
   phoneNumberSchema,
   calculateCustomerStats,
-} from "../../../lib/customer-utils";
+} from "@/shared/customer-utils";
 import { nanoid } from "nanoid";
 import { getOrders } from "../../../lib/admin";
 

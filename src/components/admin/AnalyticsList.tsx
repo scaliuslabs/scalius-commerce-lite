@@ -28,7 +28,7 @@ import {
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
 import { Edit, Trash2, Plus, Power, PowerOff } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/shared/utils";
 
 interface Analytics {
   id: string;

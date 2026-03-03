@@ -16,7 +16,7 @@ import {
 import type { Database } from "@/db";
 import { releaseMultiple } from "@/modules/inventory/release";
 import type { ProcessPaymentParams, PaymentGateway } from "./types";
-import { getCurrencyConfig } from "@/lib/currency";
+import { getCurrencyConfig } from "@/shared/currency";
 import { applyInventoryForStatusChange } from "@/modules/inventory/inventory-transitions";
 
 /**

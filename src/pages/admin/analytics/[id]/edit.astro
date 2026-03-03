@@ -4,7 +4,7 @@ import { AnalyticsForm } from "../../../../components/admin/AnalyticsForm";
 import { db } from "../../../../db";
 import { analytics } from "../../../../db/schema";
 import { eq } from "drizzle-orm";
-import { unixToDate } from "@/lib/utils";
+import { unixToDate } from "@/shared/utils";
 
 // Get the analytics script ID from the URL
 const { id } = Astro.params;
