@@ -7,7 +7,7 @@ import {
   getLogRetentionHours,
   getCleanupCheckIntervalHours,
   manualLogCleanup,
-} from "@/lib/meta/conversions-api";
+} from "@/integrations/meta/conversions-api";
 
 // GET: Fetch Meta Conversions logs with pagination
 export const GET: APIRoute = async ({ url }) => {

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { VariantActionsToolbar } from "./VariantActionsToolbar";
 import { VariantTable } from "./VariantTable";
 import { VariantSortModal } from "./VariantSortModal";

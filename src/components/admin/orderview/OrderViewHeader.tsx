@@ -13,7 +13,7 @@ import {
   Package,
 } from "lucide-react";
 import type { Order } from "./types";
-import { getStatusBadgeClass, formatDate } from "@/lib/utils";
+import { getStatusBadgeClass, formatDate } from "@/shared/utils";
 import { useCurrency } from "@/hooks/useCurrency";
 
 interface OrderViewHeaderProps {

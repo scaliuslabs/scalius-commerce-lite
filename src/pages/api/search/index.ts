@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { search } from "@/lib/search/index";
-import { rateLimit } from "@/lib/rate-limit";
-import { safeErrorResponse } from "@/lib/error-utils";
+import { rateLimit } from "@/shared/rate-limit";
+import { safeErrorResponse } from "@/shared/error-utils";
 
 // Rate limiting for search API
 const limiter = rateLimit({

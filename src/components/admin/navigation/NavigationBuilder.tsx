@@ -19,7 +19,7 @@ import {
 import { Plus, Menu, Layers } from "lucide-react";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
 import type { DropResult } from "@hello-pangea/dnd";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { SortableNavItem } from "./SortableNavItem";
 import { AddNavItemDialog } from "./AddNavItemDialog";
 import type { NavigationItem, NavigationBuilderProps } from "./types";

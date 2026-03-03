@@ -1,7 +1,7 @@
 // src/components/admin/widget-list/components/WidgetStatistics.tsx
 import { Card, CardContent } from "@/components/ui/card";
 import { LayoutDashboard, Eye, EyeOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { WidgetStatisticsProps } from "../types";
 
 const StatCard = ({

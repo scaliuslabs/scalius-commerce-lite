@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { createId } from "@paralleldrive/cuid2";
-import { sendCapiEvent } from "@/lib/meta/conversions-api";
+import { sendCapiEvent } from "@/integrations/meta/conversions-api";
 
 const app = new Hono<{ Bindings: Env }>();
 

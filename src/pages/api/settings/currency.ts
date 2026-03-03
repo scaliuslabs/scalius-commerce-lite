@@ -8,7 +8,7 @@ import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getKv } from "@/server/utils/kv-cache";
-import { upsertSetting } from "@/lib/payment/gateway-settings";
+import { upsertSetting } from "@/modules/payments/gateway-settings";
 
 const CATEGORY = "currency";
 

@@ -40,7 +40,7 @@ import { storefrontRoutes } from "./routes/storefront";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { openApiSpec } from "./openapi";
-import { getCorsOriginContext } from "../lib/cors-helper";
+import { getCorsOriginContext } from "@/shared/cors-helper";
 
 // Create typed Hono app with Cloudflare Workers Env bindings
 const app = new Hono<{ Bindings: Env }>();

@@ -13,7 +13,7 @@ import {
   DiscountValueType,
 } from "@/db/schema";
 import { eq, sql, and, isNull, count, inArray } from "drizzle-orm";
-import { getCurrencyConfig } from "@/lib/currency";
+import { getCurrencyConfig } from "@/shared/currency";
 
 const app = new Hono<{ Bindings: Env }>();
 

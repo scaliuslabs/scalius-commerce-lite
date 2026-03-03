@@ -18,7 +18,7 @@ import {
 import { Plus, Trash2, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import type { ProductAttribute } from "@/db/schema";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 interface AssignedAttribute {
   attributeId: string;

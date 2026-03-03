@@ -11,7 +11,7 @@ import type {
   RecordCODCollectionParams,
   RecordCODFailureParams,
 } from "./types";
-import { getCurrencyConfig } from "@/lib/currency";
+import { getCurrencyConfig } from "@/shared/currency";
 
 /**
  * Create a COD tracking record when a COD order is placed.

@@ -1,5 +1,5 @@
 // Character counter component with SEO recommendations
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface CharacterCounterProps {

@@ -35,7 +35,7 @@ import {
   Archive,
   ClipboardList,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { useCurrency } from "@/hooks/useCurrency";
 import { Separator } from "../ui/separator";
 import { ScrollArea } from "../ui/scroll-area";

@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
 import { Button } from "../../ui/button";
 import { Check, ChevronsUpDown, Loader2, Tag, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "@/hooks/useCurrency";
 

@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../db";
 import { media } from "../../../db/schema";
-import { uploadFile } from "../../../lib/storage";
+import { uploadFile } from "@/integrations/storage";
 import { nanoid } from "nanoid";
 
 const MAX_FILE_SIZE_MB = 10;

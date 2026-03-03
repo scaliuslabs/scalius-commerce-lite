@@ -76,8 +76,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { cn } from "@/shared/utils";
+import { getOptimizedImageUrl } from "@/shared/image-optimizer";
 import { useCurrency } from "@/hooks/useCurrency";
 
 type SortField = "name" | "price" | "category" | "createdAt" | "updatedAt";

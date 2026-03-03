@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { db } from "@/db";
 import { widgets } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { unixToDate } from "@/lib/utils";
+import { unixToDate } from "@/shared/utils";
 
 export const PATCH: APIRoute = async ({ params }) => {
   const widgetId = params.id;

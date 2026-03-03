@@ -1,7 +1,7 @@
 // src/components/admin/collections-list/components/CollectionStatistics.tsx
 import { Card, CardContent } from "@/components/ui/card";
 import { Layers, Eye, EyeOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { CollectionStatisticsProps } from "../types";
 
 const StatCard = ({

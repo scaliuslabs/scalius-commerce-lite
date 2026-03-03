@@ -38,8 +38,8 @@ import {
   Type,
   Plus,
 } from "lucide-react";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
-import { cn } from "@/lib/utils";
+import { getOptimizedImageUrl } from "@/shared/image-optimizer";
+import { cn } from "@/shared/utils";
 
 // --- Helper Types ---
 

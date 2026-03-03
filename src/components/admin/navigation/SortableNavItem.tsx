@@ -25,7 +25,7 @@ import {
   Type,
 } from "lucide-react";
 import { Draggable, Droppable } from "@hello-pangea/dnd";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { NavigationItem } from "./types";
 import { MAX_NAV_DEPTH, getDepthColor } from "./types";
 

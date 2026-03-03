@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { MediaFile } from "../types";
 import { formatFileSize, formatDate, formatFileType } from "../utils";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getOptimizedImageUrl } from "@/shared/image-optimizer";
 
 interface MediaPreviewProps {
   open: boolean;

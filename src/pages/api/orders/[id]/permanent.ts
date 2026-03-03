@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../../db";
 import { orders, orderItems } from "../../../../db/schema";
 import { eq } from "drizzle-orm";
-import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
+import { applyInventoryForStatusChange } from "@/modules/inventory/inventory-transitions";
 
 export const DELETE: APIRoute = async ({ params }) => {
   try {

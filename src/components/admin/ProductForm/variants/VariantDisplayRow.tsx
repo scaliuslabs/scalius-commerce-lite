@@ -20,7 +20,7 @@ import {
   hasDiscount,
 } from "./utils/variantHelpers";
 import { useCurrency } from "@/hooks/useCurrency";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 interface VariantDisplayRowProps {
   variant: ProductVariant;

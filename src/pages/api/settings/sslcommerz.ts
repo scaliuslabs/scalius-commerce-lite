@@ -12,7 +12,7 @@ import {
   upsertSetting,
   invalidateSSLCommerzCache,
   invalidatePaymentMethodsCache,
-} from "@/lib/payment/gateway-settings";
+} from "@/modules/payments/gateway-settings";
 
 const MASKED = "••••••••••••";
 const CATEGORY = "sslcommerz";

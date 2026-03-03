@@ -12,7 +12,7 @@ import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
 import Youtube from "@tiptap/extension-youtube";
 import { ResizableImage } from "./tiptap-extensions/resizable-image";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import {
   Bold,
   Italic,

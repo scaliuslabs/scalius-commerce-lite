@@ -5,7 +5,7 @@
 // No auth required: publishable keys and enabled flags are public-facing information.
 
 import { Hono } from "hono";
-import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "@/lib/payment/gateway-settings";
+import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "@/modules/payments/gateway-settings";
 import { getDb } from "@/db";
 import { siteSettings, settings } from "@/db/schema";
 import { eq } from "drizzle-orm";

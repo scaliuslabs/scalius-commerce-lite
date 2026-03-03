@@ -51,7 +51,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
       // Email verification callback - called when user needs to verify email
       sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
         // Import dynamically to avoid circular dependencies
-        const { sendEmail } = await import("@/lib/email");
+        const { sendEmail } = await import("@/integrations/email");
         await sendEmail({
           to: user.email,
           subject: `Verify your email for ${appName}`,
@@ -78,7 +78,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
       },
       // Password reset callback
       sendResetPassword: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
-        const { sendEmail } = await import("@/lib/email");
+        const { sendEmail } = await import("@/integrations/email");
         await sendEmail({
           to: user.email,
           subject: `Reset your password for ${appName}`,
@@ -160,7 +160,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
         // Email OTP configuration for 2FA verification
         otpOptions: {
           async sendOTP({ user, otp }) {
-            const { sendEmail } = await import("@/lib/email");
+            const { sendEmail } = await import("@/integrations/email");
             await sendEmail({
               to: user.email,
               subject: `Your ${appName} verification code`,

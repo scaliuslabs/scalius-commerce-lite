@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowUpDown, Loader2, FileText, PlusCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { PageRow } from "./PageRow";
 import type { PageItem, SortField, SortOrder } from "../types";
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { AlignLeft, AlignCenter, AlignRight, Trash2 } from "lucide-react";
 
 export function ResizableImageView({

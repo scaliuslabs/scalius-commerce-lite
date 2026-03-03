@@ -8,7 +8,7 @@ import {
   GENERATION_CONFIG,
   getTimeout,
   ERROR_MESSAGES,
-} from "@/lib/ai-config";
+} from "@/modules/ai/ai-config";
 
 export const POST: APIRoute = async ({ request }) => {
   try {

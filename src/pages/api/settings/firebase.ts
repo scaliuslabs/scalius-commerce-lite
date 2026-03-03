@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { layoutCache, CACHE_KEYS } from "@/lib/layout-cache";
+import { layoutCache, CACHE_KEYS } from "@/shared/layout-cache";
 
 const CATEGORY = "firebase";
 const KEY_SERVICE_ACCOUNT = "service_account";

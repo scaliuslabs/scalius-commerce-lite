@@ -3,7 +3,7 @@ import { db } from "../../../db";
 import { orders, orderItems } from "../../../db/schema";
 import { sql, eq } from "drizzle-orm";
 import { z } from "zod";
-import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
+import { applyInventoryForStatusChange } from "@/modules/inventory/inventory-transitions";
 
 const bulkDeleteSchema = z.object({
   orderIds: z.array(z.string()),

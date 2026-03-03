@@ -41,7 +41,7 @@ import {
   TooltipTrigger,
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { format } from "date-fns";
 import { Separator } from "../../ui/separator";
 import { useToast } from "@/hooks/use-toast";

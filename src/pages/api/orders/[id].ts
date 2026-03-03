@@ -13,10 +13,10 @@ import { nanoid } from "nanoid";
 import {
   phoneNumberSchema,
   calculateCustomerStats,
-} from "../../../lib/customer-utils";
-import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
-import { reserveMultiple, releaseMultiple } from "@/lib/inventory";
-import type { ReservationEntry } from "@/lib/inventory";
+} from "@/shared/customer-utils";
+import { applyInventoryForStatusChange } from "@/modules/inventory/inventory-transitions";
+import { reserveMultiple, releaseMultiple } from "@/modules/inventory";
+import type { ReservationEntry } from "@/modules/inventory";
 
 const updateOrderSchema = z.object({
   customerName: z

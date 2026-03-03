@@ -17,8 +17,8 @@ import {
   Draggable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { cn } from "@/lib/utils";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { cn } from "@/shared/utils";
+import { getOptimizedImageUrl } from "@/shared/image-optimizer";
 import type { SocialLink, MediaFile } from "./types";
 
 interface SocialLinksSectionProps {

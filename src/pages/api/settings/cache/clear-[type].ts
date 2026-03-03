@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { safeErrorResponse } from "@/lib/error-utils";
+import { safeErrorResponse } from "@/shared/error-utils";
 
 export const POST: APIRoute = async ({ params, request }) => {
   try {

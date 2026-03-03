@@ -8,9 +8,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@/db/schema";
-import { createPaymentIntent } from "@/lib/payment/stripe";
-import { getStripeSettings } from "@/lib/payment/gateway-settings";
-import { getCurrencyConfig } from "@/lib/currency";
+import { createPaymentIntent } from "@/modules/payments/stripe";
+import { getStripeSettings } from "@/modules/payments/gateway-settings";
+import { getCurrencyConfig } from "@/shared/currency";
 
 const app = new Hono<{ Bindings: Env }>();
 

@@ -3,7 +3,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { AnalyticsList } from "../../../components/admin/AnalyticsList";
 import { db } from "../../../db";
 import { analytics } from "../../../db/schema";
-import { unixToDate } from "@/lib/utils";
+import { unixToDate } from "@/shared/utils";
 
 // Fetch all analytics scripts
 const analyticsScripts = await db.select().from(analytics);

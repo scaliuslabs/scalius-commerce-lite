@@ -13,7 +13,7 @@ import {
     getSSLCommerzSettings,
     getPolarSettings,
     invalidatePaymentMethodsCache,
-} from "@/lib/payment/gateway-settings";
+} from "@/modules/payments/gateway-settings";
 import { z } from "zod";
 
 const CATEGORY = "payment_methods";

@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
-import { DeliveryService } from "@/lib/delivery/service";
-import { createProvider } from "@/lib/delivery/factory";
-import { safeErrorResponse } from "@/lib/error-utils";
+import { DeliveryService } from "@/modules/delivery/service";
+import { createProvider } from "@/modules/delivery/factory";
+import { safeErrorResponse } from "@/shared/error-utils";
 
 // Initialize the service
 const deliveryService = new DeliveryService();

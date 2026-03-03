@@ -9,9 +9,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@/db/schema";
-import { initSSLCommerzSession } from "@/lib/payment/sslcommerz";
-import { getSSLCommerzSettings } from "@/lib/payment/gateway-settings";
-import { getCurrencyConfig } from "@/lib/currency";
+import { initSSLCommerzSession } from "@/modules/payments/sslcommerz";
+import { getSSLCommerzSettings } from "@/modules/payments/gateway-settings";
+import { getCurrencyConfig } from "@/shared/currency";
 
 const app = new Hono<{ Bindings: Env }>();
 

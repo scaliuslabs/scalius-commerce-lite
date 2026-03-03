@@ -10,11 +10,11 @@
 
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { generateStructuredPrompt } from '@/lib/prompt-helper-v2';
-import { parseJSONSafely, validateWidgetJSON } from '@/lib/json-repair';
-import { parseTagBasedResponse, validateParsedWidget } from '@/lib/tag-parser';
-import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/lib/ai-config';
-import type { ImprovementHistoryEntry } from '@/lib/ai-context-schema';
+import { generateStructuredPrompt } from '@/modules/ai/prompt-helper-v2';
+import { parseJSONSafely, validateWidgetJSON } from '@/shared/json-repair';
+import { parseTagBasedResponse, validateParsedWidget } from '@/shared/tag-parser';
+import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/modules/ai/ai-config';
+import type { ImprovementHistoryEntry } from '@/modules/ai/ai-context-schema';
 
 
 interface UseAiImproverProps {

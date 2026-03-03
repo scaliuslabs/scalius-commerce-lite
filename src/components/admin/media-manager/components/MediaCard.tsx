@@ -21,7 +21,7 @@ import {
 import type { MediaFile } from "../types";
 import { formatFileSize, formatDate } from "../utils";
 import { toast } from "@/hooks/use-toast";
-import { getOptimizedImageUrl, getOriginalImageUrl } from "@/lib/image-optimizer";
+import { getOptimizedImageUrl, getOriginalImageUrl } from "@/shared/image-optimizer";
 
 interface MediaCardProps {
   file: MediaFile;

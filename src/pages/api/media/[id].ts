@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../db";
 import { media } from "../../../db/schema";
-import { deleteFile } from "../../../lib/storage";
+import { deleteFile } from "@/integrations/storage";
 import { eq } from "drizzle-orm";
 
 export const PATCH: APIRoute = async ({ params, request }) => {

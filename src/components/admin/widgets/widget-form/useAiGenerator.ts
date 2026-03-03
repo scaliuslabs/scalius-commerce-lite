@@ -1,10 +1,10 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { generateCompletePrompt, generateStructuredPrompt } from '@/lib/prompt-helper-v2';
-import { parseJSONSafely, validateWidgetJSON } from '@/lib/json-repair';
-import { parseTagBasedResponse, validateParsedWidget } from '@/lib/tag-parser';
-import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@/lib/ai-config';
+import { generateCompletePrompt, generateStructuredPrompt } from '@/modules/ai/prompt-helper-v2';
+import { parseJSONSafely, validateWidgetJSON } from '@/shared/json-repair';
+import { parseTagBasedResponse, validateParsedWidget } from '@/shared/tag-parser';
+import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
 import type { ProductSearchResult, Category } from './types';
 

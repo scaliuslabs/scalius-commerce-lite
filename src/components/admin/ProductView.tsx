@@ -26,10 +26,10 @@ import {
   ExternalLink,
   Info
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { RichContent } from "../ui/rich-content";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getOptimizedImageUrl } from "@/shared/image-optimizer";
 import { useCurrency } from "@/hooks/useCurrency";
 
 interface ProductVariant {

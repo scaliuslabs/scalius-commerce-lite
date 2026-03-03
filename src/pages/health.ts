@@ -1,5 +1,5 @@
 export const prerender = false;
-import { safeErrorResponse } from "@/lib/error-utils";
+import { safeErrorResponse } from "@/shared/error-utils";
 
 /**
  * Health check endpoint for the application

@@ -6,7 +6,7 @@ import { getDb } from "@/db";
 import { user, roles, userRoles, userPermissions, permissions } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createAuth } from "@/lib/auth";
-import { sendAdminInviteEmail } from "@/lib/email";
+import { sendAdminInviteEmail } from "@/integrations/email";
 import { assignRoleToUser } from "@/lib/rbac/helpers";
 
 // Generate a secure random password

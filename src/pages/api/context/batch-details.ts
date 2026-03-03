@@ -14,7 +14,7 @@ import {
   type ProductAttributeValue,
 } from "@/db/schema";
 import { inArray, eq, isNull } from "drizzle-orm";
-import { getStorefrontPath } from "@/lib/storefront-url";
+import { getStorefrontPath } from "@/shared/storefront-url";
 
 interface VariantWithBuyNowUrl extends ProductVariant {
   buyNowUrl: string;

@@ -3,7 +3,7 @@ import { db } from "../../../db";
 import { siteSettings } from "../../../db/schema";
 import { nanoid } from "nanoid";
 import { sql, eq } from "drizzle-orm";
-import { layoutCache, CACHE_KEYS } from "../../../lib/layout-cache";
+import { layoutCache, CACHE_KEYS } from "@/shared/layout-cache";
 
 export const POST: APIRoute = async ({ request }) => {
   try {

@@ -18,9 +18,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { MediaManager } from "../../MediaManager";
 import { ImageIcon, Package, Tags, X, Check, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { useAiContext } from "./useAiContext";
-import { getMaxImages } from "@/lib/ai-config";
+import { getMaxImages } from "@/modules/ai/ai-config";
 
 interface AiContextManagerProps {
   context: ReturnType<typeof useAiContext>;

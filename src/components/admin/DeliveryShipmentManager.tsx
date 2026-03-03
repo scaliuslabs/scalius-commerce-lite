@@ -1,7 +1,7 @@
 import { type FC, useState, useEffect } from "react";
 import type { DeliveryProviderRecord, DeliveryShipment, Order } from "@/db/schema";
 import { toast } from "sonner";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/shared/utils";
 import ShipmentStatusIndicator from "./ShipmentStatusIndicator";
 
 // Extend the DeliveryShipment type to include properties used in component

@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
-import { DeliveryService } from "@/lib/delivery/service";
-import { safeErrorResponse } from "@/lib/error-utils";
-import { applyInventoryForStatusChange } from "@/lib/inventory/inventory-transitions";
+import { DeliveryService } from "@/modules/delivery/service";
+import { safeErrorResponse } from "@/shared/error-utils";
+import { applyInventoryForStatusChange } from "@/modules/inventory/inventory-transitions";
 import { db } from "@/db";
 import { orders, OrderStatus, FulfillmentStatus } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";

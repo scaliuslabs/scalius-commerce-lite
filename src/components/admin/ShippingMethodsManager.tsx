@@ -72,7 +72,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { useCurrency } from "@/hooks/useCurrency";
 import type { ShippingMethod } from "@/db/schema";
 

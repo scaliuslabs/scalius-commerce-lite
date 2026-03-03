@@ -3,8 +3,8 @@
 // Pattern mirrors stripe.ts — verify signature, idempotency check, enqueue to CF Queue.
 
 import { Hono } from "hono";
-import { verifyPolarWebhook } from "@/lib/payment/polar";
-import { getPolarSettings } from "@/lib/payment/gateway-settings";
+import { verifyPolarWebhook } from "@/modules/payments/polar";
+import { getPolarSettings } from "@/modules/payments/gateway-settings";
 import { type Database } from "@/db";
 import { getKv } from "../../utils/kv-cache";
 
