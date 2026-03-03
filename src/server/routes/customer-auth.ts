@@ -662,6 +662,7 @@ app.get("/orders", async (c) => {
         id: orders.id,
         status: orders.status,
         totalAmount: orders.totalAmount,
+        paidAmount: orders.paidAmount,
         shippingCharge: orders.shippingCharge,
         discountAmount: orders.discountAmount,
         paymentStatus: orders.paymentStatus,
