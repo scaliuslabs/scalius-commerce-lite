@@ -1,5 +1,4 @@
 ---
-// src/pages/admin/customers/[id]/history.astro
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import { db } from "../../../../db";
 import {
@@ -11,12 +10,9 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { CustomerHistoryView } from "../../../../components/admin/CustomerHistoryView";
 
-// Get the customer ID from the URL
 const { id } = Astro.params;
 
-// Batch fetch all data in one round-trip
 const [customerResults, history, customerOrders] = await db.batch([
-  // Get customer details
   db
     .select({
       id: customers.id,
@@ -36,7 +32,6 @@ const [customerResults, history, customerOrders] = await db.batch([
     .from(customers)
     .where(eq(customers.id, id as string)),
 
-  // Get customer history
   db
     .select({
       id: customerHistory.id,
@@ -57,7 +52,6 @@ const [customerResults, history, customerOrders] = await db.batch([
     .where(eq(customerHistory.customerId, id as string))
     .orderBy(sql`${customerHistory.createdAt} DESC`),
 
-  // Get customer orders
   db
     .select({
       id: orders.id,
@@ -76,7 +70,6 @@ if (!customer) {
   return Astro.redirect("/admin/customers");
 }
 
-// Format dates
 const formattedCustomer = {
   ...customer,
   lastOrderAt: customer.lastOrderAt
@@ -96,20 +89,17 @@ const formattedOrders = customerOrders.map((order) => ({
   createdAt: new Date(order.createdAt * 1000),
 }));
 
-// Collect all unique location IDs
 const locationIds = new Set<string>();
 if (customer.city) locationIds.add(customer.city);
 if (customer.zone) locationIds.add(customer.zone);
 if (customer.area) locationIds.add(customer.area);
 
-// Add locations from history records
 for (const record of history) {
   if (record.city) locationIds.add(record.city);
   if (record.zone) locationIds.add(record.zone);
   if (record.area) locationIds.add(record.area);
 }
 
-// Fetch all needed locations at once
 const locationArray = Array.from(locationIds).filter(Boolean) as string[];
 const locationMap = new Map<string, string>();
 

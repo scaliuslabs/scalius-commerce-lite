@@ -1,4 +1,3 @@
-// src/components/admin/discount/AmountOffProductsForm.tsx
 import React, { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -47,9 +46,6 @@ import { format } from "date-fns";
 import { Separator } from "../../ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrency } from "@/hooks/useCurrency";
-
-
-// --- Interfaces (Unchanged) ---
 interface Product {
   id: string;
   name: string;
@@ -63,7 +59,6 @@ interface Collection {
   slug: string;
 }
 
-// --- Schema and Types (Updated) ---
 const formSchema = z.object({
   code: z.string().min(1, "Discount code is required").max(50),
   valueType: z.enum(["percentage", "fixed_amount"]),
@@ -91,11 +86,10 @@ const formSchema = z.object({
   isActive: z.boolean(),
 });
 
-// Adjust FormValues to include the appliesTo structure for validation
 type FormValues = z.infer<typeof formSchema>;
 
 interface AmountOffProductsFormProps {
-  defaultValues?: Partial<Omit<FormValues, "appliesTo"> & { id?: string }>; // Exclude appliesTo from default props
+  defaultValues?: Partial<Omit<FormValues, "appliesTo"> & { id?: string }>;
   initialSelectedProducts?: Product[];
   initialSelectedCollections?: Collection[];
 }
@@ -142,7 +136,6 @@ export function AmountOffProductsForm({
       endDate: null,
       isActive: true,
       ...defaultValues,
-      // Convert ISO date strings to Date objects if needed
       ...(defaultValues?.startDate && {
         startDate:
           typeof defaultValues.startDate === "string"
@@ -155,7 +148,6 @@ export function AmountOffProductsForm({
             ? new Date(defaultValues.endDate)
             : defaultValues.endDate,
       }),
-      // Initialize appliesTo based on initial selections for validation trigger
       appliesTo: {
         products: initialSelectedProducts.map((p) => p.id),
         collections: initialSelectedCollections.map((c) => c.id),
@@ -163,7 +155,6 @@ export function AmountOffProductsForm({
     },
   });
 
-  // Update the virtual 'appliesTo' field whenever selections change
   useEffect(() => {
     form.setValue(
       "appliesTo",
@@ -171,11 +162,10 @@ export function AmountOffProductsForm({
         products: selectedProducts.map((p) => p.id),
         collections: selectedCollections.map((c) => c.id),
       },
-      { shouldValidate: true, shouldDirty: true }, // Trigger validation
+      { shouldValidate: true, shouldDirty: true },
     );
   }, [selectedProducts, selectedCollections, form]);
 
-  // --- Submission Logic (Unchanged) ---
   const internalHandleSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     const discountId = defaultValues?.id;
@@ -194,7 +184,6 @@ export function AmountOffProductsForm({
         ? `/api/discounts/${discountId}`
         : "/api/discounts";
 
-      // Create payload excluding the virtual 'appliesTo' field
       const { appliesTo, ...restOfValues } = ensuredValues;
       const payload = {
         ...restOfValues,
@@ -256,13 +245,8 @@ export function AmountOffProductsForm({
       const value = isInt ? parseInt(rawValue, 10) : parseFloat(rawValue);
       if (!isNaN(value)) {
         onChange(value);
-      }
-      // Keep the invalid input in the field visually until blur/submit validation
-      else if (rawValue === "-" || rawValue.endsWith(".")) {
-        // Allow partial input for better UX
-      } else {
-        // Or force it back to null/previous valid value if preferred
-        // onChange(null);
+      } else if (!(rawValue === "-" || rawValue.endsWith("."))) {
+        return;
       }
     }
   };
@@ -367,7 +351,7 @@ export function AmountOffProductsForm({
                       <div className="relative">
                         <Input
                           type="number"
-                          step="any" // Allow decimals for fixed amount
+                          step="any"
                           placeholder={
                             form.watch("valueType") === "percentage"
                               ? "e.g., 15 for 15%"
@@ -376,10 +360,9 @@ export function AmountOffProductsForm({
                           {...field}
                           onChange={(e) => {
                             const value = parseFloat(e.target.value);
-                            // Use empty string for input control if NaN, let Zod handle validation
                             field.onChange(isNaN(value) ? "" : value);
                           }}
-                          value={field.value === 0 ? "" : field.value} // Handle initial 0 better
+                          value={field.value === 0 ? "" : field.value}
                         />
                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
                           {form.watch("valueType") === "percentage" ? (
@@ -400,7 +383,6 @@ export function AmountOffProductsForm({
           </CardContent>
         </Card>
 
-        {/* Section 2: Applies To */}
         <Card>
           <CardHeader>
             <CardTitle>Applies To</CardTitle>
@@ -410,7 +392,6 @@ export function AmountOffProductsForm({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
-            {/* Product & Collection Selection */}
             <ProductSelector
               selectedProducts={selectedProducts}
               onChange={setSelectedProducts}
@@ -422,10 +403,9 @@ export function AmountOffProductsForm({
               buttonLabel="Browse Collections"
             />
 
-            {/* Display validation message for appliesTo */}
             <FormField
               control={form.control}
-              name="appliesTo" // Connect to the virtual field
+              name="appliesTo"
               render={({ fieldState }) => (
                 <div>
                   {fieldState.error && (
@@ -434,12 +414,6 @@ export function AmountOffProductsForm({
                 </div>
               )}
             />
-            {/* Optional: Show a summary if needed */}
-            {/* {(selectedProducts.length > 0 || selectedCollections.length > 0) && (
-                            <p className="text-sm text-muted-foreground">
-                                Applies to {selectedProducts.length} product(s) and {selectedCollections.length} collection(s).
-                            </p>
-                        )} */}
           </CardContent>
         </Card>
 

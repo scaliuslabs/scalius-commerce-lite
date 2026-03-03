@@ -152,7 +152,6 @@ async function migrateCollections() {
   }
 }
 
-// Run migration
 migrateCollections()
   .then(() => process.exit(0))
   .catch((error) => {

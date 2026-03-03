@@ -28,32 +28,27 @@ import { cacheMiddleware } from "../middleware/cache";
 // import { reserveMultiple, releaseMultiple } from "@/lib/inventory";
 // import { initCODTracking } from "@/lib/payment/cod";
 
-// Create a Hono app for order routes, typed with Env bindings
 const app = new Hono<{ Bindings: Env }>();
 const deliveryService = new DeliveryService();
 
-// Helper function to convert Unix timestamp to Date
 const unixToDate = (timestamp: number | null): Date | null => {
   if (!timestamp) return null;
   return new Date(timestamp * 1000);
 };
 
-// GET a specific order by ID
-// Apply cache middleware with 30-day TTL, for GET only, varying by auth
 app.get(
   "/:id",
   cacheMiddleware({
-    ttl: 2592000, // 30 days in seconds
+    ttl: 2592000,
     methods: ["GET"],
-    varyByQuery: false, // No query params for this route
-    varyByAuth: true, // Route is authenticated
+    varyByQuery: false,
+    varyByAuth: true,
   }),
   async (c) => {
     try {
       const db = c.get("db");
       const id = c.req.param("id");
 
-      // Get order details from database
       const orderResult = await db
         .select({
           id: orders.id,
@@ -84,7 +79,6 @@ app.get(
       }
       const order = orderResult[0];
 
-      // Get order items with product and variant details
       const items = await db
         .select({
           id: orderItems.id,
@@ -108,13 +102,10 @@ app.get(
         .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
         .where(eq(orderItems.orderId, id));
 
-      // Get associated shipments using deliveryService
       const shipments = await deliveryService.getShipments(id);
 
-      // Get active delivery providers using deliveryService
       const activeProviders = await deliveryService.getActiveProviders();
 
-      // Format dates and add shipments/providers
       const formattedOrder = {
         ...order,
         createdAt: unixToDate(order.createdAt)?.toISOString() || null,
@@ -181,7 +172,6 @@ const createOrderSchema = z.object({
     .default(InventoryPool.REGULAR),
 });
 
-// GET - Poll checkout status for async order ingestion
 app.get("/status/:token", async (c) => {
   try {
     const token = c.req.param("token");
@@ -195,24 +185,18 @@ app.get("/status/:token", async (c) => {
 
     if (!c.env.CACHE) {
       console.warn("[Orders] Polling endpoint hit but CACHE KV is not bound!");
-      return c.json({ status: "processing" }); // Fallback
+      return c.json({ status: "processing" });
     }
 
     const kvKey = `checkout_status:${token}`;
     const statusStr = await c.env.CACHE.get(kvKey);
 
     if (!statusStr) {
-      // If we don't have it yet, it might still be in the queue waiting to be processed
-      // Return 202 instead of 404 so storefront keeps polling
       return c.json({ status: "processing", message: "Order is waiting in queue." }, 202);
     }
 
     const statusData = JSON.parse(statusStr);
 
-    // KV Eventual Consistency Fallback:
-    // If KV still thinks we are "processing", the queue might have ALREADY finished inserting the order
-    // but the KV edge cache replication to this user's region is lagging.
-    // Let's explicitly check the D1 backend to be 100% sure!
     if (statusData.status === "processing" && statusData.orderId) {
       const db = c.get("db");
       const orderExists = await db
@@ -222,12 +206,10 @@ app.get("/status/:token", async (c) => {
         .limit(1);
 
       if (orderExists.length > 0) {
-        // The order is safely in D1! Bypass the lagging KV and return success instantly!
         return c.json({ status: "completed", orderId: statusData.orderId }, 200);
       }
     }
 
-    // Once completed/failed (or confirmed still processing via D1), we return the status
     return c.json(statusData, 200);
 
   } catch (err) {

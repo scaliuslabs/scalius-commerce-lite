@@ -5,9 +5,8 @@ import { LoaderCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrency } from "@/hooks/useCurrency";
 
-// Type for the items fetched for the popover
 type PopoverOrderItem = {
-  id: string; // Order item ID
+  id: string;
   productId: string;
   productName: string | null;
   productImage: string | null;
@@ -15,7 +14,7 @@ type PopoverOrderItem = {
   variantSize: string | null;
   variantColor: string | null;
   quantity: number;
-  price: number; // Price per unit
+  price: number;
 };
 
 interface OrderItemsPopoverProps {
@@ -36,7 +35,6 @@ export function OrderItemsPopover({
   const handleOpenChange = async (open: boolean) => {
     setIsOpen(open);
     if (open && !items) {
-      // Fetch only if opening and items haven't been fetched yet
       setIsLoading(true);
       try {
         const response = await fetch(`/api/orders/${orderId}/items`);

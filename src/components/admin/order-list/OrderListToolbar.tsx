@@ -82,7 +82,6 @@ export function OrderListToolbar({
   const [localSearch, setLocalSearch] = React.useState(searchQuery);
   const searchTimeoutRef = React.useRef<number | undefined>(undefined);
 
-  // Auto-refresh state - using browser APIs only (Cloudflare Workers compatible)
   const [autoRefreshEnabled, setAutoRefreshEnabled] = React.useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("orderlist-auto-refresh") === "true";
@@ -93,12 +92,10 @@ export function OrderListToolbar({
   const refreshIntervalRef = React.useRef<number | undefined>(undefined);
   const countdownIntervalRef = React.useRef<number | undefined>(undefined);
 
-  // Sync local search with prop changes
   React.useEffect(() => {
     setLocalSearch(searchQuery);
   }, [searchQuery]);
 
-  // Auto-update parent search query after 500ms of inactivity
   React.useEffect(() => {
     if (searchTimeoutRef.current) {
       window.clearTimeout(searchTimeoutRef.current);
@@ -106,7 +103,6 @@ export function OrderListToolbar({
 
     searchTimeoutRef.current = window.setTimeout(() => {
       if (localSearch !== searchQuery) {
-        // Just update the search query - the parent will handle the actual search
         onSearchQueryChange(localSearch);
       }
     }, 500);
@@ -118,23 +114,19 @@ export function OrderListToolbar({
     };
   }, [localSearch, searchQuery, onSearchQueryChange]);
 
-  // Auto-refresh logic using browser setInterval (Cloudflare Workers compatible)
   React.useEffect(() => {
     if (autoRefreshEnabled && onRefresh) {
-      // Reset countdown
       setCountdown(60);
 
-      // Countdown timer (1 second intervals)
       countdownIntervalRef.current = window.setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
-            return 60; // Reset to 60 when it reaches 0
+            return 60;
           }
           return prev - 1;
         });
       }, 1000);
 
-      // Refresh timer (60 second intervals)
       refreshIntervalRef.current = window.setInterval(() => {
         onRefresh();
       }, 60000);
@@ -148,7 +140,6 @@ export function OrderListToolbar({
         }
       };
     } else {
-      // Clean up intervals when disabled
       if (countdownIntervalRef.current) {
         window.clearInterval(countdownIntervalRef.current);
       }
@@ -158,7 +149,6 @@ export function OrderListToolbar({
     }
   }, [autoRefreshEnabled, onRefresh]);
 
-  // Save preference to localStorage
   const toggleAutoRefresh = () => {
     const newValue = !autoRefreshEnabled;
     setAutoRefreshEnabled(newValue);
@@ -166,17 +156,14 @@ export function OrderListToolbar({
       localStorage.setItem("orderlist-auto-refresh", String(newValue));
     }
 
-    // Optimistic refresh: Trigger immediately when enabling
     if (newValue && onRefresh) {
       onRefresh();
-      setCountdown(60); // Reset countdown immediately
+      setCountdown(60);
     }
   };
 
-  // Keyboard shortcuts
   React.useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Focus search on "/" key (like GitHub)
       if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
         const target = e.target as HTMLElement;
         if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
@@ -184,7 +171,6 @@ export function OrderListToolbar({
           searchInputRef.current?.focus();
         }
       }
-      // Clear search on Escape
       if (
         e.key === "Escape" &&
         document.activeElement === searchInputRef.current

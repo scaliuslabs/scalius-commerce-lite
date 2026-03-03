@@ -1,4 +1,3 @@
-// src/components/admin/discount/DiscountList.tsx
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Table,
@@ -67,7 +66,6 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/hooks/useCurrency";
 
-// --- Type Definitions (Unchanged) ---
 type SortField =
   | "code"
   | "type"
@@ -93,15 +91,14 @@ interface DiscountItem {
   combineWithOrderDiscounts: boolean;
   combineWithShippingDiscounts: boolean;
   customerSegment: string | null;
-  startDate: string | null; // ISO date string
-  endDate: string | null; // ISO date string
+  startDate: string | null;
+  endDate: string | null;
   isActive: boolean;
-  createdAt: string | null; // ISO date string
-  updatedAt: string | null; // ISO date string
-  deletedAt: string | null; // ISO date string
+  createdAt: string | null;
+  updatedAt: string | null;
+  deletedAt: string | null;
   relatedProducts: { buy: string[]; get: string[] };
   relatedCollections: { buy: string[]; get: string[] };
-  // Add new statistics fields
   usageCount?: number;
   totalDiscountAmount?: number;
 }
@@ -121,9 +118,7 @@ interface DiscountListProps {
   };
   showTrashed?: boolean;
 }
-// --- End Type Definitions ---
 
-// Build a concise discount summary for tooltip display
 function buildDiscountSummary(
   discount: DiscountItem,
   getTypeLabel: (type: string) => string,
@@ -158,7 +153,6 @@ function buildDiscountSummary(
   return lines;
 }
 
-// Enhanced Row Component with Action Dropdown
 const DiscountRow = React.memo(
   ({
     discount,
@@ -194,8 +188,8 @@ const DiscountRow = React.memo(
     return (
       <TableRow
         className={cn(
-          "hover:bg-muted/50 transition-colors", // Subtle hover effect
-          isSelected && "bg-muted", // Indicate selection
+          "hover:bg-muted/50 transition-colors",
+          isSelected && "bg-muted",
         )}
         data-state={isSelected && "selected"}
       >
@@ -513,9 +507,7 @@ export function DiscountList({
       order: (url.searchParams.get("order") || initialSort.order) as SortOrder,
     });
     setSearchQuery(url.searchParams.get("search") || initialSearchQuery);
-  }, [initialSort.field, initialSort.order, initialSearchQuery]); // Rerun if initial props change
-
-  // --- Callbacks for actions (Unchanged logic, only adjusted state updates) ---
+  }, [initialSort.field, initialSort.order, initialSearchQuery]);
   const handleSearch = useCallback(
     (e: React.SyntheticEvent) => {
       e.preventDefault();
@@ -551,7 +543,7 @@ export function DiscountList({
   const handleLimitChange = useCallback((newLimit: number) => {
     const url = new URL(window.location.href);
     url.searchParams.set("limit", newLimit.toString());
-    url.searchParams.delete("page"); // Reset to page 1 on limit change
+    url.searchParams.delete("page");
     window.location.href = url.toString();
   }, []);
 
@@ -565,8 +557,8 @@ export function DiscountList({
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirmation) return;
-    const idToDelete = deleteConfirmation; // Store id before clearing state
-    setDeleteConfirmation(null); // Close dialog immediately for better UX
+    const idToDelete = deleteConfirmation;
+    setDeleteConfirmation(null);
 
     try {
       const response = await fetch(`/api/discounts/${idToDelete}`, {
@@ -583,15 +575,12 @@ export function DiscountList({
         description: "The discount has been moved to trash successfully.",
       });
 
-      // Optimistic UI update
       setDisplayDiscounts((prev) => prev.filter((d) => d.id !== idToDelete));
       setCurrentPagination((prev) => ({
         ...prev,
-        total: Math.max(0, prev.total - 1), // Prevent negative total
+        total: Math.max(0, prev.total - 1),
         totalPages: Math.ceil((prev.total - 1) / prev.limit),
       }));
-      // Optionally: re-fetch data or trigger parent component update
-      // window.location.reload(); // Less ideal, but ensures consistency if needed
     } catch (error) {
       console.error("Error deleting discount:", error);
       toast({
@@ -600,7 +589,6 @@ export function DiscountList({
           error instanceof Error ? error.message : "Failed to delete discount",
         variant: "destructive",
       });
-      // Optionally revert optimistic update or show specific error message
     }
   }, [deleteConfirmation, toast]);
 
@@ -694,7 +682,7 @@ export function DiscountList({
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (selectedDiscounts.size === 0) return;
     const idsToDelete = Array.from(selectedDiscounts);
-    setBulkDeleteConfirmation(false); // Close dialog
+    setBulkDeleteConfirmation(false);
 
     try {
       const response = await fetch(`/api/discounts/bulk-delete`, {
@@ -726,7 +714,7 @@ export function DiscountList({
         total: Math.max(0, prev.total - idsToDelete.length),
         totalPages: Math.ceil((prev.total - idsToDelete.length) / prev.limit),
       }));
-      setSelectedDiscounts(new Set()); // Clear selection
+      setSelectedDiscounts(new Set());
     } catch (error) {
       console.error("Error bulk deleting discounts:", error);
       toast({
@@ -745,7 +733,7 @@ export function DiscountList({
     } else {
       url.searchParams.delete("type");
     }
-    url.searchParams.delete("page"); // Reset page on filter change
+    url.searchParams.delete("page");
     window.location.href = url.toString();
   }, []);
 
@@ -769,7 +757,6 @@ export function DiscountList({
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return "Invalid Date";
-      // Use a slightly more compact date format
       return date.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
@@ -785,7 +772,6 @@ export function DiscountList({
   }, []);
 
   const getTypeLabel = useCallback((type: string) => {
-    // Keep consistent with provided types
     switch (type) {
       case "amount_off_products":
         return "Amount Off Products";
@@ -794,7 +780,7 @@ export function DiscountList({
       case "free_shipping":
         return "Free Shipping";
       default:
-        return type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()); // Format fallback
+        return type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
     }
   }, []);
 
@@ -825,7 +811,6 @@ export function DiscountList({
 
   const handleSelectAll = useCallback(
     (checked: boolean | "indeterminate") => {
-      // Handle indeterminate state if needed, otherwise treat as boolean
       const isChecked = typeof checked === "boolean" ? checked : false;
       if (isChecked) {
         const allIds = new Set(displayDiscounts.map((discount) => discount.id));
@@ -841,13 +826,11 @@ export function DiscountList({
   const selectAllCheckedState = useMemo(() => {
     if (selectedDiscounts.size === 0) return false;
     if (selectedDiscounts.size === displayDiscounts.length) return true;
-    return "indeterminate"; // Partially selected
+    return "indeterminate";
   }, [selectedDiscounts.size, displayDiscounts.length]);
 
-  // Remove the hardcoded slice - rely on pagination
   const visibleDiscounts = useMemo(() => displayDiscounts, [displayDiscounts]);
 
-  // Add new callback for toggling status
   const handleToggleStatus = useCallback(
     async (id: string, currentStatus: boolean) => {
       try {

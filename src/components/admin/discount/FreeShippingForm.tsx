@@ -46,7 +46,6 @@ function generateDiscountCode(): string {
   return code;
 }
 
-// Form validation schema
 const formSchema = z.object({
   code: z.string().min(3).max(50),
   minPurchaseAmount: z.number().nullable().optional(),
@@ -75,7 +74,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
     resolver: zodResolver<FormValues>(formSchema),
     defaultValues: {
       code: "",
-      minPurchaseAmount: 1000, // Default minimum purchase amount for free shipping
+      minPurchaseAmount: 1000,
       maxUsesPerOrder: 1,
       maxUses: null,
       limitOnePerCustomer: false,
@@ -85,7 +84,6 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
       endDate: null,
       isActive: true,
       ...defaultValues,
-      // Convert ISO date strings to Date objects if needed
       ...(defaultValues?.startDate && {
         startDate:
           typeof defaultValues.startDate === "string"
@@ -101,12 +99,10 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
     },
   });
 
-  // Internal submit handler
   const internalHandleSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     const discountId = defaultValues?.id;
 
-    // Ensure startDate is valid
     const ensuredValues = {
       ...values,
       startDate:
@@ -124,9 +120,8 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
       const payload = {
         ...ensuredValues,
         type: "free_shipping",
-        valueType: "free", // Always free for this type
-        discountValue: 100, // Always 100 for this type
-        // Pass dates directly as Date objects - API will handle conversion
+        valueType: "free",
+        discountValue: 100,
         startDate: ensuredValues.startDate,
         endDate: values.endDate,
       };

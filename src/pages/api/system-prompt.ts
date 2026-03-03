@@ -1,6 +1,5 @@
 import type { APIRoute } from "astro";
 
-// Define the URLs for different prompt types
 const PROMPT_URLS = {
   widget: "https://text.wrygo.com/home-page-prompt.txt",
   "landing-page": "https://text.wrygo.com/pages-prompt.txt",
@@ -12,7 +11,6 @@ export const GET: APIRoute = async ({ url }) => {
   const promptUrl = PROMPT_URLS[promptType] || PROMPT_URLS.widget;
 
   try {
-    // Fetch the system prompt from the external URL
     const response = await fetch(promptUrl, {
       method: "GET",
       headers: {
