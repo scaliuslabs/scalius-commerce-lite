@@ -1,4 +1,3 @@
-//src/components/admin/ProductView.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -93,7 +92,6 @@ export function ProductView({ product }: ProductViewProps) {
 
   return (
     <div className="container max-w-[1400px] space-y-4 py-4">
-      {/* Header Card */}
       <Card className="border-none shadow-none bg-transparent sm:bg-card">
         <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col lg:flex-row gap-6 lg:items-start justify-between">
@@ -219,7 +217,6 @@ export function ProductView({ product }: ProductViewProps) {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Left Column - Meta & Images */}
         <div className="lg:col-span-1 space-y-4">
           <Card>
             <CardHeader className="p-4 border-b">
@@ -293,7 +290,6 @@ export function ProductView({ product }: ProductViewProps) {
           )}
         </div>
 
-        {/* Right Column - Variants Table */}
         <div className="lg:col-span-2">
           <Card className="h-full flex flex-col">
             <CardHeader className="p-4 border-b">

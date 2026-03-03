@@ -74,7 +74,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/hooks/useCurrency";
-import type { ShippingMethod } from "@/db/schema"; // Import the type
+import type { ShippingMethod } from "@/db/schema";
 
 type SortField =
   | "name"
@@ -85,13 +85,9 @@ type SortField =
   | "updatedAt";
 type SortOrder = "asc" | "desc";
 
-interface ShippingMethodsManagerProps {
-  // Props will be added if we fetch initial data server-side in Astro page later
-}
+interface ShippingMethodsManagerProps {}
 
-interface ManagerShippingMethod extends ShippingMethod {
-  // Add any client-side specific fields if needed in the future
-}
+interface ManagerShippingMethod extends ShippingMethod {}
 
 export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
   const { toast } = useToast();
@@ -186,9 +182,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
 
   useEffect(() => {
     fetchMethods();
-  }, [fetchMethods]); // fetchMethods is stable due to its own dependencies
-
-  // Sync state with URL params on mount/hydration for sort and search
+  }, [fetchMethods]);
   useEffect(() => {
     const url = new URL(window.location.href);
     setSearchQuery(url.searchParams.get("search") || "");
@@ -378,20 +372,6 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
     setMethodToDelete(null);
 
     try {
-      // Astro/Hono does not support DELETE with body for permanent typically, use a custom endpoint or query param if needed.
-      // For now, we assume DELETE on `/[id]` with `showTrashed=true` context means permanent.
-      // The API for permanent delete should be distinct if DELETE `/[id]` is only for soft delete.
-      // Let's assume a specific endpoint or a different API structure for permanent for now.
-      // For this example, let's simulate it will be handled by the same DELETE if it were a different endpoint or logic.
-      // If the `DELETE /[id]` is always soft, we need a `DELETE /[id]/permanent` or similar.
-      // For now, we will call the same DELETE and expect the API to know based on context (which is not ideal)
-      // OR we create a specific API call like /api/admin/settings/shipping-methods/${idToDelete}/permanent-delete
-      // Let's assume the API needs a specific endpoint for permanent deletion for safety.
-      // However, given the existing structure from CategoryList, we will call the same delete endpoint
-      // and rely on the API to have logic for permanent if `showTrashed` is true on client,
-      // which means the API for `DELETE /[id]` should check a param like `permanent=true` or be a different endpoint.
-      // For simplicity in this component, we call the standard DELETE. The API needs to be robust.
-      // **Correction**: CategoryList uses /api/categories/[id]/permanent. We should do the same.
       const response = await fetch(
         `/api/admin/settings/shipping-methods/${idToDelete}/permanent-delete`,
         {
@@ -430,7 +410,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
       const response = await fetch(
         `/api/admin/settings/shipping-methods/${id}/restore`,
         {
-          method: "POST", // Or PUT, depending on API design
+          method: "POST",
         },
       );
       if (!response.ok) throw new Error("Failed to restore shipping method");

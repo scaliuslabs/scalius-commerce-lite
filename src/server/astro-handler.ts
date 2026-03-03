@@ -1,6 +1,4 @@
-// src/server/astro-handler.ts
 import type { APIContext as BaseAPIContext } from "astro";
-// ✅ CORRECTED: Directly import the ExecutionContext type.
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import app from "./index";
 import { getGroupsForPath, invalidateGroups } from "./utils/cache-invalidation";
@@ -17,7 +15,6 @@ type APIContextWithLocals = BaseAPIContext & {
   };
 };
 
-// Universal request handler for all HTTP methods
 async function handleRequest(context: APIContextWithLocals) {
   const startTime = performance.now();
 
@@ -105,7 +102,6 @@ async function handleRequest(context: APIContextWithLocals) {
   }
 }
 
-// Separate functions for each method, all calling the main handler
 export async function GET(context: BaseAPIContext) {
   return handleRequest(context as APIContextWithLocals);
 }

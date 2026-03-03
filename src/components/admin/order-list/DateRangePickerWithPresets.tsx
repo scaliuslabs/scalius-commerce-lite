@@ -96,10 +96,8 @@ export function DateRangePickerWithPresets({
   align = "start",
 }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false);
-  // Internal state to hold selection before applying
   const [tempDate, setTempDate] = React.useState<DateRange | undefined>(date);
 
-  // Reset temp date when opening or when prop changes
   React.useEffect(() => {
     setTempDate(date);
   }, [date, open]);
@@ -181,19 +179,19 @@ export function DateRangePickerWithPresets({
                 selected={tempDate}
                 onSelect={setTempDate}
                 numberOfMonths={2}
-                className="p-1" // Compact padding for calendar itself
+                className="p-1"
                 classNames={{
-                  months: "flex flex-col sm:flex-row gap-3", // Tighter gap between months
-                  month: "flex flex-col gap-3", // Tighter gap within month
+                  months: "flex flex-col sm:flex-row gap-3",
+                  month: "flex flex-col gap-3",
                   caption:
-                    "flex justify-center pt-1 relative items-center w-full pb-1", // Compact caption
-                  caption_label: "text-xs font-semibold", // Smaller caption text
+                    "flex justify-center pt-1 relative items-center w-full pb-1",
+                  caption_label: "text-xs font-semibold",
                   nav_button:
-                    "size-6 bg-transparent p-0 opacity-50 hover:opacity-100", // Smaller nav buttons
+                    "size-6 bg-transparent p-0 opacity-50 hover:opacity-100",
                   head_cell:
-                    "text-muted-foreground rounded-md w-7 font-normal text-[0.7rem]", // Smaller head cells
-                  cell: "h-7 w-7 text-center text-[0.75rem] p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20", // Compact cells
-                  day: "size-7 p-0 font-normal aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground rounded-md focus:bg-accent focus:text-accent-foreground", // Smaller day buttons
+                    "text-muted-foreground rounded-md w-7 font-normal text-[0.7rem]",
+                  cell: "h-7 w-7 text-center text-[0.75rem] p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                  day: "size-7 p-0 font-normal aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground rounded-md focus:bg-accent focus:text-accent-foreground",
                   day_selected:
                     "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
                   day_today: "bg-accent/50 text-accent-foreground",

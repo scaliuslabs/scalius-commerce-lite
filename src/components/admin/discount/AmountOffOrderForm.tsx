@@ -1,4 +1,3 @@
-// src/components/admin/discount/AmountOffOrderForm.tsx
 import React, { useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -11,7 +10,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "../../ui/form"; // Assuming correct path
+} from "../../ui/form";
 import { Input } from "../../ui/input";
 import { Button } from "../../ui/button";
 import {
@@ -21,22 +20,22 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "../../ui/card"; // Assuming correct path
+} from "../../ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../../ui/select"; // Assuming correct path
-import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover"; // Assuming correct path
-import { Calendar } from "../../ui/calendar"; // Assuming correct path
+} from "../../ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
+import { Calendar } from "../../ui/calendar";
 import { CalendarIcon, Percent, Loader2, Info, RefreshCw } from "lucide-react";
-import { Checkbox } from "../../ui/checkbox"; // Assuming correct path
-import { cn } from "@/lib/utils"; // Assuming correct path
+import { Checkbox } from "../../ui/checkbox";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Separator } from "../../ui/separator"; // Assuming correct path
-import { useToast } from "@/hooks/use-toast"; // Assuming correct path
+import { Separator } from "../../ui/separator";
+import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import {
   Tooltip,
@@ -46,15 +45,12 @@ import {
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "@/hooks/useCurrency";
-
-// --- Form Schema (Unchanged) ---
 const formSchema = z
   .object({
     code: z
       .string()
       .min(3, { message: "Code must be at least 3 characters long" })
       .max(50, { message: "Code cannot exceed 50 characters" })
-      // Add regex for better code format validation (example: no spaces)
       .regex(/^[a-zA-Z0-9_-]+$/, {
         message:
           "Code can only contain letters, numbers, underscores, and hyphens",
@@ -95,7 +91,6 @@ const formSchema = z
   })
   .refine(
     (data) => {
-      // Ensure end date is not before start date
       if (data.endDate && data.startDate && data.endDate < data.startDate) {
         return false;
       }
@@ -103,7 +98,7 @@ const formSchema = z
     },
     {
       message: "End date cannot be before the start date",
-      path: ["endDate"], // Apply error to endDate field
+      path: ["endDate"],
     },
   );
 
@@ -111,10 +106,9 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface AmountOffOrderFormProps {
   defaultValues?: Partial<FormValues & { id?: string }>;
-  onCancel?: () => void; // Optional cancel handler
+  onCancel?: () => void;
 }
 
-// Helper component for section styling
 const FormSection = ({
   title,
   description,
@@ -135,7 +129,6 @@ const FormSection = ({
   </div>
 );
 
-// Helper for checkbox form items
 const CheckboxFormItem = ({
   name,
   label,
@@ -145,7 +138,7 @@ const CheckboxFormItem = ({
   name: keyof FormValues;
   label: string;
   description: string;
-  control: any; // Type from react-hook-form
+  control: any;
 }) => (
   <FormField
     control={control}
@@ -234,20 +227,16 @@ export function AmountOffOrderForm({
     },
   });
 
-  // --- Submit Handler (Unchanged Logic, added type) ---
   const internalHandleSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     const discountId = defaultValues?.id;
 
-    // Ensure values are correctly formatted for API (especially nullables)
     const payload = {
       ...values,
       type: "amount_off_order",
-      // Ensure empty strings for optional numbers become null
       minPurchaseAmount: values.minPurchaseAmount || null,
       maxUsesPerOrder: values.maxUsesPerOrder || null,
       maxUses: values.maxUses || null,
-      // Convert dates to ISO strings for JSON
       startDate: values.startDate.toISOString(),
       endDate: values.endDate ? values.endDate.toISOString() : null,
     };
@@ -411,10 +400,9 @@ export function AmountOffOrderForm({
                       <FormLabel>Discount Value</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          {/* Conditionally add padding based on type */}
                           <Input
                             type="number"
-                            step={valueType === "percentage" ? "0.1" : "0.01"} // Allow decimals
+                            step={valueType === "percentage" ? "0.1" : "0.01"}
                             placeholder={
                               valueType === "percentage" ? "10" : "500"
                             }
@@ -422,7 +410,6 @@ export function AmountOffOrderForm({
                               valueType === "fixed_amount" && "pl-7",
                             )}
                             {...field}
-                            // Use field.value directly with coerce in schema
                           />
                           {valueType === "percentage" && (
                             <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -434,7 +421,6 @@ export function AmountOffOrderForm({
                           )}
                         </div>
                       </FormControl>
-                      {/* <FormDescription>The actual discount amount/percentage.</FormDescription> */}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -444,7 +430,6 @@ export function AmountOffOrderForm({
 
             <Separator className="my-4" />
 
-            {/* Section 2: Minimum Requirements */}
             <FormSection
               title="Minimum Requirements"
               description="Set conditions that must be met for the discount to apply."
@@ -484,7 +469,6 @@ export function AmountOffOrderForm({
 
             <Separator className="my-4" />
 
-            {/* Section 3: Usage Limits */}
             <FormSection
               title="Usage Limits"
               description="Control how many times the discount can be used."
@@ -523,7 +507,6 @@ export function AmountOffOrderForm({
 
             <Separator className="my-4" />
 
-            {/* Section 4: Combinability */}
             <FormSection
               title="Combinations"
               description="Specify if this discount can be combined with other types."
@@ -557,7 +540,6 @@ export function AmountOffOrderForm({
 
             <Separator className="my-4" />
 
-            {/* Section 5: Active Dates */}
             <FormSection
               title="Active Dates"
               description="Set the period when the discount is available."

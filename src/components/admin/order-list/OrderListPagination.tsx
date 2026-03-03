@@ -23,7 +23,7 @@ export function OrderListPagination({
   onLimitChange,
 }: OrderListPaginationProps) {
   if (pagination.total === 0) {
-    return null; // Don't render pagination if there are no orders
+    return null;
   }
 
   return (

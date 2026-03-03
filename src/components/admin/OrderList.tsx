@@ -4,8 +4,6 @@ import { useToast } from "@/hooks/use-toast";
 import { CheckCircle } from "lucide-react";
 import type { OrderListItem } from "../../lib/admin";
 import type { DateRange } from "react-day-picker";
-
-// Import the refactored components
 import { OrderListToolbar } from "./order-list/OrderListToolbar";
 import { OrderTable } from "./order-list/OrderTable";
 import { OrderListPagination } from "./order-list/OrderListPagination";
@@ -44,8 +42,6 @@ export function OrderList({
   showTrashed = false,
 }: OrderListProps) {
   const { toast } = useToast();
-
-  // State Management
   const [displayOrders, setDisplayOrders] =
     React.useState<OrderListItem[]>(orders);
   const [currentPagination, setCurrentPagination] = React.useState(pagination);
@@ -67,21 +63,15 @@ export function OrderList({
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(
     undefined,
   );
-
-  // UI State
   const [updatingStatusIds, setUpdatingStatusIds] = React.useState<Set<string>>(
     new Set(),
   );
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isShipping, setIsShipping] = React.useState(false);
   const [isLoadingOrders, setIsLoadingOrders] = React.useState(false);
-
-  // Dialog State
   const [orderToDelete, setOrderToDelete] = React.useState<string | null>(null);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = React.useState(false);
   const [isShippingDialogOpen, setIsShippingDialogOpen] = React.useState(false);
-
-  // Effects
   React.useEffect(() => {
     setDisplayOrders(orders);
   }, [orders]);
@@ -96,8 +86,6 @@ export function OrderList({
     setPaymentStatus(url.searchParams.get("paymentStatus"));
     setPaymentMethod(url.searchParams.get("paymentMethod"));
     setFulfillmentStatus(url.searchParams.get("fulfillmentStatus"));
-
-    // Update sort state from URL params
     const sortField = url.searchParams.get("sort") as SortField | null;
     const sortOrder = url.searchParams.get("order") as SortOrder | null;
     if (sortField && sortOrder) {
@@ -105,7 +93,6 @@ export function OrderList({
     }
   }, []);
 
-  // Reset selection when orders change (e.g., after filter/search/pagination)
   React.useEffect(() => {
     const currentOrderIds = new Set(displayOrders.map((o) => o.id));
     setSelectedOrders((prev) => {
@@ -119,7 +106,6 @@ export function OrderList({
     });
   }, [displayOrders]);
 
-  // Initialize shipment statuses from orders prop
   React.useEffect(() => {
     const initialShipmentStatuses: Record<string, any> = {};
     orders.forEach((order) => {
@@ -130,7 +116,6 @@ export function OrderList({
     setShipmentStatuses(initialShipmentStatuses);
   }, [orders]);
 
-  // Fetch orders from API
   const fetchOrders = React.useCallback(
     async (params: {
       page?: number;
@@ -155,7 +140,6 @@ export function OrderList({
         if (params.sort) url.searchParams.set("sort", params.sort);
         if (params.order) url.searchParams.set("order", params.order);
         if (params.trashed) url.searchParams.set("trashed", "true");
-        // new filters
         if (paymentStatus) url.searchParams.set("paymentStatus", paymentStatus);
         if (paymentMethod) url.searchParams.set("paymentMethod", paymentMethod);
         if (fulfillmentStatus) url.searchParams.set("fulfillmentStatus", fulfillmentStatus);
@@ -168,8 +152,6 @@ export function OrderList({
         if (!response.ok) throw new Error("Failed to fetch orders");
 
         const data = await response.json();
-
-        // Parse dates from ISO strings
         const parsedOrders = data.orders.map((order: any) => ({
           ...order,
           createdAt: new Date(order.createdAt),
@@ -186,8 +168,6 @@ export function OrderList({
 
         setDisplayOrders(parsedOrders);
         setCurrentPagination(data.pagination);
-
-        // Update shipment statuses
         const newShipmentStatuses: Record<string, any> = {};
         parsedOrders.forEach((order: any) => {
           if (order.latestShipment) {
@@ -195,8 +175,6 @@ export function OrderList({
           }
         });
         setShipmentStatuses(newShipmentStatuses);
-
-        // Update URL without reload
         const urlToUpdate = new URL(window.location.href);
         if (params.page)
           urlToUpdate.searchParams.set("page", params.page.toString());
@@ -212,8 +190,6 @@ export function OrderList({
         } else {
           urlToUpdate.searchParams.delete("status");
         }
-
-        // Sync advance filters
         if (paymentStatus) urlToUpdate.searchParams.set("paymentStatus", paymentStatus);
         else urlToUpdate.searchParams.delete("paymentStatus");
 
@@ -234,8 +210,6 @@ export function OrderList({
         window.history.pushState({}, "", urlToUpdate.toString());
       } catch (error) {
         console.error("Error fetching orders:", error);
-        console.error("Error fetching orders:", error);
-        // setFetchError(error instanceof Error ? error.message : "Failed to fetch orders");
         toast({
           title: "Error",
           description: "Failed to fetch orders. Please try again.",
@@ -280,7 +254,7 @@ export function OrderList({
   const handleSearch = (e?: React.SyntheticEvent) => {
     if (e) e.preventDefault();
     fetchOrders({
-      page: 1, // Reset to first page on search
+      page: 1,
       limit: currentPagination.limit,
       search: searchQuery,
       status: activeStatus,
@@ -294,15 +268,12 @@ export function OrderList({
 
 
 
-  // React to additional filter changes
   React.useEffect(() => {
-    // Only fetch if it's not the initial mount
     const url = new URL(window.location.href);
     const urlPaymentStatus = url.searchParams.get("paymentStatus");
     const urlPaymentMethod = url.searchParams.get("paymentMethod");
     const urlFulfillmentStatus = url.searchParams.get("fulfillmentStatus");
 
-    // We compare with the state explicitly. If they differ significantly, fetch.
     if (paymentStatus !== urlPaymentStatus || paymentMethod !== urlPaymentMethod || fulfillmentStatus !== urlFulfillmentStatus) {
       fetchOrders({
         page: 1,
@@ -318,10 +289,8 @@ export function OrderList({
     }
   }, [paymentStatus, paymentMethod, fulfillmentStatus]);
 
-  // Auto-trigger search when searchQuery changes from toolbar
   const prevSearchQuery = React.useRef(initialSearchQuery);
   React.useEffect(() => {
-    // Only trigger if searchQuery actually changed and it's not the initial render
     if (searchQuery !== prevSearchQuery.current) {
       prevSearchQuery.current = searchQuery;
       handleSearch();
@@ -361,7 +330,7 @@ export function OrderList({
 
   const handleLimitChange = (newLimit: number) => {
     fetchOrders({
-      page: 1, // Reset to first page when changing limit
+      page: 1,
       limit: newLimit,
       search: searchQuery,
       status: activeStatus,
@@ -376,7 +345,7 @@ export function OrderList({
   const handleStatusFilter = (status: string | null) => {
     setActiveStatus(status);
     fetchOrders({
-      page: 1, // Reset to first page on filter change
+      page: 1,
       limit: currentPagination.limit,
       search: searchQuery,
       status,
@@ -394,12 +363,10 @@ export function OrderList({
       : "/admin/orders?trashed=true";
   };
 
-  // Selection Handlers
   const handleToggleSelection = (
     orderId: string,
     shiftKey: boolean = false,
   ) => {
-    // Prevent text selection when shift-clicking
     if (shiftKey) {
       const selection = window.getSelection();
       if (selection) {
@@ -408,7 +375,6 @@ export function OrderList({
     }
 
     if (shiftKey && lastSelectedId && lastSelectedId !== orderId) {
-      // Range selection
       const orderIds = displayOrders.map((o) => o.id);
       const startIndex = orderIds.indexOf(lastSelectedId);
       const endIndex = orderIds.indexOf(orderId);
@@ -421,7 +387,6 @@ export function OrderList({
       }
       setSelectedOrders(newSelection);
     } else {
-      // Single selection
       const newSelection = new Set(selectedOrders);
       if (newSelection.has(orderId)) {
         newSelection.delete(orderId);
@@ -441,7 +406,6 @@ export function OrderList({
     }
   };
 
-  // Data Mutation Handlers
   const handleStatusUpdate = async (orderId: string, newStatus: string) => {
     setUpdatingStatusIds((prev) => new Set(prev).add(orderId));
     const originalOrders = [...displayOrders];

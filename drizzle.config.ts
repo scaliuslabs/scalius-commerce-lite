@@ -1,4 +1,3 @@
-// drizzle.config.ts
 import type { Config } from "drizzle-kit";
 
 // For D1: drizzle-kit only needs schema + output dir for "generate".

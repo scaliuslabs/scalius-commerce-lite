@@ -6,7 +6,6 @@ import { db } from "@/db";
 import { orders, OrderStatus, FulfillmentStatus } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 
-// Initialize the service
 const deliveryService = new DeliveryService();
 
 export const POST: APIRoute = async ({ request }) => {

@@ -30,13 +30,11 @@ export async function getDashboardStats() {
     1,
   );
 
-  // Convert dates to Unix timestamps (seconds)
   const firstDayOfMonthTs = Math.floor(firstDayOfMonth.getTime() / 1000);
   const firstDayOfLastMonthTs = Math.floor(
     firstDayOfLastMonth.getTime() / 1000,
   );
 
-  // Run independent dashboard queries in parallel for faster load
   const [
     [{ count: totalProducts }],
     [{ count: totalCustomers }],
@@ -84,7 +82,6 @@ export async function getDashboardStats() {
       ),
   ]);
 
-  // Calculate growth percentages
   const orderGrowth = lastMonthStats.count
     ? Math.round(
       ((currentMonthStats.count - lastMonthStats.count) /
@@ -189,14 +186,11 @@ export async function getProducts(options: {
   } = options;
   const offset = (page - 1) * limit;
 
-  // Build where conditions
   const whereConditions = [];
 
   if (showTrashed) {
-    // Show only trashed items
     whereConditions.push(sql`${products.deletedAt} IS NOT NULL`);
   } else {
-    // Show only non-trashed items
     whereConditions.push(sql`${products.deletedAt} IS NULL`);
   }
 
@@ -289,9 +283,7 @@ export async function getProducts(options: {
 
   const productIds = productResults.map((p) => p.id);
 
-  // Fetch variant counts, image counts, primary images, and SKUs in parallel
   const [variantCounts, imageCounts, primaryImages, productSkus] = await db.batch([
-    // Variant counts
     db
       .select({
         productId: productVariants.productId,
@@ -302,7 +294,6 @@ export async function getProducts(options: {
         sql`${productVariants.productId} IN ${productIds} AND ${productVariants.deletedAt} IS NULL`,
       )
       .groupBy(productVariants.productId),
-    // Image counts
     db
       .select({
         productId: productImages.productId,
@@ -311,7 +302,6 @@ export async function getProducts(options: {
       .from(productImages)
       .where(sql`${productImages.productId} IN ${productIds}`)
       .groupBy(productImages.productId),
-    // Primary images
     db
       .select({
         productId: productImages.productId,
@@ -324,7 +314,6 @@ export async function getProducts(options: {
           eq(productImages.isPrimary, true),
         ),
       ),
-    // SKUs (first variant per product)
     db
       .select({
         productId: productVariants.productId,
@@ -349,7 +338,6 @@ export async function getProducts(options: {
     primaryImages.map((pi) => [pi.productId, pi.url]),
   );
 
-  // Create a map for the first SKU of each product
   const skuMap = new Map<string, string>();
   productSkus.forEach((item) => {
     if (!skuMap.has(item.productId)) {
@@ -357,7 +345,6 @@ export async function getProducts(options: {
     }
   });
 
-  // Step 6: Combine data
   const combinedProducts = productResults.map((product) => ({
     id: product.id,
     name: product.name,
@@ -369,14 +356,13 @@ export async function getProducts(options: {
     freeDelivery: product.freeDelivery,
     createdAt: new Date(product.createdAt * 1000),
     updatedAt: new Date(product.updatedAt * 1000),
-    // deletedAt is not selected in productResults, handle if needed or remove if not used in ProductListItem
     category: {
       name: product.categoryName || "Uncategorized",
     },
     variantCount: variantCountMap.get(product.id) || 0,
     imageCount: imageCountMap.get(product.id) || 0,
     primaryImage: primaryImageMap.get(product.id) || null,
-    sku: skuMap.get(product.id) || undefined, // Add SKU here
+    sku: skuMap.get(product.id) || undefined,
   }));
 
   return {
@@ -419,13 +405,11 @@ export async function getProductDetails(
 
   if (!result) return null;
 
-  // Get variants
   const variants = await db
     .select()
     .from(productVariants)
     .where(eq(productVariants.productId, id));
 
-  // Get images
   const images = await db
     .select()
     .from(productImages)
@@ -480,7 +464,6 @@ export interface OrderListItem {
   city: string;
   zone: string;
   area: string | null;
-  // Location names
   cityName: string | null;
   zoneName: string | null;
   areaName: string | null;
@@ -511,14 +494,11 @@ export async function getOrders(options: {
   } = options;
   const offset = (page - 1) * limit;
 
-  // Build where conditions
   const whereConditions = [];
 
   if (showTrashed) {
-    // Show only trashed items
     whereConditions.push(sql`${orders.deletedAt} IS NOT NULL`);
   } else {
-    // Show only non-trashed items
     whereConditions.push(sql`${orders.deletedAt} IS NULL`);
   }
 
@@ -542,7 +522,6 @@ export async function getOrders(options: {
   }
 
   if (endDate) {
-    // Set to end of day (23:59:59.999) to include all orders on that date
     const endOfDay = new Date(endDate);
     endOfDay.setHours(23, 59, 59, 999);
     const endTs = Math.floor(endOfDay.getTime() / 1000);
@@ -615,11 +594,9 @@ export async function getOrders(options: {
       })(),
     );
 
-  // Fetch item counts and shipments in parallel
   const orderIds = results.map((r) => r.id);
 
   const [itemCounts, shipments] = await db.batch([
-    // Item counts
     db
       .select({
         orderId: orderItems.orderId,
@@ -629,7 +606,6 @@ export async function getOrders(options: {
       .from(orderItems)
       .where(sql`${orderItems.orderId} IN ${orderIds}`)
       .groupBy(orderItems.orderId),
-    // Latest shipments
     results.length > 0
       ? db
         .select({
@@ -669,7 +645,6 @@ export async function getOrders(options: {
       }).from(deliveryShipments).where(sql`1=0`)
   ]);
 
-  // Create item count map
   const itemCountMap = new Map(
     itemCounts.map((ic) => [
       ic.orderId,
@@ -799,7 +774,6 @@ export async function getOrderDetails(
 
   if (!order) return null;
 
-  // Get order items with product details
   const items = await db
     .select({
       id: orderItems.id,
@@ -813,7 +787,6 @@ export async function getOrderDetails(
     .leftJoin(products, eq(products.id, orderItems.productId))
     .where(eq(orderItems.orderId, id));
 
-  // Batch fetch all variants in one query (fix N+1)
   const variantIds = [...new Set(items.map((i) => i.variantId).filter(Boolean))] as string[];
   const variantMap = new Map<
     string,
@@ -840,7 +813,6 @@ export async function getOrderDetails(
     }
   }
 
-  // Format items with proper structure (no per-item DB calls)
   const formattedItems = items.map((item) => {
     const variant = item.variantId ? variantMap.get(item.variantId) : undefined;
     return {
@@ -867,19 +839,16 @@ export async function getOrderDetails(
 }
 
 export async function getProductStats() {
-  // Get total product count
   const [{ count: totalProducts }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(products)
     .where(sql`${products.deletedAt} IS NULL`);
 
-  // Get count of active products
   const [{ count: activeProducts }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(products)
     .where(sql`${products.deletedAt} IS NULL AND ${products.isActive} = 1`);
 
-  // Get count of products with primary images
   const [{ count: productsWithImages }] = await db
     .select({
       count: sql<number>`count(DISTINCT ${products.id})`,
@@ -894,7 +863,6 @@ export async function getProductStats() {
     )
     .where(sql`${products.deletedAt} IS NULL`);
 
-  // Get categories count
   const [{ count: categoriesCount }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(categories)
@@ -909,13 +877,11 @@ export async function getProductStats() {
 }
 
 export async function getCategoryStats() {
-  // Get total categories count
   const [{ count: totalCategories }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(categories)
     .where(sql`${categories.deletedAt} IS NULL`);
 
-  // Get count of categories with images
   const [{ count: categoriesWithImages }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(categories)
@@ -923,7 +889,6 @@ export async function getCategoryStats() {
       sql`${categories.deletedAt} IS NULL AND ${categories.imageUrl} IS NOT NULL`,
     );
 
-  // Get total products across all categories
   const [{ count: totalProducts }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(products)
@@ -936,13 +901,11 @@ export async function getCategoryStats() {
   };
 }
 
-// New function to get daily aggregated order data
 export async function getDailyActivityData(days: number) {
   const now = new Date();
   const startDate = new Date(now);
   startDate.setDate(now.getDate() - days);
 
-  // Use strftime to format the timestamp as YYYY-MM-DD for grouping
   const dailyOrderData = await db
     .select({
       date: sql<string>`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch'))`,
@@ -964,7 +927,6 @@ export async function getDailyActivityData(days: number) {
       sql`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch')) asc`,
     );
 
-  // Fetch daily new customer counts
   const dailyCustomerData = await db
     .select({
       date: sql<string>`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch'))`,
@@ -985,13 +947,12 @@ export async function getDailyActivityData(days: number) {
       sql`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch')) asc`,
     );
 
-  // Ensure all days in the range are present, filling missing days with 0
   const result = [];
   const currentDate = new Date(startDate);
-  currentDate.setHours(0, 0, 0, 0); // Normalize start date
+  currentDate.setHours(0, 0, 0, 0);
 
   const endDate = new Date(now);
-  endDate.setHours(0, 0, 0, 0); // Normalize end date
+  endDate.setHours(0, 0, 0, 0);
 
   const orderMap = new Map(dailyOrderData.map((item) => [item.date, item]));
   const customerMap = new Map(
@@ -1014,7 +975,6 @@ export async function getDailyActivityData(days: number) {
   return result;
 }
 
-// Function to get discounts with pagination, sorting, filtering, etc.
 export async function getDiscounts(options: {
   search?: string;
   type?: string; // Filter by discount type
@@ -1057,17 +1017,14 @@ export async function getDiscounts(options: {
   }
 
   if (type) {
-    // Assert the type string matches the expected enum values
     whereConditions.push(eq(discounts.type, type as Discount["type"]));
   }
 
-  // Get total count for pagination
   const [{ count }] = await db
     .select({ count: sql<number>`count(distinct ${discounts.id})` })
     .from(discounts)
     .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
 
-  // Get paginated results
   const results = await db
     .select({
       id: discounts.id,
@@ -1125,10 +1082,8 @@ export async function getDiscounts(options: {
       })(),
     );
 
-  // Get the discount IDs for fetching usage statistics
   const discountIds = results.map((discount) => discount.id);
 
-  // Fetch usage statistics for each discount
   const usageStats: Record<string, { count: number; total: number }> = {};
 
   if (discountIds.length > 0) {
@@ -1142,7 +1097,6 @@ export async function getDiscounts(options: {
       .where(sql`${discountUsage.discountId} IN ${discountIds}`)
       .groupBy(discountUsage.discountId);
 
-    // Convert to lookup object
     usageResults.forEach((result) => {
       usageStats[result.discountId] = {
         count: result.count ? parseInt(String(result.count), 10) : 0,
@@ -1151,9 +1105,7 @@ export async function getDiscounts(options: {
     });
   }
 
-  // Format dates from timestamps (seconds) to ISO strings for the client
   const formattedDiscounts = results.map((discount) => {
-    // Get usage stats for this discount, defaulting to 0 if not found
     const stats = usageStats[discount.id] || { count: 0, total: 0 };
 
     return {
@@ -1173,14 +1125,12 @@ export async function getDiscounts(options: {
       deletedAt: discount.deletedAt
         ? new Date(discount.deletedAt * 1000).toISOString()
         : null,
-      // Parse the JSON strings for related items (currently empty)
       relatedProducts: JSON.parse(
         discount.relatedProducts || '{"buy": [], "get": []}',
       ),
       relatedCollections: JSON.parse(
         discount.relatedCollections || '{"buy": [], "get": []}',
       ),
-      // Include actual usage statistics
       usageCount: stats.count,
       totalDiscountAmount: stats.total,
     };

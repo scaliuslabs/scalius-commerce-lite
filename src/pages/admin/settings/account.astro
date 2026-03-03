@@ -1,20 +1,16 @@
 ---
-// src/pages/admin/settings/account.astro
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { AccountSettingsWithPermissions } from "../../../components/admin/AccountSettingsWithPermissions";
 import { getDb } from "@/db";
 import { user as userTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-// Get user from middleware
 const user = Astro.locals.user;
 
-// Redirect if not authenticated (handled by AdminLayout, but just in case)
 if (!user) {
   return Astro.redirect("/auth/login");
 }
 
-// Fetch twoFactorMethod and isSuperAdmin from database
 const env = Astro.locals.runtime?.env || process.env;
 const db = getDb(env);
 const dbUser = await db
@@ -26,7 +22,6 @@ const dbUser = await db
   .where(eq(userTable.id, user.id))
   .get();
 
-// Prepare user data for the component
 const userData = {
   id: user.id,
   name: user.name,
@@ -37,7 +32,6 @@ const userData = {
   twoFactorMethod: dbUser?.twoFactorMethod || null,
 };
 
-// Get permissions from middleware
 const permissions = Astro.locals.permissions;
 const permissionsArray = permissions ? Array.from(permissions) : [];
 const isSuperAdmin = dbUser?.isSuperAdmin ?? false;
