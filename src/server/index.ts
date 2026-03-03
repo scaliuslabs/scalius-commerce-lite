@@ -212,7 +212,7 @@ app.route("/webhooks/steadfast", steadfastWebhookRoutes);
 
 // Apply auth middleware ONLY to paths needing protection
 // Paths are relative (prefix already stripped by astro-handler)
-app.use("/cache/*", authMiddleware);
+app.use("/cache/*", adminAuthMiddleware);
 app.use("/orders/*", authMiddleware);
 
 // Register routes (mix of public and protected)

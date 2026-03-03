@@ -89,8 +89,10 @@ app.post(
     const body = c.req.valid("json");
     const eventId = createId(); // Create a unique ID for this event for deduplication
 
+    const db = c.get("db");
+
     // Create the promise for the async task
-    const eventPromise = sendCapiEvent({
+    const eventPromise = sendCapiEvent(db, {
       event_name: body.eventName,
       event_time: Math.floor(Date.now() / 1000), // Current Unix timestamp
       event_source_url: body.eventSourceUrl,
@@ -111,13 +113,13 @@ app.post(
 
     // Use waitUntil to ensure the async task completes in the background
     if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
-        c.executionCtx.waitUntil(eventPromise);
-        console.log("[Hono /meta/events] Event processing scheduled with waitUntil.");
+      c.executionCtx.waitUntil(eventPromise);
+      console.log("[Hono /meta/events] Event processing scheduled with waitUntil.");
     } else {
-        // This is a fallback for environments where waitUntil is not available (e.g., local Node.js dev)
-        // It will delay the response, but ensures the task runs.
-        console.warn("[Hono /meta/events] c.executionCtx.waitUntil not available. Awaiting promise directly.");
-        await eventPromise;
+      // This is a fallback for environments where waitUntil is not available (e.g., local Node.js dev)
+      // It will delay the response, but ensures the task runs.
+      console.warn("[Hono /meta/events] c.executionCtx.waitUntil not available. Awaiting promise directly.");
+      await eventPromise;
     }
 
     // Immediately return a success response to the client
