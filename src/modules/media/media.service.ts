@@ -4,9 +4,9 @@ import { deleteFile, uploadFile } from "@/integrations/storage";
 import { desc, isNull, sql, like, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_MB = 20; // Increased to 20MB for robustness
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-const MAX_FILES_PER_UPLOAD = 20;
+const MAX_FILES_PER_UPLOAD = 50; // Increased to 50 for robust bulk uploads
 const BATCH_SIZE = 5;
 
 export const MediaService = {
@@ -120,28 +120,34 @@ export const MediaService = {
             }
         }
 
-        if (uploadedFiles.length === 0 && errors.length > 0) {
-            const errorStr = JSON.stringify({
-                error: "All files failed to upload",
-                details: errors.map(e => ({ filename: e.filename, error: e.error })),
-                summary: `0 files uploaded, ${errors.length} files failed`,
-            });
-            const error = new Error(errorStr);
-            (error as any).statusCode = 400;
-            throw error;
-        }
-
         const response: any = {
             files: uploadedFiles,
             summary: errors.length === 0
                 ? `Successfully uploaded ${uploadedFiles.length} file(s)`
                 : `${uploadedFiles.length} file(s) uploaded successfully, ${errors.length} file(s) failed`,
         };
+
         if (errors.length > 0) {
             response.warnings = errors.map((e: any) => ({ filename: e.filename, error: e.error }));
-            response.status = 207;
+            response.details = errors.map((e: any) => ({ filename: e.filename, error: e.error })); // Maintain for UI
+
+            if (uploadedFiles.length === 0) {
+                response.status = 400;
+                response.error = "All files failed to upload";
+            } else {
+                response.status = 207; // Partial success
+            }
         } else {
             response.status = 201;
+        }
+
+        if (response.status === 400) {
+            // Throw it instead of returning so normal Hono error catch maps it properly, but format it as UI expects under data.error and data.details
+            throw Object.assign(new Error("All files failed to upload"), {
+                statusCode: 400,
+                details: response.details,
+                summary: response.summary
+            });
         }
 
         return response;
