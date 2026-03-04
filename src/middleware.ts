@@ -6,7 +6,6 @@ import {
   getUserPermissions,
   isSuperAdmin,
 } from "@/lib/rbac/helpers";
-import { autoSeedRbacIfNeeded } from "@/lib/rbac/auto-seed";
 import { getRoutePermission } from "@/lib/rbac/route-permissions";
 import { hasPageAccess } from "@/lib/rbac/page-permissions";
 
@@ -45,48 +44,55 @@ function isAdminRoute(pathname: string): boolean {
   return pathname.startsWith("/admin");
 }
 
+// Simple memory cache for hasAdminUsers to prevent D1 queries on every request
+// We'll also try to use KV if available in the context
+let memoryHasAdminUsers: boolean | null = null;
+
 async function hasAdminUsers(env?: Env | NodeJS.ProcessEnv): Promise<boolean> {
+  if (memoryHasAdminUsers !== null) {
+    return memoryHasAdminUsers;
+  }
+
   try {
     const { getDb } = await import("@/db");
     const { user } = await import("@/db/schema");
-    const { count, eq } = await import("drizzle-orm");
+    const { eq, or } = await import("drizzle-orm");
 
     const db = getDb(env);
-    const result = await db
-      .select({ count: count() })
+
+    // Check KV cache first if available via env
+    const kv = (env as any)?.CACHE as KVNamespace | undefined;
+    if (kv) {
+      const cached = await kv.get("app:setup:hasAdminUsers");
+      if (cached === "true") {
+        memoryHasAdminUsers = true;
+        return true;
+      }
+    }
+
+    const adminCount = await db
+      .select({ id: user.id })
       .from(user)
-      .where(eq(user.role, "admin"));
-    return result[0]?.count > 0;
+      .where(or(eq(user.role, "admin"), eq(user.isSuperAdmin, true)))
+      .limit(1);
+
+    const hasAdmins = adminCount.length > 0;
+
+    // If true, cache it permanently in memory and KV (you only need to set up once)
+    if (hasAdmins) {
+      memoryHasAdminUsers = true;
+      if (kv) {
+        await kv.put("app:setup:hasAdminUsers", "true"); // Cache forever, app is setup
+      }
+    }
+
+    return hasAdmins;
   } catch (error) {
     console.error("Error checking for admin users:", error);
-    return true; // Assume admins exist on error to avoid redirect loops
-  }
-}
-
-async function getSessionTwoFactorVerified(
-  sessionId: string,
-  env?: Env | NodeJS.ProcessEnv
-): Promise<boolean> {
-  try {
-    const { getDb } = await import("@/db");
-    const { session: sessionTable } = await import("@/db/schema");
-    const { eq } = await import("drizzle-orm");
-
-    const db = getDb(env);
-    const result = await db
-      .select({ twoFactorVerified: sessionTable.twoFactorVerified })
-      .from(sessionTable)
-      .where(eq(sessionTable.id, sessionId))
-      .get();
-
-    // Handle both boolean and SQLite integer (SQLite stores booleans as 0/1)
-    const verified = result?.twoFactorVerified;
-    return verified === true || (verified as unknown) === 1;
-  } catch (error) {
-    console.error("Error checking 2FA verification status:", error);
     return false;
   }
 }
+
 
 const authMiddleware = defineMiddleware(async (context, next) => {
   const request = context.request;
@@ -134,15 +140,13 @@ const authMiddleware = defineMiddleware(async (context, next) => {
       sessionUser = sessionResult.user;
 
       if (session?.id) {
-        twoFactorVerified = await getSessionTwoFactorVerified(session.id, env);
+        // The two-factor plugin automatically attaches `twoFactorVerified` to the session response.
+        // Even if stored as 0/1 in SQLite, Better Auth maps it to boolean.
+        twoFactorVerified = (session as any).twoFactorVerified === true;
       }
     }
   } catch (error) {
     console.error("Error getting session:", error);
-  }
-
-  if (session) {
-    (session as any).twoFactorVerified = twoFactorVerified;
   }
 
   context.locals.session = session;
@@ -152,12 +156,10 @@ const authMiddleware = defineMiddleware(async (context, next) => {
     try {
       const { getDb } = await import("@/db");
       const db = getDb(env);
+      const kv = env.CACHE as KVNamespace | undefined; // Get KV namespace
 
-      if (sessionUser.role === "admin") {
-        await autoSeedRbacIfNeeded(db);
-      }
-
-      const userPermissions = await getUserPermissions(db, sessionUser.id);
+      // Passing kv down enables instantaneous KV lookup (bypass D1 table joins)
+      const userPermissions = await getUserPermissions(db, sessionUser.id, kv);
       context.locals.permissions = userPermissions;
 
       const userIsSuperAdminFlag = await isSuperAdmin(db, sessionUser.id);
