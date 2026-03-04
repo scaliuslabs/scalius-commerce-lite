@@ -34,13 +34,13 @@ export function useShipmentStatus() {
     console.log(`Cleaned orderId: ${cleanedOrderId}`);
     console.log(`shipmentId: ${shipmentId}`);
     console.log(
-      `Request URL: /api/orders/${cleanedOrderId}/shipments/${shipmentId}/refresh`,
+      `Request URL: /api/v1/admin/orders/${cleanedOrderId}/shipments/${shipmentId}/refresh`,
     );
 
     setIsRefreshing((prev) => ({ ...prev, [shipmentId]: true }));
     try {
       const response = await fetch(
-        `/api/orders/${cleanedOrderId}/shipments/${shipmentId}/refresh`,
+        `/api/v1/admin/orders/${cleanedOrderId}/shipments/${shipmentId}/refresh`,
         {
           method: "POST",
         },

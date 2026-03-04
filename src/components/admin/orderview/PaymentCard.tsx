@@ -189,7 +189,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
         if (failNotes.trim()) body.notes = failNotes.trim();
       }
 
-      const res = await fetch(`/api/orders/${order.id}/cod`, {
+      const res = await fetch(`/api/v1/admin/orders/${order.id}/cod`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -236,7 +236,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
 
     setRefundLoading(true);
     try {
-      const res = await fetch(`/api/orders/${order.id}/refund`, {
+      const res = await fetch(`/api/v1/admin/orders/${order.id}/refund`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -136,58 +136,58 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Orders API
   // =============================================
-  "/api/orders": {
+  "/api/v1/admin/orders": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_CREATE },
   },
-  "/api/orders/bulk-delete": {
+  "/api/v1/admin/orders/bulk-delete": {
     POST: { permission: PERMISSIONS.ORDERS_DELETE },
     DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
   },
-  "/api/orders/bulk-ship": {
+  "/api/v1/admin/orders/bulk-ship": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
-  "/api/orders/*": {
+  "/api/v1/admin/orders/*": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     PUT: { permission: PERMISSIONS.ORDERS_EDIT },
     PATCH: { permission: PERMISSIONS.ORDERS_EDIT },
     DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
   },
-  "/api/orders/*/status": {
+  "/api/v1/admin/orders/*/status": {
     PUT: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
     PATCH: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
     POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
   },
-  "/api/orders/*/restore": {
+  "/api/v1/admin/orders/*/restore": {
     POST: { permission: PERMISSIONS.ORDERS_RESTORE },
   },
-  "/api/orders/*/shipments": {
+  "/api/v1/admin/orders/*/shipments": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
-  "/api/orders/*/shipments/*": {
+  "/api/v1/admin/orders/*/shipments/*": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
     DELETE: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
-  "/api/orders/*/shipments/*/status": {
+  "/api/v1/admin/orders/*/shipments/*/status": {
     PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
     PATCH: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
-  "/api/orders/*/shipments/*/refresh": {
+  "/api/v1/admin/orders/*/shipments/*/refresh": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
-  "/api/orders/*/fulfill": {
+  "/api/v1/admin/orders/*/fulfill": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
-  "/api/orders/*/items": {
+  "/api/v1/admin/orders/*/items": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
-  "/api/orders/*/payments": {
+  "/api/v1/admin/orders/*/payments": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
-  "/api/orders/*/cod": {
+  "/api/v1/admin/orders/*/cod": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_EDIT },
   },

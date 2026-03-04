@@ -70,14 +70,14 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
       }
 
       // Set email as the default 2FA method
-      await fetch("/api/auth/update-2fa-method", {
+      await fetch("/api/v1/admin/auth/2fa/method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method: "email" }),
       });
 
       // Mark session as 2FA verified
-      await fetch("/api/auth/mark-2fa-verified", {
+      await fetch("/api/v1/admin/auth/2fa/mark-verified", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });

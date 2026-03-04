@@ -46,7 +46,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
   ): Promise<ProductVariant | null> => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/products/${productId}/variants`, {
+      const response = await fetch(`/api/v1/admin/products/${productId}/variants`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
@@ -91,7 +91,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
   ): Promise<ProductVariant | null> => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/products/${productId}/variants/${variantId}`, {
+      const response = await fetch(`/api/v1/admin/products/${productId}/variants/${variantId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
@@ -132,7 +132,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
   const deleteVariant = async (productId: string, variantId: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/products/${productId}/variants/${variantId}`, {
+      const response = await fetch(`/api/v1/admin/products/${productId}/variants/${variantId}`, {
         method: "DELETE",
       });
 
@@ -166,7 +166,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
   ): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/products/${productId}/variants/bulk-delete`, {
+      const response = await fetch(`/api/v1/admin/products/${productId}/variants/bulk-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variantIds }),
@@ -210,7 +210,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
   ): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/products/${productId}/variants/bulk-update`, {
+      const response = await fetch(`/api/v1/admin/products/${productId}/variants/bulk-update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ updates }),
@@ -246,7 +246,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
   ): Promise<ProductVariant[]> => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/products/${productId}/variants/bulk-create`, {
+      const response = await fetch(`/api/v1/admin/products/${productId}/variants/bulk-create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variants }),
@@ -290,7 +290,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
   ): Promise<ProductVariant | null> => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/products/${productId}/variants/${variantId}/duplicate`, {
+      const response = await fetch(`/api/v1/admin/products/${productId}/variants/${variantId}/duplicate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });

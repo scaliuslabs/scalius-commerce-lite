@@ -42,7 +42,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
 
     async function fetchTwoFactorInfo() {
       try {
-        const response = await fetch("/api/auth/get-2fa-info");
+        const response = await fetch("/api/v1/admin/auth/2fa/info");
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.method) {
@@ -99,7 +99,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
       }
 
       // Mark the session as 2FA verified in our database
-      await fetch("/api/auth/mark-2fa-verified", {
+      await fetch("/api/v1/admin/auth/2fa/mark-verified", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -159,8 +159,8 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
             {method === "email"
               ? "Check your email"
               : method === "backup"
-              ? "Enter backup code"
-              : "Enter verification code"}
+                ? "Enter backup code"
+                : "Enter verification code"}
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             {method === "email"
@@ -168,8 +168,8 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
                 ? `We sent a code to ${userEmail || "your email"}`
                 : "We'll send a verification code to your email"
               : method === "backup"
-              ? "Enter one of your saved backup codes"
-              : "Enter the 6-digit code from your authenticator app"}
+                ? "Enter one of your saved backup codes"
+                : "Enter the 6-digit code from your authenticator app"}
           </CardDescription>
         </div>
       </CardHeader>

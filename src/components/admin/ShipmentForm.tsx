@@ -60,7 +60,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/orders/${orderId}/shipments`, {
+      const response = await fetch(`/api/v1/admin/orders/${orderId}/shipments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

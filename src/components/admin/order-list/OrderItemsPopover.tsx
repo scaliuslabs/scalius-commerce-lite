@@ -37,7 +37,7 @@ export function OrderItemsPopover({
     if (open && !items) {
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/orders/${orderId}/items`);
+        const response = await fetch(`/api/v1/admin/orders/${orderId}/items`);
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error || "Failed to fetch order items");

@@ -34,7 +34,7 @@ export function useProductSubmit({
   const handleSubmit = async (values: ProductFormValues) => {
     try {
       setIsSubmitting(true);
-      const endpoint = isEdit ? `/api/products/${values.id}` : "/api/v1/products";
+      const endpoint = isEdit ? `/api/v1/admin/products/${values.id}` : "/api/v1/admin/products";
       const method = isEdit ? "PUT" : "POST";
 
       const formattedValues = formatFormValuesForSubmission(

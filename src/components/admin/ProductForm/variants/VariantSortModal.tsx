@@ -51,7 +51,7 @@ export function VariantSortModal({
     setIsLoading(true);
     try {
       const response = await fetch(
-        `/api/products/${productId}/variants/sort-order`,
+        `/api/v1/admin/products/${productId}/variants/sort-order`,
       );
       if (response.ok) {
         const data = await response.json();
@@ -106,7 +106,7 @@ export function VariantSortModal({
     setIsSaving(true);
     try {
       const response = await fetch(
-        `/api/products/${productId}/variants/sort-order`,
+        `/api/v1/admin/products/${productId}/variants/sort-order`,
         {
           method: "POST",
           headers: {
@@ -201,7 +201,7 @@ export function VariantSortModal({
                                 className={cn(
                                   "flex items-center gap-3 p-3 bg-muted/50 rounded-md border cursor-grab active:cursor-grabbing",
                                   snapshot.isDragging &&
-                                    "shadow-lg ring-2 ring-primary bg-background",
+                                  "shadow-lg ring-2 ring-primary bg-background",
                                 )}
                                 style={{
                                   ...provided.draggableProps.style,
@@ -264,7 +264,7 @@ export function VariantSortModal({
                                 className={cn(
                                   "flex items-center gap-3 p-3 bg-muted/50 rounded-md border cursor-grab active:cursor-grabbing",
                                   snapshot.isDragging &&
-                                    "shadow-lg ring-2 ring-primary bg-background",
+                                  "shadow-lg ring-2 ring-primary bg-background",
                                 )}
                                 style={{
                                   ...provided.draggableProps.style,

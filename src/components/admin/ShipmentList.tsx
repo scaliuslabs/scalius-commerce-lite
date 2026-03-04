@@ -35,7 +35,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
   const fetchShipments = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/orders/${orderId}/shipments`);
+      const response = await fetch(`/api/v1/admin/orders/${orderId}/shipments`);
       if (!response.ok) {
         throw new Error("Failed to fetch shipments");
       }
@@ -73,7 +73,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
       );
 
       const response = await fetch(
-        `/api/orders/${orderId}/shipments/${shipment.id}/refresh`,
+        `/api/v1/admin/orders/${orderId}/shipments/${shipment.id}/refresh`,
         {
           method: "POST",
         },
@@ -128,7 +128,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
 
     try {
       const response = await fetch(
-        `/api/orders/${orderId}/shipments/${shipment.id}`,
+        `/api/v1/admin/orders/${orderId}/shipments/${shipment.id}`,
         {
           method: "DELETE",
         },

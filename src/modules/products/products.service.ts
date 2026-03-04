@@ -10,12 +10,63 @@ import {
     productRichContent,
     productAttributeValues,
     productAttributes,
+    orderItems,
+    discountProducts,
 } from "@/db/schema";
 import { and, sql, desc, eq, asc, isNull, inArray, or } from "drizzle-orm";
 import { sanitizeFtsQuery, ftsMatch } from "@/lib/search/fts5";
 import type { Product, ProductVariant, ProductImage } from "@/db/schema";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
+import { z } from "zod";
+
+// ─────────────────────────────────────────
+// Variant Validation Schemas
+// ─────────────────────────────────────────
+
+export const createVariantSchema = z.object({
+    size: z.string().nullable(),
+    color: z.string().nullable(),
+    weight: z.number().min(0).nullable(),
+    sku: z.string().min(3, "SKU must be at least 3 characters"),
+    price: z.number().min(0, "Price must be greater than or equal to 0"),
+    stock: z.number().min(0, "Stock must be greater than or equal to 0"),
+    discountType: z.enum(["percentage", "flat"]).optional(),
+    discountPercentage: z.number().min(0).max(100).nullable().optional(),
+    discountAmount: z.number().min(0).nullable().optional(),
+});
+
+export const updateVariantSchema = createVariantSchema;
+
+const sortItemSchema = z.object({
+    value: z.string(),
+    sortOrder: z.number(),
+});
+
+export const updateSortOrderSchema = z.object({
+    colors: z.array(sortItemSchema),
+    sizes: z.array(sortItemSchema),
+});
+
+export const bulkVariantSchema = z.object({
+    size: z.string().nullable(),
+    color: z.string().nullable(),
+    weight: z.number().min(0).nullable(),
+    sku: z.string().min(3, "SKU must be at least 3 characters"),
+    price: z.number().min(0, "Price must be greater than or equal to 0"),
+    stock: z.number().min(0, "Stock must be greater than or equal to 0"),
+    discountType: z.enum(["percentage", "flat"]),
+    discountPercentage: z.number().min(0).max(100).nullable(),
+    discountAmount: z.number().min(0).nullable(),
+});
+
+export const bulkCreateVariantsSchema = z.object({
+    variants: z.array(bulkVariantSchema).min(1, "At least one variant is required"),
+});
+
+export const bulkDeleteVariantsSchema = z.object({
+    variantIds: z.array(z.string()),
+});
 
 // ─────────────────────────────────────────
 // Types
@@ -1013,4 +1064,298 @@ export async function getStorefrontProductBySlug(slug: string) {
         variants: formattedVariants,
         relatedProducts,
     };
+}
+
+export async function bulkDeleteProducts(productIds: string[], permanent: boolean = false) {
+    if (productIds.length === 0) throw new Error("No product IDs provided");
+
+    if (permanent) {
+        const [orderCheck] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(orderItems)
+            .where(inArray(orderItems.productId, productIds));
+
+        if (orderCheck.count > 0) {
+            throw new Error("Cannot delete products. One or more products are part of existing orders.");
+        }
+
+        const [discountCheck] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(discountProducts)
+            .where(inArray(discountProducts.productId, productIds));
+
+        if (discountCheck.count > 0) {
+            throw new Error("Cannot delete products. One or more products are linked to discounts.");
+        }
+
+        await db.batch([
+            db.delete(productVariants).where(inArray(productVariants.productId, productIds)),
+            db.delete(productImages).where(inArray(productImages.productId, productIds)),
+            db.delete(products).where(inArray(products.id, productIds)),
+        ]);
+    } else {
+        await db
+            .update(products)
+            .set({ deletedAt: sql`unixepoch()` })
+            .where(inArray(products.id, productIds));
+    }
+}
+
+// ─────────────────────────────────────────
+// Variant specific mutations
+// ─────────────────────────────────────────
+
+export async function getProductVariants(productId: string) {
+    const variants = await db
+        .select({
+            id: productVariants.id,
+            size: productVariants.size,
+            color: productVariants.color,
+            weight: productVariants.weight,
+            sku: productVariants.sku,
+            price: productVariants.price,
+            stock: productVariants.stock,
+            reservedStock: productVariants.reservedStock,
+            discountType: productVariants.discountType,
+            discountPercentage: productVariants.discountPercentage,
+            discountAmount: productVariants.discountAmount,
+            colorSortOrder: productVariants.colorSortOrder,
+            sizeSortOrder: productVariants.sizeSortOrder,
+            createdAt: sql<string>`datetime(${productVariants.createdAt}, 'unixepoch', 'localtime')`,
+            updatedAt: sql<string>`datetime(${productVariants.updatedAt}, 'unixepoch', 'localtime')`,
+        })
+        .from(productVariants)
+        .where(
+            sql`${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`,
+        )
+        .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt);
+
+    return variants.map((variant) => ({
+        ...variant,
+        createdAt: new Date(variant.createdAt),
+        updatedAt: new Date(variant.updatedAt),
+    }));
+}
+
+export async function createVariant(productId: string, data: z.infer<typeof createVariantSchema>) {
+    const existingVariant = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(sql`${productVariants.sku} = ${data.sku} AND ${productVariants.deletedAt} IS NULL`)
+        .get();
+
+    if (existingVariant) {
+        throw new Error("A variant with this SKU already exists");
+    }
+
+    const [variant] = await db
+        .insert(productVariants)
+        .values({
+            id: "var_" + nanoid(),
+            productId,
+            size: data.size,
+            color: data.color,
+            weight: data.weight,
+            sku: data.sku,
+            price: data.price,
+            stock: data.stock,
+            discountType: data.discountType || "percentage",
+            discountPercentage: data.discountPercentage || null,
+            discountAmount: data.discountAmount || null,
+            createdAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .returning();
+
+    return variant;
+}
+
+export async function updateVariant(productId: string, variantId: string, data: z.infer<typeof updateVariantSchema>) {
+    const existingVariant = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
+        .get();
+
+    if (!existingVariant) {
+        throw new Error("Variant not found");
+    }
+
+    const existingSkuVariant = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(sql`${productVariants.sku} = ${data.sku} AND ${productVariants.id} != ${variantId} AND ${productVariants.deletedAt} IS NULL`)
+        .get();
+
+    if (existingSkuVariant) {
+        throw new Error("A variant with this SKU already exists");
+    }
+
+    const [variant] = await db
+        .update(productVariants)
+        .set({
+            size: data.size,
+            color: data.color,
+            weight: data.weight,
+            sku: data.sku,
+            price: data.price,
+            stock: data.stock,
+            discountType: data.discountType || "percentage",
+            discountPercentage: data.discountPercentage || null,
+            discountAmount: data.discountAmount || null,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(productVariants.id, variantId))
+        .returning();
+
+    return variant;
+}
+
+export async function deleteVariant(productId: string, variantId: string) {
+    const existingVariant = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
+        .get();
+
+    if (!existingVariant) {
+        throw new Error("Variant not found");
+    }
+
+    await db.delete(productVariants).where(eq(productVariants.id, variantId));
+}
+
+export async function duplicateVariant(productId: string, variantId: string) {
+    const [existingVariant] = await db
+        .select()
+        .from(productVariants)
+        .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
+        .limit(1);
+
+    if (!existingVariant) {
+        throw new Error("Variant not found");
+    }
+
+    let newSku = `${existingVariant.sku}-COPY`;
+    let counter = 1;
+
+    while (true) {
+        const existing = await db
+            .select({ id: productVariants.id })
+            .from(productVariants)
+            .where(sql`${productVariants.sku} = ${newSku} AND ${productVariants.deletedAt} IS NULL`)
+            .get();
+
+        if (!existing) break;
+
+        counter++;
+        newSku = `${existingVariant.sku}-COPY${counter}`;
+    }
+
+    const [newVariant] = await db
+        .insert(productVariants)
+        .values({
+            id: "var_" + nanoid(),
+            productId,
+            size: existingVariant.size,
+            color: existingVariant.color,
+            weight: existingVariant.weight,
+            sku: newSku,
+            price: existingVariant.price,
+            stock: existingVariant.stock,
+            discountType: existingVariant.discountType,
+            discountPercentage: existingVariant.discountPercentage,
+            discountAmount: existingVariant.discountAmount,
+            createdAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .returning();
+
+    return newVariant;
+}
+
+export async function bulkCreateVariants(productId: string, variants: z.infer<typeof bulkVariantSchema>[]) {
+    const skus = variants.map((v) => v.sku);
+    const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
+
+    if (duplicateSkus.length > 0) {
+        throw new Error(`Duplicate SKUs found in request: ${duplicateSkus.join(", ")}`);
+    }
+
+    const existingVariants = await db
+        .select({ sku: productVariants.sku })
+        .from(productVariants)
+        .where(sql`${productVariants.sku} IN ${skus} AND ${productVariants.deletedAt} IS NULL`)
+        .all();
+
+    if (existingVariants.length > 0) {
+        throw new Error(`One or more SKUs already exist: ${existingVariants.map((v) => v.sku).join(", ")}`);
+    }
+
+    const variantsToCreate = variants.map((variant) => ({
+        id: "var_" + nanoid(),
+        productId,
+        size: variant.size,
+        color: variant.color,
+        weight: variant.weight,
+        sku: variant.sku,
+        price: variant.price,
+        stock: variant.stock,
+        discountType: variant.discountType,
+        discountPercentage: variant.discountPercentage,
+        discountAmount: variant.discountAmount,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+    }));
+
+    const createdVariants = await db
+        .insert(productVariants)
+        .values(variantsToCreate)
+        .returning();
+
+    return createdVariants;
+}
+
+export async function bulkDeleteVariants(productId: string, variantIds: string[]) {
+    if (variantIds.length === 0) throw new Error("No variant IDs provided");
+
+    await db
+        .delete(productVariants)
+        .where(sql`${productVariants.id} IN ${variantIds} AND ${productVariants.productId} = ${productId}`);
+}
+
+export async function updateVariantSortOrder(productId: string, data: z.infer<typeof updateSortOrderSchema>) {
+    // Update color sort orders
+    for (const color of data.colors) {
+        await db
+            .update(productVariants)
+            .set({
+                colorSortOrder: color.sortOrder,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(
+                and(
+                    eq(productVariants.productId, productId),
+                    eq(productVariants.color, color.value),
+                    isNull(productVariants.deletedAt)
+                )
+            );
+    }
+
+    // Update size sort orders
+    for (const size of data.sizes) {
+        await db
+            .update(productVariants)
+            .set({
+                sizeSortOrder: size.sortOrder,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(
+                and(
+                    eq(productVariants.productId, productId),
+                    eq(productVariants.size, size.value),
+                    isNull(productVariants.deletedAt)
+                )
+            );
+    }
 }

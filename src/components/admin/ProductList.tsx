@@ -619,7 +619,7 @@ export function ProductList({
     setProductToDelete(null);
 
     try {
-      const response = await fetch(`/api/products/${idToDelete}`, {
+      const response = await fetch(`/api/v1/admin/products/${idToDelete}`, {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to move product to trash");
@@ -658,7 +658,7 @@ export function ProductList({
     setProductToDelete(null);
 
     try {
-      const response = await fetch(`/api/products/${idToDelete}/permanent`, {
+      const response = await fetch(`/api/v1/admin/products/${idToDelete}/permanent`, {
         method: "DELETE",
       });
 
@@ -699,7 +699,7 @@ export function ProductList({
     async (id: string) => {
       setIsActionLoading(true);
       try {
-        const response = await fetch(`/api/products/${id}/restore`, {
+        const response = await fetch(`/api/v1/admin/products/${id}/restore`, {
           method: "POST",
         });
         if (!response.ok) throw new Error("Failed to restore product");
@@ -878,9 +878,9 @@ export function ProductList({
               variant="outline"
               size="sm"
               onClick={() =>
-                (window.location.href = showTrashed
-                  ? "/admin/products"
-                  : "/admin/products?trashed=true")
+              (window.location.href = showTrashed
+                ? "/admin/products"
+                : "/admin/products?trashed=true")
               }
               className="h-7 text-xs text-muted-foreground hover:text-foreground"
             >

@@ -84,12 +84,12 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
 
     try {
       // 1. Fetch system prompt
-      const systemPromptRes = await fetch(`/api/system-prompt?type=${promptType}`);
+      const systemPromptRes = await fetch(`/api/v1/admin/ai-prompts?type=${promptType}`);
       if (!systemPromptRes.ok) throw new Error(ERROR_MESSAGES.systemPromptFailed);
       const systemPrompt = await systemPromptRes.text();
 
       // 2. Fetch context details
-      const contextRes = await fetch("/api/context/batch-details", {
+      const contextRes = await fetch("/api/v1/admin/ai-context/batch-details", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -182,60 +182,60 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-            // Try tag-based parsing first (primary), then fall back to JSON
-            const tagResult = parseTagBasedResponse(accumulatedJson);
+          // Try tag-based parsing first (primary), then fall back to JSON
+          const tagResult = parseTagBasedResponse(accumulatedJson);
 
-            if (tagResult.success && tagResult.data) {
-                const validation = validateParsedWidget(tagResult.data);
-                if (validation.valid) {
-                    setGeneratedContent(tagResult.data);
-                } else {
-                    console.error("Invalid widget structure:", validation.error);
-                    toast.error(`Invalid response: ${validation.error}`);
-                    setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
-                }
+          if (tagResult.success && tagResult.data) {
+            const validation = validateParsedWidget(tagResult.data);
+            if (validation.valid) {
+              setGeneratedContent(tagResult.data);
             } else {
-                // Fallback to JSON parsing
-                const jsonParsed = parseJSONSafely(accumulatedJson);
-                if (jsonParsed.success) {
-                    const validation = validateWidgetJSON(jsonParsed.data);
-                    if (validation.valid) {
-                        setGeneratedContent(jsonParsed.data);
-                    } else {
-                        console.error("Invalid widget structure:", validation.error);
-                        toast.error(`Invalid response: ${validation.error}`);
-                        setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
-                    }
-                } else {
-                    console.error("Failed to parse response:", tagResult.error, accumulatedJson);
-                    toast.error("Failed to parse AI response.");
-                    setGeneratedContent({ html: '<p class="text-destructive">Error parsing response.</p>', css: '' });
-                }
+              console.error("Invalid widget structure:", validation.error);
+              toast.error(`Invalid response: ${validation.error}`);
+              setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
             }
-            break;
+          } else {
+            // Fallback to JSON parsing
+            const jsonParsed = parseJSONSafely(accumulatedJson);
+            if (jsonParsed.success) {
+              const validation = validateWidgetJSON(jsonParsed.data);
+              if (validation.valid) {
+                setGeneratedContent(jsonParsed.data);
+              } else {
+                console.error("Invalid widget structure:", validation.error);
+                toast.error(`Invalid response: ${validation.error}`);
+                setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
+              }
+            } else {
+              console.error("Failed to parse response:", tagResult.error, accumulatedJson);
+              toast.error("Failed to parse AI response.");
+              setGeneratedContent({ html: '<p class="text-destructive">Error parsing response.</p>', css: '' });
+            }
+          }
+          break;
         }
 
         buffer += decoder.decode(value, { stream: true });
         let lineEnd;
         while ((lineEnd = buffer.indexOf('\n')) >= 0) {
-            const line = buffer.slice(0, lineEnd).trim();
-            buffer = buffer.slice(lineEnd + 1);
+          const line = buffer.slice(0, lineEnd).trim();
+          buffer = buffer.slice(lineEnd + 1);
 
-            if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') {
-                    break;
-                }
-                try {
-                    const parsed = JSON.parse(data);
-                    const delta = parsed.choices[0].delta.content;
-                    if (delta) {
-                        accumulatedJson += delta;
-                    }
-                } catch (e) {
-                    // Ignore JSON parse errors on partial data
-                }
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              break;
             }
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed.choices[0].delta.content;
+              if (delta) {
+                accumulatedJson += delta;
+              }
+            } catch (e) {
+              // Ignore JSON parse errors on partial data
+            }
+          }
         }
       }
 
@@ -256,11 +256,11 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
 
     const toastId = toast.loading("Preparing standalone prompt...");
     try {
-      const systemPromptRes = await fetch(`/api/system-prompt?type=${promptType}`);
+      const systemPromptRes = await fetch(`/api/v1/admin/ai-prompts?type=${promptType}`);
       if (!systemPromptRes.ok) throw new Error("Could not fetch system prompt.");
       const systemPrompt = await systemPromptRes.text();
 
-      const contextRes = await fetch("/api/context/batch-details", {
+      const contextRes = await fetch("/api/v1/admin/ai-context/batch-details", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

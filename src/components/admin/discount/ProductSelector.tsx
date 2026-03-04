@@ -106,7 +106,7 @@ export function ProductSelector({
         params.append("search", searchTerm.trim());
       }
 
-      const url = `/api/products?${params.toString()}`;
+      const url = `/api/v1/admin/products?${params.toString()}`;
       const response = await fetch(url);
       const data = await response.json();
 

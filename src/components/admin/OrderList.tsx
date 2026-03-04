@@ -131,7 +131,7 @@ export function OrderList({
       setIsLoadingOrders(true);
 
       try {
-        const url = new URL("/api/orders", window.location.origin);
+        const url = new URL("/api/v1/admin/orders", window.location.origin);
         if (params.page) url.searchParams.set("page", params.page.toString());
         if (params.limit)
           url.searchParams.set("limit", params.limit.toString());
@@ -417,7 +417,7 @@ export function OrderList({
     );
 
     try {
-      const response = await fetch(`/api/orders/${orderId}/status`, {
+      const response = await fetch(`/api/v1/admin/orders/${orderId}/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus.toLowerCase() }),
@@ -456,7 +456,7 @@ export function OrderList({
     setDisplayOrders((prev) => prev.filter((order) => !ids.includes(order.id)));
 
     try {
-      const response = await fetch("/api/orders/bulk-delete", {
+      const response = await fetch("/api/v1/admin/orders/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderIds: ids, permanent }),
@@ -507,7 +507,7 @@ export function OrderList({
   const handleRestore = async (id: string) => {
     setDisplayOrders((prev) => prev.filter((order) => order.id !== id));
     try {
-      const response = await fetch(`/api/orders/${id}/restore`, {
+      const response = await fetch(`/api/v1/admin/orders/${id}/restore`, {
         method: "POST",
       });
       if (!response.ok) throw new Error("Failed to restore order");
@@ -535,7 +535,7 @@ export function OrderList({
     // Process shipments with progress tracking
     for (const orderId of orderIds) {
       try {
-        const response = await fetch(`/api/orders/${orderId}/shipments`, {
+        const response = await fetch(`/api/v1/admin/orders/${orderId}/shipments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ providerId, options: {} }),
@@ -658,7 +658,7 @@ export function OrderList({
 
         try {
           const response = await fetch(
-            `/api/orders/${order.id}/shipments/${shipment.id}/refresh`,
+            `/api/v1/admin/orders/${order.id}/shipments/${shipment.id}/refresh`,
             { method: "POST" },
           );
 
