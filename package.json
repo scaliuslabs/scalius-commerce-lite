@@ -3,6 +3,7 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
+    "dev:setup": "node scripts/dev-setup.mjs",
     "dev": "astro dev --host",
     "start": "wrangler dev",
     "build": "astro check && astro build && pnpm db:generate && node scripts/build-with-queue.mjs",
@@ -11,6 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "node scripts/deploy.mjs --migrate-only --local",
     "db:migrate:remote": "node scripts/deploy.mjs --migrate-only",
+    "dev:reset": "node scripts/dev-reset.mjs",
     "db:studio": "drizzle-kit studio",
     "deploy": "node scripts/deploy.mjs",
     "generate:sdk": "tsx src/scripts/generate-openapi-json.ts && openapi-ts"
@@ -122,6 +124,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "@types/jsonwebtoken": "^9.0.10",
     "drizzle-kit": "^0.30.6",
+    "esbuild": "^0.25.12",
     "prettier": "^3.8.1",
     "prettier-plugin-astro": "^0.14.1",
     "terser": "^5.46.0",
@@ -136,6 +139,13 @@
     "react-is": "^19.1.0"
   },
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "workerd",
+      "protobufjs",
+      "@firebase/util"
+    ],
     "peerDependencyRules": {
       "allowedVersions": {
         "react": "19",
