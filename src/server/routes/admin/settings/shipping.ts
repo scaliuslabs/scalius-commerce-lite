@@ -280,7 +280,7 @@ app.post("/:id/restore", async (c) => {
     }
 });
 
-app.delete("/:id/permanent", async (c) => {
+app.delete("/:id/permanent-delete", async (c) => {
     const db = c.get("db");
     const id = c.req.param("id");
 
