@@ -157,7 +157,7 @@ export function OrderForm({
   const handleSubmit: SubmitHandler<OrderFormValues> = async (values) => {
     setIsSubmitting(true);
     try {
-      const endpoint = isEdit ? `/api/orders/${values.id}` : "/api/orders";
+      const endpoint = isEdit ? `/api/v1/admin/orders/${values.id}` : "/api/v1/admin/orders";
       const method = isEdit ? "PUT" : "POST";
 
       // Find the location objects from state based on the selected IDs

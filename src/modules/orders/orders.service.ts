@@ -12,7 +12,15 @@ import {
     deliveryShipments,
     deliveryProviders,
     deliveryLocations,
+    OrderStatus,
+    FulfillmentStatus,
+    ItemFulfillmentStatus,
 } from "@/db/schema";
+import { applyInventoryForStatusChange } from "@/modules/inventory/inventory-transitions";
+import { reserveMultiple, releaseMultiple } from "@/modules/inventory";
+import type { ReservationEntry } from "@/modules/inventory";
+import { markCODReturned, recordCODCollection, recordCODFailure } from "@/modules/payments/cod";
+import { DeliveryService } from "@/modules/delivery/service";
 
 import { sql, desc, eq, inArray, isNull, and } from "drizzle-orm";
 import { ftsMatch, sanitizeFtsQuery } from "@/lib/search/fts5";
@@ -602,4 +610,328 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
     }
 
     return { id: order.id };
+}
+
+export async function updateOrder(id: string, data: any): Promise<{ id: string }> {
+    const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
+    const locationMap = new Map<string, string>();
+    if (locationIds.length > 0) {
+        const locationResults = await db
+            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
+            .from(deliveryLocations)
+            .where(and(
+                sql`${deliveryLocations.id} IN (${locationIds.join(",")})`,
+                isNull(deliveryLocations.deletedAt),
+            ));
+        locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
+    }
+
+    const cityName = data.cityName || (data.city ? locationMap.get(data.city) || data.city : "");
+    const zoneName = data.zoneName || (data.zone ? locationMap.get(data.zone) || data.zone : "");
+    const areaName = data.areaName || (data.area ? locationMap.get(data.area) || null : null);
+
+    const existingOrder = await db
+        .select({
+            id: orders.id,
+            customerId: orders.customerId,
+            customerPhone: orders.customerPhone,
+            status: orders.status,
+            inventoryAction: orders.inventoryAction,
+            inventoryPool: orders.inventoryPool,
+        })
+        .from(orders)
+        .where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`)
+        .get();
+
+    if (!existingOrder) throw new Error("Order not found");
+
+    const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
+
+    if (existingOrder.inventoryAction === "reserved") {
+        const oldEntries: ReservationEntry[] = existingItems
+            .filter((i) => i.variantId)
+            .map((i) => ({ variantId: i.variantId!, quantity: i.quantity, pool }));
+        const newEntries: ReservationEntry[] = data.items
+            .filter((i: any) => i.variantId)
+            .map((i: any) => ({ variantId: i.variantId!, quantity: i.quantity, pool }));
+
+        if (oldEntries.length > 0) await releaseMultiple(db, oldEntries, id);
+
+        if (newEntries.length > 0) {
+            const reserveResult = await reserveMultiple(db, newEntries, id);
+            if (!reserveResult.success) {
+                if (oldEntries.length > 0) await reserveMultiple(db, oldEntries, id);
+                throw new Error(reserveResult.error ?? "Insufficient stock for updated items");
+            }
+        }
+    } else if (existingOrder.inventoryAction === "deducted") {
+        // Direct quantity comparisons
+        for (const existingItem of existingItems) {
+            if (existingItem.variantId) {
+                const matchingNewItem = data.items.find(
+                    (item: any) => item.variantId === existingItem.variantId && item.quantity === existingItem.quantity
+                );
+                if (!matchingNewItem) {
+                    await db.update(productVariants)
+                        .set({ stock: sql`${productVariants.stock} + ${existingItem.quantity}`, updatedAt: sql`unixepoch()` })
+                        .where(eq(productVariants.id, existingItem.variantId));
+                }
+            }
+        }
+        for (const item of data.items) {
+            if (item.variantId) {
+                const existingItem = existingItems.find((ei) => ei.variantId === item.variantId);
+                const quantityDiff = existingItem ? item.quantity - existingItem.quantity : item.quantity;
+
+                if (quantityDiff !== 0) {
+                    const variant = await db.select().from(productVariants).where(and(eq(productVariants.id, item.variantId), isNull(productVariants.deletedAt))).get();
+                    if (!variant) throw new Error(`Variant ${item.variantId} not found`);
+                    if (variant.stock < quantityDiff) {
+                        throw new Error(`Insufficient stock for variant ${item.variantId}. Available: ${variant.stock}, Additional Requested: ${quantityDiff}`);
+                    }
+                    await db.update(productVariants)
+                        .set({ stock: variant.stock - quantityDiff, updatedAt: sql`unixepoch()` })
+                        .where(eq(productVariants.id, item.variantId));
+                }
+            }
+        }
+    }
+
+    const totalAmount = data.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0) + data.shippingCharge - (data.discountAmount || 0);
+    let customerId = existingOrder.customerId;
+
+    if (data.customerPhone !== existingOrder.customerPhone) {
+        const customer = await db.select().from(customers).where(eq(customers.phone, data.customerPhone)).get();
+        if (customer) {
+            customerId = customer.id;
+        } else {
+            const [newCustomer] = await db.insert(customers).values({
+                id: "cust_" + nanoid(),
+                name: data.customerName,
+                phone: data.customerPhone,
+                email: data.customerEmail,
+                address: data.shippingAddress,
+                city: data.city,
+                zone: data.zone,
+                area: data.area,
+                totalOrders: 1,
+                totalSpent: totalAmount,
+                lastOrderAt: sql`unixepoch()`,
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            }).returning();
+            customerId = newCustomer.id;
+        }
+    }
+
+    let newInventoryAction = existingOrder.inventoryAction;
+    if (data.status !== existingOrder.status) {
+        newInventoryAction = await applyInventoryForStatusChange(db, id, data.status);
+    }
+
+    const [order] = await db.update(orders).set({
+        customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        customerEmail: data.customerEmail,
+        shippingAddress: data.shippingAddress,
+        city: data.city,
+        zone: data.zone,
+        area: data.area,
+        cityName,
+        zoneName,
+        areaName,
+        notes: data.notes,
+        totalAmount,
+        shippingCharge: data.shippingCharge,
+        discountAmount: data.discountAmount,
+        status: data.status,
+        inventoryAction: newInventoryAction,
+        customerId,
+        updatedAt: sql`unixepoch()`,
+    }).where(eq(orders.id, id)).returning();
+
+    await db.delete(orderItems).where(eq(orderItems.orderId, id));
+
+    if (data.items.length > 0) {
+        await db.insert(orderItems).values(data.items.map((item: any) => ({
+            id: "item_" + nanoid(),
+            orderId: order.id,
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: item.price,
+            createdAt: sql`unixepoch()`,
+        })));
+    }
+
+    if (existingOrder.customerId) {
+        await updateCustomerStatsService(existingOrder.customerId);
+    }
+    if (customerId && customerId !== existingOrder.customerId) {
+        await updateCustomerStatsService(customerId);
+    }
+
+    return { id: order.id };
+}
+
+async function updateCustomerStatsService(customerId: string) {
+    const customerOrders = await db.select({ totalAmount: orders.totalAmount, createdAt: orders.createdAt })
+        .from(orders).where(eq(orders.customerId, customerId));
+    const stats = calculateCustomerStats(customerOrders);
+    await db.update(customers).set({
+        totalOrders: stats.totalOrders,
+        totalSpent: stats.totalSpent,
+        lastOrderAt: stats.lastOrderAt ? sql`${Math.floor(stats.lastOrderAt.getTime() / 1000)}` : null,
+        updatedAt: sql`unixepoch()`,
+    }).where(eq(customers.id, customerId));
+}
+
+export async function deleteOrder(id: string) {
+    const orderToDelete = await db.select({ id: orders.id, inventoryAction: orders.inventoryAction }).from(orders).where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`).get();
+    if (!orderToDelete) throw new Error("Order not found");
+    if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
+        await applyInventoryForStatusChange(db, id, "cancelled");
+    }
+    await db.update(orders).set({ deletedAt: sql`unixepoch()`, inventoryAction: "restored" }).where(eq(orders.id, id));
+}
+
+export async function restoreOrder(id: string) {
+    await db.update(orders).set({ deletedAt: null }).where(eq(orders.id, id));
+}
+
+export async function permanentlyDeleteOrder(id: string) {
+    const orderToDelete = await db.select({ inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, id)).get();
+    if (orderToDelete && (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted")) {
+        await applyInventoryForStatusChange(db, id, "cancelled");
+    }
+    await db.delete(orderItems).where(eq(orderItems.orderId, id));
+    await db.delete(orders).where(eq(orders.id, id));
+}
+
+export async function bulkDeleteOrders(orderIds: string[], permanent: boolean = false) {
+    for (const orderId of orderIds) {
+        const order = await db.select({ id: orders.id, inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, orderId)).get();
+        if (!order) continue;
+        if (order.inventoryAction === "reserved" || order.inventoryAction === "deducted") {
+            await applyInventoryForStatusChange(db, orderId, "cancelled");
+        }
+    }
+
+    if (permanent) {
+        await db.delete(orders).where(sql`${orders.id} IN ${orderIds}`);
+        await db.delete(orderItems).where(sql`${orderItems.orderId} IN ${orderIds}`);
+    } else {
+        await db.update(orders)
+            .set({ deletedAt: sql`unixepoch()`, inventoryAction: "restored" })
+            .where(sql`${orders.id} IN ${orderIds}`);
+    }
+}
+
+const deliveryService = new DeliveryService();
+
+export async function bulkShipOrders(orderIds: string[], providerId: string, options: any) {
+    const results = [];
+    for (const orderId of orderIds) {
+        try {
+            const shipment = await deliveryService.createShipment(orderId, providerId, options);
+            if (shipment.success) {
+                const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
+                await db.update(orders).set({
+                    status: OrderStatus.SHIPPED,
+                    fulfillmentStatus: FulfillmentStatus.COMPLETE,
+                    inventoryAction: newInventoryAction,
+                    updatedAt: sql`unixepoch()`,
+                }).where(eq(orders.id, orderId));
+            }
+            results.push({ orderId, success: shipment.success, shipment: shipment.success ? shipment : undefined, error: shipment.success ? undefined : shipment.message });
+        } catch (error) {
+            results.push({ orderId, success: false, error: error instanceof Error ? error.message : String(error) });
+        }
+    }
+    return results;
+}
+
+export async function processCodAction(orderId: string, body: any) {
+    switch (body.action) {
+        case "collected":
+            const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy, collectedAmount: body.collectedAmount, receiptUrl: body.receiptUrl });
+            if (!colResult.success) throw new Error(colResult.error);
+            await db.update(orders).set({ status: OrderStatus.DELIVERED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
+            return { success: true, message: "COD collection recorded" };
+        case "failed":
+            const failResult = await recordCODFailure(db, { orderId, reason: body.reason, notes: body.notes });
+            if (!failResult.success) throw new Error(failResult.error);
+            return { success: true, message: "COD failure recorded" };
+        case "returned":
+            const retResult = await markCODReturned(db, orderId);
+            if (!retResult.success) throw new Error(retResult.error);
+            await applyInventoryForStatusChange(db, orderId, OrderStatus.RETURNED);
+            await db.update(orders).set({ status: OrderStatus.RETURNED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
+            return { success: true, message: "Order marked as returned" };
+        default:
+            throw new Error("Invalid action");
+    }
+}
+
+export async function getOrderShipments(orderId: string) {
+    return db.select().from(deliveryShipments).where(eq(deliveryShipments.orderId, orderId)).all();
+}
+
+export async function createFulfillmentShipment(orderId: string, body: any) {
+    const order = await db.select({ id: orders.id, status: orders.status, fulfillmentStatus: orders.fulfillmentStatus }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new Error("Order not found");
+    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
+        throw new Error("Cannot fulfill a cancelled/returned order");
+    }
+
+    const allItems = await db.select({ id: orderItems.id, fulfillmentStatus: orderItems.fulfillmentStatus }).from(orderItems).where(eq(orderItems.orderId, orderId)).all();
+    const shipmentItemIds = body.itemIds ?? allItems.map((i) => i.id);
+
+    const alreadyFulfilled = allItems.filter((i) => shipmentItemIds.includes(i.id) && (i.fulfillmentStatus === ItemFulfillmentStatus.SHIPPED || i.fulfillmentStatus === ItemFulfillmentStatus.DELIVERED));
+    if (alreadyFulfilled.length > 0) throw new Error(`Items already shipped: ${alreadyFulfilled.map((i) => i.id).join(", ")}`);
+
+    const shipmentId = `shp_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const now = new Date();
+    const unfulfilledItemIds = allItems.filter((i) => i.fulfillmentStatus === ItemFulfillmentStatus.PENDING || i.fulfillmentStatus === ItemFulfillmentStatus.PICKED || i.fulfillmentStatus === ItemFulfillmentStatus.PACKED).map((i) => i.id);
+    const isFinalShipment = body.isFinalShipment ?? (shipmentItemIds.every((sid: string) => unfulfilledItemIds.includes(sid)) && unfulfilledItemIds.every((uid) => shipmentItemIds.includes(uid)));
+
+    const newFulfillmentStatus = isFinalShipment ? FulfillmentStatus.COMPLETE : FulfillmentStatus.PARTIAL;
+    const writes: any[] = [];
+
+    writes.push(db.insert(deliveryShipments).values({
+        id: shipmentId, orderId, trackingId: body.trackingId ?? null, trackingUrl: body.trackingUrl ?? null,
+        courierName: body.courierName ?? null, status: "processing", note: body.note ?? null,
+        shipmentItems: JSON.stringify(shipmentItemIds), shipmentAmount: body.shipmentAmount ?? null, isFinalShipment,
+        createdAt: now, updatedAt: now,
+    }));
+
+    for (const itemId of shipmentItemIds) {
+        writes.push(db.update(orderItems).set({ fulfillmentStatus: ItemFulfillmentStatus.SHIPPED }).where(eq(orderItems.id, itemId)));
+    }
+
+    const orderUpdate: Record<string, any> = { fulfillmentStatus: newFulfillmentStatus, updatedAt: sql`unixepoch()` };
+    if (isFinalShipment && order.status === OrderStatus.CONFIRMED) orderUpdate.status = OrderStatus.SHIPPED;
+
+    writes.push(db.update(orders).set(orderUpdate).where(eq(orders.id, orderId)));
+    await db.batch(writes as any);
+
+    if (isFinalShipment && order.status === OrderStatus.CONFIRMED) {
+        await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED).catch(console.error);
+    }
+
+    return { success: true, shipmentId, isFinalShipment, fulfillmentStatus: newFulfillmentStatus };
+}
+
+export async function updateOrderStatus(orderId: string, status: string) {
+    const existingOrder = await db.select({ status: orders.status, inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!existingOrder) throw new Error("Order not found");
+    if (existingOrder.status === status) return { message: "Status unchanged" };
+
+    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
+    const result = await db.update(orders).set({ status, inventoryAction: newInventoryAction, updatedAt: sql`unixepoch()` })
+        .where(and(eq(orders.id, orderId), eq(orders.status, existingOrder.status))).returning({ id: orders.id });
+
+    if (result.length === 0) throw new Error("Order status was changed by another request. Please reload and try again.");
+    return { message: "Order status updated successfully" };
 }

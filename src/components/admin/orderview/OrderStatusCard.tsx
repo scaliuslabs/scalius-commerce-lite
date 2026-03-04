@@ -45,7 +45,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   const handleStatusChange = async (newStatus: string) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/orders/${order.id}/status`, {
+      const response = await fetch(`/api/v1/admin/orders/${order.id}/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
@@ -87,7 +87,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
 
     setIsReturning(true);
     try {
-      const response = await fetch(`/api/orders/${order.id}/return`, {
+      const response = await fetch(`/api/v1/admin/orders/${order.id}/return`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: returnReason, autoRefund }),

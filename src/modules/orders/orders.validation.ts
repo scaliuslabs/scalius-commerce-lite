@@ -45,3 +45,21 @@ export const createOrderSchema = z.object({
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+
+/** Schema for updating an existing order (PUT /api/orders/:id) */
+export const updateOrderSchema = createOrderSchema.extend({
+    status: z.string().min(1, "Status is required"),
+});
+
+export type UpdateOrderInput = z.infer<typeof updateOrderSchema>;
+
+export const bulkDeleteOrderSchema = z.object({
+    orderIds: z.array(z.string()),
+    permanent: z.boolean().default(false),
+});
+
+export const bulkShipOrderSchema = z.object({
+    orderIds: z.array(z.string()),
+    providerId: z.string(),
+    options: z.any().optional(),
+});

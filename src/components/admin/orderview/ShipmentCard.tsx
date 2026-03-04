@@ -46,7 +46,7 @@ const CreateShipmentForm = ({
     }
     setIsCreatingShipment(true);
     try {
-      const response = await fetch(`/api/orders/${order.id}/shipments`, {
+      const response = await fetch(`/api/v1/admin/orders/${order.id}/shipments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ providerId: selectedProviderId, options: {} }),

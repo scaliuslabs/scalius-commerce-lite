@@ -181,7 +181,7 @@ function ProfileHeaderCard({ user }: { user: User }) {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/update-profile", {
+      const response = await fetch("/api/v1/admin/auth/update-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -372,7 +372,7 @@ function ChangePasswordSection() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/change-password", {
+      const response = await fetch("/api/v1/admin/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword, newPassword }),
@@ -590,13 +590,13 @@ function TwoFactorSection({ user }: { user: User }) {
         return;
       }
 
-      await fetch("/api/auth/update-2fa-method", {
+      await fetch("/api/v1/admin/auth/2fa/method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method: selectedMethod }),
       });
 
-      await fetch("/api/auth/mark-2fa-verified", {
+      await fetch("/api/v1/admin/auth/2fa/mark-verified", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -648,13 +648,13 @@ function TwoFactorSection({ user }: { user: User }) {
         return;
       }
 
-      await fetch("/api/auth/update-2fa-method", {
+      await fetch("/api/v1/admin/auth/2fa/method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method: "totp" }),
       });
 
-      await fetch("/api/auth/mark-2fa-verified", {
+      await fetch("/api/v1/admin/auth/2fa/mark-verified", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -674,7 +674,7 @@ function TwoFactorSection({ user }: { user: User }) {
     setIsLoading(true);
 
     try {
-      await fetch("/api/auth/update-2fa-method", {
+      await fetch("/api/v1/admin/auth/2fa/method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method: "email" }),
@@ -1107,7 +1107,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
 
   const fetchAdminUsers = async () => {
     try {
-      const response = await fetch("/api/auth/admin-users");
+      const response = await fetch("/api/v1/admin/auth/users");
       const result = await response.json();
       if (response.ok) setAdminUsers(result.users);
     } catch {
@@ -1141,7 +1141,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
     setIsAdding(true);
 
     try {
-      const response = await fetch("/api/auth/admin-users", {
+      const response = await fetch("/api/v1/admin/auth/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1173,7 +1173,7 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-      const response = await fetch(`/api/auth/admin-users?id=${userId}`, {
+      const response = await fetch(`/api/v1/admin/auth/users/${userId}`, {
         method: "DELETE",
       });
 

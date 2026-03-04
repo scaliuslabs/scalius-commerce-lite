@@ -88,7 +88,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
 // ---------------------------------------------------------------------------
 
 export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
-  "/api/products": ["products", "search"],
+  "/api/v1/admin/products": ["products", "search"],
   "/api/inventory": ["products"],
   "/api/v1/admin/categories": ["categories", "search"],
   "/api/v1/admin/collections": ["collections"],

@@ -46,7 +46,7 @@ export function SetupForm() {
     try {
       // Create the first admin account using custom setup endpoint
       // This uses Better Auth's signUpEmail internally which also creates a session
-      const response = await fetch("/api/auth/setup", {
+      const response = await fetch("/api/v1/setup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -59,6 +59,11 @@ import { adminAnalyticsRoutes } from "./routes/admin/analytics";
 import { adminFraudCheckerRoutes } from "./routes/admin/fraud-checker";
 import { adminRbacRoutes } from "./routes/admin/rbac";
 import { adminSettingsRoutes } from "./routes/admin/settings";
+import { adminOrdersRoutes } from "./routes/admin/orders";
+import { adminProductsRoutes } from "./routes/admin/products";
+import { adminAuthManagementRoutes, authSetupRoutes } from "./routes/admin/auth-management";
+import { adminAiContextRoutes } from "./routes/admin/ai-context";
+import { adminAiPromptsRoutes } from "./routes/admin/ai-prompts";
 
 // Create typed Hono app with Cloudflare Workers Env bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -242,6 +247,14 @@ app.route("/admin/analytics", adminAnalyticsRoutes);
 app.route("/admin/fraud-checker", adminFraudCheckerRoutes);
 app.route("/admin/rbac", adminRbacRoutes);
 app.route("/admin/settings", adminSettingsRoutes);
+app.route("/admin/orders", adminOrdersRoutes);
+app.route("/admin/products", adminProductsRoutes);
+app.route("/admin/auth", adminAuthManagementRoutes);
+app.route("/admin/ai-context", adminAiContextRoutes);
+app.route("/admin/ai-prompts", adminAiPromptsRoutes);
+
+// Setup routes - bypassing normal auth rules, used only during initial deployment
+app.route("/setup", authSetupRoutes);
 
 // Payment routes — session/intent creation is public (storefront)
 app.route("/payment/stripe", stripePaymentRoutes);

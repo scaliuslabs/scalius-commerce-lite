@@ -45,12 +45,12 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
 
     try {
       // Fetch system prompt
-      const systemPromptRes = await fetch(`/api/system-prompt?type=${aiGenerator.promptType}`);
+      const systemPromptRes = await fetch(`/api/v1/admin/ai-prompts?type=${aiGenerator.promptType}`);
       if (!systemPromptRes.ok) throw new Error(ERROR_MESSAGES.systemPromptFailed);
       const systemPrompt = await systemPromptRes.text();
 
       // Fetch context details
-      const contextRes = await fetch('/api/context/batch-details', {
+      const contextRes = await fetch('/api/v1/admin/ai-context/batch-details', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,8 +84,8 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       // Build improvement history context
       const historyContext = improvementHistory.length > 0
         ? `\n\nPREVIOUS IMPROVEMENTS:\n${improvementHistory.map((h, i) =>
-            `${i + 1}. ${h.section !== undefined ? `Section ${h.section + 1}` : 'Whole widget'}: "${h.prompt}"`
-          ).join('\n')}\n\nIMPORTANT: Build upon these previous improvements. Do not revert any of the changes made in the history above.`
+          `${i + 1}. ${h.section !== undefined ? `Section ${h.section + 1}` : 'Whole widget'}: "${h.prompt}"`
+        ).join('\n')}\n\nIMPORTANT: Build upon these previous improvements. Do not revert any of the changes made in the history above.`
         : '';
 
       // Build other sections context (for awareness when improving specific section)

@@ -6,18 +6,18 @@ import type { Category } from '@/db/schema';
 import type { MediaFile, ProductSearchResult } from './types';
 
 export const useAiContext = (
-    initialContext?: {
-        images?: MediaFile[];
-        products?: ProductSearchResult[];
-        categories?: Category[];
-        allCategories?: boolean;
-    }
+  initialContext?: {
+    images?: MediaFile[];
+    products?: ProductSearchResult[];
+    categories?: Category[];
+    allCategories?: boolean;
+  }
 ) => {
   const [selectedImages, setSelectedImages] = useState<MediaFile[]>(initialContext?.images || []);
   const [selectedProducts, setSelectedProducts] = useState<ProductSearchResult[]>(initialContext?.products || []);
   const [selectedCategories, setSelectedCategories] = useState<Category[]>(initialContext?.categories || []);
   const [allCategoriesSelected, setAllCategoriesSelected] = useState(initialContext?.allCategories || false);
-  
+
   const [allCategoriesList, setAllCategoriesList] = useState<Category[]>([]);
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [productSearchResults, setProductSearchResults] = useState<ProductSearchResult[]>([]);
@@ -32,7 +32,7 @@ export const useAiContext = (
     if (isFetchingProducts) return;
     setIsFetchingProducts(true);
     try {
-      const response = await fetch(`/api/products?page=${pageToFetch}&limit=10&sort=updatedAt&order=desc`);
+      const response = await fetch(`/api/v1/admin/products?page=${pageToFetch}&limit=10&sort=updatedAt&order=desc`);
       if (response.ok) {
         const data = await response.json();
         const newProducts: ProductSearchResult[] = (data.products || []).map((p: any) => ({
@@ -82,7 +82,7 @@ export const useAiContext = (
       }
       setIsFetchingProducts(true);
       try {
-        const response = await fetch(`/api/products?search=${encodeURIComponent(debouncedProductSearch)}&limit=10`);
+        const response = await fetch(`/api/v1/admin/products?search=${encodeURIComponent(debouncedProductSearch)}&limit=10`);
         if (response.ok) {
           const data = await response.json();
           const newProducts: ProductSearchResult[] = (data.products || []).map((p: any) => ({
