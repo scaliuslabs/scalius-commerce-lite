@@ -2,7 +2,7 @@
 // Centralized notification service for admin push + order email notifications.
 // Extracted from src/lib/notification-utils.ts and src/queue-consumer.ts.
 
-import { db } from "@/db";
+import type { Database } from "@/db";
 import { adminFcmTokens, settings } from "@/db/schema";
 import { getFirebaseAdminMessaging } from "@/integrations/firebase/admin";
 import { eq, sql, and } from "drizzle-orm";
@@ -23,6 +23,7 @@ interface OrderNotificationData {
  * own errors to avoid unhandled promise rejections.
  */
 export async function sendOrderNotification(
+    db: Database,
     order: OrderNotificationData,
     env: Env,
     requestUrl: string,
