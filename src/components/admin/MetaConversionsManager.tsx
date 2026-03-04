@@ -56,7 +56,7 @@ interface MetaConversionsManagerProps {
   initialSettings?: MetaConversionsSettings;
 }
 
-interface LogEntry extends MetaConversionsLog {}
+interface LogEntry extends MetaConversionsLog { }
 
 interface RetentionInfo {
   hours: number;
@@ -307,19 +307,19 @@ export function MetaConversionsManager({
   const fetchSettings = useCallback(async () => {
     setIsSettingsLoading(true);
     try {
-      const response = await fetch("/api/admin/settings/meta-conversions");
+      const response = await fetch("/api/v1/admin/settings/meta-conversions");
       if (response.ok) {
         const data = await response.json();
         setSettings(data.data);
         setFormData(
           data.data
             ? {
-                pixelId: data.data.pixelId || "",
-                accessToken: data.data.accessToken || "",
-                testEventCode: data.data.testEventCode || "",
-                isEnabled: data.data.isEnabled || false,
-                logRetentionDays: data.data.logRetentionDays || 30,
-              }
+              pixelId: data.data.pixelId || "",
+              accessToken: data.data.accessToken || "",
+              testEventCode: data.data.testEventCode || "",
+              isEnabled: data.data.isEnabled || false,
+              logRetentionDays: data.data.logRetentionDays || 30,
+            }
             : DEFAULT_FORM_DATA,
         );
       }
@@ -338,7 +338,7 @@ export function MetaConversionsManager({
         limit: String(logsPagination.limit),
       });
       const response = await fetch(
-        `/api/admin/settings/meta-conversions/logs?${params}`,
+        `/api/v1/admin/settings/meta-conversions/logs?${params}`,
       );
       if (response.ok) {
         const data = await response.json();
@@ -356,7 +356,7 @@ export function MetaConversionsManager({
   const handleSaveSettings = async () => {
     setIsSettingsLoading(true);
     try {
-      const response = await fetch("/api/admin/settings/meta-conversions", {
+      const response = await fetch("/api/v1/admin/settings/meta-conversions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -382,7 +382,7 @@ export function MetaConversionsManager({
     setLogsLoading(true);
     try {
       const response = await fetch(
-        "/api/admin/settings/meta-conversions/logs",
+        "/api/v1/admin/settings/meta-conversions/logs",
         {
           method: "DELETE",
         },
@@ -409,7 +409,7 @@ export function MetaConversionsManager({
     setIsManualCleanupLoading(true);
     try {
       const response = await fetch(
-        "/api/admin/settings/meta-conversions/logs",
+        "/api/v1/admin/settings/meta-conversions/logs",
         {
           method: "POST",
         },

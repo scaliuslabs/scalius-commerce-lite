@@ -205,7 +205,7 @@ const authMiddleware = defineMiddleware(async (context, next) => {
       );
     }
 
-    if (pathname.startsWith("/api/admin/")) {
+    if (pathname.startsWith("/api/v1/admin/")) {
       const userHasAdminAccess = (context.locals as any)._hasAdminAccess ?? false;
 
       if (sessionUser.role !== "admin" && !userHasAdminAccess) {

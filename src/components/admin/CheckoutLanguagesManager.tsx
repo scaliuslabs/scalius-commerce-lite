@@ -153,7 +153,7 @@ const defaultFieldVisibility = {
   showAreaField: true,
 };
 
-export function CheckoutLanguagesManager({}: CheckoutLanguagesManagerProps) {
+export function CheckoutLanguagesManager({ }: CheckoutLanguagesManagerProps) {
   const { toast } = useToast();
   const [languages, setLanguages] = useState<ManagerCheckoutLanguage[]>([]);
   const [pagination, setPagination] = useState({
@@ -216,7 +216,7 @@ export function CheckoutLanguagesManager({}: CheckoutLanguagesManagerProps) {
         if (currentShowTrashed) params.append("trashed", "true");
 
         const response = await fetch(
-          `/api/admin/settings/checkout-languages?${params.toString()}`,
+          `/api/v1/admin/settings/checkout-languages?${params.toString()}`,
         );
         if (!response.ok) throw new Error("Failed to fetch checkout languages");
         const data = await response.json();
@@ -371,8 +371,8 @@ export function CheckoutLanguagesManager({}: CheckoutLanguagesManagerProps) {
     e.preventDefault();
     setIsActionLoading(true);
     const url = editingLanguage
-      ? `/api/admin/settings/checkout-languages/${editingLanguage.id}`
-      : "/api/admin/settings/checkout-languages";
+      ? `/api/v1/admin/settings/checkout-languages/${editingLanguage.id}`
+      : "/api/v1/admin/settings/checkout-languages";
     const method = editingLanguage ? "PUT" : "POST";
 
     try {
@@ -385,9 +385,9 @@ export function CheckoutLanguagesManager({}: CheckoutLanguagesManagerProps) {
       if (!response.ok) {
         throw new Error(
           result.error ||
-            (editingLanguage ? "Failed to update" : "Failed to create") +
-              " checkout language: " +
-              (result.details ? JSON.stringify(result.details) : ""),
+          (editingLanguage ? "Failed to update" : "Failed to create") +
+          " checkout language: " +
+          (result.details ? JSON.stringify(result.details) : ""),
         );
       }
       toast({
@@ -415,7 +415,7 @@ export function CheckoutLanguagesManager({}: CheckoutLanguagesManagerProps) {
     setIsActionLoading(true);
     try {
       const response = await fetch(
-        `/api/admin/settings/checkout-languages/${id}`,
+        `/api/v1/admin/settings/checkout-languages/${id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -449,7 +449,7 @@ export function CheckoutLanguagesManager({}: CheckoutLanguagesManagerProps) {
     setItemToSoftDelete(null);
     try {
       const response = await fetch(
-        `/api/admin/settings/checkout-languages/${language.id}`,
+        `/api/v1/admin/settings/checkout-languages/${language.id}`,
         {
           method: "PATCH", // Soft delete
         },
@@ -488,7 +488,7 @@ export function CheckoutLanguagesManager({}: CheckoutLanguagesManagerProps) {
     setItemToPermanentlyDelete(null);
     try {
       const response = await fetch(
-        `/api/admin/settings/checkout-languages/${language.id}`,
+        `/api/v1/admin/settings/checkout-languages/${language.id}`,
         {
           method: "DELETE", // Permanent delete
         },
@@ -528,7 +528,7 @@ export function CheckoutLanguagesManager({}: CheckoutLanguagesManagerProps) {
     setItemToRestore(null);
     try {
       const response = await fetch(
-        `/api/admin/settings/checkout-languages/${language.id}/restore`,
+        `/api/v1/admin/settings/checkout-languages/${language.id}/restore`,
         {
           method: "POST",
         },

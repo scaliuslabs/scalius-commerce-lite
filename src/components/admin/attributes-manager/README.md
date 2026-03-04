@@ -187,6 +187,6 @@ When adding new features:
 
 ## 📚 Related Files
 
-- API Routes: `src/pages/api/admin/attributes/`
+- API Routes: `src/pages/api/v1/admin/attributes/`
 - Database Schema: `src/db/schema.ts` (productAttributes table)
 - Page Implementation: `src/pages/admin/attributes/index.astro`

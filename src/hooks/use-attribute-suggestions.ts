@@ -34,7 +34,7 @@ export function useAttributeSuggestions({
     setIsLoading(true);
     try {
       const response = await fetch(
-        `/api/admin/attributes/values/search?q=${encodeURIComponent(query.trim())}&limit=10`,
+        `/api/v1/admin/attributes/values/search?q=${encodeURIComponent(query.trim())}&limit=10`,
         { signal: controller.signal },
       );
 

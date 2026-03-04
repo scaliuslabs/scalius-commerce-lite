@@ -68,7 +68,7 @@ export function AttributeValueEditor({
     setIsLoading(true);
     try {
       const response = await fetch(
-        `/api/admin/attributes/${attributeId}/values`,
+        `/api/v1/admin/attributes/${attributeId}/values`,
       );
       if (!response.ok) throw new Error("Failed to fetch values");
       const data = await response.json();
@@ -107,7 +107,7 @@ export function AttributeValueEditor({
     setSavingValue(editingValue);
     try {
       const response = await fetch(
-        `/api/admin/attributes/${attributeId}/values`,
+        `/api/v1/admin/attributes/${attributeId}/values`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -138,7 +138,7 @@ export function AttributeValueEditor({
     setSavingValue("new");
     try {
       const response = await fetch(
-        `/api/admin/attributes/${attributeId}/values`,
+        `/api/v1/admin/attributes/${attributeId}/values`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -168,7 +168,7 @@ export function AttributeValueEditor({
     setSavingValue(value);
     try {
       const response = await fetch(
-        `/api/admin/attributes/${attributeId}/values`,
+        `/api/v1/admin/attributes/${attributeId}/values`,
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
