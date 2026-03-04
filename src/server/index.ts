@@ -26,8 +26,6 @@ import { polarWebhookRoutes } from "./routes/webhooks/polar";
 import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
 import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
 import { authMiddleware } from "./middleware/auth";
-import { adminAuthMiddleware } from "./middleware/admin-auth";
-import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { discountRoutes } from "./routes/discounts";
 import { widgetRoutes } from "./routes/widgets";
 import { analyticsRoutes } from "./routes/analytics";
@@ -42,6 +40,8 @@ import { openApiSpec } from "./openapi";
 import { getCorsOriginContext } from "@/shared/cors-helper";
 
 // Admin routes
+import { adminAuthMiddleware } from "./middleware/admin-auth";
+import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { adminCategoryRoutes } from "./routes/admin/categories";
 import { adminCollectionRoutes } from "./routes/admin/collections";
 import { adminCustomerRoutes } from "./routes/admin/customers";
