@@ -1,9 +1,7 @@
 ---
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { CollectionForm } from "@/components/admin/CollectionForm";
-import { db } from "@/db";
-import { collections, categories, products } from "@/db/schema";
-import { eq, isNull, and } from "drizzle-orm";
+import { getCollectionEditData } from "@/server/loaders/admin/catalog";
 
 const { id } = Astro.params;
 
@@ -11,58 +9,11 @@ if (!id) {
   return Astro.redirect("/admin/collections");
 }
 
-const collection = await db
-  .select()
-  .from(collections)
-  .where(and(eq(collections.id, id), isNull(collections.deletedAt)))
-  .limit(1)
-  .then((rows) => rows[0]);
-
-if (!collection) {
+const collectionData = id ? await getCollectionEditData(id) : null;
+if (!collectionData) {
   return Astro.redirect("/admin/collections");
 }
-
-const allCategories = await db
-  .select({
-    id: categories.id,
-    name: categories.name,
-  })
-  .from(categories)
-  .where(isNull(categories.deletedAt));
-
-const allProducts = await db
-  .select({
-    id: products.id,
-    name: products.name,
-    categoryId: products.categoryId,
-  })
-  .from(products)
-  .where(isNull(products.deletedAt));
-
-const parsedConfig = JSON.parse(collection.config);
-
-// Build config with backward compatibility
-const config = {
-  categoryIds: parsedConfig.categoryIds || [],
-  productIds: parsedConfig.productIds || parsedConfig.specificProductIds || [],
-  featuredProductId: parsedConfig.featuredProductId,
-  maxProducts: parsedConfig.maxProducts || 8,
-  title: parsedConfig.title || "",
-  subtitle: parsedConfig.subtitle || "",
-};
-
-const validCollectionTypesForForm = ["collection1", "collection2"];
-const formType = validCollectionTypesForForm.includes(collection.type)
-  ? collection.type
-  : "collection1";
-
-const defaultValues = {
-  id: collection.id,
-  name: collection.name,
-  type: formType as "collection1" | "collection2",
-  isActive: collection.isActive,
-  config: config,
-};
+const { allCategories, allProducts, defaultValues } = collectionData;
 ---
 
 <AdminLayout title="Edit Collection">

@@ -1,24 +1,9 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { AnalyticsList } from "../../../components/admin/AnalyticsList";
-import { db } from "../../../db";
-import { analytics } from "../../../db/schema";
-import { unixToDate } from "@/shared/utils";
+import { getAnalyticsListData } from "@/server/loaders/admin/analytics";
 
-// Fetch all analytics scripts
-const analyticsScripts = await db.select().from(analytics);
-
-// Format the data for the component
-const formattedScripts = analyticsScripts.map((script) => ({
-  id: script.id,
-  name: script.name,
-  type: script.type,
-  isActive: script.isActive,
-  usePartytown: script.usePartytown,
-  location: script.location,
-  createdAt: unixToDate(script.createdAt) || new Date(),
-  updatedAt: unixToDate(script.updatedAt) || new Date(),
-}));
+const formattedScripts = await getAnalyticsListData();
 ---
 
 <AdminLayout title="Analytics Scripts">

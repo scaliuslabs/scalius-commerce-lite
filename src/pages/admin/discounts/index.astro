@@ -2,8 +2,7 @@
 //src/pages/admin/discounts/index.astro
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { DiscountList } from "@/components/admin/discount/DiscountList";
-import { DiscountService } from "@/modules/discounts";
-import { db } from "@/db";
+import { getDiscountsIndexData } from "@/server/loaders/admin/discounts";
 
 // Local type definition matching DiscountListProps['discounts'] expected structure
 interface DiscountItem {
@@ -49,8 +48,7 @@ const sort = (searchParams.get("sort") || "updatedAt") as
 const order = (searchParams.get("order") || "desc") as "asc" | "desc";
 const limit = parseInt(searchParams.get("limit") || "10");
 
-// Fetch discounts via canonical DiscountService
-const { discounts: rawDiscounts, pagination } = await DiscountService.list(db, {
+const { discounts: rawDiscounts, pagination } = await getDiscountsIndexData({
   page,
   search,
   showTrashed,

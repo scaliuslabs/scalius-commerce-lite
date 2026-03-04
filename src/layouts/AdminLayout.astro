@@ -42,6 +42,7 @@ import SideBar from "@/components/admin/adminLayout/SideBar.astro";
 import { generateAdminBreadcrumbs } from "@/lib/adminBreadCrumb";
 import favicon from "@/assets/favicon.png";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { getAdminLayoutFirebaseConfig } from "@/server/loaders/admin/layout";
 
 interface Props {
   title: string;
@@ -61,13 +62,7 @@ if (!user || !session) {
   return Astro.redirect("/auth/login");
 }
 
-// Firebase config setup (cached to avoid DB query on every admin page load)
-import { db } from "@/db";
-import { settings } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
-import { layoutCache, CACHE_KEYS } from "@/shared/layout-cache";
-
-let firebaseConfig = {
+const defaultFirebaseConfig = {
   apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY,
   authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID,
@@ -78,27 +73,7 @@ let firebaseConfig = {
   vapidKey: import.meta.env.PUBLIC_VAPID_FIREBASE,
 };
 
-const cached = layoutCache.get<typeof firebaseConfig>(CACHE_KEYS.FIREBASE_CONFIG);
-if (cached) {
-  firebaseConfig = cached;
-} else {
-  try {
-    const result = await db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(and(eq(settings.key, "public_config"), eq(settings.category, "firebase")))
-      .get();
-
-    if (result && result.value) {
-      const dbConfig = JSON.parse(result.value);
-      firebaseConfig = { ...firebaseConfig, ...dbConfig };
-      if (dbConfig.vapidKey) firebaseConfig.vapidKey = dbConfig.vapidKey;
-    }
-    layoutCache.set(CACHE_KEYS.FIREBASE_CONFIG, firebaseConfig);
-  } catch (e) {
-    console.error("Error loading Firebase settings in layout:", e);
-  }
-}
+const firebaseConfig = await getAdminLayoutFirebaseConfig(defaultFirebaseConfig);
 
 // Generate breadcrumb items using helper function
 const breadcrumbItems = generateAdminBreadcrumbs(currentPath);

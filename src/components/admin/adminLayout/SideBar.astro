@@ -2,9 +2,7 @@
 // src/components/admin/SideBar.astro
 import { Button } from "@/components/ui/button.tsx";
 import { ChevronDown, Store, ExternalLink, X } from "lucide-react";
-import { db } from "@/db";
-import { siteSettings } from "@/db/schema";
-import { layoutCache, CACHE_KEYS } from "@/shared/layout-cache";
+import { getSidebarStorefrontUrl } from "@/server/loaders/admin/layout";
 import favicon from "@/assets/favicon.png";
 import logoDark from "@/assets/logo-dark.png";
 import logoLight from "@/assets/logo-light.png";
@@ -33,21 +31,7 @@ interface Props {
 const { navSections, currentPath } = Astro.props;
 const path = currentPath;
 
-// Get storefront URL (cached to avoid DB query on every admin page load)
-let storefrontUrl = layoutCache.get<string>(CACHE_KEYS.STOREFRONT_URL) ?? null;
-if (storefrontUrl === null) {
-  try {
-    const [storefrontSettings] = await db
-      .select({ storefrontUrl: siteSettings.storefrontUrl })
-      .from(siteSettings)
-      .limit(1);
-    storefrontUrl = storefrontSettings?.storefrontUrl || "/";
-    layoutCache.set(CACHE_KEYS.STOREFRONT_URL, storefrontUrl);
-  } catch (error) {
-    console.warn("Could not fetch storefront URL, using default:", error);
-    storefrontUrl = "/";
-  }
-}
+const storefrontUrl = await getSidebarStorefrontUrl();
 ---
 
 <!-- Inline style to prevent FOUC -->

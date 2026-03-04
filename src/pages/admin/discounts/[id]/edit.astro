@@ -3,30 +3,7 @@ import AdminLayout from "@/layouts/AdminLayout.astro";
 import { AmountOffProductsForm } from "@/components/admin/discount/AmountOffProductsForm";
 import { AmountOffOrderForm } from "@/components/admin/discount/AmountOffOrderForm";
 import { FreeShippingForm } from "@/components/admin/discount/FreeShippingForm";
-import { db } from "@/db/index.ts";
-import {
-  discounts,
-  discountProducts,
-  discountCollections,
-  products,
-  collections,
-} from "@/db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
-
-// Local types for product/collection data (matching form expectations)
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  discountPercentage: number | null;
-}
-
-interface Collection {
-  id: string;
-  name: string;
-  description: string | null;
-  slug: string;
-}
+import { getDiscountEditData } from "@/server/loaders/admin/discounts";
 
 // Get discount ID from URL params
 const { id } = Astro.params;
@@ -35,95 +12,12 @@ if (!id) {
   return Astro.redirect("/admin/discounts");
 }
 
-// Fetch discount data from database using raw SQL for dates (like products/orders pages)
-const discount = await db
-  .select({
-    id: discounts.id,
-    code: discounts.code,
-    type: discounts.type,
-    valueType: discounts.valueType,
-    discountValue: discounts.discountValue,
-    minPurchaseAmount: discounts.minPurchaseAmount,
-    minQuantity: discounts.minQuantity,
-    maxUsesPerOrder: discounts.maxUsesPerOrder,
-    maxUses: discounts.maxUses,
-    limitOnePerCustomer: discounts.limitOnePerCustomer,
-    combineWithProductDiscounts: discounts.combineWithProductDiscounts,
-    combineWithOrderDiscounts: discounts.combineWithOrderDiscounts,
-    combineWithShippingDiscounts: discounts.combineWithShippingDiscounts,
-    customerSegment: discounts.customerSegment,
-    isActive: discounts.isActive,
-    deletedAt: discounts.deletedAt,
-    // Use SQL datetime() to convert UNIX timestamps to ISO strings (like products/orders pages)
-    startDate: sql<string>`datetime(${discounts.startDate}, 'unixepoch')`,
-    endDate: sql<string | null>`datetime(${discounts.endDate}, 'unixepoch')`,
-  })
-  .from(discounts)
-  .where(eq(discounts.id, id))
-  .get();
-
-if (!discount) {
+const discountData = await getDiscountEditData(id);
+if (!discountData) {
   return Astro.redirect("/admin/discounts");
 }
-
-// Convert datetime strings to Date objects (simple and clean like products page)
-const formattedDiscount = {
-  ...discount,
-  startDate: discount.startDate ? new Date(discount.startDate + 'Z') : new Date(), // Add Z to indicate UTC
-  endDate: discount.endDate ? new Date(discount.endDate + 'Z') : null,
-};
-
-// Fetch product IDs related to this discount
-const productAssociations = await db
-  .select()
-  .from(discountProducts)
-  .where(eq(discountProducts.discountId, id));
-
-// Fetch collection IDs related to this discount
-const collectionAssociations = await db
-  .select()
-  .from(discountCollections)
-  .where(eq(discountCollections.discountId, id));
-
-// Get all product and collection IDs
-const productIds = productAssociations.map((p) => p.productId);
-const collectionIds = collectionAssociations.map((c) => c.collectionId);
-
-// Fetch actual product data
-let selectedProducts: Product[] = [];
-
-if (productIds.length > 0) {
-  selectedProducts = await db
-    .select({
-      id: products.id,
-      name: products.name,
-      price: products.price,
-      discountPercentage: products.discountPercentage,
-    })
-    .from(products)
-    .where(inArray(products.id, productIds));
-}
-
-// Fetch actual collection data
-let selectedCollections: Collection[] = [];
-
-if (collectionIds.length > 0) {
-  const collectionsData = await db
-    .select({
-      id: collections.id,
-      name: collections.name,
-    })
-    .from(collections)
-    .where(inArray(collections.id, collectionIds));
-
-  // Convert to expected Collection format with safe defaults
-  selectedCollections = collectionsData.map((c) => ({
-    id: c.id,
-    name: c.name,
-    description: null,
-    slug: "",
-  }));
-}
+const { discount, formattedDiscount, selectedProducts, selectedCollections } =
+  discountData;
 ---
 
 <AdminLayout title="Edit Discount">

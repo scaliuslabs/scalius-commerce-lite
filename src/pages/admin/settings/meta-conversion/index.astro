@@ -2,25 +2,9 @@
 // src/pages/admin/settings/meta-conversion/index.astro
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import { MetaConversionsManager } from "../../../../components/admin/MetaConversionsManager";
-import { db } from "../../../../db";
-import { metaConversionsSettings } from "../../../../db/schema";
-import { eq } from "drizzle-orm";
+import { getMetaConversionSettingsData } from "@/server/loaders/admin/settings";
 
-// SECURITY: Masked value for sensitive fields
-const MASKED_VALUE = "••••••••••••";
-
-// Get existing settings, specifically targeting the 'singleton' row
-const dbSettings = await db
-  .select()
-  .from(metaConversionsSettings)
-  .where(eq(metaConversionsSettings.id, "singleton"))
-  .get();
-
-// SECURITY: Mask access token before sending to client
-const settings = dbSettings ? {
-  ...dbSettings,
-  accessToken: dbSettings.accessToken ? MASKED_VALUE : null,
-} : undefined;
+const settings = await getMetaConversionSettingsData();
 ---
 
 <AdminLayout title="Meta Conversions API">
