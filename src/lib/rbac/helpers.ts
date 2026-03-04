@@ -17,17 +17,28 @@ const permissionCache = new Map<
   string,
   { permissions: Set<string>; timestamp: number }
 >();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 300; // 5 minutes in KV
 
 /**
- * Clear the permission cache for a specific user
+ * Get the cache key for a user's permissions
  */
-export function clearPermissionCache(userId: string): void {
-  permissionCache.delete(userId);
+function getPermCacheKey(userId: string): string {
+  return `rbac:perms:${userId}`;
 }
 
 /**
- * Clear all permission caches
+ * Clear the permission cache for a specific user.
+ * In production, pass the KV namespace to ensure cross-isolate clearing.
+ */
+export async function clearPermissionCache(userId: string, kv?: KVNamespace): Promise<void> {
+  permissionCache.delete(userId);
+  if (kv) {
+    await kv.delete(getPermCacheKey(userId));
+  }
+}
+
+/**
+ * Clear all local permission caches (Note: cannot cleanly wipe KV by prefix without listing keys)
  */
 export function clearAllPermissionCache(): void {
   permissionCache.clear();
@@ -43,12 +54,23 @@ export function clearAllPermissionCache(): void {
  */
 export async function getUserPermissions(
   db: Database,
-  userId: string
+  userId: string,
+  kv?: KVNamespace
 ): Promise<Set<string>> {
-  // Check cache first
+  // Check local memory cache first (fastest, intra-isolate)
   const cached = permissionCache.get(userId);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL * 1000) {
     return cached.permissions;
+  }
+
+  // Check KV cache next (fast, cross-isolate)
+  if (kv) {
+    const kvCached = await kv.get<string[]>(getPermCacheKey(userId), "json");
+    if (kvCached) {
+      const permSet = new Set(kvCached);
+      permissionCache.set(userId, { permissions: permSet, timestamp: Date.now() });
+      return permSet;
+    }
   }
 
   // Get user details including isSuperAdmin
@@ -71,7 +93,12 @@ export async function getUserPermissions(
   if (userData.isSuperAdmin) {
     const allPerms = await db.select({ name: permissions.name }).from(permissions);
     const permSet = new Set(allPerms.map((p) => p.name));
+
     permissionCache.set(userId, { permissions: permSet, timestamp: Date.now() });
+    if (kv) {
+      // Background the KV write so it doesn't block the request
+      kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(permSet)), { expirationTtl: CACHE_TTL });
+    }
     return permSet;
   }
 
@@ -106,11 +133,16 @@ export async function getUserPermissions(
     }
   }
 
-  // Cache the result
+  // Cache the result in local memory
   permissionCache.set(userId, {
     permissions: effectivePermissions,
     timestamp: Date.now(),
   });
+
+  // Cache the result in KV without blocking
+  if (kv) {
+    kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(effectivePermissions)), { expirationTtl: CACHE_TTL });
+  }
 
   return effectivePermissions;
 }
@@ -231,7 +263,8 @@ export async function checkPermissionDetailed(
  */
 export async function getUserPermissionContext(
   db: Database,
-  userId: string
+  userId: string,
+  kv?: KVNamespace
 ): Promise<UserPermissionContext | null> {
   // Get user details
   const userResult = await db
@@ -282,7 +315,7 @@ export async function getUserPermissionContext(
   }
 
   // Get effective permissions
-  const effectivePermissions = await getUserPermissions(db, userId);
+  const effectivePermissions = await getUserPermissions(db, userId, kv);
 
   return {
     userId,
@@ -361,7 +394,8 @@ export async function assignRoleToUser(
   db: Database,
   userId: string,
   roleId: string,
-  assignedBy?: string
+  assignedBy?: string,
+  kv?: KVNamespace
 ): Promise<void> {
   const id = crypto.randomUUID();
   await db.insert(userRoles).values({
@@ -372,8 +406,8 @@ export async function assignRoleToUser(
     createdAt: new Date(),
   });
 
-  // Clear cache
-  clearPermissionCache(userId);
+  // Clear cache in KV
+  await clearPermissionCache(userId, kv);
 }
 
 /**
@@ -382,14 +416,15 @@ export async function assignRoleToUser(
 export async function removeRoleFromUser(
   db: Database,
   userId: string,
-  roleId: string
+  roleId: string,
+  kv?: KVNamespace
 ): Promise<void> {
   await db
     .delete(userRoles)
     .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, roleId)));
 
-  // Clear cache
-  clearPermissionCache(userId);
+  // Clear cache in KV
+  await clearPermissionCache(userId, kv);
 }
 
 /**
@@ -400,7 +435,8 @@ export async function setUserPermissionOverride(
   userId: string,
   permissionName: string,
   granted: boolean,
-  assignedBy?: string
+  assignedBy?: string,
+  kv?: KVNamespace
 ): Promise<void> {
   // Get permission ID
   const permResult = await db
@@ -446,8 +482,8 @@ export async function setUserPermissionOverride(
     });
   }
 
-  // Clear cache
-  clearPermissionCache(userId);
+  // Clear cache in KV
+  await clearPermissionCache(userId, kv);
 }
 
 /**
@@ -456,7 +492,8 @@ export async function setUserPermissionOverride(
 export async function removeUserPermissionOverride(
   db: Database,
   userId: string,
-  permissionName: string
+  permissionName: string,
+  kv?: KVNamespace
 ): Promise<void> {
   // Get permission ID
   const permResult = await db
@@ -478,8 +515,8 @@ export async function removeUserPermissionOverride(
       )
     );
 
-  // Clear cache
-  clearPermissionCache(userId);
+  // Clear cache in KV
+  await clearPermissionCache(userId, kv);
 }
 
 /**
@@ -487,7 +524,8 @@ export async function removeUserPermissionOverride(
  */
 export async function hasAdminAccess(
   db: Database,
-  userId: string
+  userId: string,
+  kv?: KVNamespace
 ): Promise<boolean> {
   // Check if super admin
   const userResult = await db
@@ -505,6 +543,6 @@ export async function hasAdminAccess(
   }
 
   // Check if user has any permissions (through roles or overrides)
-  const permissions = await getUserPermissions(db, userId);
+  const permissions = await getUserPermissions(db, userId, kv);
   return permissions.size > 0;
 }
