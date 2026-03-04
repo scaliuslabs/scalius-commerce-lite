@@ -33,7 +33,7 @@ export function useCurrency() {
 
     // Only fetch if we haven't fetched in this tab session yet
     if (!hasFetchedThisSession && !_fetchPromise) {
-      _fetchPromise = fetch("/api/settings/currency")
+      _fetchPromise = fetch("/api/v1/admin/settings/currency")
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           const s = data?.currencySymbol || DEFAULT_SYMBOL;
