@@ -101,6 +101,37 @@ app.delete("/:id", async (c) => {
     }
 });
 
+// POST /api/v1/admin/products/:id/restore
+app.post("/:id/restore", async (c) => {
+    try {
+        const db = c.get("db");
+        const productId = c.req.param("id");
+        if (!productId) return c.json({ error: "Product ID is required" }, 400);
+
+        await ProductsService.restoreProduct(db, productId);
+        return c.json({ success: true }, 200);
+    } catch (error: any) {
+        return c.json({ error: error.message || "Internal Server Error" }, 500);
+    }
+});
+
+// DELETE /api/v1/admin/products/:id/permanent
+app.delete("/:id/permanent", async (c) => {
+    try {
+        const db = c.get("db");
+        const productId = c.req.param("id");
+        if (!productId) return c.json({ error: "Product ID is required" }, 400);
+
+        await ProductsService.permanentDeleteProduct(db, productId);
+        return new Response(null, { status: 204 });
+    } catch (error: any) {
+        if (error.message?.includes("delete")) {
+            return c.json({ error: error.message }, 409);
+        }
+        return c.json({ error: error.message || "Internal Server Error" }, 500);
+    }
+});
+
 import {
     createVariantSchema,
     updateVariantSchema,

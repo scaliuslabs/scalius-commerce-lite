@@ -653,6 +653,51 @@ export async function deleteProduct(db: DrizzleD1Database<typeof schema>, id: st
 }
 
 /**
+ * Restores a soft-deleted product by setting deletedAt to null.
+ */
+export async function restoreProduct(db: DrizzleD1Database<typeof schema>, id: string): Promise<void> {
+    await db
+        .update(products)
+        .set({
+            deletedAt: null,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(products.id, id));
+}
+
+/**
+ * Permanently deletes a product and all of its related data (variants, images, attributes, rich content).
+ * Throws an error if the product is linked to any existing orders or discounts.
+ */
+export async function permanentDeleteProduct(db: DrizzleD1Database<typeof schema>, id: string): Promise<void> {
+    const [orderCheck] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(orderItems)
+        .where(eq(orderItems.productId, id));
+
+    if (orderCheck.count > 0) {
+        throw new Error("Cannot delete product. It is part of one or more existing orders.");
+    }
+
+    const [discountCheck] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(discountProducts)
+        .where(eq(discountProducts.productId, id));
+
+    if (discountCheck.count > 0) {
+        throw new Error("Cannot delete product. It is linked to one or more discounts.");
+    }
+
+    await db.batch([
+        db.delete(productVariants).where(eq(productVariants.productId, id)),
+        db.delete(productImages).where(eq(productImages.productId, id)),
+        db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
+        db.delete(productRichContent).where(eq(productRichContent.productId, id)),
+        db.delete(products).where(eq(products.id, id)),
+    ] as any);
+}
+
+/**
  * Bulk updates given product variants using an array of updates.
  */
 export async function bulkUpdateVariants(db: DrizzleD1Database<typeof schema>, productId: string, updates: Array<{ id: string; size?: string | null; color?: string | null; weight?: number | null; sku?: string; price?: number; stock?: number }>) {
