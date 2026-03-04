@@ -1,9 +1,7 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { AccountSettingsWithPermissions } from "../../../components/admin/AccountSettingsWithPermissions";
-import { getDb } from "@/db";
-import { user as userTable } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { getAccountSecurityData } from "@/server/loaders/admin/layout";
 
 const user = Astro.locals.user;
 
@@ -11,16 +9,7 @@ if (!user) {
   return Astro.redirect("/auth/login");
 }
 
-const env = Astro.locals.runtime?.env || process.env;
-const db = getDb(env);
-const dbUser = await db
-  .select({
-    twoFactorMethod: userTable.twoFactorMethod,
-    isSuperAdmin: userTable.isSuperAdmin
-  })
-  .from(userTable)
-  .where(eq(userTable.id, user.id))
-  .get();
+const dbUser = await getAccountSecurityData(user.id);
 
 const userData = {
   id: user.id,
@@ -29,12 +18,12 @@ const userData = {
   image: user.image,
   role: user.role,
   twoFactorEnabled: user.twoFactorEnabled,
-  twoFactorMethod: dbUser?.twoFactorMethod || null,
+  twoFactorMethod: dbUser.twoFactorMethod,
 };
 
 const permissions = Astro.locals.permissions;
 const permissionsArray = permissions ? Array.from(permissions) : [];
-const isSuperAdmin = dbUser?.isSuperAdmin ?? false;
+const isSuperAdmin = dbUser.isSuperAdmin;
 ---
 
 <AdminLayout title="Account Settings">

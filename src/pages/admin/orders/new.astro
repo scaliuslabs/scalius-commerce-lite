@@ -1,38 +1,9 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { OrderForm } from "../../../components/admin/OrderForm";
-import { db } from "../../../db";
-import { products, productVariants } from "../../../db/schema";
-import { isNull, sql } from "drizzle-orm";
+import { getOrderFormProducts } from "@/server/loaders/admin/orders";
 
-// Get all active products with their variants
-const allProducts = await db
-  .select({
-    id: products.id,
-    name: products.name,
-    price: products.price,
-    discountPercentage: products.discountPercentage,
-  })
-  .from(products)
-  .where(isNull(products.deletedAt));
-
-// Get variants for each product
-const productVariantsMap = new Map();
-for (const product of allProducts) {
-  const variants = await db
-    .select()
-    .from(productVariants)
-    .where(
-      sql`${productVariants.productId} = ${product.id} AND ${productVariants.deletedAt} IS NULL`
-    );
-  productVariantsMap.set(product.id, variants);
-}
-
-// Prepare products with variants
-const productsWithVariants = allProducts.map((product) => ({
-  ...product,
-  variants: productVariantsMap.get(product.id) || [],
-}));
+const productsWithVariants = await getOrderFormProducts();
 
 // Default values for the form
 const defaultValues = {

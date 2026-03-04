@@ -3,66 +3,16 @@ import AdminLayout from "@/layouts/AdminLayout.astro";
 import { WidgetsList } from "@/components/admin/widget-list";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard } from "lucide-react";
-import { db } from "@/db";
-import { widgets, collections } from "@/db/schema";
-import { eq, isNotNull, asc, and, like, desc, sql } from "drizzle-orm";
-import { unixToDate } from "@/shared/utils";
+import { getWidgetsListPageData } from "@/server/loaders/admin/widgets";
 
 const searchParams = Astro.url.searchParams;
 const search = searchParams.get("search") || "";
 
-const queryConditions = [isNotNull(widgets.deletedAt)];
-
-if (search) {
-  queryConditions.push(like(widgets.name, `%${search}%`));
-}
-
-const dbWidgets = await db
-  .select({
-    id: widgets.id,
-    name: widgets.name,
-    htmlContent: widgets.htmlContent,
-    cssContent: widgets.cssContent,
-    aiContext: widgets.aiContext,
-    isActive: widgets.isActive,
-    displayTarget: widgets.displayTarget,
-    placementRule: widgets.placementRule,
-    referenceCollectionId: widgets.referenceCollectionId,
-    sortOrder: widgets.sortOrder,
-    createdAt: sql<number>`CAST(${widgets.createdAt} AS INTEGER)`,
-    updatedAt: sql<number>`CAST(${widgets.updatedAt} AS INTEGER)`,
-    deletedAt: sql<number>`CAST(${widgets.deletedAt} AS INTEGER)`,
-  })
-  .from(widgets)
-  .where(and(...queryConditions))
-  .orderBy(desc(widgets.deletedAt));
-
-const allWidgets = dbWidgets.map((widget) => {
-  const createdAtDate = unixToDate(widget.createdAt);
-  const updatedAtDate = unixToDate(widget.updatedAt);
-  const deletedAtDate = unixToDate(widget.deletedAt);
-
-  return {
-    ...widget,
-    createdAt: createdAtDate?.toISOString() ?? null,
-    updatedAt: updatedAtDate?.toISOString() ?? null,
-    deletedAt: deletedAtDate?.toISOString() ?? null,
-  };
-});
-
-const allCollections = await db
-  .select({
-    id: collections.id,
-    name: collections.name,
-    type: collections.type,
-    sortOrder: collections.sortOrder,
-  })
-  .from(collections)
-  .where(and(eq(collections.isActive, true)))
-  .orderBy(asc(collections.sortOrder));
-
-// Stats are only for non-deleted widgets
-const statsResult = { total: 0, active: 0, inactive: 0 };
+const { widgets: allWidgets, collections: allCollections, stats: statsResult } =
+  await getWidgetsListPageData({
+    search,
+    showTrashed: true,
+  });
 ---
 
 <AdminLayout title="Widget Trash">

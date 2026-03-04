@@ -1,49 +1,20 @@
 ---
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import { CustomerForm } from "../../../../components/admin/CustomerForm";
-import { db } from "../../../../db";
-import { customers } from "../../../../db/schema";
-import { eq, sql } from "drizzle-orm";
+import { getCustomerEditData } from "@/server/loaders/admin/customers";
 
 // Get customer ID from URL
 const { id } = Astro.params;
 
-// Get customer details with proper timestamp handling
-const [customer] = await db
-  .select({
-    id: customers.id,
-    name: customers.name,
-    email: customers.email,
-    phone: customers.phone,
-    address: customers.address,
-    city: customers.city,
-    zone: customers.zone,
-    area: customers.area,
-    cityName: customers.cityName,
-    zoneName: customers.zoneName,
-    areaName: customers.areaName,
-    createdAt: sql<string>`datetime(${customers.createdAt}, 'unixepoch', 'localtime')`,
-    updatedAt: sql<string>`datetime(${customers.updatedAt}, 'unixepoch', 'localtime')`,
-  })
-  .from(customers)
-  .where(eq(customers.id, id as string));
+const customer = id ? await getCustomerEditData(id) : null;
 
 if (!customer) {
   return Astro.redirect("/admin/customers");
 }
-
-// Prepare default values
-const defaultValues = {
-  ...customer,
-  // Ensure the optional fields are treated as strings when they're null
-  cityName: customer.cityName || "",
-  zoneName: customer.zoneName || "",
-  areaName: customer.areaName || "",
-};
 ---
 
 <AdminLayout title={`Edit ${customer.name}`}>
   <div class="container max-w-7xl py-4 pb-8">
-    <CustomerForm client:idle defaultValues={defaultValues} isEdit={true} />
+    <CustomerForm client:idle defaultValues={customer} isEdit={true} />
   </div>
 </AdminLayout>
