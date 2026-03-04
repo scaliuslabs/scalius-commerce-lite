@@ -22,18 +22,15 @@ const sort = (searchParams.get("sort") || "updatedAt") as
   | "updatedAt";
 const order = (searchParams.get("order") || "desc") as "asc" | "desc";
 
-// Get all active categories
+// Get all active categories for the filter dropdown
 const categories = await db
-  .select({
-    id: categoriesTable.id,
-    name: categoriesTable.name,
-  })
+  .select({ id: categoriesTable.id, name: categoriesTable.name })
   .from(categoriesTable)
   .where(sql`${categoriesTable.deletedAt} IS NULL`)
   .orderBy(categoriesTable.name);
 
 // Get products with proper sorting and trash handling
-const { products, pagination } = await getProducts({
+const { products, pagination } = await getProducts(db, {
   page,
   search,
   categoryId: categoryId === ALL_CATEGORIES ? undefined : categoryId,
@@ -44,7 +41,7 @@ const { products, pagination } = await getProducts({
 });
 
 // Get accurate product statistics
-const stats = await getProductStats();
+const stats = await getProductStats(db);
 
 // Ensure all dates are properly instantiated
 const formattedProducts = products.map((product) => ({

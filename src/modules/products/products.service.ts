@@ -1,7 +1,7 @@
 // src/modules/products/products.service.ts
 // Product service: admin queries, storefront queries, and CRUD mutations.
-
-import { db } from "@/db";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import * as schema from "@/db/schema";
 import {
     products,
     categories,
@@ -120,7 +120,7 @@ export interface ProductListItem {
  * Returns a paginated, searchable list of products for the admin dashboard.
  * Includes variant counts, image counts, and primary image URLs.
  */
-export async function getProducts(options: {
+export async function getProducts(db: DrizzleD1Database<typeof schema>, options: {
     search?: string;
     categoryId?: string;
     page?: number;
@@ -233,7 +233,7 @@ export async function getProducts(options: {
         };
     }
 
-    const productIds = productResults.map((p) => p.id);
+    const productIds: string[] = productResults.map((p) => p.id);
 
     const [variantCounts, imageCounts, primaryImages, productSkus] = await db.batch([
         db
@@ -278,20 +278,20 @@ export async function getProducts(options: {
             .orderBy(productVariants.productId, asc(productVariants.createdAt)),
     ]);
 
-    const variantCountMap = new Map(
-        variantCounts.map((vc) => [vc.productId, vc.count]),
+    const variantCountMap = new Map<string, number>(
+        variantCounts.map((vc: { productId: string; count: number }) => [vc.productId, vc.count]),
     );
 
-    const imageCountMap = new Map(
-        imageCounts.map((ic) => [ic.productId, ic.count]),
+    const imageCountMap = new Map<string, number>(
+        imageCounts.map((ic: { productId: string; count: number }) => [ic.productId, ic.count]),
     );
 
-    const primaryImageMap = new Map(
-        primaryImages.map((pi) => [pi.productId, pi.url]),
+    const primaryImageMap = new Map<string, string>(
+        primaryImages.map((pi: { productId: string; url: string }) => [pi.productId, pi.url]),
     );
 
     const skuMap = new Map<string, string>();
-    productSkus.forEach((item) => {
+    productSkus.forEach((item: { productId: string; sku: string }) => {
         if (!skuMap.has(item.productId)) {
             skuMap.set(item.productId, item.sku);
         }
@@ -333,6 +333,7 @@ export async function getProducts(options: {
  * Returns null if the product does not exist.
  */
 export async function getProductDetails(
+    db: any,
     id: string,
 ): Promise<ProductWithDetails | null> {
     const [result] = await db
@@ -380,7 +381,7 @@ export async function getProductDetails(
             ? new Date(Number(result.deletedAt) * 1000)
             : null,
         variants,
-        images: images.map((img) => ({
+        images: images.map((img: { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number }) => ({
             ...img,
             createdAt: new Date(Number(img.createdAt) * 1000),
         })),
@@ -388,7 +389,7 @@ export async function getProductDetails(
 }
 
 /** Returns aggregate product and category counts for the products dashboard. */
-export async function getProductStats() {
+export async function getProductStats(db: DrizzleD1Database<typeof schema>) {
     const [{ count: totalProducts }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(products)
@@ -427,7 +428,7 @@ export async function getProductStats() {
 }
 
 /** Returns category-level stats for the categories admin page. */
-export async function getCategoryStats() {
+export async function getCategoryStats(db: DrizzleD1Database<typeof schema>) {
     const [{ count: totalCategories }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(categories)
@@ -461,7 +462,7 @@ export async function getCategoryStats() {
  * Checks for slug uniqueness before inserting.
  * Returns the new product ID on success.
  */
-export async function createProduct(data: CreateProductInput): Promise<{ id: string }> {
+export async function createProduct(db: DrizzleD1Database<typeof schema>, data: CreateProductInput): Promise<{ id: string }> {
     const existingProduct = await db
         .select({ id: products.id })
         .from(products)
@@ -546,7 +547,7 @@ export async function createProduct(data: CreateProductInput): Promise<{ id: str
  * Updates an existing product, replacing images, rich content, and attributes.
  * Validates that the product exists and the slug is not taken by another product.
  */
-export async function updateProduct(id: string, data: UpdateProductInput): Promise<void> {
+export async function updateProduct(db: DrizzleD1Database<typeof schema>, id: string, data: UpdateProductInput): Promise<void> {
     const existingProduct = await db
         .select({ id: products.id })
         .from(products)
@@ -644,7 +645,7 @@ export async function updateProduct(id: string, data: UpdateProductInput): Promi
 /**
  * Soft-deletes a product by setting deletedAt.
  */
-export async function deleteProduct(id: string): Promise<void> {
+export async function deleteProduct(db: DrizzleD1Database<typeof schema>, id: string): Promise<void> {
     await db
         .update(products)
         .set({ deletedAt: sql`unixepoch()` })
@@ -654,7 +655,7 @@ export async function deleteProduct(id: string): Promise<void> {
 /**
  * Bulk updates given product variants using an array of updates.
  */
-export async function bulkUpdateVariants(productId: string, updates: any[]) {
+export async function bulkUpdateVariants(db: DrizzleD1Database<typeof schema>, productId: string, updates: Array<{ id: string; size?: string | null; color?: string | null; weight?: number | null; sku?: string; price?: number; stock?: number }>) {
     const statements = [];
     for (const update of updates) {
         const { id, ...fieldsToUpdate } = update;
@@ -734,7 +735,7 @@ export interface StorefrontProductFilterInput {
  * Returns a paginated list of active storefront products with images and categories.
  * This is the unified query backing the Hono GET /api/storefront/products route.
  */
-export async function getStorefrontProducts(params: StorefrontProductFilterInput) {
+export async function getStorefrontProducts(db: DrizzleD1Database<typeof schema>, params: StorefrontProductFilterInput) {
     const {
         category,
         search,
@@ -846,13 +847,13 @@ export async function getStorefrontProducts(params: StorefrontProductFilterInput
             .from(productImages)
             .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
             .all();
-        imageMap = new Map(images.map((img) => [img.productId, img.url]));
+        imageMap = new Map(images.map((img: { productId: string; url: string }) => [img.productId, img.url]));
     }
 
     let categoryMap = new Map<string, any>();
     const categoryIds = [...new Set(productsList.map((p) => p.categoryId).filter(Boolean))] as string[];
     if (categoryIds.length > 0) {
-        const categoriesData = await db
+        const categoriesData: Array<{ id: string; name: string; slug: string }> = await db
             .select({ id: categories.id, name: categories.name, slug: categories.slug })
             .from(categories)
             .where(inArray(categories.id, categoryIds))
@@ -860,7 +861,7 @@ export async function getStorefrontProducts(params: StorefrontProductFilterInput
         categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
     }
 
-    const productsWithImages = productsList.map(({ variantCount, ...product }) => ({
+    const productsWithImages = productsList.map(({ variantCount, ...product }: { variantCount: number; id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean; categoryId: string | null; createdAt: number; updatedAt: number }) => ({
         ...product,
         hasVariants: variantCount > 0,
         imageUrl: imageMap.get(product.id) || null,
@@ -917,7 +918,7 @@ export async function getStorefrontProducts(params: StorefrontProductFilterInput
  * Returns full storefront product details (variants, images, attributes, related products)
  * for a single product identified by slug.
  */
-export async function getStorefrontProductBySlug(slug: string) {
+export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof schema>, slug: string) {
     const product = await db
         .select({
             id: products.id,
@@ -953,7 +954,7 @@ export async function getStorefrontProductBySlug(slug: string) {
             sortOrder: productImages.sortOrder,
             createdAt: sql<number>`CAST(${productImages.createdAt} AS INTEGER)`,
         }).from(productImages).where(eq(productImages.productId, product.id)).orderBy(productImages.sortOrder).all()
-            .then((res) => ({ type: "images", data: res })),
+            .then((res: Array<{ id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number }>) => ({ type: "images", data: res })),
 
         db.select({
             id: productVariants.id,
@@ -976,14 +977,14 @@ export async function getStorefrontProductBySlug(slug: string) {
         }).from(productVariants)
             .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
             .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt)
-            .all().then((res) => ({ type: "variants", data: res })),
+            .all().then((res: Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null }>) => ({ type: "variants", data: res })),
 
         db.select({
             id: productRichContent.id,
             title: productRichContent.title,
             content: productRichContent.content,
         }).from(productRichContent).where(eq(productRichContent.productId, product.id))
-            .orderBy(productRichContent.sortOrder).then((res) => ({ type: "additionalInfo", data: res })),
+            .orderBy(productRichContent.sortOrder).then((res: Array<{ id: string; title: string; content: string }>) => ({ type: "additionalInfo", data: res })),
 
         db.select({
             name: productAttributes.name,
@@ -996,7 +997,7 @@ export async function getStorefrontProductBySlug(slug: string) {
                 eq(productAttributes.filterable, true),
             ))
             .where(eq(productAttributeValues.productId, product.id))
-            .then((res) => ({ type: "attributes", data: res })),
+            .then((res: Array<{ name: string; value: string; slug: string }>) => ({ type: "attributes", data: res })),
     ];
 
     if (product.categoryId) {
@@ -1006,12 +1007,12 @@ export async function getStorefrontProductBySlug(slug: string) {
                 description: categories.description, imageUrl: categories.imageUrl,
                 metaTitle: categories.metaTitle, metaDescription: categories.metaDescription,
             }).from(categories).where(eq(categories.id, product.categoryId!)).get()
-                .then((res) => ({ type: "category", data: res })),
+                .then((res: { id: string; name: string; slug: string; description: string | null; imageUrl: string | null; metaTitle: string | null; metaDescription: string | null } | undefined) => ({ type: "category", data: res })),
         );
 
         promises.push(
             (async () => {
-                const relatedProds = await db.select({
+                const relatedProds: Array<{ id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean }> = await db.select({
                     id: products.id, name: products.name, price: products.price,
                     slug: products.slug, discountType: products.discountType,
                     discountPercentage: products.discountPercentage, discountAmount: products.discountAmount,
@@ -1027,13 +1028,13 @@ export async function getStorefrontProductBySlug(slug: string) {
                 if (relatedProds.length === 0) return { type: "relatedProducts", data: [] };
 
                 const relatedIds = relatedProds.map((p) => p.id);
-                const relatedImages = await db
+                const relatedImages: Array<{ productId: string; url: string }> = await db
                     .select({ productId: productImages.productId, url: productImages.url })
                     .from(productImages)
                     .where(and(inArray(productImages.productId, relatedIds), eq(productImages.isPrimary, true)))
                     .all();
 
-                const relatedImageMap = new Map(relatedImages.map((img) => [img.productId, img.url]));
+                const relatedImageMap = new Map(relatedImages.map((img: { productId: string; url: string }) => [img.productId, img.url]));
 
                 return {
                     type: "relatedProducts",
@@ -1110,7 +1111,7 @@ export async function getStorefrontProductBySlug(slug: string) {
     };
 }
 
-export async function bulkDeleteProducts(productIds: string[], permanent: boolean = false) {
+export async function bulkDeleteProducts(db: DrizzleD1Database<typeof schema>, productIds: string[], permanent: boolean = false) {
     if (productIds.length === 0) throw new Error("No product IDs provided");
 
     if (permanent) {
@@ -1149,7 +1150,7 @@ export async function bulkDeleteProducts(productIds: string[], permanent: boolea
 // Variant specific mutations
 // ─────────────────────────────────────────
 
-export async function getProductVariants(productId: string) {
+export async function getProductVariants(db: DrizzleD1Database<typeof schema>, productId: string) {
     const variants = await db
         .select({
             id: productVariants.id,
@@ -1174,14 +1175,14 @@ export async function getProductVariants(productId: string) {
         )
         .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt);
 
-    return variants.map((variant) => ({
+    return variants.map((variant: { id: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: string; updatedAt: string }) => ({
         ...variant,
         createdAt: new Date(variant.createdAt),
         updatedAt: new Date(variant.updatedAt),
     }));
 }
 
-export async function createVariant(productId: string, data: z.infer<typeof createVariantSchema>) {
+export async function createVariant(db: DrizzleD1Database<typeof schema>, productId: string, data: z.infer<typeof createVariantSchema>) {
     const existingVariant = await db
         .select({ id: productVariants.id })
         .from(productVariants)
@@ -1214,7 +1215,7 @@ export async function createVariant(productId: string, data: z.infer<typeof crea
     return variant;
 }
 
-export async function updateVariant(productId: string, variantId: string, data: z.infer<typeof updateVariantSchema>) {
+export async function updateVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string, data: z.infer<typeof updateVariantSchema>) {
     const existingVariant = await db
         .select({ id: productVariants.id })
         .from(productVariants)
@@ -1255,7 +1256,7 @@ export async function updateVariant(productId: string, variantId: string, data: 
     return variant;
 }
 
-export async function deleteVariant(productId: string, variantId: string) {
+export async function deleteVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string) {
     const existingVariant = await db
         .select({ id: productVariants.id })
         .from(productVariants)
@@ -1269,7 +1270,7 @@ export async function deleteVariant(productId: string, variantId: string) {
     await db.delete(productVariants).where(eq(productVariants.id, variantId));
 }
 
-export async function duplicateVariant(productId: string, variantId: string) {
+export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string) {
     const [existingVariant] = await db
         .select()
         .from(productVariants)
@@ -1318,7 +1319,7 @@ export async function duplicateVariant(productId: string, variantId: string) {
     return newVariant;
 }
 
-export async function bulkCreateVariants(productId: string, variants: z.infer<typeof bulkVariantSchema>[]) {
+export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, productId: string, variants: z.infer<typeof bulkVariantSchema>[]) {
     const skus = variants.map((v) => v.sku);
     const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
 
@@ -1326,7 +1327,7 @@ export async function bulkCreateVariants(productId: string, variants: z.infer<ty
         throw new Error(`Duplicate SKUs found in request: ${duplicateSkus.join(", ")}`);
     }
 
-    const existingVariants = await db
+    const existingVariants: Array<{ sku: string }> = await db
         .select({ sku: productVariants.sku })
         .from(productVariants)
         .where(sql`${productVariants.sku} IN ${skus} AND ${productVariants.deletedAt} IS NULL`)
@@ -1366,7 +1367,7 @@ export async function bulkCreateVariants(productId: string, variants: z.infer<ty
     return createdVariants;
 }
 
-export async function bulkDeleteVariants(productId: string, variantIds: string[]) {
+export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, productId: string, variantIds: string[]) {
     if (variantIds.length === 0) throw new Error("No variant IDs provided");
 
     await db
@@ -1374,7 +1375,7 @@ export async function bulkDeleteVariants(productId: string, variantIds: string[]
         .where(sql`${productVariants.id} IN ${variantIds} AND ${productVariants.productId} = ${productId}`);
 }
 
-export async function getVariantSortOrder(productId: string) {
+export async function getVariantSortOrder(db: DrizzleD1Database<typeof schema>, productId: string) {
     const variants = await db
         .select({
             color: productVariants.color,
@@ -1393,7 +1394,7 @@ export async function getVariantSortOrder(productId: string) {
     const colorMap = new Map<string, number>();
     const sizeMap = new Map<string, number>();
 
-    variants.forEach((variant) => {
+    variants.forEach((variant: { color: string | null; size: string | null; colorSortOrder: number | null; sizeSortOrder: number | null }) => {
         if (variant.color && !colorMap.has(variant.color)) {
             colorMap.set(variant.color, variant.colorSortOrder || 0);
         }
@@ -1413,7 +1414,7 @@ export async function getVariantSortOrder(productId: string) {
     return { colors, sizes };
 }
 
-export async function updateVariantSortOrder(productId: string, data: z.infer<typeof updateSortOrderSchema>) {
+export async function updateVariantSortOrder(db: DrizzleD1Database<typeof schema>, productId: string, data: z.infer<typeof updateSortOrderSchema>) {
     // Update color sort orders
     for (const color of data.colors) {
         await db
@@ -1447,4 +1448,110 @@ export async function updateVariantSortOrder(productId: string, data: z.infer<ty
                 )
             );
     }
+}
+
+// ─────────────────────────────────────────
+// Storefront search (variant-aware)
+// ─────────────────────────────────────────
+
+/**
+ * Lightweight variant-aware product search for cart/checkout use.
+ * Returns products with their variants and primary image URL.
+ */
+export async function searchStorefrontProducts(
+    db: DrizzleD1Database<typeof schema>,
+    params: { search: string; page: number; limit: number },
+) {
+    const { search, page, limit } = params;
+    const offset = (page - 1) * limit;
+    const { ftsMatch } = await import("@/lib/search/fts5");
+    const { eq, and, isNull, desc, inArray, sql } = await import("drizzle-orm");
+
+    const conditions: Array<ReturnType<typeof eq>> = [
+        eq(products.isActive, true),
+        isNull(products.deletedAt) as ReturnType<typeof eq>,
+    ];
+    const searchCondition = search ? ftsMatch("products_fts", "products", search) : null;
+    if (searchCondition) conditions.push(searchCondition as ReturnType<typeof eq>);
+
+    const [results, countResults] = await Promise.all([
+        db
+            .select({
+                id: products.id,
+                name: products.name,
+                price: products.price,
+                slug: products.slug,
+                discountType: products.discountType,
+                discountPercentage: products.discountPercentage,
+                discountAmount: products.discountAmount,
+                freeDelivery: products.freeDelivery,
+            })
+            .from(products)
+            .where(and(...conditions))
+            .orderBy(desc(products.updatedAt))
+            .limit(limit)
+            .offset(offset)
+            .all() as Promise<Array<{ id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean }>>,
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(products)
+            .where(and(...conditions)),
+    ]);
+
+    const productIds = results.map((p) => p.id);
+    const count = Number((countResults[0] as { count: number } | undefined)?.count ?? 0);
+    const totalPages = Math.ceil(count / limit);
+
+    const [images, variants] =
+        productIds.length > 0
+            ? await Promise.all([
+                db
+                    .select({ productId: productImages.productId, url: productImages.url })
+                    .from(productImages)
+                    .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
+                    .all() as Promise<Array<{ productId: string; url: string }>>,
+                db
+                    .select({
+                        id: productVariants.id,
+                        productId: productVariants.productId,
+                        size: productVariants.size,
+                        color: productVariants.color,
+                        weight: productVariants.weight,
+                        sku: productVariants.sku,
+                        price: productVariants.price,
+                        stock: productVariants.stock,
+                        discountType: productVariants.discountType,
+                        discountPercentage: productVariants.discountPercentage,
+                        discountAmount: productVariants.discountAmount,
+                        colorSortOrder: productVariants.colorSortOrder,
+                        sizeSortOrder: productVariants.sizeSortOrder,
+                    })
+                    .from(productVariants)
+                    .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
+                    .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder)
+                    .all() as Promise<Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null }>>,
+            ])
+            : [[], []];
+
+    const imageMap = new Map(
+        (images as Array<{ productId: string; url: string }>).map((img) => [img.productId, img.url]),
+    );
+
+    return {
+        data: results.map((product) => ({
+            ...product,
+            imageUrl: imageMap.get(product.id) || null,
+            variants: (variants as Array<{ productId: string } & Record<string, unknown>>).filter(
+                (v) => v.productId === product.id,
+            ),
+        })),
+        pagination: {
+            page,
+            limit,
+            total: count,
+            totalPages,
+            hasNextPage: page < totalPages,
+            hasPrevPage: page > 1,
+        },
+    };
 }
