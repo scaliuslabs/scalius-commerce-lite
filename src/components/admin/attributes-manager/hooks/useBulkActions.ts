@@ -14,9 +14,9 @@ export function useBulkActions(onRefresh: () => void) {
       setIsActionLoading(true);
 
       const endpointMap = {
-        trash: "/api/admin/attributes/bulk-delete",
-        delete: "/api/admin/attributes/bulk-delete",
-        restore: "/api/admin/attributes/bulk-restore",
+        trash: "/api/v1/admin/attributes/bulk-delete",
+        delete: "/api/v1/admin/attributes/bulk-delete",
+        restore: "/api/v1/admin/attributes/bulk-restore",
       };
 
       const body =

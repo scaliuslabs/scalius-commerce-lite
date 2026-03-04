@@ -350,39 +350,39 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
 
   // =============================================
-  // Attributes API (under /api/admin/)
+  // Attributes API (under /api/v1/admin/)
   // =============================================
-  "/api/admin/attributes": {
+  "/api/v1/admin/attributes": {
     GET: { permission: PERMISSIONS.ATTRIBUTES_VIEW },
     POST: { permission: PERMISSIONS.ATTRIBUTES_CREATE },
   },
-  "/api/admin/attributes/bulk-delete": {
+  "/api/v1/admin/attributes/bulk-delete": {
     POST: { permission: PERMISSIONS.ATTRIBUTES_DELETE },
     DELETE: { permission: PERMISSIONS.ATTRIBUTES_DELETE },
   },
-  "/api/admin/attributes/bulk-restore": {
+  "/api/v1/admin/attributes/bulk-restore": {
     POST: { permission: PERMISSIONS.ATTRIBUTES_EDIT },
   },
-  "/api/admin/attributes/values/search": {
+  "/api/v1/admin/attributes/values/search": {
     GET: { permission: PERMISSIONS.ATTRIBUTES_VIEW },
     POST: { permission: PERMISSIONS.ATTRIBUTES_VIEW },
   },
-  "/api/admin/attributes/*": {
+  "/api/v1/admin/attributes/*": {
     GET: { permission: PERMISSIONS.ATTRIBUTES_VIEW },
     PUT: { permission: PERMISSIONS.ATTRIBUTES_EDIT },
     PATCH: { permission: PERMISSIONS.ATTRIBUTES_EDIT },
     DELETE: { permission: PERMISSIONS.ATTRIBUTES_DELETE },
   },
-  "/api/admin/attributes/*/restore": {
+  "/api/v1/admin/attributes/*/restore": {
     POST: { permission: PERMISSIONS.ATTRIBUTES_EDIT },
   },
-  "/api/admin/attributes/*/permanent": {
+  "/api/v1/admin/attributes/*/permanent": {
     DELETE: { permission: PERMISSIONS.ATTRIBUTES_DELETE },
   },
-  "/api/admin/attributes/*/usage": {
+  "/api/v1/admin/attributes/*/usage": {
     GET: { permission: PERMISSIONS.ATTRIBUTES_VIEW },
   },
-  "/api/admin/attributes/*/values": {
+  "/api/v1/admin/attributes/*/values": {
     GET: { permission: PERMISSIONS.ATTRIBUTES_VIEW },
     POST: { permission: PERMISSIONS.ATTRIBUTES_EDIT },
     PUT: { permission: PERMISSIONS.ATTRIBUTES_EDIT },
@@ -508,39 +508,39 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
 
   // Admin Settings
-  "/api/admin/settings/shipping-methods": {
+  "/api/v1/admin/settings/shipping-methods": {
     GET: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
   },
-  "/api/admin/settings/shipping-methods/*": {
+  "/api/v1/admin/settings/shipping-methods/*": {
     GET: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
   },
-  "/api/admin/settings/shipping-methods/*/restore": {
+  "/api/v1/admin/settings/shipping-methods/*/restore": {
     POST: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
   },
-  "/api/admin/settings/shipping-methods/*/permanent-delete": {
+  "/api/v1/admin/settings/shipping-methods/*/permanent-delete": {
     DELETE: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
   },
-  "/api/admin/settings/checkout-languages": {
+  "/api/v1/admin/settings/checkout-languages": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
-  "/api/admin/settings/checkout-languages/*": {
+  "/api/v1/admin/settings/checkout-languages/*": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
-  "/api/admin/settings/checkout-languages/*/restore": {
+  "/api/v1/admin/settings/checkout-languages/*/restore": {
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
-  "/api/admin/settings/meta-conversions": {
+  "/api/v1/admin/settings/meta-conversions": {
     GET: { permission: PERMISSIONS.ANALYTICS_VIEW },
     POST: { permission: PERMISSIONS.ANALYTICS_EDIT },
     PUT: { permission: PERMISSIONS.ANALYTICS_EDIT },
   },
-  "/api/admin/settings/meta-conversions/logs": {
+  "/api/v1/admin/settings/meta-conversions/logs": {
     GET: { permission: PERMISSIONS.ANALYTICS_VIEW },
   },
 
@@ -557,7 +557,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PUT: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
   },
-  "/api/admin/navigation/preview-products": {
+  "/api/v1/admin/navigation/preview-products": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     POST: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
@@ -565,7 +565,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Admin Abandoned Checkouts
   // =============================================
-  "/api/admin/abandoned-checkouts": {
+  "/api/v1/admin/abandoned-checkouts": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
 
@@ -649,10 +649,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // FCM Token API
   // =============================================
-  "/api/admin/fcm-token": {
+  "/api/v1/admin/fcm-token": {
     POST: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Any admin can register their token
   },
-  "/api/admin/fcm-token-cleanup": {
+  "/api/v1/admin/fcm-token-cleanup": {
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
 };

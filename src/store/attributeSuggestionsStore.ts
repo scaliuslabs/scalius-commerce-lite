@@ -112,7 +112,7 @@ export const suggestionsActions = {
 
           // Fetch from API
           const response = await fetch(
-            `/api/admin/attributes/values/search?q=${encodeURIComponent(query.trim())}&limit=10`,
+            `/api/v1/admin/attributes/values/search?q=${encodeURIComponent(query.trim())}&limit=10`,
           );
 
           // Check if this input is still active after API call

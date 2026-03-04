@@ -90,4 +90,30 @@ app.delete("/:id", async (c) => {
     return c.body(null, 204);
 });
 
+// DELETE /admin/widgets/:id/permanent
+app.delete("/:id/permanent", async (c) => {
+    const db = c.get("db");
+    await bulkDeleteWidgets(db, [c.req.param("id")], true);
+    return c.body(null, 204);
+});
+
+// POST /admin/widgets/:id/restore
+app.post("/:id/restore", async (c) => {
+    const db = c.get("db");
+    await restoreWidgets(db, [c.req.param("id")]);
+    return c.body(null, 204);
+});
+
+// PATCH /admin/widgets/:id/toggle-status
+app.patch("/:id/toggle-status", async (c) => {
+    const db = c.get("db");
+    const id = c.req.param("id");
+    const widget = await getWidgetById(db, id);
+    if (!widget) return c.json({ error: "Widget not found" }, 404);
+
+    // Toggle active status
+    const result = await updateWidget(db, id, { isActive: !widget.isActive });
+    return c.json(result);
+});
+
 export { app as adminWidgetRoutes };

@@ -53,7 +53,7 @@ export function AttributeManager({
 
   const fetchAllAttributes = useCallback(async () => {
     try {
-      const response = await fetch("/api/admin/attributes?limit=999");
+      const response = await fetch("/api/v1/admin/attributes?limit=999");
       if (!response.ok) throw new Error("Failed");
       const data = await response.json();
       setAvailableAttributes(data.data);
@@ -97,7 +97,7 @@ export function AttributeManager({
       .replace(/^-|-$/g, "");
 
     try {
-      const response = await fetch("/api/admin/attributes", {
+      const response = await fetch("/api/v1/admin/attributes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -364,7 +364,7 @@ function AttributeValueSelector({
         if (text) p.set("search", text);
 
         const res = await fetch(
-          `/api/admin/attributes/${attributeId}/values?${p.toString()}`,
+          `/api/v1/admin/attributes/${attributeId}/values?${p.toString()}`,
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -399,7 +399,7 @@ function AttributeValueSelector({
     onChange(search);
     setOpen(false);
     try {
-      await fetch(`/api/admin/attributes/${attributeId}/values`, {
+      await fetch(`/api/v1/admin/attributes/${attributeId}/values`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: search }),

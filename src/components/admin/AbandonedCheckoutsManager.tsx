@@ -366,7 +366,7 @@ export function AbandonedCheckoutsManager() {
 
       try {
         const response = await fetch(
-          `/api/admin/abandoned-checkouts?${params.toString()}`,
+          `/api/v1/admin/abandoned-checkouts?${params.toString()}`,
           {
             credentials: "include",
           },
@@ -430,7 +430,7 @@ export function AbandonedCheckoutsManager() {
     if (!deleteDialog) return;
     setIsActionLoading(true);
     try {
-      const response = await fetch("/api/admin/abandoned-checkouts", {
+      const response = await fetch("/api/v1/admin/abandoned-checkouts", {
         method: "DELETE",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

@@ -109,10 +109,10 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/settings/payment-methods": ["checkout"],
   "/api/settings/stripe": ["checkout"],
   "/api/settings/sslcommerz": ["checkout"],
-  "/api/admin/settings/shipping-methods": ["checkout"],
-  "/api/admin/settings/checkout-languages": ["checkout"],
-  "/api/admin/settings/meta-conversions": ["layout"],
-  "/api/admin/attributes": ["attributes", "products", "categories"],
+  "/api/v1/admin/settings/shipping-methods": ["checkout"],
+  "/api/v1/admin/settings/checkout-languages": ["checkout"],
+  "/api/v1/admin/settings/meta-conversions": ["layout"],
+  "/api/v1/admin/attributes": ["attributes", "products", "categories"],
   "/api/v1/admin/discounts": ["products"],
 };
 

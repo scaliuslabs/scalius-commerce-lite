@@ -64,6 +64,9 @@ import { adminProductsRoutes } from "./routes/admin/products";
 import { adminAuthManagementRoutes, authSetupRoutes } from "./routes/admin/auth-management";
 import { adminAiContextRoutes } from "./routes/admin/ai-context";
 import { adminAiPromptsRoutes } from "./routes/admin/ai-prompts";
+import { adminOpenRouterRoutes } from "./routes/admin/openrouter";
+import { adminAttributesRoutes } from "./routes/admin/attributes";
+import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 
 // Create typed Hono app with Cloudflare Workers Env bindings
 const app = new Hono<{ Bindings: Env }>();
@@ -167,7 +170,7 @@ app.route("/shipping-methods", shippingMethodRoutes);
 app.route("/seo", seoRoutes);
 app.route("/checkout-languages", checkoutLanguageRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
-app.route("/meta", metaConversionsRoutes);
+app.route("/admin/settings/meta-conversions", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
 app.route("/checkout", checkoutRoutes);
 app.route("/customer-auth", customerAuthRoutes);
@@ -252,6 +255,10 @@ app.route("/admin/products", adminProductsRoutes);
 app.route("/admin/auth", adminAuthManagementRoutes);
 app.route("/admin/ai-context", adminAiContextRoutes);
 app.route("/admin/ai-prompts", adminAiPromptsRoutes);
+app.route("/admin/openrouter", adminOpenRouterRoutes);
+app.route("/admin/attributes", adminAttributesRoutes);
+// Mount system utils directly under /admin since they include /abandoned-checkouts and /fcm-token
+app.route("/admin", adminSystemUtilsRoutes);
 
 // Setup routes - bypassing normal auth rules, used only during initial deployment
 app.route("/setup", authSetupRoutes);

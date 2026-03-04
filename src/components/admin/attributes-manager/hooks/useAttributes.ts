@@ -31,7 +31,7 @@ export function useAttributes(
 
     try {
       const response = await fetch(
-        `/api/admin/attributes?${params.toString()}`,
+        `/api/v1/admin/attributes?${params.toString()}`,
       );
       if (!response.ok) throw new Error("Failed to fetch attributes");
       const data = await response.json();

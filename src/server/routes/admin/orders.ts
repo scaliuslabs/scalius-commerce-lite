@@ -199,8 +199,8 @@ app.post("/:id/fulfill", zValidator("json", z.object({
     }
 });
 
-// POST /api/v1/admin/orders/:id/status
-app.post("/:id/status", zValidator("json", z.object({ status: z.string() })), async (c) => {
+// PUT /api/v1/admin/orders/:id/status
+app.put("/:id/status", zValidator("json", z.object({ status: z.string() })), async (c) => {
     try {
         const orderId = c.req.param("id");
         const data = c.req.valid("json");

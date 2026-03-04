@@ -107,7 +107,7 @@ export function AddNavItemDialog({
       try {
         const [navRes, attrRes] = await Promise.all([
           fetch("/api/v1/admin/navigation/items"),
-          fetch("/api/admin/attributes?limit=100"),
+          fetch("/api/v1/admin/attributes?limit=100"),
         ]);
 
         if (navRes.ok) {
@@ -160,7 +160,7 @@ export function AddNavItemDialog({
 
       setLoadingAttrValues((prev) => ({ ...prev, [attributeId]: true }));
       try {
-        const res = await fetch(`/api/admin/attributes/${attributeId}/values`);
+        const res = await fetch(`/api/v1/admin/attributes/${attributeId}/values`);
         if (res.ok) {
           const data = await res.json();
           setAttributeValues((prev) => ({
@@ -196,7 +196,7 @@ export function AddNavItemDialog({
         });
 
         const res = await fetch(
-          `/api/admin/navigation/preview-products?${params.toString()}`,
+          `/api/v1/admin/navigation/preview-products?${params.toString()}`,
         );
         if (res.ok) {
           const data = await res.json();

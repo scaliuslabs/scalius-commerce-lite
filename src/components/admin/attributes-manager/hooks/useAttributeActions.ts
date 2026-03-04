@@ -15,7 +15,7 @@ export function useAttributeActions(
     async (id: string, data: Partial<Attribute>) => {
       setSavingStates((prev) => ({ ...prev, [id]: true }));
       try {
-        const response = await fetch(`/api/admin/attributes/${id}`, {
+        const response = await fetch(`/api/v1/admin/attributes/${id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -46,7 +46,7 @@ export function useAttributeActions(
       }
       setIsCreating(true);
       try {
-        const response = await fetch("/api/admin/attributes", {
+        const response = await fetch("/api/v1/admin/attributes", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newAttribute),
@@ -71,8 +71,8 @@ export function useAttributeActions(
     async (id: string, name: string, showTrashed: boolean) => {
       setIsActionLoading(true);
       const apiEndpoint = showTrashed
-        ? `/api/admin/attributes/${id}/permanent`
-        : `/api/admin/attributes/${id}`;
+        ? `/api/v1/admin/attributes/${id}/permanent`
+        : `/api/v1/admin/attributes/${id}`;
       const successMessage = showTrashed
         ? `Attribute "${name}" permanently deleted.`
         : `Attribute "${name}" moved to trash.`;
@@ -106,7 +106,7 @@ export function useAttributeActions(
     async (id: string) => {
       setIsActionLoading(true);
       try {
-        await fetch(`/api/admin/attributes/${id}/restore`, { method: "POST" });
+        await fetch(`/api/v1/admin/attributes/${id}/restore`, { method: "POST" });
         toast.success("Attribute restored.");
         onRefresh();
       } catch (error: any) {

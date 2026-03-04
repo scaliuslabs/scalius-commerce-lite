@@ -150,7 +150,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
         if (currentShowTrashed) params.append("trashed", "true");
 
         const response = await fetch(
-          `/api/admin/settings/shipping-methods?${params.toString()}`,
+          `/api/v1/admin/settings/shipping-methods?${params.toString()}`,
         );
         if (!response.ok) throw new Error("Failed to fetch shipping methods");
         const data = await response.json();
@@ -291,8 +291,8 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
     e.preventDefault();
     setIsActionLoading(true);
     const url = editingMethod
-      ? `/api/admin/settings/shipping-methods/${editingMethod.id}`
-      : "/api/admin/settings/shipping-methods";
+      ? `/api/v1/admin/settings/shipping-methods/${editingMethod.id}`
+      : "/api/v1/admin/settings/shipping-methods";
     const method = editingMethod ? "PUT" : "POST";
 
     try {
@@ -335,7 +335,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
 
     try {
       const response = await fetch(
-        `/api/admin/settings/shipping-methods/${idToDelete}`,
+        `/api/v1/admin/settings/shipping-methods/${idToDelete}`,
         {
           method: "DELETE",
         },
@@ -373,7 +373,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
 
     try {
       const response = await fetch(
-        `/api/admin/settings/shipping-methods/${idToDelete}/permanent-delete`,
+        `/api/v1/admin/settings/shipping-methods/${idToDelete}/permanent-delete`,
         {
           // Assuming this endpoint exists
           method: "DELETE",
@@ -408,7 +408,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
     setIsActionLoading(true);
     try {
       const response = await fetch(
-        `/api/admin/settings/shipping-methods/${id}/restore`,
+        `/api/v1/admin/settings/shipping-methods/${id}/restore`,
         {
           method: "POST",
         },
@@ -452,18 +452,18 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
       for (const id of ids) {
         let response;
         if (action === "trash") {
-          response = await fetch(`/api/admin/settings/shipping-methods/${id}`, {
+          response = await fetch(`/api/v1/admin/settings/shipping-methods/${id}`, {
             method: "DELETE",
           });
         } else if (action === "deletePermanent") {
-          // Needs /api/admin/settings/shipping-methods/[id]/permanent-delete or similar
+          // Needs /api/v1/admin/settings/shipping-methods/[id]/permanent-delete or similar
           response = await fetch(
-            `/api/admin/settings/shipping-methods/${id}/permanent-delete`,
+            `/api/v1/admin/settings/shipping-methods/${id}/permanent-delete`,
             { method: "DELETE" },
           );
         } else if (action === "restore") {
           response = await fetch(
-            `/api/admin/settings/shipping-methods/${id}/restore`,
+            `/api/v1/admin/settings/shipping-methods/${id}/restore`,
             { method: "POST" },
           );
         }

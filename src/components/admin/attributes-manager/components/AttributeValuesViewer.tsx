@@ -47,7 +47,7 @@ export function AttributeValuesViewer({
     const fetchValues = async () => {
       try {
         const response = await fetch(
-          `/api/admin/attributes/${attributeId}/values`,
+          `/api/v1/admin/attributes/${attributeId}/values`,
         );
         if (!response.ok) throw new Error("Failed to fetch attribute values");
         const data = await response.json();
