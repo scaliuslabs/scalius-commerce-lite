@@ -83,7 +83,7 @@ export function VariantDisplayRow({
       <TableCell className="py-2 text-xs text-muted-foreground">{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
 
       <TableCell className="py-2 text-xs font-medium text-foreground">
-        {symbol}{variant.price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <span suppressHydrationWarning>{symbol}{variant.price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
       </TableCell>
 
       {/* On Hand */}
@@ -119,7 +119,7 @@ export function VariantDisplayRow({
       <TableCell className="py-2 text-xs text-muted-foreground whitespace-nowrap">{getDiscountDisplay(variant, symbol)}</TableCell>
 
       <TableCell className="py-2 text-xs text-muted-foreground whitespace-nowrap">
-        {formatDate(variant.updatedAt)}
+        <span suppressHydrationWarning>{formatDate(variant.updatedAt)}</span>
       </TableCell>
 
       <TableCell className="text-right pr-3 py-2">

@@ -1352,10 +1352,16 @@ export async function bulkCreateVariants(productId: string, variants: z.infer<ty
         updatedAt: sql`unixepoch()`,
     }));
 
-    const createdVariants = await db
-        .insert(productVariants)
-        .values(variantsToCreate)
-        .returning();
+    const createdVariants = [];
+    const chunkSize = 50;
+    for (let i = 0; i < variantsToCreate.length; i += chunkSize) {
+        const chunk = variantsToCreate.slice(i, i + chunkSize);
+        const result = await db
+            .insert(productVariants)
+            .values(chunk)
+            .returning();
+        createdVariants.push(...result);
+    }
 
     return createdVariants;
 }
@@ -1366,6 +1372,45 @@ export async function bulkDeleteVariants(productId: string, variantIds: string[]
     await db
         .delete(productVariants)
         .where(sql`${productVariants.id} IN ${variantIds} AND ${productVariants.productId} = ${productId}`);
+}
+
+export async function getVariantSortOrder(productId: string) {
+    const variants = await db
+        .select({
+            color: productVariants.color,
+            size: productVariants.size,
+            colorSortOrder: productVariants.colorSortOrder,
+            sizeSortOrder: productVariants.sizeSortOrder,
+        })
+        .from(productVariants)
+        .where(
+            and(
+                eq(productVariants.productId, productId),
+                isNull(productVariants.deletedAt)
+            )
+        );
+
+    const colorMap = new Map<string, number>();
+    const sizeMap = new Map<string, number>();
+
+    variants.forEach((variant) => {
+        if (variant.color && !colorMap.has(variant.color)) {
+            colorMap.set(variant.color, variant.colorSortOrder || 0);
+        }
+        if (variant.size && !sizeMap.has(variant.size)) {
+            sizeMap.set(variant.size, variant.sizeSortOrder || 0);
+        }
+    });
+
+    const colors = Array.from(colorMap.entries())
+        .map(([value, sortOrder]) => ({ value, sortOrder }))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+
+    const sizes = Array.from(sizeMap.entries())
+        .map(([value, sortOrder]) => ({ value, sortOrder }))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+
+    return { colors, sizes };
 }
 
 export async function updateVariantSortOrder(productId: string, data: z.infer<typeof updateSortOrderSchema>) {

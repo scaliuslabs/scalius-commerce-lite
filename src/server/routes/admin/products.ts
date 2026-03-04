@@ -225,6 +225,19 @@ app.post("/:id/variants/:variantId/duplicate", async (c) => {
     }
 });
 
+// GET /api/v1/admin/products/:id/variants/sort-order
+app.get("/:id/variants/sort-order", async (c) => {
+    try {
+        const productId = c.req.param("id");
+        if (!productId) return c.json({ error: "Product ID is required" }, 400);
+
+        const result = await ProductsService.getVariantSortOrder(productId);
+        return c.json(result, 200);
+    } catch (error: any) {
+        return c.json({ error: error.message || "Internal Server Error" }, 500);
+    }
+});
+
 // POST /api/v1/admin/products/:id/variants/sort-order
 app.post("/:id/variants/sort-order", zValidator("json", updateSortOrderSchema), async (c) => {
     try {
