@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { sql, eq, and, or, like, asc, desc, count, inArray } from "drizzle-orm";
+import { sql, eq, and, or, like, asc, desc, count, inArray, isNull } from "drizzle-orm";
 import { productAttributes, productAttributeValues, products } from "@/db/schema";
 
 const app = new Hono<{
@@ -292,6 +292,246 @@ app.post("/bulk-restore", zValidator("json", bulkActionSchema), async (c) => {
     } catch (error) {
         console.error("Error bulk restoring attributes:", error);
         return c.json({ error: "Failed to bulk restore attributes" }, 500);
+    }
+});
+
+// GET: List all unique values for an attribute with product counts
+app.get("/:id/values", async (c) => {
+    const db = c.get("db");
+    const attributeId = c.req.param("id");
+
+    try {
+        const attribute = await db
+            .select()
+            .from(productAttributes)
+            .where(
+                and(
+                    eq(productAttributes.id, attributeId),
+                    isNull(productAttributes.deletedAt)
+                )
+            )
+            .get();
+
+        if (!attribute) {
+            return c.json({ error: "Attribute not found" }, 404);
+        }
+
+        const allRows = await db
+            .select({
+                value: productAttributeValues.value,
+                createdAt: productAttributeValues.createdAt, // We want oldest
+                productName: products.name,
+            })
+            .from(productAttributeValues)
+            .innerJoin(products, eq(productAttributeValues.productId, products.id))
+            .where(
+                and(
+                    eq(productAttributeValues.attributeId, attributeId),
+                    isNull(products.deletedAt)
+                )
+            )
+            .all();
+
+        const valueMap = new Map<string, any>();
+
+        for (const row of allRows) {
+            const existing = valueMap.get(row.value) || {
+                value: row.value,
+                productCount: 0,
+                createdAt: row.createdAt,
+                isPreset: false,
+                sampleProducts: [],
+            };
+
+            existing.productCount++;
+            if (new Date(row.createdAt * 1000) < new Date(existing.createdAt * 1000)) {
+                existing.createdAt = row.createdAt;
+            }
+            if (existing.sampleProducts.length < 5) {
+                existing.sampleProducts.push(row.productName);
+            }
+            valueMap.set(row.value, existing);
+        }
+
+        const options = (attribute.options as string[]) || [];
+        for (const option of options) {
+            if (valueMap.has(option)) {
+                valueMap.get(option)!.isPreset = true;
+            } else {
+                valueMap.set(option, {
+                    value: option,
+                    productCount: 0,
+                    createdAt: attribute.updatedAt,
+                    isPreset: true,
+                    sampleProducts: [],
+                });
+            }
+        }
+
+        let allValues = Array.from(valueMap.values());
+        const search = c.req.query("search");
+        if (search) {
+            const lowerSearch = search.toLowerCase();
+            allValues = allValues.filter((v) =>
+                v.value.toLowerCase().includes(lowerSearch)
+            );
+        }
+
+        const sort = c.req.query("sort") || "desc";
+        allValues.sort((a, b) => {
+            const timeA = new Date(a.createdAt * 1000).getTime();
+            const timeB = new Date(b.createdAt * 1000).getTime();
+            return sort === "asc" ? timeA - timeB : timeB - timeA;
+        });
+
+        const page = parseInt(c.req.query("page") || "1");
+        const limit = parseInt(c.req.query("limit") || "20");
+        const offset = (page - 1) * limit;
+        const paginatedValues = allValues.slice(offset, offset + limit);
+
+        return c.json({
+            attributeId,
+            attributeName: attribute.name,
+            values: paginatedValues,
+            totalValues: allValues.length,
+            page,
+            totalPages: Math.ceil(allValues.length / limit),
+        });
+    } catch (error) {
+        console.error("Error fetching attribute values:", error);
+        return c.json({ error: "Failed to fetch attribute values" }, 500);
+    }
+});
+
+const addValueSchema = z.object({
+    value: z.string().min(1, "Value is required"),
+});
+
+app.post("/:id/values", zValidator("json", addValueSchema), async (c) => {
+    const db = c.get("db");
+    const attributeId = c.req.param("id");
+
+    try {
+        const { value } = c.req.valid("json");
+
+        const attribute = await db
+            .select()
+            .from(productAttributes)
+            .where(eq(productAttributes.id, attributeId))
+            .get();
+
+        if (!attribute) return c.json({ error: "Attribute not found" }, 404);
+
+        const currentOptions = (attribute.options as string[]) || [];
+        if (!currentOptions.includes(value)) {
+            const newOptions = [...currentOptions, value];
+            await db
+                .update(productAttributes)
+                .set({ options: newOptions })
+                .where(eq(productAttributes.id, attributeId));
+        }
+
+        return c.json({ success: true }, 200);
+    } catch (error) {
+        return c.json({ error: "Failed" }, 500);
+    }
+});
+
+const updateValueSchema = z.object({
+    oldValue: z.string().min(1, "Old value is required"),
+    newValue: z.string().min(1, "New value is required"),
+});
+
+app.put("/:id/values", zValidator("json", updateValueSchema), async (c) => {
+    const db = c.get("db");
+    const attributeId = c.req.param("id");
+
+    try {
+        const { oldValue, newValue } = c.req.valid("json");
+
+        await db
+            .update(productAttributeValues)
+            .set({ value: newValue })
+            .where(
+                and(
+                    eq(productAttributeValues.attributeId, attributeId),
+                    eq(productAttributeValues.value, oldValue)
+                )
+            );
+
+        const attribute = await db
+            .select()
+            .from(productAttributes)
+            .where(eq(productAttributes.id, attributeId))
+            .get();
+
+        if (attribute) {
+            const currentOptions = (attribute.options as string[]) || [];
+            if (currentOptions.includes(oldValue)) {
+                const newOptions = currentOptions.map((o) =>
+                    o === oldValue ? newValue : o
+                );
+                await db
+                    .update(productAttributes)
+                    .set({ options: newOptions })
+                    .where(eq(productAttributes.id, attributeId));
+            }
+        }
+
+        return c.json({
+            success: true,
+            message: `Value "${oldValue}" renamed to "${newValue}"`,
+        }, 200);
+    } catch (error) {
+        console.error("Error updating attribute value:", error);
+        return c.json({ error: "Failed to update attribute value" }, 500);
+    }
+});
+
+const deleteValueSchema = z.object({
+    value: z.string().min(1, "Value is required"),
+});
+
+app.delete("/:id/values", zValidator("json", deleteValueSchema), async (c) => {
+    const db = c.get("db");
+    const attributeId = c.req.param("id");
+
+    try {
+        const { value } = c.req.valid("json");
+
+        await db
+            .delete(productAttributeValues)
+            .where(
+                and(
+                    eq(productAttributeValues.attributeId, attributeId),
+                    eq(productAttributeValues.value, value)
+                )
+            );
+
+        const attribute = await db
+            .select()
+            .from(productAttributes)
+            .where(eq(productAttributes.id, attributeId))
+            .get();
+
+        if (attribute) {
+            const currentOptions = (attribute.options as string[]) || [];
+            if (currentOptions.includes(value)) {
+                const newOptions = currentOptions.filter((o) => o !== value);
+                await db
+                    .update(productAttributes)
+                    .set({ options: newOptions })
+                    .where(eq(productAttributes.id, attributeId));
+            }
+        }
+
+        return c.json({
+            success: true,
+            message: `Value "${value}" deleted from all products`,
+        }, 200);
+    } catch (error) {
+        console.error("Error deleting attribute value:", error);
+        return c.json({ error: "Failed to delete attribute value" }, 500);
     }
 });
 

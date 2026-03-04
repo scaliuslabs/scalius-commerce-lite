@@ -68,6 +68,20 @@ export const bulkDeleteVariantsSchema = z.object({
     variantIds: z.array(z.string()),
 });
 
+export const bulkUpdateVariantsSchema = z.object({
+    updates: z.array(
+        z.object({
+            id: z.string(),
+            size: z.string().nullable().optional(),
+            color: z.string().nullable().optional(),
+            weight: z.number().nullable().optional(),
+            sku: z.string().optional(),
+            price: z.number().min(0).optional(),
+            stock: z.number().min(0).optional(),
+        })
+    ),
+});
+
 // ─────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────
@@ -635,6 +649,36 @@ export async function deleteProduct(id: string): Promise<void> {
         .update(products)
         .set({ deletedAt: sql`unixepoch()` })
         .where(eq(products.id, id));
+}
+
+/**
+ * Bulk updates given product variants using an array of updates.
+ */
+export async function bulkUpdateVariants(productId: string, updates: any[]) {
+    const statements = [];
+    for (const update of updates) {
+        const { id, ...fieldsToUpdate } = update;
+        if (Object.keys(fieldsToUpdate).length === 0) continue;
+
+        statements.push(
+            db
+                .update(productVariants)
+                .set({
+                    ...fieldsToUpdate,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(
+                    and(
+                        eq(productVariants.id, id),
+                        eq(productVariants.productId, productId)
+                    )
+                )
+        );
+    }
+
+    if (statements.length > 0) {
+        await db.batch(statements as any);
+    }
 }
 
 // ─────────────────────────────────────────
