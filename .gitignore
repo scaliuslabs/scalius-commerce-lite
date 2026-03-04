@@ -19,6 +19,9 @@ clerk-docs/
 astro-docs/
 # environment variables
 .env
+.env.development
+.env.local
+.env.*.local
 .dev.vars
 
 # macOS-specific files
