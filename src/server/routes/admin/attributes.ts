@@ -238,18 +238,41 @@ app.delete("/:id", async (c) => {
     }
 });
 
+app.delete("/:id/permanent", async (c) => {
+    const db = c.get("db");
+    const id = c.req.param("id");
+
+    try {
+        await db
+            .delete(productAttributes)
+            .where(eq(productAttributes.id, id));
+
+        return new Response(null, { status: 204 });
+    } catch (error) {
+        console.error(`Error permanently deleting attribute ${id}:`, error);
+        return c.json({ error: "Failed to permanently delete attribute" }, 500);
+    }
+});
+
 const bulkActionSchema = z.object({
     ids: z.array(z.string()).min(1, "No IDs provided"),
+    permanent: z.boolean().default(false),
 });
 
 app.post("/bulk-delete", zValidator("json", bulkActionSchema), async (c) => {
     const db = c.get("db");
     try {
-        const { ids } = c.req.valid("json");
-        await db
-            .update(productAttributes)
-            .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
-            .where(inArray(productAttributes.id, ids));
+        const { ids, permanent } = c.req.valid("json");
+        if (permanent) {
+            await db
+                .delete(productAttributes)
+                .where(inArray(productAttributes.id, ids));
+        } else {
+            await db
+                .update(productAttributes)
+                .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
+                .where(inArray(productAttributes.id, ids));
+        }
         return new Response(null, { status: 204 });
     } catch (error) {
         console.error("Error bulk deleting attributes:", error);

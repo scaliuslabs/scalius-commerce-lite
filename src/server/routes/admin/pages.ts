@@ -48,10 +48,10 @@ app.post("/", zValidator("json", createPageSchema), async (c) => {
 });
 
 // POST /admin/pages/bulk-delete
-app.post("/bulk-delete", zValidator("json", z.object({ ids: z.array(z.string()), permanent: z.boolean().default(false) })), async (c) => {
+app.post("/bulk-delete", zValidator("json", z.object({ pageIds: z.array(z.string()), permanent: z.boolean().default(false) })), async (c) => {
     const db = c.get("db");
-    const { ids, permanent } = c.req.valid("json");
-    await bulkDeletePages(db, ids, permanent);
+    const { pageIds, permanent } = c.req.valid("json");
+    await bulkDeletePages(db, pageIds, permanent);
     return c.body(null, 204);
 });
 
@@ -99,6 +99,13 @@ app.put("/:id", zValidator("json", updatePageSchema), async (c) => {
 app.delete("/:id", async (c) => {
     const db = c.get("db");
     await deletePage(db, c.req.param("id"));
+    return c.body(null, 204);
+});
+
+// DELETE /admin/pages/:id/permanent
+app.delete("/:id/permanent", async (c) => {
+    const db = c.get("db");
+    await bulkDeletePages(db, [c.req.param("id")], true);
     return c.body(null, 204);
 });
 

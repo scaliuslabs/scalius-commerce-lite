@@ -2,7 +2,7 @@
 // All DB queries and business logic for the customers domain.
 
 import { customers, customerHistory, deliveryLocations } from "@/db/schema";
-import { sql, and, isNull, inArray, asc, desc } from "drizzle-orm";
+import { sql, and, isNull, inArray, asc, desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ftsMatch } from "@/lib/search/fts5";
 import { phoneNumberSchema } from "@/shared/customer-utils";
@@ -207,4 +207,94 @@ export async function createCustomer(
     });
 
     return { id: customerId };
+}
+
+export const updateCustomerSchema = createCustomerSchema.partial();
+export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
+
+export async function getCustomerById(db: any, id: string) {
+    return db.select().from(customers).where(eq(customers.id, id)).get() ?? null;
+}
+
+export async function updateCustomer(
+    db: any,
+    id: string,
+    data: UpdateCustomerInput,
+) {
+    const existing = await getCustomerById(db, id);
+    if (!existing) throw Object.assign(new Error("Customer not found"), { statusCode: 404 });
+
+    if (data.phone && data.phone !== existing.phone) {
+        const phoneConflict = await db
+            .select({ id: customers.id })
+            .from(customers)
+            .where(sql`${customers.phone} = ${data.phone} AND ${customers.id} != ${id}`)
+            .get();
+        if (phoneConflict) throw Object.assign(new Error("Another customer with this phone number already exists"), { statusCode: 400 });
+    }
+
+    let cityName = existing.cityName, zoneName = existing.zoneName, areaName = existing.areaName;
+    const locationIds = [data.city ?? existing.city, data.zone ?? existing.zone, data.area ?? existing.area].filter(Boolean) as string[];
+
+    if ((data.city !== undefined || data.zone !== undefined || data.area !== undefined) && locationIds.length > 0) {
+        const locs = await db
+            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
+            .from(deliveryLocations)
+            .where(inArray(deliveryLocations.id, locationIds));
+        const locMap = new Map(locs.map((l: any) => [l.id, l.name]));
+        if (data.city !== undefined) cityName = data.city ? locMap.get(data.city) ?? null : null;
+        if (data.zone !== undefined) zoneName = data.zone ? locMap.get(data.zone) ?? null : null;
+        if (data.area !== undefined) areaName = data.area ? locMap.get(data.area) ?? null : null;
+    }
+
+    const updateData = {
+        ...data,
+        cityName,
+        zoneName,
+        areaName,
+        updatedAt: sql`unixepoch()`,
+    };
+
+    await db.update(customers).set(updateData).where(eq(customers.id, id));
+
+    await db.insert(customerHistory).values({
+        id: "hist_" + nanoid(),
+        customerId: id,
+        name: data.name ?? existing.name,
+        email: data.email !== undefined ? data.email : existing.email,
+        phone: data.phone ?? existing.phone,
+        address: data.address !== undefined ? data.address : existing.address,
+        city: data.city !== undefined ? data.city : existing.city,
+        zone: data.zone !== undefined ? data.zone : existing.zone,
+        area: data.area !== undefined ? data.area : existing.area,
+        cityName,
+        zoneName,
+        areaName,
+        changeType: "updated",
+        createdAt: sql`unixepoch()`,
+    });
+
+    return { success: true };
+}
+
+export async function deleteCustomer(db: any, id: string): Promise<void> {
+    await db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(eq(customers.id, id));
+}
+
+export async function permanentDeleteCustomer(db: any, id: string): Promise<void> {
+    await db.delete(customerHistory).where(eq(customerHistory.customerId, id));
+    await db.delete(customers).where(eq(customers.id, id));
+}
+
+export async function restoreCustomer(db: any, id: string): Promise<void> {
+    await db.update(customers).set({ deletedAt: null }).where(eq(customers.id, id));
+}
+
+export async function bulkDeleteCustomers(db: any, ids: string[], permanent = false): Promise<void> {
+    if (permanent) {
+        await db.delete(customerHistory).where(inArray(customerHistory.customerId, ids));
+        await db.delete(customers).where(inArray(customers.id, ids));
+    } else {
+        await db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inArray(customers.id, ids));
+    }
 }

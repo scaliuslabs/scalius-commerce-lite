@@ -46,10 +46,10 @@ app.post("/", zValidator("json", createCollectionSchema), async (c) => {
 });
 
 // POST /admin/collections/bulk-delete
-app.post("/bulk-delete", zValidator("json", z.object({ ids: z.array(z.string()), permanent: z.boolean().default(false) })), async (c) => {
+app.post("/bulk-delete", zValidator("json", z.object({ collectionIds: z.array(z.string()), permanent: z.boolean().default(false) })), async (c) => {
     const db = c.get("db");
-    const { ids, permanent } = c.req.valid("json");
-    await bulkDeleteCollections(db, ids, permanent);
+    const { collectionIds, permanent } = c.req.valid("json");
+    await bulkDeleteCollections(db, collectionIds, permanent);
     return c.body(null, 204);
 });
 
@@ -105,6 +105,17 @@ app.delete("/:id", async (c) => {
     const db = c.get("db");
     try {
         await deleteCollection(db, c.req.param("id"));
+        return c.body(null, 204);
+    } catch (error: any) {
+        return c.json({ error: error.message }, error.statusCode || 400);
+    }
+});
+
+// DELETE /admin/collections/:id/permanent
+app.delete("/:id/permanent", async (c) => {
+    const db = c.get("db");
+    try {
+        await bulkDeleteCollections(db, [c.req.param("id")], true);
         return c.body(null, 204);
     } catch (error: any) {
         return c.json({ error: error.message }, error.statusCode || 400);
