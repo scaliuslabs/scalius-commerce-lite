@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-import { shippingMethods as shippingMethodsTable } from "@/db/schema"; 
+import { shippingMethods as shippingMethodsTable } from "@/db/schema";
 import { eq, isNull, asc, and } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 
@@ -10,7 +10,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 0,
+    ttl: 300000, // 5 minutes — shipping methods change rarely, admin-managed
     keyPrefix: "api:shipping-methods:",
     varyByQuery: false,
     methods: ["GET"],

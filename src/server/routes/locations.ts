@@ -10,7 +10,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 0,
+    ttl: 600000, // 10 minutes — cities/zones/areas are admin-managed and rarely change
     keyPrefix: "api:locations:",
     varyByQuery: true, // Cache based on query params (cityId, zoneId)
     methods: ["GET"],

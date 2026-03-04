@@ -9,6 +9,7 @@ import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "@/mo
 import { getDb } from "@/db";
 import { siteSettings, settings } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { cacheMiddleware } from "../middleware/cache";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -29,99 +30,107 @@ const app = new Hono<{ Bindings: Env }>();
  *   ]
  * }
  */
-app.get("/config", async (c) => {
-  try {
-    const db = getDb(c.env);
-    const kv: KVNamespace | undefined = (c.env as any).CACHE;
+app.get(
+  "/config",
+  cacheMiddleware({
+    ttl: 60000, // 60 seconds — short TTL since payment method toggles take effect quickly
+    keyPrefix: "api:checkout:config:",
+    varyByQuery: false,
+    methods: ["GET"],
+  }),
+  async (c) => {
+    try {
+      const db = getDb(c.env);
+      const kv: KVNamespace | undefined = (c.env as any).CACHE;
 
-    // Fetch gateway settings + site settings + currency settings in parallel (DB → KV cached)
-    const [stripeSettings, sslSettings, polarSettings, siteSettingsRow, currencyRows] = await Promise.all([
-      getStripeSettings(db, kv).catch(() => null),
-      getSSLCommerzSettings(db, kv).catch(() => null),
-      getPolarSettings(db, kv).catch(() => null),
-      db.select({
-        guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
-        authVerificationMethod: siteSettings.authVerificationMethod,
-        checkoutMode: siteSettings.checkoutMode,
-        partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-        partialPaymentAmount: siteSettings.partialPaymentAmount,
-      }).from(siteSettings).limit(1).then((rows) => rows[0] ?? null).catch(() => null),
-      db.select({ key: settings.key, value: settings.value })
-        .from(settings)
-        .where(eq(settings.category, "currency"))
-        .all()
-        .catch(() => [] as { key: string; value: string }[]),
-    ]);
+      // Fetch gateway settings + site settings + currency settings in parallel (DB → KV cached)
+      const [stripeSettings, sslSettings, polarSettings, siteSettingsRow, currencyRows] = await Promise.all([
+        getStripeSettings(db, kv).catch(() => null),
+        getSSLCommerzSettings(db, kv).catch(() => null),
+        getPolarSettings(db, kv).catch(() => null),
+        db.select({
+          guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
+          authVerificationMethod: siteSettings.authVerificationMethod,
+          checkoutMode: siteSettings.checkoutMode,
+          partialPaymentEnabled: siteSettings.partialPaymentEnabled,
+          partialPaymentAmount: siteSettings.partialPaymentAmount,
+        }).from(siteSettings).limit(1).then((rows) => rows[0] ?? null).catch(() => null),
+        db.select({ key: settings.key, value: settings.value })
+          .from(settings)
+          .where(eq(settings.category, "currency"))
+          .all()
+          .catch(() => [] as { key: string; value: string }[]),
+      ]);
 
-    const currencyMap = Object.fromEntries(currencyRows.map((r) => [r.key, r.value]));
-    const localCurrencyCode = (currencyMap.currency_code ?? "bdt").toLowerCase();
+      const currencyMap = Object.fromEntries(currencyRows.map((r) => [r.key, r.value]));
+      const localCurrencyCode = (currencyMap.currency_code ?? "bdt").toLowerCase();
 
-    const gateways: Array<{
-      id: string;
-      name: string;
-      publishableKey?: string;
-      currencies: string[];
-      sandbox?: boolean;
-    }> = [];
+      const gateways: Array<{
+        id: string;
+        name: string;
+        publishableKey?: string;
+        currencies: string[];
+        sandbox?: boolean;
+      }> = [];
 
-    const checkoutMode = siteSettingsRow?.checkoutMode ?? "all";
+      const checkoutMode = siteSettingsRow?.checkoutMode ?? "all";
 
-    if (stripeSettings?.enabled && stripeSettings.publishableKey && checkoutMode !== "guest_cod_only") {
-      gateways.push({
-        id: "stripe",
-        name: "Card Payment",
-        publishableKey: stripeSettings.publishableKey,
-        currencies: [localCurrencyCode, "usd", "eur", "gbp"],
+      if (stripeSettings?.enabled && stripeSettings.publishableKey && checkoutMode !== "guest_cod_only") {
+        gateways.push({
+          id: "stripe",
+          name: "Card Payment",
+          publishableKey: stripeSettings.publishableKey,
+          currencies: [localCurrencyCode, "usd", "eur", "gbp"],
+        });
+      }
+
+      if (sslSettings?.enabled && checkoutMode !== "guest_cod_only") {
+        gateways.push({
+          id: "sslcommerz",
+          name: "Online Payment",
+          currencies: [localCurrencyCode],
+          sandbox: sslSettings.sandbox,
+        });
+      }
+
+      if (polarSettings?.enabled && checkoutMode !== "guest_cod_only") {
+        gateways.push({
+          id: "polar",
+          name: "Polar",
+          currencies: [localCurrencyCode, "usd"],
+          sandbox: polarSettings.sandbox,
+        });
+      }
+
+      // COD is available unless gateways_only mode is strictly enforced
+      if (checkoutMode !== "gateways_only") {
+        gateways.push({
+          id: "cod",
+          name: "Cash on Delivery",
+          currencies: [localCurrencyCode],
+        });
+      }
+
+      return c.json({
+        gateways,
+        guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,
+        authVerificationMethod: siteSettingsRow?.authVerificationMethod ?? "email",
+        checkoutMode,
+        partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
+        partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0,
+      });
+    } catch (error) {
+      console.error("Error fetching checkout config:", error);
+      // Degrade gracefully — always offer COD as a fallback
+      return c.json({
+        gateways: [{ id: "cod", name: "Cash on Delivery", currencies: ["bdt"] }],
+        guestCheckoutEnabled: true,
+        authVerificationMethod: "email",
+        checkoutMode: "all",
+        partialPaymentEnabled: false,
+        partialPaymentAmount: 0,
       });
     }
-
-    if (sslSettings?.enabled && checkoutMode !== "guest_cod_only") {
-      gateways.push({
-        id: "sslcommerz",
-        name: "Online Payment",
-        currencies: [localCurrencyCode],
-        sandbox: sslSettings.sandbox,
-      });
-    }
-
-    if (polarSettings?.enabled && checkoutMode !== "guest_cod_only") {
-      gateways.push({
-        id: "polar",
-        name: "Polar",
-        currencies: [localCurrencyCode, "usd"],
-        sandbox: polarSettings.sandbox,
-      });
-    }
-
-    // COD is available unless gateways_only mode is strictly enforced
-    if (checkoutMode !== "gateways_only") {
-      gateways.push({
-        id: "cod",
-        name: "Cash on Delivery",
-        currencies: [localCurrencyCode],
-      });
-    }
-
-    return c.json({
-      gateways,
-      guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,
-      authVerificationMethod: siteSettingsRow?.authVerificationMethod ?? "email",
-      checkoutMode,
-      partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
-      partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0,
-    });
-  } catch (error) {
-    console.error("Error fetching checkout config:", error);
-    // Degrade gracefully — always offer COD as a fallback
-    return c.json({
-      gateways: [{ id: "cod", name: "Cash on Delivery", currencies: ["bdt"] }],
-      guestCheckoutEnabled: true,
-      authVerificationMethod: "email",
-      checkoutMode: "all",
-      partialPaymentEnabled: false,
-      partialPaymentAmount: 0,
-    });
-  }
-});
+  });
 
 export { app as checkoutRoutes };
