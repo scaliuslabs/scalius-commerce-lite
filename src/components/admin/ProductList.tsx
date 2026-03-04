@@ -398,7 +398,7 @@ export function ProductList({
     }) => {
       setIsLoadingProducts(true);
       try {
-        const url = new URL("/api/v1/products", window.location.origin);
+        const url = new URL("/api/v1/admin/products", window.location.origin);
         if (params.page) url.searchParams.set("page", params.page.toString());
         if (params.limit) url.searchParams.set("limit", params.limit.toString());
         if (params.search) url.searchParams.set("search", params.search);
@@ -745,7 +745,7 @@ export function ProductList({
     setIsConfirmBulkDeleteOpen(false);
 
     try {
-      const response = await fetch("/api/v1/products/bulk-delete", {
+      const response = await fetch("/api/v1/admin/products/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

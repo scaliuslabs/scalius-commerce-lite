@@ -11,8 +11,8 @@ import {
 import { processReturn, processRefund } from "@/modules/payments/refund-service";
 import { DeliveryService } from "@/modules/delivery/service";
 import { ShipmentTracker } from "@/modules/delivery/tracking";
-import { orderPayments, paymentPlans, deliveryShipments } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { orderPayments, paymentPlans, deliveryShipments, orderItems, products, productVariants, productImages } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 const app = new Hono<{
     Variables: {
         db: any;
@@ -211,6 +211,43 @@ app.put("/:id/status", zValidator("json", z.object({ status: z.string() })), asy
         return c.json(result, 200);
     } catch (error: any) {
         return c.json({ error: error.message || "Internal Server Error" }, 409);
+    }
+});
+
+// GET /api/v1/admin/orders/:id/items
+app.get("/:id/items", async (c) => {
+    try {
+        const orderId = c.req.param("id");
+        const db = c.get("db") as any;
+
+        const items = await db
+            .select({
+                id: orderItems.id,
+                productId: orderItems.productId,
+                productName: products.name,
+                productImage: productImages.url,
+                variantId: orderItems.variantId,
+                variantSize: productVariants.size,
+                variantColor: productVariants.color,
+                quantity: orderItems.quantity,
+                price: orderItems.price,
+            })
+            .from(orderItems)
+            .where(eq(orderItems.orderId, orderId))
+            .leftJoin(products, eq(orderItems.productId, products.id))
+            .leftJoin(productVariants, eq(orderItems.variantId, productVariants.id))
+            .leftJoin(
+                productImages,
+                and(
+                    eq(productImages.productId, orderItems.productId),
+                    eq(productImages.isPrimary, true),
+                ),
+            );
+
+        return c.json(items, 200);
+    } catch (error: any) {
+        console.error("Error fetching order items:", error);
+        return c.json({ error: "Failed to fetch order items" }, 500);
     }
 });
 
