@@ -10,6 +10,7 @@ import {
 } from "@/modules/orders/orders.validation";
 import { processReturn, processRefund } from "@/modules/payments/refund-service";
 import { DeliveryService } from "@/modules/delivery/service";
+import { ShipmentTracker } from "@/modules/delivery/tracking";
 import { orderPayments, paymentPlans, deliveryShipments } from "@/db/schema";
 import { eq } from "drizzle-orm";
 const app = new Hono<{
@@ -291,6 +292,111 @@ app.post("/:id/shipments", zValidator("json", z.object({ providerId: z.string(),
     } catch (error: any) {
         console.error("Error creating order shipment:", error);
         return c.json({ error: "Failed to create shipment" }, 500);
+    }
+});
+
+// GET /api/v1/admin/orders/:id/shipments/:shipmentId
+app.get("/:id/shipments/:shipmentId", async (c) => {
+    try {
+        const orderId = c.req.param("id");
+        const shipmentId = c.req.param("shipmentId");
+        const deliveryService = new DeliveryService();
+
+        const shipment = await deliveryService.getShipment(shipmentId);
+        if (!shipment) return c.json({ error: "Shipment not found" }, 404);
+        if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
+
+        return c.json(shipment, 200);
+    } catch (error: any) {
+        return c.json({ error: "Internal server error" }, 500);
+    }
+});
+
+// DELETE /api/v1/admin/orders/:id/shipments/:shipmentId
+app.delete("/:id/shipments/:shipmentId", async (c) => {
+    try {
+        const orderId = c.req.param("id");
+        const shipmentId = c.req.param("shipmentId");
+        const deliveryService = new DeliveryService();
+
+        const shipment = await deliveryService.getShipment(shipmentId);
+        if (!shipment) return c.json({ error: "Shipment not found" }, 404);
+        if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
+
+        await deliveryService.deleteShipment(shipmentId);
+        return c.json({ success: true }, 200);
+    } catch (error: any) {
+        return c.json({ error: "Internal server error" }, 500);
+    }
+});
+
+// POST /api/v1/admin/orders/:id/shipments/:shipmentId/status
+app.post("/:id/shipments/:shipmentId/status", async (c) => {
+    try {
+        const orderId = c.req.param("id");
+        const shipmentId = c.req.param("shipmentId");
+        const deliveryService = new DeliveryService();
+
+        const shipment = await deliveryService.getShipment(shipmentId);
+        if (!shipment) return c.json({ error: "Shipment not found" }, 404);
+        if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
+
+        const updatedShipment = await deliveryService.checkShipmentStatus(shipmentId);
+        return c.json(updatedShipment, 200);
+    } catch (error: any) {
+        return c.json({ error: "Internal server error" }, 500);
+    }
+});
+
+// POST /api/v1/admin/orders/:id/shipments/:shipmentId/refresh
+app.post("/:id/shipments/:shipmentId/refresh", async (c) => {
+    try {
+        const orderId = c.req.param("id");
+        const shipmentId = c.req.param("shipmentId");
+        const deliveryService = new DeliveryService();
+        const db = c.get("db") as any;
+
+        const shipment = await deliveryService.getShipment(shipmentId);
+        if (!shipment) return c.json({ error: "Shipment not found" }, 404);
+        if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 400);
+
+        const previousStatus = shipment.status;
+        try {
+            await deliveryService.checkShipmentStatus(shipmentId);
+        } catch (e: any) {
+            return c.json({ error: "Failed to refresh shipment status", message: e.message }, 400);
+        }
+
+        const now = new Date();
+        await db.update(deliveryShipments).set({ lastChecked: now }).where(eq(deliveryShipments.id, shipmentId));
+
+        const updatedShipment = await deliveryService.getShipment(shipmentId);
+        if (!updatedShipment) return c.json({ error: "Failed to retrieve updated shipment" }, 500);
+
+        const provider = updatedShipment.providerId ? await deliveryService.getProvider(updatedShipment.providerId) : null;
+        const statusChanged = previousStatus !== updatedShipment.status;
+        let orderStatusUpdate = false;
+
+        if (statusChanged) {
+            try {
+                const orderUpdate = await ShipmentTracker.updateOrderStatusFromShipment(shipmentId, updatedShipment.status);
+                orderStatusUpdate = !!orderUpdate && !!orderUpdate.orderId;
+            } catch (e) {
+                console.error("Error updating order status:", e);
+            }
+        }
+
+        return c.json({
+            ...updatedShipment,
+            providerName: provider?.name || updatedShipment.providerType,
+            providerType: updatedShipment.providerType,
+            lastChecked: now.toISOString(),
+            statusChanged,
+            orderStatusUpdate,
+        }, 200);
+    } catch (error: any) {
+        console.error("Error refreshing shipment:", error);
+        return c.json({ error: "Internal server error" }, 500);
     }
 });
 
