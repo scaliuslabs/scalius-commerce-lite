@@ -135,10 +135,10 @@ export function PaymentCard({ order }: PaymentCardProps) {
     setLoading(true);
     try {
       const requests: Promise<Response>[] = [
-        fetch(`/api/orders/${order.id}/payments`),
+        fetch(`/api/v1/admin/orders/${order.id}/payments`),
       ];
       if (isCOD) {
-        requests.push(fetch(`/api/orders/${order.id}/cod`));
+        requests.push(fetch(`/api/v1/admin/orders/${order.id}/cod`));
       }
       const responses = await Promise.all(requests);
       const [paymentsRes, codRes] = responses;
