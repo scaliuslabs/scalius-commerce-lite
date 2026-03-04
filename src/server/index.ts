@@ -34,6 +34,7 @@ import { checkoutLanguageRoutes } from "./routes/checkout-languages";
 import { abandonedCheckoutsRoutes } from "./routes/abandoned-checkouts";
 import { locationRoutes } from "./routes/locations";
 import { shippingMethodRoutes } from "./routes/shipping-methods";
+import { seoRoutes } from "./routes/seo";
 import { metaConversionsRoutes } from "./routes/meta-conversions";
 import { storefrontRoutes } from "./routes/storefront";
 import { checkoutRoutes } from "./routes/checkout";
@@ -172,13 +173,12 @@ app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
 app.route("/checkout", checkoutRoutes);
 app.route("/customer-auth", customerAuthRoutes);
-// Public storefront routes: cart page reads active checkout language for labels;
-// abandoned-checkouts POST is intentionally unauthenticated (client-side debounced save)
 app.route("/checkout-languages", checkoutLanguageRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
-// Cart page delivery dropdowns and shipping options
 app.route("/locations", locationRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);
+// SEO settings — used by storefront product/page routes for meta tags
+app.route("/seo", seoRoutes);
 
 
 // Add health check endpoint (relative path '/health')
@@ -265,7 +265,6 @@ app.route("/admin/ai-context", adminAiContextRoutes);
 app.route("/admin/ai-prompts", adminAiPromptsRoutes);
 app.route("/admin/openrouter", adminOpenRouterRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);
-// Mount system utils directly under /admin since they include /abandoned-checkouts and /fcm-token
 app.route("/admin", adminSystemUtilsRoutes);
 app.route("/admin/settings/delivery-locations", adminLocationRoutes);
 app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
