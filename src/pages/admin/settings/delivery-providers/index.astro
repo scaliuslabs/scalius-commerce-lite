@@ -1,37 +1,9 @@
 ---
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { DeliveryProviderSettings } from "@/components/admin/DeliveryProviderSettings";
-import { db } from "@/db";
-import { deliveryProviders } from "@/db/schema";
+import { getDeliveryProvidersData } from "@/server/loaders/admin/settings";
 
-// SECURITY: Mask sensitive credentials before sending to client
-const MASKED_VALUE = "••••••••••••";
-
-function maskCredentials(credentialsJson: string): string {
-  try {
-    const credentials = JSON.parse(credentialsJson);
-    const masked = { ...credentials };
-
-    // Mask all sensitive fields
-    if (masked.clientSecret) masked.clientSecret = MASKED_VALUE;
-    if (masked.password) masked.password = MASKED_VALUE;
-    if (masked.apiKey) masked.apiKey = MASKED_VALUE;
-    if (masked.secretKey) masked.secretKey = MASKED_VALUE;
-
-    return JSON.stringify(masked);
-  } catch (e) {
-    return credentialsJson;
-  }
-}
-
-// Get providers from the database
-const dbProviders = await db.select().from(deliveryProviders);
-
-// Mask sensitive credentials before sending to client
-const providers = dbProviders.map(provider => ({
-  ...provider,
-  credentials: maskCredentials(provider.credentials),
-}));
+const providers = await getDeliveryProvidersData();
 ---
 
 <AdminLayout title="Delivery Provider Settings">

@@ -1,26 +1,9 @@
 ---
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { CollectionForm } from "@/components/admin/CollectionForm";
-import { db } from "@/db";
-import { categories, products } from "@/db/schema";
-import { isNull } from "drizzle-orm";
+import { getCollectionFormOptions } from "@/server/loaders/admin/catalog";
 
-const allCategories = await db
-  .select({
-    id: categories.id,
-    name: categories.name,
-  })
-  .from(categories)
-  .where(isNull(categories.deletedAt));
-
-const allProducts = await db
-  .select({
-    id: products.id,
-    name: products.name,
-    categoryId: products.categoryId,
-  })
-  .from(products)
-  .where(isNull(products.deletedAt));
+const { allCategories, allProducts } = await getCollectionFormOptions();
 ---
 
 <AdminLayout title="New Collection">
