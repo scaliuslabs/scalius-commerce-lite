@@ -1,51 +1,20 @@
 ---
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import { CategoryForm } from "../../../../components/admin/CategoryForm";
-import { db } from "../../../../db";
-import { categories } from "../../../../db/schema";
-import { eq, sql } from "drizzle-orm";
+import { getCategoryEditData } from "@/server/loaders/admin/catalog";
 
 // Get category ID from URL
 const { id } = Astro.params;
 
-// Get category details with proper timestamp handling
-const [category] = await db
-  .select({
-    id: categories.id,
-    name: categories.name,
-    description: categories.description,
-    slug: categories.slug,
-    metaTitle: categories.metaTitle,
-    metaDescription: categories.metaDescription,
-    imageUrl: categories.imageUrl,
-    createdAt: sql<string>`datetime(${categories.createdAt}, 'unixepoch', 'localtime')`,
-    updatedAt: sql<string>`datetime(${categories.updatedAt}, 'unixepoch', 'localtime')`,
-  })
-  .from(categories)
-  .where(eq(categories.id, id as string));
+const category = id ? await getCategoryEditData(id) : null;
 
 if (!category) {
   return Astro.redirect("/admin/categories");
 }
-
-// Prepare default values with proper type conversion
-const defaultValues = {
-  ...category,
-  slugEdited: true,
-  image: category.imageUrl
-    ? {
-        id: `temp_${category.id}`,
-        url: category.imageUrl,
-        filename: category.imageUrl.split("/").pop() || "",
-        size: 0,
-        createdAt: new Date(),
-      }
-    : null,
-};
 ---
 
 <AdminLayout title={`Edit ${category.name}`}>
   <div class="container max-w-7xl py-4 pb-8">
-    <CategoryForm client:idle defaultValues={defaultValues} isEdit={true} />
+    <CategoryForm client:idle defaultValues={category} isEdit={true} />
   </div>
 </AdminLayout>

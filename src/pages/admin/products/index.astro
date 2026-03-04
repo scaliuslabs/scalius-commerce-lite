@@ -2,10 +2,7 @@
 // src/pages/admin/products/index.astro
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { ProductList } from "../../../components/admin/ProductList";
-import { getProducts, getProductStats } from "@/modules/products";
-import { db } from "../../../db";
-import { categories as categoriesTable } from "../../../db/schema";
-import { sql } from "drizzle-orm";
+import { getProductsIndexData } from "@/server/loaders/admin/products";
 
 const ALL_CATEGORIES = "all";
 const searchParams = Astro.url.searchParams;
@@ -22,33 +19,16 @@ const sort = (searchParams.get("sort") || "updatedAt") as
   | "updatedAt";
 const order = (searchParams.get("order") || "desc") as "asc" | "desc";
 
-// Get all active categories for the filter dropdown
-const categories = await db
-  .select({ id: categoriesTable.id, name: categoriesTable.name })
-  .from(categoriesTable)
-  .where(sql`${categoriesTable.deletedAt} IS NULL`)
-  .orderBy(categoriesTable.name);
-
-// Get products with proper sorting and trash handling
-const { products, pagination } = await getProducts(db, {
-  page,
-  search,
-  categoryId: categoryId === ALL_CATEGORIES ? undefined : categoryId,
-  sort,
-  order,
-  showTrashed,
-  limit,
-});
-
-// Get accurate product statistics
-const stats = await getProductStats(db);
-
-// Ensure all dates are properly instantiated
-const formattedProducts = products.map((product) => ({
-  ...product,
-  createdAt: new Date(product.createdAt),
-  updatedAt: new Date(product.updatedAt),
-}));
+const { categories, products: formattedProducts, pagination, stats } =
+  await getProductsIndexData({
+    page,
+    search,
+    categoryId: categoryId === ALL_CATEGORIES ? undefined : categoryId,
+    sort,
+    order,
+    showTrashed,
+    limit,
+  });
 ---
 
 <AdminLayout title={showTrashed ? "Trash" : "Products"}>

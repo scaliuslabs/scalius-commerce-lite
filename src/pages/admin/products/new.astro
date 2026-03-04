@@ -1,18 +1,9 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { ProductForm } from "../../../components/admin/ProductForm";
-import { db } from "../../../db";
-import { categories } from "../../../db/schema";
-import { sql } from "drizzle-orm";
+import { getActiveCategories } from "@/server/loaders/admin/products";
 
-// Get all active categories
-const allCategories = await db
-  .select({
-    id: categories.id,
-    name: categories.name,
-  })
-  .from(categories)
-  .where(sql`${categories.deletedAt} IS NULL`);
+const allCategories = await getActiveCategories();
 
 // Default values for the form
 const defaultValues = {

@@ -2,17 +2,7 @@
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import { ProductForm } from "../../../../components/admin/ProductForm";
 import { VariantManager } from "../../../../components/admin/ProductForm/variants";
-import { db } from "../../../../db";
-import {
-  products,
-  categories as categoriesTable,
-  productImages,
-  productVariants,
-  productAttributeValues,
-  productAttributes,
-  productRichContent,
-} from "../../../../db/schema";
-import { eq, sql } from "drizzle-orm";
+import { getProductEditData } from "@/server/loaders/admin/products";
 
 const { id } = Astro.params;
 
@@ -20,134 +10,12 @@ if (!id) {
   return Astro.redirect("/admin/products");
 }
 
-const product = await db
-  .select({
-    id: products.id,
-    name: products.name,
-    description: products.description,
-    price: products.price,
-    categoryId: products.categoryId,
-    slug: products.slug,
-    metaTitle: products.metaTitle,
-    metaDescription: products.metaDescription,
-    isActive: products.isActive,
-    discountType: products.discountType,
-    discountPercentage: products.discountPercentage,
-    discountAmount: products.discountAmount,
-    freeDelivery: products.freeDelivery,
-  })
-  .from(products)
-  .where(eq(products.id, id))
-  .get();
-
-if (!product) {
+const productData = await getProductEditData(id);
+if (!productData) {
   return Astro.redirect("/admin/products");
 }
 
-const images = await db
-  .select({
-    id: productImages.id,
-    url: productImages.url,
-    alt: productImages.alt,
-    sortOrder: productImages.sortOrder,
-    createdAt: sql<string>`datetime(${productImages.createdAt}, 'unixepoch')`,
-  })
-  .from(productImages)
-  .where(eq(productImages.productId, id))
-  .orderBy(productImages.sortOrder);
-
-const variants = await db
-  .select({
-    id: productVariants.id,
-    productId: productVariants.productId,
-    size: productVariants.size,
-    color: productVariants.color,
-    weight: productVariants.weight,
-    sku: productVariants.sku,
-    price: productVariants.price,
-    stock: productVariants.stock,
-    reservedStock: productVariants.reservedStock,
-    discountType: productVariants.discountType,
-    discountPercentage: productVariants.discountPercentage,
-    discountAmount: productVariants.discountAmount,
-    colorSortOrder: productVariants.colorSortOrder,
-    sizeSortOrder: productVariants.sizeSortOrder,
-    createdAt: sql<string>`datetime(${productVariants.createdAt}, 'unixepoch')`,
-    updatedAt: sql<string>`datetime(${productVariants.updatedAt}, 'unixepoch')`,
-    deletedAt: productVariants.deletedAt,
-  })
-  .from(productVariants)
-  .where(
-    sql`${productVariants.productId} = ${id} AND ${productVariants.deletedAt} IS NULL`
-  )
-  .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt);
-
-const assignedAttributes = await db
-  .select({
-    attributeId: productAttributeValues.attributeId,
-    value: productAttributeValues.value,
-    name: productAttributes.name,
-    slug: productAttributes.slug,
-  })
-  .from(productAttributeValues)
-  .leftJoin(
-    productAttributes,
-    eq(productAttributeValues.attributeId, productAttributes.id)
-  )
-  .where(eq(productAttributeValues.productId, id));
-
-const additionalInfo = await db
-  .select({
-    id: productRichContent.id,
-    title: productRichContent.title,
-    content: productRichContent.content,
-  })
-  .from(productRichContent)
-  .where(eq(productRichContent.productId, id))
-  .orderBy(productRichContent.sortOrder);
-
-const allCategories = await db
-  .select({
-    id: categoriesTable.id,
-    name: categoriesTable.name,
-  })
-  .from(categoriesTable)
-  .where(sql`${categoriesTable.deletedAt} IS NULL`);
-
-const defaultValues = {
-  ...product,
-  slugEdited: true,
-  discountType: (product.discountType || "percentage") as "percentage" | "flat",
-  discountPercentage: product.discountPercentage || 0,
-  discountAmount: product.discountAmount || 0,
-  images: images.map((img) => ({
-    id: img.id,
-    url: img.url,
-    filename: img.alt || img.url.split("/").pop() || "",
-    size: 0,
-    createdAt: new Date(img.createdAt),
-  })),
-  attributes: assignedAttributes,
-  additionalInfo: additionalInfo,
-};
-
-const formattedVariants = variants.map((variant) => ({
-  id: variant.id,
-  productId: variant.productId,
-  size: variant.size,
-  color: variant.color,
-  weight: variant.weight,
-  sku: variant.sku,
-  price: variant.price,
-  stock: variant.stock,
-  reservedStock: variant.reservedStock,
-  discountType: variant.discountType || "percentage",
-  discountPercentage: variant.discountPercentage || 0,
-  discountAmount: variant.discountAmount || 0,
-  createdAt: new Date(variant.createdAt),
-  updatedAt: new Date(variant.updatedAt),
-  deletedAt: variant.deletedAt ? new Date((variant.deletedAt as unknown as number) * 1000) : null,
-}));
+const { product, allCategories, defaultValues, formattedVariants } = productData;
 ---
 
 <AdminLayout title={`Edit ${product.name}`}>
