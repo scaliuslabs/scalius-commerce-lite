@@ -21,11 +21,11 @@ export function useBulkActions(onRefresh: () => void) {
 
       const body =
         action === "restore"
-          ? { attributeIds: Array.from(selectedIds) }
+          ? { ids: Array.from(selectedIds) }
           : {
-              attributeIds: Array.from(selectedIds),
-              permanent: action === "delete",
-            };
+            ids: Array.from(selectedIds),
+            permanent: action === "delete",
+          };
 
       try {
         const response = await fetch(endpointMap[action], {
