@@ -32,8 +32,6 @@ import { discountRoutes } from "./routes/discounts";
 import { widgetRoutes } from "./routes/widgets";
 import { analyticsRoutes } from "./routes/analytics";
 import { partytownProxyRoutes } from "./routes/partytown-proxy";
-import { shippingMethodRoutes } from "./routes/shipping-methods";
-import { seoRoutes } from "./routes/seo";
 import { checkoutLanguageRoutes } from "./routes/checkout-languages";
 import { abandonedCheckoutsRoutes } from "./routes/abandoned-checkouts";
 import { metaConversionsRoutes } from "./routes/meta-conversions";
@@ -151,7 +149,10 @@ app.get("/", (c) =>
   }),
 );
 
-// Public API routes (no auth required)
+// ==========================================
+// STOREFRONT API ROUTES
+// ==========================================
+// Public Storefront routes (no auth required)
 // Mount directly on app, paths are relative
 app.route("/auth", authRoutes);
 app.route("/attributes", attributeRoutes);
@@ -224,7 +225,9 @@ app.route("/categories", categoryRoutes);
 app.route("/cache", cacheControlRoutes);
 app.route("/orders", orderRoutes);
 
-// --- Admin System ---
+// ==========================================
+// ADMIN API ROUTES
+// ==========================================
 // The /admin/* routes are strictly protected by adminAuthMiddleware.
 // It verifies either a Better Auth session (Astro SSR) or a JWT Bearer token (Decoupled Hono).
 app.use("/admin/*", adminAuthMiddleware);
