@@ -9,7 +9,9 @@ import {
     bulkShipOrderSchema
 } from "@/modules/orders/orders.validation";
 import { processReturn, processRefund } from "@/modules/payments/refund-service";
-
+import { DeliveryService } from "@/modules/delivery/service";
+import { orderPayments, paymentPlans, deliveryShipments } from "@/db/schema";
+import { eq } from "drizzle-orm";
 const app = new Hono<{
     Variables: {
         db: any;
@@ -208,6 +210,87 @@ app.put("/:id/status", zValidator("json", z.object({ status: z.string() })), asy
         return c.json(result, 200);
     } catch (error: any) {
         return c.json({ error: error.message || "Internal Server Error" }, 409);
+    }
+});
+
+// GET /api/v1/admin/orders/:id/payments
+app.get("/:id/payments", async (c) => {
+    try {
+        const orderId = c.req.param("id");
+        const db = c.get("db") as any;
+
+        const [payments, plan] = await Promise.all([
+            db.select().from(orderPayments).where(eq(orderPayments.orderId, orderId)).all(),
+            db.select().from(paymentPlans).where(eq(paymentPlans.orderId, orderId)).get()
+        ]);
+
+        return c.json({ payments, plan: plan ?? null });
+    } catch (error: any) {
+        console.error("Error fetching order payments:", error);
+        return c.json({ error: "Failed to fetch payments" }, 500);
+    }
+});
+
+// GET /api/v1/admin/orders/:id/shipments
+app.get("/:id/shipments", async (c) => {
+    try {
+        const orderId = c.req.param("id");
+        const deliveryService = new DeliveryService();
+        const shipments = await deliveryService.getShipments(orderId);
+
+        const enhancedShipments = await Promise.all(
+            shipments.map(async (shipment) => {
+                const provider = shipment.providerId ? await deliveryService.getProvider(shipment.providerId) : null;
+                return {
+                    ...shipment,
+                    providerName: provider?.name || shipment.providerType,
+                    lastChecked: shipment.lastChecked || shipment.updatedAt,
+                };
+            })
+        );
+
+        return c.json(enhancedShipments, 200);
+    } catch (error: any) {
+        console.error("Error fetching order shipments:", error);
+        return c.json({ error: "Failed to fetch shipments" }, 500);
+    }
+});
+
+// POST /api/v1/admin/orders/:id/shipments
+app.post("/:id/shipments", zValidator("json", z.object({ providerId: z.string(), options: z.record(z.any()).optional() })), async (c) => {
+    try {
+        const orderId = c.req.param("id");
+        const data = c.req.valid("json");
+        const db = c.get("db") as any;
+        const deliveryService = new DeliveryService();
+
+        const shipmentResult = await deliveryService.createShipment(orderId, data.providerId, data.options);
+
+        if (!shipmentResult.success) {
+            console.error(`Failed to create shipment for order ${orderId}: ${shipmentResult.message}`);
+            return c.json({ error: "Failed to create shipment", message: shipmentResult.message }, 400);
+        }
+
+        const provider = await deliveryService.getProvider(data.providerId);
+        const createdShipment = await deliveryService.getLatestShipment(orderId);
+
+        if (!createdShipment) {
+            return c.json({ error: "Failed to retrieve created shipment" }, 500);
+        }
+
+        const now = new Date();
+        await db.update(deliveryShipments).set({ lastChecked: now }).where(eq(deliveryShipments.id, createdShipment.id));
+
+        const enhancedShipment = {
+            ...createdShipment,
+            providerName: provider?.name || createdShipment.providerType,
+            lastChecked: now.toISOString(),
+        };
+
+        return c.json(enhancedShipment, 201);
+    } catch (error: any) {
+        console.error("Error creating order shipment:", error);
+        return c.json({ error: "Failed to create shipment" }, 500);
     }
 });
 
