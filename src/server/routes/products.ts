@@ -1,16 +1,13 @@
 // src/server/routes/products.ts
 // Storefront product routes — thin HTTP layer.
-// All main query logic lives in src/modules/products/products.service.ts.
+// All query logic lives in src/modules/products/products.service.ts.
 import { Hono } from "hono";
 import { z } from "zod";
-import { db } from "@/db";
-import { products, productAttributes, productVariants, productImages } from "@/db/schema";
-import { eq, and, isNull, desc, inArray, sql } from "drizzle-orm";
-import { ftsMatch } from "@/lib/search/fts5";
 import { cacheMiddleware } from "../middleware/cache";
 import {
   getStorefrontProducts,
   getStorefrontProductBySlug,
+  searchStorefrontProducts,
 } from "@/modules/products/products.service";
 
 const app = new Hono();
@@ -50,23 +47,14 @@ const productSearchSchema = z.object({
 // GET /api/storefront/products
 app.get("/", async (c) => {
   try {
+    const db = c.get("db");
     const params = productFilterSchema.parse(c.req.query());
     const queryParams = c.req.query();
 
     // Resolve attribute filters from unknown query params
-    const allAttributes = await db
-      .select({ slug: productAttributes.slug })
-      .from(productAttributes);
-    const validAttributeSlugs = new Set(allAttributes.map((a) => a.slug));
-    const attributeFilters: { slug: string; value: string }[] = [];
-    for (const key in queryParams) {
-      if (validAttributeSlugs.has(key)) {
-        const value = queryParams[key];
-        if (value) attributeFilters.push({ slug: key, value });
-      }
-    }
+    const attributeFilters = await getAttributeFilters(db, queryParams, params);
 
-    const result = await getStorefrontProducts({ ...params, attributeFilters });
+    const result = await getStorefrontProducts(db, { ...params, attributeFilters });
     return c.json({ success: true, ...result });
   } catch (error) {
     console.error("Error fetching storefront products:", error);
@@ -74,11 +62,26 @@ app.get("/", async (c) => {
   }
 });
 
+// GET /api/storefront/products/search
+// Variant-aware product search used by cart/checkout. Returns lightweight variant data.
+app.get("/search", async (c) => {
+  try {
+    const db = c.get("db");
+    const { search, page, limit } = productSearchSchema.parse(c.req.query());
+    const result = await searchStorefrontProducts(db, { search, page, limit });
+    return c.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error searching products:", error);
+    return c.json({ success: false, error: "Failed to search products" }, 500);
+  }
+});
+
 // GET /api/storefront/products/:slug
 app.get("/:slug", async (c) => {
   try {
+    const db = c.get("db");
     const { slug } = c.req.param();
-    const result = await getStorefrontProductBySlug(slug);
+    const result = await getStorefrontProductBySlug(db, slug);
     if (!result) return c.json({ success: false, error: "Product not found" }, 404);
     return c.json({ success: true, ...result });
   } catch (error) {
@@ -87,94 +90,28 @@ app.get("/:slug", async (c) => {
   }
 });
 
-// GET /api/storefront/products/search
-// Variant-aware product search used by cart/checkout. Returns lightweight variant data.
-app.get("/search", async (c) => {
-  try {
-    const { search, page, limit } = productSearchSchema.parse(c.req.query());
+/** Extracts attribute-based filters from raw query params by checking known attribute slugs. */
+async function getAttributeFilters(
+  db: any,
+  queryParams: Record<string, string>,
+  parsedParams: ReturnType<typeof productFilterSchema.parse>,
+): Promise<Array<{ slug: string; value: string }>> {
+  const knownKeys = new Set(Object.keys(parsedParams));
+  const potentialAttributeKeys = Object.keys(queryParams).filter((k) => !knownKeys.has(k));
+  if (potentialAttributeKeys.length === 0) return [];
 
-    const conditions: any[] = [eq(products.isActive, true), isNull(products.deletedAt)];
-    const searchCondition = search ? ftsMatch("products_fts", "products", search) : null;
-    if (searchCondition) conditions.push(searchCondition);
+  const { productAttributes } = await import("@/db/schema");
+  const { inArray } = await import("drizzle-orm");
 
-    const offset = (page - 1) * limit;
+  const allAttributes: Array<{ slug: string }> = await db
+    .select({ slug: productAttributes.slug })
+    .from(productAttributes)
+    .where(inArray(productAttributes.slug, potentialAttributeKeys));
 
-    const [results, [countResult]] = await Promise.all([
-      db
-        .select({
-          id: products.id,
-          name: products.name,
-          price: products.price,
-          slug: products.slug,
-          discountType: products.discountType,
-          discountPercentage: products.discountPercentage,
-          discountAmount: products.discountAmount,
-          freeDelivery: products.freeDelivery,
-        })
-        .from(products)
-        .where(and(...conditions))
-        .orderBy(desc(products.updatedAt))
-        .limit(limit)
-        .offset(offset)
-        .all(),
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(products)
-        .where(and(...conditions)),
-    ]);
-
-    const productIds = results.map((p) => p.id);
-
-    const [images, variants] =
-      productIds.length > 0
-        ? await Promise.all([
-          db
-            .select({ productId: productImages.productId, url: productImages.url })
-            .from(productImages)
-            .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds))),
-          db
-            .select({
-              id: productVariants.id,
-              productId: productVariants.productId,
-              size: productVariants.size,
-              color: productVariants.color,
-              weight: productVariants.weight,
-              sku: productVariants.sku,
-              price: productVariants.price,
-              stock: productVariants.stock,
-              discountType: productVariants.discountType,
-              discountPercentage: productVariants.discountPercentage,
-              discountAmount: productVariants.discountAmount,
-              colorSortOrder: productVariants.colorSortOrder,
-              sizeSortOrder: productVariants.sizeSortOrder,
-            })
-            .from(productVariants)
-            .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
-            .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder),
-        ])
-        : [[], []];
-
-    const imageMap = new Map(images.map((img) => [img.productId, img.url]));
-    const count = Number(countResult?.count || 0);
-    const totalPages = Math.ceil(count / limit);
-
-    return c.json({
-      success: true,
-      data: results.map((product) => ({
-        ...product,
-        imageUrl: imageMap.get(product.id) || null,
-        variants: variants.filter((v) => v.productId === product.id),
-      })),
-      pagination: {
-        page, limit, total: count, totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
-      },
-    });
-  } catch (error) {
-    console.error("Error searching products:", error);
-    return c.json({ success: false, error: "Failed to search products" }, 500);
-  }
-});
+  const validSlugs = new Set(allAttributes.map((a) => a.slug));
+  return potentialAttributeKeys
+    .filter((k) => validSlugs.has(k) && queryParams[k])
+    .map((k) => ({ slug: k, value: queryParams[k] }));
+}
 
 export { app as productRoutes };

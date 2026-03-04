@@ -23,8 +23,9 @@ const bulkDeleteSchema = z.object({
 // GET /api/v1/admin/products
 app.get("/", async (c) => {
     try {
+        const db = c.get("db");
         const query = c.req.query();
-        const result = await ProductsService.getProducts({
+        const result = await ProductsService.getProducts(db, {
             page: parseInt(query.page || "1"),
             limit: parseInt(query.limit || "10"),
             search: query.search || undefined,
@@ -42,8 +43,9 @@ app.get("/", async (c) => {
 // POST /api/v1/admin/products
 app.post("/", zValidator("json", createProductSchema), async (c) => {
     try {
+        const db = c.get("db");
         const data = c.req.valid("json");
-        const result = await ProductsService.createProduct(data);
+        const result = await ProductsService.createProduct(db, data);
         return c.json(result, 201);
     } catch (error: any) {
         if (error.message?.includes("slug")) {
@@ -56,8 +58,9 @@ app.post("/", zValidator("json", createProductSchema), async (c) => {
 // POST /api/v1/admin/products/bulk-delete
 app.post("/bulk-delete", zValidator("json", bulkDeleteSchema), async (c) => {
     try {
+        const db = c.get("db");
         const data = c.req.valid("json");
-        await ProductsService.bulkDeleteProducts(data.productIds, data.permanent);
+        await ProductsService.bulkDeleteProducts(db, data.productIds, data.permanent);
         return new Response(null, { status: 204 });
     } catch (error: any) {
         if (error.message?.includes("delete")) {
@@ -70,11 +73,12 @@ app.post("/bulk-delete", zValidator("json", bulkDeleteSchema), async (c) => {
 // PUT /api/v1/admin/products/:id
 app.put("/:id", zValidator("json", updateProductSchema), async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         if (!productId) return c.json({ error: "Product ID is required" }, 400);
 
         const data = c.req.valid("json");
-        await ProductsService.updateProduct(productId, data);
+        await ProductsService.updateProduct(db, productId, data);
         return c.json({ success: true }, 200);
     } catch (error: any) {
         if (error.message === "Product not found") return c.json({ error: error.message }, 404);
@@ -86,10 +90,11 @@ app.put("/:id", zValidator("json", updateProductSchema), async (c) => {
 // DELETE /api/v1/admin/products/:id
 app.delete("/:id", async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         if (!productId) return c.json({ error: "Product ID is required" }, 400);
 
-        await ProductsService.deleteProduct(productId);
+        await ProductsService.deleteProduct(db, productId);
         return new Response(null, { status: 204 });
     } catch (error: any) {
         return c.json({ error: error.message || "Internal Server Error" }, 500);
@@ -108,11 +113,12 @@ import {
 // POST /api/v1/admin/products/:id/variants
 app.post("/:id/variants", zValidator("json", createVariantSchema), async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         if (!productId) return c.json({ error: "Product ID is required" }, 400);
 
         const data = c.req.valid("json");
-        const result = await ProductsService.createVariant(productId, data);
+        const result = await ProductsService.createVariant(db, productId, data);
         return c.json(result, 201);
     } catch (error: any) {
         if (error.message?.includes("SKU")) return c.json({ error: error.message }, 400);
@@ -123,10 +129,11 @@ app.post("/:id/variants", zValidator("json", createVariantSchema), async (c) => 
 // GET /api/v1/admin/products/:id/variants
 app.get("/:id/variants", async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         if (!productId) return c.json({ error: "Product ID is required" }, 400);
 
-        const variants = await ProductsService.getProductVariants(productId);
+        const variants = await ProductsService.getProductVariants(db, productId);
         return c.json({ variants }, 200);
     } catch (error: any) {
         return c.json({ error: error.message || "Internal Server Error" }, 500);
@@ -136,12 +143,13 @@ app.get("/:id/variants", async (c) => {
 // PUT /api/v1/admin/products/:id/variants/:variantId
 app.put("/:id/variants/:variantId", zValidator("json", updateVariantSchema), async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         const variantId = c.req.param("variantId");
         if (!productId || !variantId) return c.json({ error: "Product ID and Variant ID are required" }, 400);
 
         const data = c.req.valid("json");
-        const result = await ProductsService.updateVariant(productId, variantId, data);
+        const result = await ProductsService.updateVariant(db, productId, variantId, data);
         return c.json(result, 200);
     } catch (error: any) {
         if (error.message === "Variant not found") return c.json({ error: error.message }, 404);
@@ -153,11 +161,12 @@ app.put("/:id/variants/:variantId", zValidator("json", updateVariantSchema), asy
 // DELETE /api/v1/admin/products/:id/variants/:variantId
 app.delete("/:id/variants/:variantId", async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         const variantId = c.req.param("variantId");
         if (!productId || !variantId) return c.json({ error: "Product ID and Variant ID are required" }, 400);
 
-        await ProductsService.deleteVariant(productId, variantId);
+        await ProductsService.deleteVariant(db, productId, variantId);
         return new Response(null, { status: 204 });
     } catch (error: any) {
         if (error.message === "Variant not found") return c.json({ error: error.message }, 404);
@@ -168,11 +177,12 @@ app.delete("/:id/variants/:variantId", async (c) => {
 // POST /api/v1/admin/products/:id/variants/bulk-create
 app.post("/:id/variants/bulk-create", zValidator("json", bulkCreateVariantsSchema), async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         if (!productId) return c.json({ error: "Product ID is required" }, 400);
 
         const data = c.req.valid("json");
-        const variants = await ProductsService.bulkCreateVariants(productId, data.variants);
+        const variants = await ProductsService.bulkCreateVariants(db, productId, data.variants);
         return c.json({ success: true, variants, count: variants.length }, 201);
     } catch (error: any) {
         if (error.message?.includes("SKU")) return c.json({ error: error.message }, 400);
@@ -183,11 +193,12 @@ app.post("/:id/variants/bulk-create", zValidator("json", bulkCreateVariantsSchem
 // POST /api/v1/admin/products/:id/variants/bulk-delete
 app.post("/:id/variants/bulk-delete", zValidator("json", bulkDeleteVariantsSchema), async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         if (!productId) return c.json({ error: "Product ID is required" }, 400);
 
         const data = c.req.valid("json");
-        await ProductsService.bulkDeleteVariants(productId, data.variantIds);
+        await ProductsService.bulkDeleteVariants(db, productId, data.variantIds);
         return new Response(null, { status: 204 });
     } catch (error: any) {
         return c.json({ error: error.message || "Internal Server Error" }, 500);
@@ -197,13 +208,14 @@ app.post("/:id/variants/bulk-delete", zValidator("json", bulkDeleteVariantsSchem
 // POST /api/v1/admin/products/:id/variants/bulk-update
 app.post("/:id/variants/bulk-update", zValidator("json", bulkUpdateVariantsSchema), async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         if (!productId) return c.json({ error: "Product ID is required" }, 400);
 
         const data = c.req.valid("json");
         if (data.updates.length === 0) return c.json({ error: "No updates provided" }, 400);
 
-        await ProductsService.bulkUpdateVariants(productId, data.updates);
+        await ProductsService.bulkUpdateVariants(db, productId, data.updates);
         return c.json({ success: true }, 200);
     } catch (error: any) {
         return c.json({ error: error.message || "Internal Server Error" }, 500);
@@ -213,11 +225,12 @@ app.post("/:id/variants/bulk-update", zValidator("json", bulkUpdateVariantsSchem
 // POST /api/v1/admin/products/:id/variants/:variantId/duplicate
 app.post("/:id/variants/:variantId/duplicate", async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         const variantId = c.req.param("variantId");
         if (!productId || !variantId) return c.json({ error: "Product ID and Variant ID are required" }, 400);
 
-        const variant = await ProductsService.duplicateVariant(productId, variantId);
+        const variant = await ProductsService.duplicateVariant(db, productId, variantId);
         return c.json(variant, 201);
     } catch (error: any) {
         if (error.message === "Variant not found") return c.json({ error: error.message }, 404);
@@ -228,10 +241,11 @@ app.post("/:id/variants/:variantId/duplicate", async (c) => {
 // GET /api/v1/admin/products/:id/variants/sort-order
 app.get("/:id/variants/sort-order", async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         if (!productId) return c.json({ error: "Product ID is required" }, 400);
 
-        const result = await ProductsService.getVariantSortOrder(productId);
+        const result = await ProductsService.getVariantSortOrder(db, productId);
         return c.json(result, 200);
     } catch (error: any) {
         return c.json({ error: error.message || "Internal Server Error" }, 500);
@@ -241,11 +255,12 @@ app.get("/:id/variants/sort-order", async (c) => {
 // POST /api/v1/admin/products/:id/variants/sort-order
 app.post("/:id/variants/sort-order", zValidator("json", updateSortOrderSchema), async (c) => {
     try {
+        const db = c.get("db");
         const productId = c.req.param("id");
         if (!productId) return c.json({ error: "Product ID is required" }, 400);
 
         const data = c.req.valid("json");
-        await ProductsService.updateVariantSortOrder(productId, data);
+        await ProductsService.updateVariantSortOrder(db, productId, data);
         return c.json({ success: true, message: "Sort order updated successfully" }, 200);
     } catch (error: any) {
         return c.json({ error: error.message || "Internal Server Error" }, 500);

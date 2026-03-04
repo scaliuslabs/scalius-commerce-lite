@@ -109,7 +109,7 @@ try {
   }));
 
   // Get accurate category statistics
-  stats = await getCategoryStats();
+  stats = await getCategoryStats(db);
 
   // Create pagination data
   data = {
