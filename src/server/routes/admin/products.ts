@@ -101,6 +101,7 @@ import {
     updateVariantSchema,
     bulkCreateVariantsSchema,
     bulkDeleteVariantsSchema,
+    bulkUpdateVariantsSchema,
     updateSortOrderSchema,
 } from "@/modules/products/products.service";
 
@@ -188,6 +189,22 @@ app.post("/:id/variants/bulk-delete", zValidator("json", bulkDeleteVariantsSchem
         const data = c.req.valid("json");
         await ProductsService.bulkDeleteVariants(productId, data.variantIds);
         return new Response(null, { status: 204 });
+    } catch (error: any) {
+        return c.json({ error: error.message || "Internal Server Error" }, 500);
+    }
+});
+
+// POST /api/v1/admin/products/:id/variants/bulk-update
+app.post("/:id/variants/bulk-update", zValidator("json", bulkUpdateVariantsSchema), async (c) => {
+    try {
+        const productId = c.req.param("id");
+        if (!productId) return c.json({ error: "Product ID is required" }, 400);
+
+        const data = c.req.valid("json");
+        if (data.updates.length === 0) return c.json({ error: "No updates provided" }, 400);
+
+        await ProductsService.bulkUpdateVariants(productId, data.updates);
+        return c.json({ success: true }, 200);
     } catch (error: any) {
         return c.json({ error: error.message || "Internal Server Error" }, 500);
     }
