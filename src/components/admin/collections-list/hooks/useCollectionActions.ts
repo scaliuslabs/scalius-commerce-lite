@@ -99,7 +99,7 @@ export function useCollectionActions(
         const response = await fetch("/api/v1/admin/collections/reorder", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatedOrder),
+          body: JSON.stringify({ items: updatedOrder }),
         });
 
         if (!response.ok) {
