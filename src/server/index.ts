@@ -170,6 +170,11 @@ app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
 app.route("/checkout", checkoutRoutes);
 app.route("/customer-auth", customerAuthRoutes);
+// Public storefront routes: cart page reads active checkout language for labels;
+// abandoned-checkouts POST is intentionally unauthenticated (client-side debounced save)
+app.route("/checkout-languages", checkoutLanguageRoutes);
+app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
+
 
 // Add health check endpoint (relative path '/health')
 app.get("/health", async (c) => {
