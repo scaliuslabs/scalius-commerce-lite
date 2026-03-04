@@ -324,6 +324,7 @@ export async function bulkDeleteCategories(
             ),
             {
                 statusCode: 400,
+                suggestion: "Please delete the products permanently or move them to another category first.",
                 affectedProducts: referencedProducts.map((p: any) => ({ id: p.id, name: p.name })),
             },
         );

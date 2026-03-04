@@ -55,7 +55,7 @@ app.post("/bulk-delete", zValidator("json", z.object({ categoryIds: z.array(z.st
         await bulkDeleteCategories(db, categoryIds, permanent);
         return c.body(null, 204);
     } catch (error: any) {
-        return c.json({ error: error.message, ...(error.affectedProducts ? { affectedProducts: error.affectedProducts } : {}) }, error.statusCode || 400);
+        return c.json({ error: error.message, ...(error.affectedProducts ? { suggestion: error.suggestion, affectedProducts: error.affectedProducts } : {}) }, error.statusCode || 400);
     }
 });
 
