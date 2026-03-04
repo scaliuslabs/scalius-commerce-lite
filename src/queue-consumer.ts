@@ -1,7 +1,6 @@
 // src/queue-consumer.ts
-// Cloudflare Queue consumer for async payment processing and order notifications.
-// This handler is invoked by Cloudflare when messages are dequeued from
-// the payment-events and order-notifications queues.
+// Cloudflare Queue consumer — thin dispatcher.
+// Receives batches from Cloudflare and routes each message to the right handler.
 //
 // Architecture:
 //   Webhook handler  →  enqueue message  →  return 200 immediately
@@ -9,18 +8,24 @@
 //
 // This makes webhooks resilient: Cloudflare retries failed queue messages
 // automatically (up to max_retries = 3).
+//
+// Handler locations:
+//   order.ingest     → src/modules/orders/orders.queue.ts
+//   payment.*        → src/modules/payments/process-payment.ts   (via switch below)
+//   order.notif      → src/modules/notifications/notifications.service.ts
+//   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
+//
+// TODO: When 5-6 SMS providers are implemented, extract auth.send_otp to
+//       src/modules/notifications/otp.handler.ts
 
 import { getDb } from "@/db";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@/modules/payments/process-payment";
 import { sendOrderNotificationEmail } from "@/modules/notifications/notifications.service";
 import { sendEmail } from "@/integrations/email";
-import { nanoid } from "nanoid";
-import { sql, eq } from "drizzle-orm";
-import { orders, orderItems, customers, customerHistory, discountUsage } from "@/db/schema";
-import { reserveMultiple, releaseMultiple } from "@/modules/inventory";
-import { initCODTracking } from "@/modules/payments/cod";
+import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@/modules/orders/orders.queue";
 
-// ── Message types ──────────────────────────────────────────────────────────
+// Re-export so webhook routes can import message types from one place.
+export type { OrderIngestQueueMessage } from "@/modules/orders/orders.queue";
 
 export type PaymentQueueMessage =
   | {
@@ -106,16 +111,6 @@ export type AuthOtpQueueMessage =
     waTemplate?: string;
   };
 
-export type OrderIngestQueueMessage = {
-  type: "order.ingest";
-  checkoutToken: string;
-  existingCustomer: { id: string } | null;
-  orderData: any;
-  items: any[];
-  discountUsage: { discountId: string; amountDiscounted: number } | null;
-  requestUrl: string;
-};
-
 // ── Queue batch handler ────────────────────────────────────────────────────
 
 /**
@@ -128,19 +123,18 @@ export async function handleQueueBatch(
 ): Promise<void> {
   const db = getDb(env);
 
-  // If this batch contains order ingest routing, handle it completely differently
-  // Since we want to perform a SINGLE db.batch() across multiple queue messages
+  // Order ingest uses a different strategy: a single db.batch() across all messages
   if (batch.queue === "order-ingest-queue" || batch.messages.some(m => m.body.type === "order.ingest")) {
     await handleOrderIngestBatch(batch as unknown as MessageBatch<OrderIngestQueueMessage>, db, env);
     return;
   }
 
-  // Process each message independently
+  // Process each payment/notification/OTP message independently
   const results = await Promise.allSettled(
-    batch.messages.map((msg) => processQueueMessage(msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage>, db))
+    batch.messages.map((msg) => processQueueMessage(msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage>, db)),
   );
 
-  // Ack successful messages, retry failed ones
+  // Ack successful, retry failed with backoff
   for (let i = 0; i < batch.messages.length; i++) {
     const result = results[i];
     const msg = batch.messages[i];
@@ -148,248 +142,15 @@ export async function handleQueueBatch(
       msg.ack();
     } else {
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.reason);
-      msg.retry({ delaySeconds: 30 }); // Retry after 30s
+      msg.retry({ delaySeconds: 30 });
     }
   }
 }
+
+// ── Single message processor ───────────────────────────────────────────────
 
 /**
- * Handle a batch of order ingest messages.
- * This aggregates all orders in the batch and performs a single db.batch()
- */
-async function handleOrderIngestBatch(
-  batch: MessageBatch<OrderIngestQueueMessage>,
-  db: ReturnType<typeof getDb>,
-  env: Env
-): Promise<void> {
-  if (batch.messages.length === 0) return;
-  console.log(`[Queue] Processing ORDER_INGEST_QUEUE batch of ${batch.messages.length} messages`);
-
-  const writeBatch: any[] = [];
-  const reservationEntries: { variantId: string; quantity: number; pool: "regular" | "preorder" | "backorder" }[] = [];
-  const orderIdsForReservation: string[] = [];
-
-  // Arrays to keep track of message status
-  const successMessages: Message<OrderIngestQueueMessage>[] = [];
-  const failedMessages: { msg: Message<OrderIngestQueueMessage>; reason: string }[] = [];
-
-  for (const msg of batch.messages) {
-    const payload = msg.body;
-    try {
-      let customerId = payload.existingCustomer?.id;
-
-      // Accumulate reservation entries
-      const orderReservationEntries = payload.items
-        .filter((item: any) => item.variantId !== null)
-        .map((item: any) => ({
-          variantId: item.variantId as string,
-          quantity: item.quantity,
-          pool: payload.orderData.inventoryPool as "regular" | "preorder" | "backorder",
-        }));
-
-      if (orderReservationEntries.length > 0) {
-        reservationEntries.push(...orderReservationEntries);
-        // We use the first order ID for the reservation log, or pass null
-        orderIdsForReservation.push(payload.orderData.id);
-      }
-
-      // Customer
-      if (!customerId) {
-        customerId = "cust_" + nanoid();
-        writeBatch.push(
-          db.insert(customers).values({
-            id: customerId,
-            name: payload.orderData.customerName,
-            phone: payload.orderData.customerPhone,
-            email: payload.orderData.customerEmail,
-            address: payload.orderData.shippingAddress,
-            city: payload.orderData.city,
-            zone: payload.orderData.zone,
-            area: payload.orderData.area,
-            cityName: payload.orderData.cityName,
-            zoneName: payload.orderData.zoneName,
-            areaName: payload.orderData.areaName,
-            totalOrders: 1,
-            totalSpent: payload.orderData.totalAmount,
-            lastOrderAt: sql`unixepoch()`,
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-          })
-        );
-        writeBatch.push(
-          db.insert(customerHistory).values({
-            id: "hist_" + nanoid(),
-            customerId: customerId,
-            name: payload.orderData.customerName,
-            email: payload.orderData.customerEmail,
-            phone: payload.orderData.customerPhone,
-            address: payload.orderData.shippingAddress,
-            city: payload.orderData.city,
-            zone: payload.orderData.zone,
-            area: payload.orderData.area,
-            cityName: payload.orderData.cityName,
-            zoneName: payload.orderData.zoneName,
-            areaName: payload.orderData.areaName,
-            changeType: "created",
-            createdAt: sql`unixepoch()`,
-          })
-        );
-      } else {
-        writeBatch.push(
-          db.update(customers).set({
-            totalOrders: sql`${customers.totalOrders} + 1`,
-            totalSpent: sql`${customers.totalSpent} + ${payload.orderData.totalAmount}`,
-            lastOrderAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-          }).where(eq(customers.id, customerId))
-        );
-      }
-
-      // Order
-      writeBatch.push(db.insert(orders).values({
-        ...payload.orderData,
-        customerId,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      }));
-
-      // Items
-      if (payload.items.length > 0) {
-        writeBatch.push(
-          db.insert(orderItems).values(
-            payload.items.map((item: any) => ({
-              id: "item_" + nanoid(),
-              orderId: payload.orderData.id,
-              productId: item.productId,
-              variantId: item.variantId,
-              quantity: item.quantity,
-              price: item.price,
-              productName: item.productName,
-              variantLabel: item.variantLabel,
-              fulfillmentStatus: "pending" as const,
-              createdAt: sql`unixepoch()`,
-            }))
-          )
-        );
-      }
-
-      // Discount
-      if (payload.discountUsage) {
-        writeBatch.push(
-          db.insert(discountUsage).values({
-            id: "du_" + nanoid(),
-            discountId: payload.discountUsage.discountId,
-            orderId: payload.orderData.id,
-            customerId: customerId,
-            amountDiscounted: payload.discountUsage.amountDiscounted,
-            createdAt: sql`unixepoch()`,
-          })
-        );
-      }
-
-      successMessages.push(msg);
-
-    } catch (e) {
-      console.error(`[Queue] Error preparing order ${payload.orderData.id}:`, e);
-      failedMessages.push({ msg, reason: String(e) });
-    }
-  }
-
-  console.log(`[Queue] Prepped ${writeBatch.length} statements for ${successMessages.length} successful orders`);
-
-  // 1. Run Reservations for the entire batch
-  if (reservationEntries.length > 0) {
-    console.log(`[Queue] Running reserveMultiple for ${reservationEntries.length} entries`);
-    const reserveResult = await reserveMultiple(db, reservationEntries, orderIdsForReservation[0] || "batch");
-    if (!reserveResult.success) {
-      console.error("[Queue] Batched reservation failed:", reserveResult.results);
-      // Hard fail the entire batch to retry
-      for (const msg of batch.messages) {
-        await setCheckoutStatus(env, msg.body.checkoutToken, "failed", "Insufficient stock preventing batch ingestion.");
-        msg.retry({ delaySeconds: 15 });
-      }
-      return;
-    }
-    console.log(`[Queue] reserveMultiple completed successfully`);
-  }
-
-  // 2. Execute DB Batch Write
-  try {
-    console.log(`[Queue] Calling db.batch() with ${writeBatch.length} queries`);
-    if (writeBatch.length > 0) {
-      await db.batch(writeBatch as any);
-    }
-    console.log(`[Queue] db.batch() completed successfully`);
-
-    // 3. Mark success
-    for (const msg of successMessages) {
-      const payload = msg.body;
-
-      // Initialize COD tracking if necessary
-      if (payload.orderData.paymentMethod === "cod") {
-        await initCODTracking(db, { orderId: payload.orderData.id }).catch((err) =>
-          console.error("[Queue] COD tracking init failed for order", payload.orderData.id, err)
-        );
-      }
-
-      await setCheckoutStatus(env, payload.checkoutToken, "completed");
-      msg.ack();
-      console.log(`[Queue] Acked order ${payload.orderData.id}`);
-    }
-
-    // Handle individual prep failures
-    for (const failed of failedMessages) {
-      console.log(`[Queue] Failing individual prep for ${failed.msg.body.checkoutToken}`);
-      await setCheckoutStatus(env, failed.msg.body.checkoutToken, "failed", failed.reason);
-      failed.msg.retry({ delaySeconds: 30 });
-    }
-
-    console.log(`[Queue] Batch processing completely finished`);
-
-  } catch (batchError) {
-    console.error("[Queue] Order ingest DB batch failed WITH EXCEPTION:", batchError);
-    // 4. Rollback
-    if (reservationEntries.length > 0) {
-      console.log(`[Queue] Rolling back inventory...`);
-      await releaseMultiple(db, reservationEntries, orderIdsForReservation[0] || "batch").catch(releaseErr =>
-        console.error("[Queue] Rollback release failed:", releaseErr)
-      );
-    }
-
-    // Retry everything
-    for (const msg of batch.messages) {
-      await setCheckoutStatus(env, msg.body.checkoutToken, "failed", "Database write error during heavy traffic. Retrying.");
-      msg.retry({ delaySeconds: 15 });
-    }
-  }
-}
-
-async function setCheckoutStatus(env: Env, token: string, status: "processing" | "completed" | "failed", error?: string) {
-  if (!env.CACHE) {
-    console.warn(`[Queue] CACHE not bound when trying to set status to ${status}`);
-    return;
-  }
-  const kvKey = `checkout_status:${token}`;
-  console.log(`[Queue] Writing ${status} to KV ${kvKey}`);
-
-  try {
-    // Get existing to preserve orderId
-    const existingStr = await env.CACHE.get(kvKey);
-    const existing = existingStr ? JSON.parse(existingStr) : {};
-
-    await env.CACHE.put(
-      kvKey,
-      JSON.stringify({ ...existing, status, error, updatedAt: Date.now() }),
-      { expirationTtl: 86400 } // Keep final status for 24h
-    );
-    console.log(`[Queue] Successfully wrote ${status} to KV`);
-  } catch (kvErr) {
-    console.error(`[Queue] Failed to write KV status ${status}:`, kvErr);
-  }
-}
-
-/**
- * Process a single queue message.
+ * Process a single payment, notification, or OTP queue message.
  */
 async function processQueueMessage(
   msg: Message<PaymentQueueMessage | AuthOtpQueueMessage>,
@@ -399,6 +160,9 @@ async function processQueueMessage(
   console.log(`[Queue] Processing message type=${payload.type} id=${msg.id}`);
 
   switch (payload.type) {
+    // ── Auth / OTP ─────────────────────────────────────────────────────────
+    // TODO: When SMS providers (Twilio, etc.) are finalized, extract this block
+    //       to src/modules/notifications/otp.handler.ts
     case "auth.send_otp": {
       if (payload.method === "email") {
         await sendEmail({
@@ -425,7 +189,7 @@ async function processQueueMessage(
           method: "POST",
           headers: {
             "Authorization": `Bearer ${payload.waToken}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             messaging_product: "whatsapp",
@@ -436,10 +200,10 @@ async function processQueueMessage(
               language: { code: "en_US" },
               components: [
                 { type: "body", parameters: [{ type: "text", text: payload.code }] },
-                { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: payload.code }] }
-              ]
-            }
-          })
+                { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: payload.code }] },
+              ],
+            },
+          }),
         });
         if (!waRes.ok) {
           const err = await waRes.text();
@@ -447,12 +211,16 @@ async function processQueueMessage(
         }
         console.log(`[Queue] Sent WhatsApp OTP to ${payload.identifier}`);
       } else {
+        // SMS provider logic pending — see TODO above
         console.log(`[Queue] SMS OTP requested to ${payload.identifier}. Provider logic pending.`);
       }
       break;
     }
+
+    // ── Stripe ─────────────────────────────────────────────────────────────
+
     case "payment.stripe.confirmed": {
-      const amountInMajor = payload.amount / 100; // Convert cents to major currency unit
+      const amountInMajor = payload.amount / 100; // cents → major unit
       await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "stripe",
@@ -479,11 +247,13 @@ async function processQueueMessage(
     }
 
     case "payment.stripe.refunded": {
-      // Refunds handled synchronously via the refund endpoint
-      // Queue message is for audit/notification purposes
+      // Refunds are handled synchronously via the refund endpoint.
+      // This message exists for audit / notification purposes.
       console.log(`[Queue] Stripe refund recorded for order ${payload.orderId}`);
       break;
     }
+
+    // ── SSLCommerz ─────────────────────────────────────────────────────────
 
     case "payment.sslcommerz.confirmed": {
       await processPaymentConfirmed(db, {
@@ -506,8 +276,10 @@ async function processQueueMessage(
       break;
     }
 
+    // ── Polar ──────────────────────────────────────────────────────────────
+
     case "payment.polar.confirmed": {
-      const amountInMajor = (payload.amount ?? 0) / 100; // Convert cents to major currency unit
+      const amountInMajor = (payload.amount ?? 0) / 100; // cents → major unit
       await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "polar",
@@ -525,6 +297,8 @@ async function processQueueMessage(
       console.log(`[Queue] Polar payment failed for order ${payload.orderId}`);
       break;
     }
+
+    // ── Order notifications ────────────────────────────────────────────────
 
     case "order.notification": {
       if (payload.customerEmail) {
@@ -544,6 +318,3 @@ async function processQueueMessage(
     }
   }
 }
-
-
-// (sendOrderNotificationEmail is now in src/modules/notifications/notifications.service.ts)
