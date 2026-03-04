@@ -359,9 +359,9 @@ app.post("/2fa/verify", zValidator("json", z.object({ code: z.string(), trustDev
 
 // We define a separate standalone router for unauthenticated routes like `/setup`
 const setupApp = new Hono<{
+    Bindings: Env;
     Variables: {
         db: any;
-        env: any;
     };
 }>();
 
@@ -371,10 +371,10 @@ const setupSchema = z.object({
     password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
-setupApp.post("/setup", zValidator("json", setupSchema), async (c) => {
+setupApp.post("/", zValidator("json", setupSchema), async (c) => {
     try {
         const db = c.get("db");
-        const env = c.get("env") || process.env;
+        const env = c.env;
         const auth = createAuth(env);
 
         // SECURITY CHECK: Only allow setup when NO admin users exist
@@ -393,7 +393,11 @@ setupApp.post("/setup", zValidator("json", setupSchema), async (c) => {
             return c.json({ error: "Failed to create account", message: "Could not create user account" }, 500);
         }
 
-        await db.update(user).set({ role: "admin", emailVerified: true }).where(eq(user.id, signUpResult.user.id));
+        await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));
+
+        // Seed RBAC permissions and roles so the dashboard works immediately
+        const { autoSeedRbacIfNeeded } = await import("@/lib/rbac/auto-seed");
+        await autoSeedRbacIfNeeded(db);
 
         return c.json({ success: true, message: "Admin account created successfully", userId: signUpResult.user.id }, 201);
     } catch (error: any) {

@@ -6,6 +6,7 @@ import {
   getUserPermissions,
   isSuperAdmin,
 } from "@/lib/rbac/helpers";
+import { autoSeedRbacIfNeeded } from "@/lib/rbac/auto-seed";
 import { getRoutePermission } from "@/lib/rbac/route-permissions";
 import { hasPageAccess } from "@/lib/rbac/page-permissions";
 
@@ -157,6 +158,9 @@ const authMiddleware = defineMiddleware(async (context, next) => {
       const { getDb } = await import("@/db");
       const db = getDb(env);
       const kv = env.CACHE as KVNamespace | undefined; // Get KV namespace
+
+      // Ensure RBAC permissions/roles exist (no-op after first call per isolate)
+      await autoSeedRbacIfNeeded(db);
 
       // Passing kv down enables instantaneous KV lookup (bypass D1 table joins)
       const userPermissions = await getUserPermissions(db, sessionUser.id, kv);
