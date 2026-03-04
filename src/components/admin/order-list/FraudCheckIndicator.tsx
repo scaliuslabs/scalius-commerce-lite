@@ -22,7 +22,7 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
   const handleCheck = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/fraud-checker/lookup", {
+      const response = await fetch("/api/v1/admin/fraud-checker/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
@@ -155,13 +155,12 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
                   </div>
                   <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div
-                      className={`h-full ${
-                        ((fraudData.total_delivered / fraudData.total_parcels) * 100) >= 80
+                      className={`h-full ${((fraudData.total_delivered / fraudData.total_parcels) * 100) >= 80
                           ? "bg-green-500"
                           : ((fraudData.total_delivered / fraudData.total_parcels) * 100) >= 50
                             ? "bg-yellow-500"
                             : "bg-red-500"
-                      }`}
+                        }`}
                       style={{
                         width: `${(fraudData.total_delivered / fraudData.total_parcels) * 100}%`,
                       }}

@@ -78,7 +78,7 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
   const handleDelete = async (id: string) => {
     try {
       setIsDeleting(true);
-      const response = await fetch(`/api/analytics/${id}`, {
+      const response = await fetch(`/api/v1/admin/analytics/${id}`, {
         method: "DELETE",
       });
 
@@ -98,7 +98,7 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      const response = await fetch(`/api/analytics/${id}/toggle`, {
+      const response = await fetch(`/api/v1/admin/analytics/${id}/toggle`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
