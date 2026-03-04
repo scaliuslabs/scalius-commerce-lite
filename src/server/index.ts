@@ -165,12 +165,7 @@ app.route("/pages", pagesRoutes);
 app.route("/discounts", discountRoutes);
 app.route("/widgets", widgetRoutes);
 app.route("/analytics", analyticsRoutes);
-app.route("/locations", locationRoutes);
-app.route("/shipping-methods", shippingMethodRoutes);
-app.route("/seo", seoRoutes);
-app.route("/checkout-languages", checkoutLanguageRoutes);
-app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
-app.route("/admin/settings/meta-conversions", metaConversionsRoutes);
+app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
 app.route("/checkout", checkoutRoutes);
 app.route("/customer-auth", customerAuthRoutes);
@@ -259,6 +254,9 @@ app.route("/admin/openrouter", adminOpenRouterRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);
 // Mount system utils directly under /admin since they include /abandoned-checkouts and /fcm-token
 app.route("/admin", adminSystemUtilsRoutes);
+app.route("/admin/settings/delivery-locations", locationRoutes);
+app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
+app.route("/admin/settings/abandoned-checkouts", abandonedCheckoutsRoutes);
 
 // Setup routes - bypassing normal auth rules, used only during initial deployment
 app.route("/setup", authSetupRoutes);

@@ -21,7 +21,7 @@ async function fetchStorefrontUrl(): Promise<string> {
   }
 
   // Create new promise
-  globalPromise = fetch("/api/settings/storefront-url")
+  globalPromise = fetch("/api/v1/admin/settings/storefront-url")
     .then((response) => {
       if (!response.ok) {
         throw new Error("Failed to fetch storefront URL");
