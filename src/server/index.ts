@@ -27,7 +27,7 @@ import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
 import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
 import { authMiddleware } from "./middleware/auth";
 import { adminAuthMiddleware } from "./middleware/admin-auth";
-import { locationRoutes } from "./routes/locations";
+import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { discountRoutes } from "./routes/discounts";
 import { widgetRoutes } from "./routes/widgets";
 import { analyticsRoutes } from "./routes/analytics";
@@ -254,7 +254,7 @@ app.route("/admin/openrouter", adminOpenRouterRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);
 // Mount system utils directly under /admin since they include /abandoned-checkouts and /fcm-token
 app.route("/admin", adminSystemUtilsRoutes);
-app.route("/admin/settings/delivery-locations", locationRoutes);
+app.route("/admin/settings/delivery-locations", adminLocationRoutes);
 app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
 app.route("/admin/settings/abandoned-checkouts", abandonedCheckoutsRoutes);
 
