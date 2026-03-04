@@ -54,15 +54,14 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 ### What's in this repo
 
 - **Admin dashboard (UI)**: `src/pages/admin/**` (Astro pages) + `src/components/admin/**` (React components).
-- **Admin CRUD APIs (Astro API routes)**: `src/pages/api/**` (file-based endpoints, protected by Better Auth via `src/middleware.ts`).
-- **Storefront API (Hono)**: `src/server/**` (Hono app + routes), mounted at `/api/v1/**` via the custom Astro integration in `src/integrations/hono-integration.ts`.
+- **Backend API (Unified Hono)**: `src/server/**` (Hono app + routes), mounted at `/api/v1/**` via the custom Astro integration in `src/integrations/hono-integration.ts`. Handles both Admin CRUD operations (`/api/v1/admin/**`) and Storefront endpoints.
+- **Domain Modules**: `src/modules/**` - Domain-Driven Design service classes containing the core business logic, decoupled from the HTTP routing layer.
 - **Database (Drizzle + D1)**: schema split across 11 domain files in `src/db/schema/` (barrel: `src/db/schema/index.ts`), connection in `src/db/index.ts`, migrations in `migrations/**`.
 
 ### Key URLs
 
 - **Admin UI**: `/admin`
-- **Admin API (Astro endpoints)**: `/api/**`
-- **Storefront API (Hono)**: `/api/v1/**`
+- **Unified API (Hono)**: `/api/v1/**` (Includes `/api/v1/admin/**` for dashboard operations)
 - **Swagger UI**: `/api/v1/docs`
 - **OpenAPI JSON**: `/api/v1/openapi.json`
 - **Health**: `/health` (Astro) and `/api/v1/health` (Hono)
@@ -99,17 +98,16 @@ flowchart TB
     subgraph Admin [Admin Dashboard]
         AdminPages[Astro Pages /admin]
         AdminComponents[React Components]
-        AdminAPI[Astro API Routes /api/*]
     end
 
     subgraph Storefront [Storefront]
         StorefrontPages[Astro/React Pages]
-        StorefrontAPI[Direct fetch to /api/v1]
     end
 
-    subgraph Backend [Backend - Cloudflare Worker]
+    subgraph Backend [Unified Backend - Hono Worker]
         HonoApp[Hono App /api/v1/*]
         AstroIntegration[hono-integration.ts]
+        DomainModules[Domain Services src/modules]
         QueueConsumer[Queue Consumer]
     end
 
@@ -121,45 +119,39 @@ flowchart TB
 
     subgraph Data [Data Layer]
         D1[(Cloudflare D1)]
-        KV[(KV Cache/Session)]
+        KV[(KV Cache/Session/RBAC)]
         R2[(R2 Media)]
     end
 
-    AdminPages --> AdminAPI
-    AdminComponents --> AdminAPI
-    AdminAPI --> D1
-    AdminAPI -->|Cache invalidation| KV
-    StorefrontPages --> StorefrontAPI
-    StorefrontAPI --> HonoApp
+    AdminPages -->|HTTP/Fetch| HonoApp
+    AdminComponents -->|HTTP/Fetch| HonoApp
+    StorefrontPages -->|Service Binding| HonoApp
     AstroIntegration --> HonoApp
-    HonoApp --> D1
-    HonoApp --> KV
-    HonoApp --> R2
-    HonoApp -->|Enqueue jobs| Queues
+    HonoApp --> DomainModules
+    DomainModules --> D1
+    HonoApp -->|Cache & Auth| KV
+    DomainModules --> R2
+    DomainModules -->|Enqueue jobs| Queues
     Queues -->|Consume batches| QueueConsumer
-    QueueConsumer --> D1
+    QueueConsumer --> DomainModules
 ```
 
 #### Admin (Astro pages + React)
 
 - Admin pages live in `src/pages/admin/**` and render through `src/layouts/AdminLayout.astro`.
 - Most interactive UI is React (hydrated with `client:*` directives).
-- Authentication is enforced by `src/middleware.ts` using Better Auth with mandatory two-factor authentication.
+- Authentication and incredibly fast KV-backed RBAC caching are enforced by `src/middleware.ts` before pages render.
 
-#### Admin CRUD APIs (Astro API routes)
-
-- Admin CRUD endpoints are Astro API routes under `src/pages/api/**` (e.g. products, categories, collections, orders, media, widgets, settings).
-- These routes use Drizzle (`src/db`) for reads/writes and are protected by middleware route matching (see `isProtectedApiRoute` in `src/middleware.ts`).
-
-#### Storefront API (Hono)
+#### Unified API + Domain Modules (Hono)
 
 - Hono app entry: `src/server/index.ts`
 - Astro integration injects `/api/v1/[...slug]` and forwards requests to Hono via `src/server/astro-handler.ts`.
-- Route handlers live in `src/server/routes/**`.
+- The HTTP routing layer (`src/server/routes/**`) is kept extremely thin. It handles request validation, auth checks, and immediately delegates to Domain Services.
+- **Domain-Driven Design (DDD)**: Actual business logic lives in `src/modules/**` (e.g., `products.service.ts`, `orders.service.ts`). These services expect a D1 database instance injection, making them highly testable, modular, and LLM-friendly.
+- Admin APIs live at `/api/v1/admin/**` and storefront APIs live elsewhere under `/api/v1/`.
 - API docs:
   - Swagger UI is served at `/api/v1/docs`
   - OpenAPI spec is served at `/api/v1/openapi.json`
-  - The OpenAPI spec is manually maintained and may lag behind route changes. Use the live API for authoritative behavior.
 
 ### Project structure (high level)
 
@@ -167,7 +159,6 @@ flowchart TB
 src/
   pages/
     admin/               # Admin dashboard pages (Astro)
-    api/                 # Admin CRUD endpoints (Astro API routes)
     auth/                # Auth pages (login, setup, 2FA)
     health.ts
   components/
@@ -175,9 +166,11 @@ src/
     auth/                # Auth React components
     ui/                  # shadcn/ui components
   server/
-    index.ts             # Hono app (storefront API)
+    index.ts             # Hono app (Unified API initialization)
     astro-handler.ts     # Astro → Hono bridge for /api/v1/*
-    routes/              # Hono route modules
+    routes/              # Hono route modules (thin HTTP layer)
+      admin/             # Admin API endpoints
+      ...                # Storefront API endpoints
     middleware/          # Hono middleware (auth + caching)
     openapi/             # OpenAPI spec builder
     utils/               # KV cache / JWT helpers
@@ -435,23 +428,18 @@ This project uses [Better Auth](https://better-auth.com) for authentication with
 
 ### API usage
 
-#### Admin API (Astro) — `/api/**`
+The legacy Astro endpoints (`src/pages/api/`) have been fully migrated into a highly performant, unified Hono application under `/api/v1/`.
 
-- Source: `src/pages/api/**`
-- Auth: protected by Better Auth middleware in `src/middleware.ts`
-- Example: products CRUD lives in:
-  - `src/pages/api/products/index.ts` (`GET`, `POST`)
-  - `src/pages/api/products/[id].ts` (`PUT`, `DELETE`)
+#### Unified Hono API — `/api/v1/**`
 
-#### Storefront API (Hono) — `/api/v1/**`
-
-- Source: `src/server/**`
-- Docs: `/api/v1/docs` and `/api/v1/openapi.json`
-- CORS: configured in `src/server/index.ts` using `src/shared/cors-helper.ts`
-- Caching: many GET routes use `cacheMiddleware` (`src/server/middleware/cache.ts`)
-- Public vs protected:
-  - **Public (no JWT)**: most read-only storefront data (products, categories, collections, pages, layout data, etc.)
-  - **Protected (JWT required)**: `/api/v1/orders/**` and `/api/v1/cache/**`
+- **Source Code**: `src/server/routes/**` (HTTP layer) delegating to `src/modules/**` (Business Logic)
+- **Docs**: `/api/v1/docs` and `/api/v1/openapi.json`
+- **CORS**: configured in `src/server/index.ts` using `src/shared/cors-helper.ts`
+- **Caching**: many GET routes use `cacheMiddleware` (`src/server/middleware/cache.ts`) for extremely low latency.
+- **Namespacing**:
+  - **Admin Restricted routes (JWT/Session + RBAC required)**: `/api/v1/admin/**` (e.g., managing inventory, products, orders).
+  - **Storefront Protected routes (JWT required)**: `/api/v1/orders/**` and `/api/v1/cache/**`
+  - **Storefront Public routes (No JWT)**: most read-only storefront data under `/api/v1/` (e.g., standard product fetching, categories, layout data).
 
 ##### Storefront "single-call" endpoints
 
@@ -484,12 +472,12 @@ curl -sS \
 
 There are two complementary mechanisms:
 
-- **Hono-side invalidation for Hono writes**: `src/server/astro-handler.ts` can invalidate related cache keys after successful `/api/v1` write requests.
-- **Admin-side invalidation for Astro admin writes**: `src/lib/middleware-helper/hono-cache-invalidator.ts` (remains in `src/lib/` — it is middleware infrastructure) watches successful writes to admin endpoints like `/api/products`, `/api/categories`, `/api/collections`, etc. and triggers:
+- **Module-level invalidation**: Domain services (`src/modules/**`) can invalidate specific cache keys after successful write operations.
+- **Middleware-level invalidation**: `src/lib/middleware-helper/hono-cache-invalidator.ts` watches successful writes to admin endpoints (like `/api/v1/admin/products`, `/api/v1/admin/categories`, etc.) and triggers:
   - backend KV cache invalidation
   - optional external storefront purge (if `PURGE_URL` + `PURGE_TOKEN` are set)
 
-In Cloudflare Workers, invalidations are scheduled via `ctx.waitUntil()` when available (see `src/middleware.ts`).
+In Cloudflare Workers, invalidations are scheduled via `ctx.waitUntil()` when available to prevent blocking the response.
 
 ### Media uploads (R2)
 
@@ -564,7 +552,6 @@ This runs `scripts/deploy.mjs` which handles building, migrations, and deploying
 
 - **`/api/v1/auth/test`**: Debug endpoint in `src/server/routes/auth.ts`; consider removing for production.
 - **OpenAPI spec**: Manually maintained in `src/server/openapi/`; may not match all Hono routes.
-- **Legacy migration**: `migrations/migrate-collections-data.ts` uses Turso/libSQL for one-off data migration only; the live database is Cloudflare D1.
 
 ### Troubleshooting
 
