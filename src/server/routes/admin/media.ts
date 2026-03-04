@@ -27,7 +27,7 @@ app.get("/", async (c) => {
 // POST - Upload media
 app.post("/upload", async (c) => {
     const db = c.get("db");
-    const body = await c.req.parseBody();
+    const body = await c.req.parseBody({ all: true });
 
     // parseBody handles multipart/form-data
     let files: any = body["files"];
