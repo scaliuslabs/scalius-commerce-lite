@@ -683,58 +683,46 @@ const storefrontUrl = await getSidebarStorefrontUrl();
       const href = link.getAttribute("data-sidebar-item-href");
       const isActive = href ? isPrefixPathMatch(href) : false;
       link.classList.toggle("is-active", isActive);
-      if (isActive) {
-        link.setAttribute("aria-current", "page");
-      } else {
-        link.removeAttribute("aria-current");
-      }
+      isActive ? link.setAttribute("aria-current", "page") : link.removeAttribute("aria-current");
     });
 
     document.querySelectorAll("[data-sidebar-subitem]").forEach((link) => {
       const href = link.getAttribute("data-sidebar-item-href");
       const isActive = href ? isExactPathMatch(href) : false;
       link.classList.toggle("is-active", isActive);
-      if (isActive) {
-        link.setAttribute("aria-current", "page");
-      } else {
-        link.removeAttribute("aria-current");
-      }
+      isActive ? link.setAttribute("aria-current", "page") : link.removeAttribute("aria-current");
     });
 
     document.querySelectorAll("[data-sidebar-parent]").forEach((toggleButton) => {
       const isActive = isParentItemActive(toggleButton);
       toggleButton.classList.toggle("is-active", isActive);
+      // Auto-close submenu when navigating away from its section
+      if (!isActive) {
+        setSubmenuOpen(toggleButton, false, false);
+      }
     });
   }
 
   function revealSettingsSubmenu(toggleButton) {
     const sidebarNavEl = getSidebarNav();
     const submenu = getSubmenuContainer(toggleButton);
-    const lastSubItem = submenu?.lastElementChild;
 
-    if (
-      !sidebarNavEl ||
-      !submenu ||
-      !lastSubItem ||
-      !toggleButton.closest("#desktop-sidebar")
-    ) {
-      return;
-    }
+    if (!sidebarNavEl || !submenu || !toggleButton.closest("#desktop-sidebar")) return;
 
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const navRect = sidebarNavEl.getBoundingClientRect();
-        const itemRect = lastSubItem.getBoundingClientRect();
-        const bottomPadding = 16;
-
-        if (itemRect.bottom > navRect.bottom - bottomPadding) {
-          sidebarNavEl.scrollBy({
-            top: itemRect.bottom - (navRect.bottom - bottomPadding),
-            behavior: "smooth",
-          });
-        }
-      });
-    });
+    // Wait for the max-height CSS transition (350ms) to finish before measuring
+    window.setTimeout(() => {
+      const lastSubItem = submenu.lastElementChild;
+      if (!lastSubItem) return;
+      const navRect = sidebarNavEl.getBoundingClientRect();
+      const itemRect = lastSubItem.getBoundingClientRect();
+      const bottomPadding = 16;
+      if (itemRect.bottom > navRect.bottom - bottomPadding) {
+        sidebarNavEl.scrollBy({
+          top: itemRect.bottom - (navRect.bottom - bottomPadding),
+          behavior: "smooth",
+        });
+      }
+    }, 360);
   }
 
   function bindSubmenuToggleHandlers(rootElement) {
