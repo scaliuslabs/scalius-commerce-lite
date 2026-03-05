@@ -704,24 +704,24 @@ export function DiscountList({
           ? `/api/v1/admin/discounts/bulk-restore`
           : `/api/v1/admin/discounts/bulk-delete`,
         {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          discountIds: idsToDelete,
-          ...(bulkActionConfirmation === "delete"
-            ? { permanent: showTrashed }
-            : {}),
-        }),
-      },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            discountIds: idsToDelete,
+            ...(bulkActionConfirmation === "delete"
+              ? { permanent: showTrashed }
+              : {}),
+          }),
+        },
       );
 
       if (!response.ok) {
         const error = await response.json();
         throw new Error(
           error.error ||
-            (bulkActionConfirmation === "restore"
-              ? "Failed to restore discounts"
-              : "Failed to delete discounts"),
+          (bulkActionConfirmation === "restore"
+            ? "Failed to restore discounts"
+            : "Failed to delete discounts"),
         );
       }
 
@@ -910,7 +910,7 @@ export function DiscountList({
   );
 
   return (
-    <Card className="overflow-hidden border border-gray-100/50 bg-white/50 shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-gray-200/50 hover:shadow-md dark:bg-gray-900/50 dark:border-gray-800/50 dark:hover:border-gray-700/50">
+    <Card className="overflow-hidden border border-border bg-card shadow-sm transition-all duration-300 hover:border-border hover:shadow-md">
       <CardHeader className="space-y-1.5 pb-6">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
