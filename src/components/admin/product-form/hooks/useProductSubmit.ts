@@ -4,6 +4,7 @@ import type { UseFormReturn } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
 import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission } from "../utils";
+import { navigateTo } from "@/lib/client/navigate";
 
 interface UseProductSubmitOptions {
   isEdit: boolean;
@@ -110,7 +111,7 @@ export function useProductSubmit({
         onSuccess();
       } else if (!isEdit) {
         // For new products, redirect to edit page with the new product ID
-        window.location.href = `/admin/products/${data.id}/edit?new=true`;
+        await navigateTo(`/admin/products/${data.id}/edit?new=true`);
       }
     } catch (error) {
       console.error("Error submitting form:", error);
