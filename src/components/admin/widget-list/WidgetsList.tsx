@@ -23,6 +23,7 @@ import {
   WidgetDeleteDialog,
   BulkActionDialog,
 } from "./components";
+import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 import type {
   WidgetsManagerProps,
   WidgetItem,
@@ -53,6 +54,8 @@ export function WidgetsList({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [openRouterApiKey, setOpenRouterApiKey] = useState("");
   const [isSavingKey, setIsSavingKey] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Custom hooks
   const {
@@ -70,6 +73,13 @@ export function WidgetsList({
         widget.name.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     : allWidgets;
+
+  const totalPages = Math.max(1, Math.ceil(widgets.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedWidgets = widgets.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  );
 
   const {
     savingStates,
@@ -98,6 +108,16 @@ export function WidgetsList({
         .catch(() => {});
     }
   }, [isSettingsOpen]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, showTrashed]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleSaveApiKey = async () => {
     setIsSavingKey(true);
@@ -186,7 +206,7 @@ export function WidgetsList({
         </CardHeader>
         <CardContent className="p-0">
           <WidgetTable
-            widgets={widgets}
+            widgets={paginatedWidgets}
             collections={collections}
             selectedIds={selectedIds}
             savingStates={savingStates}
@@ -198,10 +218,28 @@ export function WidgetsList({
             onDelete={(id, name) => setDeleteDialog({ id, name })}
             onRestore={handleRestore}
             onToggleSelection={toggleSelection}
-            onToggleSelectAll={() => toggleSelectAll(widgets.map((w) => w.id))}
+            onToggleSelectAll={() =>
+              toggleSelectAll(paginatedWidgets.map((w) => w.id))
+            }
             onCreateClick={handleCreateClick}
             onCopyShortcode={handleCopyShortcode}
           />
+          {widgets.length > 0 && (
+            <AdminListPagination
+              pagination={{
+                total: widgets.length,
+                page: safePage,
+                limit: pageSize,
+                totalPages,
+              }}
+              itemLabel="widgets"
+              onPageChange={setCurrentPage}
+              onLimitChange={(nextLimit) => {
+                setPageSize(nextLimit);
+                setCurrentPage(1);
+              }}
+            />
+          )}
         </CardContent>
       </Card>
 

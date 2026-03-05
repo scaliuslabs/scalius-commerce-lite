@@ -21,11 +21,13 @@ export function useBulkActions(onRefresh: () => void) {
         deactivate: "/api/v1/admin/collections/bulk-deactivate",
       };
 
-      let body: any = { collectionIds: Array.from(selectedIds) };
+      const selected = Array.from(selectedIds);
+      const body: Record<string, unknown> =
+        action === "trash" || action === "delete"
+          ? { collectionIds: selected }
+          : { ids: selected };
 
-      if (action === "delete") {
-        body.permanent = true;
-      }
+      if (action === "delete") body.permanent = true;
 
       try {
         const response = await fetch(endpointMap[action], {

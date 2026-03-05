@@ -23,11 +23,13 @@ export function useBulkActions(
         unpublish: "/api/v1/admin/pages/bulk-unpublish",
       };
 
-      let body: any = { pageIds: Array.from(selectedIds) };
+      const selected = Array.from(selectedIds);
+      const body: Record<string, unknown> =
+        action === "trash" || action === "delete"
+          ? { pageIds: selected }
+          : { ids: selected };
 
-      if (action === "delete") {
-        body.permanent = true;
-      }
+      if (action === "delete") body.permanent = true;
 
       try {
         const response = await fetch(endpointMap[action], {
