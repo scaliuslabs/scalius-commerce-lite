@@ -43,7 +43,6 @@ import SideBar from "@/components/admin/adminLayout/SideBar.astro";
 import { generateAdminBreadcrumbs } from "@/lib/adminBreadCrumb";
 import favicon from "@/assets/favicon.png";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
-import { getAdminLayoutFirebaseConfig } from "@/server/loaders/admin/layout";
 
 interface Props {
   title: string;
@@ -62,20 +61,6 @@ const session = Astro.locals.session;
 if (!user || !session) {
   return Astro.redirect("/auth/login");
 }
-
-const defaultFirebaseConfig = {
-  apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY,
-  authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.PUBLIC_FIREBASE_APP_ID,
-  measurementId: import.meta.env.PUBLIC_FIREBASE_MEASUREMENT_ID,
-  vapidKey: import.meta.env.PUBLIC_VAPID_FIREBASE,
-};
-
-const firebaseConfig = await getAdminLayoutFirebaseConfig(defaultFirebaseConfig);
-
 // Generate breadcrumb items using helper function
 const breadcrumbItems = generateAdminBreadcrumbs(currentPath);
 
@@ -102,13 +87,13 @@ interface NavSection {
 
 // Prepare user data for UserMenu component
 const userData = {
-  id: user.id,
-  name: user.name,
-  email: user.email,
-  image: user.image,
-  role: user.role,
-  twoFactorEnabled: user.twoFactorEnabled,
-  isSuperAdmin: (user as any).isSuperAdmin ?? false,
+  id: user!.id,
+  name: user!.name,
+  email: user!.email,
+  image: user!.image,
+  role: user!.role,
+  twoFactorEnabled: user!.twoFactorEnabled,
+  isSuperAdmin: (user as any)!.isSuperAdmin ?? false, 
 };
 
 // Get user permissions from middleware
@@ -265,14 +250,22 @@ const navSections: NavSection[] = allNavSections
     <ClientRouter />
     <script is:inline>
       (function() {
-        var theme = "light";
-        try { theme = localStorage.getItem("theme") || "light"; } catch(e) {}
-        if (theme === "dark") {
-          document.documentElement.classList.add("dark");
-        } else {
-          document.documentElement.classList.remove("dark");
+        function applyTheme() {
+          var theme = "light";
+          try { theme = localStorage.getItem("theme") || "light"; } catch(e) {}
+          if (theme === "dark") {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+          document.documentElement.style.colorScheme = theme;
         }
-        document.documentElement.style.colorScheme = theme;
+        
+        // Execute immediately on initial load
+        applyTheme();
+        
+        // Ensure theme persists across Astro View Transitions
+        document.addEventListener("astro:after-swap", applyTheme);
       })();
     </script>
     <link rel="icon" type="image/png" href={favicon.src} />
@@ -283,16 +276,6 @@ const navSections: NavSection[] = allNavSections
     data-current-path={Astro.url.pathname}
     class="bg-background text-foreground transition-colors duration-200"
   >
-    <div id="admin-nav-progress" aria-hidden="true"></div>
-    <div id="admin-nav-overlay" aria-hidden="true">
-      <div id="admin-nav-overlay-card" role="status" aria-live="polite" aria-atomic="true">
-        <span id="admin-nav-spinner" aria-hidden="true"></span>
-        <div class="flex flex-col">
-          <span class="text-sm font-semibold text-foreground">Loading page...</span>
-          <span class="text-xs text-muted-foreground">Preparing the next view</span>
-        </div>
-      </div>
-    </div>
     <div class="flex min-h-screen">
       <SideBar navSections={navSections} currentPath={currentPath} />
 
@@ -341,11 +324,21 @@ const navSections: NavSection[] = allNavSections
 
         <!-- Main content area -->
         <main
-          class="flex-1 p-6 transition-all duration-200"
+          class="flex-1 p-6 transition-all duration-200 relative"
           id="main-content"
           transition:name="admin-main-content"
+          transition:animate="none"
         >
-          <div class="max-w-7xl mx-auto">
+          <!-- Premium Cloudflare-style Spinner -->
+          <div id="admin-nav-spinner-overlay" aria-hidden="true">
+            <div class="sticky-spinner-wrapper">
+              <svg class="cf-spinner" viewBox="0 0 50 50">
+                <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
+              </svg>
+            </div>
+          </div>
+
+          <div class="max-w-7xl mx-auto min-h-[50vh]">
             <slot />
           </div>
         </main>
@@ -356,96 +349,79 @@ const navSections: NavSection[] = allNavSections
     <SonnerToaster richColors closeButton client:idle />
 
     <style is:inline>
-      #admin-nav-progress {
-        position: fixed;
+      #admin-nav-spinner-overlay {
+        position: absolute;
         top: 0;
         left: 0;
-        width: 100%;
-        height: 2px;
-        background: hsl(var(--primary));
+        right: 0;
+        bottom: 0;
+        background: oklch(var(--background) / 0.5);
+        backdrop-filter: blur(3px);
+        z-index: 50;
         opacity: 0;
-        transform: scaleX(0);
-        transform-origin: left;
-        transition: transform 180ms ease, opacity 180ms ease;
-        z-index: 125;
+        visibility: hidden;
         pointer-events: none;
+        transition: opacity 200ms ease, visibility 200ms ease;
       }
 
-      #admin-nav-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 120;
+      .sticky-spinner-wrapper {
+        position: sticky;
+        top: calc(50vh - 24px);
+        transform: translateY(-50%);
+        width: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: hsl(var(--background) / 0.72);
-        backdrop-filter: blur(5px);
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 120ms ease, visibility 120ms linear;
         pointer-events: none;
+        z-index: 51;
       }
 
-      #admin-nav-overlay-card {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        border-radius: 0.9rem;
-        border: 1px solid hsl(var(--border));
-        background: hsl(var(--card) / 0.96);
-        box-shadow: 0 10px 30px hsl(var(--foreground) / 0.14);
-        padding: 0.85rem 1rem;
-        min-width: 260px;
-      }
-
-      #admin-nav-spinner {
-        width: 1.15rem;
-        height: 1.15rem;
-        border: 2px solid hsl(var(--muted-foreground) / 0.3);
-        border-top-color: hsl(var(--primary));
-        border-radius: 9999px;
-        animation: admin-nav-spin 700ms linear infinite;
-      }
-
-      @keyframes admin-nav-spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      html.admin-nav-pending #admin-nav-progress {
-        opacity: 0.9;
-        transform: scaleX(0.2);
-      }
-
-      html.admin-nav-loading #admin-nav-progress {
-        opacity: 1;
-        transform: scaleX(0.82);
-      }
-
-      html.admin-nav-loaded #admin-nav-progress {
-        opacity: 0;
-        transform: scaleX(1);
-        transition: transform 120ms ease, opacity 200ms ease;
-      }
-
-      html.admin-nav-pending #admin-nav-overlay,
-      html.admin-nav-loading #admin-nav-overlay {
+      /* Show the loading UI quickly */
+      html.admin-nav-pending #admin-nav-spinner-overlay,
+      html.admin-nav-loading #admin-nav-spinner-overlay {
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
+        transition: opacity 150ms ease, visibility 0s;
       }
 
-      html.admin-nav-pending,
+      html.admin-nav-loaded #admin-nav-spinner-overlay {
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 150ms ease, visibility 0s linear 150ms;
+      }
+
+      .cf-spinner {
+        animation: cf-rotate 2s linear infinite;
+        width: 48px;
+        height: 48px;
+        filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1));
+      }
+      
+      .cf-spinner .path {
+        stroke: #2563eb; /* Tailwind blue-600 for a consistent premium blue */
+        stroke-linecap: round;
+        animation: cf-dash 1.5s ease-in-out infinite;
+      }
+      
+      @keyframes cf-rotate {
+        100% { transform: rotate(360deg); }
+      }
+      
+      @keyframes cf-dash {
+        0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
+        50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+        100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
+      }
+
       html.admin-nav-pending body,
-      html.admin-nav-loading,
       html.admin-nav-loading body {
         cursor: progress;
       }
 
       html.admin-nav-pending #main-content,
       html.admin-nav-loading #main-content {
-        opacity: 0.8;
+        pointer-events: none; /* Physically prevents double clicks */
       }
     </style>
 
@@ -488,7 +464,7 @@ const navSections: NavSection[] = allNavSections
             root.classList.add("admin-nav-loaded");
             resetTimer = window.setTimeout(() => {
               root.classList.remove("admin-nav-loading", "admin-nav-loaded", "admin-nav-pending");
-            }, 140);
+            }, 450);
           };
 
           const elapsed = navStartAt ? Date.now() - navStartAt : MIN_LOADER_VISIBLE_MS;
@@ -588,9 +564,8 @@ const navSections: NavSection[] = allNavSections
       }
     </script>
 
-    <script is:inline define:vars={{ firebaseConfig, userId: user.id, permissions: permissionsArray, isSuperAdmin: userData.isSuperAdmin }}>
-      // Store config in window for the module script to access
-      window.__FIREBASE_CONFIG__ = firebaseConfig;
+    <script is:inline define:vars={{ userId: user!.id, permissions: permissionsArray, isSuperAdmin: userData.isSuperAdmin }}>
+      // Store user info in window for the module script to access
       window.__USER_ID__ = userId;
       // Store permissions for React components
       window.__USER_PERMISSIONS__ = permissions;
@@ -598,22 +573,27 @@ const navSections: NavSection[] = allNavSections
     </script>
 
     <script>
-      // Lazy-load Firebase notifications - deferred to avoid blocking page load
-      // Uses dynamic import so the ~50KB Firebase SDK only loads after the page is idle
-      function initializeFcmOnClient() {
-        const firebaseConfig = (window as any).__FIREBASE_CONFIG__;
+      // Lazy-load Firebase configurations and notifications - deferred to avoid blocking page load
+      async function initializeFcmOnClient() {
         const userId = (window as any).__USER_ID__;
+        if (!userId) return;
 
-        if (!firebaseConfig || !firebaseConfig.apiKey || !userId) {
-          return;
-        }
+        try {
+          // Fetch the config asynchronously on the client to avoid blocking the initial HTML stream
+          const req = await fetch('/api/v1/auth/firebase-config');
+          if (!req.ok) return;
+          const firebaseConfig = await req.json();
 
-        // Dynamic import - Firebase SDK loaded only when needed
-        import("@/integrations/firebase/client").then(({ initFirebaseClientNotifications }) => {
+          if (!firebaseConfig || !firebaseConfig.apiKey) {
+            return;
+          }
+
+          // Dynamic import - Firebase SDK loaded only when needed
+          const { initFirebaseClientNotifications } = await import("@/integrations/firebase/client");
           initFirebaseClientNotifications(userId, firebaseConfig);
-        }).catch((err) => {
-          console.error("Failed to load Firebase client:", err);
-        });
+        } catch (err) {
+          console.error("Failed to load Firebase client config:", err);
+        }
       }
 
       // Defer Firebase init until browser is idle (or 3s timeout)
