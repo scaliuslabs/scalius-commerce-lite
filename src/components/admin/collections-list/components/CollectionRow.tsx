@@ -196,7 +196,10 @@ export const CollectionRow = forwardRef<
                   asChild
                   title="Edit collection"
                 >
-                  <a href={`/admin/collections/${collection.id}/edit`}>
+                  <a
+                    href={`/admin/collections/${collection.id}/edit`}
+                    data-astro-prefetch="hover"
+                  >
                     <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
                   </a>
                 </Button>

@@ -151,7 +151,7 @@ export function PageTable({
                   </div>
                   {!showTrashed && !searchQuery && (
                     <Button asChild className="mt-2">
-                      <a href="/admin/pages/new">
+                      <a href="/admin/pages/new" data-astro-prefetch="hover">
                         <PlusCircle className="h-4 w-4 mr-2" />
                         Create Page
                       </a>

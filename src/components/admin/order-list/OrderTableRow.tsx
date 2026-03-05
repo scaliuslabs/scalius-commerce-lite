@@ -153,6 +153,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
                 <TooltipTrigger asChild>
                   <a
                     href={`/admin/orders/${order.id}/edit`}
+                    data-astro-prefetch="hover"
                     className="group/link text-sm font-semibold text-[var(--foreground)] transition-all duration-200 hover:text-primary hover:underline"
                   >
                     {order.customerName}
@@ -320,6 +321,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
               <TooltipTrigger asChild>
                 <a
                   href={`/admin/orders/${order.id}`}
+                  data-astro-prefetch="hover"
                   className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)] text-[var(--primary)] transition-all duration-200 hover:bg-[var(--muted)]/80 hover:text-[var(--primary)] hover:scale-105 hover:shadow-sm active:scale-95"
                 >
                   <Eye className="h-4 w-4" />

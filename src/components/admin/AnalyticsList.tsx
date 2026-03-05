@@ -145,7 +145,7 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
           </CardDescription>
         </div>
         <Button asChild>
-          <a href="/admin/analytics/new">
+          <a href="/admin/analytics/new" data-astro-prefetch="hover">
             <Plus className="mr-2 h-4 w-4" />
             Add Script
           </a>
@@ -207,7 +207,10 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
                         )}
                       </Button>
                       <Button variant="outline" size="icon" asChild>
-                        <a href={`/admin/analytics/${script.id}/edit`}>
+                        <a
+                          href={`/admin/analytics/${script.id}/edit`}
+                          data-astro-prefetch="hover"
+                        >
                           <Edit className="h-4 w-4" />
                         </a>
                       </Button>
