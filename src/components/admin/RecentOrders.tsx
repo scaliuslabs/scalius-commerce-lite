@@ -134,7 +134,7 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
             asChild
             className="h-8 gap-1 border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 hover:bg-gray-50 dark:hover:bg-gray-800/60 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 px-3 text-xs font-medium shadow-xs hover:shadow-sm transition-all hover:-translate-y-px active:translate-y-0"
           >
-            <a href="/admin/orders">
+            <a href="/admin/orders" data-astro-prefetch="hover">
               View All
               <ArrowRight className="h-3.5 w-3.5" />
             </a>
@@ -191,7 +191,7 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
                         asChild
                         className="mt-2 h-8 gap-1 border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 px-3 text-xs font-medium shadow-xs hover:shadow-sm transition-all hover:-translate-y-px active:translate-y-0"
                       >
-                        <a href="/admin/products">
+                        <a href="/admin/products" data-astro-prefetch="hover">
                           Manage Products
                           <ArrowRight className="h-3.5 w-3.5" />
                         </a>
@@ -215,6 +215,7 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
                       <TableCell className="py-3.5 px-6 font-medium">
                         <a
                           href={`/admin/orders/${order.id}/`}
+                          data-astro-prefetch="hover"
                           className="group/link inline-flex items-center gap-1.5 text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-primary dark:hover:text-primary-foreground/80 transition-colors"
                         >
                           <span className="font-mono text-[13px]">

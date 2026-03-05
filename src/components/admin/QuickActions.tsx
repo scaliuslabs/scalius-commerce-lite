@@ -155,7 +155,11 @@ export function QuickActions() {
             className={`group relative h-auto w-full justify-start overflow-hidden border border-border bg-card p-0 shadow-sm transition-all duration-300 before:absolute before:inset-0 before:transition-all before:duration-300 hover:-translate-y-0.5 hover:border-input hover:shadow-md ${action.border} ${action.glowBg}`}
             asChild
           >
-            <a href={action.href} className="relative">
+            <a
+              href={action.href}
+              data-astro-prefetch="hover"
+              className="relative"
+            >
               <div className="flex items-center gap-4 p-3">
                 <div
                   className={`group/icon relative flex shrink-0 items-center justify-center rounded-xl ${action.bg} p-0.5`}
