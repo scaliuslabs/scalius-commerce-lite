@@ -30,6 +30,7 @@ import { WidgetPlacement } from './widget-form/WidgetPlacement';
 import { FullScreenEditor, type EditorMode } from './widget-form/FullScreenEditor';
 import { WidgetHistoryModal } from './widget-form/WidgetHistoryModal';
 import { WidgetPasteModal } from './widget-form/WidgetPasteModal';
+import { navigateTo } from '@/lib/client/navigate';
 
 const widgetFormSchema = z.object({
   name: z.string().min(3, 'Widget name must be at least 3 characters long.'),
@@ -392,7 +393,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       if (response.ok) {
         toast.success(`Widget ${isCreateMode ? 'created' : 'updated'} successfully!`);
         setTimeout(() => {
-          window.location.href = '/admin/widgets';
+          void navigateTo('/admin/widgets');
         }, 1000);
       } else {
         const errorData = await response.json().catch(() => ({ message: 'An unexpected error occurred.' }));

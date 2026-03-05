@@ -22,6 +22,7 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { LocationSelector } from "./LocationSelector";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { navigateTo } from "@/lib/client/navigate";
 
 const customerFormSchema = z.object({
   id: z.string().optional(),
@@ -139,7 +140,7 @@ export function CustomerForm({
 
       await response.json();
       toast.success(isEdit ? "Customer updated successfully" : "Customer created successfully");
-      window.location.href = "/admin/customers";
+      await navigateTo("/admin/customers");
     } catch (error) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save customer", {

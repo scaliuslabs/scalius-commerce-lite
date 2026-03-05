@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { OrderStatus } from "../../db/schema";
 import { generateOrderId } from "@/shared/order-utils";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { navigateTo } from "@/lib/client/navigate";
 import {
   updateOrderItems,
   updateShippingCharge,
@@ -192,7 +193,7 @@ export function OrderForm({
       }
 
       toast.success(isEdit ? "Order updated successfully" : "Order created successfully");
-      window.location.href = "/admin/orders";
+      await navigateTo("/admin/orders");
     } catch (error) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save order", {

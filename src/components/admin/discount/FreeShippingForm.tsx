@@ -36,6 +36,7 @@ import {
 import { Badge } from "../../ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrency } from "@/hooks/useCurrency";
+import { navigateTo } from "@/lib/client/navigate";
 
 function generateDiscountCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -143,7 +144,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
       toast({
         title: `Discount ${discountId ? "updated" : "created"} successfully!`,
       });
-      window.location.href = "/admin/discounts";
+      await navigateTo("/admin/discounts");
     } catch (error) {
       const action = defaultValues?.id ? "updating" : "creating";
       console.error(`Error ${action} Free Shipping discount:`, error);

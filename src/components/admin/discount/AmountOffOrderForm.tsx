@@ -45,6 +45,7 @@ import {
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "@/hooks/useCurrency";
+import { navigateTo } from "@/lib/client/navigate";
 const formSchema = z
   .object({
     code: z
@@ -268,7 +269,7 @@ export function AmountOffOrderForm({
       });
       // Redirect or call a success handler instead of hard reload
       // Example: navigate to the list page
-      window.location.href = "/admin/discounts";
+      await navigateTo("/admin/discounts");
       // Or if using a router: router.push('/admin/discounts');
     } catch (error) {
       const action = defaultValues?.id ? "updating" : "creating";
