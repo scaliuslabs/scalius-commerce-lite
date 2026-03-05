@@ -135,6 +135,12 @@ const storefrontUrl = await getSidebarStorefrontUrl();
                         ? "javascript:void(0)"
                         : item.href
                     }
+                    data-astro-prefetch={
+                      !(Array.isArray(item.subItems) && item.subItems.length > 0) &&
+                      item.href.startsWith("/admin")
+                        ? "hover"
+                        : undefined
+                    }
                     data-toggle-submenu={
                       Array.isArray(item.subItems) && item.subItems.length > 0
                         ? "true"
@@ -188,6 +194,11 @@ const storefrontUrl = await getSidebarStorefrontUrl();
                       {item.subItems.map((subItem: NavSubItem) => (
                         <a
                           href={subItem.href}
+                          data-astro-prefetch={
+                            subItem.href.startsWith("/admin")
+                              ? "hover"
+                              : undefined
+                          }
                           class:list={[
                             "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 sidebar-subnav-item hover:scale-[1.01] hover:translate-x-1",
                             path === subItem.href
@@ -305,6 +316,12 @@ const storefrontUrl = await getSidebarStorefrontUrl();
                         ? "javascript:void(0)"
                         : item.href
                     }
+                    data-astro-prefetch={
+                      !(Array.isArray(item.subItems) && item.subItems.length > 0) &&
+                      item.href.startsWith("/admin")
+                        ? "hover"
+                        : undefined
+                    }
                     data-toggle-submenu={
                       Array.isArray(item.subItems) && item.subItems.length > 0
                         ? "true"
@@ -357,6 +374,11 @@ const storefrontUrl = await getSidebarStorefrontUrl();
                       {item.subItems.map((subItem: NavSubItem) => (
                         <a
                           href={subItem.href}
+                          data-astro-prefetch={
+                            subItem.href.startsWith("/admin")
+                              ? "hover"
+                              : undefined
+                          }
                           class:list={[
                             "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
                             path === subItem.href
@@ -435,12 +457,28 @@ const storefrontUrl = await getSidebarStorefrontUrl();
    * - Graceful handling of localStorage errors
    */
 
+  const SIDEBAR_RUNTIME_KEY = "__adminSidebarRuntime";
+  const previousSidebarRuntime = window[SIDEBAR_RUNTIME_KEY];
+  if (previousSidebarRuntime?.cleanup) {
+    previousSidebarRuntime.cleanup();
+  }
+
   // Element references
-  const mobileSidebarEl = document.getElementById("mobile-sidebar");
-  const sidebarOverlayEl = document.getElementById("sidebar-overlay");
-  const closeSidebarBtn = document.getElementById("close-sidebar");
-  const desktopSidebarEl = document.getElementById("desktop-sidebar");
-  const sidebarNavEl = document.getElementById("sidebar-nav");
+  let mobileSidebarEl = null;
+  let sidebarOverlayEl = null;
+  let closeSidebarBtn = null;
+  let desktopSidebarEl = null;
+  let sidebarNavEl = null;
+  let sidebarScrollTimeout;
+  let sidebarScrollHandler = null;
+
+  function cacheElements() {
+    mobileSidebarEl = document.getElementById("mobile-sidebar");
+    sidebarOverlayEl = document.getElementById("sidebar-overlay");
+    closeSidebarBtn = document.getElementById("close-sidebar");
+    desktopSidebarEl = document.getElementById("desktop-sidebar");
+    sidebarNavEl = document.getElementById("sidebar-nav");
+  }
 
   let isCollapsed = localStorage.getItem("sidebar-collapsed") === "true";
 
@@ -519,10 +557,11 @@ const storefrontUrl = await getSidebarStorefrontUrl();
 
   // Save/restore scroll position with smart scrolling for settings
   function saveScrollPosition() {
-    if (sidebarNavEl) {
+    const navEl = sidebarNavEl ?? document.getElementById("sidebar-nav");
+    if (navEl) {
       localStorage.setItem(
         STORAGE_KEYS.scrollPosition,
-        sidebarNavEl.scrollTop.toString()
+        navEl.scrollTop.toString()
       );
     }
   }
@@ -603,6 +642,8 @@ const storefrontUrl = await getSidebarStorefrontUrl();
   }
 
   function initializeSubmenuHandlers() {
+    const activePath = window.location.pathname || currentPath;
+
     document
       .querySelectorAll('[data-toggle-submenu="true"]')
       .forEach((toggleButton) => {
@@ -613,12 +654,14 @@ const storefrontUrl = await getSidebarStorefrontUrl();
 
         if (!submenuContainer || !itemHref) return;
 
+        if (toggleButton.dataset.sidebarSubmenuBound === "true") return;
+
         // Check if should be open initially (current path or restored state)
         let openInitially =
-          currentPath.startsWith(itemHref) && currentPath !== itemHref;
+          activePath.startsWith(itemHref) && activePath !== itemHref;
         if (!openInitially) {
           submenuContainer.querySelectorAll("a").forEach((subLink) => {
-            if (subLink.getAttribute("href") === currentPath) {
+            if (subLink.getAttribute("href") === activePath) {
               openInitially = true;
             }
           });
@@ -684,10 +727,38 @@ const storefrontUrl = await getSidebarStorefrontUrl();
 
           toggleSubmenu(submenuContainer, chevron);
         });
+
+        toggleButton.dataset.sidebarSubmenuBound = "true";
       });
   }
 
+  function detachElementListeners() {
+    sidebarOverlayEl?.removeEventListener("click", toggleMobileSidebar);
+    closeSidebarBtn?.removeEventListener("click", toggleMobileSidebar);
+
+    if (sidebarNavEl && sidebarScrollHandler) {
+      sidebarNavEl.removeEventListener("scroll", sidebarScrollHandler);
+    }
+    sidebarScrollHandler = null;
+  }
+
+  function attachElementListeners() {
+    sidebarOverlayEl?.addEventListener("click", toggleMobileSidebar);
+    closeSidebarBtn?.addEventListener("click", toggleMobileSidebar);
+
+    if (sidebarNavEl) {
+      sidebarScrollHandler = () => {
+        clearTimeout(sidebarScrollTimeout);
+        sidebarScrollTimeout = setTimeout(saveScrollPosition, 150);
+      };
+      sidebarNavEl.addEventListener("scroll", sidebarScrollHandler);
+    }
+  }
+
   function initializeSidebar() {
+    detachElementListeners();
+    cacheElements();
+
     // Apply initial state immediately to prevent FOUC
     applyInitialState();
 
@@ -702,35 +773,48 @@ const storefrontUrl = await getSidebarStorefrontUrl();
       restoreScrollPosition();
     }, 100);
 
-    // Save scroll position on scroll with debouncing
-    if (sidebarNavEl) {
-      let scrollTimeout;
-      sidebarNavEl.addEventListener("scroll", () => {
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(saveScrollPosition, 150);
-      });
-    }
+    // Re-bind element listeners after navigation swaps
+    attachElementListeners();
   }
 
-  // Event listeners
-  window.addEventListener("toggleMobileSidebar", toggleMobileSidebar);
-  window.addEventListener("toggleSidebarCollapse", toggleSidebarCollapse);
-  sidebarOverlayEl?.addEventListener("click", toggleMobileSidebar);
-  closeSidebarBtn?.addEventListener("click", toggleMobileSidebar);
+  function saveSidebarState() {
+    saveSubmenuStates();
+    saveScrollPosition();
+  }
 
-  // Initialize immediately if DOM is ready, otherwise wait for it
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initializeSidebar);
-  } else {
-    // Use requestAnimationFrame to ensure DOM is fully ready and prevent FOUC
+  function handleSidebarPageLoad() {
     requestAnimationFrame(initializeSidebar);
   }
 
-  // Save states before page unload
-  window.addEventListener("beforeunload", () => {
-    saveSubmenuStates();
-    saveScrollPosition();
-  });
+  // Global event listeners
+  window.addEventListener("toggleMobileSidebar", toggleMobileSidebar);
+  window.addEventListener("toggleSidebarCollapse", toggleSidebarCollapse);
+  window.addEventListener("beforeunload", saveSidebarState);
+  document.addEventListener("astro:before-swap", saveSidebarState);
+  document.addEventListener("astro:page-load", handleSidebarPageLoad);
+
+  // Initialize immediately if DOM is ready, otherwise wait for it.
+  // Re-initialization on client navigations is handled by astro:page-load.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", handleSidebarPageLoad);
+  } else {
+    handleSidebarPageLoad();
+  }
+
+  function cleanupSidebarRuntime() {
+    detachElementListeners();
+    clearTimeout(sidebarScrollTimeout);
+    window.removeEventListener("toggleMobileSidebar", toggleMobileSidebar);
+    window.removeEventListener("toggleSidebarCollapse", toggleSidebarCollapse);
+    window.removeEventListener("beforeunload", saveSidebarState);
+    document.removeEventListener("astro:before-swap", saveSidebarState);
+    document.removeEventListener("astro:page-load", handleSidebarPageLoad);
+    document.removeEventListener("DOMContentLoaded", handleSidebarPageLoad);
+  }
+
+  window[SIDEBAR_RUNTIME_KEY] = {
+    cleanup: cleanupSidebarRuntime,
+  };
 </script>
 
 <style>
