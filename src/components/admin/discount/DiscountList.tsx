@@ -483,7 +483,9 @@ export function DiscountList({
   );
   const [permanentDeleteConfirmation, setPermanentDeleteConfirmation] =
     useState<string | null>(null);
-  const [bulkDeleteConfirmation, setBulkDeleteConfirmation] = useState(false);
+  const [bulkActionConfirmation, setBulkActionConfirmation] = useState<
+    "delete" | "restore" | null
+  >(null);
   const [activeType, setActiveType] = useState<string | null>(null);
   const [displayDiscounts, setDisplayDiscounts] = useState<DiscountItem[]>(
     discounts || [],
@@ -675,35 +677,62 @@ export function DiscountList({
 
   const handleBulkDelete = useCallback(() => {
     if (selectedDiscounts.size > 0) {
-      setBulkDeleteConfirmation(true);
+      setBulkActionConfirmation("delete");
     }
   }, [selectedDiscounts]);
 
-  const handleBulkDeleteConfirm = useCallback(async () => {
+  const handleBulkRestore = useCallback(() => {
+    if (selectedDiscounts.size > 0) {
+      setBulkActionConfirmation("restore");
+    }
+  }, [selectedDiscounts]);
+
+  const handleBulkActionConfirm = useCallback(async () => {
     if (selectedDiscounts.size === 0) return;
+
+    if (!bulkActionConfirmation) return;
+
     const idsToDelete = Array.from(selectedDiscounts);
-    setBulkDeleteConfirmation(false);
+    setBulkActionConfirmation(null);
 
     try {
-      const response = await fetch(`/api/v1/admin/discounts/bulk-delete`, {
+      const response = await fetch(
+        bulkActionConfirmation === "restore"
+          ? `/api/v1/admin/discounts/bulk-restore`
+          : `/api/v1/admin/discounts/bulk-delete`,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           discountIds: idsToDelete,
-          permanent: showTrashed,
+          ...(bulkActionConfirmation === "delete"
+            ? { permanent: showTrashed }
+            : {}),
         }),
-      });
+      },
+      );
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to delete discounts");
+        throw new Error(
+          error.error ||
+            (bulkActionConfirmation === "restore"
+              ? "Failed to restore discounts"
+              : "Failed to delete discounts"),
+        );
       }
 
       toast({
-        title: showTrashed
-          ? "Discounts deleted permanently"
-          : "Discounts moved to trash",
-        description: `${idsToDelete.length} discounts have been ${showTrashed ? "permanently deleted" : "moved to trash"}.`,
+        title:
+          bulkActionConfirmation === "restore"
+            ? "Discounts restored"
+            : showTrashed
+              ? "Discounts deleted permanently"
+              : "Discounts moved to trash",
+        description:
+          bulkActionConfirmation === "restore"
+            ? `${idsToDelete.length} discounts have been restored.`
+            : `${idsToDelete.length} discounts have been ${showTrashed ? "permanently deleted" : "moved to trash"}.`,
       });
 
       setDisplayDiscounts((prev) =>
@@ -716,15 +745,19 @@ export function DiscountList({
       }));
       setSelectedDiscounts(new Set());
     } catch (error) {
-      console.error("Error bulk deleting discounts:", error);
+      console.error("Error processing bulk discount action:", error);
       toast({
         title: "Error",
         description:
-          error instanceof Error ? error.message : "Failed to delete discounts",
+          error instanceof Error
+            ? error.message
+            : bulkActionConfirmation === "restore"
+              ? "Failed to restore discounts"
+              : "Failed to delete discounts",
         variant: "destructive",
       });
     }
-  }, [selectedDiscounts, showTrashed, toast]);
+  }, [selectedDiscounts, showTrashed, toast, bulkActionConfirmation]);
 
   const handleTypeFilter = useCallback((type: string | null) => {
     const url = new URL(window.location.href);
@@ -1015,23 +1048,35 @@ export function DiscountList({
             >
               {
                 selectedDiscounts.size > 0 ? (
-                  <Button
-                    variant={showTrashed ? "destructive" : "outline"}
-                    size="sm"
-                    className={cn(
-                      "h-9",
-                      showTrashed
-                        ? "" // Destructive variant handles its own text/icon colors (e.g., text-destructive-foreground)
-                        : "text-destructive border-destructive hover:bg-destructive/10", // Specific styles for the "Trash" outline button
+                  <>
+                    {showTrashed && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9"
+                        onClick={handleBulkRestore}
+                      >
+                        <Undo className="h-4 w-4 mr-1.5" />
+                        {`Restore (${selectedDiscounts.size})`}
+                      </Button>
                     )}
-                    onClick={handleBulkDelete} // Changed to trigger confirmation first
-                  >
-                    <Trash2 className="h-4 w-4 mr-1.5" />{" "}
-                    {/* Icon color will inherit from button text color */}
-                    {showTrashed
-                      ? `Delete (${selectedDiscounts.size})`
-                      : `Trash (${selectedDiscounts.size})`}
-                  </Button>
+                    <Button
+                      variant={showTrashed ? "destructive" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-9",
+                        showTrashed
+                          ? ""
+                          : "text-destructive border-destructive hover:bg-destructive/10",
+                      )}
+                      onClick={handleBulkDelete}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1.5" />
+                      {showTrashed
+                        ? `Delete (${selectedDiscounts.size})`
+                        : `Trash (${selectedDiscounts.size})`}
+                    </Button>
+                  </>
                 ) : (
                   <div className="h-9" />
                 ) /* Placeholder to prevent layout shift */
@@ -1284,27 +1329,34 @@ export function DiscountList({
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog
-        open={bulkDeleteConfirmation}
-        onOpenChange={setBulkDeleteConfirmation}
+        open={!!bulkActionConfirmation}
+        onOpenChange={(open) => !open && setBulkActionConfirmation(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will {showTrashed ? "permanently delete" : "move to trash"}{" "}
-              the selected {selectedDiscounts.size} discount(s).
-              {showTrashed && " This action cannot be undone."}
+              {bulkActionConfirmation === "restore"
+                ? `This will restore the selected ${selectedDiscounts.size} discount(s).`
+                : `This will ${showTrashed ? "permanently delete" : "move to trash"} the selected ${selectedDiscounts.size} discount(s).`}
+              {showTrashed && bulkActionConfirmation !== "restore" && " This action cannot be undone."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleBulkDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleBulkActionConfirm}
+              className={
+                bulkActionConfirmation === "restore"
+                  ? ""
+                  : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              }
             >
-              {showTrashed
-                ? `Delete ${selectedDiscounts.size} items`
-                : `Move ${selectedDiscounts.size} items to Trash`}
+              {bulkActionConfirmation === "restore"
+                ? `Restore ${selectedDiscounts.size} items`
+                : showTrashed
+                  ? `Delete ${selectedDiscounts.size} items`
+                  : `Move ${selectedDiscounts.size} items to Trash`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
