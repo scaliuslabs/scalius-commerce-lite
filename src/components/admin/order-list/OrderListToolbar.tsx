@@ -263,7 +263,11 @@ export function OrderListToolbar({
               asChild
               className="group h-9 px-3 text-xs font-medium shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
-              <a href="/admin/orders/new" aria-label="Create new order">
+              <a
+                href="/admin/orders/new"
+                data-astro-prefetch="hover"
+                aria-label="Create new order"
+              >
                 <Plus className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
                 Add Order
               </a>
