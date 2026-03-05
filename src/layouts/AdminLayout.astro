@@ -284,6 +284,15 @@ const navSections: NavSection[] = allNavSections
     class="bg-background text-foreground transition-colors duration-200"
   >
     <div id="admin-nav-progress" aria-hidden="true"></div>
+    <div id="admin-nav-overlay" aria-hidden="true">
+      <div id="admin-nav-overlay-card" role="status" aria-live="polite" aria-atomic="true">
+        <span id="admin-nav-spinner" aria-hidden="true"></span>
+        <div class="flex flex-col">
+          <span class="text-sm font-semibold text-foreground">Loading page...</span>
+          <span class="text-xs text-muted-foreground">Preparing the next view</span>
+        </div>
+      </div>
+    </div>
     <div class="flex min-h-screen">
       <SideBar navSections={navSections} currentPath={currentPath} />
 
@@ -321,7 +330,6 @@ const navSections: NavSection[] = allNavSections
           </div>
           <TooltipProvider client:idle>
             <div class="flex items-center">
-              <span id="admin-nav-status" role="status" aria-live="polite" aria-atomic="true">Opening...</span>
               <CacheNukeButton client:idle />
               <div class="h-5 w-px bg-border mx-2.5"></div>
               <DarkModeToggle client:idle />
@@ -359,26 +367,50 @@ const navSections: NavSection[] = allNavSections
         transform: scaleX(0);
         transform-origin: left;
         transition: transform 180ms ease, opacity 180ms ease;
-        z-index: 100;
+        z-index: 125;
         pointer-events: none;
       }
 
-      #admin-nav-status {
-        display: inline-flex;
+      #admin-nav-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 120;
+        display: flex;
         align-items: center;
-        border: 1px solid hsl(var(--border) / 0.8);
-        border-radius: 9999px;
-        background: hsl(var(--muted) / 0.7);
-        color: hsl(var(--muted-foreground));
-        font-size: 0.72rem;
-        line-height: 1;
-        font-weight: 500;
-        padding: 0.3rem 0.5rem;
-        margin-right: 0.5rem;
+        justify-content: center;
+        background: hsl(var(--background) / 0.72);
+        backdrop-filter: blur(5px);
         opacity: 0;
-        transform: translateY(-2px);
-        transition: opacity 140ms ease, transform 140ms ease;
+        visibility: hidden;
+        transition: opacity 120ms ease, visibility 120ms linear;
         pointer-events: none;
+      }
+
+      #admin-nav-overlay-card {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        border-radius: 0.9rem;
+        border: 1px solid hsl(var(--border));
+        background: hsl(var(--card) / 0.96);
+        box-shadow: 0 10px 30px hsl(var(--foreground) / 0.14);
+        padding: 0.85rem 1rem;
+        min-width: 260px;
+      }
+
+      #admin-nav-spinner {
+        width: 1.15rem;
+        height: 1.15rem;
+        border: 2px solid hsl(var(--muted-foreground) / 0.3);
+        border-top-color: hsl(var(--primary));
+        border-radius: 9999px;
+        animation: admin-nav-spin 700ms linear infinite;
+      }
+
+      @keyframes admin-nav-spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
 
       html.admin-nav-pending #admin-nav-progress {
@@ -397,10 +429,11 @@ const navSections: NavSection[] = allNavSections
         transition: transform 120ms ease, opacity 200ms ease;
       }
 
-      html.admin-nav-pending #admin-nav-status,
-      html.admin-nav-loading #admin-nav-status {
+      html.admin-nav-pending #admin-nav-overlay,
+      html.admin-nav-loading #admin-nav-overlay {
         opacity: 1;
-        transform: translateY(0);
+        visibility: visible;
+        pointer-events: auto;
       }
 
       html.admin-nav-pending,
@@ -432,6 +465,8 @@ const navSections: NavSection[] = allNavSections
 
         const root = document.documentElement;
         let resetTimer: number | undefined;
+        let navStartAt = 0;
+        const MIN_LOADER_VISIBLE_MS = 150;
 
         const clearPendingState = () => {
           navWindow.__adminPendingDestination__ = null;
@@ -440,19 +475,29 @@ const navSections: NavSection[] = allNavSections
 
         const startLoading = () => {
           if (resetTimer) window.clearTimeout(resetTimer);
+          navStartAt = Date.now();
           root.classList.remove("admin-nav-loaded");
           root.classList.add("admin-nav-pending");
           root.classList.add("admin-nav-loading");
         };
 
         const stopLoading = () => {
-          clearPendingState();
+          const finalize = () => {
+            clearPendingState();
+            if (!root.classList.contains("admin-nav-loading")) return;
+            root.classList.add("admin-nav-loaded");
+            resetTimer = window.setTimeout(() => {
+              root.classList.remove("admin-nav-loading", "admin-nav-loaded", "admin-nav-pending");
+            }, 140);
+          };
 
-          if (!root.classList.contains("admin-nav-loading")) return;
-          root.classList.add("admin-nav-loaded");
-          resetTimer = window.setTimeout(() => {
-            root.classList.remove("admin-nav-loading", "admin-nav-loaded", "admin-nav-pending");
-          }, 140);
+          const elapsed = navStartAt ? Date.now() - navStartAt : MIN_LOADER_VISIBLE_MS;
+          const remaining = Math.max(0, MIN_LOADER_VISIBLE_MS - elapsed);
+          if (remaining > 0) {
+            window.setTimeout(finalize, remaining);
+            return;
+          }
+          finalize();
         };
 
         const getInternalAdminDestination = (anchor: HTMLAnchorElement): string | null => {
