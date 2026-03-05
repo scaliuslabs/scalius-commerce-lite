@@ -646,9 +646,10 @@ const storefrontUrl = await getSidebarStorefrontUrl();
         if (!submenuContainer) return;
 
         // Add click handler
-        toggleButton.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
+        toggleButton.addEventListener("click", () => {
+          // Do not preventDefault or stopPropagation.
+          // Allow the parent link to naturally navigate to its href, while simultaneously
+          // toggling the submenu visually.
 
           const isSettings =
             toggleButton.getAttribute("data-is-settings") === "true";
@@ -714,15 +715,6 @@ const storefrontUrl = await getSidebarStorefrontUrl();
           submenuContainer.classList.remove("hidden");
           submenuContainer.style.maxHeight = submenuContainer.scrollHeight + "px";
           if (chevron) chevron.classList.add("rotate-180");
-        } else {
-          submenuContainer.style.maxHeight = "0px";
-          if (chevron) chevron.classList.remove("rotate-180");
-          // Allow max-height transition to complete before adding hidden class to remove it from layout
-          setTimeout(() => {
-            if (submenuContainer.style.maxHeight === "0px") {
-              submenuContainer.classList.add("hidden");
-            }
-          }, 350);
         }
       });
   }
