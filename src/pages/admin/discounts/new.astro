@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
     </div>
     <a
       href="/admin/discounts"
+      data-astro-prefetch
       class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2"
     >
       Cancel
@@ -152,9 +153,18 @@ import { Button } from "@/components/ui/button";
     },
   };
 
+  type DiscountPageState = {
+    cleanup?: () => void;
+    hasPageLoadListener?: boolean;
+  };
+
+  const discountPageState = (
+    window as Window & { __discountsNewPageState?: DiscountPageState }
+  );
+  discountPageState.__discountsNewPageState ??= {};
+
   let typeSelectorElement: HTMLElement | null = null;
   let changeTypeSection: HTMLElement | null = null;
-  let changeTypeButton: HTMLElement | null = null;
   let formLoaded: { [key: string]: boolean } = {};
 
   // Function to handle showing/hiding forms AND the selector/button
@@ -208,30 +218,70 @@ import { Button } from "@/components/ui/button";
     handleFormDisplay(null); // Passing null hides all forms and shows selector
   }
 
-  // Wait for the DOM to be fully loaded
-  document.addEventListener("DOMContentLoaded", () => {
-    // Get elements after DOM is ready
+  function initDiscountPage() {
+    const pageState = discountPageState.__discountsNewPageState!;
+
+    // Clear previous listeners before wiring up current DOM.
+    pageState.cleanup?.();
+    pageState.cleanup = undefined;
+
+    const pageContainer = document.getElementById("discount-form-container");
+    if (!pageContainer) {
+      typeSelectorElement = null;
+      changeTypeSection = null;
+      formLoaded = {};
+      return;
+    }
+
+    // Get elements for the current page instance.
     typeSelectorElement = document.getElementById("discount-type-selector");
     changeTypeSection = document.getElementById("change-type-section");
-    changeTypeButton = document.getElementById("change-discount-type-button");
+    const changeTypeButton = document.getElementById(
+      "change-discount-type-button"
+    );
+    formLoaded = {};
 
-    // Attach listener to the DiscountTypeSelector component
+    const onDiscountTypeSelected = (event: Event) => {
+      const selectedType = (event as CustomEvent<{ type: string }>)?.detail?.type;
+      if (selectedType) {
+        handleFormDisplay(selectedType);
+      }
+    };
+
+    const onChangeTypeClick = () => {
+      showTypeSelector();
+    };
+
+    // Attach listener to the DiscountTypeSelector component.
     if (typeSelectorElement) {
-      typeSelectorElement.addEventListener("discountTypeSelected", (e) => {
-        const selectedType = (e as CustomEvent<{ type: string }>)?.detail?.type;
-        if (selectedType) {
-          handleFormDisplay(selectedType);
-        }
-      });
+      typeSelectorElement.addEventListener(
+        "discountTypeSelected",
+        onDiscountTypeSelected as EventListener
+      );
     } else {
       console.error("Could not find #discount-type-selector element.");
     }
 
-    // Attach listener to the Change Type button
+    // Attach listener to the Change Type button.
     if (changeTypeButton) {
-      changeTypeButton.addEventListener("click", showTypeSelector);
+      changeTypeButton.addEventListener("click", onChangeTypeClick);
     } else {
       console.error("Could not find #change-discount-type-button element.");
     }
-  });
+
+    pageState.cleanup = () => {
+      typeSelectorElement?.removeEventListener(
+        "discountTypeSelected",
+        onDiscountTypeSelected as EventListener
+      );
+      changeTypeButton?.removeEventListener("click", onChangeTypeClick);
+    };
+  }
+
+  if (!discountPageState.__discountsNewPageState?.hasPageLoadListener) {
+    document.addEventListener("astro:page-load", initDiscountPage);
+    discountPageState.__discountsNewPageState!.hasPageLoadListener = true;
+  }
+
+  initDiscountPage();
 </script>
