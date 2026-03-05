@@ -130,13 +130,8 @@ const storefrontUrl = await getSidebarStorefrontUrl();
               {section.items.map((item: NavItem) => (
                 <div class="nav-item-container">
                   <a
-                    href={
-                      item.subItems && item.subItems.length > 0
-                        ? "javascript:void(0)"
-                        : item.href
-                    }
+                    href={item.href}
                     data-astro-prefetch={
-                      !(Array.isArray(item.subItems) && item.subItems.length > 0) &&
                       item.href.startsWith("/admin")
                         ? "hover"
                         : undefined
@@ -311,13 +306,8 @@ const storefrontUrl = await getSidebarStorefrontUrl();
               {section.items.map((item: NavItem) => (
                 <div class="nav-item-container">
                   <a
-                    href={
-                      item.subItems && item.subItems.length > 0
-                        ? "javascript:void(0)"
-                        : item.href
-                    }
+                    href={item.href}
                     data-astro-prefetch={
-                      !(Array.isArray(item.subItems) && item.subItems.length > 0) &&
                       item.href.startsWith("/admin")
                         ? "hover"
                         : undefined
