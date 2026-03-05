@@ -334,6 +334,7 @@ const navSections: NavSection[] = allNavSections
         <main
           class="flex-1 p-6 transition-all duration-200"
           id="main-content"
+          transition:name="admin-main-content"
         >
           <div class="max-w-7xl mx-auto">
             <slot />
@@ -402,28 +403,37 @@ const navSections: NavSection[] = allNavSections
     </script>
 
     <script>
+      function bindSidebarControl(
+        button: HTMLElement | null,
+        boundKey: "sidebarToggleBound" | "sidebarCollapseBound",
+        eventName: "toggleMobileSidebar" | "toggleSidebarCollapse"
+      ) {
+        if (!button || button.dataset[boundKey] === "true") return;
+        button.dataset[boundKey] = "true";
+        button.addEventListener("click", () => {
+          window.dispatchEvent(new CustomEvent(eventName));
+        });
+      }
+
       function initializeSidebarControls() {
         const sidebarToggleBtn = document.getElementById("sidebar-toggle");
         const sidebarCollapseBtn = document.getElementById("sidebar-collapse");
 
-        if (sidebarToggleBtn) {
-          sidebarToggleBtn.addEventListener("click", () => {
-            window.dispatchEvent(new CustomEvent("toggleMobileSidebar"));
-          });
-        }
+        bindSidebarControl(sidebarToggleBtn, "sidebarToggleBound", "toggleMobileSidebar");
+        bindSidebarControl(sidebarCollapseBtn, "sidebarCollapseBound", "toggleSidebarCollapse");
+      }
 
-        if (sidebarCollapseBtn) {
-          sidebarCollapseBtn.addEventListener("click", () => {
-            window.dispatchEvent(new CustomEvent("toggleSidebarCollapse"));
-          });
-        }
+      if (!(window as any).__adminSidebarPageLoadBound__) {
+        (window as any).__adminSidebarPageLoadBound__ = true;
+        document.addEventListener("astro:page-load", initializeSidebarControls);
       }
 
       // Initialize immediately if DOM is ready, otherwise wait for it
       if (document.readyState === "loading") {
         document.addEventListener(
           "DOMContentLoaded",
-          initializeSidebarControls
+          initializeSidebarControls,
+          { once: true }
         );
       } else {
         initializeSidebarControls();
