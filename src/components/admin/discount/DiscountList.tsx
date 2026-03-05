@@ -65,6 +65,7 @@ import { Badge } from "../../ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/shared/utils";
 import { useCurrency } from "@/hooks/useCurrency";
+import { navigateTo } from "@/lib/client/navigate";
 
 type SortField =
   | "code"
@@ -420,7 +421,9 @@ const DiscountRow = React.memo(
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => {
-                      window.location.href = `/admin/discounts/${discount.id}/edit?duplicate=true`;
+                      void navigateTo(
+                        `/admin/discounts/${discount.id}/edit?duplicate=true`,
+                      );
                     }}
                   >
                     <Copy className="mr-2 h-4 w-4" />
@@ -520,7 +523,7 @@ export function DiscountList({
         url.searchParams.delete("search");
       }
       url.searchParams.delete("page");
-      window.location.href = url.toString();
+      void navigateTo(url.toString());
     },
     [searchQuery],
   );
@@ -533,24 +536,24 @@ export function DiscountList({
       currentSort === field && currentOrder === "asc" ? "desc" : "asc";
     url.searchParams.set("sort", field);
     url.searchParams.set("order", newOrder);
-    window.location.href = url.toString();
+    void navigateTo(url.toString());
   }, []);
 
   const handlePageChange = useCallback((newPage: number) => {
     const url = new URL(window.location.href);
     url.searchParams.set("page", newPage.toString());
-    window.location.href = url.toString();
+    void navigateTo(url.toString());
   }, []);
 
   const handleLimitChange = useCallback((newLimit: number) => {
     const url = new URL(window.location.href);
     url.searchParams.set("limit", newLimit.toString());
     url.searchParams.delete("page");
-    window.location.href = url.toString();
+    void navigateTo(url.toString());
   }, []);
 
   const handleEdit = useCallback((id: string) => {
-    window.location.href = `/admin/discounts/${id}/edit`;
+    void navigateTo(`/admin/discounts/${id}/edit`);
   }, []);
 
   const handleDelete = useCallback((id: string) => {
@@ -767,7 +770,7 @@ export function DiscountList({
       url.searchParams.delete("type");
     }
     url.searchParams.delete("page");
-    window.location.href = url.toString();
+    void navigateTo(url.toString());
   }, []);
 
   const getSortIcon = useCallback(
@@ -931,9 +934,9 @@ export function DiscountList({
               variant="outline"
               size="sm"
               onClick={() => {
-                window.location.href = showTrashed
-                  ? "/admin/discounts"
-                  : "/admin/discounts?trashed=true";
+                void navigateTo(
+                  showTrashed ? "/admin/discounts" : "/admin/discounts?trashed=true",
+                );
               }}
               className="group h-9 border-gray-200 bg-white/80 px-3 text-xs font-medium shadow-sm backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:border-gray-300 hover:bg-white hover:shadow-md active:translate-y-0 dark:bg-gray-800/80 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:border-gray-600"
             >
@@ -952,7 +955,7 @@ export function DiscountList({
             {!showTrashed && (
               <Button
                 size="sm"
-                onClick={() => (window.location.href = "/admin/discounts/new")}
+                onClick={() => void navigateTo("/admin/discounts/new")}
                 className="group h-9 px-3 text-xs font-medium shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
               >
                 <Plus className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
@@ -1169,9 +1172,7 @@ export function DiscountList({
                       {!showTrashed && !searchQuery && !activeType && (
                         <Button
                           size="sm"
-                          onClick={() =>
-                            (window.location.href = "/admin/discounts/new")
-                          }
+                          onClick={() => void navigateTo("/admin/discounts/new")}
                           className="mt-2"
                         >
                           <Plus className="h-4 w-4 mr-1.5" />

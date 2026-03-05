@@ -9,6 +9,7 @@ import { OrderTable } from "./order-list/OrderTable";
 import { OrderListPagination } from "./order-list/OrderListPagination";
 import { DeleteOrderDialog } from "./order-list/DeleteOrderDialog";
 import { BulkShipDialog } from "./order-list/BulkShipDialog";
+import { navigateTo } from "@/lib/client/navigate";
 
 type SortField =
   | "customerName"
@@ -358,9 +359,7 @@ export function OrderList({
   };
 
   const handleToggleTrash = () => {
-    window.location.href = showTrashed
-      ? "/admin/orders"
-      : "/admin/orders?trashed=true";
+    void navigateTo(showTrashed ? "/admin/orders" : "/admin/orders?trashed=true");
   };
 
   const handleToggleSelection = (
@@ -757,7 +756,7 @@ export function OrderList({
             onSort={handleSort}
             onToggleAll={handleToggleAll}
             onToggleSelection={handleToggleSelection}
-            onEdit={(id) => (window.location.href = `/admin/orders/${id}/edit`)}
+            onEdit={(id) => void navigateTo(`/admin/orders/${id}/edit`)}
             onDelete={(id) => setOrderToDelete(id)}
             onPermanentDelete={(id) => setOrderToDelete(id)}
             onRestore={handleRestore}

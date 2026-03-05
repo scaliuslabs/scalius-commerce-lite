@@ -31,6 +31,7 @@ import type {
   WidgetStatistics as WidgetStats,
   DeleteDialogState,
 } from "./types";
+import { navigateTo } from "@/lib/client/navigate";
 
 interface WidgetsListProps extends WidgetsManagerProps {
   initialWidgets: WidgetItem[];
@@ -151,7 +152,7 @@ export function WidgetsList({
   };
 
   const handleCreateClick = () => {
-    window.location.href = "/admin/widgets/create";
+    void navigateTo("/admin/widgets/create");
   };
 
   const handleCopyShortcode = (widgetId: string) => {
