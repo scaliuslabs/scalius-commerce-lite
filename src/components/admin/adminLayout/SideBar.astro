@@ -130,85 +130,84 @@ const storefrontUrl = await getSidebarStorefrontUrl();
             <div class="space-y-1">
               {section.items.map((item: NavItem) => (
                 <div class="nav-item-container">
-                  <a
-                    href={item.href}
-                    data-astro-prefetch={
-                      item.href.startsWith("/admin")
-                        ? "hover"
-                        : undefined
-                    }
-                    data-toggle-submenu={
-                      Array.isArray(item.subItems) && item.subItems.length > 0
-                        ? "true"
-                        : undefined
-                    }
-                    data-href={item.href}
-                    data-submenu-key={item.name
-                      .toLowerCase()
-                      .replace(/\s+/g, "-")}
-                    data-is-settings={
-                      item.name.toLowerCase() === "settings"
-                        ? "true"
-                        : undefined
-                    }
-                    class:list={[
-                      "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02]",
-                      path === item.href ||
-                      (item.subItems &&
-                        item.subItems.some((sub) => path === sub.href))
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm border border-sidebar-border"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-                    ]}
-                  >
-                    <item.icon
-                      className={`w-5 h-5 shrink-0 sidebar-nav-icon transition-all duration-200 ${
+                  {Array.isArray(item.subItems) && item.subItems.length > 0 ? (
+                    <button
+                      type="button"
+                      data-toggle-submenu="true"
+                      data-sidebar-parent="true"
+                      data-href={item.href}
+                      data-submenu-key={item.name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}
+                      data-is-settings={
+                        item.name.toLowerCase() === "settings"
+                          ? "true"
+                          : undefined
+                      }
+                      aria-expanded={path.startsWith(item.href) ? "true" : "false"}
+                      aria-controls={`desktop-submenu-${item.name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}`}
+                      class:list={[
+                        "group flex w-full items-center gap-3 rounded-lg border border-transparent bg-transparent px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02] hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground cursor-pointer",
                         path === item.href ||
                         (item.subItems &&
                           item.subItems.some((sub) => path === sub.href))
-                          ? "text-sidebar-accent-foreground"
-                          : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
-                      }`}
-                      strokeWidth={2}
-                    />
-                    <span class="sidebar-nav-text flex-1">{item.name}</span>
-                    {Array.isArray(item.subItems) &&
-                      item.subItems.length > 0 && (
-                        <ChevronDown
-                          className={`submenu-chevron w-4 h-4 transition-all duration-300 sidebar-chevron ${
-                            path.startsWith(item.href) && path !== item.href
-                              ? "text-muted-foreground rotate-180"
-                              : path.startsWith(item.href)
-                                ? "text-muted-foreground"
-                                : "text-muted-foreground/70"
-                          }`}
-                        />
-                      )}
-                  </a>
+                          ? "is-active"
+                          : undefined,
+                      ]}
+                    >
+                      <item.icon
+                        className="w-5 h-5 shrink-0 sidebar-nav-icon text-muted-foreground transition-all duration-200 group-hover:text-sidebar-accent-foreground"
+                        strokeWidth={2}
+                      />
+                      <span class="sidebar-nav-text flex-1">{item.name}</span>
+                      <ChevronDown
+                        className={`submenu-chevron w-4 h-4 text-muted-foreground/70 transition-all duration-300 sidebar-chevron ${
+                          path.startsWith(item.href) ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                  ) : (
+                    <a
+                      href={item.href}
+                      data-sidebar-link="true"
+                      data-sidebar-item-href={item.href}
+                      class:list={[
+                        "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg border border-transparent text-sidebar-foreground transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02] hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                        path === item.href ? "is-active" : undefined,
+                      ]}
+                      aria-current={path === item.href ? "page" : undefined}
+                    >
+                      <item.icon
+                        className="w-5 h-5 shrink-0 sidebar-nav-icon text-muted-foreground transition-all duration-200 group-hover:text-sidebar-accent-foreground"
+                        strokeWidth={2}
+                      />
+                      <span class="sidebar-nav-text flex-1">{item.name}</span>
+                    </a>
+                  )}
 
                   {Array.isArray(item.subItems) && item.subItems.length > 0 && (
-                    <div class="submenu-container ml-6 mt-1 space-y-1 sidebar-submenu overflow-hidden transition-all duration-300 ease-in-out">
+                    <div
+                      id={`desktop-submenu-${item.name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}`}
+                      class="submenu-container ml-6 mt-1 space-y-1 sidebar-submenu overflow-hidden transition-all duration-300 ease-in-out"
+                    >
                       {item.subItems.map((subItem: NavSubItem) => (
                         <a
                           href={subItem.href}
-                          data-astro-prefetch={
-                            subItem.href.startsWith("/admin")
-                              ? "hover"
-                              : undefined
-                          }
+                          data-sidebar-subitem="true"
+                          data-sidebar-item-href={subItem.href}
                           class:list={[
-                            "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 sidebar-subnav-item hover:scale-[1.01] hover:translate-x-1",
-                            path === subItem.href
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm"
-                              : "text-muted-foreground hover:bg-sidebar-accent/30 hover:text-sidebar-accent-foreground",
+                            "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg text-muted-foreground transition-all duration-200 sidebar-subnav-item hover:scale-[1.01] hover:translate-x-1 hover:bg-sidebar-accent/30 hover:text-sidebar-accent-foreground",
+                            path === subItem.href ? "is-active" : undefined,
                           ]}
+                          aria-current={path === subItem.href ? "page" : undefined}
                         >
                           {subItem.icon && (
                             <subItem.icon
-                              className={`w-4 h-4 shrink-0 sidebar-subnav-icon transition-all duration-200 ${
-                                path === subItem.href
-                                  ? "text-sidebar-accent-foreground"
-                                  : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
-                              }`}
+                              className="w-4 h-4 shrink-0 sidebar-subnav-icon text-muted-foreground transition-all duration-200 group-hover:text-sidebar-accent-foreground"
                               strokeWidth={2}
                             />
                           )}
@@ -264,7 +263,6 @@ const storefrontUrl = await getSidebarStorefrontUrl();
 <aside
   class="fixed inset-y-0 left-0 w-[280px] bg-sidebar z-50 md:hidden transform -translate-x-full transition-all duration-300 shadow-2xl border-r border-sidebar-border"
   id="mobile-sidebar"
-  transition:persist="sidebar-mobile"
 >
   <div
     class="flex items-center justify-between h-14 px-6 border-b border-sidebar-border"
@@ -307,84 +305,83 @@ const storefrontUrl = await getSidebarStorefrontUrl();
             <div class="space-y-1">
               {section.items.map((item: NavItem) => (
                 <div class="nav-item-container">
-                  <a
-                    href={item.href}
-                    data-astro-prefetch={
-                      item.href.startsWith("/admin")
-                        ? "hover"
-                        : undefined
-                    }
-                    data-toggle-submenu={
-                      Array.isArray(item.subItems) && item.subItems.length > 0
-                        ? "true"
-                        : undefined
-                    }
-                    data-href={item.href}
-                    data-submenu-key={item.name
-                      .toLowerCase()
-                      .replace(/\s+/g, "-")}
-                    data-is-settings={
-                      item.name.toLowerCase() === "settings"
-                        ? "true"
-                        : undefined
-                    }
-                    class:list={[
-                      "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative",
-                      path === item.href ||
-                      (item.subItems &&
-                        item.subItems.some((sub) => path === sub.href))
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm border border-sidebar-border"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-                    ]}
-                  >
-                    <item.icon
-                      className={`w-5 h-5 shrink-0 ${
+                  {Array.isArray(item.subItems) && item.subItems.length > 0 ? (
+                    <button
+                      type="button"
+                      data-toggle-submenu="true"
+                      data-sidebar-parent="true"
+                      data-href={item.href}
+                      data-submenu-key={item.name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}
+                      data-is-settings={
+                        item.name.toLowerCase() === "settings"
+                          ? "true"
+                          : undefined
+                      }
+                      aria-expanded={path.startsWith(item.href) ? "true" : "false"}
+                      aria-controls={`mobile-submenu-${item.name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}`}
+                      class:list={[
+                        "group flex w-full items-center gap-3 rounded-lg border border-transparent bg-transparent px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground transition-all duration-200 relative hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground cursor-pointer",
                         path === item.href ||
                         (item.subItems &&
                           item.subItems.some((sub) => path === sub.href))
-                          ? "text-sidebar-accent-foreground"
-                          : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
-                      }`}
-                      strokeWidth={2}
-                    />
-                    <span class="flex-1">{item.name}</span>
-                    {Array.isArray(item.subItems) &&
-                      item.subItems.length > 0 && (
-                        <ChevronDown
-                          className={`submenu-chevron w-4 h-4 transition-all duration-300 ${
-                            path.startsWith(item.href) && path !== item.href
-                              ? "text-muted-foreground rotate-180"
-                              : path.startsWith(item.href)
-                                ? "text-muted-foreground"
-                                : "text-muted-foreground/70"
-                          }`}
-                        />
-                      )}
-                  </a>
+                          ? "is-active"
+                          : undefined,
+                      ]}
+                    >
+                      <item.icon
+                        className="w-5 h-5 shrink-0 text-muted-foreground group-hover:text-sidebar-accent-foreground"
+                        strokeWidth={2}
+                      />
+                      <span class="flex-1">{item.name}</span>
+                      <ChevronDown
+                        className={`submenu-chevron w-4 h-4 text-muted-foreground/70 transition-all duration-300 ${
+                          path.startsWith(item.href) ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                  ) : (
+                    <a
+                      href={item.href}
+                      data-sidebar-link="true"
+                      data-sidebar-item-href={item.href}
+                      class:list={[
+                        "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg border border-transparent text-sidebar-foreground transition-all duration-200 relative hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                        path === item.href ? "is-active" : undefined,
+                      ]}
+                      aria-current={path === item.href ? "page" : undefined}
+                    >
+                      <item.icon
+                        className="w-5 h-5 shrink-0 text-muted-foreground group-hover:text-sidebar-accent-foreground"
+                        strokeWidth={2}
+                      />
+                      <span class="flex-1">{item.name}</span>
+                    </a>
+                  )}
                   {Array.isArray(item.subItems) && item.subItems.length > 0 && (
-                    <div class="submenu-container ml-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out">
+                    <div
+                      id={`mobile-submenu-${item.name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}`}
+                      class="submenu-container ml-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out"
+                    >
                       {item.subItems.map((subItem: NavSubItem) => (
                         <a
                           href={subItem.href}
-                          data-astro-prefetch={
-                            subItem.href.startsWith("/admin")
-                              ? "hover"
-                              : undefined
-                          }
+                          data-sidebar-subitem="true"
+                          data-sidebar-item-href={subItem.href}
                           class:list={[
-                            "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
-                            path === subItem.href
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                              : "text-muted-foreground hover:bg-sidebar-accent/30 hover:text-sidebar-accent-foreground",
+                            "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg text-muted-foreground transition-all duration-200 hover:bg-sidebar-accent/30 hover:text-sidebar-accent-foreground",
+                            path === subItem.href ? "is-active" : undefined,
                           ]}
+                          aria-current={path === subItem.href ? "page" : undefined}
                         >
                           {subItem.icon && (
                             <subItem.icon
-                              className={`w-4 h-4 shrink-0 ${
-                                path === subItem.href
-                                  ? "text-sidebar-accent-foreground"
-                                  : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
-                              }`}
+                              className="w-4 h-4 shrink-0 text-muted-foreground group-hover:text-sidebar-accent-foreground"
                               strokeWidth={2}
                             />
                           )}
@@ -424,7 +421,7 @@ const storefrontUrl = await getSidebarStorefrontUrl();
   </div>
 </aside>
 
-<script is:inline define:vars={{ currentPath }}>
+<script is:inline>
   /**
    * Admin Sidebar Component
    *
@@ -449,413 +446,386 @@ const storefrontUrl = await getSidebarStorefrontUrl();
    * - Graceful handling of localStorage errors
    */
 
-  const SIDEBAR_RUNTIME_KEY = "__adminSidebarRuntime";
-  const previousSidebarRuntime = window[SIDEBAR_RUNTIME_KEY];
-  if (previousSidebarRuntime?.cleanup) {
-    previousSidebarRuntime.cleanup();
-  }
-
-  // Element references
-  let mobileSidebarEl = null;
-  let sidebarOverlayEl = null;
-  let closeSidebarBtn = null;
-  let desktopSidebarEl = null;
-  let sidebarNavEl = null;
-  let sidebarScrollTimeout;
-  let sidebarScrollHandler = null;
-
-  function cacheElements() {
-    mobileSidebarEl = document.getElementById("mobile-sidebar");
-    sidebarOverlayEl = document.getElementById("sidebar-overlay");
-    closeSidebarBtn = document.getElementById("close-sidebar");
-    desktopSidebarEl = document.getElementById("desktop-sidebar");
-    sidebarNavEl = document.getElementById("sidebar-nav");
-  }
-
-  let isCollapsed = localStorage.getItem("sidebar-collapsed") === "true";
-
-  // Enhanced state management with better FOUC prevention
   const STORAGE_KEYS = {
     collapsed: "sidebar-collapsed",
     submenus: "sidebar-submenu-states",
     scrollPosition: "sidebar-scroll-position",
   };
+  const sidebarState = window.__adminSidebarState || {
+    globalListenersBound: false,
+    isCollapsed: false,
+    scrollTimeout: null,
+  };
+  window.__adminSidebarState = sidebarState;
 
-  // Apply initial collapsed state immediately to prevent FOUC
-  function applyInitialState() {
-    if (!desktopSidebarEl) return;
-
-    // Remove the pre-collapsed class if it exists
-    document.body.classList.remove("sidebar-pre-collapsed");
-
-    if (isCollapsed) {
-      desktopSidebarEl.style.width = "60px";
-      desktopSidebarEl.classList.add("sidebar-collapsed");
-    } else {
-      desktopSidebarEl.style.width = "240px";
-      desktopSidebarEl.classList.remove("sidebar-collapsed");
-    }
-
-    // Update CSS custom property for smooth transitions
-    document.documentElement.style.setProperty(
-      "--sidebar-width",
-      isCollapsed ? "60px" : "240px"
-    );
+  function getDesktopSidebar() {
+    return document.getElementById("desktop-sidebar");
   }
 
-  // Save/restore submenu states
-  function saveSubmenuStates() {
-    const states = {};
-    document.querySelectorAll("[data-submenu-key]").forEach((item) => {
-      const key = item.getAttribute("data-submenu-key");
-      const submenu = item.parentElement?.querySelector(".submenu-container");
-      if (submenu && key) {
-        states[key] =
-          !submenu.classList.contains("hidden") &&
-          submenu.style.maxHeight !== "0px";
-      }
-    });
-    localStorage.setItem(STORAGE_KEYS.submenus, JSON.stringify(states));
+  function getMobileSidebar() {
+    return document.getElementById("mobile-sidebar");
   }
 
-  function restoreSubmenuStates() {
+  function getSidebarOverlay() {
+    return document.getElementById("sidebar-overlay");
+  }
+
+  function getCloseSidebarButton() {
+    return document.getElementById("close-sidebar");
+  }
+
+  function getSidebarNav() {
+    return document.getElementById("sidebar-nav");
+  }
+
+  function getCurrentPath() {
+    return window.location.pathname;
+  }
+
+  function readStorage(key) {
     try {
-      const states = JSON.parse(
-        localStorage.getItem(STORAGE_KEYS.submenus) || "{}"
-      );
-      Object.entries(states).forEach(([key, isOpen]) => {
-        const item = document.querySelector(`[data-submenu-key="${key}"]`);
-        if (item) {
-          const submenu =
-            item.parentElement?.querySelector(".submenu-container");
-          const chevron = item.querySelector(".submenu-chevron");
-          if (submenu) {
-            if (isOpen) {
-              submenu.classList.remove("hidden");
-              submenu.style.maxHeight = submenu.scrollHeight + "px";
-              if (chevron) chevron.classList.add("rotate-180");
-            } else {
-              submenu.classList.add("hidden");
-              submenu.style.maxHeight = "0px";
-              if (chevron) chevron.classList.remove("rotate-180");
-            }
-          }
-        }
-      });
-    } catch (e) {
-      // Silently handle localStorage errors (e.g., in private browsing mode)
+      return localStorage.getItem(key);
+    } catch (error) {
+      return null;
     }
   }
 
-  // Save/restore scroll position with smart scrolling for settings
-  function saveScrollPosition() {
-    const navEl = sidebarNavEl ?? document.getElementById("sidebar-nav");
-    if (navEl) {
-      localStorage.setItem(
-        STORAGE_KEYS.scrollPosition,
-        navEl.scrollTop.toString()
-      );
+  function writeStorage(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      // Ignore localStorage write failures.
     }
   }
 
-  function restoreScrollPosition() {
-    if (sidebarNavEl) {
-      const scrollPos = localStorage.getItem(STORAGE_KEYS.scrollPosition);
-      if (scrollPos) {
-        sidebarNavEl.scrollTop = parseInt(scrollPos, 10);
-      }
-    }
+  function isExactPathMatch(targetPath) {
+    return getCurrentPath() === targetPath;
   }
 
-  function updateSidebarState() {
-    if (!desktopSidebarEl) return;
-
-    const collapseBtn = document.getElementById("sidebar-collapse");
-    if (!collapseBtn) return;
-
-    const expandedIcon = collapseBtn.querySelector(".sidebar-icon-expanded");
-    const collapsedIcon = collapseBtn.querySelector(".sidebar-icon-collapsed");
-
-    if (isCollapsed) {
-      desktopSidebarEl.style.width = "60px";
-      desktopSidebarEl.classList.add("sidebar-collapsed");
-      expandedIcon?.classList.add("hidden");
-      collapsedIcon?.classList.remove("hidden");
-    } else {
-      desktopSidebarEl.style.width = "240px";
-      desktopSidebarEl.classList.remove("sidebar-collapsed");
-      expandedIcon?.classList.remove("hidden");
-      collapsedIcon?.classList.add("hidden");
+  function isPrefixPathMatch(targetPath) {
+    const currentPath = getCurrentPath();
+    if (targetPath === "/admin") {
+      return currentPath === targetPath;
     }
-
-    // Update CSS custom property for smooth transitions
-    document.documentElement.style.setProperty(
-      "--sidebar-width",
-      isCollapsed ? "60px" : "240px"
+    return (
+      currentPath === targetPath || currentPath.startsWith(`${targetPath}/`)
     );
-
-    localStorage.setItem(STORAGE_KEYS.collapsed, isCollapsed.toString());
   }
 
-  function toggleSidebarCollapse() {
-    isCollapsed = !isCollapsed;
-    updateSidebarState();
+  function getSubmenuContainer(toggleButton) {
+    return toggleButton.parentElement?.querySelector(".submenu-container");
   }
 
-  function toggleMobileSidebar() {
-    mobileSidebarEl?.classList.toggle("-translate-x-full");
-    sidebarOverlayEl?.classList.toggle("opacity-0");
-    sidebarOverlayEl?.classList.toggle("pointer-events-none");
+  function getSubmenuChevron(toggleButton) {
+    return toggleButton.querySelector(".submenu-chevron");
   }
 
-  // Enhanced submenu toggle with smart scrolling for settings
-  function toggleSubmenu(submenu, chevron, save = true) {
-    const isCurrentlyHidden =
-      submenu.classList.contains("hidden") || submenu.style.maxHeight === "0px";
+  function isSubmenuOpen(submenu) {
+    if (!submenu) return false;
+    return (
+      !submenu.classList.contains("hidden") && submenu.style.maxHeight !== "0px"
+    );
+  }
 
-    if (isCurrentlyHidden) {
-      // Note: Scroll handling is done in the click handler to ensure proper timing
+  function setSubmenuOpen(toggleButton, shouldOpen, save = true) {
+    const submenu = getSubmenuContainer(toggleButton);
+    const chevron = getSubmenuChevron(toggleButton);
+
+    if (!submenu) return;
+
+    if (shouldOpen) {
       submenu.classList.remove("hidden");
-      submenu.style.maxHeight = submenu.scrollHeight + "px";
-      if (chevron) chevron.classList.add("rotate-180");
+      submenu.style.maxHeight = `${submenu.scrollHeight}px`;
+      chevron?.classList.add("rotate-180");
     } else {
       submenu.style.maxHeight = "0px";
-      if (chevron) chevron.classList.remove("rotate-180");
-      setTimeout(() => {
+      chevron?.classList.remove("rotate-180");
+      window.setTimeout(() => {
         if (submenu.style.maxHeight === "0px") {
           submenu.classList.add("hidden");
         }
       }, 300);
     }
 
+    toggleButton.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+
     if (save) {
       saveSubmenuStates();
     }
   }
 
-  function bindSubmenuEvents() {
+  function syncOpenSubmenuHeights() {
     document
       .querySelectorAll('[data-toggle-submenu="true"]')
       .forEach((toggleButton) => {
-        if (toggleButton.dataset.sidebarSubmenuBound === "true") return;
-
-        const submenuContainer =
-          toggleButton.parentElement?.querySelector(".submenu-container");
-        const chevron = toggleButton.querySelector(".submenu-chevron");
-
-        if (!submenuContainer) return;
-
-        // Add click handler
-        toggleButton.addEventListener("click", () => {
-          // Do not preventDefault or stopPropagation.
-          // Allow the parent link to naturally navigate to its href, while simultaneously
-          // toggling the submenu visually.
-
-          const isSettings =
-            toggleButton.getAttribute("data-is-settings") === "true";
-
-          // If collapsed, expand the sidebar and then show the submenu
-          if (isCollapsed) {
-            toggleSidebarCollapse();
-            // immediately toggle the submenu, CSS transitions handle the rest
-            toggleSubmenu(submenuContainer, chevron);
-            return;
-          }
-
-          toggleSubmenu(submenuContainer, chevron);
-
-          // Auto-scroll for Settings dropdown to ensure all submenu items are visible
-          if (isSettings && sidebarNavEl) {
-            // Wait for submenu to fully expand before calculating scroll position
-            setTimeout(() => {
-              const maxScroll =
-                sidebarNavEl.scrollHeight - sidebarNavEl.clientHeight;
-
-              if (maxScroll > 10) {
-                // Scroll to maximum position to ensure Cache Settings is visible above View Store
-                sidebarNavEl.scrollTo({
-                  top: maxScroll,
-                  behavior: "smooth",
-                });
-              }
-            }, 300);
-          }
-        });
-
-        toggleButton.dataset.sidebarSubmenuBound = "true";
+        const submenu = getSubmenuContainer(toggleButton);
+        if (submenu && isSubmenuOpen(submenu)) {
+          submenu.style.maxHeight = `${submenu.scrollHeight}px`;
+        }
       });
   }
 
-  function enforceActiveSubmenuState() {
-    const activePath = window.location.pathname;
+  function saveSubmenuStates() {
+    const states = {};
+    document
+      .querySelectorAll('#desktop-sidebar [data-toggle-submenu="true"]')
+      .forEach((toggleButton) => {
+        const key = toggleButton.getAttribute("data-submenu-key");
+        const submenu = getSubmenuContainer(toggleButton);
+        if (key && submenu) {
+          states[key] = isSubmenuOpen(submenu);
+        }
+      });
+    writeStorage(STORAGE_KEYS.submenus, JSON.stringify(states));
+  }
+
+  function getSavedSubmenuStates() {
+    try {
+      return JSON.parse(readStorage(STORAGE_KEYS.submenus) || "{}");
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function parentContainsActiveSubItem(toggleButton) {
+    return Array.from(
+      toggleButton.parentElement?.querySelectorAll("[data-sidebar-subitem]") || []
+    ).some((subItem) => isExactPathMatch(subItem.getAttribute("data-sidebar-item-href")));
+  }
+
+  function isParentItemActive(toggleButton) {
+    const itemHref = toggleButton.getAttribute("data-href");
+    if (!itemHref) return false;
+    return isPrefixPathMatch(itemHref) || parentContainsActiveSubItem(toggleButton);
+  }
+
+  function restoreSubmenuStates() {
+    const savedStates = getSavedSubmenuStates();
 
     document
       .querySelectorAll('[data-toggle-submenu="true"]')
       .forEach((toggleButton) => {
-        const submenuContainer =
-          toggleButton.parentElement?.querySelector(".submenu-container");
-        const chevron = toggleButton.querySelector(".submenu-chevron");
-        const itemHref = toggleButton.getAttribute("data-href");
+        const key = toggleButton.getAttribute("data-submenu-key");
+        const storedState =
+          key && Object.prototype.hasOwnProperty.call(savedStates, key)
+            ? Boolean(savedStates[key])
+            : false;
+        const shouldOpen = isParentItemActive(toggleButton) || storedState;
+        setSubmenuOpen(toggleButton, shouldOpen, false);
+      });
+  }
 
-        if (!submenuContainer || !itemHref) return;
+  function saveScrollPosition() {
+    const sidebarNavEl = getSidebarNav();
+    if (!sidebarNavEl) return;
+    writeStorage(STORAGE_KEYS.scrollPosition, sidebarNavEl.scrollTop.toString());
+  }
 
-        // Check if should be open (current path matches a child)
-        let shouldBeOpen =
-          activePath.startsWith(itemHref) && activePath !== itemHref;
-        if (!shouldBeOpen) {
-          submenuContainer.querySelectorAll("a").forEach((subLink) => {
-            if (subLink.getAttribute("href") === activePath) {
-              shouldBeOpen = true;
-            }
+  function restoreScrollPosition() {
+    const sidebarNavEl = getSidebarNav();
+    const scrollPosition = readStorage(STORAGE_KEYS.scrollPosition);
+
+    if (!sidebarNavEl || !scrollPosition) return;
+
+    sidebarNavEl.scrollTop = Number.parseInt(scrollPosition, 10) || 0;
+  }
+
+  function setSidebarCollapsed(shouldCollapse, save = true) {
+    const desktopSidebarEl = getDesktopSidebar();
+    const collapseButton = document.getElementById("sidebar-collapse");
+
+    if (!desktopSidebarEl) return;
+
+    sidebarState.isCollapsed = shouldCollapse;
+    document.body.classList.remove("sidebar-pre-collapsed");
+
+    if (shouldCollapse) {
+      desktopSidebarEl.style.width = "60px";
+      desktopSidebarEl.classList.add("sidebar-collapsed");
+    } else {
+      desktopSidebarEl.style.width = "240px";
+      desktopSidebarEl.classList.remove("sidebar-collapsed");
+    }
+
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      shouldCollapse ? "60px" : "240px"
+    );
+
+    if (collapseButton) {
+      collapseButton
+        .querySelector(".sidebar-icon-expanded")
+        ?.classList.toggle("hidden", shouldCollapse);
+      collapseButton
+        .querySelector(".sidebar-icon-collapsed")
+        ?.classList.toggle("hidden", !shouldCollapse);
+    }
+
+    if (save) {
+      writeStorage(STORAGE_KEYS.collapsed, shouldCollapse.toString());
+    }
+
+    requestAnimationFrame(syncOpenSubmenuHeights);
+  }
+
+  function toggleSidebarCollapse() {
+    setSidebarCollapsed(!sidebarState.isCollapsed);
+  }
+
+  function toggleMobileSidebar() {
+    getMobileSidebar()?.classList.toggle("-translate-x-full");
+    getSidebarOverlay()?.classList.toggle("opacity-0");
+    getSidebarOverlay()?.classList.toggle("pointer-events-none");
+  }
+
+  function applyActiveStates() {
+    document.querySelectorAll("[data-sidebar-link]").forEach((link) => {
+      const href = link.getAttribute("data-sidebar-item-href");
+      const isActive = href ? isPrefixPathMatch(href) : false;
+      link.classList.toggle("is-active", isActive);
+      if (isActive) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
+
+    document.querySelectorAll("[data-sidebar-subitem]").forEach((link) => {
+      const href = link.getAttribute("data-sidebar-item-href");
+      const isActive = href ? isExactPathMatch(href) : false;
+      link.classList.toggle("is-active", isActive);
+      if (isActive) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
+
+    document.querySelectorAll("[data-sidebar-parent]").forEach((toggleButton) => {
+      const isActive = isParentItemActive(toggleButton);
+      toggleButton.classList.toggle("is-active", isActive);
+    });
+  }
+
+  function revealSettingsSubmenu(toggleButton) {
+    const sidebarNavEl = getSidebarNav();
+    const submenu = getSubmenuContainer(toggleButton);
+    const lastSubItem = submenu?.lastElementChild;
+
+    if (
+      !sidebarNavEl ||
+      !submenu ||
+      !lastSubItem ||
+      !toggleButton.closest("#desktop-sidebar")
+    ) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const navRect = sidebarNavEl.getBoundingClientRect();
+        const itemRect = lastSubItem.getBoundingClientRect();
+        const bottomPadding = 16;
+
+        if (itemRect.bottom > navRect.bottom - bottomPadding) {
+          sidebarNavEl.scrollBy({
+            top: itemRect.bottom - (navRect.bottom - bottomPadding),
+            behavior: "smooth",
           });
         }
-
-        // Apply state
-        if (shouldBeOpen) {
-          submenuContainer.classList.remove("hidden");
-          submenuContainer.style.maxHeight = submenuContainer.scrollHeight + "px";
-          if (chevron) chevron.classList.add("rotate-180");
-        }
       });
+    });
   }
 
-  function detachElementListeners() {
-    sidebarOverlayEl?.removeEventListener("click", toggleMobileSidebar);
-    closeSidebarBtn?.removeEventListener("click", toggleMobileSidebar);
+  function bindSubmenuToggleHandlers(rootElement) {
+    if (!rootElement || rootElement.dataset.sidebarBound === "true") return;
 
-    if (sidebarNavEl && sidebarScrollHandler) {
-      sidebarNavEl.removeEventListener("scroll", sidebarScrollHandler);
-    }
-    sidebarScrollHandler = null;
+    rootElement.addEventListener("click", (event) => {
+      const toggleButton = event.target.closest('[data-toggle-submenu="true"]');
+      if (!toggleButton || !rootElement.contains(toggleButton)) return;
+
+      const isSettings = toggleButton.getAttribute("data-is-settings") === "true";
+
+      if (toggleButton.closest("#desktop-sidebar") && sidebarState.isCollapsed) {
+        setSidebarCollapsed(false);
+        setSubmenuOpen(toggleButton, true);
+      } else {
+        const submenu = getSubmenuContainer(toggleButton);
+        setSubmenuOpen(toggleButton, !isSubmenuOpen(submenu));
+      }
+
+      if (isSettings) {
+        revealSettingsSubmenu(toggleButton);
+      }
+    });
+
+    rootElement.dataset.sidebarBound = "true";
   }
 
-  function attachElementListeners() {
-    sidebarOverlayEl?.addEventListener("click", toggleMobileSidebar);
-    closeSidebarBtn?.addEventListener("click", toggleMobileSidebar);
+  function bindScrollPersistence() {
+    const sidebarNavEl = getSidebarNav();
+    if (!sidebarNavEl || sidebarNavEl.dataset.scrollBound === "true") return;
 
-    if (sidebarNavEl) {
-      sidebarScrollHandler = () => {
-        clearTimeout(sidebarScrollTimeout);
-        sidebarScrollTimeout = setTimeout(saveScrollPosition, 150);
-      };
-      sidebarNavEl.addEventListener("scroll", sidebarScrollHandler);
-    }
+    sidebarNavEl.addEventListener("scroll", () => {
+      window.clearTimeout(sidebarState.scrollTimeout);
+      sidebarState.scrollTimeout = window.setTimeout(saveScrollPosition, 150);
+    });
+
+    sidebarNavEl.dataset.scrollBound = "true";
+  }
+
+  function bindStaticControl(control, handler) {
+    if (!control || control.dataset.bound === "true") return;
+    control.addEventListener("click", handler);
+    control.dataset.bound = "true";
+  }
+
+  function bindGlobalListeners() {
+    if (sidebarState.globalListenersBound) return;
+
+    window.addEventListener("toggleMobileSidebar", toggleMobileSidebar);
+    window.addEventListener("toggleSidebarCollapse", toggleSidebarCollapse);
+    window.addEventListener("beforeunload", () => {
+      saveSubmenuStates();
+      saveScrollPosition();
+    });
+
+    document.addEventListener("astro:page-load", () => {
+      applyActiveStates();
+      syncOpenSubmenuHeights();
+    });
+
+    sidebarState.globalListenersBound = true;
   }
 
   function initializeSidebar() {
-    detachElementListeners();
-    cacheElements();
+    const desktopSidebarEl = getDesktopSidebar();
 
-    // Apply exact visual width class sizes
-    applyInitialState();
+    sidebarState.isCollapsed = readStorage(STORAGE_KEYS.collapsed) === "true";
+    setSidebarCollapsed(sidebarState.isCollapsed, false);
 
-    // Bind interactive elements strictly ONCE per element
-    bindSubmenuEvents();
+    bindSubmenuToggleHandlers(desktopSidebarEl);
+    bindSubmenuToggleHandlers(getMobileSidebar());
+    bindStaticControl(getSidebarOverlay(), toggleMobileSidebar);
+    bindStaticControl(getCloseSidebarButton(), toggleMobileSidebar);
+    bindScrollPersistence();
+    bindGlobalListeners();
 
-    // Dynamically query location and toggle submenu max heights
-    enforceActiveSubmenuState();
-
-    attachElementListeners();
-  }
-
-  function saveSidebarState() {
-    saveSubmenuStates();
-    saveScrollPosition();
-  }
-
-  function updateActiveLinkStyles() {
-    const activePath = window.location.pathname;
-    
-    // Desktop Nav Items
-    document.querySelectorAll('#desktop-sidebar .sidebar-nav-item, #mobile-sidebar .sidebar-nav-item').forEach(el => {
-      const itemHref = el.getAttribute('href');
-      const hasSubItems = el.getAttribute('data-toggle-submenu') === 'true';
-      let isActive = activePath === itemHref;
-
-      // Check if any sub-item is active
-      if (!isActive && hasSubItems) {
-        const submenuContainer = el.parentElement?.querySelector('.submenu-container');
-        if (submenuContainer) {
-           submenuContainer.querySelectorAll('a').forEach(subLink => {
-             if (activePath === subLink.getAttribute('href')) {
-               isActive = true;
-             }
-           });
-        }
-      }
-
-      const icon = el.querySelector('svg');
-      
-      if (isActive) {
-        el.setAttribute('class', "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02] bg-sidebar-accent text-sidebar-accent-foreground shadow-sm border border-sidebar-border");
-        if (icon) icon.setAttribute('class', "w-5 h-5 shrink-0 sidebar-nav-icon transition-all duration-200 text-sidebar-accent-foreground");
-      } else {
-        el.setAttribute('class', "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02] text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground");
-        if (icon) icon.setAttribute('class', "w-5 h-5 shrink-0 sidebar-nav-icon transition-all duration-200 text-muted-foreground group-hover:text-sidebar-accent-foreground");
-      }
-    });
-
-    // Sub Nav Items
-    document.querySelectorAll('#desktop-sidebar .sidebar-subnav-item, #mobile-sidebar .sidebar-subnav-item').forEach(el => {
-      const itemHref = el.getAttribute('href');
-      const isActive = activePath === itemHref;
-      const icon = el.querySelector('svg');
-
-      if (isActive) {
-         el.setAttribute('class', "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 sidebar-subnav-item hover:scale-[1.01] hover:translate-x-1 bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm");
-         if (icon) icon.setAttribute('class', "w-4 h-4 shrink-0 sidebar-subnav-icon transition-all duration-200 text-sidebar-accent-foreground");
-      } else {
-         el.setAttribute('class', "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 sidebar-subnav-item hover:scale-[1.01] hover:translate-x-1 text-muted-foreground hover:bg-sidebar-accent/30 hover:text-sidebar-accent-foreground");
-         if (icon) icon.setAttribute('class', "w-4 h-4 shrink-0 sidebar-subnav-icon transition-all duration-200 text-muted-foreground group-hover:text-sidebar-accent-foreground");
-      }
-    });
-  }
-
-  function handleSidebarPageLoad() {
-    requestAnimationFrame(() => {
-      initializeSidebar();
-      updateActiveLinkStyles();
-    });
-  }
-
-  // Global event listeners
-  window.addEventListener("toggleMobileSidebar", toggleMobileSidebar);
-  window.addEventListener("toggleSidebarCollapse", toggleSidebarCollapse);
-  window.addEventListener("beforeunload", saveSidebarState);
-  document.addEventListener("astro:before-swap", saveSidebarState);
-  document.addEventListener("astro:page-load", handleSidebarPageLoad);
-
-
-  function handleInitialLoad() {
-    handleSidebarPageLoad();
-    setTimeout(() => {
+    if (desktopSidebarEl && desktopSidebarEl.dataset.sidebarInitialized !== "true") {
       restoreSubmenuStates();
-      restoreScrollPosition();
-    }, 100);
+      requestAnimationFrame(restoreScrollPosition);
+      desktopSidebarEl.dataset.sidebarInitialized = "true";
+    }
+
+    applyActiveStates();
+    syncOpenSubmenuHeights();
   }
 
-  // Initialize immediately if DOM is ready, otherwise wait for it.
-  // Re-initialization on client navigations is handled by astro:page-load.
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", handleInitialLoad);
+    document.addEventListener("DOMContentLoaded", initializeSidebar, { once: true });
   } else {
-    handleInitialLoad();
+    requestAnimationFrame(initializeSidebar);
   }
-
-  function cleanupSidebarRuntime() {
-    detachElementListeners();
-    clearTimeout(sidebarScrollTimeout);
-    window.removeEventListener("toggleMobileSidebar", toggleMobileSidebar);
-    window.removeEventListener("toggleSidebarCollapse", toggleSidebarCollapse);
-    window.removeEventListener("beforeunload", saveSidebarState);
-    document.removeEventListener("astro:before-swap", saveSidebarState);
-    document.removeEventListener("astro:page-load", handleSidebarPageLoad);
-    document.removeEventListener("DOMContentLoaded", handleSidebarPageLoad);
-  }
-
-  window[SIDEBAR_RUNTIME_KEY] = {
-    cleanup: cleanupSidebarRuntime,
-  };
 </script>
 
 <style>
@@ -889,6 +859,29 @@ const storefrontUrl = await getSidebarStorefrontUrl();
   .submenu-container:not(.hidden) {
     max-height: 600px;
     opacity: 1;
+  }
+
+  .sidebar-nav-item.is-active {
+    background: oklch(var(--sidebar-accent));
+    color: oklch(var(--sidebar-accent-foreground));
+    border-color: oklch(var(--sidebar-border));
+    box-shadow: 0 1px 2px 0 oklch(var(--sidebar-accent-foreground) / 0.08);
+  }
+
+  .sidebar-nav-item.is-active .sidebar-nav-icon,
+  .sidebar-nav-item.is-active .submenu-chevron {
+    color: oklch(var(--sidebar-accent-foreground));
+  }
+
+  .sidebar-subnav-item.is-active {
+    background: oklch(var(--sidebar-accent));
+    color: oklch(var(--sidebar-accent-foreground));
+    font-weight: 500;
+    box-shadow: 0 1px 2px 0 oklch(var(--sidebar-accent-foreground) / 0.08);
+  }
+
+  .sidebar-subnav-item.is-active .sidebar-subnav-icon {
+    color: oklch(var(--sidebar-accent-foreground));
   }
 
   .sidebar-nav-item {
