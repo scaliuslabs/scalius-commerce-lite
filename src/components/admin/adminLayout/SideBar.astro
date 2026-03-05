@@ -84,6 +84,7 @@ const storefrontUrl = await getSidebarStorefrontUrl();
   class="hidden md:flex md:flex-col bg-sidebar border-r border-sidebar-border sticky top-0 h-screen transition-all duration-300 ease-in-out z-20 sidebar-desktop"
   style="width: var(--sidebar-width, 240px);"
   id="desktop-sidebar"
+  transition:persist="sidebar-desktop"
 >
   <div
     class="flex items-center h-14 px-6 border-b border-sidebar-border bg-sidebar"
@@ -263,6 +264,7 @@ const storefrontUrl = await getSidebarStorefrontUrl();
 <aside
   class="fixed inset-y-0 left-0 w-[280px] bg-sidebar z-50 md:hidden transform -translate-x-full transition-all duration-300 shadow-2xl border-r border-sidebar-border"
   id="mobile-sidebar"
+  transition:persist="sidebar-mobile"
 >
   <div
     class="flex items-center justify-between h-14 px-6 border-b border-sidebar-border"
@@ -772,8 +774,59 @@ const storefrontUrl = await getSidebarStorefrontUrl();
     saveScrollPosition();
   }
 
+  function updateActiveLinkStyles() {
+    const activePath = window.location.pathname;
+    
+    // Desktop Nav Items
+    document.querySelectorAll('#desktop-sidebar .sidebar-nav-item, #mobile-sidebar .sidebar-nav-item').forEach(el => {
+      const itemHref = el.getAttribute('href');
+      const hasSubItems = el.getAttribute('data-toggle-submenu') === 'true';
+      let isActive = activePath === itemHref;
+
+      // Check if any sub-item is active
+      if (!isActive && hasSubItems) {
+        const submenuContainer = el.parentElement?.querySelector('.submenu-container');
+        if (submenuContainer) {
+           submenuContainer.querySelectorAll('a').forEach(subLink => {
+             if (activePath === subLink.getAttribute('href')) {
+               isActive = true;
+             }
+           });
+        }
+      }
+
+      const icon = el.querySelector('svg');
+      
+      if (isActive) {
+        el.setAttribute('class', "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02] bg-sidebar-accent text-sidebar-accent-foreground shadow-sm border border-sidebar-border");
+        if (icon) icon.setAttribute('class', "w-5 h-5 shrink-0 sidebar-nav-icon transition-all duration-200 text-sidebar-accent-foreground");
+      } else {
+        el.setAttribute('class', "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02] text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground");
+        if (icon) icon.setAttribute('class', "w-5 h-5 shrink-0 sidebar-nav-icon transition-all duration-200 text-muted-foreground group-hover:text-sidebar-accent-foreground");
+      }
+    });
+
+    // Sub Nav Items
+    document.querySelectorAll('#desktop-sidebar .sidebar-subnav-item, #mobile-sidebar .sidebar-subnav-item').forEach(el => {
+      const itemHref = el.getAttribute('href');
+      const isActive = activePath === itemHref;
+      const icon = el.querySelector('svg');
+
+      if (isActive) {
+         el.setAttribute('class', "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 sidebar-subnav-item hover:scale-[1.01] hover:translate-x-1 bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm");
+         if (icon) icon.setAttribute('class', "w-4 h-4 shrink-0 sidebar-subnav-icon transition-all duration-200 text-sidebar-accent-foreground");
+      } else {
+         el.setAttribute('class', "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 sidebar-subnav-item hover:scale-[1.01] hover:translate-x-1 text-muted-foreground hover:bg-sidebar-accent/30 hover:text-sidebar-accent-foreground");
+         if (icon) icon.setAttribute('class', "w-4 h-4 shrink-0 sidebar-subnav-icon transition-all duration-200 text-muted-foreground group-hover:text-sidebar-accent-foreground");
+      }
+    });
+  }
+
   function handleSidebarPageLoad() {
-    requestAnimationFrame(initializeSidebar);
+    requestAnimationFrame(() => {
+      initializeSidebar();
+      updateActiveLinkStyles();
+    });
   }
 
   // Global event listeners
@@ -782,6 +835,7 @@ const storefrontUrl = await getSidebarStorefrontUrl();
   window.addEventListener("beforeunload", saveSidebarState);
   document.addEventListener("astro:before-swap", saveSidebarState);
   document.addEventListener("astro:page-load", handleSidebarPageLoad);
+
 
   // Initialize immediately if DOM is ready, otherwise wait for it.
   // Re-initialization on client navigations is handled by astro:page-load.
