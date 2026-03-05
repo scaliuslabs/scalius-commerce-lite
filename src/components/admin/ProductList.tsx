@@ -79,6 +79,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/shared/utils";
 import { getOptimizedImageUrl } from "@/shared/image-optimizer";
 import { useCurrency } from "@/hooks/useCurrency";
+import { navigateTo } from "@/lib/client/navigate";
 
 type SortField = "name" | "price" | "category" | "createdAt" | "updatedAt";
 type SortOrder = "asc" | "desc";
@@ -601,11 +602,11 @@ export function ProductList({
   );
 
   const handleView = useCallback((id: string) => {
-    window.location.href = `/admin/products/${id}`;
+    void navigateTo(`/admin/products/${id}`);
   }, []);
 
   const handleEdit = useCallback((id: string) => {
-    window.location.href = `/admin/products/${id}/edit`;
+    void navigateTo(`/admin/products/${id}/edit`);
   }, []);
 
   const triggerDelete = useCallback((id: string) => {
@@ -878,9 +879,11 @@ export function ProductList({
               variant="outline"
               size="sm"
               onClick={() =>
-              (window.location.href = showTrashed
-                ? "/admin/products"
-                : "/admin/products?trashed=true")
+                void navigateTo(
+                  showTrashed
+                    ? "/admin/products"
+                    : "/admin/products?trashed=true",
+                )
               }
               className="h-7 text-xs text-muted-foreground hover:text-foreground"
             >
@@ -898,7 +901,7 @@ export function ProductList({
               <Button
                 size="sm"
                 className="h-7 text-xs"
-                onClick={() => (window.location.href = "/admin/products/new")}
+                onClick={() => void navigateTo("/admin/products/new")}
               >
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 Add Product
@@ -1110,9 +1113,7 @@ export function ProductList({
                       {!showTrashed && !hasActiveFilters && (
                         <Button
                           size="sm"
-                          onClick={() =>
-                            (window.location.href = "/admin/products/new")
-                          }
+                          onClick={() => void navigateTo("/admin/products/new")}
                           className="mt-1 h-7 text-xs"
                         >
                           <Plus className="h-3.5 w-3.5 mr-1" />

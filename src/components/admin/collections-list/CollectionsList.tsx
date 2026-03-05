@@ -24,6 +24,7 @@ import type {
   SortOrder,
   DeleteDialogState,
 } from "./types";
+import { navigateTo } from "@/lib/client/navigate";
 
 export function CollectionsList({
   showTrashed = false,
@@ -117,7 +118,7 @@ export function CollectionsList({
   };
 
   const handleCreateClick = () => {
-    window.location.href = "/admin/collections/new";
+    void navigateTo("/admin/collections/new");
   };
 
   return (

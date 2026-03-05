@@ -19,6 +19,7 @@ import { OrderItemsPopover } from "./OrderItemsPopover";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { FraudCheckIndicator } from "./FraudCheckIndicator";
 import { useCurrency } from "@/hooks/useCurrency";
+import { navigateTo } from "@/lib/client/navigate";
 
 interface OrderMobileCardProps {
   order: OrderListItem;
@@ -235,9 +236,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               variant="ghost"
               size="sm"
               className="h-8 w-8 p-0"
-              onClick={() =>
-                (window.location.href = `/admin/orders/${order.id}`)
-              }
+              onClick={() => void navigateTo(`/admin/orders/${order.id}`)}
             >
               <Eye className="h-4 w-4" />
             </Button>
