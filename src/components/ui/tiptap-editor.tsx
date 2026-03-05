@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
@@ -669,16 +670,30 @@ export function TiptapEditor({
   // Handle Escape key and body scroll lock for fullscreen
   useEffect(() => {
     if (!isFullscreen) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyPaddingRight = document.body.style.paddingRight;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setIsFullscreen(false);
       }
     };
+
     document.addEventListener("keydown", handleKeyDown);
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.paddingRight = previousBodyPaddingRight;
+      document.documentElement.style.overflow = previousHtmlOverflow;
     };
   }, [isFullscreen]);
 
@@ -764,12 +779,12 @@ export function TiptapEditor({
     );
   }
 
-  return (
+  const editorContent = (
     <div
       className={cn(
         "flex flex-col bg-background",
         isFullscreen
-          ? "fixed inset-0 z-[100]"
+          ? "fixed inset-0 z-[999] h-dvh w-screen"
           : "border rounded-md",
         !isFullscreen && className,
       )}
@@ -822,4 +837,10 @@ export function TiptapEditor({
       </div>
     </div>
   );
+
+  if (isFullscreen && typeof document !== "undefined") {
+    return createPortal(editorContent, document.body);
+  }
+
+  return editorContent;
 }
