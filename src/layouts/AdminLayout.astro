@@ -321,6 +321,7 @@ const navSections: NavSection[] = allNavSections
           </div>
           <TooltipProvider client:idle>
             <div class="flex items-center">
+              <span id="admin-nav-status" role="status" aria-live="polite" aria-atomic="true">Opening...</span>
               <CacheNukeButton client:idle />
               <div class="h-5 w-px bg-border mx-2.5"></div>
               <DarkModeToggle client:idle />
@@ -362,6 +363,29 @@ const navSections: NavSection[] = allNavSections
         pointer-events: none;
       }
 
+      #admin-nav-status {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid hsl(var(--border) / 0.8);
+        border-radius: 9999px;
+        background: hsl(var(--muted) / 0.7);
+        color: hsl(var(--muted-foreground));
+        font-size: 0.72rem;
+        line-height: 1;
+        font-weight: 500;
+        padding: 0.3rem 0.5rem;
+        margin-right: 0.5rem;
+        opacity: 0;
+        transform: translateY(-2px);
+        transition: opacity 140ms ease, transform 140ms ease;
+        pointer-events: none;
+      }
+
+      html.admin-nav-pending #admin-nav-progress {
+        opacity: 0.9;
+        transform: scaleX(0.2);
+      }
+
       html.admin-nav-loading #admin-nav-progress {
         opacity: 1;
         transform: scaleX(0.82);
@@ -372,33 +396,112 @@ const navSections: NavSection[] = allNavSections
         transform: scaleX(1);
         transition: transform 120ms ease, opacity 200ms ease;
       }
+
+      html.admin-nav-pending #admin-nav-status,
+      html.admin-nav-loading #admin-nav-status {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      html.admin-nav-pending,
+      html.admin-nav-pending body,
+      html.admin-nav-loading,
+      html.admin-nav-loading body {
+        cursor: progress;
+      }
+
+      html.admin-nav-pending #main-content,
+      html.admin-nav-loading #main-content {
+        opacity: 0.8;
+      }
     </style>
 
-    <script is:inline>
+    <script>
+      import { navigateTo } from "@/lib/client/navigate";
+
       (() => {
-        if (window.__adminNavProgressBound__) return;
-        window.__adminNavProgressBound__ = true;
+        type AdminNavWindow = Window & {
+          __adminNavProgressBound__?: boolean;
+          __adminPendingDestination__?: string | null;
+        };
+
+        const navWindow = window as AdminNavWindow;
+
+        if (navWindow.__adminNavProgressBound__) return;
+        navWindow.__adminNavProgressBound__ = true;
 
         const root = document.documentElement;
-        let resetTimer;
+        let resetTimer: number | undefined;
+
+        const clearPendingState = () => {
+          navWindow.__adminPendingDestination__ = null;
+          root.classList.remove("admin-nav-pending");
+        };
 
         const startLoading = () => {
           if (resetTimer) window.clearTimeout(resetTimer);
           root.classList.remove("admin-nav-loaded");
+          root.classList.add("admin-nav-pending");
           root.classList.add("admin-nav-loading");
         };
 
         const stopLoading = () => {
+          clearPendingState();
+
           if (!root.classList.contains("admin-nav-loading")) return;
           root.classList.add("admin-nav-loaded");
           resetTimer = window.setTimeout(() => {
-            root.classList.remove("admin-nav-loading", "admin-nav-loaded");
+            root.classList.remove("admin-nav-loading", "admin-nav-loaded", "admin-nav-pending");
           }, 140);
+        };
+
+        const getInternalAdminDestination = (anchor: HTMLAnchorElement): string | null => {
+          const href = anchor.getAttribute("href");
+          if (!href || href.startsWith("#")) return null;
+          if (anchor.target && anchor.target !== "_self") return null;
+          if (anchor.hasAttribute("download") || anchor.hasAttribute("data-astro-reload")) return null;
+
+          const destination = new URL(anchor.href, window.location.href);
+          if (destination.origin !== window.location.origin) return null;
+          if (!destination.pathname.startsWith("/admin")) return null;
+
+          const isSamePathAndSearch =
+            destination.pathname === window.location.pathname &&
+            destination.search === window.location.search;
+
+          if (isSamePathAndSearch && destination.hash) return null;
+          if (destination.href === window.location.href) return null;
+
+          return destination.href;
+        };
+
+        const handleInternalAdminLinkClick = (event: MouseEvent) => {
+          if (event.defaultPrevented) return;
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+          const target = event.target as Element | null;
+          const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+          if (!anchor) return;
+
+          const destination = getInternalAdminDestination(anchor);
+          if (!destination) return;
+
+          if (navWindow.__adminPendingDestination__ === destination) {
+            event.preventDefault();
+            return;
+          }
+
+          navWindow.__adminPendingDestination__ = destination;
+          root.classList.remove("admin-nav-loaded");
+          root.classList.add("admin-nav-pending");
+          event.preventDefault();
+          void navigateTo(destination);
         };
 
         document.addEventListener("astro:before-preparation", startLoading);
         document.addEventListener("astro:after-swap", stopLoading);
         document.addEventListener("astro:page-load", stopLoading);
+        document.addEventListener("click", handleInternalAdminLinkClick);
       })();
     </script>
 
