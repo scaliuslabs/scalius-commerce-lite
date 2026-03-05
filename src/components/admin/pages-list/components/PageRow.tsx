@@ -100,7 +100,10 @@ export function PageRow({
                 </a>
               </Button>
               <Button variant="ghost" size="sm" asChild title="Edit page">
-                <a href={`/admin/pages/${page.id}/edit`}>
+                <a
+                  href={`/admin/pages/${page.id}/edit`}
+                  data-astro-prefetch="hover"
+                >
                   <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
                 </a>
               </Button>
