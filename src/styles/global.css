@@ -119,6 +119,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings:
@@ -216,7 +217,6 @@
 /* Enhanced sidebar animations */
 .sidebar-nav {
   @apply transition-all duration-200 ease-out;
-  scroll-behavior: smooth;
   scrollbar-width: thin;
 }
 
@@ -293,10 +293,9 @@
   width: 3px;
   height: 60%;
   background: linear-gradient(180deg,
-    oklch(var(--sidebar-primary) / 0.8),
-    oklch(var(--sidebar-primary) / 0.5),
-    oklch(var(--sidebar-primary) / 0.8)
-  );
+      oklch(var(--sidebar-primary) / 0.8),
+      oklch(var(--sidebar-primary) / 0.5),
+      oklch(var(--sidebar-primary) / 0.8));
   border-radius: 0 2px 2px 0;
   opacity: 0.9;
 }
@@ -344,9 +343,17 @@
   animation-fill-mode: both;
 }
 
-.sidebar-section:nth-child(1) { animation-delay: 0ms; }
-.sidebar-section:nth-child(2) { animation-delay: 50ms; }
-.sidebar-section:nth-child(3) { animation-delay: 100ms; }
+.sidebar-section:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.sidebar-section:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.sidebar-section:nth-child(3) {
+  animation-delay: 100ms;
+}
 
 /* Section label enhancements */
 .sidebar-section-label {
@@ -619,6 +626,7 @@ header {
     opacity: 0;
     transform: translateX(20px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -630,6 +638,7 @@ header {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -766,13 +775,13 @@ header {
 }
 
 /* Prevent excessive spacing inside table cells */
-.ProseMirror td > *:first-child,
-.ProseMirror th > *:first-child {
+.ProseMirror td>*:first-child,
+.ProseMirror th>*:first-child {
   margin-top: 0;
 }
 
-.ProseMirror td > *:last-child,
-.ProseMirror th > *:last-child {
+.ProseMirror td>*:last-child,
+.ProseMirror th>*:last-child {
   margin-bottom: 0;
 }
 
@@ -923,6 +932,7 @@ header {
 
 /* Accessibility improvements */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   ::before,
   ::after {
@@ -935,6 +945,7 @@ header {
 
 /* Improve text selection visibility */
 ::selection {
-  background-color: oklch(0.705 0.015 286.067 / 50%); /* ring color with alpha */
+  background-color: oklch(0.705 0.015 286.067 / 50%);
+  /* ring color with alpha */
   color: oklch(var(--foreground));
 }
