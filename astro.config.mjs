@@ -33,10 +33,10 @@ export default defineConfig({
   // Add compression for better performance
   compressHTML: true,
 
-  // Aggressive but safe prefetching for admin SPA-like navigation
+  // Targeted prefetching avoids network saturation on link-heavy tables
   prefetch: {
-    prefetchAll: true,
-    defaultStrategy: "viewport",
+    prefetchAll: false,
+    defaultStrategy: "hover",
   },
 
   integrations: [
