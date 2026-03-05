@@ -29,6 +29,7 @@ import {
 } from "../ui/alert-dialog";
 import { Edit, Trash2, Plus, Power, PowerOff } from "lucide-react";
 import { formatDate } from "@/shared/utils";
+import { AdminListPagination } from "./shared/AdminListPagination";
 
 interface Analytics {
   id: string;
@@ -48,6 +49,22 @@ interface AnalyticsListProps {
 export function AnalyticsList({ analytics }: AnalyticsListProps) {
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+
+  const totalPages = Math.max(1, Math.ceil(analytics.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+
+  React.useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedAnalytics = React.useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return analytics.slice(start, start + pageSize);
+  }, [analytics, safePage, pageSize]);
 
   const formatType = (type: string) => {
     switch (type) {
@@ -155,7 +172,7 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              analytics.map((script) => (
+              paginatedAnalytics.map((script) => (
                 <TableRow key={script.id}>
                   <TableCell className="font-medium">{script.name}</TableCell>
                   <TableCell>{formatType(script.type)}</TableCell>
@@ -236,6 +253,22 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
             )}
           </TableBody>
         </Table>
+        {analytics.length > 0 && (
+          <AdminListPagination
+            pagination={{
+              total: analytics.length,
+              page: safePage,
+              limit: pageSize,
+              totalPages,
+            }}
+            itemLabel="scripts"
+            onPageChange={setCurrentPage}
+            onLimitChange={(nextLimit) => {
+              setPageSize(nextLimit);
+              setCurrentPage(1);
+            }}
+          />
+        )}
       </CardContent>
     </Card>
   );

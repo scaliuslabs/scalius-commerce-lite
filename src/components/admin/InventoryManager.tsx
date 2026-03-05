@@ -2,7 +2,7 @@
 // Rebuilt Inventory Management Dashboard (Premium UI/UX).
 
 import { useState, useEffect, useCallback } from "react";
-import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, ChevronLeft, ChevronRight, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
+import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/shared/utils";
+import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 
 // ---------- Types ----------
 
@@ -488,51 +489,19 @@ function PaginationControls({
   if (!pagination || pagination.total === 0) return null;
 
   return (
-    <div className="flex items-center justify-between pt-3">
-      <div className="text-xs text-muted-foreground hidden sm:block">
-        Showing {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} {itemName}
-      </div>
-      <div className="flex items-center space-x-2 lg:space-x-3">
-        <div className="flex items-center space-x-1.5">
-          <p className="text-xs font-medium text-muted-foreground whitespace-nowrap">Rows</p>
-          <Select value={String(pagination.limit)} onValueChange={(v) => onLimitChange(Number(v))}>
-            <SelectTrigger className="h-7 w-[70px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="text-xs">
-              {[10, 20, 50, 100].map(size => (
-                <SelectItem key={size} value={String(size)}>{size}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex w-[80px] items-center justify-center text-xs font-medium text-muted-foreground">
-          Page {pagination.page} of {pagination.totalPages}
-        </div>
-        <div className="flex items-center space-x-0.5">
-          <Button
-            variant="outline"
-            className="h-7 w-7 p-0"
-            onClick={() => onPageChange(pagination.page - 1)}
-            disabled={pagination.page === 1}
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="outline"
-            className="h-7 w-7 p-0"
-            onClick={() => onPageChange(pagination.page + 1)}
-            disabled={pagination.page >= pagination.totalPages}
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
-    </div>
+    <AdminListPagination
+      pagination={pagination}
+      itemLabel={itemName}
+      onPageChange={onPageChange}
+      onLimitChange={onLimitChange}
+      pageSizeOptions={[10, 20, 50, 100]}
+    />
   );
 }
 
-function StatCard({ label, value, icon: Icon, iconBgColor, iconTextColor }: { label: string; value: number; icon: any; iconBgColor: string; iconTextColor: string }) {
+function StatCard({ label, value, icon: Icon, iconBgColor, iconTextColor }: { label: string; value: number | null | undefined; icon: any; iconBgColor: string; iconTextColor: string }) {
+  const safeValue = Number.isFinite(value) ? Number(value) : 0;
+
   return (
     <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
       <CardContent className="p-2 flex items-center space-x-2">
@@ -543,7 +512,7 @@ function StatCard({ label, value, icon: Icon, iconBgColor, iconTextColor }: { la
           <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider leading-tight">
             {label}
           </p>
-          <p className="text-sm font-bold text-foreground leading-tight">{value.toLocaleString()}</p>
+          <p className="text-sm font-bold text-foreground leading-tight">{safeValue.toLocaleString()}</p>
         </div>
       </CardContent>
     </Card>

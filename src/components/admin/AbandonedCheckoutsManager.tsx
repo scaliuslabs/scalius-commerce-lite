@@ -50,11 +50,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/utils";
 import type { AbandonedCheckout } from "@/db/schema";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "../ui/pagination";
+import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 
 // --- Type Definitions ---
 interface CartItem {
@@ -402,6 +398,10 @@ export function AbandonedCheckoutsManager() {
     fetchCheckouts(newPage);
   };
 
+  const handleLimitChange = (newLimit: number) => {
+    setPagination((prev) => ({ ...prev, limit: newLimit, page: 1 }));
+  };
+
   const handleSort = (key: SortKey) => {
     setSort((prev) => ({
       key,
@@ -586,35 +586,13 @@ export function AbandonedCheckoutsManager() {
           </CardContent>
           {pagination.totalPages > 1 && (
             <CardHeader>
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handlePageChange(pagination.page - 1)}
-                      disabled={pagination.page <= 1}
-                    >
-                      Previous
-                    </Button>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <span className="text-sm font-medium p-2">
-                      Page {pagination.page} of {pagination.totalPages}
-                    </span>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handlePageChange(pagination.page + 1)}
-                      disabled={pagination.page >= pagination.totalPages}
-                    >
-                      Next
-                    </Button>
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
+              <AdminListPagination
+                pagination={pagination}
+                itemLabel="checkouts"
+                onPageChange={handlePageChange}
+                onLimitChange={handleLimitChange}
+                pageSizeOptions={[10, 20, 50, 100]}
+              />
             </CardHeader>
           )}
         </Card>
