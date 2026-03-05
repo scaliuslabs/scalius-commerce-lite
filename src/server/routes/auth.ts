@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { generateToken, revokeToken, getTokenStats } from "../utils/jwt";
 import { authMiddleware } from "../middleware/auth";
+import { db } from "@/db";
+import { settings } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 
 // Define the user type for type safety
 interface User {
@@ -74,6 +77,32 @@ app.get("/token", async (c) => {
   });
 });
 
+// Get public firebase config for client setup
+app.get("/firebase-config", async (c) => {
+  try {
+    const result = await db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(
+        and(
+          eq(settings.key, "public_config"),
+          eq(settings.category, "firebase"),
+        ),
+      )
+      .get();
+
+    let config = {};
+    if (result && result.value) {
+      config = JSON.parse(result.value);
+    }
+
+    return c.json(config);
+  } catch (error) {
+    console.error("Error fetching firebase config:", error);
+    return c.json({ error: "Failed to load config" }, 500);
+  }
+});
+
 // Apply auth middleware to all routes below
 app.use("/*", authMiddleware);
 
@@ -88,6 +117,8 @@ app.get("/me", (c) => {
     },
   });
 });
+
+
 
 // Revoke current token
 app.post("/revoke", async (c) => {
