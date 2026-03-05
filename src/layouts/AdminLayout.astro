@@ -33,6 +33,7 @@ import {
 
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
+import { ClientRouter } from "astro:transitions";
 import "../styles/global.css";
 import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
 import { CacheNukeButton } from "@/components/admin/CacheNukeButton";
@@ -261,6 +262,7 @@ const navSections: NavSection[] = allNavSections
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <ClientRouter />
     <script is:inline>
       (function() {
         var theme = "light";
@@ -281,6 +283,7 @@ const navSections: NavSection[] = allNavSections
     data-current-path={Astro.url.pathname}
     class="bg-background text-foreground transition-colors duration-200"
   >
+    <div id="admin-nav-progress" aria-hidden="true"></div>
     <div class="flex min-h-screen">
       <SideBar navSections={navSections} currentPath={currentPath} />
 
@@ -341,6 +344,62 @@ const navSections: NavSection[] = allNavSections
 
     <ShadcnToaster client:idle />
     <SonnerToaster richColors closeButton client:idle />
+
+    <style is:inline>
+      #admin-nav-progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: hsl(var(--primary));
+        opacity: 0;
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 180ms ease, opacity 180ms ease;
+        z-index: 100;
+        pointer-events: none;
+      }
+
+      html.admin-nav-loading #admin-nav-progress {
+        opacity: 1;
+        transform: scaleX(0.82);
+      }
+
+      html.admin-nav-loaded #admin-nav-progress {
+        opacity: 0;
+        transform: scaleX(1);
+        transition: transform 120ms ease, opacity 200ms ease;
+      }
+    </style>
+
+    <script is:inline>
+      (() => {
+        if (window.__adminNavProgressBound__) return;
+        window.__adminNavProgressBound__ = true;
+
+        const root = document.documentElement;
+        let resetTimer;
+
+        const startLoading = () => {
+          if (resetTimer) window.clearTimeout(resetTimer);
+          root.classList.remove("admin-nav-loaded");
+          root.classList.add("admin-nav-loading");
+        };
+
+        const stopLoading = () => {
+          if (!root.classList.contains("admin-nav-loading")) return;
+          root.classList.add("admin-nav-loaded");
+          resetTimer = window.setTimeout(() => {
+            root.classList.remove("admin-nav-loading", "admin-nav-loaded");
+          }, 140);
+        };
+
+        document.addEventListener("astro:before-preparation", startLoading);
+        document.addEventListener("astro:after-swap", stopLoading);
+        document.addEventListener("astro:page-load", stopLoading);
+      })();
+    </script>
 
     <script>
       function initializeSidebarControls() {
