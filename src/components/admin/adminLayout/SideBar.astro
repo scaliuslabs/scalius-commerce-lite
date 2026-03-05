@@ -633,43 +633,17 @@ const storefrontUrl = await getSidebarStorefrontUrl();
     }
   }
 
-  function initializeSubmenuHandlers() {
-    const activePath = window.location.pathname || currentPath;
-
+  function bindSubmenuEvents() {
     document
       .querySelectorAll('[data-toggle-submenu="true"]')
       .forEach((toggleButton) => {
+        if (toggleButton.dataset.sidebarSubmenuBound === "true") return;
+
         const submenuContainer =
           toggleButton.parentElement?.querySelector(".submenu-container");
         const chevron = toggleButton.querySelector(".submenu-chevron");
-        const itemHref = toggleButton.getAttribute("data-href");
 
-        if (!submenuContainer || !itemHref) return;
-
-        if (toggleButton.dataset.sidebarSubmenuBound === "true") return;
-
-        // Check if should be open initially (current path or restored state)
-        let openInitially =
-          activePath.startsWith(itemHref) && activePath !== itemHref;
-        if (!openInitially) {
-          submenuContainer.querySelectorAll("a").forEach((subLink) => {
-            if (subLink.getAttribute("href") === activePath) {
-              openInitially = true;
-            }
-          });
-        }
-
-        // Set initial state without saving to localStorage
-        if (openInitially) {
-          submenuContainer.classList.remove("hidden");
-          submenuContainer.style.maxHeight =
-            submenuContainer.scrollHeight + "px";
-          if (chevron) chevron.classList.add("rotate-180");
-        } else {
-          submenuContainer.classList.add("hidden");
-          submenuContainer.style.maxHeight = "0px";
-          if (chevron) chevron.classList.remove("rotate-180");
-        }
+        if (!submenuContainer) return;
 
         // Add click handler
         toggleButton.addEventListener("click", (event) => {
@@ -678,6 +652,16 @@ const storefrontUrl = await getSidebarStorefrontUrl();
 
           const isSettings =
             toggleButton.getAttribute("data-is-settings") === "true";
+
+          // If collapsed, expand the sidebar and then show the submenu
+          if (isCollapsed) {
+            toggleSidebarCollapse();
+            // immediately toggle the submenu, CSS transitions handle the rest
+            toggleSubmenu(submenuContainer, chevron);
+            return;
+          }
+
+          toggleSubmenu(submenuContainer, chevron);
 
           // Auto-scroll for Settings dropdown to ensure all submenu items are visible
           if (isSettings && sidebarNavEl) {
@@ -692,35 +676,54 @@ const storefrontUrl = await getSidebarStorefrontUrl();
                   top: maxScroll,
                   behavior: "smooth",
                 });
-
-                // Double-check after submenu animation completes
-                setTimeout(() => {
-                  const finalMaxScroll =
-                    sidebarNavEl.scrollHeight - sidebarNavEl.clientHeight;
-                  if (finalMaxScroll > maxScroll) {
-                    sidebarNavEl.scrollTo({
-                      top: finalMaxScroll,
-                      behavior: "smooth",
-                    });
-                  }
-                }, 100);
               }
             }, 300);
           }
-
-          // If collapsed, expand the sidebar and then show the submenu
-          if (isCollapsed) {
-            toggleSidebarCollapse();
-            setTimeout(() => {
-              toggleSubmenu(submenuContainer, chevron);
-            }, 300);
-            return;
-          }
-
-          toggleSubmenu(submenuContainer, chevron);
         });
 
         toggleButton.dataset.sidebarSubmenuBound = "true";
+      });
+  }
+
+  function enforceActiveSubmenuState() {
+    const activePath = window.location.pathname;
+
+    document
+      .querySelectorAll('[data-toggle-submenu="true"]')
+      .forEach((toggleButton) => {
+        const submenuContainer =
+          toggleButton.parentElement?.querySelector(".submenu-container");
+        const chevron = toggleButton.querySelector(".submenu-chevron");
+        const itemHref = toggleButton.getAttribute("data-href");
+
+        if (!submenuContainer || !itemHref) return;
+
+        // Check if should be open (current path matches a child)
+        let shouldBeOpen =
+          activePath.startsWith(itemHref) && activePath !== itemHref;
+        if (!shouldBeOpen) {
+          submenuContainer.querySelectorAll("a").forEach((subLink) => {
+            if (subLink.getAttribute("href") === activePath) {
+              shouldBeOpen = true;
+            }
+          });
+        }
+
+        // Apply state
+        if (shouldBeOpen) {
+          submenuContainer.classList.remove("hidden");
+          submenuContainer.style.maxHeight = submenuContainer.scrollHeight + "px";
+          if (chevron) chevron.classList.add("rotate-180");
+        } else {
+          submenuContainer.style.maxHeight = "0px";
+          if (chevron) chevron.classList.remove("rotate-180");
+          // Allow max-height transition to complete before adding hidden class to remove it from layout
+          setTimeout(() => {
+            if (submenuContainer.style.maxHeight === "0px") {
+              submenuContainer.classList.add("hidden");
+            }
+          }, 350);
+        }
       });
   }
 
@@ -751,21 +754,15 @@ const storefrontUrl = await getSidebarStorefrontUrl();
     detachElementListeners();
     cacheElements();
 
-    // Apply initial state immediately to prevent FOUC
+    // Apply exact visual width class sizes
     applyInitialState();
 
-    // Restore submenu states
-    restoreSubmenuStates();
+    // Bind interactive elements strictly ONCE per element
+    bindSubmenuEvents();
 
-    // Initialize submenu handlers
-    initializeSubmenuHandlers();
+    // Dynamically query location and toggle submenu max heights
+    enforceActiveSubmenuState();
 
-    // Restore scroll position after a short delay to ensure content is rendered
-    setTimeout(() => {
-      restoreScrollPosition();
-    }, 100);
-
-    // Re-bind element listeners after navigation swaps
     attachElementListeners();
   }
 
@@ -837,12 +834,20 @@ const storefrontUrl = await getSidebarStorefrontUrl();
   document.addEventListener("astro:page-load", handleSidebarPageLoad);
 
 
+  function handleInitialLoad() {
+    handleSidebarPageLoad();
+    setTimeout(() => {
+      restoreSubmenuStates();
+      restoreScrollPosition();
+    }, 100);
+  }
+
   // Initialize immediately if DOM is ready, otherwise wait for it.
   // Re-initialization on client navigations is handled by astro:page-load.
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", handleSidebarPageLoad);
+    document.addEventListener("DOMContentLoaded", handleInitialLoad);
   } else {
-    handleSidebarPageLoad();
+    handleInitialLoad();
   }
 
   function cleanupSidebarRuntime() {
