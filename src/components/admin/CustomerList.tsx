@@ -38,6 +38,7 @@ import { Badge } from "../ui/badge";
 import { Checkbox } from "../ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrency } from "@/hooks/useCurrency";
+import { navigateTo } from "@/lib/client/navigate";
 import { cn } from "@/shared/utils";
 import {
   AlertTriangle,
@@ -322,9 +323,9 @@ export function CustomerList({
   );
 
   const toggleTrashView = useCallback(() => {
-    window.location.href = showTrashed
-      ? "/admin/customers"
-      : "/admin/customers?trashed=true";
+    void navigateTo(
+      showTrashed ? "/admin/customers" : "/admin/customers?trashed=true",
+    );
   }, [showTrashed]);
 
   const performApiAction = useCallback(

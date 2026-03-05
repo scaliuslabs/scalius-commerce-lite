@@ -74,6 +74,7 @@ import {
 import { Checkbox } from "../ui/checkbox";
 import { cn } from "@/shared/utils";
 import { getOptimizedImageUrl } from "@/shared/image-optimizer";
+import { navigateTo } from "@/lib/client/navigate";
 
 interface Category {
   id: string;
@@ -675,7 +676,7 @@ export function CategoryList({
     } else {
       url.searchParams.set("trashed", "true");
     }
-    window.location.href = url.toString();
+    void navigateTo(url.toString());
   }, [showTrashed]);
 
   const formatDate = useCallback((date: Date): string => {
@@ -761,7 +762,7 @@ export function CategoryList({
               <Button
                 size="sm"
                 className="h-7 text-sm font-medium"
-                onClick={() => (window.location.href = "/admin/categories/new")}
+                onClick={() => void navigateTo("/admin/categories/new")}
               >
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 Add Category
@@ -988,9 +989,7 @@ export function CategoryList({
                       {!showTrashed && !hasActiveFilters && (
                         <Button
                           size="sm"
-                          onClick={() =>
-                            (window.location.href = "/admin/categories/new")
-                          }
+                          onClick={() => void navigateTo("/admin/categories/new")}
                           className="mt-1 h-7 text-sm font-medium"
                         >
                           <Plus className="h-3.5 w-3.5 mr-1" />
@@ -1050,7 +1049,7 @@ export function CategoryList({
                           <span
                             className="font-medium text-sm text-foreground hover:text-primary cursor-pointer truncate"
                             onClick={() =>
-                              (window.location.href = `/admin/categories/${category.id}/edit`)
+                              void navigateTo(`/admin/categories/${category.id}/edit`)
                             }
                           >
                             {category.name}
