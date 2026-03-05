@@ -38,7 +38,12 @@ const handleSubmit = `async function(values) {
     }
 
     const data = await response.json();
-    window.location.href = \`/admin/products/\${data.id}/edit\`;
+    const destination = \`/admin/products/\${data.id}/edit\`;
+    if (typeof window.navigateToProductEdit === "function") {
+      await window.navigateToProductEdit(destination);
+    } else {
+      window.location.href = destination;
+    }
   } catch (error) {
     console.error("Error creating product:", error);
     alert("Failed to create product. Please try again.");
@@ -56,6 +61,29 @@ const handleSubmit = `async function(values) {
     />
   </div>
 </AdminLayout>
+
+<script>
+  type ProductNavigationWindow = Window & {
+    __productEditNavigate?: (url: string) => Promise<void>;
+    navigateToProductEdit?: (url: string) => Promise<void>;
+  };
+
+  const navigationWindow = window as ProductNavigationWindow;
+
+  navigationWindow.__productEditNavigate ??= async (url: string) => {
+    try {
+      const { navigate } = await import("astro:transitions/client");
+      await navigate(url);
+      return;
+    } catch {
+      // Fallback keeps the same behavior when client navigation isn't available.
+    }
+
+    window.location.href = url;
+  };
+
+  navigationWindow.navigateToProductEdit = navigationWindow.__productEditNavigate;
+</script>
 
 <script is:inline define:vars={{ handleSubmit }}>
   // Convert the string function to an actual function
