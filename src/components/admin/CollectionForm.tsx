@@ -46,6 +46,7 @@ import {
 import { Trash2, Layers, Package, Search } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { navigateTo } from "@/lib/client/navigate";
 
 interface Category {
   id: string;
@@ -191,7 +192,7 @@ export function CollectionForm({
         `Collection ${isEdit ? "updated" : "created"} successfully`,
       );
 
-      window.location.href = "/admin/collections";
+      await navigateTo("/admin/collections");
     } catch (error) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save collection", {

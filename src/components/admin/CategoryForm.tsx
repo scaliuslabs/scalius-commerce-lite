@@ -33,6 +33,7 @@ import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { getOptimizedImageUrl } from "@/shared/image-optimizer";
+import { navigateTo } from "@/lib/client/navigate";
 
 const categoryFormSchema = z.object({
   id: z.string().optional(),
@@ -177,7 +178,7 @@ export function CategoryForm({
       );
 
       setTimeout(() => {
-        window.location.href = "/admin/categories";
+        void navigateTo("/admin/categories");
       }, 500);
     } catch (error: any) {
       console.error("Error submitting form:", error);

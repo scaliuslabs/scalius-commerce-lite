@@ -46,6 +46,7 @@ import { format } from "date-fns";
 import { Separator } from "../../ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrency } from "@/hooks/useCurrency";
+import { navigateTo } from "@/lib/client/navigate";
 interface Product {
   id: string;
   name: string;
@@ -214,7 +215,7 @@ export function AmountOffProductsForm({
       });
       // Consider redirecting within a useEffect based on a success state
       // instead of direct manipulation here, but keep as is for now.
-      window.location.href = "/admin/discounts";
+      await navigateTo("/admin/discounts");
     } catch (error) {
       const action = defaultValues?.id ? "updating" : "creating";
       console.error(`Error ${action} discount:`, error);
@@ -885,7 +886,7 @@ export function AmountOffProductsForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => window.history.back()} // Or redirect to list: window.location.href = "/admin/discounts"
+              onClick={() => window.history.back()} // Or redirect to list: void navigateTo("/admin/discounts")
               disabled={isSubmitting}
             >
               Cancel

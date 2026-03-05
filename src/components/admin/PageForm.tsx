@@ -29,6 +29,7 @@ import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
+import { navigateTo } from "@/lib/client/navigate";
 
 const pageFormSchema = z.object({
   id: z.string().optional(),
@@ -123,7 +124,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
 
       // Small delay to show toast before redirect
       setTimeout(() => {
-        window.location.href = "/admin/pages";
+        void navigateTo("/admin/pages");
       }, 500);
     } catch (error: any) {
       console.error("Error submitting form:", error);

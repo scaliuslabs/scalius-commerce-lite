@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import { navigateTo } from "@/lib/client/navigate";
 
 const analyticsFormSchema = z.object({
   id: z.string().optional(),
@@ -95,7 +96,7 @@ export function AnalyticsForm({
       }
 
       await response.json();
-      window.location.href = "/admin/analytics";
+      await navigateTo("/admin/analytics");
     } catch (error) {
       console.error("Error submitting form:", error);
       alert("Failed to save analytics script. Please try again.");
