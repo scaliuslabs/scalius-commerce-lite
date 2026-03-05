@@ -33,6 +33,12 @@ export default defineConfig({
   // Add compression for better performance
   compressHTML: true,
 
+  // Aggressive but safe prefetching for admin SPA-like navigation
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: "viewport",
+  },
+
   integrations: [
     react(),
     honoIntegration(),
