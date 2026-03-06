@@ -37,13 +37,15 @@ export function MediaManager({
   onSelect,
   onSelectMultiple,
   selectedFiles = [],
+  open: controlledOpen,
+  onOpenChange,
   triggerLabel = "Select Image",
   acceptedFileTypes = "image/*",
   maxFileSize = 10,
   dialogClassName,
   trigger,
 }: MediaManagerProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [uncontrolledDialogOpen, setUncontrolledDialogOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -58,6 +60,13 @@ export function MediaManager({
     () => selectedFiles.map((file) => file.id.replace(/^temp_/, "")),
     [selectedFiles],
   );
+  const dialogOpen = controlledOpen ?? uncontrolledDialogOpen;
+  const triggerNode = trigger === undefined ? (
+    <Button variant="outline" className="w-full">
+      <Upload className="mr-2 h-4 w-4" />
+      {triggerLabel}
+    </Button>
+  ) : trigger;
 
   // Use custom hooks
   const {
@@ -115,7 +124,7 @@ export function MediaManager({
               createdAt: new Date(file.createdAt),
             };
             onSelect(fileWithDateObject);
-            setDialogOpen(false);
+            handleDialogChange(false);
             toast({
               title: "Image Selected",
               description: "Newly uploaded image has been selected.",
@@ -207,7 +216,7 @@ export function MediaManager({
         createdAt: new Date(file.createdAt),
       };
       onSelect(fileWithDateObject);
-      setDialogOpen(false);
+      handleDialogChange(false);
     }
   };
 
@@ -282,7 +291,7 @@ export function MediaManager({
     }));
 
     onSelectMultiple(filesWithDateObjects);
-    setDialogOpen(false);
+    handleDialogChange(false);
   };
 
   // Preview navigation
@@ -304,7 +313,11 @@ export function MediaManager({
 
   // Reset state when dialog closes
   const handleDialogChange = (isOpen: boolean) => {
-    setDialogOpen(isOpen);
+    if (controlledOpen === undefined) {
+      setUncontrolledDialogOpen(isOpen);
+    }
+    onOpenChange?.(isOpen);
+
     if (!isOpen) {
       setShowPreview(false);
       setSelectedFileIds([]);
@@ -316,14 +329,7 @@ export function MediaManager({
   return (
     <>
       <Dialog open={dialogOpen} onOpenChange={handleDialogChange}>
-        <DialogTrigger asChild>
-          {trigger ?? (
-            <Button variant="outline" className="w-full">
-              <Upload className="mr-2 h-4 w-4" />
-              {triggerLabel}
-            </Button>
-          )}
-        </DialogTrigger>
+        {triggerNode !== null ? <DialogTrigger asChild>{triggerNode}</DialogTrigger> : null}
 
         <DialogContent
           className={`max-w-7xl w-[95vw] max-h-[95vh] h-[95vh] p-0 overflow-hidden flex flex-col ${dialogClassName || ""}`}
@@ -489,7 +495,7 @@ export function MediaManager({
                 };
                 onSelect(fileWithDateObject);
                 setShowPreview(false);
-                setDialogOpen(false);
+                handleDialogChange(false);
               }
             : undefined
         }

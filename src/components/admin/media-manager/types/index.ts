@@ -46,6 +46,8 @@ export interface MediaManagerProps {
   onSelect?: (file: MediaFile) => void;
   onSelectMultiple?: (files: MediaFile[]) => void;
   selectedFiles?: MediaFile[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   triggerLabel?: string;
   acceptedFileTypes?: string;
   maxFileSize?: number; // in MB

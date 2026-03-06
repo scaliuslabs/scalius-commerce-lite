@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
@@ -109,17 +110,20 @@ const MenuBar = ({
   toggleModal,
   compact = false,
   isFullscreen = false,
+  className,
 }: {
   editor: Editor | null;
   toggleModal: () => void;
   compact?: boolean;
   isFullscreen?: boolean;
+  className?: string;
 }) => {
   const [linkUrl, setLinkUrl] = useState<string>("");
   const [imageUrl, setImageUrl] = useState<string>("");
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [linkOpen, setLinkOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
+  const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
   const [tableRows, setTableRows] = useState<string>("3");
   const [tableCols, setTableCols] = useState<string>("3");
@@ -194,6 +198,13 @@ const MenuBar = ({
     });
   };
 
+  const openMediaLibrary = () => {
+    setImageOpen(false);
+    requestAnimationFrame(() => {
+      setMediaLibraryOpen(true);
+    });
+  };
+
   const addVideo = () => {
     if (!videoUrl.trim()) return;
     const url = videoUrl.trim();
@@ -228,7 +239,14 @@ const MenuBar = ({
   const padding = compact ? "p-0.5" : "p-1";
 
   return (
-    <div className={cn("border border-input rounded-t-md bg-background flex flex-wrap items-center justify-between", padding, gapSize)}>
+    <div
+      className={cn(
+        "border border-input rounded-t-md bg-background flex flex-wrap items-center justify-between",
+        padding,
+        gapSize,
+        className,
+      )}
+    >
       <div className={cn("flex flex-wrap items-center", gapSize)}>
         {/* Text formatting */}
         <ToolbarButton
@@ -347,20 +365,15 @@ const MenuBar = ({
 
               <div className="space-y-2">
                 <p className="text-xs font-medium">Choose from media library</p>
-                <MediaManager
-                  onSelect={addImageFromMediaLibrary}
-                  trigger={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full justify-center"
-                    >
-                      Browse media library
-                    </Button>
-                  }
-                  dialogClassName={isFullscreen ? "z-[1002]" : undefined}
-                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-center"
+                  onClick={openMediaLibrary}
+                >
+                  Browse media library
+                </Button>
                 <p className="text-xs text-muted-foreground">
                   Media library images keep the original source in the document
                   and render through optimized Cloudflare transforms.
@@ -369,6 +382,13 @@ const MenuBar = ({
             </div>
           </PopoverContent>
         </Popover>
+
+        <MediaManager
+          onSelect={addImageFromMediaLibrary}
+          open={mediaLibraryOpen}
+          onOpenChange={setMediaLibraryOpen}
+          trigger={null}
+        />
 
         <Popover open={videoOpen} onOpenChange={setVideoOpen}>
           <Tooltip open={videoOpen ? false : undefined}>
@@ -892,60 +912,97 @@ export function TiptapEditor({
     <div
       className={cn(
         "flex flex-col bg-background",
-        isFullscreen
-          ? "fixed inset-0 z-[999] h-dvh w-screen shadow-2xl"
-          : "border rounded-md",
+        isFullscreen ? "h-full min-h-0" : "border rounded-md",
         !isFullscreen && className,
       )}
     >
       {/* Fullscreen header */}
       {isFullscreen && (
-        <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
-          <span className="text-sm font-medium text-muted-foreground">
-            Editing Content
-          </span>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground hidden sm:inline">
-              Press <kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Esc</kbd> to exit
+        <div className="shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-3">
+            <span className="text-sm font-medium text-muted-foreground">
+              Editing Content
             </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsFullscreen(false)}
-              className="gap-1.5"
-            >
-              <Minimize2 className="h-3.5 w-3.5" />
-              Exit Fullscreen
-            </Button>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Press <kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Esc</kbd> to exit
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsFullscreen(false)}
+                className="gap-1.5"
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+                Exit Fullscreen
+              </Button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Toolbar */}
       {editorInstance && (
-        <MenuBar
-          editor={editorInstance}
-          toggleModal={toggleFullscreen}
-          compact={isFullscreen ? false : compact}
-          isFullscreen={isFullscreen}
-        />
+        <div
+          className={cn(
+            "shrink-0",
+            isFullscreen &&
+              "border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80",
+          )}
+        >
+          <div
+            className={cn(
+              isFullscreen
+                ? "mx-auto w-full max-w-5xl px-4 py-3"
+                : "",
+            )}
+          >
+            <MenuBar
+              editor={editorInstance}
+              toggleModal={toggleFullscreen}
+              compact={isFullscreen ? false : compact}
+              isFullscreen={isFullscreen}
+              className={cn(
+                isFullscreen &&
+                  "rounded-md border-border/80 bg-background shadow-sm",
+              )}
+            />
+          </div>
+        </div>
       )}
 
       {/* Editor content — always mounted, never unmounts */}
       <div
         className={cn(
-          "overflow-y-auto border-t",
-          isFullscreen ? "flex-1 overscroll-contain" : "",
+          "overflow-y-auto",
+          isFullscreen
+            ? "min-h-0 flex-1 overscroll-contain"
+            : "border-t",
         )}
         style={!isFullscreen ? { maxHeight: "300px" } : undefined}
       >
-        <div className={isFullscreen ? "max-w-4xl mx-auto px-8 py-6" : ""}>
+        <div
+          className={cn(
+            isFullscreen
+              ? "mx-auto w-full max-w-5xl px-4 py-6"
+              : "",
+          )}
+        >
           <EditorContent editor={editorInstance} className="max-w-none" />
         </div>
       </div>
     </div>
   );
+
+  if (isFullscreen && typeof document !== "undefined") {
+    return createPortal(
+      <div className="fixed inset-0 z-[120] bg-background shadow-2xl">
+        {editorContent}
+      </div>,
+      document.body,
+    );
+  }
 
   return editorContent;
 }
