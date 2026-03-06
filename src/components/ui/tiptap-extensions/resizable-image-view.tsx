@@ -3,6 +3,7 @@ import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { cn } from "@/shared/utils";
 import { AlignLeft, AlignCenter, AlignRight, Trash2 } from "lucide-react";
+import { getEditorImageUrl } from "@/shared/image-optimizer";
 
 export function ResizableImageView({
   node,
@@ -17,7 +18,7 @@ export function ResizableImageView({
   const [displayWidth, setDisplayWidth] = useState<number | null>(null);
   const widthRef = useRef<number | null>(null);
 
-  // Reset display width when the attribute changes externally
+  // Reset display width when the stored attribute changes externally
   useEffect(() => {
     setDisplayWidth(null);
   }, [width]);
@@ -68,6 +69,12 @@ export function ResizableImageView({
     ? `${displayWidth}px`
     : width || undefined;
 
+  // Current pixel width for optimization hints
+  const currentWidthPx = displayWidth ?? (width ? parseInt(width, 10) : null);
+
+  // Display via optimized URL; original src is stored in the node attrs and preserved in HTML output
+  const displaySrc = getEditorImageUrl(src, currentWidthPx);
+
   const alignmentClass =
     textAlign === "center"
       ? "mx-auto"
@@ -87,7 +94,7 @@ export function ResizableImageView({
       >
         <img
           ref={imgRef}
-          src={src}
+          src={displaySrc}
           alt={alt || ""}
           className={cn(
             "block h-auto rounded-md",
@@ -100,7 +107,7 @@ export function ResizableImageView({
           draggable={false}
         />
 
-        {/* Floating toolbar - show when selected */}
+        {/* Floating toolbar — visible when selected, not while actively resizing */}
         {selected && !resizing && (
           <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-background border rounded-md shadow-lg p-0.5 z-20">
             <button
@@ -144,7 +151,7 @@ export function ResizableImageView({
           </div>
         )}
 
-        {/* Resize handle - right edge */}
+        {/* Right-edge resize handle */}
         {selected && (
           <div
             className="resize-handle right opacity-0 group-hover:opacity-100 transition-opacity"
@@ -152,7 +159,7 @@ export function ResizableImageView({
           />
         )}
 
-        {/* Resize handle - bottom-right corner */}
+        {/* Bottom-right corner resize handle */}
         {selected && (
           <div
             className="resize-handle bottom-right opacity-0 group-hover:opacity-100 transition-opacity"

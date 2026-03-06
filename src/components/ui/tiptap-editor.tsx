@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
@@ -42,12 +41,17 @@ import {
   ChevronsLeftRight,
   TextQuote,
   Video as VideoIcon,
+  Link2,
+  Library,
 } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "./tooltip";
 import { Switch } from "./switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
+import { MediaManager } from "@/components/admin/media-manager";
+import type { MediaFile } from "@/components/admin/media-manager";
 
 interface TiptapEditorProps {
   content: string;
@@ -95,12 +99,12 @@ function ToolbarButton({
 
 const MenuBar = ({
   editor,
-  toggleModal,
+  toggleFullscreen,
   compact = false,
   isFullscreen = false,
 }: {
   editor: Editor | null;
-  toggleModal: () => void;
+  toggleFullscreen: () => void;
   compact?: boolean;
   isFullscreen?: boolean;
 }) => {
@@ -136,24 +140,47 @@ const MenuBar = ({
     }
   };
 
-  const addImage = () => {
+  /**
+   * Insert block content (image or video) at the end of the document,
+   * bypassing the current selection entirely.
+   *
+   * Why: Tiptap's `focus("end")` on a document whose last child is an atom
+   * node (e.g. an image with `atom: true`) resolves to a NodeSelection on
+   * that atom. Any subsequent `insertContent` call then *replaces* the
+   * selected node. By using `insertContentAt(doc.content.size, ...)` we
+   * always append after all existing content without touching the selection.
+   */
+  const appendContent = (content: object) => {
+    const endPos = editor.state.doc.content.size;
+    editor.commands.insertContentAt(endPos, content);
+    editor.commands.focus();
+  };
+
+  const addImageFromUrl = () => {
     if (!imageUrl) return;
-    const url = imageUrl;
+    const url = imageUrl.trim();
     setImageUrl("");
     setImageOpen(false);
     requestAnimationFrame(() => {
-      editor.chain().focus().setImage({ src: url }).run();
+      appendContent({ type: "image", attrs: { src: url } });
+    });
+  };
+
+  const addImageFromMedia = (file: MediaFile) => {
+    const src = file.url;
+    setImageOpen(false);
+    requestAnimationFrame(() => {
+      appendContent({ type: "image", attrs: { src } });
     });
   };
 
   const addVideo = () => {
     if (!videoUrl) return;
-    const url = videoUrl;
+    const url = videoUrl.trim();
     setVideoUrl("");
     setVideoOpen(false);
     requestAnimationFrame(() => {
-      editor.chain().focus().run();
-      editor.commands.setYoutubeVideo({ src: url });
+      appendContent({ type: "youtube", attrs: { src: url } });
     });
   };
 
@@ -174,480 +201,518 @@ const MenuBar = ({
   const gapSize = compact ? "gap-0.5" : "gap-1";
   const padding = compact ? "p-0.5" : "p-1";
 
-  return (
-    <div className={cn("border border-input rounded-t-md bg-background flex flex-wrap items-center justify-between", padding, gapSize)}>
-      <div className={cn("flex flex-wrap items-center", gapSize)}>
-        {/* Text formatting */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          isActive={editor.isActive("bold")}
-          tooltip="Bold (Ctrl+B)"
-          buttonSize={buttonSize}
+  const toolbarContent = (
+    <div className={cn("flex flex-wrap items-center", gapSize)}>
+      {/* Text formatting */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        isActive={editor.isActive("bold")}
+        tooltip="Bold (Ctrl+B)"
+        buttonSize={buttonSize}
+      >
+        <Bold className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        isActive={editor.isActive("italic")}
+        tooltip="Italic (Ctrl+I)"
+        buttonSize={buttonSize}
+      >
+        <Italic className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        isActive={editor.isActive("underline")}
+        tooltip="Underline (Ctrl+U)"
+        buttonSize={buttonSize}
+      >
+        <UnderlineIcon className={iconSize} />
+      </ToolbarButton>
 
-        >
-          <Bold className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          isActive={editor.isActive("italic")}
-          tooltip="Italic (Ctrl+I)"
-          buttonSize={buttonSize}
+      <div className="w-px h-6 bg-border mx-1" />
 
-        >
-          <Italic className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          isActive={editor.isActive("underline")}
-          tooltip="Underline (Ctrl+U)"
-          buttonSize={buttonSize}
-
-        >
-          <UnderlineIcon className={iconSize} />
-        </ToolbarButton>
-
-        <div className="w-px h-6 bg-border mx-1" />
-
-        {/* Links, images, video */}
-        <Popover open={linkOpen} onOpenChange={setLinkOpen}>
-          <Tooltip open={linkOpen ? false : undefined}>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(buttonSize, editor.isActive("link") && "bg-accent")}
-                >
-                  <LinkIcon className={iconSize} />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={5}>
-              <p className="text-xs">Insert link</p>
-            </TooltipContent>
-          </Tooltip>
-          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                placeholder="https://example.com"
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                className="flex-1"
-                onKeyDown={(e) => e.key === "Enter" && setLink()}
-              />
-              <Button type="button" size="sm" onClick={setLink}>
-                Set
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        <Popover open={imageOpen} onOpenChange={setImageOpen}>
-          <Tooltip open={imageOpen ? false : undefined}>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={buttonSize}
-                >
-                  <ImageIcon className={iconSize} />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={5}>
-              <p className="text-xs">Insert image</p>
-            </TooltipContent>
-          </Tooltip>
-          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                placeholder="https://example.com/image.jpg"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                className="flex-1"
-                onKeyDown={(e) => e.key === "Enter" && addImage()}
-              />
-              <Button type="button" size="sm" onClick={addImage}>
-                Add
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        <Popover open={videoOpen} onOpenChange={setVideoOpen}>
-          <Tooltip open={videoOpen ? false : undefined}>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={buttonSize}
-                >
-                  <VideoIcon className={iconSize} />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={5}>
-              <p className="text-xs">Embed video</p>
-            </TooltipContent>
-          </Tooltip>
-          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                placeholder="https://youtube.com/watch?v=..."
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                className="flex-1"
-                onKeyDown={(e) => e.key === "Enter" && addVideo()}
-              />
-              <Button type="button" size="sm" onClick={addVideo}>
-                Embed
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Supports YouTube and Vimeo URLs
-            </p>
-          </PopoverContent>
-        </Popover>
-
-        <div className="w-px h-6 bg-border mx-1" />
-
-        {/* Alignment */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign("left").run()}
-          isActive={editor.isActive({ textAlign: "left" })}
-          tooltip="Align left"
-          buttonSize={buttonSize}
-
-        >
-          <AlignLeft className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign("center").run()}
-          isActive={editor.isActive({ textAlign: "center" })}
-          tooltip="Align center"
-          buttonSize={buttonSize}
-
-        >
-          <AlignCenter className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign("right").run()}
-          isActive={editor.isActive({ textAlign: "right" })}
-          tooltip="Align right"
-          buttonSize={buttonSize}
-
-        >
-          <AlignRight className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-          isActive={editor.isActive({ textAlign: "justify" })}
-          tooltip="Justify"
-          buttonSize={buttonSize}
-
-        >
-          <AlignJustify className={iconSize} />
-        </ToolbarButton>
-
-        <div className="w-px h-6 bg-border mx-1" />
-
-        {/* Headings */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          isActive={editor.isActive("heading", { level: 1 })}
-          tooltip="Heading 1"
-          buttonSize={buttonSize}
-
-        >
-          <Heading1 className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          isActive={editor.isActive("heading", { level: 2 })}
-          tooltip="Heading 2"
-          buttonSize={buttonSize}
-
-        >
-          <Heading2 className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          isActive={editor.isActive("heading", { level: 3 })}
-          tooltip="Heading 3"
-          buttonSize={buttonSize}
-
-        >
-          <Heading3 className={iconSize} />
-        </ToolbarButton>
-
-        <div className="w-px h-6 bg-border mx-1" />
-
-        {/* Lists & blockquote */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          isActive={editor.isActive("bulletList")}
-          tooltip="Bullet list"
-          buttonSize={buttonSize}
-
-        >
-          <List className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          isActive={editor.isActive("orderedList")}
-          tooltip="Numbered list"
-          buttonSize={buttonSize}
-
-        >
-          <ListOrdered className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          isActive={editor.isActive("blockquote")}
-          tooltip="Blockquote"
-          buttonSize={buttonSize}
-
-        >
-          <TextQuote className={iconSize} />
-        </ToolbarButton>
-
-        <div className="w-px h-6 bg-border mx-1" />
-
-        {/* Table */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <span>
-              <ToolbarButton
-                onClick={() => { }}
-                tooltip="Insert table"
-                buttonSize={buttonSize}
-
+      {/* Link */}
+      <Popover open={linkOpen} onOpenChange={setLinkOpen}>
+        <Tooltip open={linkOpen ? false : undefined}>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(buttonSize, editor.isActive("link") && "bg-accent")}
               >
-                <TableIcon className={iconSize} />
-              </ToolbarButton>
-            </span>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-2 space-y-2">
-            <div className="grid grid-cols-2 gap-2 items-center">
-              <Input
-                type="number"
-                value={tableRows}
-                onChange={(e) => setTableRows(e.target.value)}
-                placeholder="Rows"
-                className="h-8 text-xs"
-                min="1"
-              />
-              <Input
-                type="number"
-                value={tableCols}
-                onChange={(e) => setTableCols(e.target.value)}
-                placeholder="Cols"
-                className="h-8 text-xs"
-                min="1"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="table-header"
-                checked={tableWithHeader}
-                onCheckedChange={setTableWithHeader}
-              />
-              <label
-                htmlFor="table-header"
-                className="text-xs text-muted-foreground"
+                <LinkIcon className={iconSize} />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={5}>
+            <p className="text-xs">Insert link</p>
+          </TooltipContent>
+        </Tooltip>
+        <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <div className="flex gap-2">
+            <Input
+              type="url"
+              placeholder="https://example.com"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              className="flex-1"
+              onKeyDown={(e) => e.key === "Enter" && setLink()}
+            />
+            <Button type="button" size="sm" onClick={setLink}>
+              Set
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Image with URL + Media Library tabs */}
+      <Popover open={imageOpen} onOpenChange={setImageOpen}>
+        <Tooltip open={imageOpen ? false : undefined}>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={buttonSize}
               >
-                Include header row
-              </label>
-            </div>
+                <ImageIcon className={iconSize} />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={5}>
+            <p className="text-xs">Insert image</p>
+          </TooltipContent>
+        </Tooltip>
+        <PopoverContent
+          className="w-[420px] p-3"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <Tabs defaultValue="url">
+            <TabsList className="w-full mb-3">
+              <TabsTrigger value="url" className="flex-1 gap-1.5 text-xs">
+                <Link2 className="h-3.5 w-3.5" />
+                From URL
+              </TabsTrigger>
+              <TabsTrigger value="library" className="flex-1 gap-1.5 text-xs">
+                <Library className="h-3.5 w-3.5" />
+                Media Library
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="url" className="mt-0">
+              <div className="flex gap-2">
+                <Input
+                  type="url"
+                  placeholder="https://example.com/image.jpg"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  className="flex-1 text-sm"
+                  onKeyDown={(e) => e.key === "Enter" && addImageFromUrl()}
+                  autoFocus
+                />
+                <Button type="button" size="sm" onClick={addImageFromUrl}>
+                  Add
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Paste a direct link to an image (jpg, png, webp, gif…)
+              </p>
+            </TabsContent>
+
+            <TabsContent value="library" className="mt-0">
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Select an image from your media library to insert it.
+                </p>
+                <MediaManager
+                  onSelect={addImageFromMedia}
+                  triggerLabel="Browse Media Library"
+                  acceptedFileTypes="image/*"
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
+        </PopoverContent>
+      </Popover>
+
+      {/* Video / YouTube embed */}
+      <Popover open={videoOpen} onOpenChange={setVideoOpen}>
+        <Tooltip open={videoOpen ? false : undefined}>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={buttonSize}
+              >
+                <VideoIcon className={iconSize} />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={5}>
+            <p className="text-xs">Embed video</p>
+          </TooltipContent>
+        </Tooltip>
+        <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <div className="flex gap-2">
+            <Input
+              type="url"
+              placeholder="https://youtube.com/watch?v=..."
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              className="flex-1"
+              onKeyDown={(e) => e.key === "Enter" && addVideo()}
+            />
+            <Button type="button" size="sm" onClick={addVideo}>
+              Embed
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Supports YouTube and Vimeo URLs
+          </p>
+        </PopoverContent>
+      </Popover>
+
+      <div className="w-px h-6 bg-border mx-1" />
+
+      {/* Alignment */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign("left").run()}
+        isActive={editor.isActive({ textAlign: "left" })}
+        tooltip="Align left"
+        buttonSize={buttonSize}
+      >
+        <AlignLeft className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign("center").run()}
+        isActive={editor.isActive({ textAlign: "center" })}
+        tooltip="Align center"
+        buttonSize={buttonSize}
+      >
+        <AlignCenter className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign("right").run()}
+        isActive={editor.isActive({ textAlign: "right" })}
+        tooltip="Align right"
+        buttonSize={buttonSize}
+      >
+        <AlignRight className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+        isActive={editor.isActive({ textAlign: "justify" })}
+        tooltip="Justify"
+        buttonSize={buttonSize}
+      >
+        <AlignJustify className={iconSize} />
+      </ToolbarButton>
+
+      <div className="w-px h-6 bg-border mx-1" />
+
+      {/* Headings */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        isActive={editor.isActive("heading", { level: 1 })}
+        tooltip="Heading 1"
+        buttonSize={buttonSize}
+      >
+        <Heading1 className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        isActive={editor.isActive("heading", { level: 2 })}
+        tooltip="Heading 2"
+        buttonSize={buttonSize}
+      >
+        <Heading2 className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        isActive={editor.isActive("heading", { level: 3 })}
+        tooltip="Heading 3"
+        buttonSize={buttonSize}
+      >
+        <Heading3 className={iconSize} />
+      </ToolbarButton>
+
+      <div className="w-px h-6 bg-border mx-1" />
+
+      {/* Lists & blockquote */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        isActive={editor.isActive("bulletList")}
+        tooltip="Bullet list"
+        buttonSize={buttonSize}
+      >
+        <List className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        isActive={editor.isActive("orderedList")}
+        tooltip="Numbered list"
+        buttonSize={buttonSize}
+      >
+        <ListOrdered className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        isActive={editor.isActive("blockquote")}
+        tooltip="Blockquote"
+        buttonSize={buttonSize}
+      >
+        <TextQuote className={iconSize} />
+      </ToolbarButton>
+
+      <div className="w-px h-6 bg-border mx-1" />
+
+      {/* Table */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <span>
+            <ToolbarButton
+              onClick={() => {}}
+              tooltip="Insert table"
+              buttonSize={buttonSize}
+            >
+              <TableIcon className={iconSize} />
+            </ToolbarButton>
+          </span>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2 space-y-2">
+          <div className="grid grid-cols-2 gap-2 items-center">
+            <Input
+              type="number"
+              value={tableRows}
+              onChange={(e) => setTableRows(e.target.value)}
+              placeholder="Rows"
+              className="h-8 text-xs"
+              min="1"
+            />
+            <Input
+              type="number"
+              value={tableCols}
+              onChange={(e) => setTableCols(e.target.value)}
+              placeholder="Cols"
+              className="h-8 text-xs"
+              min="1"
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="table-header"
+              checked={tableWithHeader}
+              onCheckedChange={setTableWithHeader}
+            />
+            <label
+              htmlFor="table-header"
+              className="text-xs text-muted-foreground"
+            >
+              Include header row
+            </label>
+          </div>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={addTable}
+            className="w-full text-xs"
+          >
+            <TableIcon className="h-3 w-3 mr-1" /> Insert Table
+          </Button>
+
+          <hr className="my-2" />
+          <p className="text-xs font-medium text-muted-foreground mb-1">
+            Quick Actions:
+          </p>
+          <div className="grid grid-cols-3 gap-1">
             <Button
               type="button"
-              variant="default"
+              variant="ghost"
               size="sm"
-              onClick={addTable}
-              className="w-full text-xs"
+              onClick={() => editor.chain().focus().addColumnBefore().run()}
+              disabled={!editor.can().addColumnBefore()}
+              className="flex items-center gap-1 text-xs"
             >
-              <TableIcon className="h-3 w-3 mr-1" /> Insert Table
+              <ChevronsLeftRight className="h-3 w-3 transform rotate-90" />{" "}
+              Col Before
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().addColumnAfter().run()}
+              disabled={!editor.can().addColumnAfter()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <ChevronsLeftRight className="h-3 w-3 transform rotate-90" />{" "}
+              Col After
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().deleteColumn().run()}
+              disabled={!editor.can().deleteColumn()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <Columns className="h-3 w-3" /> Del Col
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().addRowBefore().run()}
+              disabled={!editor.can().addRowBefore()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <Rows className="h-3 w-3" /> Row Before
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().addRowAfter().run()}
+              disabled={!editor.can().addRowAfter()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <Rows className="h-3 w-3" /> Row After
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().deleteRow().run()}
+              disabled={!editor.can().deleteRow()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <Rows className="h-3 w-3" /> Del Row
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().deleteTable().run()}
+              disabled={!editor.can().deleteTable()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <Eraser className="h-3 w-3" /> Del Table
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().mergeCells().run()}
+              disabled={!editor.can().mergeCells()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <Merge className="h-3 w-3" /> Merge
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().splitCell().run()}
+              disabled={!editor.can().splitCell()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <Split className="h-3 w-3" /> Split
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                editor.chain().focus().toggleHeaderColumn().run()
+              }
+              disabled={!editor.can().toggleHeaderColumn()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <ChevronsLeftRight className="h-3 w-3" /> H Col
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleHeaderRow().run()}
+              disabled={!editor.can().toggleHeaderRow()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <Rows className="h-3 w-3" /> H Row
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleHeaderCell().run()}
+              disabled={!editor.can().toggleHeaderCell()}
+              className="flex items-center gap-1 text-xs"
+            >
+              <TableIcon className="h-3 w-3" /> H Cell
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
 
-            <hr className="my-2" />
-            <p className="text-xs font-medium text-muted-foreground mb-1">
-              Quick Actions:
-            </p>
-            <div className="grid grid-cols-3 gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().addColumnBefore().run()}
-                disabled={!editor.can().addColumnBefore()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <ChevronsLeftRight className="h-3 w-3 transform rotate-90" />{" "}
-                Col Before
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().addColumnAfter().run()}
-                disabled={!editor.can().addColumnAfter()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <ChevronsLeftRight className="h-3 w-3 transform rotate-90" />{" "}
-                Col After
-              </Button>
+      <div className="w-px h-6 bg-border mx-1" />
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().deleteColumn().run()}
-                disabled={!editor.can().deleteColumn()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <Columns className="h-3 w-3" /> Del Col
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().addRowBefore().run()}
-                disabled={!editor.can().addRowBefore()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <Rows className="h-3 w-3" /> Row Before
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().addRowAfter().run()}
-                disabled={!editor.can().addRowAfter()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <Rows className="h-3 w-3" /> Row After
-              </Button>
+      {/* History */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().undo()}
+        tooltip="Undo (Ctrl+Z)"
+        buttonSize={buttonSize}
+      >
+        <Undo className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().redo()}
+        tooltip="Redo (Ctrl+Shift+Z)"
+        buttonSize={buttonSize}
+      >
+        <Redo className={iconSize} />
+      </ToolbarButton>
+    </div>
+  );
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().deleteRow().run()}
-                disabled={!editor.can().deleteRow()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <Rows className="h-3 w-3" /> Del Row
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().deleteTable().run()}
-                disabled={!editor.can().deleteTable()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <Eraser className="h-3 w-3" /> Del Table
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().mergeCells().run()}
-                disabled={!editor.can().mergeCells()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <Merge className="h-3 w-3" /> Merge
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().splitCell().run()}
-                disabled={!editor.can().splitCell()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <Split className="h-3 w-3" /> Split
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  editor.chain().focus().toggleHeaderColumn().run()
-                }
-                disabled={!editor.can().toggleHeaderColumn()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <ChevronsLeftRight className="h-3 w-3" /> H Col
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().toggleHeaderRow().run()}
-                disabled={!editor.can().toggleHeaderRow()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <Rows className="h-3 w-3" /> H Row
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().toggleHeaderCell().run()}
-                disabled={!editor.can().toggleHeaderCell()}
-                className="flex items-center gap-1 text-xs"
-              >
-                <TableIcon className="h-3 w-3" /> H Cell
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        <div className="w-px h-6 bg-border mx-1" />
-
-        {/* History */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().undo()}
-          tooltip="Undo (Ctrl+Z)"
-          buttonSize={buttonSize}
-
-        >
-          <Undo className={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().redo()}
-          tooltip="Redo (Ctrl+Shift+Z)"
-          buttonSize={buttonSize}
-
-        >
-          <Redo className={iconSize} />
-        </ToolbarButton>
-      </div>
-
-      {/* Fullscreen toggle */}
-      {!isFullscreen && (
-        <div>
+  return (
+    <div
+      className={cn(
+        "border border-input bg-background flex flex-wrap items-center justify-between",
+        isFullscreen ? "rounded-none border-x-0 border-t-0" : "rounded-t-md",
+        padding,
+        gapSize,
+      )}
+    >
+      {isFullscreen ? (
+        <div className="w-full max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-1">
+          {toolbarContent}
+          {/* Minimize button inside centered toolbar row */}
           <ToolbarButton
-            onClick={toggleModal}
+            onClick={toggleFullscreen}
+            tooltip="Exit fullscreen (Esc)"
+            buttonSize={buttonSize}
+          >
+            <Minimize2 className={iconSize} />
+          </ToolbarButton>
+        </div>
+      ) : (
+        <>
+          {toolbarContent}
+          <ToolbarButton
+            onClick={toggleFullscreen}
             tooltip="Fullscreen"
             buttonSize={buttonSize}
-
           >
             <Maximize className={iconSize} />
           </ToolbarButton>
-        </div>
+        </>
       )}
     </div>
   );
@@ -662,14 +727,16 @@ export function TiptapEditor({
 }: TiptapEditorProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Handle Escape key and body scroll lock for fullscreen
+  // Handle Escape key, body scroll lock, and admin layout z-index elevation when fullscreen
   useEffect(() => {
     if (!isFullscreen) return;
+
     const previousBodyOverflow = document.body.style.overflow;
     const previousBodyPaddingRight = document.body.style.paddingRight;
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -689,11 +756,40 @@ export function TiptapEditor({
       document.body.style.paddingRight = `${scrollbarWidth}px`;
     }
 
+    /**
+     * The admin layout's <main id="main-content"> has Astro's
+     * `transition:name="admin-main-content"` which compiles to
+     * `view-transition-name: admin-main-content` in CSS.
+     *
+     * Per CSS spec, any non-none `view-transition-name` CREATES A STACKING
+     * CONTEXT on the element. Because <main>'s stacking context has `z-index:
+     * auto` (level 7 in root), it paints BELOW positioned elements with
+     * explicit z-indices like the sidebar (z-20, level 8) and header (z-30,
+     * level 8). This traps our `position:fixed` fullscreen overlay inside
+     * <main>'s stacking context so it never appears above the sidebar/header,
+     * regardless of how high we set its z-index.
+     *
+     * Fix: Temporarily override `view-transition-name` to `none` during
+     * fullscreen. This removes the stacking context from <main>, allowing the
+     * fixed editor (z-[999]) to participate directly in the root stacking
+     * context and appear above everything (sidebar, header, etc.).
+     * Dialogs/popovers portaled to <body> at z-[1000+] still float above it.
+     * We restore the original value on exit.
+     */
+    const mainEl = document.getElementById("main-content");
+    const prevMainViewTransitionName = mainEl?.style.viewTransitionName ?? "";
+    if (mainEl) {
+      mainEl.style.viewTransitionName = "none";
+    }
+
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousBodyOverflow;
       document.body.style.paddingRight = previousBodyPaddingRight;
       document.documentElement.style.overflow = previousHtmlOverflow;
+      if (mainEl) {
+        mainEl.style.viewTransitionName = prevMainViewTransitionName;
+      }
     };
   }, [isFullscreen]);
 
@@ -762,6 +858,7 @@ export function TiptapEditor({
     immediatelyRender: false,
   });
 
+  // Sync content from outside (e.g., form reset)
   useEffect(() => {
     if (editorInstance && content !== editorInstance.getHTML() && isMounted) {
       editorInstance.commands.setContent(content);
@@ -771,7 +868,7 @@ export function TiptapEditor({
   if (!isMounted) {
     return (
       <div className={cn("border rounded-md", className)}>
-        <div className="border border-input rounded-t-md p-1 bg-background h-10"></div>
+        <div className="border border-input rounded-t-md p-1 bg-background h-10" />
         <div className="max-w-none p-4 min-h-[200px] focus-visible:outline-none text-sm border-t">
           <div className="text-muted-foreground">{placeholder}</div>
         </div>
@@ -779,68 +876,62 @@ export function TiptapEditor({
     );
   }
 
-  const editorContent = (
+  return (
+    /**
+     * CSS-only fullscreen: position:fixed keeps the editor in the same React
+     * tree (no portal, no unmount/remount) so embedded iframes (YouTube) and
+     * images survive the transition without glitching or disappearing.
+     *
+     * Z-index strategy (must stay consistent with dialog.tsx / alert-dialog.tsx
+     * / popover.tsx / tooltip.tsx):
+     *   z-[999]  — fullscreen editor (covers admin header z-30, sidebar z-20/50)
+     *   z-[1000] — Dialog / AlertDialog overlays (e.g. MediaManager, above editor)
+     *   z-[1001] — Dialog / AlertDialog content
+     *   z-[1100] — Popovers & Tooltips (always topmost)
+     */
     <div
+      ref={wrapperRef}
       className={cn(
         "flex flex-col bg-background",
         isFullscreen
-          ? "fixed inset-0 z-[999] h-dvh w-screen"
-          : "border rounded-md",
-        !isFullscreen && className,
+          ? "fixed inset-0 z-[999] h-dvh w-screen overflow-hidden"
+          : cn("border rounded-md", className),
       )}
     >
-      {/* Fullscreen header */}
-      {isFullscreen && (
-        <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
-          <span className="text-sm font-medium text-muted-foreground">
-            Editing Content
-          </span>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground hidden sm:inline">
-              Press <kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Esc</kbd> to exit
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsFullscreen(false)}
-              className="gap-1.5"
-            >
-              <Minimize2 className="h-3.5 w-3.5" />
-              Exit Fullscreen
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Toolbar */}
+      {/* Toolbar — always rendered; centered in fullscreen */}
       {editorInstance && (
         <MenuBar
           editor={editorInstance}
-          toggleModal={toggleFullscreen}
+          toggleFullscreen={toggleFullscreen}
           compact={isFullscreen ? false : compact}
           isFullscreen={isFullscreen}
         />
       )}
 
-      {/* Editor content — always mounted, never unmounts */}
+      {/* Scrollable content area */}
       <div
         className={cn(
-          "overflow-y-auto border-t",
-          isFullscreen ? "flex-1" : "",
+          "overflow-y-auto border-t flex-1",
+          !isFullscreen && "max-h-[300px]",
         )}
-        style={!isFullscreen ? { maxHeight: "300px" } : undefined}
       >
-        <div className={isFullscreen ? "max-w-4xl mx-auto px-8 py-6" : ""}>
+        <div className={cn(isFullscreen && "max-w-4xl mx-auto px-8 py-6")}>
           <EditorContent editor={editorInstance} className="max-w-none" />
         </div>
       </div>
+
+      {/* Fullscreen footer hint */}
+      {isFullscreen && (
+        <div className="shrink-0 border-t px-4 py-1.5 bg-muted/30 flex items-center justify-end gap-3">
+          <span className="text-xs text-muted-foreground">
+            Press{" "}
+            <kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">
+              Esc
+            </kbd>{" "}
+            or click <Minimize2 className="h-3 w-3 inline-block mx-0.5" /> to exit
+          </span>
+        </div>
+      )}
     </div>
   );
-
-  if (isFullscreen && typeof document !== "undefined") {
-    return createPortal(editorContent, document.body);
-  }
-
-  return editorContent;
 }
