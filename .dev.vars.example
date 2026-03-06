@@ -1,0 +1,33 @@
+# .dev.vars.example
+# Scalius Commerce Lite - Worker runtime variables for local development
+#
+# Copy this file to `.dev.vars` only if you want to configure local runtime
+# bindings manually. `pnpm dev:setup` generates `.dev.vars` automatically.
+#
+# `.dev.vars` is for Worker runtime values (`env.*` in Cloudflare Workers).
+# Vite/Astro build-time values belong in `.env.development`; see `.env.example`.
+#
+# Do not put Resend, payment gateway, or delivery-provider credentials here.
+# Those integrations are configured from the admin dashboard and stored in D1.
+
+# Required secrets
+BETTER_AUTH_SECRET="generate_a_secure_random_string_here"
+JWT_SECRET="generate_a_secure_random_string_here"
+API_TOKEN="generate_a_secure_random_string_here"
+
+# Required local URL overrides
+BETTER_AUTH_URL="http://localhost:4321"
+PUBLIC_API_BASE_URL="http://localhost:4321"
+STOREFRONT_URL="http://localhost:4322"
+
+# Optional runtime configuration
+# R2_PUBLIC_URL="https://cdn.yourdomain.com"
+# CDN_DOMAIN_URL="cdn.yourdomain.com"
+# PURGE_URL="https://storefront.yourdomain.com/api/purge-cache"
+# PURGE_TOKEN="generate_a_secure_random_string_here"
+# PROJECT_CACHE_PREFIX="sc"
+# CSP_ALLOWED="shop.yourdomain.com,admin.yourdomain.com"
+
+# Optional Firebase Admin fallback.
+# The preferred source is the admin dashboard at Settings -> Notifications.
+# FIREBASE_SERVICE_ACCOUNT_CRED_JSON='{"type":"service_account","project_id":"..."}'
