@@ -72,7 +72,7 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 - **Storefront API**: Hono (Swagger UI + OpenAPI)
 - **Database**: Cloudflare D1 (SQLite) + Drizzle ORM + FTS5 full-text search
 - **UI**: Tailwind CSS v4 + shadcn/ui (`src/components/ui/**`)
-- **Auth**: Better Auth (email/password + mandatory 2FA)
+- **Auth**: Better Auth (email/password + optional admin 2FA with TOTP/email OTP)
 - **Caching**: Cloudflare KV (with in-memory fallback) for Hono API response caching
 - **Storage**: Cloudflare R2 for media uploads
 - **Notifications**: Firebase Cloud Messaging (admin push notifications, configured via dashboard)
@@ -89,7 +89,7 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 - **Media**: R2-backed uploads + Cloudflare Image Resizing optimization in production
 - **Notifications**: admin push notifications for new orders (Firebase Cloud Messaging)
 - **AI**: OpenRouter-powered widget/content generation and prompt tooling
-- **Security**: Mandatory 2FA for admin users (authenticator app or email), rate limiting, secure sessions
+- **Security**: optional admin 2FA (authenticator app or email OTP), rate limiting, secure sessions
 
 ### Architecture overview
 
@@ -232,148 +232,155 @@ scripts/                 # Build and deployment scripts
 From `package.json`:
 
 ```bash
-pnpm dev              # astro dev --host
-pnpm build            # astro check && astro build && pnpm db:generate && node scripts/build-with-queue.mjs
-pnpm start            # wrangler dev (Cloudflare Workers local runtime)
+pnpm dev:setup        # install deps, create .dev.vars + .env.development, apply local D1 migrations
+pnpm dev              # astro dev --host (primary local dev flow)
+pnpm start            # wrangler dev against built output in dist/worker-with-queue.js
+pnpm build            # astro check + astro build + drizzle-kit generate + queue wrapper build
 pnpm deploy           # node scripts/deploy.mjs (build + migrate + deploy)
 
 pnpm db:generate      # drizzle-kit generate
 pnpm db:migrate:local # node scripts/deploy.mjs --migrate-only --local
 pnpm db:migrate:remote # node scripts/deploy.mjs --migrate-only
+pnpm dev:reset        # wipe .wrangler/state and re-apply local migrations
 pnpm db:studio        # drizzle-kit studio
 
 pnpm generate:sdk     # tsx src/scripts/generate-openapi-json.ts && openapi-ts
 ```
 
-The deployable entry point is `./dist/worker-with-queue.js` (set in `wrangler.jsonc` main). The build script bundles the queue consumer and wraps the Astro worker to support Cloudflare Queues.
+The deployable Worker entry point is `./dist/worker-with-queue.js` (set in `wrangler.jsonc` `main`). `pnpm build` also runs `drizzle-kit generate`, so it may create new migration files when schema changes are detected.
 
 ### Environment variables
 
-This project uses Cloudflare Workers bindings for databases and storage (declared in `wrangler.jsonc`). Configuration can be set in two ways:
+This project has three configuration surfaces:
 
-- **`wrangler.jsonc` `vars`**: For production, many variables (e.g. `PUBLIC_API_BASE_URL`, `BETTER_AUTH_URL`, `STOREFRONT_URL`, `CDN_DOMAIN_URL`, `R2_PUBLIC_URL`, `PURGE_URL`) can be set in the `vars` block of `wrangler.jsonc`. These are non-secret values.
-- **Secrets**: For sensitive values (e.g. `BETTER_AUTH_SECRET`, `JWT_SECRET`, `API_TOKEN`), use `wrangler secret put <NAME>` or the Cloudflare dashboard.
+1. **Cloudflare bindings in `wrangler.jsonc`** for D1, KV, R2, Queues, and non-secret runtime vars.
+2. **Local env files**:
+   - `.dev.vars` for Worker runtime secrets and local URL overrides.
+   - `.env.development` for Vite/Astro build-time vars (`import.meta.env.*`).
+3. **Admin dashboard settings** for third-party providers such as Resend, Firebase, payment gateways, delivery providers, and OpenRouter.
 
-For local development, create a `.dev.vars` file. Secrets go in `.dev.vars`; non-secret vars can also be set there or inherited from wrangler.
+`pnpm dev:setup` creates both local files automatically. For manual setup, use `.dev.vars.example` as the runtime template and `.env.example` as the build-time template.
 
-#### Core (required)
+`wrangler.jsonc` in this repo already contains concrete worker/resource names and production URLs. Update those bindings and `vars` before deploying your own fork.
 
-- **Authentication (Better Auth)**
-  - `BETTER_AUTH_SECRET`: Session encryption secret (generate with: `openssl rand -base64 32`)
-  - `BETTER_AUTH_URL`: Base URL for auth callbacks (e.g., `https://your-domain.com`)
-- **Hono auth**
-  - `API_TOKEN`: machine-to-machine token (used by `/api/v1/auth/token`)
-  - `JWT_SECRET`: JWT signing secret (required in production; defaults are blocked by code)
+#### Runtime secrets and local overrides (`.dev.vars`)
 
-#### Optional runtime configuration
+Required:
 
-- **Base URL**
-  - `PUBLIC_API_BASE_URL`: canonical site origin used by the Hono layer (CORS, proxy headers, notifications links, CSP helpers)
-  - `PUBLIC_API_URL`: optional override for the full Hono API base (some admin cache routes will use this if set)
-- **Media**
-  - `R2_PUBLIC_URL`: public base URL used to construct file URLs for R2 uploads (the bucket binding is set in `wrangler.jsonc`)
-  - `CDN_DOMAIN_URL`: used for CSP and image allow-listing
+- `BETTER_AUTH_SECRET`: Better Auth secret.
+- `JWT_SECRET`: JWT signing secret for protected API flows.
+- `API_TOKEN`: machine-to-machine token used by `/api/v1/auth/token`.
+- `BETTER_AUTH_URL`: auth callback origin. Local default: `http://localhost:4321`.
+- `PUBLIC_API_BASE_URL`: canonical admin/API origin. Local default: `http://localhost:4321`.
+- `STOREFRONT_URL`: storefront origin used by redirects and payment callbacks. Local default: `http://localhost:4322`.
 
-#### Content Security Policy / CORS
+Optional runtime vars:
 
-- `CSP_ALLOWED`: comma-separated additional allowed domains (used by CSP + CORS helpers)
+- `R2_PUBLIC_URL`: public base URL for uploaded media.
+- `CDN_DOMAIN_URL`: CDN/image allow-list domain for CSP and Astro image config.
+- `PURGE_URL`: external storefront purge endpoint.
+- `PURGE_TOKEN`: bearer token/header secret used with `PURGE_URL`.
+- `PROJECT_CACHE_PREFIX`: KV namespace prefix. Defaults to `sc`.
+- `CSP_ALLOWED`: comma-separated extra domains for CSP/CORS allow-lists.
+- `FIREBASE_SERVICE_ACCOUNT_CRED_JSON`: optional Firebase Admin fallback when dashboard settings are not configured.
 
-#### Storefront cache purge (optional)
+#### Build-time vars (`.env.development`)
 
-If you have a separate storefront that exposes a purge endpoint, the backend can trigger it after admin writes:
+Required in practice for local admin auth:
 
-- `PURGE_URL`
-- `PURGE_TOKEN`
+- `PUBLIC_API_BASE_URL`: consumed by the Better Auth React client.
 
-#### KV cache prefix (optional)
+Optional build-time/public vars:
 
-- `PROJECT_CACHE_PREFIX`: prefixes all KV cache keys (multi-project safety; defaults to `sc`)
-
-#### Admin notifications (Firebase Cloud Messaging)
-
-Firebase credentials are configured via the admin dashboard at **Settings → Notifications**. No environment variables are required for Firebase — all credentials (service account JSON, web app config, VAPID key) are stored securely in the database settings table.
-
-Optional local-dev fallback:
-- `FIREBASE_SERVICE_ACCOUNT_CRED_JSON`: service account JSON (falls back to DB setting)
-
-#### Email (Resend API)
-
-Resend API key and sender address are configured via the admin dashboard at **Settings → Email**. No environment variables are required — credentials are stored in the database settings table and fetched at runtime.
-
-In development without a Resend API key configured in the dashboard, emails are logged to console.
-
-#### AI / OpenRouter (optional)
-
-OpenRouter API key is stored in the DB settings table (`key=openrouter_api_key`, `category=integrations`), not in env.
-
-Optional env vars used for OpenRouter request metadata:
-
+- `PUBLIC_FIREBASE_API_KEY`
+- `PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `PUBLIC_FIREBASE_PROJECT_ID`
+- `PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `PUBLIC_FIREBASE_APP_ID`
+- `PUBLIC_FIREBASE_MEASUREMENT_ID`
 - `OPENROUTER_BASE_URL`
 - `PUBLIC_SITE_URL`
 - `SITE_TITLE`
+
+#### Dashboard-configured integrations
+
+These are configured from the admin dashboard and stored in the database, not in env vars:
+
+| Integration                                           | Where to configure                |
+| ----------------------------------------------------- | --------------------------------- |
+| Resend email key + sender                             | **Settings → Email**              |
+| Firebase public config + service account              | **Settings → Notifications**      |
+| Stripe / SSLCommerz / Polar + enabled payment methods | **Settings → Payments**           |
+| Delivery provider credentials/config                  | **Settings → Delivery Providers** |
+| OpenRouter API key                                    | widget generator settings dialog  |
+
+Development note: if Resend is not configured in the dashboard, transactional emails are logged to the console instead of being sent.
 
 ### Cloudflare bindings
 
 The following bindings are declared in `wrangler.jsonc` and are automatically available to the Worker at runtime. No environment variables are needed for these — they are injected by the Cloudflare Workers runtime:
 
-| Binding | Type | Purpose |
-|---------|------|---------|
-| `DB` | D1Database | Primary SQLite database |
-| `CACHE` | KVNamespace | API response cache |
-| `SESSION` | KVNamespace | Astro session storage |
-| `SHARED_AUTH_CACHE` | KVNamespace | Firebase access token cache |
-| `BUCKET` | R2Bucket | Media file storage |
-| `PAYMENT_EVENTS_QUEUE` | Queue | Payment event processing (producer) |
-| `ORDER_NOTIFICATIONS_QUEUE` | Queue | Order notification processing (producer) |
-| `AUTH_OTP_QUEUE` | Queue | Async email/OTP delivery (producer/consumer) |
-| `ORDER_INGEST_QUEUE` | Queue | High-concurrency async order creation (producer/consumer) |
-| `ASSETS` | Fetcher | Static asset serving |
+| Binding                     | Type        | Purpose                                                   |
+| --------------------------- | ----------- | --------------------------------------------------------- |
+| `DB`                        | D1Database  | Primary SQLite database                                   |
+| `CACHE`                     | KVNamespace | API response cache                                        |
+| `SESSION`                   | KVNamespace | Astro session storage                                     |
+| `SHARED_AUTH_CACHE`         | KVNamespace | Firebase access token cache                               |
+| `BUCKET`                    | R2Bucket    | Media file storage                                        |
+| `PAYMENT_EVENTS_QUEUE`      | Queue       | Payment event processing (producer)                       |
+| `ORDER_NOTIFICATIONS_QUEUE` | Queue       | Order notification processing (producer)                  |
+| `AUTH_OTP_QUEUE`            | Queue       | Async email/OTP delivery (producer/consumer)              |
+| `ORDER_INGEST_QUEUE`        | Queue       | High-concurrency async order creation (producer/consumer) |
+| `ASSETS`                    | Fetcher     | Static asset serving                                      |
 
 ### Local development
 
-#### 1) Install dependencies
+#### 1) First-time setup
 
 ```bash
-pnpm install
+pnpm dev:setup
 ```
 
-#### 2) Configure env
+This command:
 
-Create a `.dev.vars` file with at least the required variables:
+- installs dependencies
+- creates `.dev.vars`
+- creates `.env.development`
+- applies local D1 migrations
 
-```bash
-# Required
-BETTER_AUTH_SECRET=your-secret-key
-BETTER_AUTH_URL=http://localhost:4321
-
-# For production
-JWT_SECRET=your-jwt-secret
-API_TOKEN=your-api-token
-
-# Optional - configure via admin dashboard instead
-# R2_PUBLIC_URL=https://your-bucket.r2.cloudflarestorage.com
-# CDN_DOMAIN_URL=cdn.yourdomain.com
-```
-
-#### 3) Run the dev server
+#### 2) Start the app
 
 ```bash
 pnpm dev
 ```
 
-Astro defaults to port `4321` unless configured otherwise.
+`astro dev` is the primary local workflow. The Cloudflare adapter is configured with `platformProxy`, so D1/KV/R2 bindings are already emulated during `pnpm dev`.
 
-#### 4) First-time setup
+#### 3) Create the first admin account
 
-On first run, navigate to `/admin` - you'll be redirected to `/auth/setup` to create the first admin account. After account creation, you'll be required to set up two-factor authentication (authenticator app or email).
+Visit `/admin`. If no admin exists yet, middleware redirects to `/auth/setup`, where the first account is created as an admin, marked as super admin, and the RBAC seed runs automatically.
 
-For full Cloudflare Workers runtime parity (D1, KV, R2 bindings in local dev), use Wrangler:
+#### 4) Useful local reset commands
 
 ```bash
+pnpm dev:reset
+pnpm db:migrate:local
+```
+
+- `pnpm dev:reset` wipes `.wrangler/state` and reapplies all migrations from scratch.
+- `pnpm db:migrate:local` applies pending migrations without wiping data.
+
+#### 5) Built-worker parity mode
+
+```bash
+pnpm build
 pnpm start
 ```
 
-This runs your built output in a local `workerd` environment via `wrangler dev`.
+Use this when you specifically want to run the built Worker via `wrangler dev`. `pnpm start` expects the built `dist/worker-with-queue.js` entrypoint to exist.
+
+Port note: auth callbacks assume the admin app is running on `http://localhost:4321`. If that port is occupied, stop the previous dev server before starting a new one.
 
 ### Database & migrations (Drizzle + Cloudflare D1)
 
@@ -406,29 +413,32 @@ All text search (admin dashboard, storefront API, command palette) uses **SQLite
 This project uses [Better Auth](https://better-auth.com) for authentication with the following features:
 
 - **Email/password authentication** with secure password hashing
-- **Mandatory two-factor authentication** for all admin users:
-  - Authenticator app (TOTP) - Google Authenticator, Authy, etc.
-  - Email verification codes (requires Resend configured in dashboard)
-  - Backup codes for account recovery
-- **Rate limiting** on sensitive endpoints (login, 2FA, password reset)
+- **Admin 2FA support**:
+  - Authenticator app (TOTP)
+  - Email OTP (requires Resend configured in the dashboard)
+  - Backup codes
+- **Rate limiting** on login, 2FA, and password reset flows
 - **Session management** with 7-day expiry and automatic refresh
+
+2FA is enforced only for users who have enabled it. Middleware redirects to `/auth/two-factor` when `twoFactorEnabled` is true and the current session is not yet verified.
 
 #### First-time setup
 
-1. Navigate to `/admin` (redirects to `/auth/setup`)
+1. Navigate to `/admin` (redirects to `/auth/setup` when no admin exists)
 2. Create the first admin account with email and password
-3. Set up two-factor authentication (required)
+3. The account is promoted to super admin and RBAC roles/permissions are seeded automatically
 4. Access the admin dashboard
+5. Enable 2FA later from account settings if desired
 
 #### Subsequent logins
 
 1. Enter email and password at `/auth/login`
-2. Complete 2FA verification (authenticator, email, or backup code)
+2. Complete 2FA verification only if the account has 2FA enabled
 3. Access the admin dashboard
 
 ### API usage
 
-The legacy Astro endpoints (`src/pages/api/`) have been fully migrated into a highly performant, unified Hono application under `/api/v1/`.
+Most application APIs now live in the unified Hono app under `/api/v1/`. The main exception is Better Auth, which still uses the Astro endpoint at `src/pages/api/auth/[...all].ts`.
 
 #### Unified Hono API — `/api/v1/**`
 
@@ -452,7 +462,7 @@ To reduce client round-trips, the Hono API exposes consolidated endpoints:
 
 Some routes (notably `/api/v1/orders/*` and `/api/v1/cache/*`) require a short-lived JWT.
 
-1) Obtain a JWT using your `API_TOKEN`:
+1. Obtain a JWT using your `API_TOKEN`:
 
 ```bash
 curl -sS \
@@ -460,7 +470,7 @@ curl -sS \
   "http://localhost:4321/api/v1/auth/token"
 ```
 
-2) Use the JWT to call protected endpoints:
+2. Use the JWT to call protected endpoints:
 
 ```bash
 curl -sS \
@@ -481,15 +491,15 @@ In Cloudflare Workers, invalidations are scheduled via `ctx.waitUntil()` when av
 
 ### Media uploads (R2)
 
-- Upload endpoint: `POST /api/media/upload` (multipart form field `files`)
+- Upload endpoint: `POST /api/v1/admin/media/upload` (multipart form field `files`)
 - Storage implementation: `src/integrations/storage.ts` (native R2 bucket binding)
 - The R2 bucket binding (`BUCKET`) is declared in `wrangler.jsonc`
 
-If `R2_PUBLIC_URL` is not set, uploaded file URLs will be incomplete. Set this to the public base URL of your R2 bucket.
+Set `R2_PUBLIC_URL` to the public base URL of your own bucket/domain. If it is missing, the storage layer falls back to `https://cloud.wrygo.com`, which is not correct for forks.
 
 ### Admin push notifications (FCM)
 
-Firebase Cloud Messaging is configured via the admin dashboard at **Settings → Notifications**. No environment variables are required for Firebase — all credentials are stored in the database.
+Firebase Cloud Messaging is configured primarily via the admin dashboard at **Settings → Notifications**.
 
 To set up notifications:
 
@@ -499,18 +509,24 @@ To set up notifications:
 4. Enter your Firebase configuration (API key, project ID, etc.)
 5. Enter your service account credentials for server-side messaging
 
+Fallbacks:
+
+- `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` can be used when the dashboard service account is not configured yet.
+- `PUBLIC_FIREBASE_*` values can seed the service worker config when the dashboard public config is empty.
+
 Implementation details:
-- Client initializes FCM inside `src/layouts/AdminLayout.astro` and posts tokens to `POST /api/admin/fcm-token`
+
+- Client initializes FCM inside `src/layouts/AdminLayout.astro` and posts tokens to `POST /api/v1/admin/fcm-token`
 - Server sends order notifications in the background from Hono order creation via `src/lib/notification-utils.ts`
 - Firebase admin/client SDK: `src/integrations/firebase/`
 
 ### AI generation (OpenRouter)
 
-- Model list: `GET /api/openrouter/models`
-- Generation: `POST /api/openrouter/generate`
-- Staged generation: `POST /api/openrouter/generate-staged`
-- API key management: `GET/POST /api/settings/openrouter` (stored in DB settings, masked on read)
-- System prompt fetch: `GET /api/system-prompt?type=widget|landing-page|collection`
+- API key management: `GET/POST /api/v1/admin/settings/openrouter` (stored in DB settings, masked on read)
+- Model list: `GET /api/v1/admin/openrouter/models`
+- Generation: `POST /api/v1/admin/openrouter/generate`
+- Staged generation: `POST /api/v1/admin/openrouter/generate-staged`
+- System prompt fetch: `GET /api/v1/admin/ai-prompts?type=widget|landing-page|collection`
 
 ### SDK generation
 
@@ -559,6 +575,9 @@ This runs `scripts/deploy.mjs` which handles building, migrations, and deploying
   - Set `JWT_SECRET` in production.
 - **"BETTER_AUTH_SECRET is not set"**
   - Set `BETTER_AUTH_SECRET` environment variable. Generate with: `openssl rand -base64 32`
+- **Local auth callbacks or sign-in loops**
+  - Make sure the dev server is running on `http://localhost:4321`.
+  - Regenerate local files with `pnpm dev:setup -- --force` if your local URLs drifted.
 - **KV cache not working**
   - Ensure the `CACHE` KV namespace is correctly bound in `wrangler.jsonc` and created in your Cloudflare account.
 - **CORS issues**
@@ -570,4 +589,5 @@ This runs `scripts/deploy.mjs` which handles building, migrations, and deploying
   - Configure Firebase credentials in the admin dashboard at **Settings → Notifications**.
 - **D1 database errors in local dev**
   - Run `pnpm db:migrate:local` to apply pending migrations to the local D1 database.
-  - Use `pnpm start` (wrangler dev) for full D1/KV/R2 binding support locally.
+  - Run `pnpm dev:reset` if you need a clean local database.
+  - `pnpm dev` already uses Cloudflare `platformProxy`; `pnpm start` is only needed for built-worker parity.
