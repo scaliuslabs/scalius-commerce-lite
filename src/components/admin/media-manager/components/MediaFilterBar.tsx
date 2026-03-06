@@ -36,6 +36,7 @@ interface MediaFilterBarProps {
   onMoveToFolder?: (folderId: string | null) => void;
   onUpload?: (files: FileList | null) => Promise<void>;
   isUploading?: boolean;
+  acceptedFileTypes?: string;
 }
 
 export function MediaFilterBar({
@@ -53,6 +54,7 @@ export function MediaFilterBar({
   onMoveToFolder,
   onUpload,
   isUploading = false,
+  acceptedFileTypes = "image/*",
 }: MediaFilterBarProps) {
   const [moveToFolderId, setMoveToFolderId] = useState<string>("");
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -68,7 +70,7 @@ export function MediaFilterBar({
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
-    input.accept = "image/*";
+    input.accept = acceptedFileTypes;
     input.onchange = async (e) => {
       const target = e.target as HTMLInputElement;
       if (target.files && target.files.length > 0 && onUpload) {

@@ -3,6 +3,7 @@ import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { cn } from "@/shared/utils";
 import { AlignLeft, AlignCenter, AlignRight, Trash2 } from "lucide-react";
+import { getRichTextOptimizedImageUrl } from "@/shared/image-optimizer";
 
 export function ResizableImageView({
   node,
@@ -10,7 +11,7 @@ export function ResizableImageView({
   selected,
   deleteNode,
 }: NodeViewProps) {
-  const { src, alt, width, textAlign } = node.attrs;
+  const { src, alt, width, textAlign, optimize } = node.attrs;
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [resizing, setResizing] = useState(false);
@@ -74,6 +75,9 @@ export function ResizableImageView({
       : textAlign === "right"
         ? "ml-auto"
         : "mr-auto";
+  const renderedSrc = optimize
+    ? getRichTextOptimizedImageUrl(src, width)
+    : src;
 
   return (
     <NodeViewWrapper
@@ -87,7 +91,7 @@ export function ResizableImageView({
       >
         <img
           ref={imgRef}
-          src={src}
+          src={renderedSrc}
           alt={alt || ""}
           className={cn(
             "block h-auto rounded-md",
@@ -97,6 +101,8 @@ export function ResizableImageView({
             width: widthStyle ? "100%" : undefined,
             maxWidth: "100%",
           }}
+          loading="lazy"
+          decoding="async"
           draggable={false}
         />
 

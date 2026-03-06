@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
@@ -48,6 +47,8 @@ import { Input } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "./tooltip";
 import { Switch } from "./switch";
+import { MediaManager, type MediaFile } from "@/components/admin/MediaManager";
+import { resolveMediaUrl } from "@/shared/media-url";
 
 interface TiptapEditorProps {
   content: string;
@@ -55,6 +56,16 @@ interface TiptapEditorProps {
   placeholder?: string;
   className?: string;
   compact?: boolean;
+}
+
+function normalizeEditorHtml(value: string | null | undefined): string {
+  const normalized = (value ?? "").trim();
+
+  if (normalized === "" || normalized === "<p></p>") {
+    return "";
+  }
+
+  return value ?? "";
 }
 
 function ToolbarButton({
@@ -136,24 +147,66 @@ const MenuBar = ({
     }
   };
 
-  const addImage = () => {
-    if (!imageUrl) return;
-    const url = imageUrl;
+  const insertImage = ({
+    src,
+    alt,
+    title,
+    optimize = false,
+  }: {
+    src: string;
+    alt?: string;
+    title?: string;
+    optimize?: boolean;
+  }) => {
+    const normalizedSrc = resolveMediaUrl(src);
+    if (!normalizedSrc) return;
+
     setImageUrl("");
     setImageOpen(false);
+
     requestAnimationFrame(() => {
-      editor.chain().focus().setImage({ src: url }).run();
+      editor
+        .chain()
+        .focus()
+        .setImage({
+          src: normalizedSrc,
+          alt,
+          title,
+          optimize,
+        })
+        .createParagraphNear()
+        .run();
+    });
+  };
+
+  const addImage = () => {
+    if (!imageUrl.trim()) return;
+
+    insertImage({ src: imageUrl.trim() });
+  };
+
+  const addImageFromMediaLibrary = (file: MediaFile) => {
+    insertImage({
+      src: file.url,
+      alt: file.filename,
+      title: file.filename,
+      optimize: true,
     });
   };
 
   const addVideo = () => {
-    if (!videoUrl) return;
-    const url = videoUrl;
+    if (!videoUrl.trim()) return;
+    const url = videoUrl.trim();
     setVideoUrl("");
     setVideoOpen(false);
+
     requestAnimationFrame(() => {
-      editor.chain().focus().run();
-      editor.commands.setYoutubeVideo({ src: url });
+      editor
+        .chain()
+        .focus()
+        .setYoutubeVideo({ src: url })
+        .createParagraphNear()
+        .run();
     });
   };
 
@@ -262,19 +315,57 @@ const MenuBar = ({
               <p className="text-xs">Insert image</p>
             </TooltipContent>
           </Tooltip>
-          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                placeholder="https://example.com/image.jpg"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                className="flex-1"
-                onKeyDown={(e) => e.key === "Enter" && addImage()}
-              />
-              <Button type="button" size="sm" onClick={addImage}>
-                Add
-              </Button>
+          <PopoverContent
+            className="w-96 p-3"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <p className="text-xs font-medium">Insert from URL</p>
+                <div className="flex gap-2">
+                  <Input
+                    type="url"
+                    placeholder="https://example.com/image.jpg"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    className="flex-1"
+                    onKeyDown={(e) => e.key === "Enter" && addImage()}
+                  />
+                  <Button type="button" size="sm" onClick={addImage}>
+                    Add
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  or
+                </span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium">Choose from media library</p>
+                <MediaManager
+                  onSelect={addImageFromMediaLibrary}
+                  trigger={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-center"
+                    >
+                      Browse media library
+                    </Button>
+                  }
+                  dialogClassName={isFullscreen ? "z-[1002]" : undefined}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Media library images keep the original source in the document
+                  and render through optimized Cloudflare transforms.
+                </p>
+              </div>
             </div>
           </PopoverContent>
         </Popover>
@@ -662,6 +753,7 @@ export function TiptapEditor({
 }: TiptapEditorProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const lastEmittedContentRef = useRef(normalizeEditorHtml(content));
 
   useEffect(() => {
     setIsMounted(true);
@@ -749,9 +841,11 @@ export function TiptapEditor({
       TableHeader,
       TableCell,
     ],
-    content,
+    content: normalizeEditorHtml(content),
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      const nextContent = normalizeEditorHtml(editor.getHTML());
+      lastEmittedContentRef.current = nextContent;
+      onChange(nextContent);
     },
     editorProps: {
       attributes: {
@@ -763,9 +857,24 @@ export function TiptapEditor({
   });
 
   useEffect(() => {
-    if (editorInstance && content !== editorInstance.getHTML() && isMounted) {
-      editorInstance.commands.setContent(content);
+    if (!editorInstance || !isMounted) {
+      return;
     }
+
+    const normalizedContent = normalizeEditorHtml(content);
+    const currentContent = normalizeEditorHtml(editorInstance.getHTML());
+
+    if (normalizedContent === lastEmittedContentRef.current) {
+      return;
+    }
+
+    if (normalizedContent === currentContent) {
+      lastEmittedContentRef.current = normalizedContent;
+      return;
+    }
+
+    editorInstance.commands.setContent(normalizedContent, false);
+    lastEmittedContentRef.current = normalizedContent;
   }, [content, editorInstance, isMounted]);
 
   if (!isMounted) {
@@ -784,7 +893,7 @@ export function TiptapEditor({
       className={cn(
         "flex flex-col bg-background",
         isFullscreen
-          ? "fixed inset-0 z-[999] h-dvh w-screen"
+          ? "fixed inset-0 z-[999] h-dvh w-screen shadow-2xl"
           : "border rounded-md",
         !isFullscreen && className,
       )}
@@ -827,7 +936,7 @@ export function TiptapEditor({
       <div
         className={cn(
           "overflow-y-auto border-t",
-          isFullscreen ? "flex-1" : "",
+          isFullscreen ? "flex-1 overscroll-contain" : "",
         )}
         style={!isFullscreen ? { maxHeight: "300px" } : undefined}
       >
@@ -837,10 +946,6 @@ export function TiptapEditor({
       </div>
     </div>
   );
-
-  if (isFullscreen && typeof document !== "undefined") {
-    return createPortal(editorContent, document.body);
-  }
 
   return editorContent;
 }

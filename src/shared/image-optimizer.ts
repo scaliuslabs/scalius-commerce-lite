@@ -20,6 +20,56 @@ import { resolveMediaUrl } from "./media-url";
 const STANDARD_WIDTH = 600;
 const STANDARD_HEIGHT = 600;
 const STANDARD_QUALITY = 85;
+const RICH_TEXT_DEFAULT_WIDTH = 1200;
+const RICH_TEXT_MIN_WIDTH = 160;
+const RICH_TEXT_MAX_WIDTH = 2000;
+
+function isImageOptimizationDisabledInCurrentEnvironment() {
+  return (
+    import.meta.env.MODE === "development" ||
+    import.meta.env.DEV === true ||
+    (typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+       window.location.hostname === "127.0.0.1" ||
+       window.location.hostname.startsWith("192.168.") ||
+       window.location.hostname.includes("local"))) ||
+    (typeof process !== "undefined" && process.env.NODE_ENV === "development")
+  );
+}
+
+function buildCloudflareImageUrl(
+  resolvedUrl: string,
+  params: string[],
+): string {
+  return `/cdn-cgi/image/${params.join(",")}/${resolvedUrl}`;
+}
+
+function parsePixelWidth(width: string | null | undefined): number | null {
+  if (!width) return null;
+
+  const parsedWidth = parseInt(width, 10);
+  if (Number.isNaN(parsedWidth) || parsedWidth <= 0) {
+    return null;
+  }
+
+  return parsedWidth;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getRichTextTargetWidth(width: string | null | undefined): number {
+  const parsedWidth = parsePixelWidth(width);
+
+  if (!parsedWidth) {
+    return RICH_TEXT_DEFAULT_WIDTH;
+  }
+
+  // Ask Cloudflare for a slightly larger asset than the rendered width so
+  // resized/editor-selected images stay sharp on high-density displays.
+  return clamp(Math.round(parsedWidth * 2), RICH_TEXT_MIN_WIDTH, RICH_TEXT_MAX_WIDTH);
+}
 
 /**
  * Generates an optimized image URL using Cloudflare Image Resizing
@@ -40,36 +90,49 @@ export function getOptimizedImageUrl(originalUrl: string | null | undefined): st
     return resolved;
   }
 
-  // CRITICAL: Check if we're in development mode
-  // /cdn-cgi/image/ only works on Cloudflare infrastructure
-  const isDevelopment =
-    import.meta.env.MODE === "development" ||
-    import.meta.env.DEV === true ||
-    (typeof window !== "undefined" &&
-      (window.location.hostname === "localhost" ||
-       window.location.hostname === "127.0.0.1" ||
-       window.location.hostname.startsWith("192.168.") ||
-       window.location.hostname.includes("local"))) ||
-    (typeof process !== "undefined" && process.env.NODE_ENV === "development");
-
   // In development, return resolved URL (no optimization)
-  if (isDevelopment) {
+  if (isImageOptimizationDisabledInCurrentEnvironment()) {
     return resolved;
   }
 
-  // Build Cloudflare Image Resizing parameters
-  const params = [
+  return buildCloudflareImageUrl(resolved, [
     `width=${STANDARD_WIDTH}`,
     `height=${STANDARD_HEIGHT}`,
     `fit=cover`,
     `quality=${STANDARD_QUALITY}`,
     `format=auto`,
     `sharpen=1`,
-  ].join(",");
+  ]);
+}
 
-  // Construct the optimized URL
-  // Format: /cdn-cgi/image/{params}/{full-url-to-image}
-  return `/cdn-cgi/image/${params}/${resolved}`;
+/**
+ * Generates a rich-text-friendly image URL.
+ *
+ * Unlike square card thumbnails, rich text images should preserve aspect ratio
+ * and scale their requested width to match the rendered content width.
+ */
+export function getRichTextOptimizedImageUrl(
+  originalUrl: string | null | undefined,
+  width: string | null | undefined,
+): string {
+  const resolved = resolveMediaUrl(originalUrl);
+  if (!resolved) return "";
+
+  if (resolved.includes("/cdn-cgi/image/")) {
+    return resolved;
+  }
+
+  if (isImageOptimizationDisabledInCurrentEnvironment()) {
+    return resolved;
+  }
+
+  return buildCloudflareImageUrl(resolved, [
+    "onerror=redirect",
+    `width=${getRichTextTargetWidth(width)}`,
+    "fit=scale-down",
+    `quality=${STANDARD_QUALITY}`,
+    "format=avif",
+  ]);
 }
 
 /**

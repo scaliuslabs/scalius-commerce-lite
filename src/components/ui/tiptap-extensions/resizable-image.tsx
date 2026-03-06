@@ -1,6 +1,10 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { ResizableImageView } from "./resizable-image-view";
+import {
+  getOriginalImageUrl,
+  getRichTextOptimizedImageUrl,
+} from "@/shared/image-optimizer";
 
 export interface ResizableImageOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -15,6 +19,7 @@ declare module "@tiptap/core" {
         title?: string;
         width?: string;
         textAlign?: string;
+        optimize?: boolean;
       }) => ReturnType;
     };
   }
@@ -42,6 +47,7 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
       title: { default: null },
       width: { default: null },
       textAlign: { default: "center" },
+      optimize: { default: false },
     };
   },
 
@@ -53,10 +59,22 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
           const element = dom as HTMLElement;
           const style = element.getAttribute("style") || "";
           const width =
-            element.getAttribute("width") || element.style.width || null;
+            element.getAttribute("data-image-width") ||
+            element.getAttribute("width") ||
+            element.style.width ||
+            null;
+          const originalSrc =
+            element.getAttribute("data-original-src") ||
+            getOriginalImageUrl(element.getAttribute("src"));
+          const explicitAlignment = element.getAttribute("data-image-align");
+          const optimize =
+            element.getAttribute("data-image-optimize") === "true" ||
+            Boolean(element.getAttribute("data-original-src"));
 
           let textAlign = "center";
-          if (
+          if (explicitAlignment === "left" || explicitAlignment === "center" || explicitAlignment === "right") {
+            textAlign = explicitAlignment;
+          } else if (
             style.includes("margin-right: auto") &&
             !style.includes("margin-left: auto")
           ) {
@@ -69,11 +87,12 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
           }
 
           return {
-            src: element.getAttribute("src"),
+            src: originalSrc,
             alt: element.getAttribute("alt"),
             title: element.getAttribute("title"),
             width,
             textAlign,
+            optimize,
           };
         },
       },
@@ -81,8 +100,26 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
   },
 
   renderHTML({ HTMLAttributes }) {
-    const { textAlign, width, ...rest } = HTMLAttributes;
+    const {
+      src,
+      textAlign,
+      width,
+      optimize,
+      ...rest
+    } = HTMLAttributes as {
+      src?: string | null;
+      textAlign?: string | null;
+      width?: string | null;
+      optimize?: boolean;
+    };
     const styles: string[] = [];
+    const normalizedTextAlign =
+      textAlign === "left" || textAlign === "right" ? textAlign : "center";
+    const originalSrc = getOriginalImageUrl(src);
+    const renderedSrc =
+      optimize && originalSrc
+        ? getRichTextOptimizedImageUrl(originalSrc, width)
+        : originalSrc;
 
     if (width) {
       styles.push(`width: ${width}`);
@@ -91,11 +128,11 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
     styles.push("height: auto");
     styles.push("border-radius: 0.375rem");
 
-    if (textAlign === "center") {
+    if (normalizedTextAlign === "center") {
       styles.push("margin-left: auto");
       styles.push("margin-right: auto");
       styles.push("display: block");
-    } else if (textAlign === "right") {
+    } else if (normalizedTextAlign === "right") {
       styles.push("margin-left: auto");
       styles.push("display: block");
     } else {
@@ -106,7 +143,14 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
     return [
       "img",
       mergeAttributes(this.options.HTMLAttributes, rest, {
+        src: renderedSrc,
+        "data-original-src": optimize && originalSrc ? originalSrc : null,
+        "data-image-optimize": optimize ? "true" : null,
+        "data-image-align": normalizedTextAlign,
+        "data-image-width": width,
         style: styles.join("; "),
+        loading: "lazy",
+        decoding: "async",
       }),
     ];
   },

@@ -1,6 +1,6 @@
 // Main MediaManager component (Dialog version for selecting media)
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -36,10 +36,12 @@ import { toast } from "@/hooks/use-toast";
 export function MediaManager({
   onSelect,
   onSelectMultiple,
+  selectedFiles = [],
   triggerLabel = "Select Image",
   acceptedFileTypes = "image/*",
   maxFileSize = 10,
   dialogClassName,
+  trigger,
 }: MediaManagerProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -52,6 +54,10 @@ export function MediaManager({
   );
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [folderSidebarCollapsed, setFolderSidebarCollapsed] = useState(false); // FIXED: Expanded by default for better UX
+  const normalizedSelectedFileIds = useMemo(
+    () => selectedFiles.map((file) => file.id.replace(/^temp_/, "")),
+    [selectedFiles],
+  );
 
   // Use custom hooks
   const {
@@ -149,6 +155,21 @@ export function MediaManager({
       debouncedApplyFilters(filters);
     }
   }, [filters.search, dialogOpen]);
+
+  useEffect(() => {
+    if (!dialogOpen || !onSelectMultiple) {
+      return;
+    }
+
+    if (normalizedSelectedFileIds.length > 0) {
+      setSelectedFileIds(normalizedSelectedFileIds);
+      setSelectionMode(true);
+      return;
+    }
+
+    setSelectedFileIds([]);
+    setSelectionMode(false);
+  }, [dialogOpen, normalizedSelectedFileIds, onSelectMultiple]);
 
   // Selection handlers
   const toggleFileSelection = (fileId: string) => {
@@ -296,10 +317,12 @@ export function MediaManager({
     <>
       <Dialog open={dialogOpen} onOpenChange={handleDialogChange}>
         <DialogTrigger asChild>
-          <Button variant="outline" className="w-full">
-            <Upload className="mr-2 h-4 w-4" />
-            {triggerLabel}
-          </Button>
+          {trigger ?? (
+            <Button variant="outline" className="w-full">
+              <Upload className="mr-2 h-4 w-4" />
+              {triggerLabel}
+            </Button>
+          )}
         </DialogTrigger>
 
         <DialogContent
@@ -380,6 +403,7 @@ export function MediaManager({
                   onMoveToFolder={handleMoveToFolder}
                   onUpload={uploadFiles}
                   isUploading={isUploading}
+                  acceptedFileTypes={acceptedFileTypes}
                 />
               </div>
 
