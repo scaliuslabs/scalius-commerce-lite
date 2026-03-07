@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -42,12 +42,15 @@ import {
   ChevronsLeftRight,
   TextQuote,
   Video as VideoIcon,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "./tooltip";
 import { Switch } from "./switch";
+import { MediaManager } from "@/components/admin/MediaManager";
+import { getOptimizedImageUrl } from "@/shared/image-optimizer";
 
 interface TiptapEditorProps {
   content: string;
@@ -113,6 +116,7 @@ const MenuBar = ({
   const [tableRows, setTableRows] = useState<string>("3");
   const [tableCols, setTableCols] = useState<string>("3");
   const [tableWithHeader, setTableWithHeader] = useState<boolean>(true);
+  const mediaManagerTriggerRef = useRef<HTMLDivElement>(null);
 
   if (!editor) {
     return null;
@@ -146,6 +150,13 @@ const MenuBar = ({
     });
   };
 
+  const handleMediaSelect = (file: { url: string; filename: string }) => {
+    const optimizedUrl = getOptimizedImageUrl(file.url);
+    requestAnimationFrame(() => {
+      editor.chain().focus().setImage({ src: optimizedUrl, alt: file.filename }).run();
+    });
+  };
+
   const addVideo = () => {
     if (!videoUrl) return;
     const url = videoUrl;
@@ -175,7 +186,12 @@ const MenuBar = ({
   const padding = compact ? "p-0.5" : "p-1";
 
   return (
-    <div className={cn("border border-input rounded-t-md bg-background flex flex-wrap items-center justify-between", padding, gapSize)}>
+    <div className={cn(
+      "border border-input rounded-t-md bg-background flex flex-wrap items-center",
+      isFullscreen ? "justify-center" : "justify-between",
+      padding,
+      gapSize,
+    )}>
       <div className={cn("flex flex-wrap items-center", gapSize)}>
         {/* Text formatting */}
         <ToolbarButton
@@ -183,7 +199,6 @@ const MenuBar = ({
           isActive={editor.isActive("bold")}
           tooltip="Bold (Ctrl+B)"
           buttonSize={buttonSize}
-
         >
           <Bold className={iconSize} />
         </ToolbarButton>
@@ -192,7 +207,6 @@ const MenuBar = ({
           isActive={editor.isActive("italic")}
           tooltip="Italic (Ctrl+I)"
           buttonSize={buttonSize}
-
         >
           <Italic className={iconSize} />
         </ToolbarButton>
@@ -201,14 +215,13 @@ const MenuBar = ({
           isActive={editor.isActive("underline")}
           tooltip="Underline (Ctrl+U)"
           buttonSize={buttonSize}
-
         >
           <UnderlineIcon className={iconSize} />
         </ToolbarButton>
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* Links, images, video */}
+        {/* Links */}
         <Popover open={linkOpen} onOpenChange={setLinkOpen}>
           <Tooltip open={linkOpen ? false : undefined}>
             <TooltipTrigger asChild>
@@ -244,6 +257,7 @@ const MenuBar = ({
           </PopoverContent>
         </Popover>
 
+        {/* Image URL Popover */}
         <Popover open={imageOpen} onOpenChange={setImageOpen}>
           <Tooltip open={imageOpen ? false : undefined}>
             <TooltipTrigger asChild>
@@ -259,7 +273,7 @@ const MenuBar = ({
               </PopoverTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={5}>
-              <p className="text-xs">Insert image</p>
+              <p className="text-xs">Insert Image URL</p>
             </TooltipContent>
           </Tooltip>
           <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -279,6 +293,29 @@ const MenuBar = ({
           </PopoverContent>
         </Popover>
 
+        {/* Media Manager directly on toolbar */}
+        <ToolbarButton
+          onClick={() => mediaManagerTriggerRef.current?.click()}
+          tooltip="Media Library"
+          buttonSize={buttonSize}
+        >
+          <FolderOpen className={iconSize} />
+        </ToolbarButton>
+
+        {/* Hidden Media Manager trigger */}
+        <div className="hidden" ref={mediaManagerTriggerRef} onClick={(e) => {
+          const btn = e.currentTarget.querySelector('button');
+          if (btn) btn.click();
+        }}>
+          <MediaManager
+            onSelect={handleMediaSelect}
+            triggerLabel="Hidden"
+            acceptedFileTypes="image/*"
+            dialogClassName={isFullscreen ? "z-[10001] !important" : undefined}
+          />
+        </div>
+
+        {/* Video */}
         <Popover open={videoOpen} onOpenChange={setVideoOpen}>
           <Tooltip open={videoOpen ? false : undefined}>
             <TooltipTrigger asChild>
@@ -325,7 +362,6 @@ const MenuBar = ({
           isActive={editor.isActive({ textAlign: "left" })}
           tooltip="Align left"
           buttonSize={buttonSize}
-
         >
           <AlignLeft className={iconSize} />
         </ToolbarButton>
@@ -334,7 +370,6 @@ const MenuBar = ({
           isActive={editor.isActive({ textAlign: "center" })}
           tooltip="Align center"
           buttonSize={buttonSize}
-
         >
           <AlignCenter className={iconSize} />
         </ToolbarButton>
@@ -343,7 +378,6 @@ const MenuBar = ({
           isActive={editor.isActive({ textAlign: "right" })}
           tooltip="Align right"
           buttonSize={buttonSize}
-
         >
           <AlignRight className={iconSize} />
         </ToolbarButton>
@@ -352,7 +386,6 @@ const MenuBar = ({
           isActive={editor.isActive({ textAlign: "justify" })}
           tooltip="Justify"
           buttonSize={buttonSize}
-
         >
           <AlignJustify className={iconSize} />
         </ToolbarButton>
@@ -365,7 +398,6 @@ const MenuBar = ({
           isActive={editor.isActive("heading", { level: 1 })}
           tooltip="Heading 1"
           buttonSize={buttonSize}
-
         >
           <Heading1 className={iconSize} />
         </ToolbarButton>
@@ -374,7 +406,6 @@ const MenuBar = ({
           isActive={editor.isActive("heading", { level: 2 })}
           tooltip="Heading 2"
           buttonSize={buttonSize}
-
         >
           <Heading2 className={iconSize} />
         </ToolbarButton>
@@ -383,7 +414,6 @@ const MenuBar = ({
           isActive={editor.isActive("heading", { level: 3 })}
           tooltip="Heading 3"
           buttonSize={buttonSize}
-
         >
           <Heading3 className={iconSize} />
         </ToolbarButton>
@@ -396,7 +426,6 @@ const MenuBar = ({
           isActive={editor.isActive("bulletList")}
           tooltip="Bullet list"
           buttonSize={buttonSize}
-
         >
           <List className={iconSize} />
         </ToolbarButton>
@@ -405,7 +434,6 @@ const MenuBar = ({
           isActive={editor.isActive("orderedList")}
           tooltip="Numbered list"
           buttonSize={buttonSize}
-
         >
           <ListOrdered className={iconSize} />
         </ToolbarButton>
@@ -414,7 +442,6 @@ const MenuBar = ({
           isActive={editor.isActive("blockquote")}
           tooltip="Blockquote"
           buttonSize={buttonSize}
-
         >
           <TextQuote className={iconSize} />
         </ToolbarButton>
@@ -429,7 +456,6 @@ const MenuBar = ({
                 onClick={() => { }}
                 tooltip="Insert table"
                 buttonSize={buttonSize}
-
               >
                 <TableIcon className={iconSize} />
               </ToolbarButton>
@@ -621,7 +647,6 @@ const MenuBar = ({
           disabled={!editor.can().undo()}
           tooltip="Undo (Ctrl+Z)"
           buttonSize={buttonSize}
-
         >
           <Undo className={iconSize} />
         </ToolbarButton>
@@ -630,22 +655,30 @@ const MenuBar = ({
           disabled={!editor.can().redo()}
           tooltip="Redo (Ctrl+Shift+Z)"
           buttonSize={buttonSize}
-
         >
           <Redo className={iconSize} />
         </ToolbarButton>
       </div>
 
       {/* Fullscreen toggle */}
-      {!isFullscreen && (
+      {!isFullscreen ? (
         <div>
           <ToolbarButton
             onClick={toggleModal}
             tooltip="Fullscreen"
             buttonSize={buttonSize}
-
           >
             <Maximize className={iconSize} />
+          </ToolbarButton>
+        </div>
+      ) : (
+        <div>
+          <ToolbarButton
+            onClick={toggleModal}
+            tooltip="Exit Fullscreen"
+            buttonSize={buttonSize}
+          >
+            <Minimize2 className={iconSize} />
           </ToolbarButton>
         </div>
       )}
@@ -662,6 +695,8 @@ export function TiptapEditor({
 }: TiptapEditorProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const editorAreaRef = useRef<HTMLDivElement>(null);
+  const contentWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -685,21 +720,75 @@ export function TiptapEditor({
     document.addEventListener("keydown", handleKeyDown);
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
+    document.body.classList.add("editor-fullscreen-active");
+
     if (scrollbarWidth > 0) {
       document.body.style.paddingRight = `${scrollbarWidth}px`;
     }
+
+    document.body.classList.add("editor-fullscreen-active");
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousBodyOverflow;
       document.body.style.paddingRight = previousBodyPaddingRight;
       document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.classList.remove("editor-fullscreen-active");
     };
   }, [isFullscreen]);
 
-  const toggleFullscreen = () => {
-    setIsFullscreen((prev) => !prev);
-  };
+  // Break out of containing blocks via CSS overrides without unmounting
+  useEffect(() => {
+    if (!isFullscreen || !contentWrapperRef.current) return;
+
+    const originalStyles = new Map<HTMLElement, string>();
+    let el = contentWrapperRef.current.parentElement;
+
+    // Traverse up to document body and strip any properties that create a containing block for fixed positioning
+    while (el && el !== document.body && el !== document.documentElement) {
+      const style = window.getComputedStyle(el);
+
+      const hasContainingBlock =
+        style.transform !== 'none' ||
+        style.perspective !== 'none' ||
+        style.filter !== 'none' ||
+        (style.willChange && style.willChange !== 'auto' && style.willChange !== 'none') ||
+        (style.contain && style.contain !== 'none') ||
+        (style.backdropFilter && style.backdropFilter !== 'none') ||
+        (style.viewTransitionName && style.viewTransitionName !== 'none');
+
+      if (hasContainingBlock) {
+        if (!originalStyles.has(el)) originalStyles.set(el, el.getAttribute('style') || '');
+        el.style.setProperty('transform', 'none', 'important');
+        el.style.setProperty('perspective', 'none', 'important');
+        el.style.setProperty('filter', 'none', 'important');
+        el.style.setProperty('will-change', 'auto', 'important');
+        el.style.setProperty('contain', 'none', 'important');
+        el.style.setProperty('backdrop-filter', 'none', 'important');
+        el.style.setProperty('view-transition-name', 'none', 'important');
+      }
+
+      // Force z-index of all parents to ensure we sit on top of siblings like the sidebar
+      const tzIndex = parseInt(style.zIndex);
+      if (style.position !== 'static' || !isNaN(tzIndex) || style.isolation === 'isolate' || style.display === 'flex' || style.display === 'grid') {
+        if (!originalStyles.has(el)) originalStyles.set(el, el.getAttribute('style') || '');
+        el.style.setProperty('z-index', '45', 'important');
+        el.style.setProperty('isolation', 'auto', 'important');
+      }
+
+      el = el.parentElement;
+    }
+
+    return () => {
+      originalStyles.forEach((styleStr, element) => {
+        if (styleStr === '') {
+          element.removeAttribute('style');
+        } else {
+          element.setAttribute('style', styleStr);
+        }
+      });
+    };
+  }, [isFullscreen]);
 
   const editorInstance = useEditor({
     extensions: [
@@ -781,10 +870,11 @@ export function TiptapEditor({
 
   const editorContent = (
     <div
+      ref={contentWrapperRef}
       className={cn(
-        "flex flex-col bg-background",
+        "flex flex-col bg-background transition-colors",
         isFullscreen
-          ? "fixed inset-0 z-[999] h-dvh w-screen"
+          ? "fixed inset-0 z-[9999] h-dvh w-screen"
           : "border rounded-md",
         !isFullscreen && className,
       )}
@@ -817,7 +907,14 @@ export function TiptapEditor({
       {editorInstance && (
         <MenuBar
           editor={editorInstance}
-          toggleModal={toggleFullscreen}
+          toggleModal={() => {
+            setIsFullscreen((prev) => {
+              setTimeout(() => {
+                editorInstance?.commands.focus();
+              }, 50);
+              return !prev;
+            });
+          }}
           compact={isFullscreen ? false : compact}
           isFullscreen={isFullscreen}
         />
@@ -825,22 +922,37 @@ export function TiptapEditor({
 
       {/* Editor content — always mounted, never unmounts */}
       <div
+        ref={editorAreaRef}
         className={cn(
           "overflow-y-auto border-t",
-          isFullscreen ? "flex-1" : "",
+          isFullscreen ? "flex-1 bg-muted/30" : "",
         )}
         style={!isFullscreen ? { maxHeight: "300px" } : undefined}
+        onClick={() => {
+          // Click-to-focus: when user clicks the editing area background, focus the editor
+          if (isFullscreen && editorInstance && !editorInstance.isFocused) {
+            editorInstance.commands.focus("end");
+          }
+        }}
       >
-        <div className={isFullscreen ? "max-w-4xl mx-auto px-8 py-6" : ""}>
+        <div className={cn(
+          isFullscreen
+            ? "max-w-4xl mx-auto px-8 py-6 min-h-full bg-background shadow-sm border-x border-border/40"
+            : ""
+        )}>
           <EditorContent editor={editorInstance} className="max-w-none" />
         </div>
       </div>
+      {/* CSS to ensure layout elements like sticky headers/sidebars are pushed below the fullscreen editor */}
+      <style suppressHydrationWarning>{`
+        body.editor-fullscreen-active header,
+        body.editor-fullscreen-active aside,
+        body.editor-fullscreen-active nav {
+          z-index: 0 !important;
+        }
+      `}</style>
     </div>
   );
-
-  if (isFullscreen && typeof document !== "undefined") {
-    return createPortal(editorContent, document.body);
-  }
 
   return editorContent;
 }
