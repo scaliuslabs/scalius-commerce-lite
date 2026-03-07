@@ -121,7 +121,7 @@ export async function uploadFile(
   if (!r2) {
     throw new Error(
       "R2 bucket binding is not available. " +
-        "Pass the bucket argument explicitly or call initStorage() first.",
+      "Pass the bucket argument explicitly or call initStorage() first.",
     );
   }
 
@@ -142,6 +142,7 @@ export async function uploadFile(
   const uploadPromise = r2.put(key, fileBuffer, {
     httpMetadata: {
       contentType: file.type,
+      cacheControl: "public, max-age=31536000, immutable",
     },
     customMetadata: {
       originalFilename: file.name,
