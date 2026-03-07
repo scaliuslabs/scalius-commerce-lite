@@ -114,7 +114,7 @@ export function MediaGallery({
         {/* Load More Button */}
         {hasMore && !isLoadingMore && onLoadMore && (
           <div className="mt-6 flex justify-center">
-            <Button onClick={onLoadMore} variant="outline" size="sm">
+            <Button type="button" onClick={onLoadMore} variant="outline" size="sm">
               Load More
             </Button>
           </div>

@@ -197,7 +197,7 @@ export function MediaCard({
             <div className="absolute inset-0 flex opacity-0 hover:opacity-100 bg-black/50">
               <div className="absolute bottom-2 right-2 flex gap-1">
                 {/* Preview button */}
-                <Button
+                <Button type="button"
                   variant="secondary"
                   size="icon"
                   className="h-7 w-7 bg-background/90 rounded-full"
@@ -209,7 +209,7 @@ export function MediaCard({
                 {/* More actions */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
+                    <Button type="button"
                       variant="secondary"
                       size="icon"
                       className="h-7 w-7 bg-background/90 rounded-full"
