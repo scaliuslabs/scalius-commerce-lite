@@ -115,7 +115,6 @@ const MenuBar = ({
   const [tableRows, setTableRows] = useState<string>("3");
   const [tableCols, setTableCols] = useState<string>("3");
   const [tableWithHeader, setTableWithHeader] = useState<boolean>(true);
-  const mediaManagerTriggerRef = useRef<HTMLDivElement>(null);
 
   if (!editor) {
     return null;
@@ -292,20 +291,20 @@ const MenuBar = ({
           </PopoverContent>
         </Popover>
 
-        {/* Media Manager directly on toolbar */}
+        {/* Media Manager mapped via DOM interaction to avoid breaking Radix Tooltip composition */}
         <ToolbarButton
-          onClick={() => mediaManagerTriggerRef.current?.click()}
+          onClick={() => {
+            const wrapper = document.getElementById("tiptap-media-manager-wrapper");
+            wrapper?.querySelector("button")?.click();
+          }}
           tooltip="Media Library"
           buttonSize={buttonSize}
         >
           <FolderOpen className={iconSize} />
         </ToolbarButton>
 
-        {/* Hidden Media Manager trigger */}
-        <div className="hidden" ref={mediaManagerTriggerRef} onClick={(e) => {
-          const btn = e.currentTarget.querySelector('button');
-          if (btn) btn.click();
-        }}>
+        {/* Hidden Media Manager trigger (No onClick bubble traps!) */}
+        <div id="tiptap-media-manager-wrapper" className="hidden">
           <MediaManager
             onSelect={handleMediaSelect}
             triggerLabel="Hidden"
