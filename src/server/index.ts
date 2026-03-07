@@ -40,6 +40,7 @@ import { storefrontRoutes } from "./routes/storefront";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { openApiSpec } from "./openapi";
+import { serveMediaRoute } from "./routes/media-server";
 import { getCorsOriginContext } from "@/shared/cors-helper";
 
 // Admin routes
@@ -179,9 +180,10 @@ app.route("/locations", locationRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);
 // SEO settings — used by storefront product/page routes for meta tags
 app.route("/seo", seoRoutes);
-
-
-// Add health check endpoint (relative path '/health')
+// Local development media server route
+if (process.env.NODE_ENV === "development") {
+  app.route("/media", serveMediaRoute);
+}// Add health check endpoint (relative path '/health')
 app.get("/health", async (c) => {
   try {
     const { getCacheStats, getCacheType } = await import("./utils/kv-cache");
