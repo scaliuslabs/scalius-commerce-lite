@@ -111,22 +111,20 @@ export function MediaGallery({
           </div>
         )}
 
-        {/* Load More Button */}
-        {hasMore && !isLoadingMore && onLoadMore && (
+        {/* Load More Button & Indicator */}
+        {hasMore && onLoadMore && (
           <div className="mt-6 flex justify-center">
-            <Button type="button" onClick={onLoadMore} variant="outline" size="sm">
-              Load More
+            <Button
+              type="button"
+              onClick={isLoadingMore ? undefined : onLoadMore}
+              disabled={isLoadingMore}
+              variant="outline"
+              size="sm"
+              className={isLoadingMore ? "gap-2" : ""}
+            >
+              {isLoadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isLoadingMore ? "Loading more files..." : "Load More"}
             </Button>
-          </div>
-        )}
-
-        {/* Loading more indicator */}
-        {isLoadingMore && (
-          <div className="mt-6 flex justify-center">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading more files...</span>
-            </div>
           </div>
         )}
       </div>
