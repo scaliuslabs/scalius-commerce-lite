@@ -1,5 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState, useRef } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
@@ -874,7 +873,7 @@ export function TiptapEditor({
       className={cn(
         "flex flex-col bg-background transition-colors",
         isFullscreen
-          ? "fixed inset-0 z-[9999] h-dvh w-screen"
+          ? "fixed inset-0 z-9999 h-dvh w-screen"
           : "border rounded-md",
         !isFullscreen && className,
       )}

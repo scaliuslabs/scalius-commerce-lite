@@ -125,7 +125,7 @@ export function ResizableImageView({
 
         {/* Floating toolbar - show when selected, z-[9999] ensures visibility in fullscreen */}
         {selected && !resizing && (
-          <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-background border rounded-md shadow-lg p-0.5 z-[9999]">
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-background border rounded-md shadow-lg p-0.5 z-9999">
             <button
               type="button"
               onClick={() => updateAttributes({ textAlign: "left" })}
