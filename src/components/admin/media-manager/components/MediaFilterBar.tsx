@@ -85,7 +85,7 @@ export function MediaFilterBar({
         <div className="flex items-center gap-2">
           {/* Upload Button */}
           {onUpload && (
-            <Button
+            <Button type="button"
               variant="default"
               size="sm"
               onClick={handleUploadClick}
@@ -99,7 +99,7 @@ export function MediaFilterBar({
           )}
 
           {/* Search Toggle */}
-          <Button
+          <Button type="button"
             variant="outline"
             size="sm"
             onClick={() => setSearchExpanded(!searchExpanded)}
@@ -109,7 +109,7 @@ export function MediaFilterBar({
           </Button>
 
           {/* Selection Mode Toggle - NO NESTED BUTTONS */}
-          <Button
+          <Button type="button"
             variant={selectionMode ? "default" : "outline"}
             size="sm"
             onClick={onToggleSelectionMode}
@@ -136,7 +136,7 @@ export function MediaFilterBar({
                   : "None selected"}
               </span>
               {onSelectAll && selectedCount < totalCount && (
-                <Button
+                <Button type="button"
                   variant="ghost"
                   size="sm"
                   onClick={onSelectAll}
@@ -170,7 +170,7 @@ export function MediaFilterBar({
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button
+                  <Button type="button"
                     variant="outline"
                     size="sm"
                     onClick={handleMoveToFolder}
@@ -182,7 +182,7 @@ export function MediaFilterBar({
                 </div>
               )}
               {canAddSelected && onAddSelected && (
-                <Button
+                <Button type="button"
                   variant="default"
                   size="sm"
                   onClick={onAddSelected}
@@ -192,7 +192,7 @@ export function MediaFilterBar({
                 </Button>
               )}
               {onBulkDelete && (
-                <Button
+                <Button type="button"
                   variant="destructive"
                   size="sm"
                   onClick={onBulkDelete}

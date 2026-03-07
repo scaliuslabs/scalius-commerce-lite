@@ -129,7 +129,7 @@ export function FolderBrowser({
       >
         {/* Collapse/Expand Toggle */}
         {onToggleCollapse && (
-          <Button
+          <Button type="button"
             variant="ghost"
             size="icon"
             className="absolute -right-3 top-4 z-10 h-6 w-6 rounded-full border bg-background shadow-sm"
@@ -149,7 +149,7 @@ export function FolderBrowser({
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-sm">Folders</h3>
               </div>
-              <Button
+              <Button type="button"
                 variant="outline"
                 size="sm"
                 className="w-full justify-start h-8"
@@ -172,7 +172,7 @@ export function FolderBrowser({
                   {/* All Files - shows files from all folders */}
                   {!folderSearch && (
                     <>
-                      <Button
+                      <Button type="button"
                         variant={
                           currentFolderId === "all" ? "secondary" : "ghost"
                         }
@@ -185,7 +185,7 @@ export function FolderBrowser({
                       </Button>
 
                       {/* Root folder - files not in any folder */}
-                      <Button
+                      <Button type="button"
                         variant={
                           currentFolderId === null ? "secondary" : "ghost"
                         }
@@ -205,7 +205,7 @@ export function FolderBrowser({
                       key={folder.id}
                       className="group flex items-center gap-1 mb-1 pr-1"
                     >
-                      <Button
+                      <Button type="button"
                         variant={
                           currentFolderId === folder.id ? "secondary" : "ghost"
                         }
@@ -223,7 +223,7 @@ export function FolderBrowser({
                           {folder.name}
                         </span>
                       </Button>
-                      <Button
+                      <Button type="button"
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
@@ -249,7 +249,7 @@ export function FolderBrowser({
           </>
         ) : (
           <div className="p-2 flex flex-col items-center gap-2 pt-16">
-            <Button
+            <Button type="button"
               variant={currentFolderId === "all" ? "secondary" : "ghost"}
               size="icon"
               className="h-9 w-9"
@@ -258,7 +258,7 @@ export function FolderBrowser({
             >
               <Home className="h-4 w-4" />
             </Button>
-            <Button
+            <Button type="button"
               variant={currentFolderId === null ? "secondary" : "ghost"}
               size="icon"
               className="h-9 w-9"
@@ -268,7 +268,7 @@ export function FolderBrowser({
               <Folder className="h-4 w-4" />
             </Button>
             {folders.map((folder) => (
-              <Button
+              <Button type="button"
                 key={folder.id}
                 variant={currentFolderId === folder.id ? "secondary" : "ghost"}
                 size="icon"
@@ -279,7 +279,7 @@ export function FolderBrowser({
                 <Folder className={cn("h-4 w-4", getFolderColor(folder.id))} />
               </Button>
             ))}
-            <Button
+            <Button type="button"
               variant="outline"
               size="icon"
               className="h-9 w-9 mt-2"
@@ -315,7 +315,7 @@ export function FolderBrowser({
             />
           </div>
           <DialogFooter>
-            <Button
+            <Button type="button"
               variant="outline"
               onClick={() => {
                 setShowCreateDialog(false);
@@ -324,7 +324,7 @@ export function FolderBrowser({
             >
               Cancel
             </Button>
-            <Button
+            <Button type="button"
               onClick={handleCreateFolder}
               disabled={!newFolderName.trim() || isCreating}
             >

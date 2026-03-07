@@ -36,6 +36,7 @@ import { toast } from "@/hooks/use-toast";
 export function MediaManager({
   onSelect,
   onSelectMultiple,
+  selectedFiles = [],
   triggerLabel = "Select Image",
   acceptedFileTypes = "image/*",
   maxFileSize = 10,
@@ -135,6 +136,24 @@ export function MediaManager({
     }
   }, [dialogOpen, currentFolderId]);
 
+  // Initialize selection when dialog opens
+  // CRITICAL: We explicitly DO NOT include selectedFiles in the dependency array.
+  // If the parent component passes a new array reference every render (e.g. `selectedFiles={[]}`),
+  // including it here will cause an infinite render loop (useEffect -> setState -> render -> new array -> useEffect -> ...).
+  useEffect(() => {
+    if (dialogOpen) {
+      if (selectedFiles && selectedFiles.length > 0) {
+        // Strip temp_ prefix if present
+        const ids = selectedFiles.map(f => f.id.replace(/^temp_/, ""));
+        setSelectedFileIds(ids);
+        setSelectionMode(true);
+      } else {
+        setSelectedFileIds([]);
+        setSelectionMode(false);
+      }
+    }
+  }, [dialogOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Debounced search
   const debouncedApplyFilters = useCallback(
     debounce((newFilters) => {
@@ -148,7 +167,7 @@ export function MediaManager({
     if (dialogOpen && filters.search !== undefined) {
       debouncedApplyFilters(filters);
     }
-  }, [filters.search, dialogOpen]);
+  }, [filters.search, dialogOpen, debouncedApplyFilters]);
 
   // Selection handlers
   const toggleFileSelection = (fileId: string) => {
@@ -286,8 +305,7 @@ export function MediaManager({
     setDialogOpen(isOpen);
     if (!isOpen) {
       setShowPreview(false);
-      setSelectedFileIds([]);
-      setSelectionMode(false);
+      // We don't reset selection here anymore; it's handled safely by the initialization effect
       // Don't reset search or folder when closing
     }
   };
@@ -296,7 +314,7 @@ export function MediaManager({
     <>
       <Dialog open={dialogOpen} onOpenChange={handleDialogChange}>
         <DialogTrigger asChild>
-          <Button variant="outline" className="w-full">
+          <Button type="button" variant="outline" className="w-full">
             <Upload className="mr-2 h-4 w-4" />
             {triggerLabel}
           </Button>
@@ -458,15 +476,15 @@ export function MediaManager({
         onSelect={
           onSelect
             ? (file) => {
-                const fileWithDateObject = {
-                  ...file,
-                  id: `temp_${file.id}`,
-                  createdAt: new Date(file.createdAt),
-                };
-                onSelect(fileWithDateObject);
-                setShowPreview(false);
-                setDialogOpen(false);
-              }
+              const fileWithDateObject = {
+                ...file,
+                id: `temp_${file.id}`,
+                createdAt: new Date(file.createdAt),
+              };
+              onSelect(fileWithDateObject);
+              setShowPreview(false);
+              setDialogOpen(false);
+            }
             : undefined
         }
       />

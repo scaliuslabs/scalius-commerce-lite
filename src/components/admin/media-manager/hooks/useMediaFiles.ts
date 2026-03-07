@@ -40,9 +40,15 @@ export function useMediaFiles(autoLoad: boolean = false) {
         // This prevents race conditions when rapidly switching folders
         if (requestId === currentRequestId.current) {
           // Smooth transition: only update files after data loads
-          setFiles((prevFiles) =>
-            page === 1 ? data.files : [...prevFiles, ...data.files],
-          );
+          setFiles((prevFiles) => {
+            if (page === 1) return data.files;
+
+            // Deduplicate files by ID to prevent React rendering crashes
+            // when new files are uploaded between pages
+            const existingIds = new Set(prevFiles.map(f => f.id));
+            const newFiles = data.files.filter(f => !existingIds.has(f.id));
+            return [...prevFiles, ...newFiles];
+          });
           setCurrentPage(data.pagination.page);
           setTotalPages(data.pagination.totalPages);
           setFilters(newFilters);
