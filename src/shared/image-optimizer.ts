@@ -47,9 +47,9 @@ export function getOptimizedImageUrl(originalUrl: string | null | undefined): st
     import.meta.env.DEV === true ||
     (typeof window !== "undefined" &&
       (window.location.hostname === "localhost" ||
-       window.location.hostname === "127.0.0.1" ||
-       window.location.hostname.startsWith("192.168.") ||
-       window.location.hostname.includes("local"))) ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname.startsWith("192.168.") ||
+        window.location.hostname.includes("local"))) ||
     (typeof process !== "undefined" && process.env.NODE_ENV === "development");
 
   // In development, return resolved URL (no optimization)
@@ -103,8 +103,13 @@ export function isR2Image(url: string | null | undefined): boolean {
   const resolved = resolveMediaUrl(url);
   if (!resolved) return false;
 
+  // Resolve CDN hostname from env vars
+  const cdnDomain = import.meta.env?.CDN_DOMAIN_URL || import.meta.env?.R2_PUBLIC_URL || '';
+  const cdnHost = cdnDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  if (!cdnHost) return false;
+
   try {
-    return new URL(resolved).hostname === "cloud.wrygo.com";
+    return new URL(resolved).hostname === cdnHost;
   } catch {
     return false;
   }

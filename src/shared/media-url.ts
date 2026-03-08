@@ -5,8 +5,25 @@
  * database before R2_PUBLIC_URL was configured, as well as already-complete
  * URLs and local/CDN-optimized paths.
  */
+/**
+ * CDN base URL resolved from env vars (R2_PUBLIC_URL or CDN_DOMAIN_URL).
+ * In SSR (Hono Worker), these are available via import.meta.env.
+ * Falls back to empty string which keeps bare keys as-is.
+ */
+function resolveCdnBase(): string {
+  const r2Url = import.meta.env?.R2_PUBLIC_URL;
+  if (r2Url) return r2Url.replace(/\/$/, '');
 
-const CDN_BASE = "https://cloud.wrygo.com";
+  const cdnDomain = import.meta.env?.CDN_DOMAIN_URL;
+  if (cdnDomain) {
+    const d = cdnDomain.replace(/^https?:\/\//, '');
+    return `https://${d}`;
+  }
+
+  return '';
+}
+
+const CDN_BASE = resolveCdnBase();
 
 export function resolveMediaUrl(url: string | null | undefined): string {
   if (!url || url.trim() === "") return "";

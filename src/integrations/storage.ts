@@ -125,9 +125,9 @@ export async function uploadFile(
     );
   }
 
-  // Fallback ensures we always produce full URLs even if R2_PUBLIC_URL is misconfigured
-  const CDN_FALLBACK = "https://cloud.wrygo.com";
-  const baseUrl = (publicUrl ?? _publicUrl) || CDN_FALLBACK;
+  // Use the R2_PUBLIC_URL configured via initStorage() in middleware.
+  // If not set, the URL field in the result will just be the bare key.
+  const baseUrl = (publicUrl ?? _publicUrl) || "";
   const ext = file.name.split(".").pop();
   const key = `${nanoid()}.${ext}`;
 
