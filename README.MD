@@ -495,7 +495,7 @@ In Cloudflare Workers, invalidations are scheduled via `ctx.waitUntil()` when av
 - Storage implementation: `src/integrations/storage.ts` (native R2 bucket binding)
 - The R2 bucket binding (`BUCKET`) is declared in `wrangler.jsonc`
 
-Set `R2_PUBLIC_URL` to the public base URL of your own bucket/domain. If it is missing, the storage layer falls back to `https://cloud.wrygo.com`, which is not correct for forks.
+Set `R2_PUBLIC_URL` to the public base URL of your own bucket/domain.
 
 ### Admin push notifications (FCM)
 
