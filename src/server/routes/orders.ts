@@ -322,6 +322,7 @@ app.post("/", async (c) => {
             discountPercentage: products.discountPercentage,
             discountType: products.discountType,
             discountAmount: products.discountAmount,
+            freeDelivery: products.freeDelivery,
           })
           .from(products)
           .where(
@@ -386,6 +387,7 @@ app.post("/", async (c) => {
         discountPercentage: number | null;
         discountType: string | null;
         discountAmount: number | null;
+        freeDelivery: boolean;
       }[])
       : [];
     const productMap = new Map(productList.map((p) => [p.id, p]));
@@ -455,7 +457,16 @@ app.post("/", async (c) => {
     serverItemTotal = Math.round(serverItemTotal * 100) / 100;
 
     // Determine exact shipping charge to use securely from DB
-    const verifiedShippingCharge = shippingMethod ? shippingMethod.fee : (data.shippingCharge || 0);
+    let verifiedShippingCharge = shippingMethod ? shippingMethod.fee : (data.shippingCharge || 0);
+
+    // Zero out shipping if any product in the order has free delivery
+    const hasFreeDeliveryProduct = data.items.some((item) => {
+      const product = productMap.get(item.productId);
+      return product?.freeDelivery === true;
+    });
+    if (hasFreeDeliveryProduct) {
+      verifiedShippingCharge = 0;
+    }
 
     // ------------------------------------------------------------------
     // DISCOUNTS VERIFICATION
