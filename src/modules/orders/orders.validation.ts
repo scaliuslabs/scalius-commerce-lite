@@ -12,7 +12,7 @@ export const createOrderSchema = z.object({
         .min(3, "Customer name must be at least 3 characters")
         .max(100, "Customer name must be less than 100 characters"),
     customerPhone: phoneNumberSchema,
-    customerEmail: z.string().email().nullable(),
+    customerEmail: z.email().nullable(),
     shippingAddress: z
         .string()
         .min(10, "Address must be at least 10 characters")

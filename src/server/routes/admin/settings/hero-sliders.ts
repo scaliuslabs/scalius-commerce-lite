@@ -10,7 +10,7 @@ const app = new Hono<{ Bindings: any, Variables: any }>();
 
 const sliderImageSchema = z.object({
     id: z.string(),
-    url: z.string().url(),
+    url: z.url(),
     title: z.string(),
     link: z.string(),
 });

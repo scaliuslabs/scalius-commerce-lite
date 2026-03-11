@@ -8,6 +8,7 @@ import {
 } from "@/server/utils/cache-invalidation";
 import { getCache, setCache } from "@/server/utils/kv-cache";
 import type { APIContext } from "astro";
+import { env as cfEnv } from 'cloudflare:workers';
 
 const WRITE_METHODS = ["POST", "PUT", "DELETE", "PATCH"];
 
@@ -119,8 +120,8 @@ export async function invalidateHonoCacheIfNeeded(
 
       if (groups.length === 0) return;
 
-      const runtimeEnv = (locals as any).runtime?.env as Env | undefined;
-      const kv = runtimeEnv?.CACHE as KVNamespace | undefined;
+      const runtimeEnv = cfEnv as unknown as Env;
+      const kv = runtimeEnv.CACHE as KVNamespace | undefined;
 
       // KV-based debounce: skip if the same group set was invalidated within DEBOUNCE_MS
       const debounceKey = `${DEBOUNCE_KEY}:${groups.sort().join(",")}`;
@@ -143,7 +144,7 @@ export async function invalidateHonoCacheIfNeeded(
       const bumpVersion = shouldBumpStorefrontVersion(groups);
       const prefixes = getStorefrontPrefixesForGroups(groups);
 
-      const runtimeCtx = (locals as any).runtime?.ctx;
+      const runtimeCtx = (locals as any).cfContext;
       const waitUntil = runtimeCtx?.waitUntil?.bind(runtimeCtx);
 
       if (waitUntil) {

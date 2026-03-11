@@ -16,15 +16,7 @@ interface RateLimitResponse {
 // Simple in-memory store for rate limiting
 const ipHitMap = new Map<string, { hits: number; resetTime: number }>();
 
-// Clean up expired entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of ipHitMap.entries()) {
-    if (value.resetTime <= now) {
-      ipHitMap.delete(key);
-    }
-  }
-}, 60000); // Clean up every minute
+let cleanupScheduled = false;
 
 export function rateLimit(options: RateLimitOptions): RateLimitResponse {
   const windowMs = options.windowMs || 60 * 1000; // default: 1 minute
@@ -34,6 +26,20 @@ export function rateLimit(options: RateLimitOptions): RateLimitResponse {
 
   return {
     check: async (req: Request) => {
+      // Schedule cleanup lazily to avoid global scope errors in Cloudflare Workers
+      if (!cleanupScheduled) {
+        cleanupScheduled = true;
+        // Run cleanup every minute but only start it when a request comes in
+        setInterval(() => {
+          const now = Date.now();
+          for (const [key, value] of ipHitMap.entries()) {
+            if (value.resetTime <= now) {
+              ipHitMap.delete(key);
+            }
+          }
+        }, 60000);
+      }
+
       // Get IP from headers or fall back to a default
       const ip =
         req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||

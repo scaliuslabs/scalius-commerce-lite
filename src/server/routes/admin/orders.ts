@@ -295,7 +295,7 @@ app.get("/:id/shipments", async (c) => {
 });
 
 // POST /api/v1/admin/orders/:id/shipments
-app.post("/:id/shipments", zValidator("json", z.object({ providerId: z.string(), options: z.record(z.any()).optional() })), async (c) => {
+app.post("/:id/shipments", zValidator("json", z.object({ providerId: z.string(), options: z.record(z.string(), z.any()).optional() })), async (c) => {
     try {
         const orderId = c.req.param("id");
         const data = c.req.valid("json");

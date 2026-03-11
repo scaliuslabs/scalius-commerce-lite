@@ -69,7 +69,7 @@ app.post("/payment-methods", async (c) => {
 
         return c.json({ success: true, message: "Payment methods updated" });
     } catch (error: any) {
-        if (error instanceof z.ZodError) return c.json({ error: "Invalid request data", details: error.errors }, 400);
+        if (error instanceof z.ZodError) return c.json({ error: "Invalid request data", details: error.issues }, 400);
         return c.json({ error: "Failed to save payment methods" }, 500);
     }
 });

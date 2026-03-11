@@ -77,30 +77,6 @@ async function expandCollectionsToProductIds(
           config.productIds.forEach((id: string) => allProductIds.add(id));
         }
 
-        // Backward compatibility: old schema support
-        // Add old categoryId field (if exists in config or collection)
-        if (config.categoryId) {
-          allCategoryIds.add(config.categoryId);
-        }
-        // @ts-ignore - categoryId may still exist during migration
-        if (collection.categoryId) {
-          // @ts-ignore
-          allCategoryIds.add(collection.categoryId);
-        }
-
-        // Add old specificProductIds
-        if (Array.isArray(config.specificProductIds)) {
-          config.specificProductIds.forEach((id: string) =>
-            allProductIds.add(id),
-          );
-        }
-
-        // Add old specificCategoryIds
-        if (Array.isArray(config.specificCategoryIds)) {
-          config.specificCategoryIds.forEach((id: string) =>
-            allCategoryIds.add(id),
-          );
-        }
       } catch (error) {
         console.error(
           `Error parsing collection config for ${collection.id}:`,
@@ -480,16 +456,12 @@ app.get("/validate", async (c) => {
         const itemsArray = Array.isArray(parsed) ? parsed : Object.values(parsed);
         // Validate and coerce each item
         cartItems = itemsArray.map((item: any) => {
-          // Accept either 'id' or 'productId' for backwards compatibility
-          if (!item.id && item.productId) {
-            item.id = item.productId;
-          }
           return cartItemSchema.parse(item);
         });
       } catch (error) {
         const message =
           error instanceof z.ZodError
-            ? `Invalid cart items: ${error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
+            ? `Invalid cart items: ${error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
             : "Invalid cart items format";
         return c.json({ valid: false, error: message }, 400);
       }
@@ -552,7 +524,7 @@ app.get("/validate", async (c) => {
   } catch (error) {
     console.error("Error validating discount:", error);
     if (error instanceof z.ZodError) {
-      return c.json({ valid: false, error: error.errors }, 400);
+      return c.json({ valid: false, error: error.issues }, 400);
     }
     return c.json({ valid: false, error: "Failed to validate discount" }, 500);
   }

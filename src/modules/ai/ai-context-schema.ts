@@ -10,7 +10,7 @@ import { z } from 'zod';
 // Media file schema
 export const MediaFileSchema = z.object({
   id: z.string(),
-  url: z.string().url(),
+  url: z.url(),
   filename: z.string(),
   size: z.number(),
   createdAt: z.date().or(z.string()).transform(val =>
@@ -23,7 +23,7 @@ export const ProductReferenceSchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
-  primaryImage: z.string().url().nullable(),
+  primaryImage: z.url().nullable(),
 });
 
 // Category reference schema

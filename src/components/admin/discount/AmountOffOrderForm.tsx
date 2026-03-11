@@ -58,18 +58,18 @@ const formSchema = z
       }),
     valueType: z.enum(["percentage", "fixed_amount"]),
     discountValue: z.coerce // Use coerce for better number handling from input
-      .number({ invalid_type_error: "Discount value must be a number" })
+      .number({ message: "Discount value must be a number" })
       .positive({ message: "Discount value must be positive" }),
     minPurchaseAmount: z.coerce
       .number({
-        invalid_type_error: "Minimum purchase must be a number or empty",
+        message: "Minimum purchase must be a number or empty",
       })
       .positive({ message: "Minimum purchase must be positive" })
       .nullable()
       .optional(),
     maxUsesPerOrder: z.coerce
       .number({
-        invalid_type_error: "Max uses per order must be an integer or empty",
+        message: "Max uses per order must be an integer or empty",
       })
       .int({ message: "Max uses per order must be a whole number" })
       .positive({ message: "Max uses per order must be positive" })
@@ -77,7 +77,7 @@ const formSchema = z
       .optional(),
     maxUses: z.coerce
       .number({
-        invalid_type_error: "Max total uses must be an integer or empty",
+        message: "Max total uses must be an integer or empty",
       })
       .int({ message: "Max total uses must be a whole number" })
       .positive({ message: "Max total uses must be positive" })
@@ -86,7 +86,7 @@ const formSchema = z
     limitOnePerCustomer: z.boolean(),
     combineWithProductDiscounts: z.boolean(),
     combineWithShippingDiscounts: z.boolean(),
-    startDate: z.date({ required_error: "Start date is required" }),
+    startDate: z.date({ message: "Start date is required" }),
     endDate: z.date().nullable().optional(),
     isActive: z.boolean(),
   })

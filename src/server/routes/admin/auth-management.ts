@@ -99,7 +99,7 @@ app.get("/users", async (c) => {
 
 const createAdminSchema = z.object({
     name: z.string().min(1),
-    email: z.string().email(),
+    email: z.email(),
     roleId: z.string().optional(),
 });
 
@@ -228,7 +228,7 @@ app.post("/change-password", zValidator("json", changePasswordSchema), async (c)
 
 const updateProfileSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters").optional(),
-    image: z.string().url().optional().nullable(),
+    image: z.url().optional().nullable(),
 });
 
 app.post("/update-profile", zValidator("json", updateProfileSchema), async (c) => {
@@ -367,7 +367,7 @@ const setupApp = new Hono<{
 
 const setupSchema = z.object({
     name: z.string().min(1),
-    email: z.string().email(),
+    email: z.email(),
     password: z.string().min(8, "Password must be at least 8 characters"),
 });
 

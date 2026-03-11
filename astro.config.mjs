@@ -121,11 +121,6 @@ export default defineConfig({
   },
 
   adapter: cloudflare({
-    // Enable platform proxy for local development (helps emulate CF bindings in `astro dev`)
-    platformProxy: {
-      enabled: true,
-      configPath: "wrangler.jsonc",
-    },
     // Use Cloudflare's Image Resizing service for on-demand optimization
     imageService: "cloudflare",
   }),

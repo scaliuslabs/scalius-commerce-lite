@@ -88,6 +88,12 @@ export const suggestionsActions = {
 
           // Check cache first
           const cacheKey = query.toLowerCase().trim();
+          
+          // Lazy cache eviction
+          if (suggestionsCache.size > 100) {
+            suggestionsCache.clear();
+          }
+
           if (suggestionsCache.has(cacheKey)) {
             const cachedSuggestions = suggestionsCache.get(cacheKey) || [];
             const filteredSuggestions = cachedSuggestions
@@ -166,12 +172,4 @@ export const suggestionsActions = {
   },
 };
 
-// Clean up cache periodically (every 5 minutes)
-setInterval(
-  () => {
-    if (suggestionsCache.size > 100) {
-      suggestionsCache.clear();
-    }
-  },
-  5 * 60 * 1000,
-);
+// Cleanup logic moved inside fetchSuggestions for Cloudflare Workers compatibility.

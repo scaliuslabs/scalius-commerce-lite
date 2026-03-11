@@ -24,7 +24,7 @@ const sessionSchema = z.object({
   depositAmount: z.number().positive().optional(),
   currency: z.string().optional(),
   /** Base URL for redirect callbacks (e.g. https://example.com) */
-  baseUrl: z.string().url().optional(),
+  baseUrl: z.url().optional(),
 });
 
 app.post("/session", async (c) => {
