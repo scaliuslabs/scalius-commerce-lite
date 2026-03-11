@@ -56,6 +56,10 @@ const storefrontUrl = await getSidebarStorefrontUrl();
     display: none !important;
   }
 
+  .sidebar-desktop:not(.sidebar-collapsed) .sidebar-collapsed-only {
+    display: none !important;
+  }
+
   .sidebar-collapsed .sidebar-nav-item {
     justify-content: center !important;
     padding-left: 1rem !important;
