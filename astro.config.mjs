@@ -10,6 +10,9 @@ import cloudflare from "@astrojs/cloudflare";
 
 // https://astro.build/config
 export default defineConfig({
+  experimental: {
+    rustCompiler: true,
+  },
   // Disable dev toolbar to prevent errors
   devToolbar: { enabled: false },
 
