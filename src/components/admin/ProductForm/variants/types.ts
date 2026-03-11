@@ -30,25 +30,25 @@ export const variantFormSchema = z.object({
   size: z.string().max(50, "Size must be 50 characters or less.").nullable(),
   color: z.string().max(50, "Color must be 50 characters or less.").nullable(),
   weight: z.coerce
-    .number({ invalid_type_error: "Must be a number" })
+    .number({ message: "Must be a number" })
     .min(0, "Weight cannot be negative.")
     .nullable(),
   sku: z.string().min(1, "SKU is required."),
   price: z.coerce
-    .number({ invalid_type_error: "Price is required." })
+    .number({ message: "Price is required." })
     .min(0, "Price cannot be negative."),
   stock: z.coerce
-    .number({ invalid_type_error: "Stock is required." })
+    .number({ message: "Stock is required." })
     .int("Stock must be a whole number.")
     .min(0, "Stock cannot be negative."),
   discountType: z.enum(["percentage", "flat"]),
   discountPercentage: z.coerce
-    .number({ invalid_type_error: "Must be a number" })
+    .number({ message: "Must be a number" })
     .min(0, "Discount cannot be negative.")
     .max(100, "Discount cannot exceed 100%.")
     .nullable(),
   discountAmount: z.coerce
-    .number({ invalid_type_error: "Must be a number" })
+    .number({ message: "Must be a number" })
     .min(0, "Discount cannot be negative.")
     .nullable(),
 });

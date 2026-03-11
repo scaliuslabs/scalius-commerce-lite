@@ -14,7 +14,7 @@ import { z } from "zod";
 
 export const createCustomerSchema = z.object({
     name: z.string().min(3).max(100),
-    email: z.string().email().nullable(),
+    email: z.email().nullable(),
     phone: phoneNumberSchema,
     address: z.string().max(500).nullable(),
     city: z.string().nullable(),

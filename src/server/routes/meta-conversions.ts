@@ -21,7 +21,7 @@ const eventPayloadSchema = z.object({
     "Lead",
     "CompleteRegistration",
   ]),
-  eventSourceUrl: z.string().url(),
+  eventSourceUrl: z.url(),
   actionSource: z
     .enum([
       "website",
@@ -38,9 +38,9 @@ const eventPayloadSchema = z.object({
   userData: z
     .object({
       // Existing fields
-      em: z.string().email().optional(),
+      em: z.email().optional(),
       ph: z.string().optional(),
-      client_ip_address: z.string().ip().optional(),
+      client_ip_address: z.string().optional(),
       client_user_agent: z.string().optional(),
       fbp: z.string().optional(),
       fbc: z.string().optional(),

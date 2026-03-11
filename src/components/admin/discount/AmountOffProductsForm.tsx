@@ -64,7 +64,7 @@ const formSchema = z.object({
   code: z.string().min(1, "Discount code is required").max(50),
   valueType: z.enum(["percentage", "fixed_amount"]),
   discountValue: z
-    .number({ invalid_type_error: "Must be a number" })
+    .number({ message: "Must be a number" })
     .positive("Value must be positive"),
   appliesTo: z
     .object({
@@ -82,7 +82,7 @@ const formSchema = z.object({
   combineWithProductDiscounts: z.boolean(),
   combineWithOrderDiscounts: z.boolean(),
   combineWithShippingDiscounts: z.boolean(),
-  startDate: z.date({ required_error: "Start date is required." }),
+  startDate: z.date({ message: "Start date is required." }),
   endDate: z.date().nullable().optional(),
   isActive: z.boolean(),
 });

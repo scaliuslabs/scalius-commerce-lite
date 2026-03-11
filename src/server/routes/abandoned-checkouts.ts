@@ -14,7 +14,7 @@ const app = new Hono<{ Bindings: Env }>();
 const abandonedCheckoutSchema = z.object({
   checkoutId: z.string().min(1, "checkoutId is required"),
   customerPhone: z.string().optional(),
-  checkoutData: z.record(z.any()),
+  checkoutData: z.record(z.string(), z.any()),
 });
 
 // Schema for the new cleanup endpoint

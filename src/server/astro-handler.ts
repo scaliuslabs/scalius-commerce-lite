@@ -2,15 +2,13 @@ import type { APIContext as BaseAPIContext } from "astro";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import app from "./index";
 import { getGroupsForPath, invalidateGroups } from "./utils/cache-invalidation";
+import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
 type APIContextWithLocals = BaseAPIContext & {
   locals: {
-    runtime: {
-      env: Env;
-      ctx: ExecutionContext;
-    };
+    cfContext: ExecutionContext;
     [key: string]: any;
   };
 };
@@ -19,9 +17,10 @@ async function handleRequest(context: APIContextWithLocals) {
   const startTime = performance.now();
 
   try {
-    const runtime = context.locals.runtime;
+    const env = cfEnv as unknown as Env;
+    const ctx = context.locals.cfContext;
 
-    if (!runtime || !runtime.env || !runtime.ctx) {
+    if (!env || !ctx) {
       console.error(
         "FATAL: Cloudflare runtime environment not found in Astro context. Check your Astro adapter configuration and middleware.",
       );
@@ -58,7 +57,7 @@ async function handleRequest(context: APIContextWithLocals) {
       redirect: "manual",
     });
 
-    const response = await app.fetch(newRequest, runtime.env, runtime.ctx);
+    const response = await app.fetch(newRequest, env, ctx);
 
     const endTime = performance.now();
     const responseTime = endTime - startTime;
@@ -148,8 +147,7 @@ async function invalidateCacheForRequest(
 
     if (groups.length === 0) return;
 
-    const runtimeEnv = (context.locals as any).runtime?.env as Env | undefined;
-    const kv = runtimeEnv?.CACHE as KVNamespace | undefined;
+    const kv = (cfEnv as any)?.CACHE as KVNamespace | undefined;
 
     await invalidateGroups(groups, kv);
   } catch (error) {

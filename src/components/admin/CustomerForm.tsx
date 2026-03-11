@@ -30,7 +30,7 @@ const customerFormSchema = z.object({
     .string()
     .min(3, "Name must be at least 3 characters")
     .max(100, "Name must be less than 100 characters"),
-  email: z.string().email().nullable(),
+  email: z.email().nullable(),
   phone: z
     .string()
     .min(11, "Phone number must be at least 11 characters")

@@ -9,6 +9,7 @@ import {
 import { autoSeedRbacIfNeeded } from "@/lib/rbac/auto-seed";
 import { getRoutePermission } from "@/lib/rbac/route-permissions";
 import { hasPageAccess } from "@/lib/rbac/page-permissions";
+import { env as cfEnv } from 'cloudflare:workers';
 
 const protectedApiPatterns = [
   /^\/api\/v1\/admin(\/.*)?$/,
@@ -100,19 +101,19 @@ const authMiddleware = defineMiddleware(async (context, next) => {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  const runtimeEnv = context.locals.runtime?.env;
-  const env = runtimeEnv || (typeof process !== "undefined" ? process.env : {});
+  // Use native CF Worker env in prod/dev, fallback to process.env for scripts
+  const env = Object.keys(cfEnv).length > 0 ? (cfEnv as unknown as Env) : (typeof process !== "undefined" ? process.env as unknown as Env : {} as Env);
 
-  if (runtimeEnv) {
+  if (Object.keys(cfEnv).length > 0) {
     const [{ getDb }, { initKv }, { initStorage }] = await Promise.all([
       import("@/db"),
       import("@/server/utils/kv-cache"),
       import("@/integrations/storage"),
     ]);
-    getDb(runtimeEnv);
-    if (runtimeEnv.CACHE) initKv(runtimeEnv.CACHE);
-    if (runtimeEnv.BUCKET) {
-      initStorage(runtimeEnv.BUCKET, (runtimeEnv.R2_PUBLIC_URL as string) || "");
+    getDb(env);
+    if (env.CACHE) initKv(env.CACHE);
+    if (env.BUCKET) {
+      initStorage(env.BUCKET, (env.R2_PUBLIC_URL as string) || "");
     }
   }
 
@@ -323,7 +324,8 @@ const cspMiddleware = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url);
 
   if (!url.pathname.startsWith("/api/")) {
-    return await setPageCspHeader(response, context.locals.runtime?.env);
+    const env = Object.keys(cfEnv).length > 0 ? (cfEnv as unknown as Env) : (typeof process !== "undefined" ? process.env as unknown as Env : {} as Env);
+    return await setPageCspHeader(response, env);
   }
 
   return response;

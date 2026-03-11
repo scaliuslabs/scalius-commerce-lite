@@ -7,7 +7,7 @@ export const prerender = false;
 // Handle all HTTP methods for Better Auth
 export const ALL: APIRoute = async (ctx) => {
   // Get environment from Astro context (Cloudflare Workers)
-  const env = ctx.locals.runtime?.env || process.env;
+  const env = (ctx.locals as any).cfContext?.env || process.env;
   const auth = createAuth(env);
 
   return auth.handler(ctx.request);

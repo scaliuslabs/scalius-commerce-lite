@@ -69,10 +69,7 @@ declare namespace App {
     user: BetterAuthUser | null;
     session: BetterAuthSession | null;
     permissions: Set<string>;
-    runtime?: {
-      env: Env;
-      ctx: ExecutionContext;
-    };
+    cfContext: ExecutionContext;
   }
 }
 

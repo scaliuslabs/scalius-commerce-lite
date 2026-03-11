@@ -16,7 +16,7 @@ export default function honoIntegration(): AstroIntegration {
       "astro:config:setup": ({ injectRoute, logger }) => {
         logger.info("Setting up Hono API integration for Scalius Commerce");
 
-        const apiEntrypoint = "./src/server/astro-handler.ts";
+        const apiEntrypoint = new URL("../server/astro-handler.ts", import.meta.url).pathname;
 
         // Use Astro's catch-all syntax targeting the handler
         const catchAllPattern = "/api/v1/[...slug]";
