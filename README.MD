@@ -68,7 +68,7 @@ Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefr
 
 ### Tech stack
 
-- **Runtime / framework**: Astro (SSR, Cloudflare adapter) + React
+- **Runtime / framework**: Astro 6 (SSR, Cloudflare adapter, Experimental Rust Compiler) + Vite 7 + React
 - **Storefront API**: Hono (Swagger UI + OpenAPI)
 - **Database**: Cloudflare D1 (SQLite) + Drizzle ORM + FTS5 full-text search
 - **UI**: Tailwind CSS v4 + shadcn/ui (`src/components/ui/**`)
@@ -234,8 +234,8 @@ From `package.json`:
 ```bash
 pnpm dev:setup        # install deps, create .dev.vars + .env.development, apply local D1 migrations
 pnpm dev              # astro dev --host (primary local dev flow)
-pnpm start            # wrangler dev against built output in dist/worker-with-queue.js
-pnpm build            # astro check + astro build + drizzle-kit generate + queue wrapper build
+pnpm start            # wrangler dev against built output
+pnpm build            # astro check + astro build + drizzle-kit generate
 pnpm deploy           # node scripts/deploy.mjs (build + migrate + deploy)
 
 pnpm db:generate      # drizzle-kit generate
@@ -247,7 +247,7 @@ pnpm db:studio        # drizzle-kit studio
 pnpm generate:sdk     # tsx src/scripts/generate-openapi-json.ts && openapi-ts
 ```
 
-The deployable Worker entry point is `./dist/worker-with-queue.js` (set in `wrangler.jsonc` `main`). `pnpm build` also runs `drizzle-kit generate`, so it may create new migration files when schema changes are detected.
+The deployable Worker entry point is `./src/worker.ts` (set in `wrangler.jsonc` `main`). `pnpm build` also runs `drizzle-kit generate`, so it may create new migration files when schema changes are detected.
 
 ### Environment variables
 
@@ -378,7 +378,7 @@ pnpm build
 pnpm start
 ```
 
-Use this when you specifically want to run the built Worker via `wrangler dev`. `pnpm start` expects the built `dist/worker-with-queue.js` entrypoint to exist.
+Use this when you specifically want to run the built Worker via `wrangler dev`. `pnpm start` expects the built configurations.
 
 Port note: auth callbacks assume the admin app is running on `http://localhost:4321`. If that port is occupied, stop the previous dev server before starting a new one.
 
@@ -549,7 +549,7 @@ The backend uses Cloudflare Queues for async processing:
 - **`auth-otp`**: Async block-free delivery for authentication OTP emails
 - **`order-ingest`**: High-concurrency order creation with D1 batched inventory reservations to prevent lockups
 
-The build script (`scripts/build-with-queue.mjs`) bundles the queue consumer (`src/queue-consumer.ts`) and wraps the Astro worker. The deployable entry `dist/worker-with-queue.js` exports both `fetch` (HTTP handler) and `queue` (queue batch handler). Queue bindings are declared in `wrangler.jsonc`.
+The deployable Cloudflare Worker entrypoint is located at `src/worker.ts`, which natively supports both HTTP request handling via Astro and a `queue` batch handler. Queue bindings are declared in `wrangler.jsonc`.
 
 ### Deployment (Cloudflare Workers)
 
@@ -562,7 +562,7 @@ pnpm deploy
 
 This runs `scripts/deploy.mjs` which handles building, migrations, and deploying to Cloudflare Workers via Wrangler.
 
-`wrangler.jsonc` defines the main entry (`./dist/worker-with-queue.js`), worker compatibility flags, D1/KV/R2/Queue bindings, and static assets binding.
+`wrangler.jsonc` defines the main entry (`./src/worker.ts`), worker compatibility flags, D1/KV/R2/Queue bindings, and static assets binding.
 
 ### Maintenance notes
 
