@@ -3,8 +3,8 @@ import { createAuthClient } from "better-auth/react";
 import { twoFactorClient, adminClient } from "better-auth/client/plugins";
 
 // Create the auth client for use in React components
+// Auth endpoints live on the admin worker (same-origin), not the API worker
 export const authClient = createAuthClient({
-  baseURL: import.meta.env.PUBLIC_API_BASE_URL || "",
   plugins: [
     twoFactorClient({
       onTwoFactorRedirect: () => {

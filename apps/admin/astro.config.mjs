@@ -118,11 +118,22 @@ export default defineConfig({
       hmr: {
         overlay: true,
       },
+      // Proxy /api/v1/* to the standalone API worker in dev.
+      // Vite intercepts before workerd, so multipart bodies stream correctly.
+      // In production, apps/admin/src/pages/api/v1/[...path].ts handles this via service binding.
+      proxy: {
+        "/api/v1": {
+          target: "http://localhost:8787",
+          changeOrigin: true,
+        },
+      },
     },
   },
 
   adapter: cloudflare({
     // Use Cloudflare's Image Resizing service for on-demand optimization
     imageService: "cloudflare",
+    // Share D1/KV/R2 state with API worker (both persist to root .wrangler/state/)
+    persistState: { path: "../../.wrangler/state" },
   }),
 });

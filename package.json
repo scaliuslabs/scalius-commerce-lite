@@ -16,6 +16,7 @@
     "db:studio": "drizzle-kit studio --config packages/database/drizzle.config.ts"
   },
   "devDependencies": {
+    "@scalius/tsconfig": "workspace:*",
     "turbo": "^2.5.0",
     "drizzle-kit": "^0.30.6"
   },

@@ -5,5 +5,10 @@
   "license": "UNLICENSED",
   "publishConfig": {
     "access": "restricted"
+  },
+  "exports": {
+    "./base.json": "./base.json",
+    "./worker.json": "./worker.json",
+    "./astro.json": "./astro.json"
   }
 }

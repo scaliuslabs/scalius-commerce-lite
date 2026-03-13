@@ -77,19 +77,53 @@ async function parseCspAllowedDomains(env?: any): Promise<string[]> {
     });
 }
 
-function getCdnDomains(env?: any): string[] {
-  const cdnDomain = env?.CDN_DOMAIN_URL || process.env.CDN_DOMAIN_URL;
-  if (!cdnDomain) return [];
+/**
+ * Collect all platform-owned URLs from env so they are automatically CSP-allowed.
+ * Handles both https (production) and http (local dev) schemes.
+ */
+function getPlatformDomains(env?: any): string[] {
+  const urls: string[] = [];
+  const envKeys = [
+    "CDN_DOMAIN_URL",
+    "R2_PUBLIC_URL",
+    "PUBLIC_API_BASE_URL",
+    "STOREFRONT_URL",
+    "BETTER_AUTH_URL",
+  ];
 
-  return [`https://${cdnDomain}`, `https://*.${cdnDomain}`];
+  for (const key of envKeys) {
+    const raw: string | undefined = env?.[key] || process.env[key];
+    if (!raw) continue;
+
+    // CDN_DOMAIN_URL is stored as a bare domain (no scheme)
+    const value = raw.trim();
+    if (!value) continue;
+
+    try {
+      // If it already has a scheme, parse directly; otherwise treat as bare domain
+      const hasScheme = /^https?:\/\//.test(value);
+      if (hasScheme) {
+        const parsed = new URL(value);
+        urls.push(parsed.origin);
+        urls.push(`${parsed.protocol}//*.${parsed.hostname}`);
+      } else {
+        urls.push(`https://${value}`, `https://*.${value}`);
+      }
+    } catch {
+      // Not a valid URL, try as bare domain
+      urls.push(`https://${value}`, `https://*.${value}`);
+    }
+  }
+
+  return urls;
 }
 
 async function getCombinedDomains(env?: any): Promise<string[]> {
   const essentialDomains = getEssentialDomains();
-  const cdnDomains = getCdnDomains(env);
+  const platformDomains = getPlatformDomains(env);
   const customDomains = await parseCspAllowedDomains(env);
 
-  return [...new Set([...essentialDomains, ...cdnDomains, ...customDomains])];
+  return [...new Set([...essentialDomains, ...platformDomains, ...customDomains])];
 }
 
 /**
@@ -121,7 +155,15 @@ export async function setPageCspHeader(response: Response, env?: any): Promise<R
 
   const frameSrc = ["'self'", ...allowedDomains];
 
-  const imgSrc = ["'self'", "data:", "https:", "blob:", ...allowedDomains];
+  const imgSrc = [
+    "'self'",
+    "data:",
+    "https:",
+    "blob:",
+    "http://localhost:*",
+    "http://127.0.0.1:*",
+    ...allowedDomains,
+  ];
 
   const workerSrc = ["'self'", "blob:", ...allowedDomains];
 

@@ -14,7 +14,7 @@
 </h4>
 
 <p align="center">
-  Full-stack e-commerce admin dashboard + storefront API built on Astro, Hono, and Cloudflare D1.
+  Full-stack e-commerce admin dashboard + storefront API — Turborepo monorepo with Astro, Hono, and Cloudflare D1.
 </p>
 
 <p align="center">
@@ -49,545 +49,426 @@
 
 ## Get Started
 
-Scalius Commerce Lite is a full-stack **e-commerce admin dashboard** + **storefront API** built on **Astro** and **Hono**, backed by **Cloudflare D1** (SQLite) via **Drizzle ORM**. The admin side ships as Astro pages with React components; the storefront API ships as a Hono app mounted under `/api/v1`.
+Scalius Commerce Lite is a **Turborepo monorepo** containing two Cloudflare Workers and four shared packages:
 
-### What's in this repo
+- **Admin dashboard** (`apps/admin`) — Astro 6 SSR + React 19 admin UI
+- **API worker** (`apps/api`) — Standalone Hono API + queue consumer
 
-- **Admin dashboard (UI)**: `src/pages/admin/**` (Astro pages) + `src/components/admin/**` (React components).
-- **Backend API (Unified Hono)**: `src/server/**` (Hono app + routes), mounted at `/api/v1/**` via the custom Astro integration in `src/integrations/hono-integration.ts`. Handles both Admin CRUD operations (`/api/v1/admin/**`) and Storefront endpoints.
-- **Domain Modules**: `src/modules/**` - Domain-Driven Design service classes containing the core business logic, decoupled from the HTTP routing layer.
-- **Database (Drizzle + D1)**: schema split across 11 domain files in `src/db/schema/` (barrel: `src/db/schema/index.ts`), connection in `src/db/index.ts`, migrations in `migrations/**`.
+The admin worker communicates with the API worker via **Cloudflare Service Bindings** (zero-latency, no network hop in production) and a Vite proxy in development.
 
-### Key URLs
+### Monorepo structure
 
-- **Admin UI**: `/admin`
-- **Unified API (Hono)**: `/api/v1/**` (Includes `/api/v1/admin/**` for dashboard operations)
-- **Swagger UI**: `/api/v1/docs`
-- **OpenAPI JSON**: `/api/v1/openapi.json`
-- **Health**: `/health` (Astro) and `/api/v1/health` (Hono)
+```text
+apps/
+  admin/          # @scalius/admin — Astro SSR admin dashboard (Cloudflare Worker)
+  api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
+packages/
+  core/           # @scalius/core — Domain modules, auth, integrations, search
+  database/       # @scalius/database — Drizzle schema, client, migrations
+  shared/         # @scalius/shared — Pure utility functions
+  tsconfig/       # @scalius/tsconfig — Shared TypeScript configs
+scripts/          # Dev setup, deploy, reset scripts
+```
+
+### Key URLs (local dev)
+
+| URL | Service |
+|-----|---------|
+| `http://localhost:4321/admin` | Admin dashboard |
+| `http://localhost:4321/auth/login` | Auth pages |
+| `http://localhost:8787/api/v1/` | API root |
+| `http://localhost:8787/api/v1/docs` | Swagger UI |
+| `http://localhost:8787/api/v1/openapi.json` | OpenAPI spec |
+| `http://localhost:8787/api/v1/health` | Health check |
 
 ### Tech stack
 
-- **Runtime / framework**: Astro 6 (SSR, Cloudflare adapter, Experimental Rust Compiler) + Vite 7 + React
-- **Storefront API**: Hono (Swagger UI + OpenAPI)
+- **Monorepo**: Turborepo + pnpm workspaces
+- **Admin**: Astro 6 (SSR, Cloudflare adapter, Rust compiler) + Vite 7 + React 19
+- **API**: Hono (Swagger UI + OpenAPI)
 - **Database**: Cloudflare D1 (SQLite) + Drizzle ORM + FTS5 full-text search
-- **UI**: Tailwind CSS v4 + shadcn/ui (`src/components/ui/**`)
+- **UI**: Tailwind CSS v4 + shadcn/ui
 - **Auth**: Better Auth (email/password + optional admin 2FA with TOTP/email OTP)
-- **Caching**: Cloudflare KV (with in-memory fallback) for Hono API response caching
+- **Caching**: Cloudflare KV (with in-memory fallback)
 - **Storage**: Cloudflare R2 for media uploads
-- **Notifications**: Firebase Cloud Messaging (admin push notifications, configured via dashboard)
-- **Email**: Resend API (2FA codes, password reset, configured via dashboard)
-- **AI tooling**: OpenRouter integration for widget/content generation (API key stored in DB settings)
+- **Notifications**: Firebase Cloud Messaging (configured via dashboard)
+- **Email**: Resend API (configured via dashboard)
+- **AI**: OpenRouter integration for widget/content generation (API key stored in DB)
+- **Communication**: Cloudflare Service Bindings (admin→API)
+- **Queues**: Cloudflare Queues for async processing
 - **Deploy**: Cloudflare Workers via Wrangler
 
-### Features (high level)
+### Features
 
-- **Commerce**: products (including variants, images, rich content), categories, attributes, collections
+- **Commerce**: products (variants, images, rich content), categories, attributes, collections
 - **Sales**: orders, customers, abandoned checkouts, discounts
 - **Storefront content**: header/footer builders, navigation, pages, hero sliders, widgets
 - **Operations**: shipping methods, delivery providers/shipments, fraud checker, cache management
-- **Media**: R2-backed uploads + Cloudflare Image Resizing optimization in production
-- **Notifications**: admin push notifications for new orders (Firebase Cloud Messaging)
+- **Media**: R2-backed uploads + Cloudflare Image Resizing in production
+- **Notifications**: admin push notifications for new orders (FCM)
 - **AI**: OpenRouter-powered widget/content generation and prompt tooling
-- **Security**: optional admin 2FA (authenticator app or email OTP), rate limiting, secure sessions
+- **Security**: optional admin 2FA (authenticator app or email OTP), RBAC, rate limiting, CSP
 
-### Architecture overview
+---
+
+## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Admin [Admin Dashboard]
+    subgraph Admin ["Admin Worker (Astro SSR)"]
         AdminPages[Astro Pages /admin]
         AdminComponents[React Components]
+        AuthPages[Better Auth /api/auth/*]
+        Middleware[Middleware: Auth + RBAC + CSP]
     end
 
-    subgraph Storefront [Storefront]
-        StorefrontPages[Astro/React Pages]
-    end
-
-    subgraph Backend [Unified Backend - Hono Worker]
+    subgraph API ["API Worker (Hono)"]
         HonoApp[Hono App /api/v1/*]
-        AstroIntegration[hono-integration.ts]
-        DomainModules[Domain Services src/modules]
+        AdminAPI[Admin Routes /api/v1/admin/*]
+        StorefrontAPI[Storefront Routes /api/v1/*]
         QueueConsumer[Queue Consumer]
     end
 
-    subgraph Queues [Cloudflare Queues]
-        OrderQueue[Order Ingest Queue]
-        AuthOTPQueue[Auth OTP Queue]
-        NotificationQueue[Events & Notifications]
+    subgraph Packages [Shared Packages]
+        Core["@scalius/core<br/>Domain services, auth, integrations"]
+        Database["@scalius/database<br/>Drizzle schema, migrations"]
+        Shared["@scalius/shared<br/>Pure utilities"]
     end
 
-    subgraph Data [Data Layer]
-        D1[(Cloudflare D1)]
-        KV[(KV Cache/Session/RBAC)]
-        R2[(R2 Media)]
+    subgraph Infra [Cloudflare Infrastructure]
+        D1[(D1 Database)]
+        KV[(KV Cache/Session)]
+        R2[(R2 Media Storage)]
+        Queues[Queues]
     end
 
-    AdminPages -->|HTTP/Fetch| HonoApp
-    AdminComponents -->|HTTP/Fetch| HonoApp
-    StorefrontPages -->|Service Binding| HonoApp
-    AstroIntegration --> HonoApp
-    HonoApp --> DomainModules
-    DomainModules --> D1
-    HonoApp -->|Cache & Auth| KV
-    DomainModules --> R2
-    DomainModules -->|Enqueue jobs| Queues
-    Queues -->|Consume batches| QueueConsumer
-    QueueConsumer --> DomainModules
+    AdminPages -->|Service Binding| HonoApp
+    AdminComponents -->|Service Binding / HTTP| HonoApp
+    HonoApp --> Core
+    Core --> Database
+    Database --> D1
+    HonoApp -->|Cache| KV
+    Core --> R2
+    Core -->|Enqueue| Queues
+    Queues -->|Consume| QueueConsumer
+    Middleware -->|Session via D1| D1
+    Middleware -->|RBAC via KV| KV
 ```
 
-#### Admin (Astro pages + React)
+### Admin Worker (`apps/admin`)
 
-- Admin pages live in `src/pages/admin/**` and render through `src/layouts/AdminLayout.astro`.
-- Most interactive UI is React (hydrated with `client:*` directives).
-- Authentication and incredibly fast KV-backed RBAC caching are enforced by `src/middleware.ts` before pages render.
+- Astro 6 SSR pages + React 19 components, hydrated with `client:*` directives
+- Owns auth pages (`/api/auth/*` via Better Auth)
+- Middleware handles session validation, RBAC, CSP headers
+- Proxies `/api/v1/*` to the API worker via service binding (prod) or Vite proxy (dev)
+- Has direct D1 access only for auth/session/RBAC (not for business data)
 
-#### Unified API + Domain Modules (Hono)
+### API Worker (`apps/api`)
 
-- Hono app entry: `src/server/index.ts`
-- Astro integration injects `/api/v1/[...slug]` and forwards requests to Hono via `src/server/astro-handler.ts`.
-- The HTTP routing layer (`src/server/routes/**`) is kept extremely thin. It handles request validation, auth checks, and immediately delegates to Domain Services.
-- **Domain-Driven Design (DDD)**: Actual business logic lives in `src/modules/**` (e.g., `products.service.ts`, `orders.service.ts`). These services expect a D1 database instance injection, making them highly testable, modular, and LLM-friendly.
-- Admin APIs live at `/api/v1/admin/**` and storefront APIs live elsewhere under `/api/v1/`.
-- API docs:
-  - Swagger UI is served at `/api/v1/docs`
-  - OpenAPI spec is served at `/api/v1/openapi.json`
+- Standalone Hono app at `/api/v1/*`
+- Exports `WorkerEntrypoint` with HTTP fetch + queue handler
+- Owns all business logic routes: admin CRUD (`/api/v1/admin/*`) + storefront endpoints
+- Thin HTTP layer delegates to `@scalius/core` domain services
+- Queue consumer handles payment events, order notifications, OTP delivery, order ingestion
 
-### Project structure (high level)
+### Shared Packages (JIT — no build step)
 
-```text
-src/
-  pages/
-    admin/               # Admin dashboard pages (Astro)
-    auth/                # Auth pages (login, setup, 2FA)
-    health.ts
-  components/
-    admin/               # Admin React components
-    auth/                # Auth React components
-    ui/                  # shadcn/ui components
-  server/
-    index.ts             # Hono app (Unified API initialization)
-    astro-handler.ts     # Astro → Hono bridge for /api/v1/*
-    routes/              # Hono route modules (thin HTTP layer)
-      admin/             # Admin API endpoints
-      ...                # Storefront API endpoints
-    middleware/          # Hono middleware (auth + caching)
-    openapi/             # OpenAPI spec builder
-    utils/               # KV cache / JWT helpers
-  modules/               # Domain business logic (DDD)
-    ai/                  # AI config, prompt helpers, context schema
-    analytics/           # Dashboard stats service
-    delivery/            # Delivery service, factory, providers, tracking
-    inventory/           # Stock reserve/deduct/release/alerts
-    marketing/           # Discounts service
-    orders/              # Orders service
-    payments/            # Stripe, SSLCommerz, Polar, COD, refunds
-    products/            # Products service
-  integrations/          # Third-party service integrations
-    firebase/            # Firebase Admin + client
-    meta/                # Meta Conversions API
-    analytics.ts         # Analytics tracking
-    email.ts             # Resend email
-    storage.ts           # Cloudflare R2 uploads
-  shared/                # Pure utility functions (no DB, no side effects)
-    utils.ts             # cn(), date helpers, etc.
-    currency.ts          # Currency formatting
-    cors-helper.ts       # CORS origin helpers
-    rate-limit.ts        # Rate limiting
-    error-utils.ts       # Error formatting
-    storefront-url.ts    # URL builders
-    image-optimizer.ts   # Cloudflare Image Resizing
-    # … and more (tag-parser, json-repair, html-section-parser, etc.)
-  lib/                   # Auth + RBAC + search (remain here by design)
-    auth.ts              # Better Auth configuration
-    auth-client.ts       # Better Auth client for React
-    rbac/                # RBAC helpers, permissions, page guards
-    search/              # FTS5 query helpers
-    middleware-helper/   # CSP + Hono cache invalidator
-    fraud-checker/       # Fraud detection service
-    notification-utils.ts
-    delivery-locations.ts
-    adminBreadCrumb.ts
-  db/
-    schema/              # Drizzle schema split by domain (11 files)
-      index.ts           # Barrel — re-exports all 11 domain files
-      enums.ts           # Shared const enums
-      auth.ts            # user, session, account, verification, twoFactor
-      rbac.ts            # permissions, roles, userRoles
-      products.ts        # products, variants, images, categories…
-      customers.ts
-      orders.ts          # orders, orderItems, payments, codTracking…
-      inventory.ts       # movements, lowStockAlerts
-      delivery.ts        # deliveryProviders, deliveryShipments
-      marketing.ts       # discounts, discountUsage, metaConversions
-      content.ts         # pages, widgets, heroSliders
-      system.ts          # settings, siteSettings, shippingMethods…
-    index.ts             # getDb() (Cloudflare D1)
-migrations/              # Drizzle migration SQL + snapshots
-scripts/                 # Build and deployment scripts
+All packages are consumed directly as TypeScript by the bundler (esbuild/wrangler). No compilation step needed.
+
+- **`@scalius/database`**: Drizzle schema (11 domain files), `getDb()` client factory, migrations
+- **`@scalius/core`**: Domain services (`src/modules/`), Better Auth config, RBAC, integrations (email, storage, firebase, meta), FTS5 search
+- **`@scalius/shared`**: Pure utilities (currency, CORS, image-optimizer, rate-limit, etc.)
+- **`@scalius/tsconfig`**: Shared TypeScript configs (base, astro, worker)
+
+### Dependency graph
+
+```
+@scalius/shared          → (no deps)
+@scalius/database        → drizzle-orm, @scalius/shared
+@scalius/core            → @scalius/database, @scalius/shared
+@scalius/api             → @scalius/core, @scalius/database, @scalius/shared, hono
+@scalius/admin           → @scalius/core, @scalius/database, @scalius/shared, astro, react
 ```
 
-### Scripts
+---
 
-From `package.json`:
+## Scripts
+
+All commands run from the repo root via Turborepo:
 
 ```bash
-pnpm dev:setup        # install deps, create .dev.vars + .env.development, apply local D1 migrations
-pnpm dev              # astro dev --host (primary local dev flow)
-pnpm start            # wrangler dev against built output
-pnpm build            # astro check + astro build + drizzle-kit generate
-pnpm deploy           # node scripts/deploy.mjs (build + migrate + deploy)
-
-pnpm db:generate      # drizzle-kit generate
-pnpm db:migrate:local # node scripts/deploy.mjs --migrate-only --local
-pnpm db:migrate:remote # node scripts/deploy.mjs --migrate-only
-pnpm dev:reset        # wipe .wrangler/state and re-apply local migrations
-pnpm db:studio        # drizzle-kit studio
-
-pnpm generate:sdk     # tsx src/scripts/generate-openapi-json.ts && openapi-ts
+pnpm dev              # Start both workers (admin :4321, API :8787)
+pnpm build            # Build all workspaces
+pnpm deploy           # Build + migrate + deploy all workers
+pnpm dev:setup        # First-time local setup (creates .dev.vars, applies migrations)
+pnpm dev:reset        # Wipe local DB and re-apply migrations
+pnpm db:generate      # Generate Drizzle migrations from schema changes
+pnpm db:migrate:local # Apply pending migrations locally
+pnpm db:studio        # Drizzle Studio DB browser
 ```
 
-The deployable Worker entry point is `./src/worker.ts` (set in `wrangler.jsonc` `main`). `pnpm build` also runs `drizzle-kit generate`, so it may create new migration files when schema changes are detected.
+---
 
-### Environment variables
+## Local Development
 
-This project has three configuration surfaces:
-
-1. **Cloudflare bindings in `wrangler.jsonc`** for D1, KV, R2, Queues, and non-secret runtime vars.
-2. **Local env files**:
-   - `.dev.vars` for Worker runtime secrets and local URL overrides.
-   - `.env.development` for Vite/Astro build-time vars (`import.meta.env.*`).
-3. **Admin dashboard settings** for third-party providers such as Resend, Firebase, payment gateways, delivery providers, and OpenRouter.
-
-`pnpm dev:setup` creates both local files automatically. For manual setup, use `.dev.vars.example` as the runtime template and `.env.example` as the build-time template.
-
-`wrangler.jsonc` in this repo already contains concrete worker/resource names and production URLs. Update those bindings and `vars` before deploying your own fork.
-
-#### Runtime secrets and local overrides (`.dev.vars`)
-
-Required:
-
-- `BETTER_AUTH_SECRET`: Better Auth secret.
-- `JWT_SECRET`: JWT signing secret for protected API flows.
-- `API_TOKEN`: machine-to-machine token used by `/api/v1/auth/token`.
-- `BETTER_AUTH_URL`: auth callback origin. Local default: `http://localhost:4321`.
-- `PUBLIC_API_BASE_URL`: canonical admin/API origin. Local default: `http://localhost:4321`.
-- `STOREFRONT_URL`: storefront origin used by redirects and payment callbacks. Local default: `http://localhost:4322`.
-
-Optional runtime vars:
-
-- `R2_PUBLIC_URL`: public base URL for uploaded media.
-- `CDN_DOMAIN_URL`: CDN/image allow-list domain for CSP and Astro image config.
-- `PURGE_URL`: external storefront purge endpoint.
-- `PURGE_TOKEN`: bearer token/header secret used with `PURGE_URL`.
-- `PROJECT_CACHE_PREFIX`: KV namespace prefix. Defaults to `sc`.
-- `CSP_ALLOWED`: comma-separated extra domains for CSP/CORS allow-lists.
-- `FIREBASE_SERVICE_ACCOUNT_CRED_JSON`: optional Firebase Admin fallback when dashboard settings are not configured.
-
-#### Build-time vars (`.env.development`)
-
-Required in practice for local admin auth:
-
-- `PUBLIC_API_BASE_URL`: consumed by the Better Auth React client.
-
-Optional build-time/public vars:
-
-- `PUBLIC_FIREBASE_API_KEY`
-- `PUBLIC_FIREBASE_AUTH_DOMAIN`
-- `PUBLIC_FIREBASE_PROJECT_ID`
-- `PUBLIC_FIREBASE_STORAGE_BUCKET`
-- `PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
-- `PUBLIC_FIREBASE_APP_ID`
-- `PUBLIC_FIREBASE_MEASUREMENT_ID`
-- `OPENROUTER_BASE_URL`
-- `PUBLIC_SITE_URL`
-- `SITE_TITLE`
-
-#### Dashboard-configured integrations
-
-These are configured from the admin dashboard and stored in the database, not in env vars:
-
-| Integration                                           | Where to configure                |
-| ----------------------------------------------------- | --------------------------------- |
-| Resend email key + sender                             | **Settings → Email**              |
-| Firebase public config + service account              | **Settings → Notifications**      |
-| Stripe / SSLCommerz / Polar + enabled payment methods | **Settings → Payments**           |
-| Delivery provider credentials/config                  | **Settings → Delivery Providers** |
-| OpenRouter API key                                    | widget generator settings dialog  |
-
-Development note: if Resend is not configured in the dashboard, transactional emails are logged to the console instead of being sent.
-
-### Cloudflare bindings
-
-The following bindings are declared in `wrangler.jsonc` and are automatically available to the Worker at runtime. No environment variables are needed for these — they are injected by the Cloudflare Workers runtime:
-
-| Binding                     | Type        | Purpose                                                   |
-| --------------------------- | ----------- | --------------------------------------------------------- |
-| `DB`                        | D1Database  | Primary SQLite database                                   |
-| `CACHE`                     | KVNamespace | API response cache                                        |
-| `SESSION`                   | KVNamespace | Astro session storage                                     |
-| `SHARED_AUTH_CACHE`         | KVNamespace | Firebase access token cache                               |
-| `BUCKET`                    | R2Bucket    | Media file storage                                        |
-| `PAYMENT_EVENTS_QUEUE`      | Queue       | Payment event processing (producer)                       |
-| `ORDER_NOTIFICATIONS_QUEUE` | Queue       | Order notification processing (producer)                  |
-| `AUTH_OTP_QUEUE`            | Queue       | Async email/OTP delivery (producer/consumer)              |
-| `ORDER_INGEST_QUEUE`        | Queue       | High-concurrency async order creation (producer/consumer) |
-| `ASSETS`                    | Fetcher     | Static asset serving                                      |
-
-### Local development
-
-#### 1) First-time setup
+### 1) First-time setup
 
 ```bash
 pnpm dev:setup
 ```
 
-This command:
+This creates `.dev.vars` in both `apps/admin/` and `apps/api/`, creates `apps/admin/.env.development`, and applies D1 migrations to the local database.
 
-- installs dependencies
-- creates `.dev.vars`
-- creates `.env.development`
-- applies local D1 migrations
-
-#### 2) Start the app
+### 2) Start the app
 
 ```bash
 pnpm dev
 ```
 
-`astro dev` is the primary local workflow. The Cloudflare adapter is configured with `platformProxy`, so D1/KV/R2 bindings are already emulated during `pnpm dev`.
+Turborepo starts both workers in parallel:
+- **Admin** (`apps/admin`): Astro dev server on port 4321 with workerd runtime (D1/KV/R2 emulated)
+- **API** (`apps/api`): Wrangler dev on port 8787
 
-#### 3) Create the first admin account
+In dev, the admin's Vite config proxies `/api/v1/*` requests to `http://localhost:8787`, so API calls from the browser go directly to the API worker.
 
-Visit `/admin`. If no admin exists yet, middleware redirects to `/auth/setup`, where the first account is created as an admin, marked as super admin, and the RBAC seed runs automatically.
+### 3) Create the first admin account
 
-#### 4) Useful local reset commands
+Visit `http://localhost:4321/admin`. If no admin exists, middleware redirects to `/auth/setup`. The first account is created as super admin and RBAC roles/permissions are seeded automatically.
 
-```bash
-pnpm dev:reset
-pnpm db:migrate:local
-```
-
-- `pnpm dev:reset` wipes `.wrangler/state` and reapplies all migrations from scratch.
-- `pnpm db:migrate:local` applies pending migrations without wiping data.
-
-#### 5) Built-worker parity mode
+### 4) Reset commands
 
 ```bash
-pnpm build
-pnpm start
+pnpm dev:reset        # Wipe .wrangler/state and re-apply all migrations
+pnpm db:migrate:local # Apply pending migrations without wiping data
 ```
 
-Use this when you specifically want to run the built Worker via `wrangler dev`. `pnpm start` expects the built configurations.
+**Port note**: Auth callbacks assume the admin app runs on `http://localhost:4321`. Kill previous servers before starting new ones.
 
-Port note: auth callbacks assume the admin app is running on `http://localhost:4321`. If that port is occupied, stop the previous dev server before starting a new one.
+---
 
-### Database & migrations (Drizzle + Cloudflare D1)
+## Environment Variables
 
-- Drizzle config: `drizzle.config.ts`
-- Schema: `src/db/schema/` (11 domain files, barrel at `src/db/schema/index.ts`)
-- Migrations: `migrations/**`
+Each worker has its own configuration files:
 
-Recommended workflow:
+### Configuration surfaces
+
+1. **`wrangler.jsonc`** (per worker) — Cloudflare bindings (D1, KV, R2, Queues, service bindings) and non-secret production vars
+2. **`.dev.vars`** (per worker) — Runtime secrets for local development
+3. **`.env.development`** (`apps/admin/` only) — Vite/Astro build-time vars
+4. **Admin dashboard settings** — Third-party providers stored in the database
+
+### Runtime secrets (`.dev.vars`)
+
+Both workers need identical secrets:
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `BETTER_AUTH_SECRET` | Yes | Better Auth signing secret |
+| `JWT_SECRET` | Yes | JWT signing for protected API flows |
+| `API_TOKEN` | Yes | Machine-to-machine token for `/api/v1/auth/token` |
+| `BETTER_AUTH_URL` | Yes | Auth callback origin (`http://localhost:4321` locally) |
+| `PUBLIC_API_BASE_URL` | Yes | API base URL (`http://localhost:8787` locally) |
+| `STOREFRONT_URL` | Yes | Storefront origin for redirects/payment callbacks |
+| `R2_PUBLIC_URL` | No | Public base URL for uploaded media |
+| `PURGE_TOKEN` | No | Bearer token for external storefront cache purge |
+
+### Build-time vars (`apps/admin/.env.development`)
+
+| Variable | Purpose |
+|----------|---------|
+| `PUBLIC_API_BASE_URL` | Used by Vite proxy and client-side fetch |
+
+### Dashboard-configured integrations
+
+| Integration | Where to configure |
+|-------------|-------------------|
+| Resend email key + sender | **Settings → Email** |
+| Firebase public config + service account | **Settings → Notifications** |
+| Stripe / SSLCommerz / Polar + payment methods | **Settings → Payments** |
+| Delivery provider credentials | **Settings → Delivery Providers** |
+| OpenRouter API key | Widget generator settings dialog |
+| CSP allowed domains | **Settings → Security** |
+
+---
+
+## Cloudflare Bindings
+
+### API Worker (`apps/api/wrangler.jsonc`)
+
+| Binding | Type | Purpose |
+|---------|------|---------|
+| `DB` | D1Database | Primary SQLite database |
+| `CACHE` | KVNamespace | API response cache |
+| `SESSION` | KVNamespace | Session storage |
+| `SHARED_AUTH_CACHE` | KVNamespace | Auth/RBAC cache |
+| `BUCKET` | R2Bucket | Media file storage |
+| `PAYMENT_EVENTS_QUEUE` | Queue | Payment webhook processing |
+| `ORDER_NOTIFICATIONS_QUEUE` | Queue | Order push notifications |
+| `AUTH_OTP_QUEUE` | Queue | Async email/OTP delivery |
+| `ORDER_INGEST_QUEUE` | Queue | High-concurrency order creation |
+
+### Admin Worker (`apps/admin/wrangler.jsonc`)
+
+| Binding | Type | Purpose |
+|---------|------|---------|
+| `DB` | D1Database | Better Auth session/user tables + RBAC |
+| `CACHE` | KVNamespace | CSP domain cache, RBAC permission cache |
+| `SESSION` | KVNamespace | Astro session storage |
+| `SHARED_AUTH_CACHE` | KVNamespace | Auth token cache |
+| `BUCKET` | R2Bucket | R2 storage (initialized for shared core modules) |
+| `API` | Service Binding | Routes requests to the API worker |
+| `ASSETS` | Fetcher | Static asset serving |
+
+---
+
+## Database & Migrations
+
+- **Schema**: `packages/database/src/schema/` (11 domain files)
+- **Client**: `packages/database/src/client.ts` (`getDb()` factory)
+- **Migrations**: `packages/database/migrations/`
+- **Drizzle config**: `packages/database/drizzle.config.ts`
 
 ```bash
-pnpm db:generate        # generate migration from schema changes
-pnpm db:migrate:local   # apply migrations to local D1 (via wrangler)
-pnpm db:migrate:remote  # apply migrations to remote D1
+pnpm db:generate        # Generate migration from schema changes
+pnpm db:migrate:local   # Apply to local D1
+pnpm db:studio          # Drizzle Studio browser
 ```
 
-The deploy script (`scripts/deploy.mjs`) handles migrations automatically when running `pnpm deploy`.
+The deploy script (`scripts/deploy.mjs`) handles migrations automatically.
 
 ### Full-text search (FTS5)
 
-All text search (admin dashboard, storefront API, command palette) uses **SQLite FTS5** for fast, indexed full-text search instead of `LIKE '%term%'` scans.
+All text search uses **SQLite FTS5** with external content tables (no data duplication). INSERT/UPDATE/DELETE triggers keep indexes in sync automatically.
 
-- **FTS5 tables**: `products_fts`, `product_variants_fts`, `categories_fts`, `pages_fts`, `orders_fts`, `customers_fts`, `discounts_fts`, `abandoned_checkouts_fts`
-- **External content**: Each FTS5 table is linked to its source table via `content=` / `content_rowid='rowid'`, so no data is duplicated — only the search index is stored.
-- **Auto-sync**: INSERT/UPDATE/DELETE triggers keep FTS5 indexes in sync automatically.
-- **Query features**: Prefix matching (typing "shi" matches "shirt"), multi-word AND queries ("blue shirt" requires both words), all via the shared helper in `src/lib/search/fts5.ts`. (FTS5 helpers remain in `src/lib/search/` — they are framework-level infrastructure, not domain logic.)
-- **Migration**: `migrations/0016_fts5_search.sql`
+- FTS5 tables: `products_fts`, `product_variants_fts`, `categories_fts`, `pages_fts`, `orders_fts`, `customers_fts`, `discounts_fts`, `abandoned_checkouts_fts`
+- Query helpers: `packages/core/src/search/fts5.ts`
 
-### Authentication
+---
 
-This project uses [Better Auth](https://better-auth.com) for authentication with the following features:
+## Authentication
 
-- **Email/password authentication** with secure password hashing
-- **Admin 2FA support**:
-  - Authenticator app (TOTP)
-  - Email OTP (requires Resend configured in the dashboard)
-  - Backup codes
-- **Rate limiting** on login, 2FA, and password reset flows
-- **Session management** with 7-day expiry and automatic refresh
+Uses [Better Auth](https://better-auth.com):
 
-2FA is enforced only for users who have enabled it. Middleware redirects to `/auth/two-factor` when `twoFactorEnabled` is true and the current session is not yet verified.
+- Email/password with secure hashing
+- Optional admin 2FA: authenticator app (TOTP), email OTP, backup codes
+- Rate limiting on auth flows
+- Session management with 7-day expiry and automatic refresh
+- Auth endpoints live on the **admin worker** (`/api/auth/*`) for cookie domain alignment
+- The API worker validates sessions independently via shared D1 + Better Auth secret
 
-#### First-time setup
+### First-time setup
 
-1. Navigate to `/admin` (redirects to `/auth/setup` when no admin exists)
-2. Create the first admin account with email and password
-3. The account is promoted to super admin and RBAC roles/permissions are seeded automatically
-4. Access the admin dashboard
-5. Enable 2FA later from account settings if desired
+1. Navigate to `/admin` → redirects to `/auth/setup`
+2. Create the first admin account
+3. Account is promoted to super admin, RBAC seeded automatically
 
-#### Subsequent logins
+---
 
-1. Enter email and password at `/auth/login`
-2. Complete 2FA verification only if the account has 2FA enabled
-3. Access the admin dashboard
+## API Usage
 
-### API usage
+### Hono API — `http://localhost:8787/api/v1/**`
 
-Most application APIs now live in the unified Hono app under `/api/v1/`. The main exception is Better Auth, which still uses the Astro endpoint at `src/pages/api/auth/[...all].ts`.
+- **Routes**: `apps/api/src/routes/` (thin HTTP layer) → `packages/core/src/modules/` (business logic)
+- **Docs**: `/api/v1/docs` (Swagger UI) and `/api/v1/openapi.json`
+- **CORS**: configured in `apps/api/src/app.ts` using `@scalius/shared/cors-helper`
 
-#### Unified Hono API — `/api/v1/**`
+**Route namespacing:**
+- Admin routes (session/JWT + RBAC): `/api/v1/admin/**`
+- Storefront protected (JWT): `/api/v1/orders/**`, `/api/v1/cache/**`
+- Storefront public (no auth): `/api/v1/products`, `/api/v1/categories`, `/api/v1/storefront/*`, etc.
 
-- **Source Code**: `src/server/routes/**` (HTTP layer) delegating to `src/modules/**` (Business Logic)
-- **Docs**: `/api/v1/docs` and `/api/v1/openapi.json`
-- **CORS**: configured in `src/server/index.ts` using `src/shared/cors-helper.ts`
-- **Caching**: many GET routes use `cacheMiddleware` (`src/server/middleware/cache.ts`) for extremely low latency.
-- **Namespacing**:
-  - **Admin Restricted routes (JWT/Session + RBAC required)**: `/api/v1/admin/**` (e.g., managing inventory, products, orders).
-  - **Storefront Protected routes (JWT required)**: `/api/v1/orders/**` and `/api/v1/cache/**`
-  - **Storefront Public routes (No JWT)**: most read-only storefront data under `/api/v1/` (e.g., standard product fetching, categories, layout data).
+**Consolidated endpoints** (reduce client round-trips):
+- `GET /api/v1/storefront/homepage` — hero sliders, widgets, collections, SEO
+- `GET /api/v1/storefront/layout` — header/footer, navigation, analytics scripts
 
-##### Storefront "single-call" endpoints
-
-To reduce client round-trips, the Hono API exposes consolidated endpoints:
-
-- `GET /api/v1/storefront/homepage`: homepage data (hero sliders, widgets, collections + products, SEO)
-- `GET /api/v1/storefront/layout`: layout data (header/footer config, navigation fallback, analytics scripts)
-
-##### Machine-to-machine auth (for protected routes)
-
-Some routes (notably `/api/v1/orders/*` and `/api/v1/cache/*`) require a short-lived JWT.
-
-1. Obtain a JWT using your `API_TOKEN`:
+### Machine-to-machine auth
 
 ```bash
-curl -sS \
-  -H "X-API-Token: $API_TOKEN" \
-  "http://localhost:4321/api/v1/auth/token"
+# 1. Get JWT
+curl -sS -H "X-API-Token: $API_TOKEN" "http://localhost:8787/api/v1/auth/token"
+
+# 2. Use JWT
+curl -sS -H "Authorization: Bearer <JWT>" "http://localhost:8787/api/v1/cache/stats"
 ```
 
-2. Use the JWT to call protected endpoints:
+---
 
-```bash
-curl -sS \
-  -H "Authorization: Bearer <JWT_FROM_STEP_1>" \
-  "http://localhost:4321/api/v1/cache/stats"
-```
+## Queues
 
-### Cache invalidation (how freshness is maintained)
+The API worker uses Cloudflare Queues for async processing:
 
-There are two complementary mechanisms:
+| Queue | Purpose |
+|-------|---------|
+| `payment-events` | Payment gateway webhook events (Stripe, SSLCommerz, Polar) |
+| `order-notifications` | Push notifications for new orders |
+| `auth-otp` | Async email/OTP delivery |
+| `order-ingest` | High-concurrency order creation with batched inventory |
 
-- **Module-level invalidation**: Domain services (`src/modules/**`) can invalidate specific cache keys after successful write operations.
-- **Middleware-level invalidation**: `src/lib/middleware-helper/hono-cache-invalidator.ts` watches successful writes to admin endpoints (like `/api/v1/admin/products`, `/api/v1/admin/categories`, etc.) and triggers:
-  - backend KV cache invalidation
-  - optional external storefront purge (if `PURGE_URL` + `PURGE_TOKEN` are set)
+Queue consumer: `apps/api/src/queue-consumer.ts`
 
-In Cloudflare Workers, invalidations are scheduled via `ctx.waitUntil()` when available to prevent blocking the response.
+---
 
-### Media uploads (R2)
+## Cache Invalidation
 
-- Upload endpoint: `POST /api/v1/admin/media/upload` (multipart form field `files`)
-- Storage implementation: `src/integrations/storage.ts` (native R2 bucket binding)
-- The R2 bucket binding (`BUCKET`) is declared in `wrangler.jsonc`
+Two complementary mechanisms:
 
-Set `R2_PUBLIC_URL` to the public base URL of your own bucket/domain.
+- **Module-level**: Domain services invalidate specific KV cache keys after writes
+- **Middleware-level**: `apps/admin/src/lib/middleware-helper/hono-cache-invalidator.ts` watches admin write responses and triggers KV invalidation + optional external storefront purge (`PURGE_URL` + `PURGE_TOKEN`)
 
-### Admin push notifications (FCM)
+---
 
-Firebase Cloud Messaging is configured primarily via the admin dashboard at **Settings → Notifications**.
+## Media Uploads (R2)
 
-To set up notifications:
+- Upload endpoint: `POST /api/v1/admin/media/upload` (multipart field `files`)
+- Storage: `packages/core/src/integrations/storage.ts` (native R2 binding)
+- Dev media server: `GET /api/v1/media/:key` (serves files from local R2 in dev)
+- Set `R2_PUBLIC_URL` to the public base URL of your bucket/CDN domain
 
-1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-2. Enable Cloud Messaging in your Firebase project
-3. Go to **Settings → Notifications** in the admin dashboard
-4. Enter your Firebase configuration (API key, project ID, etc.)
-5. Enter your service account credentials for server-side messaging
+---
 
-Fallbacks:
-
-- `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` can be used when the dashboard service account is not configured yet.
-- `PUBLIC_FIREBASE_*` values can seed the service worker config when the dashboard public config is empty.
-
-Implementation details:
-
-- Client initializes FCM inside `src/layouts/AdminLayout.astro` and posts tokens to `POST /api/v1/admin/fcm-token`
-- Server sends order notifications in the background from Hono order creation via `src/lib/notification-utils.ts`
-- Firebase admin/client SDK: `src/integrations/firebase/`
-
-### AI generation (OpenRouter)
-
-- API key management: `GET/POST /api/v1/admin/settings/openrouter` (stored in DB settings, masked on read)
-- Model list: `GET /api/v1/admin/openrouter/models`
-- Generation: `POST /api/v1/admin/openrouter/generate`
-- Staged generation: `POST /api/v1/admin/openrouter/generate-staged`
-- System prompt fetch: `GET /api/v1/admin/ai-prompts?type=widget|landing-page|collection`
-
-### SDK generation
-
-This repo can generate a typed TS client from the Hono OpenAPI spec:
-
-```bash
-pnpm generate:sdk
-```
-
-The storefront (`scalius-commerce-storefront`) currently uses direct `fetch` calls via `createApiUrl` in `src/lib/api/` and does not use this SDK. The SDK is available for future use or external integrations.
-
-See `src/lib/sdk/README.md` for usage patterns and security notes.
-
-### Queues
-
-The backend uses Cloudflare Queues for async processing:
-
-- **`payment-events`**: Payment gateway webhook events (Stripe, SSLCommerz, etc.)
-- **`order-notifications`**: Order notifications (e.g. push notifications for new orders)
-- **`auth-otp`**: Async block-free delivery for authentication OTP emails
-- **`order-ingest`**: High-concurrency order creation with D1 batched inventory reservations to prevent lockups
-
-The deployable Cloudflare Worker entrypoint is located at `src/worker.ts`, which natively supports both HTTP request handling via Astro and a `queue` batch handler. Queue bindings are declared in `wrangler.jsonc`.
-
-### Deployment (Cloudflare Workers)
-
-- Build output is SSR (`output: "server"`) with the Cloudflare adapter (`astro.config.mjs`).
-- Deploy with:
+## Deployment
 
 ```bash
 pnpm deploy
 ```
 
-This runs `scripts/deploy.mjs` which handles building, migrations, and deploying to Cloudflare Workers via Wrangler.
+Runs `scripts/deploy.mjs` which:
+1. Applies D1 migrations (remote)
+2. Builds both workers
+3. Deploys to Cloudflare Workers via Wrangler
 
-`wrangler.jsonc` defines the main entry (`./src/worker.ts`), worker compatibility flags, D1/KV/R2/Queue bindings, and static assets binding.
+Worker configs: `apps/admin/wrangler.jsonc` and `apps/api/wrangler.jsonc`.
 
-### Maintenance notes
+---
 
-- **`/api/v1/auth/test`**: Debug endpoint in `src/server/routes/auth.ts`; consider removing for production.
-- **OpenAPI spec**: Manually maintained in `src/server/openapi/`; may not match all Hono routes.
+## Key File Paths
 
-### Troubleshooting
+| File | Purpose |
+|------|---------|
+| `apps/api/src/worker.ts` | API Worker entry (WorkerEntrypoint) |
+| `apps/api/src/app.ts` | Hono app entry |
+| `apps/api/wrangler.jsonc` | API Worker Cloudflare config |
+| `apps/admin/src/worker.ts` | Admin Worker entry |
+| `apps/admin/astro.config.mjs` | Astro config |
+| `apps/admin/wrangler.jsonc` | Admin Worker Cloudflare config |
+| `apps/admin/src/middleware.ts` | Auth + RBAC + CSP middleware |
+| `packages/core/src/auth/auth.ts` | Better Auth config |
+| `apps/admin/src/lib/auth-client.ts` | Better Auth React client |
+| `packages/database/src/schema/` | Drizzle schema (11 files) |
+| `packages/database/migrations/` | SQL migrations |
+| `packages/database/drizzle.config.ts` | Drizzle config |
+| `packages/core/src/middleware-helper/csp-handler.ts` | CSP header assembly |
 
-- **"CRITICAL SECURITY ERROR: Using default JWT secret in production"**
-  - Set `JWT_SECRET` in production.
-- **"BETTER_AUTH_SECRET is not set"**
-  - Set `BETTER_AUTH_SECRET` environment variable. Generate with: `openssl rand -base64 32`
-- **Local auth callbacks or sign-in loops**
-  - Make sure the dev server is running on `http://localhost:4321`.
-  - Regenerate local files with `pnpm dev:setup -- --force` if your local URLs drifted.
-- **KV cache not working**
-  - Ensure the `CACHE` KV namespace is correctly bound in `wrangler.jsonc` and created in your Cloudflare account.
-- **CORS issues**
-  - Set `PUBLIC_API_BASE_URL` and (if needed) `CSP_ALLOWED` / `CDN_DOMAIN_URL`.
-- **Email 2FA not working**
-  - Configure Resend API key and sender address in the admin dashboard at **Settings → Email**.
-  - Email-based 2FA via OTP requires a configured Resend API key. Use authenticator app for local development without Resend.
-- **Firebase notifications not working**
-  - Configure Firebase credentials in the admin dashboard at **Settings → Notifications**.
-- **D1 database errors in local dev**
-  - Run `pnpm db:migrate:local` to apply pending migrations to the local D1 database.
-  - Run `pnpm dev:reset` if you need a clean local database.
-  - `pnpm dev` already uses Cloudflare `platformProxy`; `pnpm start` is only needed for built-worker parity.
+---
+
+## Troubleshooting
+
+- **"CRITICAL SECURITY ERROR: Using default JWT secret"** — Set `JWT_SECRET` in `.dev.vars` or production secrets.
+- **"BETTER_AUTH_SECRET is not set"** — Set in `.dev.vars`. Generate: `openssl rand -base64 32`
+- **Auth sign-in loops** — Ensure admin runs on `http://localhost:4321`. Run `pnpm dev:setup --force` to regenerate env files.
+- **API logs not showing** — API worker logs appear under the `@scalius/api:dev:` prefix in the Turbo output.
+- **CSP blocking images/scripts** — Platform URLs (`PUBLIC_API_BASE_URL`, `R2_PUBLIC_URL`, etc.) are auto-allowed. For third-party domains, add them in **Settings → Security**.
+- **CORS issues** — Set `PUBLIC_API_BASE_URL` and (if needed) `CSP_ALLOWED` / `CDN_DOMAIN_URL` in `.dev.vars`.
+- **D1 errors in dev** — Run `pnpm db:migrate:local` or `pnpm dev:reset` for a clean database.
+- **Email 2FA not working** — Configure Resend in **Settings → Email**. Use authenticator app for local dev.
+- **Firebase notifications not working** — Configure in **Settings → Notifications**.
