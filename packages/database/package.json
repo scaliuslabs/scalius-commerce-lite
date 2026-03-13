@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260310.1",
+    "@scalius/tsconfig": "workspace:*",
     "drizzle-kit": "^0.30.6"
   },
   "license": "UNLICENSED"

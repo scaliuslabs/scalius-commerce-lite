@@ -151,7 +151,6 @@ interface Message<T = unknown> {
 // Must stay in sync with wrangler.jsonc.
 interface Env {
   // Service / resource bindings
-  ASSETS: Fetcher;
   DB: D1Database;
   CACHE: KVNamespace;
   BUCKET: R2Bucket;

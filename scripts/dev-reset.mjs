@@ -4,7 +4,7 @@
  *
  * Usage: pnpm dev:reset
  *
- * 1. Deletes local D1 database files (.wrangler/state/)
+ * 1. Deletes shared local D1 database files (.wrangler/state/)
  * 2. Re-applies all migrations from scratch
  *
  * After reset, navigate to /admin to create a new admin account.
@@ -24,13 +24,13 @@ function run(cmd, label) {
   execSync(cmd, { cwd: root, stdio: "inherit" });
 }
 
-console.log("\n🔄 Scalius Commerce Lite — Database Reset\n");
+console.log("\n🔄 Scalius Commerce — Database Reset\n");
 console.log("=".repeat(50));
 
-// 1. Delete local D1 database state
+// 1. Delete shared local D1 database state (root .wrangler/state/)
 const wranglerState = resolve(root, ".wrangler", "state");
 if (existsSync(wranglerState)) {
-  console.log("\n▶ Deleting local D1 database state");
+  console.log("\n▶ Deleting shared local database state");
   rmSync(wranglerState, { recursive: true, force: true });
   console.log("  ✓ Deleted .wrangler/state/");
 } else {

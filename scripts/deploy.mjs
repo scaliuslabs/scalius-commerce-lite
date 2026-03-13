@@ -3,17 +3,16 @@
  * deploy.mjs — Full deploy pipeline for Cloudflare Workers
  *
  * Usage:
- *   node scripts/deploy.mjs                  # full deploy (build + migrate + deploy)
+ *   node scripts/deploy.mjs                  # full deploy (build + migrate + deploy both workers)
  *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
  *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
  *
  * Runs in order (full deploy):
- *   1. pnpm build        — astro check + astro build + drizzle-kit generate (detects schema changes)
- *   2. wrangler d1 migrations apply --remote  — applies any new/pending migrations to D1
- *   3. wrangler deploy   — uploads and activates the new Worker
+ *   1. turbo build       — builds all workspaces
+ *   2. wrangler d1 migrations apply --remote  — applies pending migrations to D1
+ *   3. wrangler deploy   — deploys both workers
  *
- * The database name is read automatically from wrangler.jsonc so any user
- * cloning this repo only needs to update their wrangler.jsonc — no script edits needed.
+ * The database name is read from apps/api/wrangler.jsonc (API worker owns D1).
  */
 
 import { execSync } from "child_process";
@@ -23,6 +22,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
+const apiDir = resolve(root, "apps", "api");
 const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
@@ -30,35 +30,35 @@ const local = args.includes("--local");
 // Suppress punycode deprecation warnings which corrupt Wrangler's STDOUT API payloads on Node >= 21
 process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --no-warnings=DEP0040";
 
-// ── Read wrangler.jsonc (strip // comments so JSON.parse works) ──────────────
+// ── Read wrangler.jsonc from apps/api/ (strip // comments so JSON.parse works)
 function readWranglerConfig() {
-  const raw = readFileSync(resolve(root, "wrangler.jsonc"), "utf8");
+  const raw = readFileSync(resolve(apiDir, "wrangler.jsonc"), "utf8");
   // Strip single-line // comments to turn JSONC into valid JSON, ignoring http:// and https://
   const stripped = raw.replace(/(?<!https?:)\/\/[^\n]*/g, "");
   return JSON.parse(stripped);
 }
 
-// ── Run a shell command, streaming output, throwing on failure ────────────────
-function run(cmd, label) {
+// ── Run a shell command, streaming output, throwing on failure
+function run(cmd, label, cwd = root) {
   console.log(`\n▶ ${label}`);
   console.log(`  $ ${cmd}\n`);
-  execSync(cmd, { cwd: root, stdio: "inherit" });
+  execSync(cmd, { cwd, stdio: "inherit" });
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// ── Main
 (async () => {
   let config;
   try {
     config = readWranglerConfig();
   } catch (e) {
-    console.error("✗ Could not parse wrangler.jsonc:", e.message);
+    console.error("✗ Could not parse apps/api/wrangler.jsonc:", e.message);
     process.exit(1);
   }
 
   const d1 = config.d1_databases?.[0];
   if (!d1?.database_name) {
     console.error(
-      "✗ No d1_databases[0].database_name found in wrangler.jsonc.\n" +
+      "✗ No d1_databases[0].database_name found in apps/api/wrangler.jsonc.\n" +
       "  Add a D1 database binding before deploying."
     );
     process.exit(1);
@@ -66,13 +66,15 @@ function run(cmd, label) {
 
   const dbName = d1.database_name;
   const target = local ? "local" : "remote";
+  const persistFlag = local ? " --persist-to ../../.wrangler/state" : "";
 
   if (migrateOnly) {
     console.log(`\n🗄  Applying D1 migrations → "${dbName}" (${target})\n`);
     try {
       run(
-        `pnpm exec wrangler d1 migrations apply ${dbName} --${target}`,
-        `Apply migrations → ${dbName} (${target})`
+        `pnpm exec wrangler d1 migrations apply ${dbName} --${target}${persistFlag}`,
+        `Apply migrations → ${dbName} (${target})`,
+        apiDir
       );
       console.log("\n✓ Migrations applied.");
     } catch {
@@ -86,18 +88,19 @@ function run(cmd, label) {
   console.log("=".repeat(60));
 
   try {
-    // 1. Build: astro check + astro build + drizzle-kit generate
-    //    drizzle-kit generate auto-detects schema changes and writes new migration files
-    run("pnpm build", "Build + generate migrations");
+    // 1. Build: all workspaces via Turbo
+    run("pnpm build", "Build all workspaces");
 
     // 2. Apply all pending D1 migrations (no-op if schema is up to date)
     run(
       `pnpm exec wrangler d1 migrations apply ${dbName} --remote`,
-      `Apply D1 migrations → ${dbName}`
+      `Apply D1 migrations → ${dbName}`,
+      apiDir
     );
 
-    // 3. Deploy the Worker
-    run("pnpm exec wrangler deploy", "Deploy Worker to Cloudflare");
+    // 3. Deploy both workers
+    run("pnpm exec wrangler deploy", "Deploy API Worker", apiDir);
+    run("pnpm exec wrangler deploy", "Deploy Admin Worker", resolve(root, "apps", "admin"));
 
     console.log("\n✓ Deploy complete.");
   } catch {

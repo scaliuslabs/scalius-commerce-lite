@@ -6,6 +6,9 @@
   "exports": {
     "./*": "./src/*.ts"
   },
+  "devDependencies": {
+    "@scalius/tsconfig": "workspace:*"
+  },
   "dependencies": {
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.39.3",

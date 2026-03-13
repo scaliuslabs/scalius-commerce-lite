@@ -563,9 +563,9 @@ const navSections: NavSection[] = allNavSections
       }
     </script>
 
-    <script is:inline define:vars={{ userId: user!.id, permissions: permissionsArray, isSuperAdmin: userData.isSuperAdmin }}>
+    <script is:inline define:vars={{ userId: user?.id ?? "", permissions: permissionsArray, isSuperAdmin: userData.isSuperAdmin }}>
       // Store user info in window for the module script to access
-      window.__USER_ID__ = userId;
+      if (userId) window.__USER_ID__ = userId;
       // Store permissions for React components
       window.__USER_PERMISSIONS__ = permissions;
       window.__IS_SUPER_ADMIN__ = isSuperAdmin;

@@ -17,6 +17,9 @@ importers:
 
   .:
     devDependencies:
+      '@scalius/tsconfig':
+        specifier: workspace:*
+        version: link:packages/tsconfig
       drizzle-kit:
         specifier: ^0.30.6
         version: 0.30.6
@@ -456,6 +459,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260310.1
         version: 4.20260310.1
+      '@scalius/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       drizzle-kit:
         specifier: ^0.30.6
         version: 0.30.6
@@ -474,6 +480,10 @@ importers:
       zod:
         specifier: ^4.3.6
         version: 4.3.6
+    devDependencies:
+      '@scalius/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
 
   packages/tsconfig: {}
 

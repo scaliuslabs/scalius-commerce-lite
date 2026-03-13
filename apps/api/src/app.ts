@@ -4,6 +4,8 @@ import { Hono } from "hono";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import { getDb } from "@scalius/database/client";
+import { initKv } from "./utils/kv-cache";
+import { initStorage } from "@scalius/core/integrations/storage";
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
 import { categoryRoutes } from "./routes/categories";
@@ -71,17 +73,21 @@ import { adminAttributesRoutes } from "./routes/admin/attributes";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 
 // Create typed Hono app with Cloudflare Workers Env bindings
-const app = new Hono<{ Bindings: Env }>();
+// basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
+const app = new Hono<{ Bindings: Env }>().basePath("/api/v1");
 
 // NOTE: Do NOT add compress() middleware here. Cloudflare Workers handles
 // compression at the edge automatically. Application-level compression
 // breaks the cache middleware (compressed body stored as garbled text).
 
-// Database injection middleware
-// Creates per-request database connection using CF Workers env
+// Per-request initialisation: DB, KV cache, R2 storage
 app.use("*", async (c, next) => {
   const db = getDb(c.env);
   c.set("db", db);
+  if (c.env.CACHE) initKv(c.env.CACHE);
+  if (c.env.BUCKET) {
+    initStorage(c.env.BUCKET, (c.env.R2_PUBLIC_URL as string) || "");
+  }
   await next();
 });
 
@@ -227,7 +233,6 @@ app.route("/webhooks/pathao", pathaoWebhookRoutes);
 app.route("/webhooks/steadfast", steadfastWebhookRoutes);
 
 // Apply auth middleware ONLY to paths needing protection
-// Paths are relative (prefix already stripped by astro-handler)
 app.use("/cache/*", adminAuthMiddleware);
 app.use("/orders/*", authMiddleware);
 

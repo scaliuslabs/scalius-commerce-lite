@@ -37,12 +37,11 @@ export const SYSTEM_PROMPT_CACHE_TTL = 300;
 // MODEL & PROVIDER CONFIGURATION
 // ============================================================================
 
-export const OPENROUTER_BASE_URL =
-  import.meta.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 export const OPENROUTER_HEADERS = {
-  referer: import.meta.env.PUBLIC_SITE_URL || "https://scalius.com",
-  title: import.meta.env.SITE_TITLE || "Scalius Commerce",
+  referer: "https://scalius.com",
+  title: "Scalius Commerce",
 } as const;
 
 // REMOVED: No default models - user must always choose
