@@ -15,6 +15,10 @@
 	"observability": {
 		"enabled": true
 	},
+	// Use a unique inspector port so admin + storefront can run concurrently
+	"dev": {
+		"inspector_port": 9231
+	},
 	// Static assets binding (required by @astrojs/cloudflare)
 	"assets": {
 		"binding": "ASSETS",

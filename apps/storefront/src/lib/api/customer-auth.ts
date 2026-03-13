@@ -1,9 +1,19 @@
 // src/lib/api/customer-auth.ts
 // API client for storefront customer authentication (email OTP).
+//
+// All auth requests go through a same-origin proxy (/api/customer-auth/*)
+// so Set-Cookie headers are processed by the browser. Cross-origin
+// Set-Cookie from api.scalius.com → store.wrygo.com is silently dropped
+// by modern browsers.
 
-import { createApiUrl } from "./client";
-
-const BASE = "/customer-auth";
+/**
+ * Build a same-origin customer auth URL.
+ * On the client, uses a relative path (same-origin proxy).
+ * On SSR, also uses relative path (resolved by the Astro route).
+ */
+function authUrl(subpath: string): string {
+  return `/api/customer-auth/${subpath}`;
+}
 
 export interface CustomerInfo {
   email: string;
@@ -31,7 +41,7 @@ export async function sendCustomerOtp(
   name?: string
 ): Promise<{ success: boolean; error?: string; retryAfter?: number }> {
   try {
-    const res = await fetch(createApiUrl(`${BASE}/send-otp`), {
+    const res = await fetch(authUrl("send-otp"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -56,7 +66,7 @@ export async function verifyCustomerOtp(
   phone?: string,
 ): Promise<{ success: boolean; customer?: CustomerInfo; error?: string; attemptsLeft?: number; isNewUser?: boolean; }> {
   try {
-    const res = await fetch(createApiUrl(`${BASE}/verify-otp`), {
+    const res = await fetch(authUrl("verify-otp"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -75,7 +85,7 @@ export async function verifyCustomerOtp(
  */
 export async function getCustomerSession(): Promise<AuthState> {
   try {
-    const res = await fetch(createApiUrl(`${BASE}/me`), {
+    const res = await fetch(authUrl("me"), {
       credentials: "include",
       cache: "no-store",
     });
@@ -154,7 +164,7 @@ export async function updateCustomerProfile(data: ProfileUpdateData): Promise<{
   error?: string;
 }> {
   try {
-    const res = await fetch(createApiUrl(`${BASE}/profile`), {
+    const res = await fetch(authUrl("profile"), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -180,7 +190,7 @@ export async function getCustomerOrders(): Promise<{
   error?: string;
 }> {
   try {
-    const res = await fetch(createApiUrl(`${BASE}/orders`), {
+    const res = await fetch(authUrl("orders"), {
       credentials: "include",
     });
     if (!res.ok) {
