@@ -7,11 +7,12 @@
  * - CSS handles display size variations (thumbnails, previews, etc.)
  * - Significantly reduces Cloudflare Image transformation costs
  *
- * WHY 600x600?
- * - Large enough for most preview use cases
- * - Small enough to load quickly (typically 50-150KB vs 5-10MB original)
- * - Good balance between quality and performance
- * - Works well for both thumbnails and medium-sized displays
+ * ROUTING STRATEGY:
+ * - For absolute CDN URLs: routes transforms through the image's own origin
+ *   (e.g., https://cloud.scalius.com/cdn-cgi/image/params/path)
+ * - This ensures Image Resizing only needs to be enabled on the CDN zone,
+ *   not on every app zone that displays images
+ * - Always includes onerror=redirect for graceful degradation
  */
 
 import { resolveMediaUrl } from "./media-url";
@@ -20,6 +21,7 @@ import { resolveMediaUrl } from "./media-url";
 const STANDARD_WIDTH = 600;
 const STANDARD_HEIGHT = 600;
 const STANDARD_QUALITY = 85;
+const STANDARD_PARAMS = `onerror=redirect,width=${STANDARD_WIDTH},height=${STANDARD_HEIGHT},fit=cover,quality=${STANDARD_QUALITY},format=auto,sharpen=1`;
 
 /**
  * Generates an optimized image URL using Cloudflare Image Resizing
@@ -57,19 +59,20 @@ export function getOptimizedImageUrl(originalUrl: string | null | undefined): st
     return resolved;
   }
 
-  // Build Cloudflare Image Resizing parameters
-  const params = [
-    `width=${STANDARD_WIDTH}`,
-    `height=${STANDARD_HEIGHT}`,
-    `fit=cover`,
-    `quality=${STANDARD_QUALITY}`,
-    `format=auto`,
-    `sharpen=1`,
-  ].join(",");
+  // For absolute URLs, route transforms through the image's own origin.
+  // This ensures /cdn-cgi/image/ is processed by the zone that hosts the image
+  // (e.g., cloud.scalius.com), not the app zone (e.g., dashboard.scalius.com).
+  if (resolved.startsWith("https://")) {
+    try {
+      const url = new URL(resolved);
+      return `${url.origin}/cdn-cgi/image/${STANDARD_PARAMS}${url.pathname}`;
+    } catch {
+      // fall through to relative path
+    }
+  }
 
-  // Construct the optimized URL
-  // Format: /cdn-cgi/image/{params}/{full-url-to-image}
-  return `/cdn-cgi/image/${params}/${resolved}`;
+  // For relative paths, use page-relative /cdn-cgi/image/
+  return `/cdn-cgi/image/${STANDARD_PARAMS}/${resolved}`;
 }
 
 /**
@@ -84,9 +87,15 @@ export function getOriginalImageUrl(url: string | null | undefined): string {
 
   // If URL contains /cdn-cgi/image/, extract the original URL
   if (url.includes("/cdn-cgi/image/")) {
-    const match = url.match(/\/cdn-cgi\/image\/[^/]+\/(.+)/);
-    if (match && match[1]) {
-      return match[1];
+    // Handle absolute CDN URLs: https://cdn.example.com/cdn-cgi/image/params/path
+    const match = url.match(/^(https?:\/\/[^/]+)\/cdn-cgi\/image\/[^/]+(\/.+)$/);
+    if (match && match[1] && match[2]) {
+      return `${match[1]}${match[2]}`;
+    }
+    // Handle relative URLs: /cdn-cgi/image/params/https://...
+    const relMatch = url.match(/\/cdn-cgi\/image\/[^/]+\/(.+)/);
+    if (relMatch && relMatch[1]) {
+      return relMatch[1];
     }
   }
 

@@ -1,7 +1,6 @@
 ---
 // src/components/Footer.astro
 // Footer component - receives data from Layout.astro
-import { Image, getImage } from "astro:assets";
 import type {
   FooterData,
   FooterMenu,
@@ -9,6 +8,7 @@ import type {
   FooterMenuLink,
 } from "@/lib/api";
 import RecursiveFooterLink from "./RecursiveFooterLink.astro";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 interface Props {
   footerData: FooterData;
@@ -24,24 +24,13 @@ const copyrightText = footerData?.copyrightText || "";
 const rawMenus: FooterMenu[] = footerData?.menus || [];
 const socialRaw: SocialLink[] = footerData?.social || [];
 
-const social = await Promise.all(
-  socialRaw.map(async (item) => {
-    if (item.iconUrl && !item.iconUrl.endsWith(".svg")) {
-      try {
-        const opt = await getImage({
-          src: item.iconUrl,
-          width: 20,
-          height: 20,
-          format: "avif",
-        });
-        return { ...item, optimizedIconUrl: opt.src };
-      } catch (e) {
-        return { ...item, optimizedIconUrl: item.iconUrl };
-      }
-    }
-    return { ...item, optimizedIconUrl: item.iconUrl };
-  })
-);
+const social = socialRaw.map((item) => {
+  if (item.iconUrl && !item.iconUrl.endsWith(".svg")) {
+    const optimized = getOptimizedImageUrl(item.iconUrl, { width: 20, height: 20 });
+    return { ...item, optimizedIconUrl: optimized };
+  }
+  return { ...item, optimizedIconUrl: item.iconUrl };
+});
 
 /**
  * Convert flat menu structure to nested.
@@ -110,12 +99,11 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
         >
           {
             logo.src ? (
-              <Image
-                src={logo.src}
+              <img
+                src={getOptimizedImageUrl(logo.src, { width: 344, height: 256, fit: "contain" })}
                 alt={logo.alt}
                 width={344}
                 height={256}
-                format="avif"
                 loading="lazy"
                 decoding="async"
                 class="h-12 sm:h-14 w-auto object-contain drop-shadow-lg"

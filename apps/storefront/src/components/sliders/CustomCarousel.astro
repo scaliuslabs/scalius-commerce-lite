@@ -1,6 +1,6 @@
 ---
 // Optimized carousel component for best performance and LCP
-import { Image } from "astro:assets";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 interface Props {
   images: {
@@ -50,8 +50,13 @@ if (images.length === 0) return;
               target={image.link?.startsWith("http") ? "_blank" : undefined}
               rel={image.link?.startsWith("http") ? "noopener" : undefined}
             >
-              <Image
-                src={image.url}
+              <img
+                src={getOptimizedImageUrl(image.url, {
+                  width: type === "desktop" ? 1300 : 640,
+                  height: height,
+                  quality: index === 0 ? 90 : 80,
+                  fit: "cover",
+                })}
                 alt={image.title || `Slide ${index + 1}`}
                 width={type === "desktop" ? 1300 : 640}
                 height={height}
@@ -59,8 +64,6 @@ if (images.length === 0) return;
                 loading={index === 0 ? "eager" : "lazy"}
                 fetchpriority={index === 0 ? "high" : "auto"}
                 decoding={index === 0 ? "sync" : "async"}
-                format="webp"
-                quality={index === 0 ? 90 : 80}
               />
 
               {/* Hover overlay - only appears on hover */}

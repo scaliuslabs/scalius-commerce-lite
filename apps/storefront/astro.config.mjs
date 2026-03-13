@@ -76,7 +76,10 @@ export default defineConfig({
   },
 
   adapter: cloudflare({
-    imageService: "cloudflare",
+    // Use passthrough — we handle all image optimization ourselves via
+    // getOptimizedImageUrl() which routes transforms through the CDN origin.
+    // This avoids depending on Image Resizing being enabled on the app zone.
+    imageService: "passthrough",
     persistState: { path: "../../.wrangler/state" },
   }),
 });

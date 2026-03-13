@@ -2,10 +2,13 @@
  * Cloudflare Image Optimization Utility
  *
  * Transforms CDN image URLs to use Cloudflare's image resizing service.
- * Pattern: /cdn-cgi/image/{options}/{imageUrl}
  *
- * This ensures images are optimized on-the-fly by Cloudflare's edge network,
- * reducing bandwidth and improving load times.
+ * ROUTING STRATEGY:
+ * - For absolute URLs: routes through the image's own origin
+ *   (e.g., https://cloud.scalius.com/cdn-cgi/image/params/path)
+ * - This ensures /cdn-cgi/image/ is processed by the zone that hosts the image,
+ *   not the storefront zone. Only the CDN zone needs Image Resizing enabled.
+ * - Always includes onerror=redirect for graceful degradation.
  *
  * NOTE: Bypasses optimization on localhost since /cdn-cgi/ only works on Cloudflare.
  */
@@ -16,7 +19,7 @@ import { resolveMediaUrl } from "./media-url";
  * Check if we're running on localhost/development
  * The /cdn-cgi/image/ path only works on Cloudflare's edge network
  */
-const isLocalhost =
+const isDev =
   import.meta.env.DEV ||
   (typeof window !== "undefined" && window.location.hostname === "localhost");
 
@@ -29,7 +32,6 @@ export interface ImageOptimizationOptions {
   gravity?: "auto" | "left" | "right" | "top" | "bottom" | "center";
   sharpen?: number; // 0-10
   blur?: number; // 0-250
-  onerror?: "redirect";
 }
 
 /**
@@ -41,15 +43,32 @@ const DEFAULT_PRODUCT_OPTIONS: ImageOptimizationOptions = {
   quality: 75,
   format: "auto",
   fit: "cover",
-  onerror: "redirect",
 };
+
+/**
+ * Build Cloudflare Image Resizing options string
+ */
+function buildParams(opts: ImageOptimizationOptions): string {
+  const parts: string[] = ["onerror=redirect"];
+
+  if (opts.width) parts.push(`width=${opts.width}`);
+  if (opts.height) parts.push(`height=${opts.height}`);
+  if (opts.quality) parts.push(`quality=${opts.quality}`);
+  if (opts.format) parts.push(`format=${opts.format}`);
+  if (opts.fit) parts.push(`fit=${opts.fit}`);
+  if (opts.gravity) parts.push(`gravity=${opts.gravity}`);
+  if (opts.sharpen !== undefined) parts.push(`sharpen=${opts.sharpen}`);
+  if (opts.blur !== undefined) parts.push(`blur=${opts.blur}`);
+
+  return parts.join(",");
+}
 
 /**
  * Generates Cloudflare Image Resizing URL
  *
  * @param imageUrl - The original CDN image URL or bare R2 key
  * @param options - Image transformation options
- * @returns Cloudflare-optimized image URL path
+ * @returns Cloudflare-optimized image URL
  */
 export function getOptimizedImageUrl(
   imageUrl: string | null | undefined,
@@ -64,31 +83,33 @@ export function getOptimizedImageUrl(
   }
 
   // Bypass Cloudflare optimization on localhost (returns 404)
-  if (isLocalhost) {
+  if (isDev) {
+    return resolved;
+  }
+
+  // Already optimized
+  if (resolved.includes("/cdn-cgi/image/")) {
     return resolved;
   }
 
   // Merge with defaults
   const opts = { ...DEFAULT_PRODUCT_OPTIONS, ...options };
+  const params = buildParams(opts);
 
-  // Build Cloudflare Image Resizing options string
-  const optionParts: string[] = [];
+  // For absolute URLs, route transforms through the image's own origin.
+  // This ensures /cdn-cgi/image/ is processed by the CDN zone (e.g., cloud.scalius.com),
+  // not the storefront zone (e.g., store.wrygo.com).
+  if (resolved.startsWith("https://")) {
+    try {
+      const url = new URL(resolved);
+      return `${url.origin}/cdn-cgi/image/${params}${url.pathname}`;
+    } catch {
+      // fall through to relative path
+    }
+  }
 
-  if (opts.width) optionParts.push(`width=${opts.width}`);
-  if (opts.height) optionParts.push(`height=${opts.height}`);
-  if (opts.quality) optionParts.push(`quality=${opts.quality}`);
-  if (opts.format) optionParts.push(`format=${opts.format}`);
-  if (opts.fit) optionParts.push(`fit=${opts.fit}`);
-  if (opts.gravity) optionParts.push(`gravity=${opts.gravity}`);
-  if (opts.sharpen !== undefined) optionParts.push(`sharpen=${opts.sharpen}`);
-  if (opts.blur !== undefined) optionParts.push(`blur=${opts.blur}`);
-  if (opts.onerror) optionParts.push(`onerror=${opts.onerror}`);
-
-  const optionsString = optionParts.join(",");
-
-  // Return Cloudflare Image Resizing URL
-  // Format: /cdn-cgi/image/{options}/{imageUrl}
-  return `/cdn-cgi/image/${optionsString}/${resolved}`;
+  // For relative paths, use page-relative /cdn-cgi/image/
+  return `/cdn-cgi/image/${params}/${resolved}`;
 }
 
 /**

@@ -1,8 +1,8 @@
 ---
-import { Image } from "astro:assets";
 import SearchBar from "../search/SearchBar.astro";
 import { Phone, ShoppingCart, Menu, Search, Check, Copy } from "lucide-react";
 import type { HeaderData, SocialLink } from "@/lib/api";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 interface Props {
   headerData: HeaderData;
@@ -66,15 +66,15 @@ const { headerData } = Astro.props;
       >
         <a href="/" class="block group" aria-label="Go to homepage">
           {headerData.logo.src ? (
-            <Image
-              src={headerData.logo.src}
+            <img
+              src={getOptimizedImageUrl(headerData.logo.src, { width: 240, height: 80, fit: "contain" })}
               alt={headerData.logo.alt}
               class="h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-transform duration-300 group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
               width={240}
               height={80}
               loading="eager"
               fetchpriority="high"
-              format="avif"
+              decoding="async"
             />
           ) : (
             <span class="font-bold text-xl tracking-tight transition-transform duration-300 group-hover:scale-[1.02]">

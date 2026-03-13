@@ -131,8 +131,10 @@ export default defineConfig({
   },
 
   adapter: cloudflare({
-    // Use Cloudflare's Image Resizing service for on-demand optimization
-    imageService: "cloudflare",
+    // Use passthrough — we handle all image optimization ourselves via
+    // getOptimizedImageUrl() which routes transforms through the CDN origin.
+    // This avoids depending on Image Resizing being enabled on the app zone.
+    imageService: "passthrough",
     // Share D1/KV/R2 state with API worker (both persist to root .wrangler/state/)
     persistState: { path: "../../.wrangler/state" },
   }),

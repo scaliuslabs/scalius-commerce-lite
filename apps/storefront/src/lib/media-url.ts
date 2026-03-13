@@ -9,16 +9,23 @@ import { getRuntimeCdnDomain } from "./api/runtime-env";
 
 /**
  * Lazily resolve the CDN base URL (called per-use, not at module init).
- * Resolution order:
- * 1. SSR runtime: getRuntimeCdnDomain() from middleware-set store (wrangler.jsonc vars)
- * 2. Client-side: window.__CDN_DOMAIN__ injected by Layout.astro
- * 3. Build-time: import.meta.env.CDN_DOMAIN_URL (from .env if present)
+ * Resolution order (SSR):
+ * 1. getRuntimeCdnDomain() — module-level store set by middleware
+ * 2. globalThis.__SCALIUS_CDN_DOMAIN__ — fallback set by middleware
+ * Resolution order (Client):
+ * 3. window.__CDN_DOMAIN__ — injected by Layout.astro
+ * Fallback:
+ * 4. import.meta.env.CDN_DOMAIN_URL — build-time from .env (if present)
  */
 function getCdnBase(): string {
   // SSR: runtime env from middleware
   if (import.meta.env.SSR) {
     const domain = getRuntimeCdnDomain();
     if (domain) return `https://${domain.replace(/^https?:\/\//, '')}`;
+
+    // Fallback: globalThis store set by middleware (survives across the isolate)
+    const globalDomain = (globalThis as any).__SCALIUS_CDN_DOMAIN__ as string | undefined;
+    if (globalDomain) return `https://${globalDomain.replace(/^https?:\/\//, '')}`;
   }
 
   // Client-side: injected by Layout.astro into window
