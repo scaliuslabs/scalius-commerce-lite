@@ -98,7 +98,7 @@ export function getOptimizedImageUrl(
 
   // For absolute URLs, route transforms through the image's own origin.
   // This ensures /cdn-cgi/image/ is processed by the CDN zone (e.g., cloud.scalius.com),
-  // not the storefront zone (e.g., store.wrygo.com).
+  // not the storefront zone.
   if (resolved.startsWith("https://")) {
     try {
       const url = new URL(resolved);

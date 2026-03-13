@@ -3,7 +3,7 @@
 //
 // All auth requests go through a same-origin proxy (/api/customer-auth/*)
 // so Set-Cookie headers are processed by the browser. Cross-origin
-// Set-Cookie from api.scalius.com → store.wrygo.com is silently dropped
+// Cross-origin Set-Cookie is silently dropped
 // by modern browsers.
 
 /**
@@ -100,7 +100,7 @@ export async function getCustomerSession(): Promise<AuthState> {
  * Log out the current customer.
  * Uses a same-origin proxy (/api/auth/logout) to guarantee the browser
  * processes the Set-Cookie headers that clear the HttpOnly cs_tok cookie.
- * Cross-origin Set-Cookie from dash.wrygo.com → store.wrygo.com is
+ * Cross-origin Set-Cookie from a different domain is
  * silently dropped by modern browsers.
  */
 export async function logoutCustomer(): Promise<void> {
