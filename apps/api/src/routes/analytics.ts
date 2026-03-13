@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import {
   processAnalyticsScript,
-  shouldUsePartytown,
+  shouldUsePartytown
 } from "@scalius/core/integrations/analytics";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -17,7 +17,7 @@ app.use(
     ttl: 0,
     keyPrefix: "api:analytics:",
     varyByQuery: false,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -29,14 +29,12 @@ const getConfigurationsRoute = createRoute({
   summary: "Get active analytics configurations",
   responses: {
     200: {
-      description: "Active analytics configurations",
-      content: { "application/json": { schema: z.object({ analytics: z.array(z.any()) }) } },
+      description: "Active analytics configurations"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getConfigurationsRoute, async (c) => {
@@ -55,7 +53,7 @@ app.openapi(getConfigurationsRoute, async (c) => {
       }
       return {
         ...script,
-        config: processedConfig,
+        config: processedConfig
       };
     },
   );

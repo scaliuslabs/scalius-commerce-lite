@@ -11,19 +11,19 @@ const sliderImageSchema = z.object({
     id: z.string(),
     url: z.string().url(),
     title: z.string(),
-    link: z.string(),
+    link: z.string()
 });
 
 const createHeroSliderSchema = z.object({
     type: z.enum(["desktop", "mobile"]),
     images: z.array(sliderImageSchema),
-    isActive: z.boolean().optional(),
+    isActive: z.boolean().optional()
 });
 
 const updateHeroSliderSchema = z.object({
     type: z.enum(["desktop", "mobile"]).optional(),
     images: z.array(sliderImageSchema).optional(),
-    isActive: z.boolean().optional(),
+    isActive: z.boolean().optional()
 });
 
 // ── List Sliders ──
@@ -33,7 +33,7 @@ const listRoute = createRoute({
     path: "/",
     tags: ["Admin - Hero Sliders"],
     summary: "List all hero sliders",
-    responses: { 200: { description: "Slider list", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Slider list"  } }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -54,7 +54,7 @@ const createSliderRoute = createRoute({
     tags: ["Admin - Hero Sliders"],
     summary: "Create a hero slider",
     request: { body: { content: { "application/json": { schema: createHeroSliderSchema } } } },
-    responses: { 201: { description: "Slider created", content: { "application/json": { schema: z.any() } } } },
+    responses: { 201: { description: "Slider created"  } }
 });
 
 app.openapi(createSliderRoute, async (c) => {
@@ -73,7 +73,7 @@ app.openapi(createSliderRoute, async (c) => {
             images: JSON.stringify(data.images),
             isActive: data.isActive ?? true,
             createdAt: sql`CURRENT_TIMESTAMP`,
-            updatedAt: sql`CURRENT_TIMESTAMP`,
+            updatedAt: sql`CURRENT_TIMESTAMP`
         }).returning();
 
         return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } }, 201);
@@ -89,8 +89,7 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Hero Sliders"],
     summary: "Get a hero slider by ID",
-    request: { params: z.object({ id: z.string().openapi({ description: "Slider ID" }) }) },
-    responses: { 200: { description: "Slider details", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Slider details"  } }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -113,10 +112,10 @@ const updateSliderRoute = createRoute({
     tags: ["Admin - Hero Sliders"],
     summary: "Update a hero slider",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Slider ID" }) }),
-        body: { content: { "application/json": { schema: updateHeroSliderSchema } } },
+        
+        body: { content: { "application/json": { schema: updateHeroSliderSchema } } }
     },
-    responses: { 200: { description: "Slider updated", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Slider updated"  } }
 });
 
 app.openapi(updateSliderRoute, async (c) => {
@@ -127,7 +126,7 @@ app.openapi(updateSliderRoute, async (c) => {
         const updateData = {
             ...data,
             images: data.images ? JSON.stringify(data.images) : undefined,
-            updatedAt: sql`CURRENT_TIMESTAMP`,
+            updatedAt: sql`CURRENT_TIMESTAMP`
         };
 
         const [slider] = await db.update(heroSliders)
@@ -149,8 +148,7 @@ const deleteSliderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Hero Sliders"],
     summary: "Soft-delete a hero slider",
-    request: { params: z.object({ id: z.string().openapi({ description: "Slider ID" }) }) },
-    responses: { 200: { description: "Slider deleted", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Slider deleted"  } }
 });
 
 app.openapi(deleteSliderRoute, async (c) => {

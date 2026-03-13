@@ -23,12 +23,12 @@ const listRoute = createRoute({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
-            folderId: z.string().optional().openapi({ description: "Folder ID filter" }),
-        }),
+            folderId: z.string().optional().openapi({ description: "Folder ID filter" })
+        })
     },
     responses: {
-        200: { description: "Media list with pagination", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Media list with pagination"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -47,8 +47,8 @@ const uploadRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Upload media files",
     responses: {
-        200: { description: "Upload result", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Upload result"  }
+    }
 });
 
 app.openapi(uploadRoute, async (c) => {
@@ -77,12 +77,12 @@ const patchMediaRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Update media metadata (PATCH)",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Media ID" }) }),
-        body: { content: { "application/json": { schema: updateMediaSchema } } },
+        
+        body: { content: { "application/json": { schema: updateMediaSchema } } }
     },
     responses: {
-        200: { description: "Media updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Media updated"  }
+    }
 });
 
 app.openapi(patchMediaRoute, async (c) => {
@@ -105,12 +105,12 @@ const putMediaRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Update media metadata (PUT)",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Media ID" }) }),
-        body: { content: { "application/json": { schema: updateMediaSchema } } },
+        
+        body: { content: { "application/json": { schema: updateMediaSchema } } }
     },
     responses: {
-        200: { description: "Media updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Media updated"  }
+    }
 });
 
 app.openapi(putMediaRoute, async (c) => {
@@ -133,11 +133,11 @@ const moveRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Move media files to a folder",
     request: {
-        body: { content: { "application/json": { schema: moveMediaSchema } } },
+        body: { content: { "application/json": { schema: moveMediaSchema } } }
     },
     responses: {
-        200: { description: "Files moved", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Files moved"  }
+    }
 });
 
 app.openapi(moveRoute, async (c) => {
@@ -154,12 +154,9 @@ const deleteFileRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Media"],
     summary: "Delete a media file",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Media ID" }) }),
-    },
     responses: {
-        204: { description: "File deleted" },
-    },
+        204: { description: "File deleted" }
+    }
 });
 
 app.openapi(deleteFileRoute, async (c) => {
@@ -181,8 +178,8 @@ const listFoldersRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "List all media folders",
     responses: {
-        200: { description: "Folder list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Folder list"  }
+    }
 });
 
 app.openapi(listFoldersRoute, async (c) => {
@@ -199,11 +196,11 @@ const createFolderRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Create a media folder",
     request: {
-        body: { content: { "application/json": { schema: createFolderSchema } } },
+        body: { content: { "application/json": { schema: createFolderSchema } } }
     },
     responses: {
-        201: { description: "Folder created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Folder created"  }
+    }
 });
 
 app.openapi(createFolderRoute, async (c) => {
@@ -220,12 +217,9 @@ const deleteFolderRoute = createRoute({
     path: "/folders/{id}",
     tags: ["Admin - Media"],
     summary: "Delete a media folder",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Folder ID" }) }),
-    },
     responses: {
-        204: { description: "Folder deleted" },
-    },
+        204: { description: "Folder deleted" }
+    }
 });
 
 app.openapi(deleteFolderRoute, async (c) => {

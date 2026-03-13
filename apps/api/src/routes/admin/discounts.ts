@@ -21,12 +21,12 @@ const listRoute = createRoute({
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
-        }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+        })
     },
     responses: {
-        200: { description: "Discount list with pagination", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Discount list with pagination"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -38,7 +38,7 @@ app.openapi(listRoute, async (c) => {
         search: query.search || "",
         showTrashed: query.trashed === "true",
         sort: query.sort || "updatedAt",
-        order: query.order || "desc",
+        order: query.order || "desc"
     });
     return c.json(result, 200);
 });
@@ -51,11 +51,11 @@ const createDiscountRoute = createRoute({
     tags: ["Admin - Discounts"],
     summary: "Create a discount",
     request: {
-        body: { content: { "application/json": { schema: createDiscountSchema } } },
+        body: { content: { "application/json": { schema: createDiscountSchema } } }
     },
     responses: {
-        201: { description: "Discount created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Discount created"  }
+    }
 });
 
 app.openapi(createDiscountRoute, async (c) => {
@@ -82,15 +82,15 @@ const bulkDeleteRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         discountIds: z.array(z.string()),
-                        permanent: z.boolean().default(false),
-                    }),
-                },
-            },
-        },
+                        permanent: z.boolean().default(false)
+                    })
+                }
+            }
+        }
     },
     responses: {
-        204: { description: "Discounts deleted" },
-    },
+        204: { description: "Discounts deleted" }
+    }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
@@ -112,14 +112,14 @@ const bulkRestoreRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({ discountIds: z.array(z.string()) }),
-                },
-            },
-        },
+                    schema: z.object({ discountIds: z.array(z.string()) })
+                }
+            }
+        }
     },
     responses: {
-        204: { description: "Discounts restored" },
-    },
+        204: { description: "Discounts restored" }
+    }
 });
 
 app.openapi(bulkRestoreRoute, async (c) => {
@@ -137,12 +137,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Discounts"],
     summary: "Get a discount by ID",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Discount ID" }) }),
-    },
     responses: {
-        200: { description: "Discount details", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Discount details"  }
+    }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -161,12 +158,12 @@ const updateDiscountRoute = createRoute({
     tags: ["Admin - Discounts"],
     summary: "Update a discount",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Discount ID" }) }),
-        body: { content: { "application/json": { schema: updateDiscountSchema } } },
+        
+        body: { content: { "application/json": { schema: updateDiscountSchema } } }
     },
     responses: {
-        200: { description: "Discount updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Discount updated"  }
+    }
 });
 
 app.openapi(updateDiscountRoute, async (c) => {
@@ -188,12 +185,9 @@ const deleteDiscountRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Discounts"],
     summary: "Soft-delete a discount",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Discount ID" }) }),
-    },
     responses: {
-        204: { description: "Discount deleted" },
-    },
+        204: { description: "Discount deleted" }
+    }
 });
 
 app.openapi(deleteDiscountRoute, async (c) => {
@@ -210,12 +204,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Discounts"],
     summary: "Permanently delete a discount",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Discount ID" }) }),
-    },
     responses: {
-        204: { description: "Discount permanently deleted" },
-    },
+        204: { description: "Discount permanently deleted" }
+    }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {
@@ -232,12 +223,9 @@ const restoreDiscountRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Discounts"],
     summary: "Restore a soft-deleted discount",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Discount ID" }) }),
-    },
     responses: {
-        200: { description: "Discount restored", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Discount restored"  }
+    }
 });
 
 app.openapi(restoreDiscountRoute, async (c) => {

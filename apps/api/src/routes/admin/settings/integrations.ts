@@ -17,7 +17,7 @@ const getOpenRouterRoute = createRoute({
     path: "/openrouter",
     tags: ["Admin - Settings"],
     summary: "Get OpenRouter API key status",
-    responses: { 200: { description: "API key status", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "API key status"  } }
 });
 
 app.openapi(getOpenRouterRoute, async (c) => {
@@ -40,7 +40,7 @@ const saveOpenRouterRoute = createRoute({
     path: "/openrouter",
     tags: ["Admin - Settings"],
     summary: "Save OpenRouter API key",
-    responses: { 200: { description: "API key saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "API key saved"  } }
 });
 
 app.openapi(saveOpenRouterRoute, async (c) => {
@@ -56,11 +56,11 @@ app.openapi(saveOpenRouterRoute, async (c) => {
                 key: "openrouter_api_key",
                 value: apiKey,
                 type: "string",
-                category: "integrations",
+                category: "integrations"
             })
             .onConflictDoUpdate({
                 target: [settings.key, settings.category],
-                set: { value: apiKey },
+                set: { value: apiKey }
             });
 
         return c.json({ message: "API key saved successfully" }, 200);
@@ -78,7 +78,7 @@ const getEmailRoute = createRoute({
     path: "/email",
     tags: ["Admin - Settings"],
     summary: "Get email settings",
-    responses: { 200: { description: "Email settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Email settings"  } }
 });
 
 app.openapi(getEmailRoute, async (c) => {
@@ -90,7 +90,7 @@ app.openapi(getEmailRoute, async (c) => {
 
         return c.json({
             apiKey: apiKeyRow?.value ? MASKED_VALUE : "",
-            sender: senderRow?.value || "",
+            sender: senderRow?.value || ""
         }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching email settings" }, 500);
@@ -102,7 +102,7 @@ const saveEmailRoute = createRoute({
     path: "/email",
     tags: ["Admin - Settings"],
     summary: "Save email settings",
-    responses: { 200: { description: "Email settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Email settings saved"  } }
 });
 
 app.openapi(saveEmailRoute, async (c) => {
@@ -117,10 +117,10 @@ app.openapi(saveEmailRoute, async (c) => {
                     key: "resend_api_key",
                     value: apiKey,
                     type: "string",
-                    category: "email",
+                    category: "email"
                 }).onConflictDoUpdate({
                     target: [settings.key, settings.category],
-                    set: { value: apiKey },
+                    set: { value: apiKey }
                 })
             );
         }
@@ -132,10 +132,10 @@ app.openapi(saveEmailRoute, async (c) => {
                     key: "email_sender",
                     value: sender,
                     type: "string",
-                    category: "email",
+                    category: "email"
                 }).onConflictDoUpdate({
                     target: [settings.key, settings.category],
-                    set: { value: sender },
+                    set: { value: sender }
                 })
             );
         }
@@ -156,7 +156,7 @@ const getFirebaseRoute = createRoute({
     path: "/firebase",
     tags: ["Admin - Settings"],
     summary: "Get Firebase settings",
-    responses: { 200: { description: "Firebase settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Firebase settings"  } }
 });
 
 app.openapi(getFirebaseRoute, async (c) => {
@@ -191,7 +191,7 @@ const saveFirebaseRoute = createRoute({
     path: "/firebase",
     tags: ["Admin - Settings"],
     summary: "Save Firebase settings",
-    responses: { 200: { description: "Firebase settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Firebase settings saved"  } }
 });
 
 app.openapi(saveFirebaseRoute, async (c) => {
@@ -220,11 +220,11 @@ app.openapi(saveFirebaseRoute, async (c) => {
                     key: update.key,
                     value: update.value,
                     type: "json",
-                    category: "firebase",
+                    category: "firebase"
                 })
                 .onConflictDoUpdate({
                     target: [settings.key, settings.category],
-                    set: { value: update.value, updatedAt: new Date() },
+                    set: { value: update.value, updatedAt: new Date() }
                 });
         }
 

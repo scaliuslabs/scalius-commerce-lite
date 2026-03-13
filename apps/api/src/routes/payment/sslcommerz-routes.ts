@@ -18,7 +18,7 @@ const sessionSchema = z.object({
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
   depositAmount: z.number().positive().optional(),
   currency: z.string().optional(),
-  baseUrl: z.url().optional(),
+  baseUrl: z.url().optional()
 });
 
 const createSessionRoute = createRoute({
@@ -29,16 +29,16 @@ const createSessionRoute = createRoute({
   request: {
     body: {
       content: {
-        "application/json": { schema: sessionSchema },
-      },
-    },
+        "application/json": { schema: sessionSchema }
+      }
+    }
   },
   responses: {
-    200: { description: "Session created", content: { "application/json": { schema: z.any() } } },
-    400: { description: "Invalid request", content: { "application/json": { schema: z.any() } } },
-    404: { description: "Order not found", content: { "application/json": { schema: z.any() } } },
-    503: { description: "SSLCommerz not configured", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Session created"  },
+    400: { description: "Invalid request"  },
+    404: { description: "Order not found"  },
+    503: { description: "SSLCommerz not configured"  }
+  }
 });
 
 app.openapi(createSessionRoute, async (c) => {
@@ -48,7 +48,7 @@ app.openapi(createSessionRoute, async (c) => {
   if (!ssl) {
     return c.json({
       success: false,
-      error: "SSLCommerz is not configured. Please set credentials in the admin dashboard.",
+      error: "SSLCommerz is not configured. Please set credentials in the admin dashboard."
     }, 503);
   }
   if (!ssl.enabled) {
@@ -70,7 +70,7 @@ app.openapi(createSessionRoute, async (c) => {
       status: orders.status,
       paymentStatus: orders.paymentStatus,
       paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue,
+      balanceDue: orders.balanceDue
     })
     .from(orders)
     .where(eq(orders.id, body.orderId))
@@ -125,7 +125,7 @@ app.openapi(createSessionRoute, async (c) => {
       customerEmail: order.customerEmail ?? undefined,
       customerAddress: order.shippingAddress,
       customerCity: order.cityName ?? undefined,
-      paymentType: body.paymentType,
+      paymentType: body.paymentType
     }
   );
 
@@ -151,14 +151,14 @@ app.openapi(createSessionRoute, async (c) => {
       balanceDue: order.totalAmount - body.depositAmount,
       status: "pending",
       createdAt: new Date(),
-      updatedAt: new Date(),
+      updatedAt: new Date()
     }).onConflictDoNothing();
   }
 
   return c.json({
     success: true,
     gatewayUrl: result.gatewayUrl,
-    sessionKey: result.sessionKey,
+    sessionKey: result.sessionKey
   }, 200);
 });
 

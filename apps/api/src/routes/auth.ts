@@ -46,9 +46,9 @@ const getTokenRoute = createRoute({
   tags: ["Auth"],
   summary: "Get JWT token for service-to-service communication",
   responses: {
-    200: { description: "Token generated", content: { "application/json": { schema: z.any() } } },
-    401: { description: "Unauthorized", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Token generated"  },
+    401: { description: "Unauthorized"  }
+  }
 });
 
 app.openapi(getTokenRoute, async (c) => {
@@ -67,12 +67,12 @@ app.openapi(getTokenRoute, async (c) => {
     id: "system",
     email: "system@internal",
     name: "System Service",
-    role: "system",
+    role: "system"
   });
 
   return c.json({
     success: true,
-    data: { token },
+    data: { token }
   }, 200);
 });
 
@@ -84,8 +84,8 @@ const firebaseConfigRoute = createRoute({
   tags: ["Auth"],
   summary: "Get public Firebase config for client setup",
   responses: {
-    200: { description: "Firebase config", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Firebase config"  }
+  }
 });
 
 app.openapi(firebaseConfigRoute, async (c) => {
@@ -119,15 +119,15 @@ const getMeRoute = createRoute({
   tags: ["Auth"],
   summary: "Get current user/service info",
   responses: {
-    200: { description: "Current user info", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Current user info"  }
+  }
 });
 
 app.openapi(getMeRoute, (c) => {
   const user = c.get("user");
   return c.json({
     success: true,
-    data: { user },
+    data: { user }
   }, 200);
 });
 
@@ -139,9 +139,9 @@ const revokeRoute = createRoute({
   tags: ["Auth"],
   summary: "Revoke current token",
   responses: {
-    200: { description: "Token revoked", content: { "application/json": { schema: z.any() } } },
-    400: { description: "Invalid token", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Token revoked"  },
+    400: { description: "Invalid token"  }
+  }
 });
 
 app.openapi(revokeRoute, async (c) => {
@@ -151,7 +151,7 @@ app.openapi(revokeRoute, async (c) => {
     return c.json({
       success: false,
       error: "Invalid token",
-      message: "No valid token provided",
+      message: "No valid token provided"
     }, 400);
   }
 
@@ -160,7 +160,7 @@ app.openapi(revokeRoute, async (c) => {
 
   return c.json({
     success: true,
-    message: "Token revoked successfully",
+    message: "Token revoked successfully"
   }, 200);
 });
 
@@ -172,9 +172,9 @@ const tokenStatsRoute = createRoute({
   tags: ["Auth"],
   summary: "Get token stats (admin/system only)",
   responses: {
-    200: { description: "Token stats", content: { "application/json": { schema: z.any() } } },
-    403: { description: "Forbidden", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Token stats"  },
+    403: { description: "Forbidden"  }
+  }
 });
 
 app.openapi(tokenStatsRoute, (c) => {
@@ -186,7 +186,7 @@ app.openapi(tokenStatsRoute, (c) => {
 
   return c.json({
     success: true,
-    data: getTokenStats(),
+    data: getTokenStats()
   }, 200);
 });
 

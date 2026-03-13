@@ -47,8 +47,8 @@ app.options("/", async (_c) => {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Accept, User-Agent",
-      "Access-Control-Max-Age": "86400",
-    },
+      "Access-Control-Max-Age": "86400"
+    }
   });
 });
 
@@ -61,14 +61,14 @@ const proxyRoute = createRoute({
   summary: "Proxy requests to allowed domains for Partytown",
   request: {
     query: z.object({
-      url: z.string().openapi({ description: "Target URL to proxy" }),
-    }),
+      url: z.string().openapi({ description: "Target URL to proxy" })
+    })
   },
   responses: {
     200: { description: "Proxied response" },
-    400: { description: "Invalid URL", content: { "application/json": { schema: z.any() } } },
-    403: { description: "Domain not allowed", content: { "application/json": { schema: z.any() } } },
-  },
+    400: { description: "Invalid URL"  },
+    403: { description: "Domain not allowed"  }
+  }
 });
 
 app.openapi(proxyRoute, async (c) => {
@@ -76,7 +76,7 @@ app.openapi(proxyRoute, async (c) => {
 
   if (!urlParam) {
     return c.json({ error: "Missing url parameter" }, 400, {
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": "*"
     }) as any;
   }
 
@@ -85,7 +85,7 @@ app.openapi(proxyRoute, async (c) => {
     targetUrl = new URL(urlParam);
   } catch (e) {
     return c.json({ error: "Invalid url parameter" }, 400, {
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": "*"
     }) as any;
   }
 
@@ -104,7 +104,7 @@ app.openapi(proxyRoute, async (c) => {
     );
     console.warn(`Allowed domains: ${allowedDomains.join(", ")}`);
     return c.json({ error: "Proxying to this domain is not allowed" }, 403, {
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": "*"
     }) as any;
   }
 
@@ -114,9 +114,9 @@ app.openapi(proxyRoute, async (c) => {
         Accept: c.req.header("Accept") || "*/*",
         "User-Agent":
           c.req.header("User-Agent") ||
-          "Mozilla/5.0 (compatible; Partytown-Proxy/1.0)",
+          "Mozilla/5.0 (compatible; Partytown-Proxy/1.0)"
       },
-      redirect: "follow",
+      redirect: "follow"
     });
 
     if (!response.ok) {
@@ -127,8 +127,8 @@ app.openapi(proxyRoute, async (c) => {
         status: response.status,
         statusText: response.statusText,
         headers: {
-          "Access-Control-Allow-Origin": "*",
-        },
+          "Access-Control-Allow-Origin": "*"
+        }
       }) as any;
     }
 
@@ -144,15 +144,15 @@ app.openapi(proxyRoute, async (c) => {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Accept, User-Agent",
-        "Cache-Control": cacheControl,
-      },
+        "Cache-Control": cacheControl
+      }
     });
 
     return proxyResponse as any;
   } catch (error) {
     console.error(`Proxy error fetching ${targetUrl}:`, error);
     return c.json({ error: "Proxy failed" }, 500, {
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": "*"
     }) as any;
   }
 });

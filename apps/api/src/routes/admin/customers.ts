@@ -12,7 +12,7 @@ import {
     deleteCustomer,
     permanentDeleteCustomer,
     restoreCustomer,
-    bulkDeleteCustomers,
+    bulkDeleteCustomers
 } from "@scalius/core/modules/customers";
 import { NotFoundError } from "../../utils/api-error";
 
@@ -32,12 +32,12 @@ const listRoute = createRoute({
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
-        }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+        })
     },
     responses: {
-        200: { description: "Customer list with pagination", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Customer list with pagination"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -49,7 +49,7 @@ app.openapi(listRoute, async (c) => {
         search: q.search || "",
         showTrashed: q.trashed === "true",
         sort: (q.sort as any) || "updatedAt",
-        order: (q.order as any) || "desc",
+        order: (q.order as any) || "desc"
     });
     return c.json(result, 200);
 });
@@ -62,11 +62,11 @@ const createCustomerRoute = createRoute({
     tags: ["Admin - Customers"],
     summary: "Create a customer",
     request: {
-        body: { content: { "application/json": { schema: createCustomerSchema } } },
+        body: { content: { "application/json": { schema: createCustomerSchema } } }
     },
     responses: {
-        201: { description: "Customer created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Customer created"  }
+    }
 });
 
 app.openapi(createCustomerRoute, async (c) => {
@@ -93,15 +93,15 @@ const bulkDeleteRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         customerIds: z.array(z.string()),
-                        permanent: z.boolean().default(false),
-                    }),
-                },
-            },
-        },
+                        permanent: z.boolean().default(false)
+                    })
+                }
+            }
+        }
     },
     responses: {
-        204: { description: "Customers deleted" },
-    },
+        204: { description: "Customers deleted" }
+    }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
@@ -118,12 +118,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Customers"],
     summary: "Get a customer by ID",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
-    },
     responses: {
-        200: { description: "Customer details", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Customer details"  }
+    }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -142,12 +139,12 @@ const updateCustomerRoute = createRoute({
     tags: ["Admin - Customers"],
     summary: "Update a customer",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
-        body: { content: { "application/json": { schema: updateCustomerSchema } } },
+        
+        body: { content: { "application/json": { schema: updateCustomerSchema } } }
     },
     responses: {
-        200: { description: "Customer updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Customer updated"  }
+    }
 });
 
 app.openapi(updateCustomerRoute, async (c) => {
@@ -168,12 +165,9 @@ const deleteCustomerRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Customers"],
     summary: "Soft-delete a customer",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
-    },
     responses: {
-        204: { description: "Customer deleted" },
-    },
+        204: { description: "Customer deleted" }
+    }
 });
 
 app.openapi(deleteCustomerRoute, async (c) => {
@@ -190,12 +184,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Customers"],
     summary: "Permanently delete a customer",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
-    },
     responses: {
-        204: { description: "Customer permanently deleted" },
-    },
+        204: { description: "Customer permanently deleted" }
+    }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {
@@ -212,12 +203,9 @@ const restoreCustomerRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Customers"],
     summary: "Restore a soft-deleted customer",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
-    },
     responses: {
-        204: { description: "Customer restored" },
-    },
+        204: { description: "Customer restored" }
+    }
 });
 
 app.openapi(restoreCustomerRoute, async (c) => {

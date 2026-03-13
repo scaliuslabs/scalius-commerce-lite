@@ -13,7 +13,7 @@ app.use(
     ttl: 300, // 5 minutes
     keyPrefix: "api:search:",
     varyByQuery: true,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -41,7 +41,7 @@ const searchQuerySchema = z.object({
     .optional()
     .default("true")
     .transform((val) => val === "true")
-    .openapi({ description: "Include categories in search results" }),
+    .openapi({ description: "Include categories in search results" })
 });
 
 // GET /search — perform a search across products, categories, and pages
@@ -51,33 +51,19 @@ const searchRoute = createRoute({
   tags: ["Search"],
   summary: "Search across products, categories, and pages",
   request: {
-    query: searchQuerySchema,
+    query: searchQuerySchema
   },
   responses: {
     200: {
-      description: "Search results",
-      content: {
-        "application/json": {
-          schema: z.object({
-            products: z.array(z.any()),
-            pages: z.array(z.any()),
-            categories: z.array(z.any()),
-            success: z.literal(true),
-            query: z.string(),
-            timestamp: z.string().optional(),
-          }),
-        },
-      },
+      description: "Search results"
     },
     429: {
-      description: "Rate limited",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+      description: "Rate limited"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string(), message: z.string(), success: z.literal(false) }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(searchRoute, async (c) => {
@@ -88,7 +74,7 @@ app.openapi(searchRoute, async (c) => {
     return c.json(
       {
         error: "Too many requests. Please try again later.",
-        success: false as const,
+        success: false as const
       },
       429,
     );
@@ -102,7 +88,7 @@ app.openapi(searchRoute, async (c) => {
     maxPrice,
     limit,
     searchPages,
-    searchCategories,
+    searchCategories
   } = params;
 
   // If no query, return empty results
@@ -112,7 +98,7 @@ app.openapi(searchRoute, async (c) => {
       pages: [],
       categories: [],
       success: true as const,
-      query: "",
+      query: ""
     }, 200);
   }
 
@@ -123,7 +109,7 @@ app.openapi(searchRoute, async (c) => {
     maxPrice,
     limit,
     searchPages,
-    searchCategories,
+    searchCategories
   });
 
   // Set timeout for the search operation
@@ -141,7 +127,7 @@ app.openapi(searchRoute, async (c) => {
     categories: results.categories || [],
     success: true as const,
     query,
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString()
   }, 200);
 });
 

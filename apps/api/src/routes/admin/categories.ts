@@ -12,7 +12,7 @@ import {
     restoreCategories,
     permanentlyDeleteCategory,
     createCategorySchema,
-    updateCategorySchema,
+    updateCategorySchema
 } from "@scalius/core/modules/categories";
 
 const app = new OpenAPIHono();
@@ -31,12 +31,12 @@ const listRoute = createRoute({
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
-        }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+        })
     },
     responses: {
-        200: { description: "Category list with pagination", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Category list with pagination"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -48,7 +48,7 @@ app.openapi(listRoute, async (c) => {
         search: query.search || "",
         showTrashed: query.trashed === "true",
         sort: (query.sort as any) || "updatedAt",
-        order: (query.order as any) || "desc",
+        order: (query.order as any) || "desc"
     });
     return c.json(result, 200);
 });
@@ -61,11 +61,11 @@ const createCategoryRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Create a category",
     request: {
-        body: { content: { "application/json": { schema: createCategorySchema } } },
+        body: { content: { "application/json": { schema: createCategorySchema } } }
     },
     responses: {
-        201: { description: "Category created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Category created"  }
+    }
 });
 
 app.openapi(createCategoryRoute, async (c) => {
@@ -92,15 +92,15 @@ const bulkDeleteRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         categoryIds: z.array(z.string()),
-                        permanent: z.boolean().default(false),
-                    }),
-                },
-            },
-        },
+                        permanent: z.boolean().default(false)
+                    })
+                }
+            }
+        }
     },
     responses: {
-        204: { description: "Categories deleted" },
-    },
+        204: { description: "Categories deleted" }
+    }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
@@ -126,14 +126,14 @@ const bulkRestoreRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({ categoryIds: z.array(z.string()) }),
-                },
-            },
-        },
+                    schema: z.object({ categoryIds: z.array(z.string()) })
+                }
+            }
+        }
     },
     responses: {
-        204: { description: "Categories restored" },
-    },
+        204: { description: "Categories restored" }
+    }
 });
 
 app.openapi(bulkRestoreRoute, async (c) => {
@@ -152,12 +152,12 @@ const updateCategoryRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Update a category",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Category ID" }) }),
-        body: { content: { "application/json": { schema: updateCategorySchema } } },
+        
+        body: { content: { "application/json": { schema: updateCategorySchema } } }
     },
     responses: {
-        200: { description: "Category updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Category updated"  }
+    }
 });
 
 app.openapi(updateCategoryRoute, async (c) => {
@@ -179,12 +179,9 @@ const deleteCategoryRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Categories"],
     summary: "Soft-delete a category",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Category ID" }) }),
-    },
     responses: {
-        204: { description: "Category deleted" },
-    },
+        204: { description: "Category deleted" }
+    }
 });
 
 app.openapi(deleteCategoryRoute, async (c) => {
@@ -205,12 +202,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Categories"],
     summary: "Permanently delete a category",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Category ID" }) }),
-    },
     responses: {
-        204: { description: "Category permanently deleted" },
-    },
+        204: { description: "Category permanently deleted" }
+    }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {
@@ -227,12 +221,9 @@ const restoreCategoryRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Categories"],
     summary: "Restore a soft-deleted category",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Category ID" }) }),
-    },
     responses: {
-        200: { description: "Category restored", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Category restored"  }
+    }
 });
 
 app.openapi(restoreCategoryRoute, async (c) => {

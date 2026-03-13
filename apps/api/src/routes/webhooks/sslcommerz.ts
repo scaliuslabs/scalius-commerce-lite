@@ -71,7 +71,7 @@ app.post("/", async (c) => {
       currency: payload.currency,
       cardType: payload.card_type,
       cardBrand: payload.card_brand,
-      paymentType: payload.value_a,
+      paymentType: payload.value_a
     };
   } else if (isTerminalFailure) {
     console.warn(`[ssl-webhook] IPN terminal failure for order ${tranId}: ${validation.status}`);
@@ -79,7 +79,7 @@ app.post("/", async (c) => {
       type: "payment.sslcommerz.failed",
       orderId: tranId,
       tranId,
-      status: validation.status,
+      status: validation.status
     };
   } else {
     console.warn(`[ssl-webhook] IPN non-terminal status for order ${tranId}: ${validation.status}`);

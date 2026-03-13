@@ -10,16 +10,11 @@ const getMediaRoute = createRoute({
   path: "/{key}",
   tags: ["Media Server"],
   summary: "Serve R2 objects in local development",
-  request: {
-    params: z.object({
-      key: z.string().openapi({ description: "R2 object key" }),
-    }),
-  },
   responses: {
     200: { description: "Media file" },
     404: { description: "Not found" },
-    500: { description: "R2 bucket not available" },
-  },
+    500: { description: "R2 bucket not available" }
+  }
 });
 
 app.openapi(getMediaRoute, async (c) => {

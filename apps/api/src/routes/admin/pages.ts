@@ -13,7 +13,7 @@ import {
     bulkUnpublishPages,
     restorePages,
     createPageSchema,
-    updatePageSchema,
+    updatePageSchema
 } from "@scalius/core/modules/pages";
 import { NotFoundError } from "../../utils/api-error";
 
@@ -33,12 +33,12 @@ const listRoute = createRoute({
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
-        }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+        })
     },
     responses: {
-        200: { description: "Page list with pagination", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Page list with pagination"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -50,7 +50,7 @@ app.openapi(listRoute, async (c) => {
         search: q.search || "",
         showTrashed: q.trashed === "true",
         sort: (q.sort as any) || "updatedAt",
-        order: (q.order as any) || "desc",
+        order: (q.order as any) || "desc"
     });
     return c.json(result, 200);
 });
@@ -63,11 +63,11 @@ const createPageRoute = createRoute({
     tags: ["Admin - Pages"],
     summary: "Create a page",
     request: {
-        body: { content: { "application/json": { schema: createPageSchema } } },
+        body: { content: { "application/json": { schema: createPageSchema } } }
     },
     responses: {
-        201: { description: "Page created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Page created"  }
+    }
 });
 
 app.openapi(createPageRoute, async (c) => {
@@ -93,15 +93,15 @@ const bulkDeleteRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         pageIds: z.array(z.string()),
-                        permanent: z.boolean().default(false),
-                    }),
-                },
-            },
-        },
+                        permanent: z.boolean().default(false)
+                    })
+                }
+            }
+        }
     },
     responses: {
-        204: { description: "Pages deleted" },
-    },
+        204: { description: "Pages deleted" }
+    }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
@@ -119,11 +119,11 @@ const bulkPublishRoute = createRoute({
     tags: ["Admin - Pages"],
     summary: "Bulk publish pages",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Pages published" },
-    },
+        204: { description: "Pages published" }
+    }
 });
 
 app.openapi(bulkPublishRoute, async (c) => {
@@ -140,11 +140,11 @@ const bulkUnpublishRoute = createRoute({
     tags: ["Admin - Pages"],
     summary: "Bulk unpublish pages",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Pages unpublished" },
-    },
+        204: { description: "Pages unpublished" }
+    }
 });
 
 app.openapi(bulkUnpublishRoute, async (c) => {
@@ -161,11 +161,11 @@ const bulkRestoreRoute = createRoute({
     tags: ["Admin - Pages"],
     summary: "Bulk restore pages",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Pages restored" },
-    },
+        204: { description: "Pages restored" }
+    }
 });
 
 app.openapi(bulkRestoreRoute, async (c) => {
@@ -181,12 +181,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Pages"],
     summary: "Get a page by ID",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Page ID" }) }),
-    },
     responses: {
-        200: { description: "Page details", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Page details"  }
+    }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -205,12 +202,12 @@ const updatePageRoute = createRoute({
     tags: ["Admin - Pages"],
     summary: "Update a page",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Page ID" }) }),
-        body: { content: { "application/json": { schema: updatePageSchema } } },
+        
+        body: { content: { "application/json": { schema: updatePageSchema } } }
     },
     responses: {
-        200: { description: "Page updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Page updated"  }
+    }
 });
 
 app.openapi(updatePageRoute, async (c) => {
@@ -231,12 +228,9 @@ const deletePageRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Pages"],
     summary: "Soft-delete a page",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Page ID" }) }),
-    },
     responses: {
-        204: { description: "Page deleted" },
-    },
+        204: { description: "Page deleted" }
+    }
 });
 
 app.openapi(deletePageRoute, async (c) => {
@@ -253,12 +247,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Pages"],
     summary: "Permanently delete a page",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Page ID" }) }),
-    },
     responses: {
-        204: { description: "Page permanently deleted" },
-    },
+        204: { description: "Page permanently deleted" }
+    }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {

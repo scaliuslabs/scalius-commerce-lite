@@ -5,7 +5,7 @@ import {
   products,
   productImages,
   productAttributes,
-  productAttributeValues,
+  productAttributeValues
 } from "@scalius/database/schema";
 import { eq, isNull, sql, and, desc, inArray, or } from "drizzle-orm";
 import { ftsMatch } from "@scalius/core/search";
@@ -22,7 +22,7 @@ app.use(
     ttl: 3600000,
     keyPrefix: "api:categories:",
     varyByQuery: true,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -46,7 +46,7 @@ const categoryProductFilterSchema = z.object({
   minPrice: z.coerce.number().optional().openapi({ description: "Minimum price filter" }),
   maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
-  hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" }),
+  hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" })
 });
 
 // Helper function to convert Unix timestamp to Date
@@ -63,14 +63,12 @@ const listCategoriesRoute = createRoute({
   summary: "List all categories",
   responses: {
     200: {
-      description: "Category list",
-      content: { "application/json": { schema: z.object({ categories: z.array(z.any()) }) } },
+      description: "Category list"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listCategoriesRoute, async (c) => {
@@ -83,7 +81,7 @@ app.openapi(listCategoriesRoute, async (c) => {
       imageUrl: categories.imageUrl,
       createdAt: categories.createdAt,
       metaTitle: categories.metaTitle,
-      metaDescription: categories.metaDescription,
+      metaDescription: categories.metaDescription
     })
     .from(categories)
     .where(isNull(categories.deletedAt))
@@ -95,7 +93,7 @@ app.openapi(listCategoriesRoute, async (c) => {
     ...category,
     createdAt:
       unixToDate(category.createdAt as unknown as number)?.toISOString() ||
-      null,
+      null
   }));
 
   return c.json({ categories: formattedCategories }, 200);
@@ -107,25 +105,17 @@ const getCategoryBySlugRoute = createRoute({
   path: "/{slug}",
   tags: ["Categories"],
   summary: "Get category by slug",
-  request: {
-    params: z.object({
-      slug: z.string().openapi({ description: "Category slug" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Category details",
-      content: { "application/json": { schema: z.object({ category: z.any() }) } },
+      description: "Category details"
     },
     404: {
-      description: "Category not found",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+      description: "Category not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getCategoryBySlugRoute, async (c) => {
@@ -140,7 +130,7 @@ app.openapi(getCategoryBySlugRoute, async (c) => {
       imageUrl: categories.imageUrl,
       metaTitle: categories.metaTitle,
       metaDescription: categories.metaDescription,
-      createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
+      createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`
     })
     .from(categories)
     .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
@@ -154,8 +144,8 @@ app.openapi(getCategoryBySlugRoute, async (c) => {
   return c.json({
     category: {
       ...category,
-      createdAt: unixToDate(category.createdAt)?.toISOString() || null,
-    },
+      createdAt: unixToDate(category.createdAt)?.toISOString() || null
+    }
   }, 200);
 });
 
@@ -166,25 +156,20 @@ const getCategoryProductsRoute = createRoute({
   tags: ["Categories"],
   summary: "Get products in a category with filtering",
   request: {
-    params: z.object({
-      slug: z.string().openapi({ description: "Category slug" }),
-    }),
-    query: categoryProductFilterSchema,
+    
+    query: categoryProductFilterSchema
   },
   responses: {
     200: {
-      description: "Category products with pagination and filters",
-      content: { "application/json": { schema: z.object({ category: z.any(), products: z.array(z.any()), pagination: z.any(), appliedFilters: z.any() }) } },
+      description: "Category products with pagination and filters"
     },
     404: {
-      description: "Category not found",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+      description: "Category not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getCategoryProductsRoute, async (c) => {
@@ -198,7 +183,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     minPrice,
     maxPrice,
     freeDelivery,
-    hasDiscount,
+    hasDiscount
   } = params;
 
   // Get category ID from slug (excluding soft-deleted categories)
@@ -210,7 +195,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       description: categories.description,
       imageUrl: categories.imageUrl,
       metaTitle: categories.metaTitle,
-      metaDescription: categories.metaDescription,
+      metaDescription: categories.metaDescription
     })
     .from(categories)
     .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
@@ -313,7 +298,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       freeDelivery: products.freeDelivery,
       categoryId: products.categoryId,
       createdAt: products.createdAt,
-      updatedAt: products.updatedAt,
+      updatedAt: products.updatedAt
     })
     .from(products)
     .where(and(...conditions));
@@ -360,7 +345,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     const images = await db
       .select({
         productId: productImages.productId,
-        url: productImages.url,
+        url: productImages.url
       })
       .from(productImages)
       .where(
@@ -395,8 +380,8 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       description: category.description,
       imageUrl: category.imageUrl,
       metaTitle: category.metaTitle,
-      metaDescription: category.metaDescription,
-    },
+      metaDescription: category.metaDescription
+    }
   }));
 
   // Get total count for pagination - need to apply same filters
@@ -442,7 +427,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       page,
       limit,
       total: totalCount?.count || 0,
-      totalPages: Math.ceil((totalCount?.count || 0) / limit),
+      totalPages: Math.ceil((totalCount?.count || 0) / limit)
     },
     appliedFilters: {
       attributes: attributeFilters,
@@ -451,8 +436,8 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       maxPrice,
       freeDelivery,
       hasDiscount,
-      sort,
-    },
+      sort
+    }
   }, 200);
 });
 

@@ -14,7 +14,7 @@ import {
     type Product,
     type ProductImage,
     type ProductVariant,
-    type ProductAttributeValue,
+    type ProductAttributeValue
 } from "@scalius/database/schema";
 import * as SettingsService from "@scalius/core/modules/settings/settings.service";
 
@@ -59,7 +59,7 @@ function calculateFinalPrice(
 const batchDetailsSchema = z.object({
     productIds: z.array(z.string()).optional(),
     categoryIds: z.array(z.string()).optional(),
-    allCategories: z.boolean().optional(),
+    allCategories: z.boolean().optional()
 });
 
 const batchDetailsRoute = createRoute({
@@ -68,11 +68,11 @@ const batchDetailsRoute = createRoute({
     tags: ["Admin - AI Context"],
     summary: "Fetch batch product and category details for AI context",
     request: {
-        body: { content: { "application/json": { schema: batchDetailsSchema } } },
+        body: { content: { "application/json": { schema: batchDetailsSchema } } }
     },
     responses: {
-        200: { description: "Batch details", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Batch details"  }
+    }
 });
 
 app.openapi(batchDetailsRoute, async (c) => {
@@ -109,7 +109,7 @@ app.openapi(batchDetailsRoute, async (c) => {
                         db
                             .select({
                                 value: productAttributeValues,
-                                attribute: productAttributes,
+                                attribute: productAttributes
                             })
                             .from(productAttributeValues)
                             .innerJoin(
@@ -128,7 +128,7 @@ app.openapi(batchDetailsRoute, async (c) => {
                 const categoriesWithUrls = await Promise.all(
                     categoryResults.map(async (cat: any) => ({
                         ...cat,
-                        url: await SettingsService.getStorefrontPath(db, `/categories/${cat.slug}`, kv),
+                        url: await SettingsService.getStorefrontPath(db, `/categories/${cat.slug}`, kv)
                     })),
                 );
                 const categoryMap = new Map(categoriesWithUrls.map((c: any) => [c.id, c]));
@@ -153,7 +153,7 @@ app.openapi(batchDetailsRoute, async (c) => {
                             return {
                                 ...variant,
                                 buyNowUrl: await SettingsService.getStorefrontPath(db, `/buy/${product.slug}?variant=${variant.id}`, kv),
-                                finalPrice,
+                                finalPrice
                             };
                         })
                     );
@@ -175,7 +175,7 @@ app.openapi(batchDetailsRoute, async (c) => {
                                 id: productCategory.id,
                                 name: productCategory.name,
                                 slug: productCategory.slug,
-                                url: productCategory.url,
+                                url: productCategory.url
                             }
                             : null,
                         images: images.filter((img: any) => img.productId === product.id),
@@ -185,8 +185,8 @@ app.openapi(batchDetailsRoute, async (c) => {
                             .map((res: any) => ({
                                 ...res.value,
                                 name: res.attribute.name,
-                                slug: res.attribute.slug,
-                            })),
+                                slug: res.attribute.slug
+                            }))
                     } as any);
                 }
             }
@@ -213,7 +213,7 @@ app.openapi(batchDetailsRoute, async (c) => {
 
         return c.json({
             products: productsData,
-            categories: categoriesData,
+            categories: categoriesData
         }, 200);
     } catch (error: any) {
         console.error("Batch fetch error:", error);

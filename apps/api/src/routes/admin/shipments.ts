@@ -16,13 +16,10 @@ const getShipmentRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Shipments"],
     summary: "Get shipment by ID",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Shipment ID" }) }),
-    },
     responses: {
-        200: { description: "Shipment details", content: { "application/json": { schema: z.any() } } },
-        404: { description: "Shipment not found", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Shipment details"  },
+        404: { description: "Shipment not found"  }
+    }
 });
 
 app.openapi(getShipmentRoute, async (c) => {
@@ -42,13 +39,10 @@ const deleteShipmentRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Shipments"],
     summary: "Delete a shipment",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Shipment ID" }) }),
-    },
     responses: {
-        200: { description: "Shipment deleted", content: { "application/json": { schema: z.any() } } },
-        404: { description: "Shipment not found", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Shipment deleted"  },
+        404: { description: "Shipment not found"  }
+    }
 });
 
 app.openapi(deleteShipmentRoute, async (c) => {
@@ -70,13 +64,10 @@ const checkStatusRoute = createRoute({
     path: "/{id}/check-status",
     tags: ["Admin - Shipments"],
     summary: "Check and update shipment status from provider",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Shipment ID" }) }),
-    },
     responses: {
-        200: { description: "Status checked", content: { "application/json": { schema: z.any() } } },
-        404: { description: "Shipment not found", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Status checked"  },
+        404: { description: "Shipment not found"  }
+    }
 });
 
 app.openapi(checkStatusRoute, async (c) => {
@@ -120,7 +111,7 @@ app.openapi(checkStatusRoute, async (c) => {
                 ...result,
                 statusChanged: true,
                 orderStatusUpdate: orderStatusUpdate || "No change needed",
-                lastChecked: now.toISOString(),
+                lastChecked: now.toISOString()
             }
         }, 200);
     }
@@ -131,7 +122,7 @@ app.openapi(checkStatusRoute, async (c) => {
         data: {
             ...result,
             statusChanged: false,
-            lastChecked: now.toISOString(),
+            lastChecked: now.toISOString()
         }
     }, 200);
 });

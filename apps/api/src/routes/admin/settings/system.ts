@@ -16,7 +16,7 @@ const getAuthRoute = createRoute({
     path: "/auth",
     tags: ["Admin - Settings"],
     summary: "Get auth/checkout settings",
-    responses: { 200: { description: "Auth settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Auth settings"  } }
 });
 
 app.openapi(getAuthRoute, async (c) => {
@@ -32,7 +32,7 @@ app.openapi(getAuthRoute, async (c) => {
             whatsappTemplateName: row.whatsappTemplateName || "",
             checkoutMode: row.checkoutMode,
             partialPaymentEnabled: row.partialPaymentEnabled,
-            partialPaymentAmount: row.partialPaymentAmount,
+            partialPaymentAmount: row.partialPaymentAmount
         }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching auth settings" }, 500);
@@ -44,7 +44,7 @@ const saveAuthRoute = createRoute({
     path: "/auth",
     tags: ["Admin - Settings"],
     summary: "Save auth/checkout settings",
-    responses: { 200: { description: "Auth settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Auth settings saved"  } }
 });
 
 app.openapi(saveAuthRoute, async (c) => {
@@ -88,7 +88,7 @@ const getSecurityRoute = createRoute({
     path: "/security",
     tags: ["Admin - Settings"],
     summary: "Get security settings",
-    responses: { 200: { description: "Security settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Security settings"  } }
 });
 
 app.openapi(getSecurityRoute, async (c) => {
@@ -110,7 +110,7 @@ const saveSecurityRoute = createRoute({
     path: "/security",
     tags: ["Admin - Settings"],
     summary: "Save security settings",
-    responses: { 200: { description: "Security settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Security settings saved"  } }
 });
 
 app.openapi(saveSecurityRoute, async (c) => {
@@ -125,11 +125,11 @@ app.openapi(saveSecurityRoute, async (c) => {
                     key: "csp_allowed_domains",
                     value: cspAllowedDomains,
                     type: "string",
-                    category: "security",
+                    category: "security"
                 })
                 .onConflictDoUpdate({
                     target: [settings.key, settings.category],
-                    set: { value: cspAllowedDomains, updatedAt: new Date() },
+                    set: { value: cspAllowedDomains, updatedAt: new Date() }
                 });
 
             const env = c.env as any;
@@ -153,7 +153,7 @@ const getEmailRoute = createRoute({
     path: "/email",
     tags: ["Admin - Settings"],
     summary: "Get email settings (system)",
-    responses: { 200: { description: "Email settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Email settings"  } }
 });
 
 app.openapi(getEmailRoute, async (c) => {
@@ -165,7 +165,7 @@ app.openapi(getEmailRoute, async (c) => {
 
         return c.json({
             apiKey: apiKeyRow?.value ? MASKED : "",
-            sender: senderRow?.value || "",
+            sender: senderRow?.value || ""
         }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching email settings" }, 500);
@@ -177,7 +177,7 @@ const saveEmailRoute = createRoute({
     path: "/email",
     tags: ["Admin - Settings"],
     summary: "Save email settings (system)",
-    responses: { 200: { description: "Email settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Email settings saved"  } }
 });
 
 app.openapi(saveEmailRoute, async (c) => {
@@ -217,7 +217,7 @@ const getFirebaseRoute = createRoute({
     path: "/firebase",
     tags: ["Admin - Settings"],
     summary: "Get Firebase settings (system)",
-    responses: { 200: { description: "Firebase settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Firebase settings"  } }
 });
 
 app.openapi(getFirebaseRoute, async (c) => {
@@ -244,7 +244,7 @@ const saveFirebaseRoute = createRoute({
     path: "/firebase",
     tags: ["Admin - Settings"],
     summary: "Save Firebase settings (system)",
-    responses: { 200: { description: "Firebase settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Firebase settings saved"  } }
 });
 
 app.openapi(saveFirebaseRoute, async (c) => {

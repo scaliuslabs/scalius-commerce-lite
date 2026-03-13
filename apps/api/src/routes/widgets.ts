@@ -13,7 +13,7 @@ app.use(
     ttl: 3600,
     keyPrefix: "api:widgets:active-homepage:",
     varyByQuery: false,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -23,7 +23,7 @@ app.use(
     ttl: 3600,
     keyPrefix: "api:widgets:single:",
     varyByQuery: false,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -62,29 +62,20 @@ const getWidgetByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Widgets"],
   summary: "Get widget by ID",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Widget ID" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Widget details",
-      content: { "application/json": { schema: z.object({ success: z.literal(true), widget: z.any() }) } },
+      description: "Widget details"
     },
     400: {
-      description: "Bad request",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+      description: "Bad request"
     },
     404: {
-      description: "Widget not found",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+      description: "Widget not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getWidgetByIdRoute, async (c) => {
@@ -111,12 +102,12 @@ app.openapi(getWidgetByIdRoute, async (c) => {
     ...widget,
     createdAt: convertTimestampToISO(widget.createdAt),
     updatedAt: convertTimestampToISO(widget.updatedAt),
-    deletedAt: convertTimestampToISO(widget.deletedAt),
+    deletedAt: convertTimestampToISO(widget.deletedAt)
   };
 
   return c.json({
     success: true as const,
-    widget: formattedWidget,
+    widget: formattedWidget
   }, 200);
 });
 
@@ -128,14 +119,12 @@ const getActiveHomepageWidgetsRoute = createRoute({
   summary: "Get active widgets for the homepage",
   responses: {
     200: {
-      description: "Active homepage widgets",
-      content: { "application/json": { schema: z.object({ widgets: z.array(z.any()) }) } },
+      description: "Active homepage widgets"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getActiveHomepageWidgetsRoute, async (c) => {
@@ -156,7 +145,7 @@ app.openapi(getActiveHomepageWidgetsRoute, async (c) => {
     ...widget,
     createdAt: convertTimestampToISO(widget.createdAt),
     updatedAt: convertTimestampToISO(widget.updatedAt),
-    deletedAt: convertTimestampToISO(widget.deletedAt),
+    deletedAt: convertTimestampToISO(widget.deletedAt)
   }));
 
   return c.json({ widgets: formattedWidgets }, 200);

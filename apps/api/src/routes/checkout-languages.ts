@@ -40,13 +40,13 @@ const defaultLanguageData = {
   termsText: "By placing this order, you agree to our Terms of Service and Privacy Policy",
   processingOrderTitle: "Processing Your Order",
   processingOrderMessage: "Please wait while we process your order.",
-  requiredFieldIndicator: "*",
+  requiredFieldIndicator: "*"
 };
 
 const defaultFieldVisibility = {
   showEmailField: true,
   showOrderNotesField: true,
-  showAreaField: true,
+  showAreaField: true
 };
 
 const createCheckoutLanguageSchema = z.object({
@@ -55,7 +55,7 @@ const createCheckoutLanguageSchema = z.object({
   languageData: z.object({}).passthrough().optional().openapi({ description: "Language strings" }),
   fieldVisibility: z.object({}).passthrough().optional().openapi({ description: "Field visibility settings" }),
   isActive: z.boolean().optional().default(false).openapi({ description: "Whether this language is active" }),
-  isDefault: z.boolean().optional().default(false).openapi({ description: "Whether this is the default language" }),
+  isDefault: z.boolean().optional().default(false).openapi({ description: "Whether this is the default language" })
 });
 
 const updateCheckoutLanguageSchema = createCheckoutLanguageSchema.partial();
@@ -68,14 +68,12 @@ const getActiveRoute = createRoute({
   summary: "Get active checkout language",
   responses: {
     200: {
-      description: "Active checkout language",
-      content: { "application/json": { schema: z.object({ language: z.any() }) } },
+      description: "Active checkout language"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getActiveRoute, async (c) => {
@@ -108,7 +106,7 @@ app.openapi(getActiveRoute, async (c) => {
     const fallbackFieldVisibility = {
       showEmailField: true,
       showOrderNotesField: true,
-      showAreaField: true,
+      showAreaField: true
     };
 
     return c.json({
@@ -119,15 +117,15 @@ app.openapi(getActiveRoute, async (c) => {
         languageData: defaultLanguageData,
         fieldVisibility: fallbackFieldVisibility,
         isActive: true,
-        isDefault: true,
-      },
+        isDefault: true
+      }
     }, 200);
   }
 
   const parsedLanguage = {
     ...language,
     languageData: JSON.parse(language.languageData),
-    fieldVisibility: JSON.parse(language.fieldVisibility),
+    fieldVisibility: JSON.parse(language.fieldVisibility)
   };
 
   return c.json({ language: parsedLanguage }, 200);
@@ -146,19 +144,17 @@ const listRoute = createRoute({
       search: z.string().optional().default("").openapi({ description: "Search query" }),
       sort: z.string().optional().default("name").openapi({ description: "Sort field" }),
       order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
-      trashed: z.enum(["true", "false"]).optional().default("false").openapi({ description: "Show trashed items" }),
-    }),
+      trashed: z.enum(["true", "false"]).optional().default("false").openapi({ description: "Show trashed items" })
+    })
   },
   responses: {
     200: {
-      description: "Checkout language list with pagination",
-      content: { "application/json": { schema: z.object({ data: z.array(z.any()), pagination: z.any() }) } },
+      description: "Checkout language list with pagination"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -214,7 +210,7 @@ app.openapi(listRoute, async (c) => {
       total,
       totalPages: Math.ceil(total / limit),
       hasNextPage: page < Math.ceil(total / limit),
-      hasPrevPage: page > 1,
+      hasPrevPage: page > 1
     }
   }, 200);
 });
@@ -229,25 +225,22 @@ const createRoute2 = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: createCheckoutLanguageSchema,
-        },
-      },
-    },
+          schema: createCheckoutLanguageSchema
+        }
+      }
+    }
   },
   responses: {
     201: {
-      description: "Created checkout language",
-      content: { "application/json": { schema: z.object({ data: z.any() }) } },
+      description: "Created checkout language"
     },
     409: {
-      description: "Conflict",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+      description: "Conflict"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(createRoute2, async (c) => {
@@ -276,7 +269,7 @@ app.openapi(createRoute2, async (c) => {
     isActive: data.isActive || false,
     isDefault: data.isDefault || false,
     createdAt: sql`(cast(strftime('%s','now') as int))`,
-    updatedAt: sql`(cast(strftime('%s','now') as int))`,
+    updatedAt: sql`(cast(strftime('%s','now') as int))`
   }).returning();
 
   return c.json({ data: insertedLanguage }, 201);
@@ -288,21 +281,15 @@ const getByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Checkout Languages"],
   summary: "Get checkout language by ID",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Checkout language ID" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Checkout language details",
-      content: { "application/json": { schema: z.any() } },
+      description: "Checkout language details"
+      
     },
     404: {
-      description: "Not found",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Not found"
+    }
+  }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -320,31 +307,26 @@ const updateRoute = createRoute({
   tags: ["Checkout Languages"],
   summary: "Update a checkout language",
   request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Checkout language ID" }),
-    }),
+    
     body: {
       content: {
         "application/json": {
-          schema: updateCheckoutLanguageSchema,
-        },
-      },
-    },
+          schema: updateCheckoutLanguageSchema
+        }
+      }
+    }
   },
   responses: {
     200: {
-      description: "Updated checkout language",
-      content: { "application/json": { schema: z.object({ data: z.any() }) } },
+      description: "Updated checkout language"
     },
     404: {
-      description: "Not found",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+      description: "Not found"
     },
     409: {
-      description: "Conflict",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Conflict"
+    }
+  }
 });
 
 app.openapi(updateRoute, async (c) => {
@@ -385,17 +367,11 @@ const softDeleteRoute = createRoute({
   path: "/{id}",
   tags: ["Checkout Languages"],
   summary: "Soft delete a checkout language",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Checkout language ID" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Success",
-      content: { "application/json": { schema: z.object({ success: z.literal(true) }) } },
-    },
-  },
+      description: "Success"
+    }
+  }
 });
 
 app.openapi(softDeleteRoute, async (c) => {
@@ -411,16 +387,11 @@ const hardDeleteRoute = createRoute({
   path: "/{id}",
   tags: ["Checkout Languages"],
   summary: "Hard delete a checkout language",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Checkout language ID" }),
-    }),
-  },
   responses: {
     204: {
-      description: "No content",
-    },
-  },
+      description: "No content"
+    }
+  }
 });
 
 app.openapi(hardDeleteRoute, async (c) => {
@@ -436,17 +407,11 @@ const restoreRoute = createRoute({
   path: "/{id}/restore",
   tags: ["Checkout Languages"],
   summary: "Restore a soft-deleted checkout language",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Checkout language ID" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Success",
-      content: { "application/json": { schema: z.object({ success: z.literal(true) }) } },
-    },
-  },
+      description: "Success"
+    }
+  }
 });
 
 app.openapi(restoreRoute, async (c) => {

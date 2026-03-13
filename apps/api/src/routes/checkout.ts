@@ -18,8 +18,8 @@ const getCheckoutConfigRoute = createRoute({
   tags: ["Checkout"],
   summary: "Get checkout configuration (payment gateways, auth settings)",
   responses: {
-    200: { description: "Checkout configuration", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Checkout configuration"  }
+  }
 });
 
 app.use(
@@ -28,7 +28,7 @@ app.use(
     ttl: 60000,
     keyPrefix: "api:checkout:config:",
     varyByQuery: false,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -46,7 +46,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
         authVerificationMethod: siteSettings.authVerificationMethod,
         checkoutMode: siteSettings.checkoutMode,
         partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-        partialPaymentAmount: siteSettings.partialPaymentAmount,
+        partialPaymentAmount: siteSettings.partialPaymentAmount
       }).from(siteSettings).limit(1).then((rows) => rows[0] ?? null).catch(() => null),
       db.select({ key: settings.key, value: settings.value })
         .from(settings)
@@ -73,7 +73,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
         id: "stripe",
         name: "Card Payment",
         publishableKey: stripeSettings.publishableKey,
-        currencies: [localCurrencyCode, "usd", "eur", "gbp"],
+        currencies: [localCurrencyCode, "usd", "eur", "gbp"]
       });
     }
 
@@ -82,7 +82,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
         id: "sslcommerz",
         name: "Online Payment",
         currencies: [localCurrencyCode],
-        sandbox: sslSettings.sandbox,
+        sandbox: sslSettings.sandbox
       });
     }
 
@@ -91,7 +91,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
         id: "polar",
         name: "Polar",
         currencies: [localCurrencyCode, "usd"],
-        sandbox: polarSettings.sandbox,
+        sandbox: polarSettings.sandbox
       });
     }
 
@@ -99,7 +99,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       gateways.push({
         id: "cod",
         name: "Cash on Delivery",
-        currencies: [localCurrencyCode],
+        currencies: [localCurrencyCode]
       });
     }
 
@@ -109,7 +109,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       authVerificationMethod: siteSettingsRow?.authVerificationMethod ?? "email",
       checkoutMode,
       partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
-      partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0,
+      partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0
     }, 200);
   } catch (error) {
     console.error("Error fetching checkout config:", error);
@@ -119,7 +119,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       authVerificationMethod: "email",
       checkoutMode: "all",
       partialPaymentEnabled: false,
-      partialPaymentAmount: 0,
+      partialPaymentAmount: 0
     }, 200);
   }
 });

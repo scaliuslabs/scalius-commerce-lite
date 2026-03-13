@@ -18,7 +18,7 @@ const getCurrencyRoute = createRoute({
     path: "/currency",
     tags: ["Admin - Settings"],
     summary: "Get currency settings",
-    responses: { 200: { description: "Currency settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Currency settings"  } }
 });
 
 app.openapi(getCurrencyRoute, async (c) => {
@@ -34,7 +34,7 @@ app.openapi(getCurrencyRoute, async (c) => {
         return c.json({
             currencyCode: map["currency_code"] ?? "BDT",
             currencySymbol: map["currency_symbol"] ?? "\u09F3",
-            usdExchangeRate: map["usd_exchange_rate"] ?? "1",
+            usdExchangeRate: map["usd_exchange_rate"] ?? "1"
         }, 200);
     } catch (error) {
         console.error("Error fetching currency settings:", error);
@@ -47,7 +47,7 @@ const saveCurrencyRoute = createRoute({
     path: "/currency",
     tags: ["Admin - Settings"],
     summary: "Save currency settings",
-    responses: { 200: { description: "Settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Settings saved"  } }
 });
 
 app.openapi(saveCurrencyRoute, async (c) => {
@@ -86,13 +86,13 @@ const socialLinkSchema = z.object({
     id: z.string(),
     label: z.string(),
     url: z.string(),
-    iconUrl: z.string().optional(),
+    iconUrl: z.string().optional()
 });
 const navigationItemSchema: z.ZodType<any> = z.object({
     id: z.string(),
     title: z.string(),
     href: z.string().optional(),
-    subMenu: z.lazy(() => z.array(navigationItemSchema)).optional(),
+    subMenu: z.lazy(() => z.array(navigationItemSchema)).optional()
 });
 const headerConfigSchema = z.object({
     topBar: z.object({ text: z.string(), isEnabled: z.boolean().optional().default(true) }),
@@ -100,7 +100,7 @@ const headerConfigSchema = z.object({
     favicon: z.object({ src: z.string(), alt: z.string() }),
     contact: z.object({ phone: z.string(), text: z.string(), isEnabled: z.boolean().optional().default(true) }),
     social: z.array(socialLinkSchema),
-    navigation: z.array(navigationItemSchema),
+    navigation: z.array(navigationItemSchema)
 });
 
 const saveHeaderRoute = createRoute({
@@ -109,7 +109,7 @@ const saveHeaderRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save header configuration",
     request: { body: { content: { "application/json": { schema: headerConfigSchema } } } },
-    responses: { 200: { description: "Header saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Header saved"  } }
 });
 
 app.openapi(saveHeaderRoute, async (c) => {
@@ -122,7 +122,7 @@ app.openapi(saveHeaderRoute, async (c) => {
                 .update(siteSettings)
                 .set({
                     headerConfig: JSON.stringify(validatedConfig),
-                    updatedAt: sql`unixepoch()`,
+                    updatedAt: sql`unixepoch()`
                 })
                 .where(eq(siteSettings.id, existingSettings.id));
         } else {
@@ -133,7 +133,7 @@ app.openapi(saveHeaderRoute, async (c) => {
                 headerConfig: JSON.stringify(validatedConfig),
                 footerConfig: JSON.stringify({}),
                 createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`
             });
         }
         return c.json({ success: true }, 200);
@@ -148,7 +148,7 @@ app.openapi(saveHeaderRoute, async (c) => {
 const footerMenuSchema = z.object({
     id: z.string(),
     title: z.string(),
-    links: z.array(navigationItemSchema),
+    links: z.array(navigationItemSchema)
 });
 const footerConfigSchema = z.object({
     logo: z.object({ src: z.string(), alt: z.string() }),
@@ -156,7 +156,7 @@ const footerConfigSchema = z.object({
     description: z.string().optional().default(""),
     copyrightText: z.string().optional().default(""),
     menus: z.array(footerMenuSchema),
-    social: z.array(socialLinkSchema),
+    social: z.array(socialLinkSchema)
 });
 
 const saveFooterRoute = createRoute({
@@ -165,7 +165,7 @@ const saveFooterRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save footer configuration",
     request: { body: { content: { "application/json": { schema: footerConfigSchema } } } },
-    responses: { 200: { description: "Footer saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Footer saved"  } }
 });
 
 app.openapi(saveFooterRoute, async (c) => {
@@ -178,7 +178,7 @@ app.openapi(saveFooterRoute, async (c) => {
                 .update(siteSettings)
                 .set({
                     footerConfig: JSON.stringify(validatedConfig),
-                    updatedAt: sql`unixepoch()`,
+                    updatedAt: sql`unixepoch()`
                 })
                 .where(eq(siteSettings.id, existingSettings.id));
         } else {
@@ -189,7 +189,7 @@ app.openapi(saveFooterRoute, async (c) => {
                 headerConfig: JSON.stringify({}),
                 footerConfig: JSON.stringify(validatedConfig),
                 createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`
             });
         }
         return c.json({ success: true }, 200);
@@ -207,7 +207,7 @@ const getThemeRoute = createRoute({
     path: "/theme",
     tags: ["Admin - Settings"],
     summary: "Get theme settings",
-    responses: { 200: { description: "Theme settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Theme settings"  } }
 });
 
 app.openapi(getThemeRoute, async (c) => {
@@ -230,7 +230,7 @@ const saveThemeRoute = createRoute({
     path: "/theme",
     tags: ["Admin - Settings"],
     summary: "Save theme settings",
-    responses: { 200: { description: "Theme saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Theme saved"  } }
 });
 
 app.openapi(saveThemeRoute, async (c) => {
@@ -258,7 +258,7 @@ const getSeoRoute = createRoute({
     path: "/seo",
     tags: ["Admin - Settings"],
     summary: "Get SEO settings",
-    responses: { 200: { description: "SEO settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "SEO settings"  } }
 });
 
 app.openapi(getSeoRoute, async (c) => {
@@ -268,7 +268,7 @@ app.openapi(getSeoRoute, async (c) => {
                 siteTitle: siteSettings.siteTitle,
                 homepageTitle: siteSettings.homepageTitle,
                 homepageMetaDescription: siteSettings.homepageMetaDescription,
-                robotsTxt: siteSettings.robotsTxt,
+                robotsTxt: siteSettings.robotsTxt
             })
             .from(siteSettings)
             .limit(1);
@@ -277,7 +277,7 @@ app.openapi(getSeoRoute, async (c) => {
             siteTitle: row?.siteTitle || "",
             homepageTitle: row?.homepageTitle || "",
             homepageMetaDescription: row?.homepageMetaDescription || "",
-            robotsTxt: row?.robotsTxt || "",
+            robotsTxt: row?.robotsTxt || ""
         }, 200);
     } catch (error) {
         return c.json({ siteTitle: "", homepageTitle: "", homepageMetaDescription: "", robotsTxt: "" }, 200);
@@ -289,7 +289,7 @@ const saveSeoRoute = createRoute({
     path: "/seo",
     tags: ["Admin - Settings"],
     summary: "Save SEO settings",
-    responses: { 200: { description: "SEO saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "SEO saved"  } }
 });
 
 app.openapi(saveSeoRoute, async (c) => {
@@ -305,7 +305,7 @@ app.openapi(saveSeoRoute, async (c) => {
                     homepageTitle,
                     homepageMetaDescription,
                     robotsTxt,
-                    updatedAt: sql`unixepoch()`,
+                    updatedAt: sql`unixepoch()`
                 })
                 .where(eq(siteSettings.id, existing.id));
         } else {
@@ -319,7 +319,7 @@ app.openapi(saveSeoRoute, async (c) => {
                 homepageMetaDescription,
                 robotsTxt,
                 createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`
             });
         }
         return c.json({ success: true, message: "SEO settings saved successfully" }, 200);
@@ -337,7 +337,7 @@ const getStorefrontUrlRoute = createRoute({
     path: "/storefront-url",
     tags: ["Admin - Settings"],
     summary: "Get storefront URL",
-    responses: { 200: { description: "Storefront URL", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Storefront URL"  } }
 });
 
 app.openapi(getStorefrontUrlRoute, async (c) => {
@@ -354,7 +354,7 @@ const saveStorefrontUrlRoute = createRoute({
     path: "/storefront-url",
     tags: ["Admin - Settings"],
     summary: "Save storefront URL",
-    responses: { 200: { description: "URL saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "URL saved"  } }
 });
 
 app.openapi(saveStorefrontUrlRoute, async (c) => {
@@ -375,7 +375,7 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
                 footerConfig: JSON.stringify({}),
                 storefrontUrl: storefrontUrl || "/",
                 createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`
             });
         }
         layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);

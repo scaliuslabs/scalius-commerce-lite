@@ -14,7 +14,7 @@ app.use(
     ttl: 600000, // 10 minutes
     keyPrefix: "api:locations:",
     varyByQuery: true,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -25,7 +25,7 @@ const formatLocation = (location: any) => ({
   type: location.type,
   parentId: location.parentId,
   isActive: location.isActive,
-  sortOrder: location.sortOrder,
+  sortOrder: location.sortOrder
 });
 
 // GET /locations/cities — get all active cities
@@ -36,14 +36,12 @@ const listCitiesRoute = createRoute({
   summary: "Get all active cities",
   responses: {
     200: {
-      description: "City list",
-      content: { "application/json": { schema: z.object({ success: z.literal(true), data: z.array(z.any()) }) } },
+      description: "City list"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listCitiesRoute, async (c) => {
@@ -71,23 +69,20 @@ const listZonesRoute = createRoute({
   summary: "Get all active zones for a given city",
   request: {
     query: z.object({
-      cityId: z.string().openapi({ description: "City ID to get zones for" }),
-    }),
+      cityId: z.string().openapi({ description: "City ID to get zones for" })
+    })
   },
   responses: {
     200: {
-      description: "Zone list",
-      content: { "application/json": { schema: z.object({ success: z.literal(true), data: z.array(z.any()) }) } },
+      description: "Zone list"
     },
     400: {
-      description: "Bad request",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+      description: "Bad request"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listZonesRoute, async (c) => {
@@ -118,23 +113,20 @@ const listAreasRoute = createRoute({
   summary: "Get all active areas for a given zone",
   request: {
     query: z.object({
-      zoneId: z.string().openapi({ description: "Zone ID to get areas for" }),
-    }),
+      zoneId: z.string().openapi({ description: "Zone ID to get areas for" })
+    })
   },
   responses: {
     200: {
-      description: "Area list",
-      content: { "application/json": { schema: z.object({ success: z.literal(true), data: z.array(z.any()) }) } },
+      description: "Area list"
     },
     400: {
-      description: "Bad request",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+      description: "Bad request"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listAreasRoute, async (c) => {

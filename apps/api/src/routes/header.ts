@@ -14,7 +14,7 @@ app.use(
     ttl: 3600,
     keyPrefix: "api:header:",
     varyByQuery: false,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -49,18 +49,15 @@ const getHeaderRoute = createRoute({
   summary: "Get header configuration data",
   responses: {
     200: {
-      description: "Header configuration",
-      content: { "application/json": { schema: z.object({ header: z.any(), success: z.literal(true) }) } },
+      description: "Header configuration"
     },
     404: {
-      description: "Header configuration not found",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+      description: "Header configuration not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getHeaderRoute, async (c) => {
@@ -80,7 +77,7 @@ app.openapi(getHeaderRoute, async (c) => {
     return c.json(
       {
         error: "Invalid header configuration",
-        success: false as const,
+        success: false as const
       },
       500,
     );
@@ -89,25 +86,25 @@ app.openapi(getHeaderRoute, async (c) => {
   // Build response data
   const headerData: HeaderData = {
     topBar: {
-      text: headerConfig.topBar?.text || "",
+      text: headerConfig.topBar?.text || ""
     },
     logo: {
       src: headerConfig.logo?.src || "",
-      alt: headerConfig.logo?.alt || "Store Logo",
+      alt: headerConfig.logo?.alt || "Store Logo"
     },
     favicon: headerConfig.favicon,
     contact: {
       phone: headerConfig.contact?.phone || "",
-      text: headerConfig.contact?.text || "",
+      text: headerConfig.contact?.text || ""
     },
     social: {
-      facebook: headerConfig.social?.facebook || "",
-    },
+      facebook: headerConfig.social?.facebook || ""
+    }
   };
 
   return c.json({
     header: headerData,
-    success: true as const,
+    success: true as const
   }, 200);
 });
 

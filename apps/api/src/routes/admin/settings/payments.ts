@@ -12,7 +12,7 @@ import {
     invalidatePaymentMethodsCache,
     invalidateStripeCache,
     invalidateSSLCommerzCache,
-    invalidatePolarCache,
+    invalidatePolarCache
 } from "@scalius/core/modules/payments/gateway-settings";
 
 const app = new OpenAPIHono();
@@ -23,7 +23,7 @@ const MASKED = "••••••••••••";
 // ─────────────────────────────────────────
 const updateMethodsSchema = z.object({
     enabledMethods: z.array(z.enum(["stripe", "sslcommerz", "polar", "cod"])).min(1, "At least one payment method is required"),
-    defaultMethod: z.enum(["stripe", "sslcommerz", "polar", "cod"]),
+    defaultMethod: z.enum(["stripe", "sslcommerz", "polar", "cod"])
 });
 
 const getPaymentMethodsRoute = createRoute({
@@ -31,7 +31,7 @@ const getPaymentMethodsRoute = createRoute({
     path: "/payment-methods",
     tags: ["Admin - Settings"],
     summary: "Get active payment methods",
-    responses: { 200: { description: "Payment methods config", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Payment methods config"  } }
 });
 
 app.openapi(getPaymentMethodsRoute, async (c) => {
@@ -49,8 +49,8 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
                 stripe: { configured: !!stripeSettings, enabled: stripeSettings?.enabled ?? false },
                 sslcommerz: { configured: !!sslSettings, enabled: sslSettings?.enabled ?? false },
                 polar: { configured: !!polarSettings, enabled: polarSettings?.enabled ?? false },
-                cod: { configured: true, enabled: true },
-            },
+                cod: { configured: true, enabled: true }
+            }
         }, 200);
     } catch (error) {
         return c.json({ error: "Failed to fetch payment methods" }, 500);
@@ -62,7 +62,7 @@ const savePaymentMethodsRoute = createRoute({
     path: "/payment-methods",
     tags: ["Admin - Settings"],
     summary: "Save payment methods configuration",
-    responses: { 200: { description: "Payment methods saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Payment methods saved"  } }
 });
 
 app.openapi(savePaymentMethodsRoute, async (c) => {
@@ -98,7 +98,7 @@ const getStripeRoute = createRoute({
     path: "/stripe",
     tags: ["Admin - Settings"],
     summary: "Get Stripe settings",
-    responses: { 200: { description: "Stripe settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Stripe settings"  } }
 });
 
 app.openapi(getStripeRoute, async (c) => {
@@ -110,7 +110,7 @@ app.openapi(getStripeRoute, async (c) => {
             secretKey: map.secret_key ? MASKED : "",
             publishableKey: map.publishable_key ?? "",
             webhookSecret: map.webhook_secret ? MASKED : "",
-            enabled: map.enabled !== "false",
+            enabled: map.enabled !== "false"
         }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching Stripe settings" }, 500);
@@ -122,7 +122,7 @@ const saveStripeRoute = createRoute({
     path: "/stripe",
     tags: ["Admin - Settings"],
     summary: "Save Stripe settings",
-    responses: { 200: { description: "Stripe settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Stripe settings saved"  } }
 });
 
 app.openapi(saveStripeRoute, async (c) => {
@@ -155,7 +155,7 @@ const getSSLCommerzRoute = createRoute({
     path: "/sslcommerz",
     tags: ["Admin - Settings"],
     summary: "Get SSLCommerz settings",
-    responses: { 200: { description: "SSLCommerz settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "SSLCommerz settings"  } }
 });
 
 app.openapi(getSSLCommerzRoute, async (c) => {
@@ -167,7 +167,7 @@ app.openapi(getSSLCommerzRoute, async (c) => {
             storeId: map.store_id ?? "",
             storePassword: map.store_password ? MASKED : "",
             sandbox: map.sandbox !== "false",
-            enabled: map.enabled !== "false",
+            enabled: map.enabled !== "false"
         }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching SSLCommerz settings" }, 500);
@@ -179,7 +179,7 @@ const saveSSLCommerzRoute = createRoute({
     path: "/sslcommerz",
     tags: ["Admin - Settings"],
     summary: "Save SSLCommerz settings",
-    responses: { 200: { description: "SSLCommerz settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "SSLCommerz settings saved"  } }
 });
 
 app.openapi(saveSSLCommerzRoute, async (c) => {
@@ -212,7 +212,7 @@ const getPolarRoute = createRoute({
     path: "/polar",
     tags: ["Admin - Settings"],
     summary: "Get Polar settings",
-    responses: { 200: { description: "Polar settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Polar settings"  } }
 });
 
 app.openapi(getPolarRoute, async (c) => {
@@ -225,7 +225,7 @@ app.openapi(getPolarRoute, async (c) => {
             webhookSecret: map.webhook_secret ? MASKED : "",
             productId: map.product_id ?? "",
             sandbox: map.sandbox !== "false",
-            enabled: map.enabled !== "false",
+            enabled: map.enabled !== "false"
         }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching Polar settings" }, 500);
@@ -237,7 +237,7 @@ const savePolarRoute = createRoute({
     path: "/polar",
     tags: ["Admin - Settings"],
     summary: "Save Polar settings",
-    responses: { 200: { description: "Polar settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Polar settings saved"  } }
 });
 
 app.openapi(savePolarRoute, async (c) => {

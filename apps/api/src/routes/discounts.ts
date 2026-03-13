@@ -9,7 +9,7 @@ import {
   collections,
   products,
   DiscountType,
-  DiscountValueType,
+  DiscountValueType
 } from "@scalius/database/schema";
 import { eq, sql, and, isNull, count, inArray } from "drizzle-orm";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
@@ -22,7 +22,7 @@ const validateDiscountSchema = z.object({
   total: z.coerce.number().optional().openapi({ description: "Cart total" }),
   items: z.string().optional().openapi({ description: "JSON-encoded cart items" }),
   shippingCost: z.coerce.number().optional().default(0).openapi({ description: "Shipping cost" }),
-  customerPhone: z.string().optional().openapi({ description: "Customer phone for per-customer limits" }),
+  customerPhone: z.string().optional().openapi({ description: "Customer phone for per-customer limits" })
 });
 
 // Schema for cart item - coerce numbers to handle string values from localStorage
@@ -30,7 +30,7 @@ const cartItemSchema = z.object({
   id: z.string(),
   price: z.coerce.number(),
   quantity: z.coerce.number(),
-  variantId: z.string().optional(),
+  variantId: z.string().optional()
 });
 
 // Helper function to expand collections to product IDs
@@ -153,7 +153,7 @@ export async function isDiscountValid(
     return {
       valid: false,
       error: `Minimum purchase amount of ${currencySymbol}${discount.minPurchaseAmount} not met`,
-      minPurchaseAmount: discount.minPurchaseAmount,
+      minPurchaseAmount: discount.minPurchaseAmount
     };
   }
 
@@ -167,7 +167,7 @@ export async function isDiscountValid(
       return {
         valid: false,
         error: `Minimum quantity of ${discount.minQuantity} items not met`,
-        minQuantity: discount.minQuantity,
+        minQuantity: discount.minQuantity
       };
     }
   }
@@ -190,7 +190,7 @@ export async function isDiscountValid(
       if (usageCount >= discount.maxUses) {
         return {
           valid: false,
-          error: "Discount code has reached its usage limit",
+          error: "Discount code has reached its usage limit"
         };
       }
     } catch (error) {
@@ -225,7 +225,7 @@ export async function isDiscountValid(
         );
         return {
           valid: false,
-          error: "This discount code can only be used once per customer",
+          error: "This discount code can only be used once per customer"
         };
       } else {
         console.log(`No previous usage found for ${customerPhone}`);
@@ -278,7 +278,7 @@ export async function isDiscountValid(
     ) {
       return {
         valid: false,
-        error: "Discount code is not applicable to the items in your cart",
+        error: "Discount code is not applicable to the items in your cart"
       };
     }
   }
@@ -295,8 +295,8 @@ export async function isDiscountValid(
       minPurchaseAmount: discount.minPurchaseAmount,
       combineWithProductDiscounts: discount.combineWithProductDiscounts,
       combineWithOrderDiscounts: discount.combineWithOrderDiscounts,
-      combineWithShippingDiscounts: discount.combineWithShippingDiscounts,
-    },
+      combineWithShippingDiscounts: discount.combineWithShippingDiscounts
+    }
   };
 }
 
@@ -423,22 +423,20 @@ const validateDiscountRoute = createRoute({
   tags: ["Discounts"],
   summary: "Validate a discount code",
   request: {
-    query: validateDiscountSchema,
+    query: validateDiscountSchema
   },
   responses: {
     200: {
-      description: "Discount validation result",
-      content: { "application/json": { schema: z.any() } },
+      description: "Discount validation result"
+      
     },
     400: {
-      description: "Bad request",
-      content: { "application/json": { schema: z.object({ valid: z.literal(false), error: z.any() }) } },
+      description: "Bad request"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ valid: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(validateDiscountRoute, async (c) => {
@@ -503,14 +501,14 @@ app.openapi(validateDiscountRoute, async (c) => {
           validationResult.discount.type === DiscountType.AMOUNT_OFF_ORDER ||
           validationResult.discount.type ===
           DiscountType.AMOUNT_OFF_PRODUCTS ||
-          !!validationResult.discount.combineWithShippingDiscounts,
-      },
+          !!validationResult.discount.combineWithShippingDiscounts
+      }
     };
 
     return c.json({
       valid: true,
       discount: enhancedDiscount,
-      discountAmount: parseFloat(discountAmount.toFixed(2)),
+      discountAmount: parseFloat(discountAmount.toFixed(2))
     }, 200);
   }
 

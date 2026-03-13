@@ -6,7 +6,7 @@ import {
   ADMIN_PATH_TO_GROUPS,
   invalidateGroups,
   shouldBumpStorefrontVersion,
-  getStorefrontPrefixesForGroups,
+  getStorefrontPrefixesForGroups
 } from "../utils/cache-invalidation";
 import { ValidationError } from "../utils/api-error";
 
@@ -24,8 +24,8 @@ const getStatsRoute = createRoute({
   tags: ["Cache"],
   summary: "Get cache statistics",
   responses: {
-    200: { description: "Cache stats", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Cache stats"  }
+  }
 });
 
 app.openapi(getStatsRoute, async (c) => {
@@ -41,15 +41,15 @@ const getGroupsRoute = createRoute({
   tags: ["Cache"],
   summary: "Get invalidation group definitions and path mapping",
   responses: {
-    200: { description: "Cache groups", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Cache groups"  }
+  }
 });
 
 app.openapi(getGroupsRoute, async (c) => {
   return c.json({
     success: true,
     groups: INVALIDATION_GROUPS,
-    pathMapping: ADMIN_PATH_TO_GROUPS,
+    pathMapping: ADMIN_PATH_TO_GROUPS
   }, 200);
 });
 
@@ -61,8 +61,8 @@ const getLastClearedRoute = createRoute({
   tags: ["Cache"],
   summary: "Get last-cleared timestamps for each group",
   responses: {
-    200: { description: "Last cleared timestamps", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Last cleared timestamps"  }
+  }
 });
 
 app.openapi(getLastClearedRoute, async (c) => {
@@ -90,8 +90,8 @@ const clearAllRoute = createRoute({
   tags: ["Cache"],
   summary: "Clear all cache",
   responses: {
-    200: { description: "Cache cleared", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Cache cleared"  }
+  }
 });
 
 app.openapi(clearAllRoute, async (c) => {
@@ -125,16 +125,16 @@ const clearGroupRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            groups: z.array(z.string()).min(1),
-          }),
-        },
-      },
-    },
+            groups: z.array(z.string()).min(1)
+          })
+        }
+      }
+    }
   },
   responses: {
-    200: { description: "Group cache cleared", content: { "application/json": { schema: z.any() } } },
-    400: { description: "Invalid groups", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Group cache cleared"  },
+    400: { description: "Invalid groups"  }
+  }
 });
 
 app.openapi(clearGroupRoute, async (c) => {
@@ -176,7 +176,7 @@ app.openapi(clearGroupRoute, async (c) => {
       fetch(urlWithToken.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groups: validGroups, prefixes, bumpVersion }),
+        body: JSON.stringify({ groups: validGroups, prefixes, bumpVersion })
       }).catch((err) =>
         console.error("[Cache] Storefront group purge failed:", err),
       ),
@@ -187,7 +187,7 @@ app.openapi(clearGroupRoute, async (c) => {
     success: true,
     message: `Cache cleared for groups: ${validGroups.join(", ")}`,
     groups: validGroups,
-    bumpedHtml: bumpVersion,
+    bumpedHtml: bumpVersion
   }, 200);
 });
 

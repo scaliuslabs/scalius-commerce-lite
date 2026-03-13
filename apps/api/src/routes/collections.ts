@@ -14,7 +14,7 @@ app.use(
     ttl: 3600,
     keyPrefix: "api:collections:",
     varyByQuery: true,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -51,14 +51,12 @@ const listCollectionsRoute = createRoute({
   summary: "List all active collections",
   responses: {
     200: {
-      description: "Collection list",
-      content: { "application/json": { schema: z.object({ collections: z.array(z.any()) }) } },
+      description: "Collection list"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listCollectionsRoute, async (c) => {
@@ -72,7 +70,7 @@ app.openapi(listCollectionsRoute, async (c) => {
       sortOrder: collections.sortOrder,
       isActive: collections.isActive,
       createdAt: collections.createdAt,
-      updatedAt: collections.updatedAt,
+      updatedAt: collections.updatedAt
     })
     .from(collections)
     .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
@@ -90,7 +88,7 @@ app.openapi(listCollectionsRoute, async (c) => {
       collection.updatedAt,
       collection.id,
       "updatedAt",
-    ),
+    )
   }));
 
   return c.json({ collections: formattedCollections }, 200);
@@ -102,25 +100,17 @@ const getCollectionByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Collections"],
   summary: "Get collection by ID with resolved products",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Collection ID" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Collection details with resolved products",
-      content: { "application/json": { schema: z.object({ collection: z.any(), categories: z.array(z.any()), products: z.array(z.any()) }).passthrough() } },
+      description: "Collection details with resolved products"
     },
     404: {
-      description: "Collection not found",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+      description: "Collection not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getCollectionByIdRoute, async (c) => {
@@ -187,7 +177,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
               AND "product_images"."is_primary" = 1
             ORDER BY "product_images"."sort_order" ASC
             LIMIT 1
-          )`.as("imageUrl"),
+          )`.as("imageUrl")
         })
         .from(products)
         .where(
@@ -213,7 +203,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
               AND "product_images"."is_primary" = 1
             ORDER BY "product_images"."sort_order" ASC
             LIMIT 1
-          )`.as("imageUrl"),
+          )`.as("imageUrl")
         })
         .from(products)
         .where(
@@ -245,7 +235,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
       imageUrl: product.imageUrl ?? null,
       discountedPrice: product.discountPercentage
         ? Math.round(product.price * (1 - product.discountPercentage / 100))
-        : product.price,
+        : product.price
     }));
 
     resolvedCategories = [];
@@ -259,7 +249,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
               featuredData.price *
                 (1 - featuredData.discountPercentage / 100),
             )
-          : featuredData.price,
+          : featuredData.price
       };
     }
   } else if (hasCategories) {
@@ -269,7 +259,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
         .select({
           id: categories.id,
           name: categories.name,
-          slug: categories.slug,
+          slug: categories.slug
         })
         .from(categories)
         .where(
@@ -293,7 +283,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
               AND "product_images"."is_primary" = 1
             ORDER BY "product_images"."sort_order" ASC
             LIMIT 1
-          )`.as("imageUrl"),
+          )`.as("imageUrl")
         })
         .from(products)
         .where(
@@ -320,7 +310,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
               AND "product_images"."is_primary" = 1
             ORDER BY "product_images"."sort_order" ASC
             LIMIT 1
-          )`.as("imageUrl"),
+          )`.as("imageUrl")
         })
         .from(products)
         .where(
@@ -359,7 +349,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
       imageUrl: product.imageUrl ?? null,
       discountedPrice: product.discountPercentage
         ? Math.round(product.price * (1 - product.discountPercentage / 100))
-        : product.price,
+        : product.price
     }));
 
     if (featuredData) {
@@ -371,7 +361,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
               featuredData.price *
                 (1 - featuredData.discountPercentage / 100),
             )
-          : featuredData.price,
+          : featuredData.price
       };
     }
   } else if (hasFeaturedProduct) {
@@ -390,7 +380,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
             AND "product_images"."is_primary" = 1
           ORDER BY "product_images"."sort_order" ASC
           LIMIT 1
-        )`.as("imageUrl"),
+        )`.as("imageUrl")
       })
       .from(products)
       .where(
@@ -411,7 +401,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
               featuredData.price *
                 (1 - featuredData.discountPercentage / 100),
             )
-          : featuredData.price,
+          : featuredData.price
       };
     }
   }
@@ -431,11 +421,11 @@ app.openapi(getCollectionByIdRoute, async (c) => {
         collection.updatedAt,
         collection.id,
         "updatedAt",
-      ),
+      )
     },
     categories: resolvedCategories,
     products: resolvedProducts,
-    ...(featuredProduct && { featuredProduct }),
+    ...(featuredProduct && { featuredProduct })
   }, 200);
 });
 

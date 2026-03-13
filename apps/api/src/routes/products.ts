@@ -6,7 +6,7 @@ import { cacheMiddleware } from "../middleware/cache";
 import {
   getStorefrontProducts,
   getStorefrontProductBySlug,
-  searchStorefrontProducts,
+  searchStorefrontProducts
 } from "@scalius/core/modules/products/products.service";
 import { NotFoundError } from "../utils/api-error";
 
@@ -18,7 +18,7 @@ app.use(
     ttl: 3600,
     keyPrefix: "api:products:",
     varyByQuery: true,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -36,13 +36,13 @@ const productFilterSchema = z.object({
   maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Discount filter" }),
-  ids: z.string().optional().openapi({ description: "Comma-separated product IDs" }),
+  ids: z.string().optional().openapi({ description: "Comma-separated product IDs" })
 });
 
 const productSearchSchema = z.object({
   search: z.string().optional().default("").openapi({ description: "Search query" }),
   page: z.coerce.number().int().min(1).optional().default(1).openapi({ description: "Page number" }),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(10).openapi({ description: "Items per page" }),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(10).openapi({ description: "Items per page" })
 });
 
 // GET /api/storefront/products
@@ -52,18 +52,16 @@ const listProductsRoute = createRoute({
   tags: ["Products"],
   summary: "List storefront products",
   request: {
-    query: productFilterSchema,
+    query: productFilterSchema
   },
   responses: {
     200: {
-      description: "Product list with pagination",
-      content: { "application/json": { schema: z.object({ success: z.literal(true) }).passthrough() } },
+      description: "Product list with pagination"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listProductsRoute, async (c) => {
@@ -85,18 +83,16 @@ const searchProductsRoute = createRoute({
   tags: ["Products"],
   summary: "Search storefront products with variant data",
   request: {
-    query: productSearchSchema,
+    query: productSearchSchema
   },
   responses: {
     200: {
-      description: "Search results",
-      content: { "application/json": { schema: z.object({ success: z.literal(true) }).passthrough() } },
+      description: "Search results"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(searchProductsRoute, async (c) => {
@@ -112,25 +108,17 @@ const getProductBySlugRoute = createRoute({
   path: "/{slug}",
   tags: ["Products"],
   summary: "Get product by slug",
-  request: {
-    params: z.object({
-      slug: z.string().openapi({ description: "Product slug" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Product details",
-      content: { "application/json": { schema: z.object({ success: z.literal(true) }).passthrough() } },
+      description: "Product details"
     },
     404: {
-      description: "Product not found",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+      description: "Product not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getProductBySlugRoute, async (c) => {

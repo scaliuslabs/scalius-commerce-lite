@@ -8,7 +8,7 @@ const app = new OpenAPIHono();
 const PROMPT_URLS = {
     widget: "https://text.wrygo.com/home-page-prompt.txt",
     "landing-page": "https://text.wrygo.com/pages-prompt.txt",
-    collection: "https://text.wrygo.com/collection-prompt.txt",
+    collection: "https://text.wrygo.com/collection-prompt.txt"
 };
 
 const getPromptRoute = createRoute({
@@ -18,12 +18,12 @@ const getPromptRoute = createRoute({
     summary: "Fetch an AI system prompt by type",
     request: {
         query: z.object({
-            type: z.string().optional().default("widget").openapi({ description: "Prompt type: widget, landing-page, or collection" }),
-        }),
+            type: z.string().optional().default("widget").openapi({ description: "Prompt type: widget, landing-page, or collection" })
+        })
     },
     responses: {
-        200: { description: "System prompt text" },
-    },
+        200: { description: "System prompt text" }
+    }
 });
 
 app.openapi(getPromptRoute, async (c) => {
@@ -36,8 +36,8 @@ app.openapi(getPromptRoute, async (c) => {
             method: "GET",
             headers: {
                 Accept: "text/plain",
-                "User-Agent": "Scalius-Commerce-Widget-System/1.0",
-            },
+                "User-Agent": "Scalius-Commerce-Widget-System/1.0"
+            }
         });
 
         if (!response.ok) {
@@ -52,13 +52,13 @@ app.openapi(getPromptRoute, async (c) => {
 
         return c.text(systemPrompt, 200, {
             "Content-Type": "text/plain",
-            "Cache-Control": "public, max-age=300",
+            "Cache-Control": "public, max-age=300"
         });
     } catch (error: any) {
         console.error("Error fetching system prompt:", error);
         return c.json({
             error: "Failed to fetch system prompt",
-            message: error.message || "Unknown error occurred",
+            message: error.message || "Unknown error occurred"
         }, 500);
     }
 });

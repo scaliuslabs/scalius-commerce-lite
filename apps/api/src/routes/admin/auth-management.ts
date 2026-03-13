@@ -32,8 +32,8 @@ const listUsersRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "List all admin users",
     responses: {
-        200: { description: "Admin user list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Admin user list"  }
+    }
 });
 
 app.openapi(listUsersRoute, async (c) => {
@@ -54,7 +54,7 @@ app.openapi(listUsersRoute, async (c) => {
                 image: user.image,
                 twoFactorEnabled: user.twoFactorEnabled,
                 isSuperAdmin: user.isSuperAdmin,
-                createdAt: user.createdAt,
+                createdAt: user.createdAt
             })
             .from(user)
             .where(eq(user.role, "admin"));
@@ -65,7 +65,7 @@ app.openapi(listUsersRoute, async (c) => {
                     .select({
                         id: roles.id,
                         name: roles.name,
-                        displayName: roles.displayName,
+                        displayName: roles.displayName
                     })
                     .from(userRoles)
                     .innerJoin(roles, eq(userRoles.roleId, roles.id))
@@ -74,7 +74,7 @@ app.openapi(listUsersRoute, async (c) => {
                 const overrides = await db
                     .select({
                         permissionName: permissions.name,
-                        granted: userPermissions.granted,
+                        granted: userPermissions.granted
                     })
                     .from(userPermissions)
                     .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
@@ -86,7 +86,7 @@ app.openapi(listUsersRoute, async (c) => {
                 return {
                     ...adminUser,
                     roles: userRoleData,
-                    overrides: { grants, denials },
+                    overrides: { grants, denials }
                 };
             })
         );
@@ -101,7 +101,7 @@ app.openapi(listUsersRoute, async (c) => {
 const createAdminSchema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
-    roleId: z.string().optional(),
+    roleId: z.string().optional()
 });
 
 const createUserRoute = createRoute({
@@ -110,11 +110,11 @@ const createUserRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Create a new admin user",
     request: {
-        body: { content: { "application/json": { schema: createAdminSchema } } },
+        body: { content: { "application/json": { schema: createAdminSchema } } }
     },
     responses: {
-        201: { description: "Admin user created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Admin user created"  }
+    }
 });
 
 app.openapi(createUserRoute, async (c) => {
@@ -141,7 +141,7 @@ app.openapi(createUserRoute, async (c) => {
         const tempPassword = generateTempPassword();
 
         const signUpResult = await auth.api.signUpEmail({
-            body: { name, email, password: tempPassword },
+            body: { name, email, password: tempPassword }
         });
 
         if (!signUpResult || !signUpResult.user) {
@@ -170,7 +170,7 @@ app.openapi(createUserRoute, async (c) => {
         return c.json({
             success: true,
             message: "Admin user created successfully. An invitation email has been sent.",
-            user: { id: signUpResult.user.id, name, email },
+            user: { id: signUpResult.user.id, name, email }
         }, 201);
     } catch (error: any) {
         console.error("Create admin user error:", error);
@@ -183,12 +183,9 @@ const deleteUserRoute = createRoute({
     path: "/users/{id}",
     tags: ["Admin - Auth Management"],
     summary: "Delete an admin user",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "User ID" }) }),
-    },
     responses: {
-        200: { description: "User deleted", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "User deleted"  }
+    }
 });
 
 app.openapi(deleteUserRoute, async (c) => {
@@ -227,7 +224,7 @@ app.openapi(deleteUserRoute, async (c) => {
 
 const changePasswordSchema = z.object({
     currentPassword: z.string().min(1),
-    newPassword: z.string().min(8, "New password must be at least 8 characters"),
+    newPassword: z.string().min(8, "New password must be at least 8 characters")
 });
 
 const changePasswordRoute = createRoute({
@@ -236,11 +233,11 @@ const changePasswordRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Change current user password",
     request: {
-        body: { content: { "application/json": { schema: changePasswordSchema } } },
+        body: { content: { "application/json": { schema: changePasswordSchema } } }
     },
     responses: {
-        200: { description: "Password changed", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Password changed"  }
+    }
 });
 
 app.openapi(changePasswordRoute, async (c) => {
@@ -251,7 +248,7 @@ app.openapi(changePasswordRoute, async (c) => {
 
         const result = await auth.api.changePassword({
             headers: c.req.raw.headers,
-            body: { currentPassword, newPassword, revokeOtherSessions: true },
+            body: { currentPassword, newPassword, revokeOtherSessions: true }
         });
 
         if (!result) return c.json({ error: "Failed to change password", message: "Unable to change password. Please check your current password." }, 400);
@@ -268,7 +265,7 @@ app.openapi(changePasswordRoute, async (c) => {
 
 const updateProfileSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters").optional(),
-    image: z.string().url().optional().nullable(),
+    image: z.string().url().optional().nullable()
 });
 
 const updateProfileRoute = createRoute({
@@ -277,11 +274,11 @@ const updateProfileRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Update current user profile",
     request: {
-        body: { content: { "application/json": { schema: updateProfileSchema } } },
+        body: { content: { "application/json": { schema: updateProfileSchema } } }
     },
     responses: {
-        200: { description: "Profile updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Profile updated"  }
+    }
 });
 
 app.openapi(updateProfileRoute, async (c) => {
@@ -319,8 +316,8 @@ const get2faInfoRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Get 2FA info for current user",
     responses: {
-        200: { description: "2FA info", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "2FA info"  }
+    }
 });
 
 app.openapi(get2faInfoRoute, async (c) => {
@@ -340,7 +337,7 @@ app.openapi(get2faInfoRoute, async (c) => {
             success: true,
             method: userData.twoFactorMethod || "email",
             twoFactorEnabled: userData.twoFactorEnabled,
-            email: userData.email,
+            email: userData.email
         }, 200);
     } catch (error: any) {
         return c.json({ success: false, message: "Internal server error" }, 500);
@@ -353,8 +350,8 @@ const mark2faVerifiedRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Mark session as 2FA verified",
     responses: {
-        200: { description: "Session marked as verified", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Session marked as verified"  }
+    }
 });
 
 app.openapi(mark2faVerifiedRoute, async (c) => {
@@ -381,11 +378,11 @@ const update2faMethodRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Update 2FA method",
     request: {
-        body: { content: { "application/json": { schema: z.object({ method: z.enum(["totp", "email"]) }) } } },
+        body: { content: { "application/json": { schema: z.object({ method: z.enum(["totp", "email"]) }) } } }
     },
     responses: {
-        200: { description: "Method updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Method updated"  }
+    }
 });
 
 app.openapi(update2faMethodRoute, async (c) => {
@@ -414,15 +411,15 @@ const verify2faRoute = createRoute({
                     schema: z.object({
                         code: z.string(),
                         trustDevice: z.boolean().optional(),
-                        type: z.string().optional().default("totp"),
-                    }),
-                },
-            },
-        },
+                        type: z.string().optional().default("totp")
+                    })
+                }
+            }
+        }
     },
     responses: {
-        200: { description: "2FA verified", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "2FA verified"  }
+    }
 });
 
 app.openapi(verify2faRoute, async (c) => {
@@ -470,7 +467,7 @@ const setupApp = new OpenAPIHono();
 const setupSchema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    password: z.string().min(8, "Password must be at least 8 characters")
 });
 
 const setupRoute = createRoute({
@@ -479,11 +476,11 @@ const setupRoute = createRoute({
     tags: ["Admin - Setup"],
     summary: "Initial admin setup (first user only)",
     request: {
-        body: { content: { "application/json": { schema: setupSchema } } },
+        body: { content: { "application/json": { schema: setupSchema } } }
     },
     responses: {
-        201: { description: "Admin account created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Admin account created"  }
+    }
 });
 
 setupApp.openapi(setupRoute, async (c) => {

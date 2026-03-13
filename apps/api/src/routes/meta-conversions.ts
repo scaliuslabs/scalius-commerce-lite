@@ -49,7 +49,7 @@ const eventPayloadSchema = z.object({
       zp: z.string().optional(),
       country: z.string().optional(),
       subscription_id: z.string().optional(),
-      lead_id: z.coerce.number().optional(),
+      lead_id: z.coerce.number().optional()
     })
     .passthrough(),
   customData: z
@@ -62,16 +62,16 @@ const eventPayloadSchema = z.object({
           z.object({
             id: z.string(),
             quantity: z.number(),
-            item_price: z.number().optional(),
+            item_price: z.number().optional()
           }),
         )
         .optional(),
       content_type: z.enum(["product", "product_group"]).optional(),
       order_id: z.string().optional(),
-      search_string: z.string().optional(),
+      search_string: z.string().optional()
     })
     .passthrough()
-    .optional(),
+    .optional()
 });
 
 // ─── POST /events ────────────────────────────────────────────────────────────
@@ -84,13 +84,13 @@ const postEventRoute = createRoute({
   request: {
     body: {
       content: {
-        "application/json": { schema: eventPayloadSchema },
-      },
-    },
+        "application/json": { schema: eventPayloadSchema }
+      }
+    }
   },
   responses: {
-    200: { description: "Event received and processing", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Event received and processing"  }
+  }
 });
 
 app.openapi(postEventRoute, async (c) => {
@@ -113,9 +113,9 @@ app.openapi(postEventRoute, async (c) => {
         c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
         c.req.header("x-real-ip"),
       client_user_agent:
-        body.userData.client_user_agent || c.req.header("user-agent"),
+        body.userData.client_user_agent || c.req.header("user-agent")
     },
-    custom_data: body.customData,
+    custom_data: body.customData
   });
 
   if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
@@ -129,7 +129,7 @@ app.openapi(postEventRoute, async (c) => {
   return c.json({
     success: true,
     message: "Event received and is being processed.",
-    eventId: eventId,
+    eventId: eventId
   }, 200);
 });
 

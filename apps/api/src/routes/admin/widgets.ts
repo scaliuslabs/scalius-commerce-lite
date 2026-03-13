@@ -13,7 +13,7 @@ import {
     bulkDeactivateWidgets,
     restoreWidgets,
     createWidgetSchema,
-    updateWidgetSchema,
+    updateWidgetSchema
 } from "@scalius/core/modules/widgets";
 import { NotFoundError } from "../../utils/api-error";
 
@@ -27,8 +27,8 @@ const listRoute = createRoute({
     tags: ["Admin - Widgets"],
     summary: "List all widgets",
     responses: {
-        200: { description: "Widget list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Widget list"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -45,11 +45,11 @@ const createWidgetRoute = createRoute({
     tags: ["Admin - Widgets"],
     summary: "Create a widget",
     request: {
-        body: { content: { "application/json": { schema: createWidgetSchema } } },
+        body: { content: { "application/json": { schema: createWidgetSchema } } }
     },
     responses: {
-        201: { description: "Widget created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Widget created"  }
+    }
 });
 
 app.openapi(createWidgetRoute, async (c) => {
@@ -69,14 +69,14 @@ const bulkDeleteRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({ ids: z.array(z.string()), permanent: z.boolean().default(false) }),
-                },
-            },
-        },
+                    schema: z.object({ ids: z.array(z.string()), permanent: z.boolean().default(false) })
+                }
+            }
+        }
     },
     responses: {
-        204: { description: "Widgets deleted" },
-    },
+        204: { description: "Widgets deleted" }
+    }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
@@ -94,11 +94,11 @@ const bulkActivateRoute = createRoute({
     tags: ["Admin - Widgets"],
     summary: "Bulk activate widgets",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Widgets activated" },
-    },
+        204: { description: "Widgets activated" }
+    }
 });
 
 app.openapi(bulkActivateRoute, async (c) => {
@@ -115,11 +115,11 @@ const bulkDeactivateRoute = createRoute({
     tags: ["Admin - Widgets"],
     summary: "Bulk deactivate widgets",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Widgets deactivated" },
-    },
+        204: { description: "Widgets deactivated" }
+    }
 });
 
 app.openapi(bulkDeactivateRoute, async (c) => {
@@ -136,11 +136,11 @@ const bulkRestoreRoute = createRoute({
     tags: ["Admin - Widgets"],
     summary: "Bulk restore widgets",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Widgets restored" },
-    },
+        204: { description: "Widgets restored" }
+    }
 });
 
 app.openapi(bulkRestoreRoute, async (c) => {
@@ -156,12 +156,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Widgets"],
     summary: "Get a widget by ID",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Widget ID" }) }),
-    },
     responses: {
-        200: { description: "Widget details", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Widget details"  }
+    }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -180,12 +177,12 @@ const updateWidgetRoute = createRoute({
     tags: ["Admin - Widgets"],
     summary: "Update a widget",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Widget ID" }) }),
-        body: { content: { "application/json": { schema: updateWidgetSchema } } },
+        
+        body: { content: { "application/json": { schema: updateWidgetSchema } } }
     },
     responses: {
-        200: { description: "Widget updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Widget updated"  }
+    }
 });
 
 app.openapi(updateWidgetRoute, async (c) => {
@@ -206,12 +203,9 @@ const deleteWidgetRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Widgets"],
     summary: "Soft-delete a widget",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Widget ID" }) }),
-    },
     responses: {
-        204: { description: "Widget deleted" },
-    },
+        204: { description: "Widget deleted" }
+    }
 });
 
 app.openapi(deleteWidgetRoute, async (c) => {
@@ -228,12 +222,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Widgets"],
     summary: "Permanently delete a widget",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Widget ID" }) }),
-    },
     responses: {
-        204: { description: "Widget permanently deleted" },
-    },
+        204: { description: "Widget permanently deleted" }
+    }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {
@@ -250,12 +241,9 @@ const restoreWidgetRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Widgets"],
     summary: "Restore a soft-deleted widget",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Widget ID" }) }),
-    },
     responses: {
-        204: { description: "Widget restored" },
-    },
+        204: { description: "Widget restored" }
+    }
 });
 
 app.openapi(restoreWidgetRoute, async (c) => {
@@ -272,12 +260,9 @@ const toggleStatusRoute = createRoute({
     path: "/{id}/toggle-status",
     tags: ["Admin - Widgets"],
     summary: "Toggle widget active status",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Widget ID" }) }),
-    },
     responses: {
-        200: { description: "Widget status toggled", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Widget status toggled"  }
+    }
 });
 
 app.openapi(toggleStatusRoute, async (c) => {

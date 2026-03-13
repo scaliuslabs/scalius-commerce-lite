@@ -11,7 +11,7 @@ app.use(
   cacheMiddleware({
     ttl: 0,
     keyPrefix: "api:seo:",
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -30,14 +30,12 @@ const getSeoSettingsRoute = createRoute({
   summary: "Get SEO settings",
   responses: {
     200: {
-      description: "SEO settings",
-      content: { "application/json": { schema: z.object({ siteTitle: z.string().nullable(), homepageTitle: z.string().nullable(), homepageMetaDescription: z.string().nullable(), robotsTxt: z.string().nullable(), success: z.literal(true) }) } },
+      description: "SEO settings"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getSeoSettingsRoute, async (c) => {
@@ -47,7 +45,7 @@ app.openapi(getSeoSettingsRoute, async (c) => {
       siteTitle: siteSettings.siteTitle,
       homepageTitle: siteSettings.homepageTitle,
       homepageMetaDescription: siteSettings.homepageMetaDescription,
-      robotsTxt: siteSettings.robotsTxt,
+      robotsTxt: siteSettings.robotsTxt
     })
     .from(siteSettings)
     .limit(1);
@@ -59,13 +57,13 @@ app.openapi(getSeoSettingsRoute, async (c) => {
       homepageTitle: "Welcome to Scalius Commerce",
       homepageMetaDescription: "Your one-stop shop for everything amazing.",
       robotsTxt: "User-agent: *\nAllow: /",
-      success: true as const,
+      success: true as const
     }, 200);
   }
 
   return c.json({
     ...settings,
-    success: true as const,
+    success: true as const
   }, 200);
 });
 
