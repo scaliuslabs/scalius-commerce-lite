@@ -7,8 +7,8 @@
  */
 /**
  * CDN base URL resolved from env vars (R2_PUBLIC_URL or CDN_DOMAIN_URL).
- * In SSR (Hono Worker), these are available via import.meta.env.
- * Falls back to empty string which keeps bare keys as-is.
+ * Resolved lazily per-call (NOT at module init) because in Cloudflare Workers,
+ * import.meta.env values may differ between build time and runtime.
  */
 function resolveCdnBase(): string {
   const r2Url = import.meta.env?.R2_PUBLIC_URL;
@@ -22,8 +22,6 @@ function resolveCdnBase(): string {
 
   return '';
 }
-
-const CDN_BASE = resolveCdnBase();
 
 export function resolveMediaUrl(url: string | null | undefined): string {
   if (!url || url.trim() === "") return "";
@@ -63,5 +61,6 @@ export function resolveMediaUrl(url: string | null | undefined): string {
     return `/api/v1/media/${resolvedUrl}`;
   }
 
-  return `${CDN_BASE}/${resolvedUrl}`;
+  const cdnBase = resolveCdnBase();
+  return cdnBase ? `${cdnBase}/${resolvedUrl}` : resolvedUrl;
 }

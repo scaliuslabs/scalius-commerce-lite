@@ -1,8 +1,8 @@
 ---
-import { Image } from "astro:assets";
 import { Truck } from "lucide-react";
 import type { Product } from "@/lib/api";
 import { formatDiscountBadge } from "./lib/pricing-engine";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 interface Props {
   relatedProducts: Product[];
@@ -30,13 +30,14 @@ const formatPrice = (price: number) =>
             <a href={`/products/${relatedProduct.slug}`} class="group">
               <div class="aspect-square w-full overflow-hidden rounded-lg bg-muted shadow-sm border border-border group-hover:shadow-md transition-all duration-300 relative">
                 {relatedProduct.imageUrl ? (
-                  <Image
-                    src={relatedProduct.imageUrl}
+                  <img
+                    src={getOptimizedImageUrl(relatedProduct.imageUrl, { width: 300, height: 300 })}
                     alt={relatedProduct.name}
                     width={300}
                     height={300}
                     class="h-full w-full object-contain object-center group-hover:scale-105 transition-all duration-300 mix-blend-multiply"
-                    format="avif"
+                    loading="lazy"
+                    decoding="async"
                   />
                 ) : (
                   <div class="h-full w-full flex items-center justify-center bg-muted">

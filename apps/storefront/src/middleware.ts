@@ -64,9 +64,14 @@ function buildCacheKeyUrl(url: URL): URL {
 
 // Resolve Cloudflare env — in production `cfEnv` is populated by the adapter;
 // in local dev (wrangler) it may be empty, so fall back gracefully.
+//
+// IMPORTANT: Do NOT use Object.keys(cfEnv) to check for population.
+// In some Cloudflare Workers runtimes, env is a Proxy where Object.keys()
+// returns [] even though property access works. Instead, probe a known
+// binding (ASSETS is always present for Astro CF adapter).
 function getEnv(): Env | null {
   try {
-    if (cfEnv && Object.keys(cfEnv).length > 0) {
+    if (cfEnv != null && ((cfEnv as any).ASSETS || (cfEnv as any).CDN_DOMAIN_URL || (cfEnv as any).PUBLIC_API_URL)) {
       return cfEnv as unknown as Env;
     }
   } catch {
@@ -261,14 +266,28 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
 
 const apiContextMiddleware = defineMiddleware((context, next) => {
   const env = getEnv();
+
+  // Read CDN domain with direct cfEnv fallback in case getEnv() returned null
+  // but cfEnv property access still works (proxy object edge case).
+  let cdnDomain = env?.CDN_DOMAIN_URL as string | undefined;
+  if (!cdnDomain) {
+    try { cdnDomain = (cfEnv as any)?.CDN_DOMAIN_URL as string | undefined; } catch {}
+  }
+
   // Set module-level env vars for sync access by client.ts + media-url.ts
   setRuntimeEnv({
     PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,
     PUBLIC_API_BASE_URL: env?.PUBLIC_API_BASE_URL as string | undefined,
-    CDN_DOMAIN_URL: env?.CDN_DOMAIN_URL as string | undefined,
+    CDN_DOMAIN_URL: cdnDomain,
     STOREFRONT_URL: env?.STOREFRONT_URL as string | undefined,
     API_TOKEN: env?.API_TOKEN as string | undefined,
   });
+
+  // Also set on globalThis as a last-resort fallback for media-url.ts
+  // (in case the module-level store is somehow stale/empty during SSR rendering)
+  if (cdnDomain) {
+    (globalThis as any).__SCALIUS_CDN_DOMAIN__ = cdnDomain;
+  }
   return apiContext.run({
     BACKEND_API: env?.BACKEND_API as any,
     PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,

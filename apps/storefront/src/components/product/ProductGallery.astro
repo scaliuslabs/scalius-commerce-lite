@@ -29,7 +29,7 @@ function getCloudOptimizedUrl(url: string, width: number, height: number, qualit
   if (url.includes(cdnHost)) {
     const isFullUrl = url.startsWith('http');
     const relativePath = isFullUrl ? new URL(url).pathname : url;
-    return `https://${cdnHost}/cdn-cgi/image/width=${width},height=${height},quality=${quality},format=auto,fit=cover${relativePath}`;
+    return `https://${cdnHost}/cdn-cgi/image/onerror=redirect,width=${width},height=${height},quality=${quality},format=auto,fit=cover${relativePath}`;
   }
   return url;
 }
