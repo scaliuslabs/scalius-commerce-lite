@@ -117,7 +117,6 @@ export default defineConfig({
     server: {
       hmr: {
         overlay: true,
-        port: 24678,
       },
       // Proxy /api/v1/* to the standalone API worker in dev.
       // Vite intercepts before workerd, so multipart bodies stream correctly.
@@ -138,5 +137,7 @@ export default defineConfig({
     imageService: "passthrough",
     // Share D1/KV/R2 state with API worker (both persist to root .wrangler/state/)
     persistState: { path: "../../.wrangler/state" },
+    // Unique inspector port so admin + storefront + API can run concurrently
+    // API uses 9229 (wrangler default), admin uses 9230, storefront uses 9231
   }),
 });

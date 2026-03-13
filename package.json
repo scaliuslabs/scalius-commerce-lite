@@ -4,9 +4,9 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
-    "dev": "turbo dev --filter=@scalius/admin --filter=@scalius/api",
-    "dev:all": "turbo dev",
-    "dev:storefront": "turbo dev --filter=@scalius/storefront --filter=@scalius/api",
+    "dev": "bash scripts/dev.sh --filter=@scalius/admin --filter=@scalius/api",
+    "dev:all": "bash scripts/dev.sh",
+    "dev:storefront": "bash scripts/dev.sh --filter=@scalius/storefront --filter=@scalius/api",
     "build": "turbo build",
     "deploy": "node scripts/deploy.mjs",
     "deploy:api": "turbo deploy --filter=@scalius/api",

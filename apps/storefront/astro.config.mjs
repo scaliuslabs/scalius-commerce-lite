@@ -71,7 +71,6 @@ export default defineConfig({
     server: {
       hmr: {
         overlay: true,
-        port: 24679,
       },
     },
   },
@@ -82,5 +81,7 @@ export default defineConfig({
     // This avoids depending on Image Resizing being enabled on the app zone.
     imageService: "passthrough",
     persistState: { path: "../../.wrangler/state" },
+    // Unique inspector port so admin + storefront + API can run concurrently
+    // API uses 9229 (wrangler default), admin uses 9230, storefront uses 9231
   }),
 });
