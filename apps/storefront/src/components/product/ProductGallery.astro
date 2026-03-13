@@ -21,7 +21,7 @@ const hasMultipleImages = images.length > 1;
  * CDN domain resolved from Cloudflare Worker runtime env (wrangler.jsonc vars).
  */
 import { env as cfEnv } from "cloudflare:workers";
-const cdnDomainRaw = ((cfEnv as unknown as Env)?.CDN_DOMAIN_URL as string) || import.meta.env.CDN_DOMAIN_URL || '';
+const cdnDomainRaw = ((cfEnv as unknown as Env)?.CDN_DOMAIN_URL as string) || '';
 const cdnHost = cdnDomainRaw.replace(/^https?:\/\//, '');
 
 function getCloudOptimizedUrl(url: string, width: number, height: number, quality: number) {

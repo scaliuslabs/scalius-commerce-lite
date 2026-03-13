@@ -11,7 +11,7 @@ interface SendEmailOptions {
   text?: string;
 }
 
-const DEFAULT_FROM = "noreply@scalius.com";
+const DEFAULT_FROM = "noreply@example.com";
 
 /**
  * Fetch Resend settings (api key + sender) from the DB settings table.

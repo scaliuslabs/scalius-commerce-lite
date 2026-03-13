@@ -22,7 +22,7 @@ export default defineConfig({
   image: {
     // Allow images from R2 bucket domain
     domains: [
-      process.env.CDN_DOMAIN_URL || "cdn.scalius.com",
+      ...(process.env.CDN_DOMAIN_URL ? [process.env.CDN_DOMAIN_URL] : []),
       // Add R2 public URL domain (extract from env var)
       ...(process.env.R2_PUBLIC_URL ? [new URL(process.env.R2_PUBLIC_URL).hostname] : []),
     ],

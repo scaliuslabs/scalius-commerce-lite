@@ -78,11 +78,11 @@ const bodyEndScripts = analyticsScripts.filter(
 );
 
 // Derive preconnect origins from Cloudflare Worker env (wrangler.jsonc vars).
-// Falls back to import.meta.env for environments where runtime isn't available.
+// All values come from runtime bindings — no build-time fallbacks.
 import { env as cfEnv } from "cloudflare:workers";
-const workerEnv = (() => { try { return Object.keys(cfEnv).length > 0 ? (cfEnv as unknown as Env) : null; } catch { return null; } })();
-const publicApiUrl = (workerEnv?.PUBLIC_API_URL as string) || import.meta.env.PUBLIC_API_URL || "";
-const cdnDomainUrl = (workerEnv?.CDN_DOMAIN_URL as string) || import.meta.env.CDN_DOMAIN_URL || "";
+const workerEnv = (() => { try { const e = cfEnv as unknown as Env; return (e?.CDN_DOMAIN_URL || e?.PUBLIC_API_URL) ? e : null; } catch { return null; } })();
+const publicApiUrl = (workerEnv?.PUBLIC_API_URL as string) || "";
+const cdnDomainUrl = (workerEnv?.CDN_DOMAIN_URL as string) || "";
 
 const apiOrigin = publicApiUrl ? new URL(publicApiUrl).origin : null;
 const cdnDomain = cdnDomainUrl || null;

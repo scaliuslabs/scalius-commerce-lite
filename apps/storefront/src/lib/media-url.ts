@@ -14,8 +14,9 @@ import { getRuntimeCdnDomain } from "./api/runtime-env";
  * 2. globalThis.__SCALIUS_CDN_DOMAIN__ — fallback set by middleware
  * Resolution order (Client):
  * 3. window.__CDN_DOMAIN__ — injected by Layout.astro
- * Fallback:
- * 4. import.meta.env.CDN_DOMAIN_URL — build-time from .env (if present)
+ *
+ * All values come from Cloudflare Worker runtime env (wrangler.jsonc vars).
+ * No build-time baking — .dev.vars and .env files do NOT affect this.
  */
 function getCdnBase(): string {
   // SSR: runtime env from middleware
@@ -33,10 +34,6 @@ function getCdnBase(): string {
     const d = (window as any).__CDN_DOMAIN__;
     return d.startsWith('http') ? d : `https://${d}`;
   }
-
-  // Build-time fallback (from .env if present)
-  const envDomain = import.meta.env.CDN_DOMAIN_URL;
-  if (envDomain) return `https://${envDomain.replace(/^https?:\/\//, '')}`;
 
   return '';
 }

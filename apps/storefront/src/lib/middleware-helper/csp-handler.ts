@@ -169,7 +169,7 @@ async function getFrameSrcDirectives(env?: any): Promise<string[]> {
 // Generate img-src directives
 async function getImgSrcDirectives(env?: any): Promise<string[]> {
   const additionalDomains = await parseAdditionalDomains(env);
-  const cdnUrl = (env?.CDN_DOMAIN_URL || import.meta.env.CDN_DOMAIN_URL || "")?.trim();
+  const cdnUrl = (env?.CDN_DOMAIN_URL || "")?.trim();
   const directives = [
     ...ESSENTIAL_IMG_SRC,
     "https://www.facebook.com", // For Facebook Pixel noscript tag
