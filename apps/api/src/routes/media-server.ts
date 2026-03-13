@@ -7,7 +7,7 @@ const app = new OpenAPIHono<{ Bindings: any }>();
 
 const getMediaRoute = createRoute({
   method: "get",
-  path: "/:key",
+  path: "/{key}",
   tags: ["Media Server"],
   summary: "Serve R2 objects in local development",
   request: {

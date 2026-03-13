@@ -39,7 +39,7 @@ app.use(
 
 const getOrderRoute = createRoute({
   method: "get",
-  path: "/:id",
+  path: "/{id}",
   tags: ["Orders"],
   summary: "Get order by ID",
   request: {
@@ -129,7 +129,7 @@ app.openapi(getOrderRoute, async (c) => {
 
 const getOrderStatusRoute = createRoute({
   method: "get",
-  path: "/status/:token",
+  path: "/status/{token}",
   tags: ["Orders"],
   summary: "Check order processing status by checkout token",
   request: {
