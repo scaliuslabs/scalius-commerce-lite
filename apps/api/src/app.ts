@@ -1,6 +1,6 @@
 // src/server/index.ts
 
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import { getDb } from "@scalius/database/client";
@@ -41,7 +41,7 @@ import { metaConversionsRoutes } from "./routes/meta-conversions";
 import { storefrontRoutes } from "./routes/storefront";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
-import { openApiSpec } from "./openapi";
+import { ApiError } from "./utils/api-error";
 import { serveMediaRoute } from "./routes/media-server";
 import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 
@@ -72,9 +72,9 @@ import { adminOpenRouterRoutes } from "./routes/admin/openrouter";
 import { adminAttributesRoutes } from "./routes/admin/attributes";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 
-// Create typed Hono app with Cloudflare Workers Env bindings
+// Create typed OpenAPIHono app with Cloudflare Workers Env bindings
 // basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
-const app = new Hono<{ Bindings: Env }>().basePath("/api/v1");
+const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
 // NOTE: Do NOT add compress() middleware here. Cloudflare Workers handles
 // compression at the edge automatically. Application-level compression
@@ -126,13 +126,29 @@ app.use("*", async (c, next) => {
   } catch (error) {
     console.error("API Error:", error);
 
+    if (error instanceof ApiError) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+          },
+        },
+        error.status as any,
+      );
+    }
+
     if (error instanceof Error) {
       return c.json(
         {
           success: false,
-          error: error.message,
-          stack:
-            process.env.NODE_ENV === "development" ? error.stack : undefined,
+          error: {
+            code: "INTERNAL_ERROR",
+            message: error.message,
+            ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
+          },
         },
         500,
       );
@@ -141,7 +157,10 @@ app.use("*", async (c, next) => {
     return c.json(
       {
         success: false,
-        error: "Internal Server Error",
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Internal Server Error",
+        },
       },
       500,
     );
@@ -291,8 +310,26 @@ app.get("/docs", swaggerUI({ url: "/api/v1/openapi.json" }));
 
 // Add OpenAPI specification (relative path '/openapi.json')
 // OpenAPI server URL should still reflect the entry point
-app.get("/openapi.json", (c) => {
-  return c.json(openApiSpec);
+app.doc("/openapi.json", {
+  openapi: "3.0.0",
+  info: {
+    title: "Scalius Commerce API",
+    version: "1.0.0",
+    description: "E-commerce platform API powering admin dashboard and storefront",
+  },
+  servers: [
+    { url: "/api/v1", description: "API v1" },
+  ],
+  security: [
+    { bearerAuth: [] },
+  ],
+});
+
+// Register the security scheme for the OpenAPI spec
+app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
+  type: "http",
+  scheme: "bearer",
+  bearerFormat: "JWT",
 });
 
 // Export the main app

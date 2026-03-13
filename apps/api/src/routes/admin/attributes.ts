@@ -1,16 +1,13 @@
 // src/server/routes/admin/attributes.ts
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+// Admin OpenAPI routes for product attributes.
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
 import { sql, eq, and, or, like, asc, desc, count, inArray, isNull } from "drizzle-orm";
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
+import { NotFoundError, ConflictError } from "../../utils/api-error";
 
-const app = new Hono<{
-    Variables: {
-        db: any;
-    };
-}>();
+const app = new OpenAPIHono();
 
 const createAttributeSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters long"),
@@ -33,15 +30,56 @@ const updateAttributeSchema = z.object({
     options: z.array(z.string()).optional().nullable(),
 });
 
-app.get("/", async (c) => {
+const bulkActionSchema = z.object({
+    ids: z.array(z.string()).min(1, "No IDs provided"),
+    permanent: z.boolean().default(false),
+});
+
+const addValueSchema = z.object({
+    value: z.string().min(1, "Value is required"),
+});
+
+const updateValueSchema = z.object({
+    oldValue: z.string().min(1, "Old value is required"),
+    newValue: z.string().min(1, "New value is required"),
+});
+
+const deleteValueSchema = z.object({
+    value: z.string().min(1, "Value is required"),
+});
+
+// ── List Attributes ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Attributes"],
+    summary: "List all product attributes",
+    request: {
+        query: z.object({
+            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().default(10).openapi({ description: "Items per page" }),
+            search: z.string().optional().default("").openapi({ description: "Search term" }),
+            sort: z.string().optional().default("name").openapi({ description: "Sort field" }),
+            order: z.string().optional().default("asc").openapi({ description: "Sort order" }),
+            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
+        }),
+    },
+    responses: {
+        200: { description: "Attribute list with pagination", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     try {
-        const page = parseInt(c.req.query("page") || "1");
-        const limit = parseInt(c.req.query("limit") || "10");
-        const search = c.req.query("search") || "";
-        const sortField = (c.req.query("sort") || "name") as any;
-        const sortOrder = (c.req.query("order") || "asc") as "asc" | "desc";
-        const showTrashed = c.req.query("trashed") === "true";
+        const query = c.req.valid("query");
+        const page = query.page;
+        const limit = query.limit;
+        const search = query.search || "";
+        const sortField = (query.sort || "name") as any;
+        const sortOrder = (query.order || "asc") as "asc" | "desc";
+        const showTrashed = query.trashed === "true";
 
         const offset = (page - 1) * limit;
 
@@ -115,14 +153,29 @@ app.get("/", async (c) => {
                 total,
                 totalPages: Math.ceil(total / limit),
             },
-        });
+        }, 200);
     } catch (error) {
         console.error("Error fetching attributes:", error);
         return c.json({ error: "Failed to fetch attributes" }, 500);
     }
 });
 
-app.post("/", zValidator("json", createAttributeSchema), async (c) => {
+// ── Create Attribute ──
+
+const createAttributeRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Attributes"],
+    summary: "Create a product attribute",
+    request: {
+        body: { content: { "application/json": { schema: createAttributeSchema } } },
+    },
+    responses: {
+        201: { description: "Attribute created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(createAttributeRoute, async (c) => {
     const db = c.get("db");
     try {
         const data = c.req.valid("json");
@@ -137,7 +190,7 @@ app.post("/", zValidator("json", createAttributeSchema), async (c) => {
             .get();
 
         if (existingAttribute) {
-            return c.json({ error: "An attribute with that name or slug already exists." }, 409);
+            throw new ConflictError("An attribute with that name or slug already exists.");
         }
 
         const newAttributeId = "attr_" + nanoid();
@@ -156,14 +209,31 @@ app.post("/", zValidator("json", createAttributeSchema), async (c) => {
 
         return c.json({ data: insertedAttribute }, 201);
     } catch (error: any) {
+        if (error.name === "ConflictError") throw error;
         console.error("Error creating attribute:", error);
         return c.json({ error: "Failed to create attribute" }, 500);
     }
 });
 
-app.put("/:id", zValidator("json", updateAttributeSchema), async (c) => {
+// ── Update Attribute ──
+
+const updateAttributeRoute = createRoute({
+    method: "put",
+    path: "/{id}",
+    tags: ["Admin - Attributes"],
+    summary: "Update a product attribute",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
+        body: { content: { "application/json": { schema: updateAttributeSchema } } },
+    },
+    responses: {
+        200: { description: "Attribute updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateAttributeRoute, async (c) => {
     const db = c.get("db");
-    const id = c.req.param("id");
+    const { id } = c.req.valid("param");
 
     try {
         const data = c.req.valid("json");
@@ -180,7 +250,7 @@ app.put("/:id", zValidator("json", updateAttributeSchema), async (c) => {
                 .get();
 
             if (existingAttribute) {
-                return c.json({ error: "An attribute with that name or slug already exists." }, 409);
+                throw new ConflictError("An attribute with that name or slug already exists.");
             }
         }
 
@@ -193,20 +263,34 @@ app.put("/:id", zValidator("json", updateAttributeSchema), async (c) => {
             .where(eq(productAttributes.id, id))
             .returning();
 
-        if (!updatedAttribute) {
-            return c.json({ error: "Attribute not found" }, 404);
-        }
+        if (!updatedAttribute) throw new NotFoundError("Attribute not found");
 
         return c.json({ data: updatedAttribute }, 200);
-    } catch (error) {
+    } catch (error: any) {
+        if (error.name === "NotFoundError" || error.name === "ConflictError") throw error;
         console.error(`Error updating attribute ${id}:`, error);
         return c.json({ error: "Failed to update attribute" }, 500);
     }
 });
 
-app.delete("/:id", async (c) => {
+// ── Delete Attribute ──
+
+const deleteAttributeRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Attributes"],
+    summary: "Soft-delete a product attribute",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
+    },
+    responses: {
+        204: { description: "Attribute deleted" },
+    },
+});
+
+app.openapi(deleteAttributeRoute, async (c) => {
     const db = c.get("db");
-    const id = c.req.param("id");
+    const { id } = c.req.valid("param");
 
     try {
         const usage = await db
@@ -222,7 +306,6 @@ app.delete("/:id", async (c) => {
         if (usage.length > 0) {
             const productNames = usage.map((p: any) => p.productName).join(", ");
             const errorMessage = `Cannot delete. Attribute is used by ${usage.length}${usage.length < 5 ? "" : "+"} product(s), including: ${productNames}.`;
-
             return c.json({ error: "Attribute in use", message: errorMessage }, 409);
         }
 
@@ -231,35 +314,60 @@ app.delete("/:id", async (c) => {
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(eq(productAttributes.id, id));
 
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204 }) as any;
     } catch (error) {
         console.error(`Error deleting attribute ${id}:`, error);
         return c.json({ error: "Failed to delete attribute" }, 500);
     }
 });
 
-app.delete("/:id/permanent", async (c) => {
+// ── Permanent Delete Attribute ──
+
+const permanentDeleteRoute = createRoute({
+    method: "delete",
+    path: "/{id}/permanent",
+    tags: ["Admin - Attributes"],
+    summary: "Permanently delete a product attribute",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
+    },
+    responses: {
+        204: { description: "Attribute permanently deleted" },
+    },
+});
+
+app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
-    const id = c.req.param("id");
+    const { id } = c.req.valid("param");
 
     try {
         await db
             .delete(productAttributes)
             .where(eq(productAttributes.id, id));
 
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204 }) as any;
     } catch (error) {
         console.error(`Error permanently deleting attribute ${id}:`, error);
         return c.json({ error: "Failed to permanently delete attribute" }, 500);
     }
 });
 
-const bulkActionSchema = z.object({
-    ids: z.array(z.string()).min(1, "No IDs provided"),
-    permanent: z.boolean().default(false),
+// ── Bulk Delete Attributes ──
+
+const bulkDeleteRoute = createRoute({
+    method: "post",
+    path: "/bulk-delete",
+    tags: ["Admin - Attributes"],
+    summary: "Bulk delete attributes",
+    request: {
+        body: { content: { "application/json": { schema: bulkActionSchema } } },
+    },
+    responses: {
+        204: { description: "Attributes deleted" },
+    },
 });
 
-app.post("/bulk-delete", zValidator("json", bulkActionSchema), async (c) => {
+app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     try {
         const { ids, permanent } = c.req.valid("json");
@@ -273,14 +381,29 @@ app.post("/bulk-delete", zValidator("json", bulkActionSchema), async (c) => {
                 .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
                 .where(inArray(productAttributes.id, ids));
         }
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204 }) as any;
     } catch (error) {
         console.error("Error bulk deleting attributes:", error);
         return c.json({ error: "Failed to bulk delete attributes" }, 500);
     }
 });
 
-app.post("/bulk-restore", zValidator("json", bulkActionSchema), async (c) => {
+// ── Bulk Restore Attributes ──
+
+const bulkRestoreRoute = createRoute({
+    method: "post",
+    path: "/bulk-restore",
+    tags: ["Admin - Attributes"],
+    summary: "Bulk restore attributes",
+    request: {
+        body: { content: { "application/json": { schema: bulkActionSchema } } },
+    },
+    responses: {
+        204: { description: "Attributes restored" },
+    },
+});
+
+app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     try {
         const { ids } = c.req.valid("json");
@@ -288,17 +411,38 @@ app.post("/bulk-restore", zValidator("json", bulkActionSchema), async (c) => {
             .update(productAttributes)
             .set({ deletedAt: null })
             .where(inArray(productAttributes.id, ids));
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204 }) as any;
     } catch (error) {
         console.error("Error bulk restoring attributes:", error);
         return c.json({ error: "Failed to bulk restore attributes" }, 500);
     }
 });
 
-// GET: List all unique values for an attribute with product counts
-app.get("/:id/values", async (c) => {
+// ── List Attribute Values ──
+
+const listValuesRoute = createRoute({
+    method: "get",
+    path: "/{id}/values",
+    tags: ["Admin - Attributes"],
+    summary: "List all unique values for an attribute",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
+        query: z.object({
+            search: z.string().optional().openapi({ description: "Filter values" }),
+            sort: z.string().optional().default("desc").openapi({ description: "Sort order" }),
+            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().default(20).openapi({ description: "Items per page" }),
+        }),
+    },
+    responses: {
+        200: { description: "Attribute values", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listValuesRoute, async (c) => {
     const db = c.get("db");
-    const attributeId = c.req.param("id");
+    const { id: attributeId } = c.req.valid("param");
+    const query = c.req.valid("query");
 
     try {
         const attribute = await db
@@ -312,14 +456,12 @@ app.get("/:id/values", async (c) => {
             )
             .get();
 
-        if (!attribute) {
-            return c.json({ error: "Attribute not found" }, 404);
-        }
+        if (!attribute) throw new NotFoundError("Attribute not found");
 
         const allRows = await db
             .select({
                 value: productAttributeValues.value,
-                createdAt: productAttributeValues.createdAt, // We want oldest
+                createdAt: productAttributeValues.createdAt,
                 productName: products.name,
             })
             .from(productAttributeValues)
@@ -369,23 +511,22 @@ app.get("/:id/values", async (c) => {
         }
 
         let allValues = Array.from(valueMap.values());
-        const search = c.req.query("search");
-        if (search) {
-            const lowerSearch = search.toLowerCase();
+        if (query.search) {
+            const lowerSearch = query.search.toLowerCase();
             allValues = allValues.filter((v) =>
                 v.value.toLowerCase().includes(lowerSearch)
             );
         }
 
-        const sort = c.req.query("sort") || "desc";
+        const sort = query.sort || "desc";
         allValues.sort((a, b) => {
             const timeA = new Date(a.createdAt * 1000).getTime();
             const timeB = new Date(b.createdAt * 1000).getTime();
             return sort === "asc" ? timeA - timeB : timeB - timeA;
         });
 
-        const page = parseInt(c.req.query("page") || "1");
-        const limit = parseInt(c.req.query("limit") || "20");
+        const page = query.page;
+        const limit = query.limit;
         const offset = (page - 1) * limit;
         const paginatedValues = allValues.slice(offset, offset + limit);
 
@@ -396,20 +537,33 @@ app.get("/:id/values", async (c) => {
             totalValues: allValues.length,
             page,
             totalPages: Math.ceil(allValues.length / limit),
-        });
-    } catch (error) {
+        }, 200);
+    } catch (error: any) {
+        if (error.name === "NotFoundError") throw error;
         console.error("Error fetching attribute values:", error);
         return c.json({ error: "Failed to fetch attribute values" }, 500);
     }
 });
 
-const addValueSchema = z.object({
-    value: z.string().min(1, "Value is required"),
+// ── Add Attribute Value ──
+
+const addValueRoute = createRoute({
+    method: "post",
+    path: "/{id}/values",
+    tags: ["Admin - Attributes"],
+    summary: "Add a preset value to an attribute",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
+        body: { content: { "application/json": { schema: addValueSchema } } },
+    },
+    responses: {
+        200: { description: "Value added", content: { "application/json": { schema: z.any() } } },
+    },
 });
 
-app.post("/:id/values", zValidator("json", addValueSchema), async (c) => {
+app.openapi(addValueRoute, async (c) => {
     const db = c.get("db");
-    const attributeId = c.req.param("id");
+    const { id: attributeId } = c.req.valid("param");
 
     try {
         const { value } = c.req.valid("json");
@@ -420,7 +574,7 @@ app.post("/:id/values", zValidator("json", addValueSchema), async (c) => {
             .where(eq(productAttributes.id, attributeId))
             .get();
 
-        if (!attribute) return c.json({ error: "Attribute not found" }, 404);
+        if (!attribute) throw new NotFoundError("Attribute not found");
 
         const currentOptions = (attribute.options as string[]) || [];
         if (!currentOptions.includes(value)) {
@@ -432,19 +586,31 @@ app.post("/:id/values", zValidator("json", addValueSchema), async (c) => {
         }
 
         return c.json({ success: true }, 200);
-    } catch (error) {
+    } catch (error: any) {
+        if (error.name === "NotFoundError") throw error;
         return c.json({ error: "Failed" }, 500);
     }
 });
 
-const updateValueSchema = z.object({
-    oldValue: z.string().min(1, "Old value is required"),
-    newValue: z.string().min(1, "New value is required"),
+// ── Update Attribute Value ──
+
+const updateValueRoute = createRoute({
+    method: "put",
+    path: "/{id}/values",
+    tags: ["Admin - Attributes"],
+    summary: "Rename an attribute value across all products",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
+        body: { content: { "application/json": { schema: updateValueSchema } } },
+    },
+    responses: {
+        200: { description: "Value updated", content: { "application/json": { schema: z.any() } } },
+    },
 });
 
-app.put("/:id/values", zValidator("json", updateValueSchema), async (c) => {
+app.openapi(updateValueRoute, async (c) => {
     const db = c.get("db");
-    const attributeId = c.req.param("id");
+    const { id: attributeId } = c.req.valid("param");
 
     try {
         const { oldValue, newValue } = c.req.valid("json");
@@ -488,13 +654,25 @@ app.put("/:id/values", zValidator("json", updateValueSchema), async (c) => {
     }
 });
 
-const deleteValueSchema = z.object({
-    value: z.string().min(1, "Value is required"),
+// ── Delete Attribute Value ──
+
+const deleteValueRoute = createRoute({
+    method: "delete",
+    path: "/{id}/values",
+    tags: ["Admin - Attributes"],
+    summary: "Delete an attribute value from all products",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
+        body: { content: { "application/json": { schema: deleteValueSchema } } },
+    },
+    responses: {
+        200: { description: "Value deleted", content: { "application/json": { schema: z.any() } } },
+    },
 });
 
-app.delete("/:id/values", zValidator("json", deleteValueSchema), async (c) => {
+app.openapi(deleteValueRoute, async (c) => {
     const db = c.get("db");
-    const attributeId = c.req.param("id");
+    const { id: attributeId } = c.req.valid("param");
 
     try {
         const { value } = c.req.valid("json");

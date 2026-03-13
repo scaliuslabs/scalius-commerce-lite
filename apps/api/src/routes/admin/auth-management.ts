@@ -1,20 +1,14 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+// src/server/routes/admin/auth-management.ts
+// Admin OpenAPI routes for auth management (users, profile, 2FA, setup).
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, count } from "drizzle-orm";
 import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
 import { createAuth } from "@scalius/core/auth";
 import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
 import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
-const app = new Hono<{
-    Variables: {
-        db: any;
-        user: any;
-        session: any;
-        env: any;
-    };
-}>();
+const app = new OpenAPIHono();
 
 // Generate a secure random password
 function generateTempPassword(length = 16): string {
@@ -29,20 +23,28 @@ function generateTempPassword(length = 16): string {
 }
 
 // ─────────────────────────────────────────
-// Admin Users Management (formerly admin-users.ts)
+// Admin Users Management
 // ─────────────────────────────────────────
 
-app.get("/users", async (c) => {
+const listUsersRoute = createRoute({
+    method: "get",
+    path: "/users",
+    tags: ["Admin - Auth Management"],
+    summary: "List all admin users",
+    responses: {
+        200: { description: "Admin user list", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listUsersRoute, async (c) => {
     try {
         const db = c.get("db");
-        // Verify the user is authenticated and is an admin
         const sessionUser = c.get("user");
 
         if (sessionUser.role !== "admin") {
             return c.json({ error: "Forbidden", message: "Only administrators can access this resource" }, 403);
         }
 
-        // Get all admin users
         const adminUsers = await db
             .select({
                 id: user.id,
@@ -57,7 +59,6 @@ app.get("/users", async (c) => {
             .from(user)
             .where(eq(user.role, "admin"));
 
-        // Get roles for each user
         const usersWithRoles = await Promise.all(
             adminUsers.map(async (adminUser: any) => {
                 const userRoleData = await db
@@ -99,11 +100,24 @@ app.get("/users", async (c) => {
 
 const createAdminSchema = z.object({
     name: z.string().min(1),
-    email: z.email(),
+    email: z.string().email(),
     roleId: z.string().optional(),
 });
 
-app.post("/users", zValidator("json", createAdminSchema), async (c) => {
+const createUserRoute = createRoute({
+    method: "post",
+    path: "/users",
+    tags: ["Admin - Auth Management"],
+    summary: "Create a new admin user",
+    request: {
+        body: { content: { "application/json": { schema: createAdminSchema } } },
+    },
+    responses: {
+        201: { description: "Admin user created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(createUserRoute, async (c) => {
     try {
         const db = c.get("db");
         const sessionUser = c.get("user");
@@ -164,11 +178,24 @@ app.post("/users", zValidator("json", createAdminSchema), async (c) => {
     }
 });
 
-app.delete("/users/:id", async (c) => {
+const deleteUserRoute = createRoute({
+    method: "delete",
+    path: "/users/{id}",
+    tags: ["Admin - Auth Management"],
+    summary: "Delete an admin user",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "User ID" }) }),
+    },
+    responses: {
+        200: { description: "User deleted", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(deleteUserRoute, async (c) => {
     try {
         const db = c.get("db");
         const sessionUser = c.get("user");
-        const userId = c.req.param("id");
+        const { id: userId } = c.req.valid("param");
 
         if (sessionUser.role !== "admin") {
             return c.json({ error: "Forbidden", message: "Only administrators can delete admin users" }, 403);
@@ -195,7 +222,7 @@ app.delete("/users/:id", async (c) => {
 });
 
 // ─────────────────────────────────────────
-// Profile & Password (formerly change-password.ts, update-profile.ts)
+// Profile & Password
 // ─────────────────────────────────────────
 
 const changePasswordSchema = z.object({
@@ -203,7 +230,20 @@ const changePasswordSchema = z.object({
     newPassword: z.string().min(8, "New password must be at least 8 characters"),
 });
 
-app.post("/change-password", zValidator("json", changePasswordSchema), async (c) => {
+const changePasswordRoute = createRoute({
+    method: "post",
+    path: "/change-password",
+    tags: ["Admin - Auth Management"],
+    summary: "Change current user password",
+    request: {
+        body: { content: { "application/json": { schema: changePasswordSchema } } },
+    },
+    responses: {
+        200: { description: "Password changed", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(changePasswordRoute, async (c) => {
     try {
         const env = c.get("env") || process.env;
         const auth = createAuth(env);
@@ -228,10 +268,23 @@ app.post("/change-password", zValidator("json", changePasswordSchema), async (c)
 
 const updateProfileSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters").optional(),
-    image: z.url().optional().nullable(),
+    image: z.string().url().optional().nullable(),
 });
 
-app.post("/update-profile", zValidator("json", updateProfileSchema), async (c) => {
+const updateProfileRoute = createRoute({
+    method: "post",
+    path: "/update-profile",
+    tags: ["Admin - Auth Management"],
+    summary: "Update current user profile",
+    request: {
+        body: { content: { "application/json": { schema: updateProfileSchema } } },
+    },
+    responses: {
+        200: { description: "Profile updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateProfileRoute, async (c) => {
     try {
         const db = c.get("db");
         const sessionUser = c.get("user");
@@ -257,10 +310,20 @@ app.post("/update-profile", zValidator("json", updateProfileSchema), async (c) =
 });
 
 // ─────────────────────────────────────────
-// 2FA Management (formerly get-2fa-info.ts, mark-2fa-verified.ts, update-2fa-method.ts, verify-2fa.ts)
+// 2FA Management
 // ─────────────────────────────────────────
 
-app.get("/2fa/info", async (c) => {
+const get2faInfoRoute = createRoute({
+    method: "get",
+    path: "/2fa/info",
+    tags: ["Admin - Auth Management"],
+    summary: "Get 2FA info for current user",
+    responses: {
+        200: { description: "2FA info", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(get2faInfoRoute, async (c) => {
     try {
         const db = c.get("db");
         const sessionUser = c.get("user");
@@ -284,7 +347,17 @@ app.get("/2fa/info", async (c) => {
     }
 });
 
-app.post("/2fa/mark-verified", async (c) => {
+const mark2faVerifiedRoute = createRoute({
+    method: "post",
+    path: "/2fa/mark-verified",
+    tags: ["Admin - Auth Management"],
+    summary: "Mark session as 2FA verified",
+    responses: {
+        200: { description: "Session marked as verified", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(mark2faVerifiedRoute, async (c) => {
     try {
         const db = c.get("db");
         const sessionUser = c.get("user");
@@ -302,7 +375,20 @@ app.post("/2fa/mark-verified", async (c) => {
     }
 });
 
-app.post("/2fa/method", zValidator("json", z.object({ method: z.enum(["totp", "email"]) })), async (c) => {
+const update2faMethodRoute = createRoute({
+    method: "post",
+    path: "/2fa/method",
+    tags: ["Admin - Auth Management"],
+    summary: "Update 2FA method",
+    request: {
+        body: { content: { "application/json": { schema: z.object({ method: z.enum(["totp", "email"]) }) } } },
+    },
+    responses: {
+        200: { description: "Method updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(update2faMethodRoute, async (c) => {
     try {
         const db = c.get("db");
         const sessionUser = c.get("user");
@@ -316,7 +402,30 @@ app.post("/2fa/method", zValidator("json", z.object({ method: z.enum(["totp", "e
     }
 });
 
-app.post("/2fa/verify", zValidator("json", z.object({ code: z.string(), trustDevice: z.boolean().optional(), type: z.string().optional().default("totp") })), async (c) => {
+const verify2faRoute = createRoute({
+    method: "post",
+    path: "/2fa/verify",
+    tags: ["Admin - Auth Management"],
+    summary: "Verify 2FA code",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        code: z.string(),
+                        trustDevice: z.boolean().optional(),
+                        type: z.string().optional().default("totp"),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: { description: "2FA verified", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(verify2faRoute, async (c) => {
     try {
         const db = c.get("db");
         const env = c.get("env") || process.env;
@@ -353,31 +462,36 @@ app.post("/2fa/verify", zValidator("json", z.object({ code: z.string(), trustDev
 });
 
 // ─────────────────────────────────────────
-// Setup Endpoint (formerly setup.ts)
-// NOTE: This endpoint explicitly BYPASSES normal auth
+// Setup Endpoint (bypasses normal auth)
 // ─────────────────────────────────────────
 
-// We define a separate standalone router for unauthenticated routes like `/setup`
-const setupApp = new Hono<{
-    Bindings: Env;
-    Variables: {
-        db: any;
-    };
-}>();
+const setupApp = new OpenAPIHono();
 
 const setupSchema = z.object({
     name: z.string().min(1),
-    email: z.email(),
+    email: z.string().email(),
     password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
-setupApp.post("/", zValidator("json", setupSchema), async (c) => {
+const setupRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Setup"],
+    summary: "Initial admin setup (first user only)",
+    request: {
+        body: { content: { "application/json": { schema: setupSchema } } },
+    },
+    responses: {
+        201: { description: "Admin account created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+setupApp.openapi(setupRoute, async (c) => {
     try {
         const db = c.get("db");
         const env = c.env;
         const auth = createAuth(env);
 
-        // SECURITY CHECK: Only allow setup when NO admin users exist
         const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
         const adminExists = adminResult[0]?.count > 0;
 
@@ -395,7 +509,6 @@ setupApp.post("/", zValidator("json", setupSchema), async (c) => {
 
         await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));
 
-        // Seed RBAC permissions and roles so the dashboard works immediately
         const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
         await autoSeedRbacIfNeeded(db);
 

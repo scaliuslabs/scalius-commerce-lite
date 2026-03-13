@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { analytics, type Analytics } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
@@ -8,7 +8,7 @@ import {
   shouldUsePartytown,
 } from "@scalius/core/integrations/analytics";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware
 app.use(
@@ -16,38 +16,51 @@ app.use(
   cacheMiddleware({
     ttl: 0,
     keyPrefix: "api:analytics:",
-    varyByQuery: false, // Configs are global for now
+    varyByQuery: false,
     methods: ["GET"],
   }),
 );
 
-app.get("/configurations", async (c) => {
-  try {
-    const db = c.get("db");
-    const activeAnalyticsScriptsFromDB = await db
-      .select()
-      .from(analytics)
-      .where(eq(analytics.isActive, true))
-      .all();
+// GET /analytics/configurations — get active analytics configurations
+const getConfigurationsRoute = createRoute({
+  method: "get",
+  path: "/configurations",
+  tags: ["Analytics"],
+  summary: "Get active analytics configurations",
+  responses: {
+    200: {
+      description: "Active analytics configurations",
+      content: { "application/json": { schema: z.object({ analytics: z.array(z.any()) }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
+});
 
-    const processedScripts = activeAnalyticsScriptsFromDB.map(
-      (script: Analytics) => {
-        let processedConfig = script.config;
-        if (shouldUsePartytown(script)) {
-          processedConfig = processAnalyticsScript(script);
-        }
-        return {
-          ...script,
-          config: processedConfig,
-        };
-      },
-    );
+app.openapi(getConfigurationsRoute, async (c) => {
+  const db = c.get("db");
+  const activeAnalyticsScriptsFromDB = await db
+    .select()
+    .from(analytics)
+    .where(eq(analytics.isActive, true))
+    .all();
 
-    return c.json({ analytics: processedScripts });
-  } catch (error) {
-    console.error("Error fetching analytics configurations:", error);
-    return c.json({ error: "Failed to fetch analytics configurations" }, 500);
-  }
+  const processedScripts = activeAnalyticsScriptsFromDB.map(
+    (script: Analytics) => {
+      let processedConfig = script.config;
+      if (shouldUsePartytown(script)) {
+        processedConfig = processAnalyticsScript(script);
+      }
+      return {
+        ...script,
+        config: processedConfig,
+      };
+    },
+  );
+
+  return c.json({ analytics: processedScripts }, 200);
 });
 
 export { app as analyticsRoutes };

@@ -1,16 +1,25 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { db } from "@scalius/database/client";
 import { settings, siteSettings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-const app = new Hono<{ Bindings: any, Variables: any }>();
+const app = new OpenAPIHono();
 const MASKED = "••••••••••••";
 
 // ─────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────
-app.get("/auth", async (c) => {
+
+const getAuthRoute = createRoute({
+    method: "get",
+    path: "/auth",
+    tags: ["Admin - Settings"],
+    summary: "Get auth/checkout settings",
+    responses: { 200: { description: "Auth settings", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getAuthRoute, async (c) => {
     try {
         const [row] = await db.select().from(siteSettings).limit(1);
         if (!row) return c.json({ message: "Settings not found" }, 404);
@@ -24,13 +33,21 @@ app.get("/auth", async (c) => {
             checkoutMode: row.checkoutMode,
             partialPaymentEnabled: row.partialPaymentEnabled,
             partialPaymentAmount: row.partialPaymentAmount,
-        });
+        }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching auth settings" }, 500);
     }
 });
 
-app.post("/auth", async (c) => {
+const saveAuthRoute = createRoute({
+    method: "post",
+    path: "/auth",
+    tags: ["Admin - Settings"],
+    summary: "Save auth/checkout settings",
+    responses: { 200: { description: "Auth settings saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveAuthRoute, async (c) => {
     try {
         const body = (await c.req.json()) as any;
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
@@ -56,7 +73,7 @@ app.post("/auth", async (c) => {
             .set(updates)
             .where(eq(siteSettings.id, existingSettings.id));
 
-        return c.json({ message: "Auth settings saved successfully" });
+        return c.json({ message: "Auth settings saved successfully" }, 200);
     } catch (error) {
         return c.json({ message: "Error saving auth settings" }, 500);
     }
@@ -65,7 +82,16 @@ app.post("/auth", async (c) => {
 // ─────────────────────────────────────────
 // SECURITY
 // ─────────────────────────────────────────
-app.get("/security", async (c) => {
+
+const getSecurityRoute = createRoute({
+    method: "get",
+    path: "/security",
+    tags: ["Admin - Settings"],
+    summary: "Get security settings",
+    responses: { 200: { description: "Security settings", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getSecurityRoute, async (c) => {
     try {
         const row = await db
             .select({ value: settings.value })
@@ -73,13 +99,21 @@ app.get("/security", async (c) => {
             .where(and(eq(settings.key, "csp_allowed_domains"), eq(settings.category, "security")))
             .get();
 
-        return c.json({ cspAllowedDomains: row?.value || "" });
+        return c.json({ cspAllowedDomains: row?.value || "" }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching security settings" }, 500);
     }
 });
 
-app.post("/security", async (c) => {
+const saveSecurityRoute = createRoute({
+    method: "post",
+    path: "/security",
+    tags: ["Admin - Settings"],
+    summary: "Save security settings",
+    responses: { 200: { description: "Security settings saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveSecurityRoute, async (c) => {
     try {
         const { cspAllowedDomains } = await c.req.json();
 
@@ -98,15 +132,13 @@ app.post("/security", async (c) => {
                     set: { value: cspAllowedDomains, updatedAt: new Date() },
                 });
 
-            // If we have access to the CACHE binding, update it
             const env = c.env as any;
             if (env?.CACHE) {
-                // Background execution wrapper for Cloudflare Workers
                 c.executionCtx.waitUntil(env.CACHE.put("security:csp_allowed_domains", cspAllowedDomains));
             }
         }
 
-        return c.json({ message: "Security settings saved successfully" });
+        return c.json({ message: "Security settings saved successfully" }, 200);
     } catch (error) {
         return c.json({ message: "Error saving security settings" }, 500);
     }
@@ -115,7 +147,16 @@ app.post("/security", async (c) => {
 // ─────────────────────────────────────────
 // EMAIL
 // ─────────────────────────────────────────
-app.get("/email", async (c) => {
+
+const getEmailRoute = createRoute({
+    method: "get",
+    path: "/email",
+    tags: ["Admin - Settings"],
+    summary: "Get email settings (system)",
+    responses: { 200: { description: "Email settings", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getEmailRoute, async (c) => {
     try {
         const [apiKeyRow, senderRow] = await Promise.all([
             db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "resend_api_key"), eq(settings.category, "email"))).get(),
@@ -125,13 +166,21 @@ app.get("/email", async (c) => {
         return c.json({
             apiKey: apiKeyRow?.value ? MASKED : "",
             sender: senderRow?.value || "",
-        });
+        }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching email settings" }, 500);
     }
 });
 
-app.post("/email", async (c) => {
+const saveEmailRoute = createRoute({
+    method: "post",
+    path: "/email",
+    tags: ["Admin - Settings"],
+    summary: "Save email settings (system)",
+    responses: { 200: { description: "Email settings saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveEmailRoute, async (c) => {
     try {
         const { apiKey, sender } = await c.req.json();
         const updates: Promise<any>[] = [];
@@ -153,7 +202,7 @@ app.post("/email", async (c) => {
         }
 
         await Promise.all(updates);
-        return c.json({ message: "Email settings saved successfully" });
+        return c.json({ message: "Email settings saved successfully" }, 200);
     } catch (error) {
         return c.json({ message: "Error saving email settings" }, 500);
     }
@@ -162,7 +211,16 @@ app.post("/email", async (c) => {
 // ─────────────────────────────────────────
 // FIREBASE
 // ─────────────────────────────────────────
-app.get("/firebase", async (c) => {
+
+const getFirebaseRoute = createRoute({
+    method: "get",
+    path: "/firebase",
+    tags: ["Admin - Settings"],
+    summary: "Get Firebase settings (system)",
+    responses: { 200: { description: "Firebase settings", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getFirebaseRoute, async (c) => {
     try {
         const results = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "firebase")).all();
 
@@ -175,13 +233,21 @@ app.get("/firebase", async (c) => {
             }
         });
 
-        return c.json(config);
+        return c.json(config, 200);
     } catch (error) {
         return c.json({ error: "Internal Server Error" }, 500);
     }
 });
 
-app.post("/firebase", async (c) => {
+const saveFirebaseRoute = createRoute({
+    method: "post",
+    path: "/firebase",
+    tags: ["Admin - Settings"],
+    summary: "Save Firebase settings (system)",
+    responses: { 200: { description: "Firebase settings saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveFirebaseRoute, async (c) => {
     try {
         const { serviceAccount, publicConfig } = await c.req.json();
         const updates: Promise<any>[] = [];
@@ -209,11 +275,10 @@ app.post("/firebase", async (c) => {
 
         await Promise.all(updates);
 
-        // Invalidate cache
         const { layoutCache, CACHE_KEYS } = await import("@scalius/shared/layout-cache");
         layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);
 
-        return c.json({ message: "Settings saved successfully" });
+        return c.json({ message: "Settings saved successfully" }, 200);
     } catch (error) {
         return c.json({ error: "Internal Server Error" }, 500);
     }

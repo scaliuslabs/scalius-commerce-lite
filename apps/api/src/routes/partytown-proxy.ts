@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { ValidationError, ForbiddenError } from "../utils/api-error";
 
 async function getAllowedDomainsAsync(c: any): Promise<string[]> {
   let cspAllowed = c.env?.CSP_ALLOWED || "";
@@ -36,7 +37,7 @@ async function getAllowedDomainsAsync(c: any): Promise<string[]> {
   return domains;
 }
 
-const app = new Hono();
+const app = new OpenAPIHono();
 
 // Handle CORS preflight requests
 app.options("/", async (_c) => {
@@ -46,18 +47,37 @@ app.options("/", async (_c) => {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Accept, User-Agent",
-      "Access-Control-Max-Age": "86400", // Cache preflight for 24 hours
+      "Access-Control-Max-Age": "86400",
     },
   });
 });
 
-app.get("/", async (c) => {
-  const urlParam = c.req.query("url");
+// ─── GET / ───────────────────────────────────────────────────────────────────
+
+const proxyRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Partytown Proxy"],
+  summary: "Proxy requests to allowed domains for Partytown",
+  request: {
+    query: z.object({
+      url: z.string().openapi({ description: "Target URL to proxy" }),
+    }),
+  },
+  responses: {
+    200: { description: "Proxied response" },
+    400: { description: "Invalid URL", content: { "application/json": { schema: z.any() } } },
+    403: { description: "Domain not allowed", content: { "application/json": { schema: z.any() } } },
+  },
+});
+
+app.openapi(proxyRoute, async (c) => {
+  const urlParam = c.req.valid("query").url;
 
   if (!urlParam) {
     return c.json({ error: "Missing url parameter" }, 400, {
       "Access-Control-Allow-Origin": "*",
-    });
+    }) as any;
   }
 
   let targetUrl: URL;
@@ -66,7 +86,7 @@ app.get("/", async (c) => {
   } catch (e) {
     return c.json({ error: "Invalid url parameter" }, 400, {
       "Access-Control-Allow-Origin": "*",
-    });
+    }) as any;
   }
 
   const allowedDomains = await getAllowedDomainsAsync(c);
@@ -85,21 +105,18 @@ app.get("/", async (c) => {
     console.warn(`Allowed domains: ${allowedDomains.join(", ")}`);
     return c.json({ error: "Proxying to this domain is not allowed" }, 403, {
       "Access-Control-Allow-Origin": "*",
-    });
+    }) as any;
   }
 
   try {
-    // Fetch the original resource from Facebook
     const response = await fetch(targetUrl.toString(), {
       headers: {
-        // Forward necessary headers if required, or keep it simple
         Accept: c.req.header("Accept") || "*/*",
         "User-Agent":
           c.req.header("User-Agent") ||
           "Mozilla/5.0 (compatible; Partytown-Proxy/1.0)",
-        // Add other headers like User-Agent if needed
       },
-      redirect: "follow", // Handle redirects if Facebook uses them
+      redirect: "follow",
     });
 
     if (!response.ok) {
@@ -112,35 +129,31 @@ app.get("/", async (c) => {
         headers: {
           "Access-Control-Allow-Origin": "*",
         },
-      });
+      }) as any;
     }
 
-    // Get content type from original response
     const contentType =
       response.headers.get("Content-Type") || "application/javascript";
-    // Get caching headers from original response or set sensible defaults
     const cacheControl =
-      response.headers.get("Cache-Control") || "public, max-age=3600"; // Cache for 1 hour by default
+      response.headers.get("Cache-Control") || "public, max-age=3600";
 
-    // Create a new response
     const proxyResponse = new Response(response.body, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Access-Control-Allow-Origin": "*", // Allow Partytown worker origin
+        "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Accept, User-Agent",
         "Cache-Control": cacheControl,
-        // Copy other relevant headers from FB response if necessary
       },
     });
 
-    return proxyResponse;
+    return proxyResponse as any;
   } catch (error) {
     console.error(`Proxy error fetching ${targetUrl}:`, error);
     return c.json({ error: "Proxy failed" }, 500, {
       "Access-Control-Allow-Origin": "*",
-    });
+    }) as any;
   }
 });
 

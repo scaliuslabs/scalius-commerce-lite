@@ -1,108 +1,11 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { checkoutLanguages } from "@scalius/database/schema";
 import { eq, and, isNull, or, like, asc, desc, sql } from "drizzle-orm";
-import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
 import { nanoid } from "nanoid";
+import { NotFoundError, ConflictError } from "../utils/api-error";
 
-const app = new Hono<{ Bindings: Env }>();
-
-app.get("/active", async (c) => {
-  try {
-    const db = c.get("db");
-    let language = await db
-      .select()
-      .from(checkoutLanguages)
-      .where(
-        and(
-          eq(checkoutLanguages.isActive, true),
-          isNull(checkoutLanguages.deletedAt),
-        ),
-      )
-      .get();
-
-    if (!language) {
-      language = await db
-        .select()
-        .from(checkoutLanguages)
-        .where(
-          and(
-            eq(checkoutLanguages.isDefault, true),
-            isNull(checkoutLanguages.deletedAt),
-          ),
-        )
-        .get();
-    }
-
-    if (!language) {
-      const fallbackLanguageData = {
-        pageTitle: "Cart & Checkout",
-        checkoutSectionTitle: "Checkout Information",
-        cartSectionTitle: "Shopping Cart",
-        customerNameLabel: "Full Name",
-        customerNamePlaceholder: "Enter your full name",
-        customerPhoneLabel: "Phone Number",
-        customerPhonePlaceholder: "01XXXXXXXXX",
-        customerPhoneHelp: "Example: 01712345678",
-        customerEmailLabel: "Email (Optional)",
-        customerEmailPlaceholder: "Enter your email address",
-        shippingAddressLabel: "Delivery Address",
-        shippingAddressPlaceholder: "Enter your full delivery address",
-        cityLabel: "City",
-        zoneLabel: "Zone",
-        areaLabel: "Area (Optional)",
-        shippingMethodLabel: "Choose Delivery Option",
-        orderNotesLabel: "Order Notes (Optional)",
-        orderNotesPlaceholder: "Any special instructions for your order?",
-        continueShoppingText: "Continue Shopping",
-        subtotalText: "Subtotal",
-        shippingText: "Shipping",
-        discountText: "Discount",
-        totalText: "Total",
-        discountCodePlaceholder: "Discount code",
-        applyDiscountText: "Apply",
-        removeDiscountText: "Remove",
-        placeOrderText: "Place Order",
-        processingText: "Processing...",
-        emptyCartText: "Your cart is empty",
-        termsText: "By placing this order, you agree to our Terms of Service and Privacy Policy",
-        processingOrderTitle: "Processing Your Order",
-        processingOrderMessage: "Please wait while we process your order.",
-        requiredFieldIndicator: "*",
-      };
-
-      const fallbackFieldVisibility = {
-        showEmailField: true,
-        showOrderNotesField: true,
-        showAreaField: true,
-      };
-
-      return c.json({
-        language: {
-          id: "fallback",
-          name: "English (Fallback)",
-          code: "en",
-          languageData: fallbackLanguageData,
-          fieldVisibility: fallbackFieldVisibility,
-          isActive: true,
-          isDefault: true,
-        },
-      });
-    }
-
-    const parsedLanguage = {
-      ...language,
-      languageData: JSON.parse(language.languageData),
-      fieldVisibility: JSON.parse(language.fieldVisibility),
-    };
-
-    return c.json({ language: parsedLanguage });
-  } catch (error) {
-    console.error("Error fetching active checkout language:", error);
-    return c.json({ error: "Failed to fetch checkout language" }, 500);
-  }
-});
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const defaultLanguageData = {
   pageTitle: "Cart & Checkout",
@@ -147,24 +50,125 @@ const defaultFieldVisibility = {
 };
 
 const createCheckoutLanguageSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
-  code: z.string().min(1, "Code is required").max(10),
-  languageData: z.object({}).passthrough().optional(),
-  fieldVisibility: z.object({}).passthrough().optional(),
-  isActive: z.boolean().optional().default(false),
-  isDefault: z.boolean().optional().default(false),
+  name: z.string().min(1, "Name is required").max(100).openapi({ description: "Language name" }),
+  code: z.string().min(1, "Code is required").max(10).openapi({ description: "Language code" }),
+  languageData: z.object({}).passthrough().optional().openapi({ description: "Language strings" }),
+  fieldVisibility: z.object({}).passthrough().optional().openapi({ description: "Field visibility settings" }),
+  isActive: z.boolean().optional().default(false).openapi({ description: "Whether this language is active" }),
+  isDefault: z.boolean().optional().default(false).openapi({ description: "Whether this is the default language" }),
 });
 
 const updateCheckoutLanguageSchema = createCheckoutLanguageSchema.partial();
 
-app.get("/", async (c) => {
+// GET /checkout-languages/active — get active checkout language
+const getActiveRoute = createRoute({
+  method: "get",
+  path: "/active",
+  tags: ["Checkout Languages"],
+  summary: "Get active checkout language",
+  responses: {
+    200: {
+      description: "Active checkout language",
+      content: { "application/json": { schema: z.object({ language: z.any() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
+});
+
+app.openapi(getActiveRoute, async (c) => {
   const db = c.get("db");
-  const q = c.req.query();
-  const page = parseInt(q.page || "1");
-  const limit = parseInt(q.limit || "10");
-  const search = q.search || "";
+  let language = await db
+    .select()
+    .from(checkoutLanguages)
+    .where(
+      and(
+        eq(checkoutLanguages.isActive, true),
+        isNull(checkoutLanguages.deletedAt),
+      ),
+    )
+    .get();
+
+  if (!language) {
+    language = await db
+      .select()
+      .from(checkoutLanguages)
+      .where(
+        and(
+          eq(checkoutLanguages.isDefault, true),
+          isNull(checkoutLanguages.deletedAt),
+        ),
+      )
+      .get();
+  }
+
+  if (!language) {
+    const fallbackFieldVisibility = {
+      showEmailField: true,
+      showOrderNotesField: true,
+      showAreaField: true,
+    };
+
+    return c.json({
+      language: {
+        id: "fallback",
+        name: "English (Fallback)",
+        code: "en",
+        languageData: defaultLanguageData,
+        fieldVisibility: fallbackFieldVisibility,
+        isActive: true,
+        isDefault: true,
+      },
+    }, 200);
+  }
+
+  const parsedLanguage = {
+    ...language,
+    languageData: JSON.parse(language.languageData),
+    fieldVisibility: JSON.parse(language.fieldVisibility),
+  };
+
+  return c.json({ language: parsedLanguage }, 200);
+});
+
+// GET /checkout-languages — list all checkout languages
+const listRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Checkout Languages"],
+  summary: "List all checkout languages with pagination",
+  request: {
+    query: z.object({
+      page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),
+      limit: z.coerce.number().optional().default(10).openapi({ description: "Items per page" }),
+      search: z.string().optional().default("").openapi({ description: "Search query" }),
+      sort: z.string().optional().default("name").openapi({ description: "Sort field" }),
+      order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
+      trashed: z.enum(["true", "false"]).optional().default("false").openapi({ description: "Show trashed items" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Checkout language list with pagination",
+      content: { "application/json": { schema: z.object({ data: z.array(z.any()), pagination: z.any() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
+});
+
+app.openapi(listRoute, async (c) => {
+  const db = c.get("db");
+  const q = c.req.valid("query");
+  const page = q.page;
+  const limit = q.limit;
+  const search = q.search;
   const sortField = (q.sort || "name") as keyof typeof checkoutLanguages._.columns;
-  const sortOrder = (q.order || "asc") as "asc" | "desc";
+  const sortOrder = q.order;
   const showTrashed = q.trashed === "true";
 
   const offset = (page - 1) * limit;
@@ -212,15 +216,48 @@ app.get("/", async (c) => {
       hasNextPage: page < Math.ceil(total / limit),
       hasPrevPage: page > 1,
     }
-  });
+  }, 200);
 });
 
-app.post("/", zValidator("json", createCheckoutLanguageSchema), async (c) => {
+// POST /checkout-languages — create a new checkout language
+const createRoute2 = createRoute({
+  method: "post",
+  path: "/",
+  tags: ["Checkout Languages"],
+  summary: "Create a new checkout language",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: createCheckoutLanguageSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Created checkout language",
+      content: { "application/json": { schema: z.object({ data: z.any() }) } },
+    },
+    409: {
+      description: "Conflict",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
+});
+
+app.openapi(createRoute2, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
 
   const existingLanguage = await db.select().from(checkoutLanguages).where(and(eq(checkoutLanguages.code, data.code), isNull(checkoutLanguages.deletedAt))).get();
-  if (existingLanguage) return c.json({ error: "A checkout language with this code already exists." }, 409);
+  if (existingLanguage) {
+    throw new ConflictError("A checkout language with this code already exists.");
+  }
 
   if (data.isActive) {
     await db.update(checkoutLanguages).set({ isActive: false }).where(eq(checkoutLanguages.isActive, true));
@@ -245,24 +282,82 @@ app.post("/", zValidator("json", createCheckoutLanguageSchema), async (c) => {
   return c.json({ data: insertedLanguage }, 201);
 });
 
-app.get("/:id", async (c) => {
-  const db = c.get("db");
-  const language = await db.select().from(checkoutLanguages).where(eq(checkoutLanguages.id, c.req.param("id"))).get();
-  if (!language) return c.json({ error: "Not found" }, 404);
-  return c.json(language);
+// GET /checkout-languages/:id — get checkout language by ID
+const getByIdRoute = createRoute({
+  method: "get",
+  path: "/{id}",
+  tags: ["Checkout Languages"],
+  summary: "Get checkout language by ID",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: "Checkout language ID" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Checkout language details",
+      content: { "application/json": { schema: z.any() } },
+    },
+    404: {
+      description: "Not found",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
 });
 
-app.put("/:id", zValidator("json", updateCheckoutLanguageSchema), async (c) => {
+app.openapi(getByIdRoute, async (c) => {
   const db = c.get("db");
-  const id = c.req.param("id");
+  const { id } = c.req.valid("param");
+  const language = await db.select().from(checkoutLanguages).where(eq(checkoutLanguages.id, id)).get();
+  if (!language) throw new NotFoundError("Not found");
+  return c.json(language, 200);
+});
+
+// PUT /checkout-languages/:id — update a checkout language
+const updateRoute = createRoute({
+  method: "put",
+  path: "/{id}",
+  tags: ["Checkout Languages"],
+  summary: "Update a checkout language",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: "Checkout language ID" }),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: updateCheckoutLanguageSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Updated checkout language",
+      content: { "application/json": { schema: z.object({ data: z.any() }) } },
+    },
+    404: {
+      description: "Not found",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+    409: {
+      description: "Conflict",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
+});
+
+app.openapi(updateRoute, async (c) => {
+  const db = c.get("db");
+  const { id } = c.req.valid("param");
   const data = c.req.valid("json");
 
   const existing = await db.select().from(checkoutLanguages).where(eq(checkoutLanguages.id, id)).get();
-  if (!existing) return c.json({ error: "Not found" }, 404);
+  if (!existing) throw new NotFoundError("Not found");
 
   if (data.code && data.code !== existing.code) {
     const conflict = await db.select().from(checkoutLanguages).where(and(eq(checkoutLanguages.code, data.code), sql`${checkoutLanguages.id} != ${id}`)).get();
-    if (conflict) return c.json({ error: "A checkout language with this code already exists." }, 409);
+    if (conflict) throw new ConflictError("A checkout language with this code already exists.");
   }
 
   if (data.isActive) {
@@ -281,28 +376,84 @@ app.put("/:id", zValidator("json", updateCheckoutLanguageSchema), async (c) => {
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
   const [updated] = await db.update(checkoutLanguages).set(updateData).where(eq(checkoutLanguages.id, id)).returning();
-  return c.json({ data: updated });
+  return c.json({ data: updated }, 200);
 });
 
-app.patch("/:id", async (c) => {
+// PATCH /checkout-languages/:id — soft delete a checkout language
+const softDeleteRoute = createRoute({
+  method: "patch",
+  path: "/{id}",
+  tags: ["Checkout Languages"],
+  summary: "Soft delete a checkout language",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: "Checkout language ID" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Success",
+      content: { "application/json": { schema: z.object({ success: z.literal(true) }) } },
+    },
+  },
+});
+
+app.openapi(softDeleteRoute, async (c) => {
   const db = c.get("db");
-  const id = c.req.param("id");
+  const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: sql`(cast(strftime('%s','now') as int))` }).where(eq(checkoutLanguages.id, id));
-  return c.json({ success: true });
+  return c.json({ success: true as const }, 200);
 });
 
-app.delete("/:id", async (c) => {
+// DELETE /checkout-languages/:id — hard delete a checkout language
+const hardDeleteRoute = createRoute({
+  method: "delete",
+  path: "/{id}",
+  tags: ["Checkout Languages"],
+  summary: "Hard delete a checkout language",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: "Checkout language ID" }),
+    }),
+  },
+  responses: {
+    204: {
+      description: "No content",
+    },
+  },
+});
+
+app.openapi(hardDeleteRoute, async (c) => {
   const db = c.get("db");
-  const id = c.req.param("id");
+  const { id } = c.req.valid("param");
   await db.delete(checkoutLanguages).where(eq(checkoutLanguages.id, id));
   return c.body(null, 204);
 });
 
-app.post("/:id/restore", async (c) => {
+// POST /checkout-languages/:id/restore — restore a soft-deleted checkout language
+const restoreRoute = createRoute({
+  method: "post",
+  path: "/{id}/restore",
+  tags: ["Checkout Languages"],
+  summary: "Restore a soft-deleted checkout language",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: "Checkout language ID" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Success",
+      content: { "application/json": { schema: z.object({ success: z.literal(true) }) } },
+    },
+  },
+});
+
+app.openapi(restoreRoute, async (c) => {
   const db = c.get("db");
-  const id = c.req.param("id");
+  const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: null }).where(eq(checkoutLanguages.id, id));
-  return c.json({ success: true });
+  return c.json({ success: true as const }, 200);
 });
 
 export { app as checkoutLanguageRoutes };

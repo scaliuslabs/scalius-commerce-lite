@@ -1,9 +1,9 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
 
-// Create a Hono app for SEO routes
-const app = new Hono<{ Bindings: Env }>();
+// Create an OpenAPIHono app for SEO routes
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware
 app.use(
@@ -22,46 +22,51 @@ export interface SeoSettingsData {
   robotsTxt: string | null;
 }
 
-// Get SEO settings
-app.get("/", async (c) => {
-  try {
-    const db = c.get("db");
-    const [settings] = await db
-      .select({
-        siteTitle: siteSettings.siteTitle,
-        homepageTitle: siteSettings.homepageTitle,
-        homepageMetaDescription: siteSettings.homepageMetaDescription,
-        robotsTxt: siteSettings.robotsTxt,
-      })
-      .from(siteSettings)
-      .limit(1);
+// GET /seo — get SEO settings
+const getSeoSettingsRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["SEO"],
+  summary: "Get SEO settings",
+  responses: {
+    200: {
+      description: "SEO settings",
+      content: { "application/json": { schema: z.object({ siteTitle: z.string().nullable(), homepageTitle: z.string().nullable(), homepageMetaDescription: z.string().nullable(), robotsTxt: z.string().nullable(), success: z.literal(true) }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+    },
+  },
+});
 
-    if (!settings) {
-      // Return default/empty values if no settings are found
-      return c.json({
-        siteTitle: "Scalius Commerce", // Default site title
-        homepageTitle: "Welcome to Scalius Commerce", // Default homepage title
-        homepageMetaDescription: "Your one-stop shop for everything amazing.", // Default meta description
-        robotsTxt: "User-agent: *\nAllow: /", // Default robots.txt
-        success: true, // Indicate success even with defaults
-      });
-    }
+app.openapi(getSeoSettingsRoute, async (c) => {
+  const db = c.get("db");
+  const [settings] = await db
+    .select({
+      siteTitle: siteSettings.siteTitle,
+      homepageTitle: siteSettings.homepageTitle,
+      homepageMetaDescription: siteSettings.homepageMetaDescription,
+      robotsTxt: siteSettings.robotsTxt,
+    })
+    .from(siteSettings)
+    .limit(1);
 
+  if (!settings) {
+    // Return default/empty values if no settings are found
     return c.json({
-      ...settings,
-      success: true,
-    });
-  } catch (error) {
-    console.error("Error fetching SEO settings:", error);
-    return c.json(
-      {
-        error: "Failed to fetch SEO settings",
-        message: error instanceof Error ? error.message : "Unknown error",
-        success: false,
-      },
-      500,
-    );
+      siteTitle: "Scalius Commerce",
+      homepageTitle: "Welcome to Scalius Commerce",
+      homepageMetaDescription: "Your one-stop shop for everything amazing.",
+      robotsTxt: "User-agent: *\nAllow: /",
+      success: true as const,
+    }, 200);
   }
+
+  return c.json({
+    ...settings,
+    success: true as const,
+  }, 200);
 });
 
 export { app as seoRoutes };

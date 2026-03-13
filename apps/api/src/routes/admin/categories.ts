@@ -1,10 +1,8 @@
 // src/server/routes/admin/categories.ts
-// Admin Hono routes for categories.
+// Admin OpenAPI routes for categories.
 // All DB logic is delegated to src/modules/categories/categories.service.ts.
 
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     listCategories,
     createCategory,
@@ -17,25 +15,60 @@ import {
     updateCategorySchema,
 } from "@scalius/core/modules/categories";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono();
 
-// GET /admin/categories — paginated list with search/sort/filter
-app.get("/", async (c) => {
+// ── List Categories ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Categories"],
+    summary: "List all categories",
+    request: {
+        query: z.object({
+            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().default(10).openapi({ description: "Items per page" }),
+            search: z.string().optional().default("").openapi({ description: "Search term" }),
+            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
+            sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
+        }),
+    },
+    responses: {
+        200: { description: "Category list with pagination", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listRoute, async (c) => {
     const db = c.get("db");
-    const query = c.req.query();
+    const query = c.req.valid("query");
     const result = await listCategories(db, {
-        page: parseInt(query.page || "1"),
-        limit: parseInt(query.limit || "10"),
+        page: query.page,
+        limit: query.limit,
         search: query.search || "",
         showTrashed: query.trashed === "true",
         sort: (query.sort as any) || "updatedAt",
         order: (query.order as any) || "desc",
     });
-    return c.json(result);
+    return c.json(result, 200);
 });
 
-// POST /admin/categories — create new category
-app.post("/", zValidator("json", createCategorySchema), async (c) => {
+// ── Create Category ──
+
+const createCategoryRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Categories"],
+    summary: "Create a category",
+    request: {
+        body: { content: { "application/json": { schema: createCategorySchema } } },
+    },
+    responses: {
+        201: { description: "Category created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(createCategoryRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     try {
@@ -46,8 +79,31 @@ app.post("/", zValidator("json", createCategorySchema), async (c) => {
     }
 });
 
-// POST /admin/categories/bulk-delete
-app.post("/bulk-delete", zValidator("json", z.object({ categoryIds: z.array(z.string()), permanent: z.boolean().default(false) })), async (c) => {
+// ── Bulk Delete Categories ──
+
+const bulkDeleteRoute = createRoute({
+    method: "post",
+    path: "/bulk-delete",
+    tags: ["Admin - Categories"],
+    summary: "Bulk delete categories",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        categoryIds: z.array(z.string()),
+                        permanent: z.boolean().default(false),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        204: { description: "Categories deleted" },
+    },
+});
+
+app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { categoryIds, permanent } = c.req.valid("json");
     if (categoryIds.length === 0) return c.json({ error: "No category IDs provided" }, 400);
@@ -59,8 +115,28 @@ app.post("/bulk-delete", zValidator("json", z.object({ categoryIds: z.array(z.st
     }
 });
 
-// POST /admin/categories/bulk-restore
-app.post("/bulk-restore", zValidator("json", z.object({ categoryIds: z.array(z.string()) })), async (c) => {
+// ── Bulk Restore Categories ──
+
+const bulkRestoreRoute = createRoute({
+    method: "post",
+    path: "/bulk-restore",
+    tags: ["Admin - Categories"],
+    summary: "Bulk restore categories",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({ categoryIds: z.array(z.string()) }),
+                },
+            },
+        },
+    },
+    responses: {
+        204: { description: "Categories restored" },
+    },
+});
+
+app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { categoryIds } = c.req.valid("json");
     if (categoryIds.length === 0) return c.json({ error: "No category IDs provided" }, 400);
@@ -68,23 +144,52 @@ app.post("/bulk-restore", zValidator("json", z.object({ categoryIds: z.array(z.s
     return c.body(null, 204);
 });
 
-// PUT /admin/categories/:id — update category
-app.put("/:id", zValidator("json", updateCategorySchema), async (c) => {
+// ── Update Category ──
+
+const updateCategoryRoute = createRoute({
+    method: "put",
+    path: "/{id}",
+    tags: ["Admin - Categories"],
+    summary: "Update a category",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Category ID" }) }),
+        body: { content: { "application/json": { schema: updateCategorySchema } } },
+    },
+    responses: {
+        200: { description: "Category updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateCategoryRoute, async (c) => {
     const db = c.get("db");
-    const id = c.req.param("id");
+    const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
         await updateCategory(db, id, data);
-        return c.json({ success: true });
+        return c.json({ success: true }, 200);
     } catch (error: any) {
         return c.json({ error: error.message }, error.statusCode || 400);
     }
 });
 
-// DELETE /admin/categories/:id — soft-delete category
-app.delete("/:id", async (c) => {
+// ── Delete Category ──
+
+const deleteCategoryRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Categories"],
+    summary: "Soft-delete a category",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Category ID" }) }),
+    },
+    responses: {
+        204: { description: "Category deleted" },
+    },
+});
+
+app.openapi(deleteCategoryRoute, async (c) => {
     const db = c.get("db");
-    const id = c.req.param("id");
+    const { id } = c.req.valid("param");
     try {
         await deleteCategory(db, id);
         return c.body(null, 204);
@@ -93,20 +198,48 @@ app.delete("/:id", async (c) => {
     }
 });
 
-// DELETE /admin/categories/:id/permanent — hard delete
-app.delete("/:id/permanent", async (c) => {
+// ── Permanent Delete Category ──
+
+const permanentDeleteRoute = createRoute({
+    method: "delete",
+    path: "/{id}/permanent",
+    tags: ["Admin - Categories"],
+    summary: "Permanently delete a category",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Category ID" }) }),
+    },
+    responses: {
+        204: { description: "Category permanently deleted" },
+    },
+});
+
+app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
-    const id = c.req.param("id");
+    const { id } = c.req.valid("param");
     await permanentlyDeleteCategory(db, id);
     return c.body(null, 204);
 });
 
-// POST /admin/categories/:id/restore — restore soft-deleted category
-app.post("/:id/restore", async (c) => {
+// ── Restore Category ──
+
+const restoreCategoryRoute = createRoute({
+    method: "post",
+    path: "/{id}/restore",
+    tags: ["Admin - Categories"],
+    summary: "Restore a soft-deleted category",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Category ID" }) }),
+    },
+    responses: {
+        200: { description: "Category restored", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(restoreCategoryRoute, async (c) => {
     const db = c.get("db");
-    const id = c.req.param("id");
+    const { id } = c.req.valid("param");
     await restoreCategories(db, [id]);
-    return c.json({ success: true });
+    return c.json({ success: true }, 200);
 });
 
 export { app as adminCategoryRoutes };

@@ -1,12 +1,26 @@
 // src/server/routes/admin/fraud-checker.ts
-import { Hono } from "hono";
+// Admin OpenAPI routes for fraud checker providers.
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { FraudCheckerService } from "@scalius/core/modules/fraud-checker/service";
 
-const app = new Hono<{ Bindings: any }>();
+const app = new OpenAPIHono();
 const fraudCheckerService = new FraudCheckerService();
 const MASKED_VALUE = "••••••••••••";
 
-app.get("/", async (c) => {
+// ── List Providers ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Fraud Checker"],
+    summary: "List all fraud checker providers",
+    responses: {
+        200: { description: "Provider list", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listRoute, async (c) => {
     try {
         const providers = await fraudCheckerService.getProviders();
 
@@ -21,7 +35,19 @@ app.get("/", async (c) => {
     }
 });
 
-app.post("/", async (c) => {
+// ── Create Provider ──
+
+const createProviderRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Fraud Checker"],
+    summary: "Create a fraud checker provider",
+    responses: {
+        201: { description: "Provider created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(createProviderRoute, async (c) => {
     try {
         const provider = await c.req.json();
 
@@ -45,7 +71,19 @@ app.post("/", async (c) => {
     }
 });
 
-app.put("/", async (c) => {
+// ── Update Provider ──
+
+const updateProviderRoute = createRoute({
+    method: "put",
+    path: "/",
+    tags: ["Admin - Fraud Checker"],
+    summary: "Update a fraud checker provider",
+    responses: {
+        200: { description: "Provider updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateProviderRoute, async (c) => {
     try {
         const provider = await c.req.json();
 
@@ -76,14 +114,24 @@ app.put("/", async (c) => {
     }
 });
 
-app.delete("/:id", async (c) => {
+// ── Delete Provider ──
+
+const deleteProviderRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Fraud Checker"],
+    summary: "Delete a fraud checker provider",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Provider ID" }) }),
+    },
+    responses: {
+        200: { description: "Provider deleted", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(deleteProviderRoute, async (c) => {
     try {
-        const id = c.req.param("id");
-
-        if (!id) {
-            return c.json({ error: "Provider ID is required" }, 400);
-        }
-
+        const { id } = c.req.valid("param");
         await fraudCheckerService.deleteProvider(id);
         return c.json({ success: true }, 200);
     } catch (error: any) {
@@ -91,14 +139,24 @@ app.delete("/:id", async (c) => {
     }
 });
 
-app.post("/:id/test", async (c) => {
+// ── Test Provider ──
+
+const testProviderRoute = createRoute({
+    method: "post",
+    path: "/{id}/test",
+    tags: ["Admin - Fraud Checker"],
+    summary: "Test a fraud checker provider connection",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Provider ID" }) }),
+    },
+    responses: {
+        200: { description: "Test result", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(testProviderRoute, async (c) => {
     try {
-        const id = c.req.param("id");
-
-        if (!id) {
-            return c.json({ error: "Provider ID is required" }, 400);
-        }
-
+        const { id } = c.req.valid("param");
         const result = await fraudCheckerService.testProvider(id);
         return c.json(result, 200);
     } catch (error: any) {

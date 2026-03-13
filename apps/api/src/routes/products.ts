@@ -1,16 +1,16 @@
 // src/server/routes/products.ts
 // Storefront product routes — thin HTTP layer.
 // All query logic lives in src/modules/products/products.service.ts.
-import { Hono } from "hono";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cacheMiddleware } from "../middleware/cache";
 import {
   getStorefrontProducts,
   getStorefrontProductBySlug,
   searchStorefrontProducts,
 } from "@scalius/core/modules/products/products.service";
+import { NotFoundError } from "../utils/api-error";
 
-const app = new Hono();
+const app = new OpenAPIHono();
 
 app.use(
   "*",
@@ -23,71 +23,122 @@ app.use(
 );
 
 const productFilterSchema = z.object({
-  category: z.string().optional(),
-  search: z.string().optional(),
-  page: z.coerce.number().optional().default(1),
-  limit: z.coerce.number().optional().default(20),
+  category: z.string().optional().openapi({ description: "Category slug filter" }),
+  search: z.string().optional().openapi({ description: "Search query" }),
+  page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),
+  limit: z.coerce.number().optional().default(20).openapi({ description: "Items per page" }),
   sort: z
     .enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"])
     .optional()
-    .default("newest"),
-  minPrice: z.coerce.number().optional(),
-  maxPrice: z.coerce.number().optional(),
-  freeDelivery: z.enum(["true", "false"]).optional(),
-  hasDiscount: z.enum(["true", "false"]).optional(),
-  ids: z.string().optional(),
+    .default("newest")
+    .openapi({ description: "Sort order" }),
+  minPrice: z.coerce.number().optional().openapi({ description: "Minimum price filter" }),
+  maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
+  freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
+  hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Discount filter" }),
+  ids: z.string().optional().openapi({ description: "Comma-separated product IDs" }),
 });
 
 const productSearchSchema = z.object({
-  search: z.string().optional().default(""),
-  page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(10),
+  search: z.string().optional().default("").openapi({ description: "Search query" }),
+  page: z.coerce.number().int().min(1).optional().default(1).openapi({ description: "Page number" }),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(10).openapi({ description: "Items per page" }),
 });
 
 // GET /api/storefront/products
-app.get("/", async (c) => {
-  try {
-    const db = c.get("db");
-    const params = productFilterSchema.parse(c.req.query());
-    const queryParams = c.req.query();
+const listProductsRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Products"],
+  summary: "List storefront products",
+  request: {
+    query: productFilterSchema,
+  },
+  responses: {
+    200: {
+      description: "Product list with pagination",
+      content: { "application/json": { schema: z.object({ success: z.literal(true) }).passthrough() } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+    },
+  },
+});
 
-    // Resolve attribute filters from unknown query params
-    const attributeFilters = await getAttributeFilters(db, queryParams, params);
+app.openapi(listProductsRoute, async (c) => {
+  const db = c.get("db");
+  const params = c.req.valid("query");
+  const queryParams = c.req.query();
 
-    const result = await getStorefrontProducts(db, { ...params, attributeFilters });
-    return c.json({ success: true, ...result });
-  } catch (error) {
-    console.error("Error fetching storefront products:", error);
-    return c.json({ success: false, error: "Failed to fetch products" }, 500);
-  }
+  // Resolve attribute filters from unknown query params
+  const attributeFilters = await getAttributeFilters(db, queryParams, params);
+
+  const result = await getStorefrontProducts(db, { ...params, attributeFilters });
+  return c.json({ success: true as const, ...result }, 200);
 });
 
 // GET /api/storefront/products/search
-// Variant-aware product search used by cart/checkout. Returns lightweight variant data.
-app.get("/search", async (c) => {
-  try {
-    const db = c.get("db");
-    const { search, page, limit } = productSearchSchema.parse(c.req.query());
-    const result = await searchStorefrontProducts(db, { search, page, limit });
-    return c.json({ success: true, ...result });
-  } catch (error) {
-    console.error("Error searching products:", error);
-    return c.json({ success: false, error: "Failed to search products" }, 500);
-  }
+const searchProductsRoute = createRoute({
+  method: "get",
+  path: "/search",
+  tags: ["Products"],
+  summary: "Search storefront products with variant data",
+  request: {
+    query: productSearchSchema,
+  },
+  responses: {
+    200: {
+      description: "Search results",
+      content: { "application/json": { schema: z.object({ success: z.literal(true) }).passthrough() } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+    },
+  },
+});
+
+app.openapi(searchProductsRoute, async (c) => {
+  const db = c.get("db");
+  const { search, page, limit } = c.req.valid("query");
+  const result = await searchStorefrontProducts(db, { search, page, limit });
+  return c.json({ success: true as const, ...result }, 200);
 });
 
 // GET /api/storefront/products/:slug
-app.get("/:slug", async (c) => {
-  try {
-    const db = c.get("db");
-    const { slug } = c.req.param();
-    const result = await getStorefrontProductBySlug(db, slug);
-    if (!result) return c.json({ success: false, error: "Product not found" }, 404);
-    return c.json({ success: true, ...result });
-  } catch (error) {
-    console.error("Error fetching storefront product by slug:", error);
-    return c.json({ success: false, error: "Failed to fetch product" }, 500);
-  }
+const getProductBySlugRoute = createRoute({
+  method: "get",
+  path: "/{slug}",
+  tags: ["Products"],
+  summary: "Get product by slug",
+  request: {
+    params: z.object({
+      slug: z.string().openapi({ description: "Product slug" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Product details",
+      content: { "application/json": { schema: z.object({ success: z.literal(true) }).passthrough() } },
+    },
+    404: {
+      description: "Product not found",
+      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+    },
+  },
+});
+
+app.openapi(getProductBySlugRoute, async (c) => {
+  const db = c.get("db");
+  const { slug } = c.req.valid("param");
+  const result = await getStorefrontProductBySlug(db, slug);
+  if (!result) throw new NotFoundError("Product not found");
+  return c.json({ success: true as const, ...result }, 200);
 });
 
 /** Extracts attribute-based filters from raw query params by checking known attribute slugs. */

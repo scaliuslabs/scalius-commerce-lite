@@ -1,13 +1,9 @@
-import { Hono } from "hono";
+// src/server/routes/admin/ai-prompts.ts
+// Admin OpenAPI routes for AI system prompts.
 
-const app = new Hono<{
-    Variables: {
-        db: any;
-        user: any;
-        session: any;
-        env: any;
-    };
-}>();
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+
+const app = new OpenAPIHono();
 
 const PROMPT_URLS = {
     widget: "https://text.wrygo.com/home-page-prompt.txt",
@@ -15,9 +11,24 @@ const PROMPT_URLS = {
     collection: "https://text.wrygo.com/collection-prompt.txt",
 };
 
-// GET /api/v1/admin/prompts
-app.get("/", async (c) => {
-    const promptType = (c.req.query("type") || "widget") as keyof typeof PROMPT_URLS;
+const getPromptRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - AI Prompts"],
+    summary: "Fetch an AI system prompt by type",
+    request: {
+        query: z.object({
+            type: z.string().optional().default("widget").openapi({ description: "Prompt type: widget, landing-page, or collection" }),
+        }),
+    },
+    responses: {
+        200: { description: "System prompt text" },
+    },
+});
+
+app.openapi(getPromptRoute, async (c) => {
+    const { type } = c.req.valid("query");
+    const promptType = type as keyof typeof PROMPT_URLS;
     const promptUrl = PROMPT_URLS[promptType] || PROMPT_URLS.widget;
 
     try {
@@ -41,7 +52,7 @@ app.get("/", async (c) => {
 
         return c.text(systemPrompt, 200, {
             "Content-Type": "text/plain",
-            "Cache-Control": "public, max-age=300", // Cache for 5 minutes
+            "Cache-Control": "public, max-age=300",
         });
     } catch (error: any) {
         console.error("Error fetching system prompt:", error);

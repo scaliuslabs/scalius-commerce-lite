@@ -1,20 +1,17 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { DeliveryService } from "@scalius/core/modules/delivery/service";
 import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { db } from "@scalius/database/client";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
+import { NotFoundError } from "../../../utils/api-error";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono();
 
 const deliveryService = new DeliveryService();
 
-// SECURITY: Constant for masked credentials
 const MASKED_VALUE = "••••••••••••";
 
-/**
- * SECURITY: Unmask credentials by fetching from database if fields are masked
- */
 function unmaskedCredentials(
     newCredentials: string,
     existingCredentials?: string,
@@ -26,18 +23,10 @@ function unmaskedCredentials(
         const existingCreds = JSON.parse(existingCredentials);
         const unmasked = { ...newCreds };
 
-        if (unmasked.clientSecret === MASKED_VALUE && existingCreds.clientSecret) {
-            unmasked.clientSecret = existingCreds.clientSecret;
-        }
-        if (unmasked.password === MASKED_VALUE && existingCreds.password) {
-            unmasked.password = existingCreds.password;
-        }
-        if (unmasked.apiKey === MASKED_VALUE && existingCreds.apiKey) {
-            unmasked.apiKey = existingCreds.apiKey;
-        }
-        if (unmasked.secretKey === MASKED_VALUE && existingCreds.secretKey) {
-            unmasked.secretKey = existingCreds.secretKey;
-        }
+        if (unmasked.clientSecret === MASKED_VALUE && existingCreds.clientSecret) unmasked.clientSecret = existingCreds.clientSecret;
+        if (unmasked.password === MASKED_VALUE && existingCreds.password) unmasked.password = existingCreds.password;
+        if (unmasked.apiKey === MASKED_VALUE && existingCreds.apiKey) unmasked.apiKey = existingCreds.apiKey;
+        if (unmasked.secretKey === MASKED_VALUE && existingCreds.secretKey) unmasked.secretKey = existingCreds.secretKey;
 
         return JSON.stringify(unmasked);
     } catch (e) {
@@ -45,9 +34,6 @@ function unmaskedCredentials(
     }
 }
 
-/**
- * SECURITY: Mask sensitive credentials before sending to client
- */
 function maskCredentialsForClient(credentialsJson: string): string {
     try {
         const credentials = JSON.parse(credentialsJson);
@@ -64,8 +50,17 @@ function maskCredentialsForClient(credentialsJson: string): string {
     }
 }
 
-// GET /admin/settings/delivery-providers
-app.get("/", async (c) => {
+// ── List Providers ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Delivery Providers"],
+    summary: "List all delivery providers",
+    responses: { 200: { description: "Provider list", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(listRoute, async (c) => {
     try {
         const providers = await deliveryService.getProviders();
         const maskedProviders = providers.map((provider) => ({
@@ -79,8 +74,17 @@ app.get("/", async (c) => {
     }
 });
 
-// POST /admin/settings/delivery-providers
-app.post("/", async (c) => {
+// ── Create Provider ──
+
+const createProviderRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Delivery Providers"],
+    summary: "Create a delivery provider",
+    responses: { 201: { description: "Provider created", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(createProviderRoute, async (c) => {
     try {
         const provider = await c.req.json();
 
@@ -107,8 +111,17 @@ app.post("/", async (c) => {
     }
 });
 
-// PUT /admin/settings/delivery-providers
-app.put("/", async (c) => {
+// ── Update Provider ──
+
+const updateProviderRoute = createRoute({
+    method: "put",
+    path: "/",
+    tags: ["Admin - Delivery Providers"],
+    summary: "Update a delivery provider",
+    responses: { 200: { description: "Provider updated", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(updateProviderRoute, async (c) => {
     try {
         const provider = await c.req.json();
 
@@ -155,8 +168,17 @@ app.put("/", async (c) => {
     }
 });
 
-// POST /admin/settings/delivery-providers/create-test
-app.post("/create-test", async (c) => {
+// ── Create Test Provider ──
+
+const createTestRoute = createRoute({
+    method: "post",
+    path: "/create-test",
+    tags: ["Admin - Delivery Providers"],
+    summary: "Test a new provider connection before saving",
+    responses: { 200: { description: "Test result", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(createTestRoute, async (c) => {
     try {
         const data = await c.req.json();
         const { type, credentials, config, name = "Test Provider" } = data;
@@ -195,29 +217,45 @@ app.post("/create-test", async (c) => {
     }
 });
 
-// GET /admin/settings/delivery-providers/:id
-app.get("/:id", async (c) => {
+// ── Get Provider ──
+
+const getProviderRoute = createRoute({
+    method: "get",
+    path: "/{id}",
+    tags: ["Admin - Delivery Providers"],
+    summary: "Get a delivery provider by ID",
+    request: { params: z.object({ id: z.string().openapi({ description: "Provider ID" }) }) },
+    responses: { 200: { description: "Provider details", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getProviderRoute, async (c) => {
     try {
-        const id = c.req.param("id");
-        if (!id) return c.json({ error: "Provider ID is required" }, 400);
-
+        const { id } = c.req.valid("param");
         const provider = await deliveryService.getProvider(id);
-        if (!provider) return c.json({ error: "Provider not found" }, 404);
-
+        if (!provider) throw new NotFoundError("Provider not found");
         return c.json(provider, 200);
     } catch (error: any) {
+        if (error.name === "NotFoundError") throw error;
         return c.json({ error: error.message || "Failed to get provider" }, 500);
     }
 });
 
-// POST /admin/settings/delivery-providers/:id (Test existing provider)
-app.post("/:id", async (c) => {
-    try {
-        const id = c.req.param("id");
-        if (!id) return c.json({ error: "Provider ID is required" }, 400);
+// ── Test Existing Provider ──
 
+const testExistingRoute = createRoute({
+    method: "post",
+    path: "/{id}",
+    tags: ["Admin - Delivery Providers"],
+    summary: "Test an existing provider connection",
+    request: { params: z.object({ id: z.string().openapi({ description: "Provider ID" }) }) },
+    responses: { 200: { description: "Test result", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(testExistingRoute, async (c) => {
+    try {
+        const { id } = c.req.valid("param");
         const provider = await deliveryService.getProvider(id);
-        if (!provider) return c.json({ error: "Provider not found" }, 404);
+        if (!provider) throw new NotFoundError("Provider not found");
 
         try {
             const providerInstance = createProvider(provider);
@@ -230,16 +268,25 @@ app.post("/:id", async (c) => {
             }, 200);
         }
     } catch (error: any) {
+        if (error.name === "NotFoundError") throw error;
         return c.json({ error: error.message || "Internal server error" }, 500);
     }
 });
 
-// DELETE /admin/settings/delivery-providers/:id
-app.delete("/:id", async (c) => {
-    try {
-        const id = c.req.param("id");
-        if (!id) return c.json({ error: "Provider ID is required" }, 400);
+// ── Delete Provider ──
 
+const deleteProviderRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Delivery Providers"],
+    summary: "Delete a delivery provider",
+    request: { params: z.object({ id: z.string().openapi({ description: "Provider ID" }) }) },
+    responses: { 200: { description: "Provider deleted", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(deleteProviderRoute, async (c) => {
+    try {
+        const { id } = c.req.valid("param");
         await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
         return c.json({ success: true }, 200);
     } catch (error: any) {

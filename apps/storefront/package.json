@@ -12,6 +12,8 @@
     "deploy": "pnpm exec wrangler deploy"
   },
   "dependencies": {
+    "@scalius/api-client": "workspace:*",
+    "@scalius/shared": "workspace:*",
     "@astrojs/check": "^0.9.6",
     "@astrojs/react": "^5.0.0",
     "@nanostores/react": "^1.0.0",

@@ -1,6 +1,7 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+// src/server/routes/admin/ai-context.ts
+// Admin OpenAPI routes for AI context (batch product/category details).
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { inArray, eq, isNull } from "drizzle-orm";
 import {
     products,
@@ -17,12 +18,7 @@ import {
 } from "@scalius/database/schema";
 import * as SettingsService from "@scalius/core/modules/settings/settings.service";
 
-const app = new Hono<{
-    Variables: {
-        db: any;
-        env: any;
-    };
-}>();
+const app = new OpenAPIHono();
 
 interface VariantWithBuyNowUrl extends ProductVariant {
     buyNowUrl: string;
@@ -43,7 +39,6 @@ interface CategoryContextDetail extends Category {
     url: string;
 }
 
-// Helper function to calculate final price
 function calculateFinalPrice(
     basePrice: number,
     discountType: "percentage" | "flat" | null,
@@ -67,10 +62,22 @@ const batchDetailsSchema = z.object({
     allCategories: z.boolean().optional(),
 });
 
-app.post("/batch-details", zValidator("json", batchDetailsSchema), async (c) => {
+const batchDetailsRoute = createRoute({
+    method: "post",
+    path: "/batch-details",
+    tags: ["Admin - AI Context"],
+    summary: "Fetch batch product and category details for AI context",
+    request: {
+        body: { content: { "application/json": { schema: batchDetailsSchema } } },
+    },
+    responses: {
+        200: { description: "Batch details", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(batchDetailsRoute, async (c) => {
     try {
         const db = c.get("db");
-        // Use KV for settings cache if available via context
         const kv = c.get("env")?.CACHE;
         const { productIds, categoryIds, allCategories } = c.req.valid("json");
 
@@ -133,9 +140,9 @@ app.post("/batch-details", zValidator("json", batchDetailsSchema), async (c) => 
                         ? categoryMap.get(product.categoryId)
                         : null;
 
-                    const productVariants = variants.filter((v: any) => v.productId === product.id);
+                    const productVariantsList = variants.filter((v: any) => v.productId === product.id);
                     const variantsWithBuyNowUrls: VariantWithBuyNowUrl[] = await Promise.all(
-                        productVariants.map(async (variant: any) => {
+                        productVariantsList.map(async (variant: any) => {
                             const finalPrice = calculateFinalPrice(
                                 variant.price,
                                 variant.discountType,
@@ -207,7 +214,7 @@ app.post("/batch-details", zValidator("json", batchDetailsSchema), async (c) => 
         return c.json({
             products: productsData,
             categories: categoriesData,
-        });
+        }, 200);
     } catch (error: any) {
         console.error("Batch fetch error:", error);
         return c.json(

@@ -1,7 +1,7 @@
 // src/server/routes/admin/rbac.ts
-import { Hono } from "hono";
-import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
+// Admin OpenAPI routes for RBAC (roles, permissions, user roles).
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, inArray, and } from "drizzle-orm";
 import { roles, rolePermissions, permissions, userRoles, user } from "@scalius/database/schema";
 import {
@@ -17,7 +17,7 @@ import {
 } from "@scalius/core/auth/rbac/helpers";
 import { PERMISSIONS, getPermissionsByCategory } from "@scalius/core/auth/rbac/permissions";
 
-const app = new Hono<{ Bindings: any, Variables: any }>();
+const app = new OpenAPIHono();
 
 // -- Validation Schemas --
 
@@ -50,11 +50,19 @@ const removeOverrideSchema = z.object({
     permission: z.string().min(1),
 });
 
+// ── List Roles ──
 
-// -- Endpoints --
+const listRolesRoute = createRoute({
+    method: "get",
+    path: "/roles",
+    tags: ["Admin - RBAC"],
+    summary: "List all roles with permissions",
+    responses: {
+        200: { description: "Role list", content: { "application/json": { schema: z.any() } } },
+    },
+});
 
-// GET /roles - List all roles with permissions
-app.get("/roles", async (c) => {
+app.openapi(listRolesRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
@@ -76,8 +84,22 @@ app.get("/roles", async (c) => {
     }
 });
 
-// POST /roles - Create a new role
-app.post("/roles", zValidator("json", createRoleSchema), async (c) => {
+// ── Create Role ──
+
+const createRoleRoute = createRoute({
+    method: "post",
+    path: "/roles",
+    tags: ["Admin - RBAC"],
+    summary: "Create a new role",
+    request: {
+        body: { content: { "application/json": { schema: createRoleSchema } } },
+    },
+    responses: {
+        201: { description: "Role created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(createRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
@@ -142,14 +164,28 @@ app.post("/roles", zValidator("json", createRoleSchema), async (c) => {
     }
 });
 
-// GET /roles/:id - Get a single role with permissions
-app.get("/roles/:id", async (c) => {
+// ── Get Role ──
+
+const getRoleRoute = createRoute({
+    method: "get",
+    path: "/roles/{id}",
+    tags: ["Admin - RBAC"],
+    summary: "Get a single role with permissions",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Role ID" }) }),
+    },
+    responses: {
+        200: { description: "Role details", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(getRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
 
         const db = c.get("db");
-        const roleId = c.req.param("id");
+        const { id: roleId } = c.req.valid("param");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW);
@@ -178,14 +214,29 @@ app.get("/roles/:id", async (c) => {
     }
 });
 
-// PUT /roles/:id - Update a role
-app.put("/roles/:id", zValidator("json", updateRoleSchema), async (c) => {
+// ── Update Role ──
+
+const updateRoleRoute = createRoute({
+    method: "put",
+    path: "/roles/{id}",
+    tags: ["Admin - RBAC"],
+    summary: "Update a role",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Role ID" }) }),
+        body: { content: { "application/json": { schema: updateRoleSchema } } },
+    },
+    responses: {
+        200: { description: "Role updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
 
         const db = c.get("db");
-        const roleId = c.req.param("id");
+        const { id: roleId } = c.req.valid("param");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
@@ -254,14 +305,28 @@ app.put("/roles/:id", zValidator("json", updateRoleSchema), async (c) => {
     }
 });
 
-// DELETE /roles/:id - Delete a role
-app.delete("/roles/:id", async (c) => {
+// ── Delete Role ──
+
+const deleteRoleRoute = createRoute({
+    method: "delete",
+    path: "/roles/{id}",
+    tags: ["Admin - RBAC"],
+    summary: "Delete a role",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Role ID" }) }),
+    },
+    responses: {
+        200: { description: "Role deleted", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(deleteRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
 
         const db = c.get("db");
-        const roleId = c.req.param("id");
+        const { id: roleId } = c.req.valid("param");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
@@ -302,8 +367,22 @@ app.delete("/roles/:id", async (c) => {
     }
 });
 
-// POST /user-roles - Assign a role to a user
-app.post("/user-roles", zValidator("json", userRoleSchema), async (c) => {
+// ── Assign Role to User ──
+
+const assignRoleRoute = createRoute({
+    method: "post",
+    path: "/user-roles",
+    tags: ["Admin - RBAC"],
+    summary: "Assign a role to a user",
+    request: {
+        body: { content: { "application/json": { schema: userRoleSchema } } },
+    },
+    responses: {
+        201: { description: "Role assigned", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(assignRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
@@ -354,8 +433,22 @@ app.post("/user-roles", zValidator("json", userRoleSchema), async (c) => {
     }
 });
 
-// DELETE /user-roles - Remove a role from a user
-app.delete("/user-roles", zValidator("json", userRoleSchema), async (c) => {
+// ── Remove Role from User ──
+
+const removeRoleRoute = createRoute({
+    method: "delete",
+    path: "/user-roles",
+    tags: ["Admin - RBAC"],
+    summary: "Remove a role from a user",
+    request: {
+        body: { content: { "application/json": { schema: userRoleSchema } } },
+    },
+    responses: {
+        200: { description: "Role removed", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(removeRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
@@ -391,8 +484,22 @@ app.delete("/user-roles", zValidator("json", userRoleSchema), async (c) => {
     }
 });
 
-// POST /user-permissions - Set a permission override for a user
-app.post("/user-permissions", zValidator("json", setOverrideSchema), async (c) => {
+// ── Set Permission Override ──
+
+const setOverrideRoute = createRoute({
+    method: "post",
+    path: "/user-permissions",
+    tags: ["Admin - RBAC"],
+    summary: "Set a permission override for a user",
+    request: {
+        body: { content: { "application/json": { schema: setOverrideSchema } } },
+    },
+    responses: {
+        200: { description: "Override set", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(setOverrideRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
@@ -435,8 +542,22 @@ app.post("/user-permissions", zValidator("json", setOverrideSchema), async (c) =
     }
 });
 
-// DELETE /user-permissions - Remove a permission override
-app.delete("/user-permissions", zValidator("json", removeOverrideSchema), async (c) => {
+// ── Remove Permission Override ──
+
+const removeOverrideRoute = createRoute({
+    method: "delete",
+    path: "/user-permissions",
+    tags: ["Admin - RBAC"],
+    summary: "Remove a permission override",
+    request: {
+        body: { content: { "application/json": { schema: removeOverrideSchema } } },
+    },
+    responses: {
+        200: { description: "Override removed", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(removeOverrideRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
@@ -472,8 +593,19 @@ app.delete("/user-permissions", zValidator("json", removeOverrideSchema), async 
     }
 });
 
-// GET /permissions - List all available permissions
-app.get("/permissions", async (c) => {
+// ── List Permissions ──
+
+const listPermissionsRoute = createRoute({
+    method: "get",
+    path: "/permissions",
+    tags: ["Admin - RBAC"],
+    summary: "List all available permissions",
+    responses: {
+        200: { description: "Permissions list", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listPermissionsRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
@@ -500,8 +632,19 @@ app.get("/permissions", async (c) => {
     }
 });
 
-// GET /my-permissions - Get current user's permissions context
-app.get("/my-permissions", async (c) => {
+// ── My Permissions ──
+
+const myPermissionsRoute = createRoute({
+    method: "get",
+    path: "/my-permissions",
+    tags: ["Admin - RBAC"],
+    summary: "Get current user's permission context",
+    responses: {
+        200: { description: "User permission context", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(myPermissionsRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);

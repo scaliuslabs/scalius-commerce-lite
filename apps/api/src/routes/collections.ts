@@ -1,10 +1,11 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { collections, products, categories } from "@scalius/database/schema";
 import { eq, isNull, and, inArray, desc, sql } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
+import { NotFoundError } from "../utils/api-error";
 
-// Create a Hono app for collection routes
-const app = new Hono<{ Bindings: Env }>();
+// Create an OpenAPIHono app for collection routes
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware to all routes
 app.use(
@@ -42,322 +43,137 @@ const formatTimestamp = (
   return null;
 };
 
-// Get all active collections (public)
-app.get("/", async (c) => {
-  try {
-    const db = c.get("db");
-    const activeCollections = await db
-      .select({
-        id: collections.id,
-        name: collections.name,
-        type: collections.type,
-        config: collections.config,
-        sortOrder: collections.sortOrder,
-        isActive: collections.isActive,
-        createdAt: collections.createdAt,
-        updatedAt: collections.updatedAt,
-      })
-      .from(collections)
-      .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
-      .orderBy(collections.sortOrder);
-
-    const formattedCollections = activeCollections.map((collection) => ({
-      ...collection,
-      config: JSON.parse(collection.config),
-      createdAt: formatTimestamp(
-        collection.createdAt,
-        collection.id,
-        "createdAt",
-      ),
-      updatedAt: formatTimestamp(
-        collection.updatedAt,
-        collection.id,
-        "updatedAt",
-      ),
-    }));
-
-    return c.json({ collections: formattedCollections });
-  } catch (error) {
-    console.error("Error fetching collections:", error);
-    return c.json({ error: "Failed to fetch collections" }, 500);
-  }
+// GET /collections — list all active collections
+const listCollectionsRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Collections"],
+  summary: "List all active collections",
+  responses: {
+    200: {
+      description: "Collection list",
+      content: { "application/json": { schema: z.object({ collections: z.array(z.any()) }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
 });
 
+app.openapi(listCollectionsRoute, async (c) => {
+  const db = c.get("db");
+  const activeCollections = await db
+    .select({
+      id: collections.id,
+      name: collections.name,
+      type: collections.type,
+      config: collections.config,
+      sortOrder: collections.sortOrder,
+      isActive: collections.isActive,
+      createdAt: collections.createdAt,
+      updatedAt: collections.updatedAt,
+    })
+    .from(collections)
+    .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
+    .orderBy(collections.sortOrder);
 
-// Get collection by ID (public)
-// Implements the product selection logic:
-// 1. If productIds is NOT EMPTY → return ONLY these specific products (ignore categoryIds)
-// 2. If productIds is EMPTY and categoryIds is NOT EMPTY → return products from categories
-// 3. If both are empty → return empty products array
-// 4. Apply maxProducts limit (default: 8, max: 24)
-app.get("/:id", async (c) => {
-  try {
-    const db = c.get("db");
-    const id = c.req.param("id");
+  const formattedCollections = activeCollections.map((collection) => ({
+    ...collection,
+    config: JSON.parse(collection.config),
+    createdAt: formatTimestamp(
+      collection.createdAt,
+      collection.id,
+      "createdAt",
+    ),
+    updatedAt: formatTimestamp(
+      collection.updatedAt,
+      collection.id,
+      "updatedAt",
+    ),
+  }));
 
-    // First, fetch the collection (sequential - needed to parse config)
-    const collection = await db
-      .select()
-      .from(collections)
-      .where(
-        and(
-          eq(collections.id, id),
-          eq(collections.isActive, true),
-          isNull(collections.deletedAt),
-        ),
-      )
-      .get();
+  return c.json({ collections: formattedCollections }, 200);
+});
 
-    if (!collection) {
-      return c.json({ error: "Collection not found" }, 404);
-    }
+// GET /collections/:id — get collection by ID
+const getCollectionByIdRoute = createRoute({
+  method: "get",
+  path: "/{id}",
+  tags: ["Collections"],
+  summary: "Get collection by ID with resolved products",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: "Collection ID" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Collection details with resolved products",
+      content: { "application/json": { schema: z.object({ collection: z.any(), categories: z.array(z.any()), products: z.array(z.any()) }).passthrough() } },
+    },
+    404: {
+      description: "Collection not found",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
+});
 
-    // Parse the config
-    const config = JSON.parse(collection.config);
+app.openapi(getCollectionByIdRoute, async (c) => {
+  const db = c.get("db");
+  const { id } = c.req.valid("param");
 
-    // Normalize config values
-    const productIds: string[] = Array.isArray(config.productIds)
-      ? config.productIds
-      : [];
-    const categoryIds: string[] = Array.isArray(config.categoryIds)
-      ? config.categoryIds
-      : [];
+  // First, fetch the collection (sequential - needed to parse config)
+  const collection = await db
+    .select()
+    .from(collections)
+    .where(
+      and(
+        eq(collections.id, id),
+        eq(collections.isActive, true),
+        isNull(collections.deletedAt),
+      ),
+    )
+    .get();
 
-    // Apply maxProducts limit (default: 8, max: 24)
-    const maxProducts = Math.min(Math.max(config.maxProducts || 8, 1), 24);
+  if (!collection) {
+    throw new NotFoundError("Collection not found");
+  }
 
-    // Initialize response data
-    let resolvedProducts: any[] = [];
-    let resolvedCategories: any[] = [];
-    let featuredProduct: any = null;
+  // Parse the config
+  const config = JSON.parse(collection.config);
 
-    // PRODUCT SELECTION LOGIC
-    // Priority: productIds > categoryIds
-    const hasSpecificProducts = productIds.length > 0;
-    const hasCategories = categoryIds.length > 0;
-    const hasFeaturedProduct = !!config.featuredProductId;
+  // Normalize config values
+  const productIds: string[] = Array.isArray(config.productIds)
+    ? config.productIds
+    : [];
+  const categoryIds: string[] = Array.isArray(config.categoryIds)
+    ? config.categoryIds
+    : [];
 
-    // --- BATCH QUERY EXECUTION ---
-    // Use db.batch() to send all queries in a single HTTP request to Turso
-    // This eliminates per-query TLS handshake overhead on cold starts
+  // Apply maxProducts limit (default: 8, max: 24)
+  const maxProducts = Math.min(Math.max(config.maxProducts || 8, 1), 24);
 
-    if (hasSpecificProducts) {
-      // CASE 1: Specific products selected - IGNORE categoryIds completely
-      // Batch: products query + optional featured product query
-      const batchQueries: Parameters<typeof db.batch>[0] = [
-        // 0. Fetch specific products with inline primary image
-        db
-          .select({
-            id: products.id,
-            name: products.name,
-            price: products.price,
-            discountPercentage: products.discountPercentage,
-            slug: products.slug,
-            imageUrl: sql<string | null>`(
-              SELECT "product_images"."url"
-              FROM "product_images"
-              WHERE "product_images"."product_id" = "products"."id"
-                AND "product_images"."is_primary" = 1
-              ORDER BY "product_images"."sort_order" ASC
-              LIMIT 1
-            )`.as("imageUrl"),
-          })
-          .from(products)
-          .where(
-            and(
-              inArray(products.id, productIds),
-              isNull(products.deletedAt),
-              eq(products.isActive, true),
-            ),
-          )
-          .limit(maxProducts),
+  // Initialize response data
+  let resolvedProducts: any[] = [];
+  let resolvedCategories: any[] = [];
+  let featuredProduct: any = null;
 
-        // 1. Fetch featured product (will return empty if no featuredProductId)
-        db
-          .select({
-            id: products.id,
-            name: products.name,
-            price: products.price,
-            discountPercentage: products.discountPercentage,
-            slug: products.slug,
-            imageUrl: sql<string | null>`(
-              SELECT "product_images"."url"
-              FROM "product_images"
-              WHERE "product_images"."product_id" = "products"."id"
-                AND "product_images"."is_primary" = 1
-              ORDER BY "product_images"."sort_order" ASC
-              LIMIT 1
-            )`.as("imageUrl"),
-          })
-          .from(products)
-          .where(
-            hasFeaturedProduct
-              ? and(
-                  eq(products.id, config.featuredProductId),
-                  isNull(products.deletedAt),
-                  eq(products.isActive, true),
-                )
-              : sql`1 = 0`,
-          ),
-      ];
+  // PRODUCT SELECTION LOGIC
+  // Priority: productIds > categoryIds
+  const hasSpecificProducts = productIds.length > 0;
+  const hasCategories = categoryIds.length > 0;
+  const hasFeaturedProduct = !!config.featuredProductId;
 
-      const batchResults = await db.batch(batchQueries);
-
-      // Extract results
-      const productsData = batchResults[0] as {
-        id: string;
-        name: string;
-        price: number;
-        discountPercentage: number | null;
-        slug: string;
-        imageUrl: string | null;
-      }[];
-
-      const featuredData = (batchResults[1] as typeof productsData)[0];
-
-      resolvedProducts = productsData.map((product) => ({
-        ...product,
-        imageUrl: product.imageUrl ?? null,
-        discountedPrice: product.discountPercentage
-          ? Math.round(product.price * (1 - product.discountPercentage / 100))
-          : product.price,
-      }));
-
-      // Categories array is EMPTY when using specific products
-      resolvedCategories = [];
-
-      if (featuredData) {
-        featuredProduct = {
-          ...featuredData,
-          imageUrl: featuredData.imageUrl ?? null,
-          discountedPrice: featuredData.discountPercentage
-            ? Math.round(
-                featuredData.price *
-                  (1 - featuredData.discountPercentage / 100),
-              )
-            : featuredData.price,
-        };
-      }
-    } else if (hasCategories) {
-      // CASE 2: Category-based collection
-      // Batch: categories query + products query + optional featured product query
-      const batchQueries: Parameters<typeof db.batch>[0] = [
-        // 0. Fetch category details for "View All" links
-        db
-          .select({
-            id: categories.id,
-            name: categories.name,
-            slug: categories.slug,
-          })
-          .from(categories)
-          .where(
-            and(
-              inArray(categories.id, categoryIds),
-              isNull(categories.deletedAt),
-            ),
-          ),
-
-        // 1. Fetch products from categories with inline primary image
-        db
-          .select({
-            id: products.id,
-            name: products.name,
-            price: products.price,
-            discountPercentage: products.discountPercentage,
-            slug: products.slug,
-            imageUrl: sql<string | null>`(
-              SELECT "product_images"."url"
-              FROM "product_images"
-              WHERE "product_images"."product_id" = "products"."id"
-                AND "product_images"."is_primary" = 1
-              ORDER BY "product_images"."sort_order" ASC
-              LIMIT 1
-            )`.as("imageUrl"),
-          })
-          .from(products)
-          .where(
-            and(
-              inArray(products.categoryId, categoryIds),
-              isNull(products.deletedAt),
-              eq(products.isActive, true),
-            ),
-          )
-          .orderBy(desc(products.createdAt))
-          .limit(maxProducts),
-
-        // 2. Fetch featured product (will return empty if no featuredProductId)
-        db
-          .select({
-            id: products.id,
-            name: products.name,
-            price: products.price,
-            discountPercentage: products.discountPercentage,
-            slug: products.slug,
-            imageUrl: sql<string | null>`(
-              SELECT "product_images"."url"
-              FROM "product_images"
-              WHERE "product_images"."product_id" = "products"."id"
-                AND "product_images"."is_primary" = 1
-              ORDER BY "product_images"."sort_order" ASC
-              LIMIT 1
-            )`.as("imageUrl"),
-          })
-          .from(products)
-          .where(
-            hasFeaturedProduct
-              ? and(
-                  eq(products.id, config.featuredProductId),
-                  isNull(products.deletedAt),
-                  eq(products.isActive, true),
-                )
-              : sql`1 = 0`,
-          ),
-      ];
-
-      const batchResults = await db.batch(batchQueries);
-
-      // Extract results with proper typing
-      const categoriesData = batchResults[0] as {
-        id: string;
-        name: string;
-        slug: string;
-      }[];
-
-      const productsData = batchResults[1] as {
-        id: string;
-        name: string;
-        price: number;
-        discountPercentage: number | null;
-        slug: string;
-        imageUrl: string | null;
-      }[];
-
-      const featuredData = (batchResults[2] as typeof productsData)[0];
-
-      resolvedCategories = categoriesData;
-      resolvedProducts = productsData.map((product) => ({
-        ...product,
-        imageUrl: product.imageUrl ?? null,
-        discountedPrice: product.discountPercentage
-          ? Math.round(product.price * (1 - product.discountPercentage / 100))
-          : product.price,
-      }));
-
-      if (featuredData) {
-        featuredProduct = {
-          ...featuredData,
-          imageUrl: featuredData.imageUrl ?? null,
-          discountedPrice: featuredData.discountPercentage
-            ? Math.round(
-                featuredData.price *
-                  (1 - featuredData.discountPercentage / 100),
-              )
-            : featuredData.price,
-        };
-      }
-    } else if (hasFeaturedProduct) {
-      // CASE 3: Only featured product (no productIds or categoryIds)
-      const featuredData = await db
+  // --- BATCH QUERY EXECUTION ---
+  if (hasSpecificProducts) {
+    // CASE 1: Specific products selected - IGNORE categoryIds completely
+    const batchQueries: Parameters<typeof db.batch>[0] = [
+      db
         .select({
           id: products.id,
           name: products.name,
@@ -376,55 +192,251 @@ app.get("/:id", async (c) => {
         .from(products)
         .where(
           and(
-            eq(products.id, config.featuredProductId),
+            inArray(products.id, productIds),
             isNull(products.deletedAt),
             eq(products.isActive, true),
           ),
         )
-        .get();
+        .limit(maxProducts),
 
-      if (featuredData) {
-        featuredProduct = {
-          ...featuredData,
-          imageUrl: featuredData.imageUrl ?? null,
-          discountedPrice: featuredData.discountPercentage
-            ? Math.round(
-                featuredData.price *
-                  (1 - featuredData.discountPercentage / 100),
+      db
+        .select({
+          id: products.id,
+          name: products.name,
+          price: products.price,
+          discountPercentage: products.discountPercentage,
+          slug: products.slug,
+          imageUrl: sql<string | null>`(
+            SELECT "product_images"."url"
+            FROM "product_images"
+            WHERE "product_images"."product_id" = "products"."id"
+              AND "product_images"."is_primary" = 1
+            ORDER BY "product_images"."sort_order" ASC
+            LIMIT 1
+          )`.as("imageUrl"),
+        })
+        .from(products)
+        .where(
+          hasFeaturedProduct
+            ? and(
+                eq(products.id, config.featuredProductId),
+                isNull(products.deletedAt),
+                eq(products.isActive, true),
               )
-            : featuredData.price,
-        };
-      }
-    }
-    // CASE 4: Both empty - resolvedProducts and resolvedCategories stay empty
+            : sql`1 = 0`,
+        ),
+    ];
 
-    // Format the response
-    return c.json({
-      collection: {
-        ...collection,
-        config,
-        createdAt: formatTimestamp(
-          collection.createdAt,
-          collection.id,
-          "createdAt",
+    const batchResults = await db.batch(batchQueries);
+
+    const productsData = batchResults[0] as {
+      id: string;
+      name: string;
+      price: number;
+      discountPercentage: number | null;
+      slug: string;
+      imageUrl: string | null;
+    }[];
+
+    const featuredData = (batchResults[1] as typeof productsData)[0];
+
+    resolvedProducts = productsData.map((product) => ({
+      ...product,
+      imageUrl: product.imageUrl ?? null,
+      discountedPrice: product.discountPercentage
+        ? Math.round(product.price * (1 - product.discountPercentage / 100))
+        : product.price,
+    }));
+
+    resolvedCategories = [];
+
+    if (featuredData) {
+      featuredProduct = {
+        ...featuredData,
+        imageUrl: featuredData.imageUrl ?? null,
+        discountedPrice: featuredData.discountPercentage
+          ? Math.round(
+              featuredData.price *
+                (1 - featuredData.discountPercentage / 100),
+            )
+          : featuredData.price,
+      };
+    }
+  } else if (hasCategories) {
+    // CASE 2: Category-based collection
+    const batchQueries: Parameters<typeof db.batch>[0] = [
+      db
+        .select({
+          id: categories.id,
+          name: categories.name,
+          slug: categories.slug,
+        })
+        .from(categories)
+        .where(
+          and(
+            inArray(categories.id, categoryIds),
+            isNull(categories.deletedAt),
+          ),
         ),
-        updatedAt: formatTimestamp(
-          collection.updatedAt,
-          collection.id,
-          "updatedAt",
+
+      db
+        .select({
+          id: products.id,
+          name: products.name,
+          price: products.price,
+          discountPercentage: products.discountPercentage,
+          slug: products.slug,
+          imageUrl: sql<string | null>`(
+            SELECT "product_images"."url"
+            FROM "product_images"
+            WHERE "product_images"."product_id" = "products"."id"
+              AND "product_images"."is_primary" = 1
+            ORDER BY "product_images"."sort_order" ASC
+            LIMIT 1
+          )`.as("imageUrl"),
+        })
+        .from(products)
+        .where(
+          and(
+            inArray(products.categoryId, categoryIds),
+            isNull(products.deletedAt),
+            eq(products.isActive, true),
+          ),
+        )
+        .orderBy(desc(products.createdAt))
+        .limit(maxProducts),
+
+      db
+        .select({
+          id: products.id,
+          name: products.name,
+          price: products.price,
+          discountPercentage: products.discountPercentage,
+          slug: products.slug,
+          imageUrl: sql<string | null>`(
+            SELECT "product_images"."url"
+            FROM "product_images"
+            WHERE "product_images"."product_id" = "products"."id"
+              AND "product_images"."is_primary" = 1
+            ORDER BY "product_images"."sort_order" ASC
+            LIMIT 1
+          )`.as("imageUrl"),
+        })
+        .from(products)
+        .where(
+          hasFeaturedProduct
+            ? and(
+                eq(products.id, config.featuredProductId),
+                isNull(products.deletedAt),
+                eq(products.isActive, true),
+              )
+            : sql`1 = 0`,
         ),
-      },
-      // Categories only populated if productIds is empty
-      categories: resolvedCategories,
-      // Products already filtered and limited by backend
-      products: resolvedProducts,
-      // Featured product (only for collection1 style)
-      ...(featuredProduct && { featuredProduct }),
-    });
-  } catch (error) {
-    console.error("Error fetching collection:", error);
-    return c.json({ error: "Failed to fetch collection" }, 500);
+    ];
+
+    const batchResults = await db.batch(batchQueries);
+
+    const categoriesData = batchResults[0] as {
+      id: string;
+      name: string;
+      slug: string;
+    }[];
+
+    const productsData = batchResults[1] as {
+      id: string;
+      name: string;
+      price: number;
+      discountPercentage: number | null;
+      slug: string;
+      imageUrl: string | null;
+    }[];
+
+    const featuredData = (batchResults[2] as typeof productsData)[0];
+
+    resolvedCategories = categoriesData;
+    resolvedProducts = productsData.map((product) => ({
+      ...product,
+      imageUrl: product.imageUrl ?? null,
+      discountedPrice: product.discountPercentage
+        ? Math.round(product.price * (1 - product.discountPercentage / 100))
+        : product.price,
+    }));
+
+    if (featuredData) {
+      featuredProduct = {
+        ...featuredData,
+        imageUrl: featuredData.imageUrl ?? null,
+        discountedPrice: featuredData.discountPercentage
+          ? Math.round(
+              featuredData.price *
+                (1 - featuredData.discountPercentage / 100),
+            )
+          : featuredData.price,
+      };
+    }
+  } else if (hasFeaturedProduct) {
+    // CASE 3: Only featured product (no productIds or categoryIds)
+    const featuredData = await db
+      .select({
+        id: products.id,
+        name: products.name,
+        price: products.price,
+        discountPercentage: products.discountPercentage,
+        slug: products.slug,
+        imageUrl: sql<string | null>`(
+          SELECT "product_images"."url"
+          FROM "product_images"
+          WHERE "product_images"."product_id" = "products"."id"
+            AND "product_images"."is_primary" = 1
+          ORDER BY "product_images"."sort_order" ASC
+          LIMIT 1
+        )`.as("imageUrl"),
+      })
+      .from(products)
+      .where(
+        and(
+          eq(products.id, config.featuredProductId),
+          isNull(products.deletedAt),
+          eq(products.isActive, true),
+        ),
+      )
+      .get();
+
+    if (featuredData) {
+      featuredProduct = {
+        ...featuredData,
+        imageUrl: featuredData.imageUrl ?? null,
+        discountedPrice: featuredData.discountPercentage
+          ? Math.round(
+              featuredData.price *
+                (1 - featuredData.discountPercentage / 100),
+            )
+          : featuredData.price,
+      };
+    }
   }
+  // CASE 4: Both empty - resolvedProducts and resolvedCategories stay empty
+
+  // Format the response
+  return c.json({
+    collection: {
+      ...collection,
+      config,
+      createdAt: formatTimestamp(
+        collection.createdAt,
+        collection.id,
+        "createdAt",
+      ),
+      updatedAt: formatTimestamp(
+        collection.updatedAt,
+        collection.id,
+        "updatedAt",
+      ),
+    },
+    categories: resolvedCategories,
+    products: resolvedProducts,
+    ...(featuredProduct && { featuredProduct }),
+  }, 200);
 });
 
 // Export the collection routes

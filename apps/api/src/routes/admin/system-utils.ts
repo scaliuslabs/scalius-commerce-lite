@@ -1,17 +1,13 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+// src/server/routes/admin/system-utils.ts
+// Admin OpenAPI routes for system utilities (abandoned checkouts, FCM tokens).
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc, and, count, eq } from "drizzle-orm";
 import { abandonedCheckouts, orders, OrderStatus, adminFcmTokens } from "@scalius/database/schema";
 import { ftsMatch } from "@scalius/core/search";
 
-const app = new Hono<{
-    Variables: {
-        db: any;
-        user: any;
-    };
-}>();
+const app = new OpenAPIHono();
 
 // --- Abandoned Checkouts ---
 const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string | null }): boolean => {
@@ -26,20 +22,39 @@ const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string
 
         return !hasItems && !hasCustomerInfo;
     } catch {
-        return true; // Corrupt JSON is considered empty
+        return true;
     }
 };
 
-app.get("/abandoned-checkouts", async (c) => {
+// ── List Abandoned Checkouts ──
+
+const listAbandonedCheckoutsRoute = createRoute({
+    method: "get",
+    path: "/abandoned-checkouts",
+    tags: ["Admin - System Utils"],
+    summary: "List abandoned checkouts with cleanup",
+    request: {
+        query: z.object({
+            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().default(20).openapi({ description: "Items per page" }),
+            search: z.string().optional().default("").openapi({ description: "Search term" }),
+            sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
+        }),
+    },
+    responses: {
+        200: { description: "Abandoned checkout list", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listAbandonedCheckoutsRoute, async (c) => {
     const db = c.get("db");
 
     try {
         // --- Perform Cleanup ---
-        // 1. Delete any checkouts older than 30 days, regardless of content
         const thirtyDaysAgoTimestamp = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
         await db.delete(abandonedCheckouts).where(sql`${abandonedCheckouts.createdAt} <= ${thirtyDaysAgoTimestamp}`);
 
-        // 1.5 Convert INCOMPLETE orders older than 1 hour to abandoned checkouts
         const oneHourAgoTimestamp = Math.floor((Date.now() - 60 * 60 * 1000) / 1000);
         const incompleteOrders = await db.select().from(orders).where(
             and(
@@ -65,7 +80,6 @@ app.get("/abandoned-checkouts", async (c) => {
             );
         }
 
-        // 2. Find and delete empty checkouts older than 1 hour
         const candidatesForDeletion = await db.select().from(abandonedCheckouts).where(sql`${abandonedCheckouts.updatedAt} <= ${oneHourAgoTimestamp}`);
 
         const emptyCheckoutIds = candidatesForDeletion
@@ -77,11 +91,12 @@ app.get("/abandoned-checkouts", async (c) => {
         }
 
         // --- Fetch Data for UI ---
-        const page = parseInt(c.req.query("page") || "1");
-        const limit = parseInt(c.req.query("limit") || "20");
-        const search = c.req.query("search") || "";
-        const sort = (c.req.query("sort") || "updatedAt") as any;
-        const orderStr = c.req.query("order") || "desc";
+        const query = c.req.valid("query");
+        const page = query.page;
+        const limit = query.limit;
+        const search = query.search || "";
+        const sort = (query.sort || "updatedAt") as any;
+        const orderStr = query.order || "desc";
         const offset = (page - 1) * limit;
 
         const whereConditions = [];
@@ -109,7 +124,7 @@ app.get("/abandoned-checkouts", async (c) => {
                 total,
                 totalPages: Math.ceil(total / limit),
             }
-        });
+        }, 200);
 
     } catch (error: any) {
         console.error("Error fetching abandoned checkouts:", error);
@@ -117,28 +132,58 @@ app.get("/abandoned-checkouts", async (c) => {
     }
 });
 
+// ── Bulk Delete Abandoned Checkouts (POST) ──
+
 const bulkDeleteSchema = z.object({
     ids: z.array(z.string()).min(1, "No IDs provided"),
 });
 
-app.post("/abandoned-checkouts/bulk-delete", zValidator("json", bulkDeleteSchema), async (c) => {
+const bulkDeleteCheckoutsRoute = createRoute({
+    method: "post",
+    path: "/abandoned-checkouts/bulk-delete",
+    tags: ["Admin - System Utils"],
+    summary: "Bulk delete abandoned checkouts",
+    request: {
+        body: { content: { "application/json": { schema: bulkDeleteSchema } } },
+    },
+    responses: {
+        204: { description: "Checkouts deleted" },
+    },
+});
+
+app.openapi(bulkDeleteCheckoutsRoute, async (c) => {
     const db = c.get("db");
     try {
         const { ids } = c.req.valid("json");
         await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, ids));
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204 }) as any;
     } catch (error) {
         console.error("Error bulk deleting checkouts:", error);
         return c.json({ error: "Failed to bulk delete checkouts" }, 500);
     }
 });
 
-app.delete("/abandoned-checkouts", zValidator("json", bulkDeleteSchema), async (c) => {
+// ── Bulk Delete Abandoned Checkouts (DELETE) ──
+
+const deleteCheckoutsRoute = createRoute({
+    method: "delete",
+    path: "/abandoned-checkouts",
+    tags: ["Admin - System Utils"],
+    summary: "Delete abandoned checkouts by IDs",
+    request: {
+        body: { content: { "application/json": { schema: bulkDeleteSchema } } },
+    },
+    responses: {
+        204: { description: "Checkouts deleted" },
+    },
+});
+
+app.openapi(deleteCheckoutsRoute, async (c) => {
     const db = c.get("db");
     try {
         const { ids } = c.req.valid("json");
         await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, ids));
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204 }) as any;
     } catch (error) {
         console.error("Error bulk deleting checkouts:", error);
         return c.json({ error: "Failed to bulk delete checkouts" }, 500);
@@ -146,13 +191,27 @@ app.delete("/abandoned-checkouts", zValidator("json", bulkDeleteSchema), async (
 });
 
 // --- FCM Tokens ---
+
 const fcmTokenSchema = z.object({
     token: z.string().min(1, "FCM token is required"),
     userId: z.string().min(1, "User ID is required"),
     deviceInfo: z.string().optional(),
 });
 
-app.post("/fcm-token", zValidator("json", fcmTokenSchema), async (c) => {
+const registerFcmTokenRoute = createRoute({
+    method: "post",
+    path: "/fcm-token",
+    tags: ["Admin - System Utils"],
+    summary: "Register an FCM push notification token",
+    request: {
+        body: { content: { "application/json": { schema: fcmTokenSchema } } },
+    },
+    responses: {
+        200: { description: "Token registered", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(registerFcmTokenRoute, async (c) => {
     const db = c.get("db");
     const user = c.get("user");
     if (!user || !user.id) return c.json({ error: "Unauthorized" }, 401);
@@ -187,7 +246,7 @@ app.post("/fcm-token", zValidator("json", fcmTokenSchema), async (c) => {
                 },
             });
 
-        return c.json({ message: "FCM token registered successfully" });
+        return c.json({ message: "FCM token registered successfully" }, 200);
     } catch (error) {
         console.error("Error saving FCM token:", error);
         return c.json({ error: "Failed to save FCM token" }, 500);
@@ -198,7 +257,20 @@ const cleanupSchema = z.object({
     invalidTokens: z.array(z.string()).min(1),
 });
 
-app.post("/fcm-token-cleanup", zValidator("json", cleanupSchema), async (c) => {
+const cleanupFcmTokensRoute = createRoute({
+    method: "post",
+    path: "/fcm-token-cleanup",
+    tags: ["Admin - System Utils"],
+    summary: "Clean up invalid FCM tokens",
+    request: {
+        body: { content: { "application/json": { schema: cleanupSchema } } },
+    },
+    responses: {
+        200: { description: "Cleanup result", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(cleanupFcmTokensRoute, async (c) => {
     const db = c.get("db");
     const user = c.get("user");
     if (!user || !user.id) return c.json({ error: "Unauthorized" }, 401);
@@ -230,7 +302,7 @@ app.post("/fcm-token-cleanup", zValidator("json", cleanupSchema), async (c) => {
         return c.json({
             message: "Token cleanup completed successfully.",
             cleanedCount: invalidTokens.length,
-        });
+        }, 200);
     } catch (error) {
         console.error("Error cleaning up FCM tokens:", error);
         return c.json({ error: "Internal server error during cleanup." }, 500);

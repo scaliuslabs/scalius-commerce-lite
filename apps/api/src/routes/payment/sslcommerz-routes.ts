@@ -1,33 +1,47 @@
 // src/server/routes/payment/sslcommerz-routes.ts
 // Hono routes for SSLCommerz payment operations.
-// Credentials are loaded from the DB settings table (set via admin dashboard).
-//
-// POST /payment/sslcommerz/session - Initiate payment session (storefront)
-// GET/POST /payment/sslcommerz/success, fail, cancel - Redirect handlers after payment
 
-import { Hono } from "hono";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, sql } from "drizzle-orm";
 import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@scalius/database/schema";
 import { initSSLCommerzSession } from "@scalius/core/modules/payments/sslcommerz";
 import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { NotFoundError } from "../../utils/api-error";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
-// ---------------------------------------------------------------------------
-// POST /payment/sslcommerz/session
-// ---------------------------------------------------------------------------
+// ─── POST /session ───────────────────────────────────────────────────────────
+
 const sessionSchema = z.object({
   orderId: z.string().min(1),
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
   depositAmount: z.number().positive().optional(),
   currency: z.string().optional(),
-  /** Base URL for redirect callbacks (e.g. https://example.com) */
   baseUrl: z.url().optional(),
 });
 
-app.post("/session", async (c) => {
+const createSessionRoute = createRoute({
+  method: "post",
+  path: "/session",
+  tags: ["Payments - SSLCommerz"],
+  summary: "Create an SSLCommerz payment session",
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: sessionSchema },
+      },
+    },
+  },
+  responses: {
+    200: { description: "Session created", content: { "application/json": { schema: z.any() } } },
+    400: { description: "Invalid request", content: { "application/json": { schema: z.any() } } },
+    404: { description: "Order not found", content: { "application/json": { schema: z.any() } } },
+    503: { description: "SSLCommerz not configured", content: { "application/json": { schema: z.any() } } },
+  },
+});
+
+app.openapi(createSessionRoute, async (c) => {
   const db = c.get("db");
   const ssl = await getSSLCommerzSettings(db, c.env.CACHE);
 
@@ -41,12 +55,7 @@ app.post("/session", async (c) => {
     return c.json({ success: false, error: "SSLCommerz gateway is disabled." }, 503);
   }
 
-  let body: z.infer<typeof sessionSchema>;
-  try {
-    body = sessionSchema.parse(await c.req.json());
-  } catch {
-    return c.json({ success: false, error: "Invalid request body" }, 400);
-  }
+  const body = c.req.valid("json");
 
   // Fetch order + customer info
   const order = await db
@@ -67,9 +76,9 @@ app.post("/session", async (c) => {
     .where(eq(orders.id, body.orderId))
     .get();
 
-  if (!order) return c.json({ success: false, error: "Order not found" }, 404);
+  if (!order) throw new NotFoundError("Order not found");
 
-  // Resolve currency from settings if not provided in the request
+  // Resolve currency
   if (!body.currency) {
     const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
     body.currency = currencyConfig.code;
@@ -150,17 +159,12 @@ app.post("/session", async (c) => {
     success: true,
     gatewayUrl: result.gatewayUrl,
     sessionKey: result.sessionKey,
-  });
+  }, 200);
 });
 
-// ---------------------------------------------------------------------------
-// Redirect handlers (called by SSLCommerz after customer completes payment)
-// IPN (POST) handles the actual DB update via /webhooks/sslcommerz
-// These just redirect the customer to the appropriate storefront page
-// ---------------------------------------------------------------------------
-
-// SSLCommerz POSTs to these callback URLs with form-urlencoded body.
-// Also handle GET for manual navigation / edge cases.
+// ─── Redirect handlers ──────────────────────────────────────────────────────
+// SSLCommerz POSTs to these callback URLs. Also handle GET for edge cases.
+// These are NOT OpenAPI routes — external callbacks, not client-consumed APIs.
 
 async function extractTranId(c: any): Promise<string> {
   if (c.req.method === "POST") {
@@ -172,11 +176,9 @@ async function extractTranId(c: any): Promise<string> {
   return c.req.query("tran_id") ?? "";
 }
 
-/** Resolve the storefront base URL (never the admin dashboard). */
 function getStorefrontUrl(c: any): string {
   const envUrl = c.env?.STOREFRONT_URL;
-  if (envUrl) return envUrl.replace(/\/+$/, ""); // trim trailing slash
-  // Fallback: if STOREFRONT_URL is not set, use request origin (shouldn't happen in production)
+  if (envUrl) return envUrl.replace(/\/+$/, "");
   return new URL(c.req.url).origin;
 }
 

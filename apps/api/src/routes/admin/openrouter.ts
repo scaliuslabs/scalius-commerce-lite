@@ -1,4 +1,7 @@
-import { Hono } from "hono";
+// src/server/routes/admin/openrouter.ts
+// Admin OpenAPI routes for OpenRouter AI generation.
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import {
@@ -9,15 +12,21 @@ import {
     ERROR_MESSAGES,
 } from "@scalius/core/modules/ai/ai-config";
 
-const app = new Hono<{
-    Variables: {
-        db: any;
-        env: any;
-    };
-}>();
+const app = new OpenAPIHono();
 
-// GET /api/v1/admin/openrouter/models
-app.get("/models", async (c) => {
+// ── List Models ──
+
+const listModelsRoute = createRoute({
+    method: "get",
+    path: "/models",
+    tags: ["Admin - OpenRouter"],
+    summary: "List available OpenRouter models",
+    responses: {
+        200: { description: "Model list", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listModelsRoute, async (c) => {
     try {
         const response = await fetch("https://openrouter.ai/api/v1/models");
 
@@ -41,15 +50,26 @@ app.get("/models", async (c) => {
             outputModalities: model.architecture?.output_modalities || ['text'],
         }));
 
-        return c.json({ models: processedModels });
+        return c.json({ models: processedModels }, 200);
     } catch (error: any) {
         console.error("Error fetching OpenRouter models:", error);
         return c.json({ message: "Error fetching models" }, 500);
     }
 });
 
-// POST /api/v1/admin/openrouter/generate
-app.post("/generate", async (c) => {
+// ── Generate ──
+
+const generateRoute = createRoute({
+    method: "post",
+    path: "/generate",
+    tags: ["Admin - OpenRouter"],
+    summary: "Generate AI content via OpenRouter",
+    responses: {
+        200: { description: "Generation result", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(generateRoute, async (c) => {
     const db = c.get("db");
     try {
         const apiKeyRecord = await db
@@ -131,7 +151,7 @@ app.post("/generate", async (c) => {
                     errorMessage = errorBody.substring(0, 200);
                 }
 
-                console.error("❌ OpenRouter API Error:", errorBody);
+                console.error("OpenRouter API Error:", errorBody);
                 return c.json({ message: errorMessage, status: response.status }, response.status as any);
             }
 
@@ -142,7 +162,7 @@ app.post("/generate", async (c) => {
                         "Connection": "keep-alive",
                         "Cache-Control": "no-cache",
                     },
-                });
+                }) as any;
             } else {
                 const data = await response.json();
 
@@ -154,7 +174,7 @@ app.post("/generate", async (c) => {
                     console.log(`[OpenRouter] ${model} | ${requestDuration}ms`);
                 }
 
-                return c.json(data);
+                return c.json(data, 200);
             }
         } catch (error: any) {
             clearTimeout(timeoutId);
@@ -172,8 +192,19 @@ app.post("/generate", async (c) => {
     }
 });
 
-// POST /api/v1/admin/openrouter/generate-staged
-app.post("/generate-staged", async (c) => {
+// ── Generate Staged ──
+
+const generateStagedRoute = createRoute({
+    method: "post",
+    path: "/generate-staged",
+    tags: ["Admin - OpenRouter"],
+    summary: "Generate AI content in stages via OpenRouter",
+    responses: {
+        200: { description: "Staged generation result", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(generateStagedRoute, async (c) => {
     const db = c.get("db");
     try {
         const apiKeyRecord = await db
@@ -244,7 +275,7 @@ app.post("/generate-staged", async (c) => {
                     errorMessage = errorBody.substring(0, 200);
                 }
 
-                console.error("❌ OpenRouter API Error:", errorBody);
+                console.error("OpenRouter API Error:", errorBody);
                 return c.json({ message: errorMessage, details: errorBody }, response.status as any);
             }
 
@@ -265,7 +296,7 @@ app.post("/generate-staged", async (c) => {
                 stage,
                 sectionIndex,
                 totalSections,
-            });
+            }, 200);
         } catch (error: any) {
             clearTimeout(timeoutId);
             if (error.name === 'AbortError') {

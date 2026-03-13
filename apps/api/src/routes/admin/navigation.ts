@@ -1,19 +1,25 @@
 // src/server/routes/admin/navigation.ts
-import { Hono } from "hono";
+// Admin OpenAPI routes for navigation.
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { NavigationService } from "@scalius/core/modules/navigation";
 
-const app = new Hono<{ Bindings: any }>();
+const app = new OpenAPIHono();
 
-app.get("/items", async (c) => {
+const listItemsRoute = createRoute({
+    method: "get",
+    path: "/items",
+    tags: ["Admin - Navigation"],
+    summary: "Get navigation items",
+    responses: {
+        200: { description: "Navigation items list", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listItemsRoute, async (c) => {
     const db = c.get("db");
-
-    try {
-        const items = await NavigationService.getNavigationItems(db);
-        return c.json({ items });
-    } catch (error: any) {
-        console.error("Error fetching navigation items:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
+    const items = await NavigationService.getNavigationItems(db);
+    return c.json({ items }, 200);
 });
 
 export { app as adminNavigationRoutes };

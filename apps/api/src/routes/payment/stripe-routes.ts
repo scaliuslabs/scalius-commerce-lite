@@ -1,23 +1,18 @@
 // src/server/routes/payment/stripe-routes.ts
 // Hono routes for Stripe payment operations.
-// Credentials are loaded from the DB settings table (set via admin dashboard).
-//
-// POST /payment/stripe/intent - Create PaymentIntent (storefront)
 
-import { Hono } from "hono";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, sql } from "drizzle-orm";
 import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@scalius/database/schema";
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
 import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
-// ---------------------------------------------------------------------------
-// POST /payment/stripe/intent
-// Create a Stripe PaymentIntent for an existing order.
-// ---------------------------------------------------------------------------
+// ─── POST /intent ────────────────────────────────────────────────────────────
+
 const intentSchema = z.object({
   orderId: z.string().min(1),
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
@@ -26,7 +21,27 @@ const intentSchema = z.object({
   manualCapture: z.boolean().default(false),
 });
 
-app.post("/intent", async (c) => {
+const createIntentRoute = createRoute({
+  method: "post",
+  path: "/intent",
+  tags: ["Payments - Stripe"],
+  summary: "Create a Stripe PaymentIntent for an order",
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: intentSchema },
+      },
+    },
+  },
+  responses: {
+    200: { description: "PaymentIntent created", content: { "application/json": { schema: z.any() } } },
+    400: { description: "Invalid request", content: { "application/json": { schema: z.any() } } },
+    404: { description: "Order not found", content: { "application/json": { schema: z.any() } } },
+    503: { description: "Stripe not configured", content: { "application/json": { schema: z.any() } } },
+  },
+});
+
+app.openapi(createIntentRoute, async (c) => {
   const db = c.get("db");
   const stripe = await getStripeSettings(db, c.env.CACHE);
 
@@ -40,12 +55,7 @@ app.post("/intent", async (c) => {
     return c.json({ success: false, error: "Stripe gateway is disabled." }, 503);
   }
 
-  let body: z.infer<typeof intentSchema>;
-  try {
-    body = intentSchema.parse(await c.req.json());
-  } catch {
-    return c.json({ success: false, error: "Invalid request body" }, 400);
-  }
+  const body = c.req.valid("json");
 
   // Fetch the order
   const order = await db
@@ -61,9 +71,9 @@ app.post("/intent", async (c) => {
     .where(eq(orders.id, body.orderId))
     .get();
 
-  if (!order) return c.json({ success: false, error: "Order not found" }, 404);
+  if (!order) throw new NotFoundError("Order not found");
 
-  // Resolve currency from settings if not provided in the request
+  // Resolve currency from settings if not provided
   if (!body.currency) {
     const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
     body.currency = currencyConfig.code.toLowerCase();
@@ -93,7 +103,6 @@ app.post("/intent", async (c) => {
     chargeAmount = order.totalAmount;
   }
 
-  // Convert to smallest currency unit (e.g. 1 unit = 100 subunits)
   const amountInSmallestUnit = Math.round(chargeAmount * 100);
 
   const result = await createPaymentIntent(stripe.secretKey, {
@@ -135,7 +144,7 @@ app.post("/intent", async (c) => {
     publishableKey: stripe.publishableKey,
     amount: chargeAmount,
     currency: body.currency,
-  });
+  }, 200);
 });
 
 export const stripePaymentRoutes = app;

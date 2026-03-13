@@ -1,5 +1,4 @@
-import { Hono } from "hono";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import {
   discounts,
@@ -15,15 +14,15 @@ import {
 import { eq, sql, and, isNull, count, inArray } from "drizzle-orm";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Schema for validating discount code
 const validateDiscountSchema = z.object({
-  code: z.string().min(1),
-  total: z.coerce.number().optional(),
-  items: z.string().optional(),
-  shippingCost: z.coerce.number().optional().default(0),
-  customerPhone: z.string().optional(),
+  code: z.string().min(1).openapi({ description: "Discount code to validate" }),
+  total: z.coerce.number().optional().openapi({ description: "Cart total" }),
+  items: z.string().optional().openapi({ description: "JSON-encoded cart items" }),
+  shippingCost: z.coerce.number().optional().default(0).openapi({ description: "Shipping cost" }),
+  customerPhone: z.string().optional().openapi({ description: "Customer phone for per-customer limits" }),
 });
 
 // Schema for cart item - coerce numbers to handle string values from localStorage
@@ -67,12 +66,10 @@ async function expandCollectionsToProductIds(
       try {
         const config = JSON.parse(collection.config);
 
-        // Add category IDs from new schema (config.categoryIds)
         if (Array.isArray(config.categoryIds)) {
           config.categoryIds.forEach((id: string) => allCategoryIds.add(id));
         }
 
-        // Add product IDs from new schema (config.productIds)
         if (Array.isArray(config.productIds)) {
           config.productIds.forEach((id: string) => allProductIds.add(id));
         }
@@ -178,7 +175,6 @@ export async function isDiscountValid(
   // Check total usage limit
   if (discount.maxUses) {
     try {
-      // Convert count to an explicit expression with aliasing to ensure proper typing
       const countExpr = count().as("count");
       const usageCountResult = await db
         .select({ count: countExpr })
@@ -199,22 +195,19 @@ export async function isDiscountValid(
       }
     } catch (error) {
       console.error("Error checking discount usage count:", error);
-      // Don't fail the validation, just log the error
     }
   }
 
   // Check usage limit per customer (requires customerPhone)
   if (discount.limitOnePerCustomer && customerPhone) {
     try {
-      // or join with discountUsage->orders->customers (might be slow)
-      // Let's check discountUsage joined with orders for the phone number
       console.log(`Checking one-use-per-customer for phone: ${customerPhone}`);
 
       const customerUsageResult = await db
         .select({ id: discountUsage.id })
         .from(discountUsage)
         .leftJoin(
-          orders, // Assuming orders table is imported or available
+          orders,
           eq(discountUsage.orderId, orders.id),
         )
         .where(
@@ -239,7 +232,6 @@ export async function isDiscountValid(
       }
     } catch (error) {
       console.error("Error checking customer discount usage:", error);
-      // Don't fail the validation, just log the error
     }
   } else if (discount.limitOnePerCustomer && !customerPhone) {
     console.log(
@@ -261,7 +253,7 @@ export async function isDiscountValid(
       applicableProductIds.add(dp.productId),
     );
 
-    // Get product IDs from linked collections (THIS WAS MISSING!)
+    // Get product IDs from linked collections
     const discountCollectionsResult = await db
       .select({ collectionId: discountCollections.collectionId })
       .from(discountCollections)
@@ -322,16 +314,14 @@ export function calculateDiscountAmount(
   shippingCost: number = 0,
 ): number {
   if (discount.type === DiscountType.FREE_SHIPPING) {
-    // Return the actual shipping cost as the discount amount
     return shippingCost;
   }
 
   if (discount.type === DiscountType.AMOUNT_OFF_ORDER) {
     if (discount.valueType === DiscountValueType.PERCENTAGE) {
-      // Calculate percentage off the subtotal (total before shipping)
       const subTotal = total - shippingCost;
       const calculatedDiscount = (subTotal * discount.discountValue) / 100;
-      return Math.min(subTotal, calculatedDiscount); // Discount cannot exceed subtotal
+      return Math.min(subTotal, calculatedDiscount);
     } else if (discount.valueType === DiscountValueType.FIXED_AMOUNT) {
       const subTotal = total - shippingCost;
       return Math.min(subTotal, discount.discountValue);
@@ -341,8 +331,6 @@ export function calculateDiscountAmount(
   if (discount.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
     const subTotal = total - shippingCost;
 
-    // For simplicity and consistent behavior, if no cart items provided
-    // just apply to the full subtotal (this is the fallback behavior)
     if (!cartItems || cartItems.length === 0) {
       if (discount.valueType === DiscountValueType.PERCENTAGE) {
         const calculatedDiscount = (subTotal * discount.discountValue) / 100;
@@ -353,19 +341,13 @@ export function calculateDiscountAmount(
       return 0;
     }
 
-    // Get applicable product IDs for this discount
-    // This is cached for this request to avoid multiple DB calls
     if (!_applicableProductCache.has(discount.id)) {
-      // This should be awaited, but since calculateDiscountAmount is not async,
-      // we're using a cache that will be populated if this discount is validated first
-      // NOTE: Passing db to populate cache
       _tryPopulateApplicableProductCache(db, discount.id);
     }
 
     const applicableProductIds =
       _applicableProductCache.get(discount.id) || new Set<string>();
 
-    // Calculate total of applicable products
     let applicableProductsTotal = 0;
     for (const item of cartItems) {
       if (applicableProductIds.has(item.id)) {
@@ -373,8 +355,6 @@ export function calculateDiscountAmount(
       }
     }
 
-    // If no specific products found in cart or empty applicableProductIds,
-    // apply to the entire subtotal
     if (applicableProductsTotal === 0 || applicableProductIds.size === 0) {
       applicableProductsTotal = subTotal;
     }
@@ -402,7 +382,6 @@ async function _tryPopulateApplicableProductCache(
   try {
     const applicableProductIds = new Set<string>();
 
-    // Get directly linked product IDs
     const discountProductsResult = await db
       .select({ productId: discountProducts.productId })
       .from(discountProducts)
@@ -413,7 +392,6 @@ async function _tryPopulateApplicableProductCache(
       applicableProductIds.add(dp.productId),
     );
 
-    // Get product IDs from linked collections
     const discountCollectionsResult = await db
       .select({ collectionId: discountCollections.collectionId })
       .from(discountCollections)
@@ -431,103 +409,112 @@ async function _tryPopulateApplicableProductCache(
       productIdsFromCollections.forEach((id) => applicableProductIds.add(id));
     }
 
-    // Store in cache
     _applicableProductCache.set(discountId, applicableProductIds);
   } catch (error) {
     console.error("Error populating applicable product cache:", error);
-    // Set empty set as fallback
     _applicableProductCache.set(discountId, new Set<string>());
   }
 }
 
-// Validate a discount code
-app.get("/validate", async (c) => {
-  try {
-    const db = c.get("db");
-    const params = validateDiscountSchema.parse(c.req.query());
-    const { code, total, items, shippingCost, customerPhone } = params;
+// GET /discounts/validate — validate a discount code
+const validateDiscountRoute = createRoute({
+  method: "get",
+  path: "/validate",
+  tags: ["Discounts"],
+  summary: "Validate a discount code",
+  request: {
+    query: validateDiscountSchema,
+  },
+  responses: {
+    200: {
+      description: "Discount validation result",
+      content: { "application/json": { schema: z.any() } },
+    },
+    400: {
+      description: "Bad request",
+      content: { "application/json": { schema: z.object({ valid: z.literal(false), error: z.any() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ valid: z.literal(false), error: z.string() }) } },
+    },
+  },
+});
 
-    // Parse cart items if provided
-    let cartItems: any[] = [];
-    if (items) {
-      try {
-        const parsed = JSON.parse(items);
-        // Ensure it's an array
-        const itemsArray = Array.isArray(parsed) ? parsed : Object.values(parsed);
-        // Validate and coerce each item
-        cartItems = itemsArray.map((item: any) => {
-          return cartItemSchema.parse(item);
-        });
-      } catch (error) {
-        const message =
-          error instanceof z.ZodError
-            ? `Invalid cart items: ${error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
-            : "Invalid cart items format";
-        return c.json({ valid: false, error: message }, 400);
-      }
+app.openapi(validateDiscountRoute, async (c) => {
+  const db = c.get("db");
+  const params = c.req.valid("query");
+  const { code, total, items, shippingCost, customerPhone } = params;
+
+  // Parse cart items if provided
+  let cartItems: any[] = [];
+  if (items) {
+    try {
+      const parsed = JSON.parse(items);
+      const itemsArray = Array.isArray(parsed) ? parsed : Object.values(parsed);
+      cartItems = itemsArray.map((item: any) => {
+        return cartItemSchema.parse(item);
+      });
+    } catch (error) {
+      const message =
+        error instanceof z.ZodError
+          ? `Invalid cart items: ${error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
+          : "Invalid cart items format";
+      return c.json({ valid: false as const, error: message }, 400);
     }
+  }
 
-    // Fetch currency config for dynamic symbol
-    const currencyConfig = await getCurrencyConfig(db);
+  // Fetch currency config for dynamic symbol
+  const currencyConfig = await getCurrencyConfig(db);
 
-    // Validate the discount code
-    const validationResult = await isDiscountValid(
+  // Validate the discount code
+  const validationResult = await isDiscountValid(
+    db,
+    code,
+    total ? Number(total) : undefined,
+    cartItems,
+    customerPhone,
+    currencyConfig.symbol,
+  );
+
+  // If valid, calculate the discount amount
+  if (validationResult.valid && validationResult.discount) {
+    const discountAmount = calculateDiscountAmount(
       db,
-      code,
-      total ? Number(total) : undefined,
+      validationResult.discount,
+      total || 0,
       cartItems,
-      customerPhone,
-      currencyConfig.symbol,
+      shippingCost || 0,
     );
 
-    // If valid, calculate the discount amount
-    if (validationResult.valid && validationResult.discount) {
-      const discountAmount = calculateDiscountAmount(
-        db,
-        validationResult.discount,
-        total || 0, // Use cart total (subtotal + shipping potentially)
-        cartItems,
-        shippingCost || 0,
-      );
+    const enhancedDiscount = {
+      ...validationResult.discount,
+      combinable: {
+        withProductDiscounts:
+          validationResult.discount.type === DiscountType.FREE_SHIPPING ||
+          !!validationResult.discount.combineWithProductDiscounts,
 
-      // Create enhanced response for client
-      const enhancedDiscount = {
-        ...validationResult.discount,
-        // Make combinability explicit for each case - free shipping can combine with product/order
-        combinable: {
-          withProductDiscounts:
-            validationResult.discount.type === DiscountType.FREE_SHIPPING ||
-            !!validationResult.discount.combineWithProductDiscounts,
+        withOrderDiscounts:
+          validationResult.discount.type ===
+          DiscountType.AMOUNT_OFF_PRODUCTS ||
+          !!validationResult.discount.combineWithOrderDiscounts,
 
-          withOrderDiscounts:
-            validationResult.discount.type ===
-            DiscountType.AMOUNT_OFF_PRODUCTS ||
-            !!validationResult.discount.combineWithOrderDiscounts,
+        withShippingDiscounts:
+          validationResult.discount.type === DiscountType.AMOUNT_OFF_ORDER ||
+          validationResult.discount.type ===
+          DiscountType.AMOUNT_OFF_PRODUCTS ||
+          !!validationResult.discount.combineWithShippingDiscounts,
+      },
+    };
 
-          withShippingDiscounts:
-            validationResult.discount.type === DiscountType.AMOUNT_OFF_ORDER ||
-            validationResult.discount.type ===
-            DiscountType.AMOUNT_OFF_PRODUCTS ||
-            !!validationResult.discount.combineWithShippingDiscounts,
-        },
-      };
-
-      // Return the enhanced response
-      return c.json({
-        valid: true,
-        discount: enhancedDiscount,
-        discountAmount: parseFloat(discountAmount.toFixed(2)),
-      });
-    }
-
-    return c.json(validationResult);
-  } catch (error) {
-    console.error("Error validating discount:", error);
-    if (error instanceof z.ZodError) {
-      return c.json({ valid: false, error: error.issues }, 400);
-    }
-    return c.json({ valid: false, error: "Failed to validate discount" }, 500);
+    return c.json({
+      valid: true,
+      discount: enhancedDiscount,
+      discountAmount: parseFloat(discountAmount.toFixed(2)),
+    }, 200);
   }
+
+  return c.json(validationResult, 200);
 });
 
 export { app as discountRoutes };

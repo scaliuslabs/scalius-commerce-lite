@@ -1,9 +1,7 @@
 // src/server/routes/admin/customers.ts
-// Admin Hono routes for customers.
-// All DB logic is delegated to src/modules/customers/customers.service.ts.
+// Admin OpenAPI routes for customers.
 
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     listCustomers,
     createCustomer,
@@ -16,27 +14,62 @@ import {
     restoreCustomer,
     bulkDeleteCustomers,
 } from "@scalius/core/modules/customers";
-import { z } from "zod";
+import { NotFoundError } from "../../utils/api-error";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono();
 
-// GET /admin/customers
-app.get("/", async (c) => {
+// ── List Customers ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Customers"],
+    summary: "List all customers",
+    request: {
+        query: z.object({
+            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().default(10).openapi({ description: "Items per page" }),
+            search: z.string().optional().default("").openapi({ description: "Search term" }),
+            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
+            sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
+        }),
+    },
+    responses: {
+        200: { description: "Customer list with pagination", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listRoute, async (c) => {
     const db = c.get("db");
-    const q = c.req.query();
+    const q = c.req.valid("query");
     const result = await listCustomers(db, {
-        page: parseInt(q.page || "1"),
-        limit: parseInt(q.limit || "10"),
+        page: q.page,
+        limit: q.limit,
         search: q.search || "",
         showTrashed: q.trashed === "true",
         sort: (q.sort as any) || "updatedAt",
         order: (q.order as any) || "desc",
     });
-    return c.json(result);
+    return c.json(result, 200);
 });
 
-// POST /admin/customers
-app.post("/", zValidator("json", createCustomerSchema), async (c) => {
+// ── Create Customer ──
+
+const createCustomerRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Customers"],
+    summary: "Create a customer",
+    request: {
+        body: { content: { "application/json": { schema: createCustomerSchema } } },
+    },
+    responses: {
+        201: { description: "Customer created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(createCustomerRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     try {
@@ -45,54 +78,152 @@ app.post("/", zValidator("json", createCustomerSchema), async (c) => {
     } catch (error: any) {
         return c.json({ error: error.message }, error.statusCode || 400);
     }
-
 });
 
-// POST /admin/customers/bulk-delete
-app.post("/bulk-delete", zValidator("json", z.object({ customerIds: z.array(z.string()), permanent: z.boolean().default(false) })), async (c) => {
+// ── Bulk Delete Customers ──
+
+const bulkDeleteRoute = createRoute({
+    method: "post",
+    path: "/bulk-delete",
+    tags: ["Admin - Customers"],
+    summary: "Bulk delete customers",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        customerIds: z.array(z.string()),
+                        permanent: z.boolean().default(false),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        204: { description: "Customers deleted" },
+    },
+});
+
+app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { customerIds, permanent } = c.req.valid("json");
     await bulkDeleteCustomers(db, customerIds, permanent);
     return c.body(null, 204);
 });
 
-// GET /admin/customers/:id
-app.get("/:id", async (c) => {
-    const db = c.get("db");
-    const customer = await getCustomerById(db, c.req.param("id"));
-    if (!customer) return c.json({ error: "Customer not found" }, 404);
-    return c.json(customer);
+// ── Get Customer By ID ──
+
+const getByIdRoute = createRoute({
+    method: "get",
+    path: "/{id}",
+    tags: ["Admin - Customers"],
+    summary: "Get a customer by ID",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
+    },
+    responses: {
+        200: { description: "Customer details", content: { "application/json": { schema: z.any() } } },
+    },
 });
 
-// PUT /admin/customers/:id
-app.put("/:id", zValidator("json", updateCustomerSchema), async (c) => {
+app.openapi(getByIdRoute, async (c) => {
     const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const customer = await getCustomerById(db, id);
+    if (!customer) throw new NotFoundError("Customer not found");
+    return c.json(customer, 200);
+});
+
+// ── Update Customer ──
+
+const updateCustomerRoute = createRoute({
+    method: "put",
+    path: "/{id}",
+    tags: ["Admin - Customers"],
+    summary: "Update a customer",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
+        body: { content: { "application/json": { schema: updateCustomerSchema } } },
+    },
+    responses: {
+        200: { description: "Customer updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateCustomerRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
     try {
-        await updateCustomer(db, c.req.param("id"), c.req.valid("json"));
-        return c.json({ success: true });
+        await updateCustomer(db, id, c.req.valid("json"));
+        return c.json({ success: true }, 200);
     } catch (error: any) {
         return c.json({ error: error.message }, error.statusCode || 400);
     }
 });
 
-// DELETE /admin/customers/:id
-app.delete("/:id", async (c) => {
+// ── Delete Customer ──
+
+const deleteCustomerRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Customers"],
+    summary: "Soft-delete a customer",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
+    },
+    responses: {
+        204: { description: "Customer deleted" },
+    },
+});
+
+app.openapi(deleteCustomerRoute, async (c) => {
     const db = c.get("db");
-    await deleteCustomer(db, c.req.param("id"));
+    const { id } = c.req.valid("param");
+    await deleteCustomer(db, id);
     return c.body(null, 204);
 });
 
-// DELETE /admin/customers/:id/permanent
-app.delete("/:id/permanent", async (c) => {
+// ── Permanent Delete Customer ──
+
+const permanentDeleteRoute = createRoute({
+    method: "delete",
+    path: "/{id}/permanent",
+    tags: ["Admin - Customers"],
+    summary: "Permanently delete a customer",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
+    },
+    responses: {
+        204: { description: "Customer permanently deleted" },
+    },
+});
+
+app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
-    await permanentDeleteCustomer(db, c.req.param("id"));
+    const { id } = c.req.valid("param");
+    await permanentDeleteCustomer(db, id);
     return c.body(null, 204);
 });
 
-// POST /admin/customers/:id/restore
-app.post("/:id/restore", async (c) => {
+// ── Restore Customer ──
+
+const restoreCustomerRoute = createRoute({
+    method: "post",
+    path: "/{id}/restore",
+    tags: ["Admin - Customers"],
+    summary: "Restore a soft-deleted customer",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Customer ID" }) }),
+    },
+    responses: {
+        204: { description: "Customer restored" },
+    },
+});
+
+app.openapi(restoreCustomerRoute, async (c) => {
     const db = c.get("db");
-    await restoreCustomer(db, c.req.param("id"));
+    const { id } = c.req.valid("param");
+    await restoreCustomer(db, id);
     return c.body(null, 204);
 });
 

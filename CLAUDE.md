@@ -12,6 +12,7 @@ apps/
   api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
   storefront/     # @scalius/storefront — Astro 5 SSR customer-facing store (Cloudflare Worker)
 packages/
+  api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec
   core/           # @scalius/core — Domain modules, auth, integrations, search
   database/       # @scalius/database — Drizzle schema, client, migrations
   shared/         # @scalius/shared — Pure utility functions
@@ -31,6 +32,9 @@ packages/
 | `pnpm db:generate` | Generate Drizzle migrations |
 | `pnpm db:migrate:local` | Apply pending migrations locally |
 | `pnpm db:studio` | Drizzle Studio DB browser |
+| `pnpm test` | Run all tests via vitest |
+| `pnpm test:watch` | Run tests in watch mode |
+| `pnpm generate:sdk` | Regenerate API client from OpenAPI spec |
 | `pnpm deploy` | Build + migrate + deploy all workers |
 
 ## Architecture
@@ -43,6 +47,7 @@ packages/
 
 ### Packages (JIT — no build step, consumed directly by bundler)
 
+- **`@scalius/api-client`**: Generated SDK from OpenAPI spec — typed API client and response types used by admin and storefront
 - **`@scalius/database`**: Drizzle schema (11 domain files), `getDb()` client factory, migrations
 - **`@scalius/core`**: Domain services (`src/modules/`), Better Auth config (`src/auth/`), RBAC, integrations (email, storage, firebase, meta), FTS5 search, cache utils
 - **`@scalius/shared`**: Pure utilities (currency, cors, image-optimizer, rate-limit, etc.)
@@ -63,13 +68,17 @@ packages/
 ## Key Conventions
 
 - **Thin HTTP layer**: `apps/api/src/routes/**` handles validation and auth, then delegates to `@scalius/core` services
+- **API routes use OpenAPIHono**: All routes in `apps/api/src/routes/` use `createRoute()` from `@hono/zod-openapi`. OpenAPI spec is auto-generated at `/api/v1/openapi.json`.
+- **Standardized API errors**: Use `ApiError` classes from `apps/api/src/utils/api-error.ts` (ValidationError, NotFoundError, etc.)
+- **Standardized API responses**: Use helpers from `apps/api/src/utils/api-response.ts` (ok, created, paginated, noContent)
 - **JIT packages**: No build step for packages — wrangler/esbuild bundles directly from TypeScript source
 - **Two env files per app**: `.dev.vars` (Cloudflare runtime bindings) and `.env.development` (Vite/Astro build-time vars)
 - **Service bindings**: Admin uses `env.API`, storefront uses `env.BACKEND_API` — both point to the API worker
 - **Port 4321**: Admin dashboard. Port 4322: Storefront. Port 8787: API worker.
 - **RBAC auto-seed**: Permissions/roles auto-seed on first admin dashboard access
 - **FTS5**: All text search uses SQLite FTS5. Helpers in `packages/core/src/search/fts5.ts`
-- **Storefront is standalone**: Does not import from `@scalius/*` packages (has its own API client layer, utils, types)
+- **SDK types**: Both admin and storefront use `@scalius/api-client` for API types
+- **Storefront shared imports**: Storefront imports `@scalius/shared` (utilities) and `@scalius/api-client` (types). It does NOT import `@scalius/core` or `@scalius/database` directly.
 
 ## Import Conventions
 
@@ -82,11 +91,14 @@ import { createAuth } from "@scalius/core/auth";
 import { ftsMatch } from "@scalius/core/search";
 import { cn } from "@scalius/shared/utils";
 
+// Import SDK types:
+import type { Product, Category } from "@scalius/api-client/types";
+
+// Import SDK client:
+import { client } from "@scalius/api-client";
+
 // Within apps, use @/ alias for local files:
 import { SomeComponent } from "@/components/SomeComponent";
-
-// Storefront uses its own API client (not @scalius packages):
-import { fetchWithRetry } from "@/lib/api/client";
 ```
 
 ## Key URLs (Local Dev)
@@ -101,6 +113,8 @@ import { fetchWithRetry } from "@/lib/api/client";
 
 - API Worker entry: `apps/api/src/worker.ts`
 - Hono app entry: `apps/api/src/app.ts`
+- API Response Helpers: `apps/api/src/utils/api-response.ts`
+- API Error Classes: `apps/api/src/utils/api-error.ts`
 - Admin Worker entry: `apps/admin/src/worker.ts`
 - Admin Astro config: `apps/admin/astro.config.mjs`
 - Storefront Astro config: `apps/storefront/astro.config.mjs`
@@ -113,6 +127,9 @@ import { fetchWithRetry } from "@/lib/api/client";
 - Auth config: `packages/core/src/auth/auth.ts`
 - Auth client: `apps/admin/src/lib/auth-client.ts`
 - Storefront API client: `apps/storefront/src/lib/api/client.ts`
+- SDK Package: `packages/api-client/`
+- SDK Generated Types: `packages/api-client/src/generated/types.gen.ts`
+- Customer Auth Service: `packages/core/src/modules/customers/customer-auth.service.ts`
 - DB Schema: `packages/database/src/schema/`
 - Migrations: `packages/database/migrations/`
 
@@ -122,9 +139,10 @@ import { fetchWithRetry } from "@/lib/api/client";
 @scalius/shared          → (no deps)
 @scalius/database        → drizzle-orm, @scalius/shared
 @scalius/core            → @scalius/database, @scalius/shared, better-auth, zod, stripe, etc.
+@scalius/api-client      → (generated, no runtime deps)
 @scalius/api             → @scalius/core, @scalius/database, @scalius/shared, hono
-@scalius/admin           → @scalius/core, @scalius/database, @scalius/shared, astro, react
-@scalius/storefront      → astro, react (standalone — no @scalius/* package deps yet)
+@scalius/admin           → @scalius/core, @scalius/database, @scalius/shared, @scalius/api-client, astro, react
+@scalius/storefront      → @scalius/shared, @scalius/api-client, astro, react
 ```
 
 ## Production Domains
@@ -146,4 +164,4 @@ When working as part of an agent team on this codebase:
 - **Don't touch env files**: `.dev.vars` and `.env.development` contain secrets
 - **Schema changes need migrations**: after modifying `packages/database/src/schema/`, run `pnpm db:generate`
 - **Package changes**: when adding imports from a new package, ensure it's listed in the consuming workspace's `package.json`
-- **Storefront is standalone**: it has its own utils, API client, and types — don't add `@scalius/*` imports without coordinating
+- **Storefront shared imports only**: storefront imports `@scalius/shared` and `@scalius/api-client` — don't add `@scalius/core` or `@scalius/database` imports without coordinating

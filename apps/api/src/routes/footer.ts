@@ -1,17 +1,16 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { db } from "@scalius/database/client";
 import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
+import { NotFoundError } from "../utils/api-error";
 
-// Create a Hono app for footer routes
-const app = new Hono();
+// Create an OpenAPIHono app for footer routes
+const app = new OpenAPIHono();
 
 // Apply cache middleware to all routes
 app.use(
   "*",
   cacheMiddleware({
-    // Increased TTL to 1 hour (3600s).
-    // This allows browser/CDN caching (max-age=300) and reduces Redis/DB load.
     ttl: 3600,
     keyPrefix: "api:footer:",
     varyByQuery: false,
@@ -43,69 +42,71 @@ interface FooterData {
   description: string;
 }
 
-// Get footer data
-app.get("/", async (c) => {
-  try {
-    // Get footer config from database
-    const [settings] = await db.select().from(siteSettings).limit(1);
+// GET /footer — get footer data
+const getFooterRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Footer"],
+  summary: "Get footer configuration data",
+  responses: {
+    200: {
+      description: "Footer configuration",
+      content: { "application/json": { schema: z.object({ data: z.any(), success: z.literal(true) }) } },
+    },
+    404: {
+      description: "Footer configuration not found",
+      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+    },
+  },
+});
 
-    if (!settings) {
-      return c.json(
-        {
-          error: "Footer configuration not found",
-          success: false,
-        },
-        404,
-      );
-    }
+app.openapi(getFooterRoute, async (c) => {
+  // Get footer config from database
+  const [settings] = await db.select().from(siteSettings).limit(1);
 
-    // Parse footer config
-    const footerConfig = settings.footerConfig
-      ? JSON.parse(settings.footerConfig)
-      : null;
+  if (!settings) {
+    throw new NotFoundError("Footer configuration not found");
+  }
 
-    if (!footerConfig) {
-      return c.json(
-        {
-          error: "Invalid footer configuration",
-          success: false,
-        },
-        500,
-      );
-    }
+  // Parse footer config
+  const footerConfig = settings.footerConfig
+    ? JSON.parse(settings.footerConfig)
+    : null;
 
-    // Strict array usage for social links
-    const socialLinks: SocialLink[] = Array.isArray(footerConfig.social)
-      ? footerConfig.social
-      : [];
-
-    // Build response data
-    const footerData: FooterData = {
-      logo: footerConfig.logo || { src: "/logo.svg", alt: "Store Logo" },
-      tagline: footerConfig.tagline || "",
-      copyrightText:
-        footerConfig.copyrightText || settings.siteName || "Your Store",
-      menus: footerConfig.menus || [],
-      social: socialLinks,
-      description: footerConfig.description || "",
-    };
-
-    return c.json({
-      data: footerData,
-      success: true,
-    });
-  } catch (error) {
-    console.error("Error fetching footer data:", error);
-
+  if (!footerConfig) {
     return c.json(
       {
-        error: "Failed to fetch footer data",
-        message: error instanceof Error ? error.message : "Unknown error",
-        success: false,
+        error: "Invalid footer configuration",
+        success: false as const,
       },
       500,
     );
   }
+
+  // Strict array usage for social links
+  const socialLinks: SocialLink[] = Array.isArray(footerConfig.social)
+    ? footerConfig.social
+    : [];
+
+  // Build response data
+  const footerData: FooterData = {
+    logo: footerConfig.logo || { src: "/logo.svg", alt: "Store Logo" },
+    tagline: footerConfig.tagline || "",
+    copyrightText:
+      footerConfig.copyrightText || settings.siteName || "Your Store",
+    menus: footerConfig.menus || [],
+    social: socialLinks,
+    description: footerConfig.description || "",
+  };
+
+  return c.json({
+    data: footerData,
+    success: true as const,
+  }, 200);
 });
 
 // Export the footer routes

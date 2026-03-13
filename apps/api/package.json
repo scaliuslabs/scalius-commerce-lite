@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate --config ../../packages/database/drizzle.config.ts",
     "db:migrate:local": "node ../../scripts/deploy.mjs --migrate-only --local",
-    "db:migrate:remote": "node ../../scripts/deploy.mjs --migrate-only"
+    "db:migrate:remote": "node ../../scripts/deploy.mjs --migrate-only",
+    "test": "vitest run"
   },
   "dependencies": {
     "@scalius/core": "workspace:*",
@@ -40,6 +41,7 @@
     "@scalius/tsconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "typescript": "^5.9.3",
+    "vitest": "^4.1.0",
     "wrangler": "^4.72.0"
   }
 }
