@@ -1,0 +1,84 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { ProductForm } from "../../../components/admin/ProductForm";
+import { getActiveCategories } from "@/loaders/admin/products";
+
+const allCategories = await getActiveCategories();
+
+// Default values for the form
+const defaultValues = {
+  name: "",
+  description: null,
+  price: 0,
+  categoryId: "",
+  isActive: true,
+  discountType: "percentage" as "percentage" | "flat",
+  discountPercentage: 0,
+  discountAmount: 0,
+  freeDelivery: false,
+  metaTitle: null,
+  metaDescription: null,
+  slug: "",
+  images: [],
+};
+
+// Define the submit handler function
+const handleSubmit = `async function(values) {
+  try {
+    const response = await fetch("/api/v1/products", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(values),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to create product");
+    }
+
+    const data = await response.json();
+    const destination = \`/admin/products/\${data.id}/edit\`;
+    if (typeof window.navigateToProductEdit !== "function") {
+      throw new Error("Product navigation helper is unavailable");
+    }
+
+    await window.navigateToProductEdit(destination);
+  } catch (error) {
+    console.error("Error creating product:", error);
+    alert("Failed to create product. Please try again.");
+  }
+}`;
+---
+
+<AdminLayout title="New Product">
+  <div class="container max-w-7xl py-4 pb-8">
+    <ProductForm
+      client:idle
+      categories={allCategories}
+      defaultValues={defaultValues}
+      isEdit={false}
+    />
+  </div>
+</AdminLayout>
+
+<script>
+  type ProductNavigationWindow = Window & {
+    __productEditNavigate?: (url: string) => Promise<void>;
+    navigateToProductEdit?: (url: string) => Promise<void>;
+  };
+
+  const navigationWindow = window as ProductNavigationWindow;
+
+  navigationWindow.__productEditNavigate ??= async (url: string) => {
+    const { navigateTo } = await import("@/lib/client/navigate");
+    await navigateTo(url);
+  };
+
+  navigationWindow.navigateToProductEdit = navigationWindow.__productEditNavigate;
+</script>
+
+<script is:inline define:vars={{ handleSubmit }}>
+  // Convert the string function to an actual function
+  window.handleProductSubmit = eval(`(${handleSubmit})`);
+</script>

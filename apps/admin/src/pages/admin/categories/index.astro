@@ -1,0 +1,54 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { CategoryList } from "../../../components/admin/CategoryList";
+import { getCategoriesIndexData } from "@/loaders/admin/catalog";
+
+const searchParams = Astro.url.searchParams;
+const page = parseInt(searchParams.get("page") || "1");
+const limit = parseInt(searchParams.get("limit") || "20");
+const search = searchParams.get("search") || "";
+const showTrashed = searchParams.get("trashed") === "true";
+const sort = (searchParams.get("sort") || "updatedAt") as
+  | "name"
+  | "createdAt"
+  | "updatedAt";
+const order = (searchParams.get("order") || "desc") as "asc" | "desc";
+
+let formattedCategories: any[] = [];
+let data: any = { pagination: { total: 0, page, limit, totalPages: 0 } };
+let stats: any = null;
+
+try {
+  const result = await getCategoriesIndexData({
+    page,
+    limit,
+    search,
+    showTrashed,
+    sort,
+    order,
+  });
+  formattedCategories = result.categories;
+  data = { pagination: result.pagination };
+  stats = result.stats;
+} catch (error) {
+  console.error("Error fetching categories in SSR:", error);
+  return Astro.redirect("/admin?error=categories-load-failed");
+}
+---
+
+<AdminLayout title={showTrashed ? "Trash" : "Categories"}>
+  <CategoryList
+    client:idle
+    categories={formattedCategories}
+    pagination={{
+      total: data.pagination.total,
+      page,
+      limit,
+      totalPages: data.pagination.totalPages,
+    }}
+    initialSearchQuery={search}
+    initialSort={{ field: sort, order }}
+    showTrashed={showTrashed}
+    stats={stats}
+  />
+</AdminLayout>

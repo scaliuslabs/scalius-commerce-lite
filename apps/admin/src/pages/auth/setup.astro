@@ -1,0 +1,20 @@
+---
+// src/pages/auth/setup.astro
+// SECURITY: This page is ONLY accessible when no admin users exist
+import AuthLayout from "@/layouts/AuthLayout.astro";
+import { SetupForm } from "@/components/auth/SetupForm";
+import { getSetupAdminExists } from "@/loaders/admin/layout";
+
+// SECURITY: Check if any ADMIN users exist (not just any users)
+// This ensures the setup page is only accessible during initial deployment
+const adminExists = await getSetupAdminExists();
+
+// If an admin already exists, redirect to login - setup is not allowed
+if (adminExists) {
+  return Astro.redirect("/auth/login");
+}
+---
+
+<AuthLayout title="Setup">
+  <SetupForm client:load />
+</AuthLayout>

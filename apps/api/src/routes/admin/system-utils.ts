@@ -1,0 +1,240 @@
+import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
+import { createId } from "@paralleldrive/cuid2";
+import { sql, inArray, desc, asc, and, count, eq } from "drizzle-orm";
+import { abandonedCheckouts, orders, OrderStatus, adminFcmTokens } from "@scalius/database/schema";
+import { ftsMatch } from "@scalius/core/search";
+
+const app = new Hono<{
+    Variables: {
+        db: any;
+        user: any;
+    };
+}>();
+
+// --- Abandoned Checkouts ---
+const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string | null }): boolean => {
+    if (checkout.customerPhone) return false;
+    try {
+        const data = JSON.parse(checkout.checkoutData);
+        const items = data.items || [];
+        const customerInfo = data.customerInfo || {};
+
+        const hasItems = Array.isArray(items) && items.length > 0;
+        const hasCustomerInfo = Object.values(customerInfo).some((val) => !!val);
+
+        return !hasItems && !hasCustomerInfo;
+    } catch {
+        return true; // Corrupt JSON is considered empty
+    }
+};
+
+app.get("/abandoned-checkouts", async (c) => {
+    const db = c.get("db");
+
+    try {
+        // --- Perform Cleanup ---
+        // 1. Delete any checkouts older than 30 days, regardless of content
+        const thirtyDaysAgoTimestamp = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+        await db.delete(abandonedCheckouts).where(sql`${abandonedCheckouts.createdAt} <= ${thirtyDaysAgoTimestamp}`);
+
+        // 1.5 Convert INCOMPLETE orders older than 1 hour to abandoned checkouts
+        const oneHourAgoTimestamp = Math.floor((Date.now() - 60 * 60 * 1000) / 1000);
+        const incompleteOrders = await db.select().from(orders).where(
+            and(
+                eq(orders.status, OrderStatus.INCOMPLETE),
+                sql`${orders.createdAt} <= ${oneHourAgoTimestamp}`
+            )
+        );
+
+        if (incompleteOrders.length > 0) {
+            for (const io of incompleteOrders) {
+                await db.insert(abandonedCheckouts).values({
+                    id: `ab_ch_sys_${io.id}`,
+                    checkoutId: io.id,
+                    customerPhone: io.customerPhone,
+                    checkoutData: JSON.stringify(io),
+                    createdAt: io.createdAt || new Date(),
+                    updatedAt: io.updatedAt || new Date(),
+                }).onConflictDoNothing();
+            }
+
+            await db.delete(orders).where(
+                inArray(orders.id, incompleteOrders.map((o: any) => o.id))
+            );
+        }
+
+        // 2. Find and delete empty checkouts older than 1 hour
+        const candidatesForDeletion = await db.select().from(abandonedCheckouts).where(sql`${abandonedCheckouts.updatedAt} <= ${oneHourAgoTimestamp}`);
+
+        const emptyCheckoutIds = candidatesForDeletion
+            .filter((c: any) => isCheckoutEmpty({ checkoutData: c.checkoutData, customerPhone: c.customerPhone }))
+            .map((c: any) => c.id);
+
+        if (emptyCheckoutIds.length > 0) {
+            await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, emptyCheckoutIds));
+        }
+
+        // --- Fetch Data for UI ---
+        const page = parseInt(c.req.query("page") || "1");
+        const limit = parseInt(c.req.query("limit") || "20");
+        const search = c.req.query("search") || "";
+        const sort = (c.req.query("sort") || "updatedAt") as any;
+        const orderStr = c.req.query("order") || "desc";
+        const offset = (page - 1) * limit;
+
+        const whereConditions = [];
+        if (search) {
+            const cond = ftsMatch("abandoned_checkouts_fts", "abandoned_checkouts", search);
+            if (cond) whereConditions.push(cond);
+        }
+
+        const combinedWhere = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+        const results = await db.select().from(abandonedCheckouts).where(combinedWhere).orderBy(
+            orderStr === 'asc'
+                ? asc(abandonedCheckouts[sort as keyof typeof abandonedCheckouts._.columns])
+                : desc(abandonedCheckouts[sort as keyof typeof abandonedCheckouts._.columns])
+        ).limit(limit).offset(offset);
+
+        const totalResult = await db.select({ total: count() }).from(abandonedCheckouts).where(combinedWhere);
+        const total = totalResult[0].total;
+
+        return c.json({
+            data: results,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            }
+        });
+
+    } catch (error: any) {
+        console.error("Error fetching abandoned checkouts:", error);
+        return c.json({ error: "Failed to fetch data", message: error.message }, 500);
+    }
+});
+
+const bulkDeleteSchema = z.object({
+    ids: z.array(z.string()).min(1, "No IDs provided"),
+});
+
+app.post("/abandoned-checkouts/bulk-delete", zValidator("json", bulkDeleteSchema), async (c) => {
+    const db = c.get("db");
+    try {
+        const { ids } = c.req.valid("json");
+        await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, ids));
+        return new Response(null, { status: 204 });
+    } catch (error) {
+        console.error("Error bulk deleting checkouts:", error);
+        return c.json({ error: "Failed to bulk delete checkouts" }, 500);
+    }
+});
+
+app.delete("/abandoned-checkouts", zValidator("json", bulkDeleteSchema), async (c) => {
+    const db = c.get("db");
+    try {
+        const { ids } = c.req.valid("json");
+        await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, ids));
+        return new Response(null, { status: 204 });
+    } catch (error) {
+        console.error("Error bulk deleting checkouts:", error);
+        return c.json({ error: "Failed to bulk delete checkouts" }, 500);
+    }
+});
+
+// --- FCM Tokens ---
+const fcmTokenSchema = z.object({
+    token: z.string().min(1, "FCM token is required"),
+    userId: z.string().min(1, "User ID is required"),
+    deviceInfo: z.string().optional(),
+});
+
+app.post("/fcm-token", zValidator("json", fcmTokenSchema), async (c) => {
+    const db = c.get("db");
+    const user = c.get("user");
+    if (!user || !user.id) return c.json({ error: "Unauthorized" }, 401);
+
+    const { token, userId, deviceInfo } = c.req.valid("json");
+
+    if (userId !== user.id) {
+        return c.json({ error: "Forbidden: User ID mismatch" }, 403);
+    }
+
+    try {
+        await db
+            .insert(adminFcmTokens)
+            .values({
+                id: createId(),
+                userId,
+                token,
+                deviceInfo: deviceInfo || null,
+                isActive: true,
+                lastUsed: sql`(cast(strftime('%s','now') as int))`,
+                createdAt: sql`(cast(strftime('%s','now') as int))`,
+                updatedAt: sql`(cast(strftime('%s','now') as int))`,
+            })
+            .onConflictDoUpdate({
+                target: adminFcmTokens.token,
+                set: {
+                    userId,
+                    deviceInfo: deviceInfo || null,
+                    isActive: true,
+                    lastUsed: sql`(cast(strftime('%s','now') as int))`,
+                    updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                },
+            });
+
+        return c.json({ message: "FCM token registered successfully" });
+    } catch (error) {
+        console.error("Error saving FCM token:", error);
+        return c.json({ error: "Failed to save FCM token" }, 500);
+    }
+});
+
+const cleanupSchema = z.object({
+    invalidTokens: z.array(z.string()).min(1),
+});
+
+app.post("/fcm-token-cleanup", zValidator("json", cleanupSchema), async (c) => {
+    const db = c.get("db");
+    const user = c.get("user");
+    if (!user || !user.id) return c.json({ error: "Unauthorized" }, 401);
+
+    try {
+        const { invalidTokens } = c.req.valid("json");
+
+        if (invalidTokens.length > 0) {
+            await db
+                .update(adminFcmTokens)
+                .set({
+                    isActive: false,
+                    updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                })
+                .where(inArray(adminFcmTokens.token, invalidTokens));
+        }
+
+        const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
+        await db
+            .update(adminFcmTokens)
+            .set({
+                isActive: false,
+                updatedAt: sql`(cast(strftime('%s','now') as int))`,
+            })
+            .where(
+                sql`${adminFcmTokens.lastUsed} < ${thirtyDaysAgo} OR ${adminFcmTokens.lastUsed} IS NULL`
+            );
+
+        return c.json({
+            message: "Token cleanup completed successfully.",
+            cleanedCount: invalidTokens.length,
+        });
+    } catch (error) {
+        console.error("Error cleaning up FCM tokens:", error);
+        return c.json({ error: "Internal server error during cleanup." }, 500);
+    }
+});
+
+export { app as adminSystemUtilsRoutes };

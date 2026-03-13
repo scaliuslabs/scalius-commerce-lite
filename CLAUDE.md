@@ -1,31 +1,48 @@
-# Scalius Commerce Lite
+# Scalius Commerce
 
 ## Overview
 
-Full-stack e-commerce admin dashboard + storefront API. Single Cloudflare Worker: Astro SSR (admin UI) + Hono (storefront API) + D1/KV/R2 bindings. No Docker, no external databases.
+Turborepo monorepo: Astro SSR admin dashboard (Cloudflare Worker) + standalone Hono API (Cloudflare Worker) + shared packages. The admin worker communicates with the API worker via Cloudflare Service Bindings.
+
+## Monorepo Structure
+
+```
+apps/
+  admin/          # @scalius/admin — Astro SSR admin dashboard (Cloudflare Worker)
+  api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
+packages/
+  core/           # @scalius/core — Domain modules, auth, integrations, search
+  database/       # @scalius/database — Drizzle schema, client, migrations
+  shared/         # @scalius/shared — Pure utility functions
+  tsconfig/       # @scalius/tsconfig — Shared TypeScript configs
+```
 
 ## Quick Commands
 
 | Command | Purpose |
 |---------|---------|
-| `pnpm dev` | Astro dev server on port 4321 |
-| `pnpm build` | `astro check && astro build && pnpm db:generate` |
-| `pnpm dev:setup` | First-time local dev setup (deps, secrets, env files, migrations) |
+| `pnpm dev` | Start both workers via Turbo |
+| `pnpm build` | Build all workspaces |
+| `pnpm dev:setup` | First-time local dev setup |
 | `pnpm dev:reset` | Wipe local DB and re-apply migrations |
-| `pnpm db:migrate:local` | Apply pending migrations only |
+| `pnpm db:generate` | Generate Drizzle migrations |
+| `pnpm db:migrate:local` | Apply pending migrations locally |
 | `pnpm db:studio` | Drizzle Studio DB browser |
-| `pnpm deploy` | Build + migrate + deploy to Cloudflare Workers |
+| `pnpm deploy` | Build + migrate + deploy all workers |
 
 ## Architecture
 
-- **Admin UI**: `src/pages/admin/**` (Astro pages) + `src/components/admin/**` (React components)
-- **Backend API**: `src/server/**` (Hono app at `/api/v1/**`), mounted via `src/integrations/hono-integration.ts`
-- **Domain Services (DDD)**: `src/modules/**` — core business logic, decoupled from HTTP layer
-- **Database**: `src/db/schema/` (11 domain files, barrel at `src/db/schema/index.ts`), Drizzle ORM + Cloudflare D1
-- **Migrations**: `migrations/**`
-- **UI Components**: `src/components/ui/**` (shadcn/ui + Tailwind CSS v4)
-- **Auth**: Better Auth at `src/lib/auth.ts`, RBAC at `src/lib/rbac/`
-- **Shared utilities**: `src/shared/**` (pure functions, no DB, no side effects)
+### Apps
+
+- **Admin (`apps/admin/`)**: Astro SSR + React 19 admin dashboard. Owns pages, components, layouts, styles, hooks, middleware. Communicates with API via service binding.
+- **API (`apps/api/`)**: Standalone Hono worker. Owns all API routes, queue consumer, OpenAPI spec. Exports `WorkerEntrypoint` with HTTP fetch + queue handler.
+
+### Packages (JIT — no build step, consumed directly by bundler)
+
+- **`@scalius/database`**: Drizzle schema (11 domain files), `getDb()` client factory, migrations
+- **`@scalius/core`**: Domain services (`src/modules/`), Better Auth config (`src/auth/`), RBAC, integrations (email, storage, firebase, meta), FTS5 search, cache utils
+- **`@scalius/shared`**: Pure utilities (currency, cors, image-optimizer, rate-limit, etc.)
+- **`@scalius/tsconfig`**: Shared TypeScript configs (base, astro, worker)
 
 ## Tech Stack
 
@@ -35,41 +52,73 @@ Full-stack e-commerce admin dashboard + storefront API. Single Cloudflare Worker
 - Tailwind CSS v4 + shadcn/ui
 - Better Auth (email/password + optional 2FA)
 - Cloudflare KV (caching), R2 (media), Queues (async processing)
-- pnpm as package manager
+- Cloudflare Service Bindings (admin→API communication)
+- Turborepo + pnpm workspaces
 
 ## Key Conventions
 
-- **Thin HTTP layer**: `src/server/routes/**` handles validation and auth, then delegates to `src/modules/**` services
-- **Two env files**: `.dev.vars` (Cloudflare runtime bindings) and `.env.development` (Vite/Astro build-time vars)
-- **wrangler.jsonc has production URLs**: `.dev.vars` overrides with `http://localhost:4321` for local dev
+- **Thin HTTP layer**: `apps/api/src/routes/**` handles validation and auth, then delegates to `@scalius/core` services
+- **JIT packages**: No build step for packages — wrangler/esbuild bundles directly from TypeScript source
+- **Two env files per app**: `.dev.vars` (Cloudflare runtime bindings) and `.env.development` (Vite/Astro build-time vars)
+- **Service binding**: Admin fetches data from API via `env.API` binding (defined in `apps/admin/wrangler.jsonc`)
 - **Port 4321**: Auth callbacks assume this port. Kill previous servers before starting new ones
 - **RBAC auto-seed**: Permissions/roles auto-seed on first admin dashboard access
-- **FTS5**: All text search uses SQLite FTS5, not LIKE scans. Helpers in `src/lib/search/fts5.ts`
+- **FTS5**: All text search uses SQLite FTS5. Helpers in `packages/core/src/search/fts5.ts`
+
+## Import Conventions
+
+```typescript
+// From apps, import packages like:
+import { getDb } from "@scalius/database/client";
+import { products } from "@scalius/database/schema";
+import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { createAuth } from "@scalius/core/auth";
+import { ftsMatch } from "@scalius/core/search";
+import { cn } from "@scalius/shared/utils";
+
+// Within apps, use @/ alias for local files:
+import { SomeComponent } from "@/components/SomeComponent";
+```
 
 ## Key URLs (Local Dev)
 
-- Admin UI: `/admin`
-- API: `/api/v1/**`
+- Admin UI: `http://localhost:4321/admin`
+- API: `http://localhost:8787/api/v1/**` (or via admin service binding)
 - Swagger UI: `/api/v1/docs`
 - OpenAPI spec: `/api/v1/openapi.json`
 
 ## Important File Paths
 
-- Worker entry: `src/worker.ts`
-- Hono app entry: `src/server/index.ts`
-- Astro config: `astro.config.mjs`
-- Wrangler config: `wrangler.jsonc`
-- Drizzle config: `drizzle.config.ts`
-- Middleware: `src/middleware.ts`
-- Auth config: `src/lib/auth.ts`
-- Auth client: `src/lib/auth-client.ts`
+- API Worker entry: `apps/api/src/worker.ts`
+- Hono app entry: `apps/api/src/app.ts`
+- Admin Worker entry: `apps/admin/src/worker.ts`
+- Admin Astro config: `apps/admin/astro.config.mjs`
+- API Wrangler config: `apps/api/wrangler.jsonc`
+- Admin Wrangler config: `apps/admin/wrangler.jsonc`
+- Drizzle config: `packages/database/drizzle.config.ts`
+- Admin Middleware: `apps/admin/src/middleware.ts`
+- Auth config: `packages/core/src/auth/auth.ts`
+- Auth client: `apps/admin/src/lib/auth-client.ts`
+- DB Schema: `packages/database/src/schema/`
+- Migrations: `packages/database/migrations/`
+
+## Dependency Graph
+
+```
+@scalius/shared          → (no deps)
+@scalius/database        → drizzle-orm, @scalius/shared
+@scalius/core            → @scalius/database, @scalius/shared, better-auth, zod, stripe, etc.
+@scalius/api             → @scalius/core, @scalius/database, @scalius/shared, hono
+@scalius/admin           → @scalius/core, @scalius/database, @scalius/shared, astro, react
+```
 
 ## Agent Team Guidelines
 
 When working as part of an agent team on this codebase:
 
 - **Avoid file conflicts**: coordinate so each teammate owns different files/modules
-- **Domain boundaries**: the `src/modules/` directory is organized by domain — each teammate should own a complete domain when possible
-- **Test changes**: run `pnpm build` (includes `astro check`) to verify TypeScript correctness
+- **Domain boundaries**: `packages/core/src/modules/` is organized by domain — each teammate should own a complete domain when possible
+- **Test changes**: run `pnpm build` to verify both workers build correctly
 - **Don't touch env files**: `.dev.vars` and `.env.development` contain secrets
-- **Schema changes need migrations**: after modifying `src/db/schema/`, run `pnpm db:generate`
+- **Schema changes need migrations**: after modifying `packages/database/src/schema/`, run `pnpm db:generate`
+- **Package changes**: when adding imports from a new package, ensure it's listed in the consuming workspace's `package.json`

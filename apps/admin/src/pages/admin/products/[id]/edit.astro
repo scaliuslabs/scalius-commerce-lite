@@ -1,0 +1,82 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { ProductForm } from "../../../../components/admin/ProductForm";
+import { VariantManager } from "../../../../components/admin/ProductForm/variants";
+import { getProductEditData } from "@/loaders/admin/products";
+
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect("/admin/products");
+}
+
+const productData = await getProductEditData(id);
+if (!productData) {
+  return Astro.redirect("/admin/products");
+}
+
+const { product, allCategories, defaultValues, formattedVariants } = productData;
+---
+
+<AdminLayout title={`Edit ${product.name}`}>
+  <div class="container max-w-7xl space-y-6 py-4 pb-8">
+    <ProductForm
+      client:idle
+      categories={allCategories}
+      defaultValues={defaultValues}
+      isEdit={true}
+    />
+
+    <div class="mt-6" id="variant-section">
+      <VariantManager
+        client:idle
+        productId={product.id}
+        productSlug={product.slug}
+        variants={formattedVariants}
+      />
+    </div>
+  </div>
+</AdminLayout>
+
+<script is:inline>
+  (() => {
+    const stateKey = "__adminProductsEditVariantScrollState";
+    const runtime = (window[stateKey] ??= {
+      hasPageLoadListener: false,
+      lastHandledKey: "",
+      scrollTimer: null,
+    });
+
+    const maybeScrollToVariants = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isNewProduct = urlParams.get("new") === "true";
+      const navigationKey = `${window.location.pathname}${window.location.search}`;
+
+      if (!isNewProduct || runtime.lastHandledKey === navigationKey) {
+        return;
+      }
+      runtime.lastHandledKey = navigationKey;
+
+      if (runtime.scrollTimer) {
+        clearTimeout(runtime.scrollTimer);
+      }
+
+      runtime.scrollTimer = setTimeout(() => {
+        const variantSection = document.getElementById("variant-section");
+        if (variantSection) {
+          variantSection.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      }, 500);
+    };
+
+    if (!runtime.hasPageLoadListener) {
+      document.addEventListener("astro:page-load", maybeScrollToVariants);
+      runtime.hasPageLoadListener = true;
+    }
+
+    maybeScrollToVariants();
+  })();
+</script>

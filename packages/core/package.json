@@ -1,0 +1,42 @@
+{
+  "name": "@scalius/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./modules/*": "./src/modules/*/index.ts",
+    "./modules/*/*": "./src/modules/*/*.ts",
+    "./auth": "./src/auth/index.ts",
+    "./auth/rbac": "./src/auth/rbac/index.ts",
+    "./auth/rbac/*": "./src/auth/rbac/*.ts",
+    "./integrations/*": "./src/integrations/*.ts",
+    "./integrations/firebase/*": "./src/integrations/firebase/*.ts",
+    "./integrations/meta/*": "./src/integrations/meta/*.ts",
+    "./search": "./src/search/index.ts",
+    "./middleware-helper/*": "./src/middleware-helper/*.ts",
+    "./notification-utils": "./src/notification-utils.ts",
+    "./utils/*": "./src/utils/*.ts"
+  },
+  "dependencies": {
+    "@scalius/database": "workspace:*",
+    "@scalius/shared": "workspace:*",
+    "@paralleldrive/cuid2": "^2.3.1",
+    "better-auth": "^1.5.5",
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "^0.39.3",
+    "fast-xml-parser": "^5.5.3",
+    "firebase": "^11.10.0",
+    "mimetext": "^3.0.28",
+    "nanoid": "^5.1.6",
+    "@polar-sh/sdk": "^0.46.3",
+    "standardwebhooks": "^1.0.0",
+    "stripe": "^20.4.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260310.1",
+    "@scalius/tsconfig": "workspace:*",
+    "typescript": "^5.9.3"
+  },
+  "license": "UNLICENSED"
+}
