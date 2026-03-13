@@ -1,11 +1,7 @@
 // src/server/routes/webhooks/pathao.ts
 // Webhook endpoint for receiving Pathao delivery status push notifications.
-//
-// Pathao sends status updates when a shipment's status changes.
-// This endpoint validates the request, maps the status, updates the
-// shipment record, and auto-updates the order status.
 
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { deliveryShipments } from "@scalius/database/schema";
 import { getDb } from "@scalius/database/client";
@@ -13,18 +9,8 @@ import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper"
 import { ShipmentTracker } from "@scalius/core/modules/delivery/tracking";
 import { recordWebhookEvent } from "@scalius/core/modules/payments/process-payment";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
-/**
- * POST /webhooks/pathao
- *
- * Pathao webhook payload typically contains:
- * - consignment_id: string (our externalId)
- * - order_status: string (Pathao status like "Pickup Pending", "In Transit", etc.)
- * - merchant_order_id: string (our orderId)
- * - invoice_id: string
- * - updated_at: string
- */
 app.post("/", async (c) => {
     const db = getDb(c.env);
 
@@ -46,7 +32,6 @@ app.post("/", async (c) => {
             return c.json({ success: false, error: "Missing consignment_id or order_status" }, 400);
         }
 
-        // Find the shipment by external ID
         const shipment = await db
             .select()
             .from(deliveryShipments)
@@ -55,15 +40,12 @@ app.post("/", async (c) => {
 
         if (!shipment) {
             console.warn(`[pathao-webhook] No shipment found for consignment_id: ${consignmentId}`);
-            // Still return 200 so Pathao doesn't retry
             return c.json({ success: true, message: "Shipment not found, ignored" });
         }
 
-        // Map Pathao status to our standardized status
         const normalizedStatus = mapProviderStatus("pathao", rawStatus);
         const previousStatus = shipment.status;
 
-        // Update shipment record
         await db
             .update(deliveryShipments)
             .set({
@@ -79,13 +61,11 @@ app.post("/", async (c) => {
             })
             .where(eq(deliveryShipments.id, shipment.id));
 
-        // Auto-update order status based on shipment status
         if (normalizedStatus !== previousStatus) {
             await ShipmentTracker.updateOrderStatusFromShipment(shipment.id, normalizedStatus);
             await ShipmentTracker.notifyStatusChange(shipment.id, previousStatus, normalizedStatus);
         }
 
-        // Record webhook event
         await recordWebhookEvent(
             db,
             `pathao_${consignmentId}_${rawStatus}`,

@@ -1,96 +1,109 @@
 // src/server/routes/abandoned-checkouts.ts
-import { Hono } from "hono";
-import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
-
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { abandonedCheckouts } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { authMiddleware } from "../middleware/auth";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
-// Schema for the public POST endpoint to save data
+// ─── POST / (Create or Update) ──────────────────────────────────────────────
+
 const abandonedCheckoutSchema = z.object({
   checkoutId: z.string().min(1, "checkoutId is required"),
   customerPhone: z.string().optional(),
   checkoutData: z.record(z.string(), z.any()),
 });
 
-// Schema for the new cleanup endpoint
+const saveAbandonedCheckoutRoute = createRoute({
+  method: "post",
+  path: "/",
+  tags: ["Abandoned Checkouts"],
+  summary: "Save or update an abandoned checkout",
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: abandonedCheckoutSchema },
+      },
+    },
+  },
+  responses: {
+    200: { description: "Abandoned checkout saved", content: { "application/json": { schema: z.any() } } },
+  },
+});
+
+app.openapi(saveAbandonedCheckoutRoute, async (c) => {
+  const db = c.get("db");
+  const { checkoutId, customerPhone, checkoutData } = c.req.valid("json");
+  const checkoutDataString = JSON.stringify(checkoutData);
+
+  const existingCheckout = await db
+    .select({ id: abandonedCheckouts.id })
+    .from(abandonedCheckouts)
+    .where(eq(abandonedCheckouts.checkoutId, checkoutId))
+    .get();
+
+  if (existingCheckout) {
+    await db
+      .update(abandonedCheckouts)
+      .set({
+        customerPhone: customerPhone,
+        checkoutData: checkoutDataString,
+        updatedAt: sql`(cast(strftime('%s','now') as int))`,
+      })
+      .where(eq(abandonedCheckouts.id, existingCheckout.id));
+  } else {
+    await db.insert(abandonedCheckouts).values({
+      id: `ab_ch_${nanoid()}`,
+      checkoutId: checkoutId,
+      customerPhone: customerPhone,
+      checkoutData: checkoutDataString,
+      createdAt: sql`(cast(strftime('%s','now') as int))`,
+      updatedAt: sql`(cast(strftime('%s','now') as int))`,
+    });
+  }
+
+  return c.json({ success: true, message: "Abandoned checkout saved." }, 200);
+});
+
+// ─── POST /cleanup ───────────────────────────────────────────────────────────
+
 const cleanupSchema = z.object({
   checkoutId: z.string().min(1, "checkoutId is required for cleanup"),
 });
 
-// POST endpoint to CREATE or UPDATE an abandoned checkout (This remains public)
-app.post("/", zValidator("json", abandonedCheckoutSchema), async (c) => {
-  try {
-    const db = c.get("db");
-    const { checkoutId, customerPhone, checkoutData } = c.req.valid("json");
-    const checkoutDataString = JSON.stringify(checkoutData);
-
-    const existingCheckout = await db
-      .select({ id: abandonedCheckouts.id })
-      .from(abandonedCheckouts)
-      .where(eq(abandonedCheckouts.checkoutId, checkoutId))
-      .get();
-
-    if (existingCheckout) {
-      await db
-        .update(abandonedCheckouts)
-        .set({
-          customerPhone: customerPhone,
-          checkoutData: checkoutDataString,
-          updatedAt: sql`(cast(strftime('%s','now') as int))`,
-        })
-        .where(eq(abandonedCheckouts.id, existingCheckout.id));
-    } else {
-      await db.insert(abandonedCheckouts).values({
-        id: `ab_ch_${nanoid()}`,
-        checkoutId: checkoutId,
-        customerPhone: customerPhone,
-        checkoutData: checkoutDataString,
-        createdAt: sql`(cast(strftime('%s','now') as int))`,
-        updatedAt: sql`(cast(strftime('%s','now') as int))`,
-      });
-    }
-
-    return c.json({ success: true, message: "Abandoned checkout saved." });
-  } catch (error) {
-    console.error("Error saving abandoned checkout:", error);
-    return c.json(
-      { success: false, error: "Failed to save abandoned checkout." },
-      500,
-    );
-  }
+const cleanupRoute = createRoute({
+  method: "post",
+  path: "/cleanup",
+  tags: ["Abandoned Checkouts"],
+  summary: "Delete abandoned checkout after successful order",
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: cleanupSchema },
+      },
+    },
+  },
+  responses: {
+    200: { description: "Abandoned checkout cleaned up", content: { "application/json": { schema: z.any() } } },
+  },
 });
 
-// CHANGE: New, simple POST endpoint specifically for deleting a record after a successful order.
-app.post(
-  "/cleanup",
-  authMiddleware, // This action is protected and requires authentication
-  zValidator("json", cleanupSchema),
-  async (c) => {
-    try {
-      const db = c.get("db");
-      const { checkoutId } = c.req.valid("json");
+// Auth middleware for cleanup
+app.use("/cleanup", authMiddleware);
 
-      await db
-        .delete(abandonedCheckouts)
-        .where(eq(abandonedCheckouts.checkoutId, checkoutId));
+app.openapi(cleanupRoute, async (c) => {
+  const db = c.get("db");
+  const { checkoutId } = c.req.valid("json");
 
-      return c.json({
-        success: true,
-        message: `Abandoned checkout record ${checkoutId} deleted.`,
-      });
-    } catch (error) {
-      console.error("Error cleaning up abandoned checkout:", error);
-      return c.json(
-        { success: false, error: "Failed to clean up abandoned checkout." },
-        500,
-      );
-    }
-  },
-);
+  await db
+    .delete(abandonedCheckouts)
+    .where(eq(abandonedCheckouts.checkoutId, checkoutId));
+
+  return c.json({
+    success: true,
+    message: `Abandoned checkout record ${checkoutId} deleted.`,
+  }, 200);
+});
 
 export { app as abandonedCheckoutsRoutes };

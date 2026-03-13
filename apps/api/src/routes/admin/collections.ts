@@ -1,10 +1,7 @@
 // src/server/routes/admin/collections.ts
-// Admin Hono routes for collections.
-// All DB logic is delegated to src/modules/collections/collections.service.ts.
+// Admin OpenAPI routes for collections.
 
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     listCollections,
     getCollectionById,
@@ -19,103 +16,287 @@ import {
     createCollectionSchema,
     updateCollectionSchema,
 } from "@scalius/core/modules/collections";
+import { NotFoundError } from "../../utils/api-error";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono();
 
-// GET /admin/collections
-app.get("/", async (c) => {
+// ── List Collections ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Collections"],
+    summary: "List all collections",
+    request: {
+        query: z.object({
+            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().default(20).openapi({ description: "Items per page" }),
+            search: z.string().optional().default("").openapi({ description: "Search term" }),
+            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
+            sort: z.string().optional().default("sortOrder").openapi({ description: "Sort field" }),
+            order: z.string().optional().default("asc").openapi({ description: "Sort order" }),
+        }),
+    },
+    responses: {
+        200: { description: "Collection list with pagination", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listRoute, async (c) => {
     const db = c.get("db");
-    const q = c.req.query();
+    const q = c.req.valid("query");
     const result = await listCollections(db, {
-        page: parseInt(q.page || "1"),
-        limit: parseInt(q.limit || "20"),
+        page: q.page,
+        limit: q.limit,
         search: q.search || "",
         showTrashed: q.trashed === "true",
         sort: (q.sort as any) || "sortOrder",
         order: (q.order as any) || "asc",
     });
-    return c.json(result);
+    return c.json(result, 200);
 });
 
-// POST /admin/collections
-app.post("/", zValidator("json", createCollectionSchema), async (c) => {
+// ── Create Collection ──
+
+const createCollectionRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Collections"],
+    summary: "Create a collection",
+    request: {
+        body: { content: { "application/json": { schema: createCollectionSchema } } },
+    },
+    responses: {
+        201: { description: "Collection created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(createCollectionRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const collection = await createCollection(db, data);
     return c.json(collection, 201);
 });
 
-// POST /admin/collections/bulk-delete
-app.post("/bulk-delete", zValidator("json", z.object({ collectionIds: z.array(z.string()), permanent: z.boolean().default(false) })), async (c) => {
+// ── Bulk Delete Collections ──
+
+const bulkDeleteRoute = createRoute({
+    method: "post",
+    path: "/bulk-delete",
+    tags: ["Admin - Collections"],
+    summary: "Bulk delete collections",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        collectionIds: z.array(z.string()),
+                        permanent: z.boolean().default(false),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        204: { description: "Collections deleted" },
+    },
+});
+
+app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { collectionIds, permanent } = c.req.valid("json");
     await bulkDeleteCollections(db, collectionIds, permanent);
     return c.body(null, 204);
 });
 
-// POST /admin/collections/bulk-activate
-app.post("/bulk-activate", zValidator("json", z.object({ ids: z.array(z.string()) })), async (c) => {
+// ── Bulk Activate Collections ──
+
+const bulkActivateRoute = createRoute({
+    method: "post",
+    path: "/bulk-activate",
+    tags: ["Admin - Collections"],
+    summary: "Bulk activate collections",
+    request: {
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+    },
+    responses: {
+        204: { description: "Collections activated" },
+    },
+});
+
+app.openapi(bulkActivateRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await bulkActivateCollections(db, ids);
     return c.body(null, 204);
 });
 
-// POST /admin/collections/bulk-deactivate
-app.post("/bulk-deactivate", zValidator("json", z.object({ ids: z.array(z.string()) })), async (c) => {
+// ── Bulk Deactivate Collections ──
+
+const bulkDeactivateRoute = createRoute({
+    method: "post",
+    path: "/bulk-deactivate",
+    tags: ["Admin - Collections"],
+    summary: "Bulk deactivate collections",
+    request: {
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+    },
+    responses: {
+        204: { description: "Collections deactivated" },
+    },
+});
+
+app.openapi(bulkDeactivateRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await bulkDeactivateCollections(db, ids);
     return c.body(null, 204);
 });
 
-// POST /admin/collections/bulk-restore
-app.post("/bulk-restore", zValidator("json", z.object({ ids: z.array(z.string()) })), async (c) => {
+// ── Bulk Restore Collections ──
+
+const bulkRestoreRoute = createRoute({
+    method: "post",
+    path: "/bulk-restore",
+    tags: ["Admin - Collections"],
+    summary: "Bulk restore collections",
+    request: {
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+    },
+    responses: {
+        204: { description: "Collections restored" },
+    },
+});
+
+app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await restoreCollections(db, ids);
     return c.body(null, 204);
 });
 
-// POST /admin/collections/reorder
-app.post("/reorder", zValidator("json", z.object({ items: z.array(z.object({ id: z.string(), sortOrder: z.number() })) })), async (c) => {
+// ── Reorder Collections ──
+
+const reorderRoute = createRoute({
+    method: "post",
+    path: "/reorder",
+    tags: ["Admin - Collections"],
+    summary: "Reorder collections",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        items: z.array(z.object({ id: z.string(), sortOrder: z.number() })),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: { description: "Collections reordered", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(reorderRoute, async (c) => {
     const db = c.get("db");
     const { items } = c.req.valid("json");
     await reorderCollections(db, items);
-    return c.json({ success: true });
+    return c.json({ success: true }, 200);
 });
 
-// GET /admin/collections/:id
-app.get("/:id", async (c) => {
-    const db = c.get("db");
-    const collection = await getCollectionById(db, c.req.param("id"));
-    if (!collection) return c.json({ error: "Collection not found" }, 404);
-    return c.json(collection);
+// ── Get Collection By ID ──
+
+const getByIdRoute = createRoute({
+    method: "get",
+    path: "/{id}",
+    tags: ["Admin - Collections"],
+    summary: "Get a collection by ID",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Collection ID" }) }),
+    },
+    responses: {
+        200: { description: "Collection details", content: { "application/json": { schema: z.any() } } },
+    },
 });
 
-// PUT /admin/collections/:id
-app.put("/:id", zValidator("json", updateCollectionSchema), async (c) => {
+app.openapi(getByIdRoute, async (c) => {
     const db = c.get("db");
-    const result = await updateCollection(db, c.req.param("id"), c.req.valid("json"));
-    return c.json(result);
+    const { id } = c.req.valid("param");
+    const collection = await getCollectionById(db, id);
+    if (!collection) throw new NotFoundError("Collection not found");
+    return c.json(collection, 200);
 });
 
-// DELETE /admin/collections/:id
-app.delete("/:id", async (c) => {
+// ── Update Collection ──
+
+const updateCollectionRoute = createRoute({
+    method: "put",
+    path: "/{id}",
+    tags: ["Admin - Collections"],
+    summary: "Update a collection",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Collection ID" }) }),
+        body: { content: { "application/json": { schema: updateCollectionSchema } } },
+    },
+    responses: {
+        200: { description: "Collection updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateCollectionRoute, async (c) => {
     const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const result = await updateCollection(db, id, c.req.valid("json"));
+    return c.json(result, 200);
+});
+
+// ── Delete Collection ──
+
+const deleteCollectionRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Collections"],
+    summary: "Soft-delete a collection",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Collection ID" }) }),
+    },
+    responses: {
+        204: { description: "Collection deleted" },
+    },
+});
+
+app.openapi(deleteCollectionRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
     try {
-        await deleteCollection(db, c.req.param("id"));
+        await deleteCollection(db, id);
         return c.body(null, 204);
     } catch (error: any) {
         return c.json({ error: error.message }, error.statusCode || 400);
     }
 });
 
-// DELETE /admin/collections/:id/permanent
-app.delete("/:id/permanent", async (c) => {
+// ── Permanent Delete Collection ──
+
+const permanentDeleteRoute = createRoute({
+    method: "delete",
+    path: "/{id}/permanent",
+    tags: ["Admin - Collections"],
+    summary: "Permanently delete a collection",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Collection ID" }) }),
+    },
+    responses: {
+        204: { description: "Collection permanently deleted" },
+    },
+});
+
+app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
+    const { id } = c.req.valid("param");
     try {
-        await bulkDeleteCollections(db, [c.req.param("id")], true);
+        await bulkDeleteCollections(db, [id], true);
         return c.body(null, 204);
     } catch (error: any) {
         return c.json({ error: error.message }, error.statusCode || 400);

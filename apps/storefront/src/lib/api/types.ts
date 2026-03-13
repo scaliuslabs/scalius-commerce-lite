@@ -1,10 +1,60 @@
 // src/lib/api/types.ts
+//
+// Centralized type definitions for the Scalius Commerce storefront.
+//
+// Types are sourced from the shared @scalius/api-client SDK where available,
+// with storefront-specific types defined locally.
+//
+// The SDK types (generated from the OpenAPI spec) are primarily request/response
+// wrappers (e.g., GetProductsResponse, PostOrdersData). Storefront-specific
+// domain interfaces (Product, Category, etc.) are kept locally because the SDK
+// does not yet export standalone domain types. Once the SDK is regenerated with
+// extracted domain types, more of these can be replaced with SDK re-exports.
 
-/**
- * Centralized type definitions for the Scalius Commerce API.
- */
+// ---------------------------------------------------------------------------
+// SDK Re-exports
+// ---------------------------------------------------------------------------
 
-// --- Generic API Responses ---
+// OrderPostRequest from the SDK closely matches our CreateOrderPayload.
+// Differences:
+//   - SDK adds: totalAmount (optional), omits: shippingMethodId, paymentMethod
+//   - Storefront needs: shippingMethodId, paymentMethod
+// We keep the local CreateOrderPayload to preserve the extra fields the
+// storefront relies on, but re-export the SDK type for reference/use where
+// the stricter API contract is desired.
+export type { OrderPostRequest } from "@scalius/api-client/types";
+
+// Re-export SDK response types that consumers may find useful for typing
+// raw API responses directly.
+export type {
+  GetProductsResponse,
+  GetProductsBySlugResponse,
+  GetCategoriesResponse,
+  GetCategoriesBySlugResponse,
+  GetCollectionsResponse,
+  GetCollectionsByIdResponse,
+  GetSearchResponse,
+  GetHeaderResponse,
+  GetFooterResponse,
+  GetNavigationResponse,
+  GetPagesResponse,
+  GetPagesSlugBySlugResponse,
+  GetSeoResponse,
+  GetHeroSlidersResponse,
+  GetCheckoutLanguagesActiveResponse,
+  GetDiscountsValidateResponse,
+  GetAnalyticsConfigurationsResponse,
+  GetWidgetsActiveHomepageResponse,
+  GetWidgetsByIdResponse,
+  GetLocationsCitiesResponse,
+  GetLocationsZonesResponse,
+  GetLocationsAreasResponse,
+  PostOrdersResponse,
+} from "@scalius/api-client/types";
+
+// ---------------------------------------------------------------------------
+// Generic API Responses (storefront-specific wrappers)
+// ---------------------------------------------------------------------------
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -26,7 +76,11 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// --- Product & Category Types ---
+// ---------------------------------------------------------------------------
+// Product & Category Types
+// ---------------------------------------------------------------------------
+// TODO: Replace with SDK domain types once @scalius/api-client exports
+// standalone Product, ProductVariant, ProductImage, Category, CategorySummary.
 
 export interface ProductRichContent {
   id: string;
@@ -107,15 +161,19 @@ export interface CategorySummary {
   slug: string;
 }
 
-// --- Collection & Widget Types ---
+// ---------------------------------------------------------------------------
+// Collection & Widget Types
+// ---------------------------------------------------------------------------
+// TODO: Replace with SDK domain types once @scalius/api-client exports
+// standalone Collection, CollectionConfig, CollectionWithProducts, ApiWidget.
 
 export interface CollectionConfig {
-  categoryIds?: string[]; // Array of category IDs (can be empty)
-  productIds?: string[]; // Array of specific product IDs (can be empty)
-  featuredProductId?: string; // Optional featured product for collection1
-  maxProducts?: number; // Max products to display (default: 8, max: 24)
-  title?: string; // Display title (optional)
-  subtitle?: string; // Display subtitle (optional)
+  categoryIds?: string[];
+  productIds?: string[];
+  featuredProductId?: string;
+  maxProducts?: number;
+  title?: string;
+  subtitle?: string;
 }
 
 export interface Collection {
@@ -131,7 +189,7 @@ export interface Collection {
 }
 
 export interface CollectionWithProducts extends Collection {
-  categories?: CategorySummary[]; // NEW: Array of categories (was single category)
+  categories?: CategorySummary[];
   products?: Product[];
   featuredProduct?: Product | null;
 }
@@ -151,7 +209,11 @@ export interface ApiWidget {
   deletedAt?: string | null;
 }
 
-// --- Page & Site Settings Types ---
+// ---------------------------------------------------------------------------
+// Page & Site Settings Types
+// ---------------------------------------------------------------------------
+// TODO: Replace with SDK domain types once @scalius/api-client exports
+// standalone Page, NavigationItem, FooterMenu, HeaderData, FooterData, etc.
 
 export interface Page {
   id: string;
@@ -176,8 +238,8 @@ export interface Page {
 export interface NavigationItem {
   id?: string;
   title: string;
-  href?: string; // Optional - some items are menu-only without a link
-  subMenu?: NavigationItem[]; // Recursive self-reference
+  href?: string;
+  subMenu?: NavigationItem[];
 }
 
 // Flat navigation item - for normalized API response
@@ -196,7 +258,7 @@ export interface FooterMenuLink {
   id?: string;
   title: string;
   href: string;
-  subMenu?: FooterMenuLink[]; // Recursive self-reference
+  subMenu?: FooterMenuLink[];
 }
 
 // Footer Menu - supports both nested (links) and flat (items/rootIds) structures
@@ -213,9 +275,9 @@ export interface FooterMenu {
 // Social Link - supports custom labels and icons
 export interface SocialLink {
   id?: string;
-  label: string; // e.g., "facebook", "twitter", or custom text
+  label: string;
   url: string;
-  iconUrl?: string; // Optional custom icon URL
+  iconUrl?: string;
   // Legacy fields for backwards compatibility
   platform?: string;
   icon?: string;
@@ -224,16 +286,15 @@ export interface SocialLink {
 export interface HeaderData {
   topBar: {
     text: string;
-    isEnabled?: boolean; // Can be disabled
+    isEnabled?: boolean;
   };
   logo: { src: string; alt: string };
   favicon?: { src: string; alt: string };
   contact: {
     phone: string;
     text: string;
-    isEnabled?: boolean; // Can be disabled
+    isEnabled?: boolean;
   };
-  // Social is now an array of SocialLink objects
   social: SocialLink[];
 }
 
@@ -242,7 +303,7 @@ export interface FooterData {
   favicon?: { src: string; alt: string };
   tagline: string;
   copyrightText: string;
-  description?: string; // HTML description content
+  description?: string;
   menus: FooterMenu[];
   social: SocialLink[];
 }
@@ -254,7 +315,11 @@ export interface SeoSettings {
   robotsTxt: string | null;
 }
 
-// --- Order & Cart Types ---
+// ---------------------------------------------------------------------------
+// Order & Cart Types
+// ---------------------------------------------------------------------------
+// TODO: Replace with SDK domain types once @scalius/api-client exports
+// standalone Order, OrderItem types.
 
 export interface OrderItem {
   id: string;
@@ -278,9 +343,9 @@ export interface Order {
   shippingCharge: number;
   discountAmount: number | null;
   notes: string | null;
-  city: string; // ID
-  zone: string; // ID
-  area: string | null; // ID
+  city: string;
+  zone: string;
+  area: string | null;
   cityName: string | null;
   zoneName: string | null;
   areaName: string | null;
@@ -292,6 +357,8 @@ export interface Order {
   deliveryProviders: any[];
 }
 
+// CreateOrderPayload extends the SDK's OrderPostRequest with storefront-specific
+// fields (shippingMethodId, paymentMethod) that are not yet in the OpenAPI spec.
 export interface CreateOrderPayload {
   customerName: string;
   customerPhone: string;
@@ -317,7 +384,11 @@ export interface CreateOrderPayload {
   paymentMethod?: "cod" | "stripe" | "sslcommerz";
 }
 
-// --- Other Types ---
+// ---------------------------------------------------------------------------
+// Other Types
+// ---------------------------------------------------------------------------
+// TODO: Replace with SDK domain types once @scalius/api-client exports
+// standalone LocationData, ShippingMethod, Discount, AnalyticsConfig, etc.
 
 export interface LocationData {
   id: string;
@@ -381,7 +452,12 @@ export interface SearchResults {
   timestamp: string;
 }
 
-// --- Checkout Language Types ---
+// ---------------------------------------------------------------------------
+// Checkout Language Types
+// ---------------------------------------------------------------------------
+// TODO: Replace with SDK domain type once @scalius/api-client exports
+// standalone CheckoutLanguageData.
+
 export interface CheckoutLanguageData {
   id: string;
   name: string;

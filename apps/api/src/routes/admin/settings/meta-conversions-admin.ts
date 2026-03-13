@@ -1,13 +1,11 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { db } from "@scalius/database/client";
 import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
 import { sql, eq, desc, count } from "drizzle-orm";
-import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
 import { getLogRetentionHours, getCleanupCheckIntervalHours } from "@scalius/core/integrations/meta/conversions-api";
 import { MetaService } from "@scalius/core/modules/analytics/meta.service";
 
-const app = new Hono<{ Bindings: any, Variables: any }>();
+const app = new OpenAPIHono();
 const MASKED_VALUE = "••••••••••••";
 
 const metaConversionsSettingsSchema = z.object({
@@ -18,17 +16,38 @@ const metaConversionsSettingsSchema = z.object({
     logRetentionDays: z.number().int().min(1).max(365).default(30),
 });
 
-app.get("/", async (c) => {
+// ── Get Settings ──
+
+const getSettingsRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Meta Conversions"],
+    summary: "Get Meta Conversions API settings",
+    responses: { 200: { description: "Settings", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getSettingsRoute, async (c) => {
     try {
         const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
         const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
-        return c.json({ data: maskedSettings });
+        return c.json({ data: maskedSettings }, 200);
     } catch (error) {
         return c.json({ error: "Failed to fetch settings" }, 500);
     }
 });
 
-app.post("/", zValidator("json", metaConversionsSettingsSchema), async (c) => {
+// ── Save Settings ──
+
+const saveSettingsRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Meta Conversions"],
+    summary: "Save Meta Conversions API settings",
+    request: { body: { content: { "application/json": { schema: metaConversionsSettingsSchema } } } },
+    responses: { 200: { description: "Settings saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveSettingsRoute, async (c) => {
     try {
         const validation = c.req.valid("json");
         let { pixelId, accessToken, testEventCode, isEnabled, logRetentionDays } = validation;
@@ -56,10 +75,27 @@ app.post("/", zValidator("json", metaConversionsSettingsSchema), async (c) => {
     }
 });
 
-app.get("/logs", async (c) => {
+// ── Get Logs ──
+
+const getLogsRoute = createRoute({
+    method: "get",
+    path: "/logs",
+    tags: ["Admin - Meta Conversions"],
+    summary: "Get Meta Conversions API logs",
+    request: {
+        query: z.object({
+            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().default(20).openapi({ description: "Items per page" }),
+        }),
+    },
+    responses: { 200: { description: "Logs with pagination", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getLogsRoute, async (c) => {
     try {
-        const page = parseInt(c.req.query("page") || "1");
-        const limit = parseInt(c.req.query("limit") || "20");
+        const query = c.req.valid("query");
+        const page = query.page;
+        const limit = query.limit;
         const offset = (page - 1) * limit;
 
         const totalResult = await db.select({ count: count(metaConversionsLogs.id) }).from(metaConversionsLogs).get();
@@ -70,25 +106,45 @@ app.get("/logs", async (c) => {
             data: logs,
             pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
             retention: { hours: getLogRetentionHours(), cleanupIntervalHours: getCleanupCheckIntervalHours(), nextCleanupMessage: "Cleanup active" },
-        });
+        }, 200);
     } catch (error) {
         return c.json({ error: "Failed to fetch logs" }, 500);
     }
 });
 
-app.delete("/logs", async (c) => {
+// ── Clear Logs ──
+
+const clearLogsRoute = createRoute({
+    method: "delete",
+    path: "/logs",
+    tags: ["Admin - Meta Conversions"],
+    summary: "Clear all Meta Conversions API logs",
+    responses: { 200: { description: "Logs cleared", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(clearLogsRoute, async (c) => {
     try {
         await db.delete(metaConversionsLogs);
-        return c.json({ message: "All logs cleared" });
+        return c.json({ message: "All logs cleared" }, 200);
     } catch (error) {
         return c.json({ error: "Failed to clear logs" }, 500);
     }
 });
 
-app.post("/logs", async (c) => {
+// ── Manual Log Cleanup ──
+
+const manualCleanupRoute = createRoute({
+    method: "post",
+    path: "/logs",
+    tags: ["Admin - Meta Conversions"],
+    summary: "Trigger manual log cleanup",
+    responses: { 200: { description: "Cleanup result", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(manualCleanupRoute, async (c) => {
     try {
         const result = await MetaService.manualLogCleanup(db, getLogRetentionHours());
-        if (result.success) return c.json({ message: result.message });
+        if (result.success) return c.json({ message: result.message }, 200);
         return c.json({ error: result.message }, 500);
     } catch (error) {
         return c.json({ error: "Manual log cleanup failed" }, 500);

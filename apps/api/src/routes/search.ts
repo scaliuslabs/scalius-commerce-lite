@@ -1,11 +1,10 @@
-import { Hono } from "hono";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { search } from "@scalius/core/search";
 import { cacheMiddleware } from "../middleware/cache";
 import { rateLimit } from "@scalius/shared/rate-limit";
 
-// Create a Hono app for search routes
-const app = new Hono();
+// Create an OpenAPIHono app for search routes
+const app = new OpenAPIHono();
 
 // Apply cache middleware to all routes
 app.use(
@@ -26,104 +25,125 @@ const limiter = rateLimit({
 
 // Schema for search query validation
 const searchQuerySchema = z.object({
-  q: z.string().optional().default(""),
-  categoryId: z.string().optional(),
-  minPrice: z.coerce.number().optional(),
-  maxPrice: z.coerce.number().optional(),
-  limit: z.coerce.number().optional().default(10),
+  q: z.string().optional().default("").openapi({ description: "Search query" }),
+  categoryId: z.string().optional().openapi({ description: "Category ID filter" }),
+  minPrice: z.coerce.number().optional().openapi({ description: "Minimum price filter" }),
+  maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
+  limit: z.coerce.number().optional().default(10).openapi({ description: "Max results" }),
   searchPages: z
     .enum(["true", "false"])
     .optional()
     .default("true")
-    .transform((val) => val === "true"),
+    .transform((val) => val === "true")
+    .openapi({ description: "Include pages in search results" }),
   searchCategories: z
     .enum(["true", "false"])
     .optional()
     .default("true")
-    .transform((val) => val === "true"),
+    .transform((val) => val === "true")
+    .openapi({ description: "Include categories in search results" }),
 });
 
-// Perform a search across products, categories, and pages
-app.get("/", async (c) => {
-  try {
-    // Apply rate limiting
-    try {
-      await limiter.check(c.req.raw);
-    } catch (error) {
-      return c.json(
-        {
-          error: "Too many requests. Please try again later.",
-          success: false,
+// GET /search — perform a search across products, categories, and pages
+const searchRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Search"],
+  summary: "Search across products, categories, and pages",
+  request: {
+    query: searchQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Search results",
+      content: {
+        "application/json": {
+          schema: z.object({
+            products: z.array(z.any()),
+            pages: z.array(z.any()),
+            categories: z.array(z.any()),
+            success: z.literal(true),
+            query: z.string(),
+            timestamp: z.string().optional(),
+          }),
         },
-        429,
-      );
-    }
+      },
+    },
+    429: {
+      description: "Rate limited",
+      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string(), message: z.string(), success: z.literal(false) }) } },
+    },
+  },
+});
 
-    // Parse and validate the query parameters
-    const params = searchQuerySchema.parse(c.req.query());
-    const {
-      q: query,
-      categoryId,
-      minPrice,
-      maxPrice,
-      limit,
-      searchPages,
-      searchCategories,
-    } = params;
-
-    // If no query, return empty results
-    if (!query.trim()) {
-      return c.json({
-        products: [],
-        pages: [],
-        categories: [],
-        success: true,
-        query: "",
-      });
-    }
-
-    // Set up timeout for search (5 seconds)
-    const searchPromise = search(query, {
-      categoryId,
-      minPrice,
-      maxPrice,
-      limit,
-      searchPages,
-      searchCategories,
-    });
-
-    // Set timeout for the search operation
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("Search timed out")), 5000);
-    });
-
-    // Race the search and timeout
-    const results = await Promise.race([searchPromise, timeoutPromise]);
-
-    // Return results
-    return c.json({
-      products: results.products || [],
-      pages: results.pages || [],
-      categories: results.categories || [],
-      success: true,
-      query,
-      timestamp: new Date().toISOString(),
-    });
+app.openapi(searchRoute, async (c) => {
+  // Apply rate limiting
+  try {
+    await limiter.check(c.req.raw);
   } catch (error) {
-    console.error("Search API error:", error);
-
-
     return c.json(
       {
-        error: "An error occurred while searching",
-        message: String(error),
-        success: false,
+        error: "Too many requests. Please try again later.",
+        success: false as const,
       },
-      500,
+      429,
     );
   }
-});
 
+  const params = c.req.valid("query");
+  const {
+    q: query,
+    categoryId,
+    minPrice,
+    maxPrice,
+    limit,
+    searchPages,
+    searchCategories,
+  } = params;
+
+  // If no query, return empty results
+  if (!query.trim()) {
+    return c.json({
+      products: [],
+      pages: [],
+      categories: [],
+      success: true as const,
+      query: "",
+    }, 200);
+  }
+
+  // Set up timeout for search (5 seconds)
+  const searchPromise = search(query, {
+    categoryId,
+    minPrice,
+    maxPrice,
+    limit,
+    searchPages,
+    searchCategories,
+  });
+
+  // Set timeout for the search operation
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("Search timed out")), 5000);
+  });
+
+  // Race the search and timeout
+  const results = await Promise.race([searchPromise, timeoutPromise]);
+
+  // Return results
+  return c.json({
+    products: results.products || [],
+    pages: results.pages || [],
+    categories: results.categories || [],
+    success: true as const,
+    query,
+    timestamp: new Date().toISOString(),
+  }, 200);
+});
 
 // Export the search routes
 export { app as searchRoutes };

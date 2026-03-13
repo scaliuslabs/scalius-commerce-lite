@@ -18,12 +18,16 @@
     "db:generate": "turbo db:generate --filter=@scalius/api",
     "db:migrate:local": "turbo db:migrate:local --filter=@scalius/api",
     "db:migrate:remote": "turbo db:migrate:remote --filter=@scalius/api",
-    "db:studio": "drizzle-kit studio --config packages/database/drizzle.config.ts"
+    "db:studio": "drizzle-kit studio --config packages/database/drizzle.config.ts",
+    "generate:sdk": "turbo generate --filter=@scalius/api-client",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@scalius/tsconfig": "workspace:*",
+    "drizzle-kit": "^0.30.6",
     "turbo": "^2.5.0",
-    "drizzle-kit": "^0.30.6"
+    "vitest": "^4.1.0"
   },
   "packageManager": "pnpm@10.26.1",
   "overrides": {

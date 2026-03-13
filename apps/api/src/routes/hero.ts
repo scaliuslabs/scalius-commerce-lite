@@ -1,11 +1,12 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { heroSliders } from "@scalius/database/schema";
 import { eq, or, and, isNull } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
+import { NotFoundError } from "../utils/api-error";
 
-// Create a Hono app for hero routes
-const app = new Hono<{ Bindings: Env }>();
+// Create an OpenAPIHono app for hero routes
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware with longer TTL for hero content
 app.use(
@@ -24,150 +25,78 @@ const unixToDate = (timestamp: number | null): Date | null => {
   return new Date(timestamp * 1000);
 };
 
-// Get all active hero sliders (public)
-app.get("/sliders", async (c) => {
-  try {
-    const db = c.get("db");
-    // Get user agent from request to determine device type
-    const userAgent = c.req.header("user-agent") || "";
-    const isMobile = userAgent.includes("Mobile");
-
-    // Check if client only wants a specific type
-    const requestedType = c.req.query("type");
-
-    // Build the query conditions
-    let typeCondition;
-    if (requestedType === "desktop" || requestedType === "mobile") {
-      // If specific type is requested, return only that type
-      typeCondition = eq(heroSliders.type, requestedType);
-    } else if (isMobile) {
-      // If mobile device, prioritize mobile sliders
-      typeCondition = or(
-        eq(heroSliders.type, "mobile"),
-        eq(heroSliders.type, "desktop"),
-      );
-    } else {
-      // For desktop devices, prioritize desktop sliders
-      typeCondition = or(
-        eq(heroSliders.type, "desktop"),
-        eq(heroSliders.type, "mobile"),
-      );
-    }
-
-    // Get active sliders
-    const sliders = await db
-      .select()
-      .from(heroSliders)
-      .where(
-        and(
-          typeCondition,
-          eq(heroSliders.isActive, true),
-          isNull(heroSliders.deletedAt),
-        ),
-      );
-
-    // Process the results
-    const desktopSlider = sliders.find((slider) => slider.type === "desktop");
-    const mobileSlider = sliders.find((slider) => slider.type === "mobile");
-
-    // Parse the JSON strings into arrays
-    const desktopImages = desktopSlider ? JSON.parse(desktopSlider.images) : [];
-    const mobileImages = mobileSlider ? JSON.parse(mobileSlider.images) : [];
-
-    // Format dates
-    const formatSlider = (slider: (typeof sliders)[0] | undefined) => {
-      if (!slider) return null;
-
-      // Handle possible invalid timestamp values
-      let createdAt = null;
-      let updatedAt = null;
-
-      try {
-        const createdDate = unixToDate(slider.createdAt as unknown as number);
-        if (createdDate instanceof Date && !isNaN(createdDate.getTime())) {
-          createdAt = createdDate.toISOString();
-        }
-      } catch (error) {
-        console.warn(`Invalid createdAt timestamp for slider ${slider.id}`);
-      }
-
-      try {
-        const updatedDate = unixToDate(slider.updatedAt as unknown as number);
-        if (updatedDate instanceof Date && !isNaN(updatedDate.getTime())) {
-          updatedAt = updatedDate.toISOString();
-        }
-      } catch (error) {
-        console.warn(`Invalid updatedAt timestamp for slider ${slider.id}`);
-      }
-
-      return {
-        id: slider.id,
-        type: slider.type,
-        images: JSON.parse(slider.images),
-        isActive: slider.isActive,
-        createdAt,
-        updatedAt,
-      };
-    };
-
-    // Add headers for device detection (useful for client caching)
-    c.header("X-Device-Type", isMobile ? "mobile" : "desktop");
-
-    // If specific type was requested, return only that slider
-    if (requestedType === "desktop") {
-      return c.json({
-        slider: formatSlider(desktopSlider),
-        images: desktopImages,
-      });
-    } else if (requestedType === "mobile") {
-      return c.json({
-        slider: formatSlider(mobileSlider),
-        images: mobileImages,
-      });
-    }
-
-    // Return both sliders with the appropriate images for the device type
-    return c.json({
-      desktop: formatSlider(desktopSlider),
-      mobile: formatSlider(mobileSlider),
-      // Return the appropriate images based on device type
-      images:
-        isMobile && mobileImages.length > 0 ? mobileImages : desktopImages,
-      // Also include device detection for frontend use
-      isMobile,
-    });
-  } catch (error) {
-    console.error("Error fetching hero sliders:", error);
-    return c.json({ error: "Failed to fetch hero sliders" }, 500);
-  }
+// GET /hero/sliders — get all active hero sliders
+const listSlidersRoute = createRoute({
+  method: "get",
+  path: "/sliders",
+  tags: ["Hero"],
+  summary: "Get all active hero sliders",
+  request: {
+    query: z.object({
+      type: z.enum(["desktop", "mobile"]).optional().openapi({ description: "Slider type filter" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Hero slider data",
+      content: { "application/json": { schema: z.any() } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
 });
 
-// Get hero slider by ID (public)
-app.get("/sliders/:id", async (c) => {
-  try {
-    const db = c.get("db");
-    const id = c.req.param("id");
+app.openapi(listSlidersRoute, async (c) => {
+  const db = c.get("db");
+  // Get user agent from request to determine device type
+  const userAgent = c.req.header("user-agent") || "";
+  const isMobile = userAgent.includes("Mobile");
 
-    const slider = await db
-      .select()
-      .from(heroSliders)
-      .where(
-        and(
-          eq(heroSliders.id, id),
-          eq(heroSliders.isActive, true),
-          isNull(heroSliders.deletedAt),
-        ),
-      )
-      .get();
+  // Check if client only wants a specific type
+  const { type: requestedType } = c.req.valid("query");
 
-    if (!slider) {
-      return c.json({ error: "Hero slider not found" }, 404);
-    }
+  // Build the query conditions
+  let typeCondition;
+  if (requestedType === "desktop" || requestedType === "mobile") {
+    typeCondition = eq(heroSliders.type, requestedType);
+  } else if (isMobile) {
+    typeCondition = or(
+      eq(heroSliders.type, "mobile"),
+      eq(heroSliders.type, "desktop"),
+    );
+  } else {
+    typeCondition = or(
+      eq(heroSliders.type, "desktop"),
+      eq(heroSliders.type, "mobile"),
+    );
+  }
 
-    // Parse the images JSON
-    const images = JSON.parse(slider.images);
+  // Get active sliders
+  const sliders = await db
+    .select()
+    .from(heroSliders)
+    .where(
+      and(
+        typeCondition,
+        eq(heroSliders.isActive, true),
+        isNull(heroSliders.deletedAt),
+      ),
+    );
 
-    // Handle possible invalid timestamp values
+  // Process the results
+  const desktopSlider = sliders.find((slider) => slider.type === "desktop");
+  const mobileSlider = sliders.find((slider) => slider.type === "mobile");
+
+  // Parse the JSON strings into arrays
+  const desktopImages = desktopSlider ? JSON.parse(desktopSlider.images) : [];
+  const mobileImages = mobileSlider ? JSON.parse(mobileSlider.images) : [];
+
+  // Format dates
+  const formatSlider = (slider: (typeof sliders)[0] | undefined) => {
+    if (!slider) return null;
+
     let createdAt = null;
     let updatedAt = null;
 
@@ -189,21 +118,125 @@ app.get("/sliders/:id", async (c) => {
       console.warn(`Invalid updatedAt timestamp for slider ${slider.id}`);
     }
 
-    // Format the response
+    return {
+      id: slider.id,
+      type: slider.type,
+      images: JSON.parse(slider.images),
+      isActive: slider.isActive,
+      createdAt,
+      updatedAt,
+    };
+  };
+
+  // Add headers for device detection (useful for client caching)
+  c.header("X-Device-Type", isMobile ? "mobile" : "desktop");
+
+  // If specific type was requested, return only that slider
+  if (requestedType === "desktop") {
     return c.json({
-      slider: {
-        id: slider.id,
-        type: slider.type,
-        images,
-        isActive: slider.isActive,
-        createdAt,
-        updatedAt,
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching hero slider:", error);
-    return c.json({ error: "Failed to fetch hero slider" }, 500);
+      slider: formatSlider(desktopSlider),
+      images: desktopImages,
+    }, 200);
+  } else if (requestedType === "mobile") {
+    return c.json({
+      slider: formatSlider(mobileSlider),
+      images: mobileImages,
+    }, 200);
   }
+
+  // Return both sliders with the appropriate images for the device type
+  return c.json({
+    desktop: formatSlider(desktopSlider),
+    mobile: formatSlider(mobileSlider),
+    images:
+      isMobile && mobileImages.length > 0 ? mobileImages : desktopImages,
+    isMobile,
+  }, 200);
+});
+
+// GET /hero/sliders/:id — get hero slider by ID
+const getSliderByIdRoute = createRoute({
+  method: "get",
+  path: "/sliders/{id}",
+  tags: ["Hero"],
+  summary: "Get hero slider by ID",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: "Slider ID" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Hero slider details",
+      content: { "application/json": { schema: z.object({ slider: z.any() }) } },
+    },
+    404: {
+      description: "Slider not found",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
+});
+
+app.openapi(getSliderByIdRoute, async (c) => {
+  const db = c.get("db");
+  const { id } = c.req.valid("param");
+
+  const slider = await db
+    .select()
+    .from(heroSliders)
+    .where(
+      and(
+        eq(heroSliders.id, id),
+        eq(heroSliders.isActive, true),
+        isNull(heroSliders.deletedAt),
+      ),
+    )
+    .get();
+
+  if (!slider) {
+    throw new NotFoundError("Hero slider not found");
+  }
+
+  // Parse the images JSON
+  const images = JSON.parse(slider.images);
+
+  // Handle possible invalid timestamp values
+  let createdAt = null;
+  let updatedAt = null;
+
+  try {
+    const createdDate = unixToDate(slider.createdAt as unknown as number);
+    if (createdDate instanceof Date && !isNaN(createdDate.getTime())) {
+      createdAt = createdDate.toISOString();
+    }
+  } catch (error) {
+    console.warn(`Invalid createdAt timestamp for slider ${slider.id}`);
+  }
+
+  try {
+    const updatedDate = unixToDate(slider.updatedAt as unknown as number);
+    if (updatedDate instanceof Date && !isNaN(updatedDate.getTime())) {
+      updatedAt = updatedDate.toISOString();
+    }
+  } catch (error) {
+    console.warn(`Invalid updatedAt timestamp for slider ${slider.id}`);
+  }
+
+  // Format the response
+  return c.json({
+    slider: {
+      id: slider.id,
+      type: slider.type,
+      images,
+      isActive: slider.isActive,
+      createdAt,
+      updatedAt,
+    },
+  }, 200);
 });
 
 // Export the hero routes

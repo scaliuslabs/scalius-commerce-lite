@@ -1,11 +1,10 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
-import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
 import { createLocation, getLocationById } from "@scalius/core/modules/delivery/locations";
+import { NotFoundError } from "../../../utils/api-error";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono();
 
 const locationSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -26,14 +25,34 @@ const updateLocationSchema = z.object({
     sortOrder: z.number().optional(),
 });
 
-app.get("/", async (c) => {
+// ── List Locations ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Delivery Locations"],
+    summary: "List delivery locations",
+    request: {
+        query: z.object({
+            type: z.string().optional().openapi({ description: "Location type filter" }),
+            parentId: z.string().optional().openapi({ description: "Parent ID filter" }),
+            search: z.string().optional().openapi({ description: "Search term" }),
+            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().default(100).openapi({ description: "Items per page" }),
+        }),
+    },
+    responses: { 200: { description: "Location list", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(listRoute, async (c) => {
     try {
         const db = c.get("db");
-        const type = c.req.query("type") as "city" | "zone" | "area" | undefined;
-        const parentId = c.req.query("parentId");
-        const search = c.req.query("search");
-        const page = parseInt(c.req.query("page") || "1");
-        const limit = parseInt(c.req.query("limit") || "100");
+        const query = c.req.valid("query");
+        const type = query.type as "city" | "zone" | "area" | undefined;
+        const parentId = query.parentId;
+        const search = query.search;
+        const page = query.page;
+        const limit = query.limit;
         const offset = (page - 1) * limit;
 
         let conditions = [isNull(deliveryLocations.deletedAt)];
@@ -74,14 +93,25 @@ app.get("/", async (c) => {
                 limit,
                 totalPages: Math.ceil(totalCount / limit),
             },
-        });
+        }, 200);
     } catch (error: any) {
         console.error("Error fetching delivery locations:", error);
         return c.json({ error: error.message || "Failed to fetch delivery locations" }, 500);
     }
 });
 
-app.post("/", zValidator("json", locationSchema), async (c) => {
+// ── Create Location ──
+
+const createLocationRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Create a delivery location",
+    request: { body: { content: { "application/json": { schema: locationSchema } } } },
+    responses: { 201: { description: "Location created", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(createLocationRoute, async (c) => {
     try {
         const data = c.req.valid("json");
         const newLocation = await createLocation(data);
@@ -92,18 +122,41 @@ app.post("/", zValidator("json", locationSchema), async (c) => {
     }
 });
 
-app.delete("/all", async (c) => {
+// ── Delete All Locations ──
+
+const deleteAllRoute = createRoute({
+    method: "delete",
+    path: "/all",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Delete all delivery locations permanently",
+    responses: { 200: { description: "All locations deleted", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(deleteAllRoute, async (c) => {
     try {
         const db = c.get("db");
         await db.delete(deliveryLocations);
-        return c.json({ success: true, message: "All delivery locations have been permanently deleted." });
+        return c.json({ success: true, message: "All delivery locations have been permanently deleted." }, 200);
     } catch (error: any) {
         console.error("Error cleaning all delivery locations:", error);
         return c.json({ error: error.message || "Failed to clean all delivery locations" }, 500);
     }
 });
 
-app.delete("/", zValidator("json", z.object({ ids: z.array(z.string()) })), async (c) => {
+// ── Bulk Delete Locations ──
+
+const bulkDeleteRoute = createRoute({
+    method: "delete",
+    path: "/",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Bulk soft-delete delivery locations",
+    request: {
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+    },
+    responses: { 200: { description: "Locations deleted", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(bulkDeleteRoute, async (c) => {
     try {
         const db = c.get("db");
         const { ids } = c.req.valid("json");
@@ -114,29 +167,55 @@ app.delete("/", zValidator("json", z.object({ ids: z.array(z.string()) })), asyn
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(inArray(deliveryLocations.id, ids), isNull(deliveryLocations.deletedAt)));
 
-        return c.json({ success: true, message: `${ids.length} locations deleted successfully.` });
+        return c.json({ success: true, message: `${ids.length} locations deleted successfully.` }, 200);
     } catch (error: any) {
         console.error("Error bulk deleting delivery locations:", error);
         return c.json({ error: error.message || "Failed to bulk delete delivery locations" }, 500);
     }
 });
 
-app.get("/:id", async (c) => {
+// ── Get Location By ID ──
+
+const getByIdRoute = createRoute({
+    method: "get",
+    path: "/{id}",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Get a delivery location by ID",
+    request: { params: z.object({ id: z.string().openapi({ description: "Location ID" }) }) },
+    responses: { 200: { description: "Location details", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getByIdRoute, async (c) => {
     try {
-        const id = c.req.param("id");
+        const { id } = c.req.valid("param");
         const location = await getLocationById(id);
-        if (!location) return c.json({ error: "Location not found" }, 404);
-        return c.json(location);
+        if (!location) throw new NotFoundError("Location not found");
+        return c.json(location, 200);
     } catch (error: any) {
+        if (error.name === "NotFoundError") throw error;
         console.error("Error fetching delivery location:", error);
         return c.json({ error: error.message || "Failed to fetch delivery location" }, 500);
     }
 });
 
-app.put("/:id", zValidator("json", updateLocationSchema), async (c) => {
+// ── Update Location ──
+
+const updateLocationRoute = createRoute({
+    method: "put",
+    path: "/{id}",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Update a delivery location",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Location ID" }) }),
+        body: { content: { "application/json": { schema: updateLocationSchema } } },
+    },
+    responses: { 200: { description: "Location updated", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(updateLocationRoute, async (c) => {
     try {
         const db = c.get("db");
-        const id = c.req.param("id");
+        const { id } = c.req.valid("param");
         const parsedData = c.req.valid("json");
 
         const updateData: any = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
@@ -153,28 +232,40 @@ app.put("/:id", zValidator("json", updateLocationSchema), async (c) => {
             .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)))
             .returning();
 
-        if (!updatedLocation) return c.json({ error: "Location not found" }, 404);
+        if (!updatedLocation) throw new NotFoundError("Location not found");
 
         return c.json({
             ...updatedLocation,
             externalIds: updatedLocation.externalIds ? JSON.parse(updatedLocation.externalIds) : {},
             metadata: updatedLocation.metadata ? JSON.parse(updatedLocation.metadata) : {},
-        });
+        }, 200);
     } catch (error: any) {
+        if (error.name === "NotFoundError") throw error;
         console.error("Error updating location:", error);
         return c.json({ error: error.message || "Failed to update location" }, 500);
     }
 });
 
-app.delete("/:id", async (c) => {
+// ── Delete Location ──
+
+const deleteLocationRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Soft-delete a delivery location",
+    request: { params: z.object({ id: z.string().openapi({ description: "Location ID" }) }) },
+    responses: { 200: { description: "Location deleted", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(deleteLocationRoute, async (c) => {
     try {
         const db = c.get("db");
-        const id = c.req.param("id");
+        const { id } = c.req.valid("param");
         await db
             .update(deliveryLocations)
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)));
-        return c.json({ success: true });
+        return c.json({ success: true }, 200);
     } catch (error: any) {
         console.error("Error deleting location:", error);
         return c.json({ error: error.message || "Failed to delete location" }, 500);

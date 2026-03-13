@@ -1,6 +1,4 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { db } from "@scalius/database/client";
 import { settings, siteSettings } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -9,12 +7,21 @@ import { getKv, deleteCacheByPattern } from "../../../utils/kv-cache";
 import { upsertSetting } from "@scalius/core/modules/payments/gateway-settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 
-const app = new Hono<{ Bindings: any, Variables: any }>();
+const app = new OpenAPIHono();
 
 // ─────────────────────────────────────────
 // CURRENCY
 // ─────────────────────────────────────────
-app.get("/currency", async (c) => {
+
+const getCurrencyRoute = createRoute({
+    method: "get",
+    path: "/currency",
+    tags: ["Admin - Settings"],
+    summary: "Get currency settings",
+    responses: { 200: { description: "Currency settings", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getCurrencyRoute, async (c) => {
     try {
         const rows = await db
             .select({ key: settings.key, value: settings.value })
@@ -28,14 +35,22 @@ app.get("/currency", async (c) => {
             currencyCode: map["currency_code"] ?? "BDT",
             currencySymbol: map["currency_symbol"] ?? "\u09F3",
             usdExchangeRate: map["usd_exchange_rate"] ?? "1",
-        });
+        }, 200);
     } catch (error) {
         console.error("Error fetching currency settings:", error);
         return c.json({ message: "Error fetching currency settings" }, 500);
     }
 });
 
-app.post("/currency", async (c) => {
+const saveCurrencyRoute = createRoute({
+    method: "post",
+    path: "/currency",
+    tags: ["Admin - Settings"],
+    summary: "Save currency settings",
+    responses: { 200: { description: "Settings saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveCurrencyRoute, async (c) => {
     try {
         const body = (await c.req.json()) as any;
         const ops: Promise<void>[] = [];
@@ -57,7 +72,7 @@ app.post("/currency", async (c) => {
         const kv = getKv();
         await kv?.delete("gw:currency");
 
-        return c.json({ message: "Currency settings saved successfully" });
+        return c.json({ message: "Currency settings saved successfully" }, 200);
     } catch (error) {
         console.error("Error saving currency settings:", error);
         return c.json({ message: "Error saving currency settings" }, 500);
@@ -88,7 +103,16 @@ const headerConfigSchema = z.object({
     navigation: z.array(navigationItemSchema),
 });
 
-app.post("/header", zValidator("json", headerConfigSchema), async (c) => {
+const saveHeaderRoute = createRoute({
+    method: "post",
+    path: "/header",
+    tags: ["Admin - Settings"],
+    summary: "Save header configuration",
+    request: { body: { content: { "application/json": { schema: headerConfigSchema } } } },
+    responses: { 200: { description: "Header saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveHeaderRoute, async (c) => {
     try {
         const validatedConfig = c.req.valid("json");
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
@@ -112,7 +136,7 @@ app.post("/header", zValidator("json", headerConfigSchema), async (c) => {
                 updatedAt: sql`unixepoch()`,
             });
         }
-        return c.json({ success: true });
+        return c.json({ success: true }, 200);
     } catch (error: any) {
         return c.json({ error: "Failed to save header configuration" }, 500);
     }
@@ -135,7 +159,16 @@ const footerConfigSchema = z.object({
     social: z.array(socialLinkSchema),
 });
 
-app.post("/footer", zValidator("json", footerConfigSchema), async (c) => {
+const saveFooterRoute = createRoute({
+    method: "post",
+    path: "/footer",
+    tags: ["Admin - Settings"],
+    summary: "Save footer configuration",
+    request: { body: { content: { "application/json": { schema: footerConfigSchema } } } },
+    responses: { 200: { description: "Footer saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveFooterRoute, async (c) => {
     try {
         const validatedConfig = c.req.valid("json");
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
@@ -159,7 +192,7 @@ app.post("/footer", zValidator("json", footerConfigSchema), async (c) => {
                 updatedAt: sql`unixepoch()`,
             });
         }
-        return c.json({ success: true });
+        return c.json({ success: true }, 200);
     } catch (error: any) {
         return c.json({ error: "Failed to save footer configuration" }, 500);
     }
@@ -168,7 +201,16 @@ app.post("/footer", zValidator("json", footerConfigSchema), async (c) => {
 // ─────────────────────────────────────────
 // THEME
 // ─────────────────────────────────────────
-app.get("/theme", async (c) => {
+
+const getThemeRoute = createRoute({
+    method: "get",
+    path: "/theme",
+    tags: ["Admin - Settings"],
+    summary: "Get theme settings",
+    responses: { 200: { description: "Theme settings", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getThemeRoute, async (c) => {
     try {
         const row = await db
             .select({ value: settings.value })
@@ -177,13 +219,21 @@ app.get("/theme", async (c) => {
             .get();
 
         const colors = row?.value ? JSON.parse(row.value) : {};
-        return c.json({ colors });
+        return c.json({ colors }, 200);
     } catch (error) {
         return c.json({ message: "Error fetching theme settings" }, 500);
     }
 });
 
-app.post("/theme", async (c) => {
+const saveThemeRoute = createRoute({
+    method: "post",
+    path: "/theme",
+    tags: ["Admin - Settings"],
+    summary: "Save theme settings",
+    responses: { 200: { description: "Theme saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveThemeRoute, async (c) => {
     try {
         const body = (await c.req.json()) as any;
         if (!body.colors || typeof body.colors !== "object") return c.json({ message: "Invalid colors payload" }, 400);
@@ -193,7 +243,7 @@ app.post("/theme", async (c) => {
         if (kv) {
             await deleteCacheByPattern("api:storefront:layout:*", kv);
         }
-        return c.json({ message: "Theme settings saved successfully" });
+        return c.json({ message: "Theme settings saved successfully" }, 200);
     } catch (error) {
         return c.json({ message: "Error saving theme settings" }, 500);
     }
@@ -202,7 +252,16 @@ app.post("/theme", async (c) => {
 // ─────────────────────────────────────────
 // SEO
 // ─────────────────────────────────────────
-app.get("/seo", async (c) => {
+
+const getSeoRoute = createRoute({
+    method: "get",
+    path: "/seo",
+    tags: ["Admin - Settings"],
+    summary: "Get SEO settings",
+    responses: { 200: { description: "SEO settings", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getSeoRoute, async (c) => {
     try {
         const [row] = await db
             .select({
@@ -219,13 +278,21 @@ app.get("/seo", async (c) => {
             homepageTitle: row?.homepageTitle || "",
             homepageMetaDescription: row?.homepageMetaDescription || "",
             robotsTxt: row?.robotsTxt || "",
-        });
+        }, 200);
     } catch (error) {
-        return c.json({ siteTitle: "", homepageTitle: "", homepageMetaDescription: "", robotsTxt: "" });
+        return c.json({ siteTitle: "", homepageTitle: "", homepageMetaDescription: "", robotsTxt: "" }, 200);
     }
 });
 
-app.post("/seo", async (c) => {
+const saveSeoRoute = createRoute({
+    method: "post",
+    path: "/seo",
+    tags: ["Admin - Settings"],
+    summary: "Save SEO settings",
+    responses: { 200: { description: "SEO saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveSeoRoute, async (c) => {
     try {
         const { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt } = await c.req.json();
         const [existing] = await db.select().from(siteSettings).limit(1);
@@ -255,7 +322,7 @@ app.post("/seo", async (c) => {
                 updatedAt: sql`unixepoch()`,
             });
         }
-        return c.json({ success: true, message: "SEO settings saved successfully" });
+        return c.json({ success: true, message: "SEO settings saved successfully" }, 200);
     } catch (error) {
         return c.json({ error: "Failed to save SEO configuration" }, 500);
     }
@@ -264,16 +331,33 @@ app.post("/seo", async (c) => {
 // ─────────────────────────────────────────
 // STOREFRONT URL
 // ─────────────────────────────────────────
-app.get("/storefront-url", async (c) => {
+
+const getStorefrontUrlRoute = createRoute({
+    method: "get",
+    path: "/storefront-url",
+    tags: ["Admin - Settings"],
+    summary: "Get storefront URL",
+    responses: { 200: { description: "Storefront URL", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getStorefrontUrlRoute, async (c) => {
     try {
         const [row] = await db.select({ storefrontUrl: siteSettings.storefrontUrl }).from(siteSettings).limit(1);
-        return c.json({ storefrontUrl: row?.storefrontUrl || "/" });
+        return c.json({ storefrontUrl: row?.storefrontUrl || "/" }, 200);
     } catch (error) {
-        return c.json({ storefrontUrl: "/" });
+        return c.json({ storefrontUrl: "/" }, 200);
     }
 });
 
-app.post("/storefront-url", async (c) => {
+const saveStorefrontUrlRoute = createRoute({
+    method: "post",
+    path: "/storefront-url",
+    tags: ["Admin - Settings"],
+    summary: "Save storefront URL",
+    responses: { 200: { description: "URL saved", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(saveStorefrontUrlRoute, async (c) => {
     try {
         const { storefrontUrl } = await c.req.json();
         const [existing] = await db.select().from(siteSettings).limit(1);
@@ -295,7 +379,7 @@ app.post("/storefront-url", async (c) => {
             });
         }
         layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
-        return c.json({ success: true, message: "Storefront URL saved successfully" });
+        return c.json({ success: true, message: "Storefront URL saved successfully" }, 200);
     } catch (error) {
         return c.json({ error: "Failed to save storefront URL" }, 500);
     }

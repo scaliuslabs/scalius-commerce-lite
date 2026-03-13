@@ -1,5 +1,5 @@
 // src/server/routes/attributes.ts
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import {
   productAttributes,
@@ -10,8 +10,9 @@ import {
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { ftsMatch } from "@scalius/core/search";
 import { cacheMiddleware } from "../middleware/cache";
+import { NotFoundError } from "../utils/api-error";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Cache this endpoint as it changes infrequently
 app.use(
@@ -42,290 +43,358 @@ app.use(
   }),
 );
 
-app.get("/filterable", async (c) => {
-  try {
-    const db = c.get("db");
-    // 1. Get all attributes marked as filterable
-    const filterableAttributes = await db
-      .select({
-        id: productAttributes.id,
-        name: productAttributes.name,
-        slug: productAttributes.slug,
-      })
-      .from(productAttributes)
-      .where(
-        and(
-          eq(productAttributes.filterable, true),
-          isNull(productAttributes.deletedAt),
-        ),
-      );
-
-    if (filterableAttributes.length === 0) {
-      return c.json({ filters: [] });
-    }
-
-    // 2. For each attribute, get all unique values assigned to products
-    const attributeIds = filterableAttributes.map((attr) => attr.id);
-    const uniqueValues =
-      attributeIds.length > 0
-        ? await db
-            .selectDistinct({
-              attributeId: productAttributeValues.attributeId,
-              value: productAttributeValues.value,
-            })
-            .from(productAttributeValues)
-            .where(inArray(productAttributeValues.attributeId, attributeIds))
-        : [];
-
-    // 3. Structure the data for the frontend
-    const filters = filterableAttributes
-      .map((attr) => ({
-        id: attr.id,
-        name: attr.name,
-        slug: attr.slug,
-        values: uniqueValues
-          .filter((uv) => uv.attributeId === attr.id)
-          .map((uv) => uv.value)
-          .sort(),
-      }))
-      .filter((filter) => filter.values.length > 0); // Only return filters that have values
-
-    return c.json({ filters });
-  } catch (error) {
-    console.error("Error fetching filterable attributes:", error);
-    return c.json({ error: "Failed to fetch filters" }, 500);
-  }
+// GET /attributes/filterable
+const filterableRoute = createRoute({
+  method: "get",
+  path: "/filterable",
+  tags: ["Attributes"],
+  summary: "Get all filterable product attributes with values",
+  responses: {
+    200: {
+      description: "Filterable attributes list",
+      content: { "application/json": { schema: z.object({ filters: z.array(z.any()) }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
 });
 
-// Get attributes and values for a specific category by ID
-app.get("/category/:categoryId", async (c) => {
-  try {
-    const db = c.get("db");
-    const categoryId = c.req.param("categoryId");
+app.openapi(filterableRoute, async (c) => {
+  const db = c.get("db");
+  // 1. Get all attributes marked as filterable
+  const filterableAttributes = await db
+    .select({
+      id: productAttributes.id,
+      name: productAttributes.name,
+      slug: productAttributes.slug,
+    })
+    .from(productAttributes)
+    .where(
+      and(
+        eq(productAttributes.filterable, true),
+        isNull(productAttributes.deletedAt),
+      ),
+    );
 
-    // 1. Get all filterable attributes that have values in products of this category
-    const categoryAttributes = await db
-      .selectDistinct({
-        attributeId: productAttributeValues.attributeId,
-        attributeName: productAttributes.name,
-        attributeSlug: productAttributes.slug,
-        value: productAttributeValues.value,
-      })
-      .from(productAttributeValues)
-      .innerJoin(
-        productAttributes,
-        and(
-          eq(productAttributeValues.attributeId, productAttributes.id),
-          eq(productAttributes.filterable, true),
-          isNull(productAttributes.deletedAt),
-        ),
-      )
-      .innerJoin(
-        products,
-        and(
-          eq(productAttributeValues.productId, products.id),
-          eq(products.categoryId, categoryId),
-          eq(products.isActive, true),
-          isNull(products.deletedAt),
-        ),
-      );
+  if (filterableAttributes.length === 0) {
+    return c.json({ filters: [] }, 200);
+  }
 
-    // 2. Group by attribute and collect values
-    const attributeMap = new Map();
-    categoryAttributes.forEach((item) => {
-      if (!attributeMap.has(item.attributeId)) {
-        attributeMap.set(item.attributeId, {
-          id: item.attributeId,
-          name: item.attributeName,
-          slug: item.attributeSlug,
-          values: new Set(),
-        });
-      }
-      attributeMap.get(item.attributeId).values.add(item.value);
-    });
+  // 2. For each attribute, get all unique values assigned to products
+  const attributeIds = filterableAttributes.map((attr) => attr.id);
+  const uniqueValues =
+    attributeIds.length > 0
+      ? await db
+          .selectDistinct({
+            attributeId: productAttributeValues.attributeId,
+            value: productAttributeValues.value,
+          })
+          .from(productAttributeValues)
+          .where(inArray(productAttributeValues.attributeId, attributeIds))
+      : [];
 
-    // 3. Convert to final format
-    const filters = Array.from(attributeMap.values()).map((attr) => ({
+  // 3. Structure the data for the frontend
+  const filters = filterableAttributes
+    .map((attr) => ({
       id: attr.id,
       name: attr.name,
       slug: attr.slug,
-      values: Array.from(attr.values).sort(),
-    }));
+      values: uniqueValues
+        .filter((uv) => uv.attributeId === attr.id)
+        .map((uv) => uv.value)
+        .sort(),
+    }))
+    .filter((filter) => filter.values.length > 0);
 
-    return c.json({ filters });
-  } catch (error) {
-    console.error("Error fetching category attributes:", error);
-    return c.json({ error: "Failed to fetch category filters" }, 500);
-  }
+  return c.json({ filters }, 200);
 });
 
-// Get attributes and values for a specific category by slug
-app.get("/category-slug/:categorySlug", async (c) => {
-  try {
-    const db = c.get("db");
-    const categorySlug = c.req.param("categorySlug");
-
-    // 1. First get the category ID from slug
-    const category = await db
-      .select({ id: categories.id })
-      .from(categories)
-      .where(
-        and(eq(categories.slug, categorySlug), isNull(categories.deletedAt)),
-      )
-      .get();
-
-    if (!category) {
-      return c.json({ error: "Category not found" }, 404);
-    }
-
-    // 2. Get all filterable attributes that have values in products of this category
-    const categoryAttributes = await db
-      .selectDistinct({
-        attributeId: productAttributeValues.attributeId,
-        attributeName: productAttributes.name,
-        attributeSlug: productAttributes.slug,
-        value: productAttributeValues.value,
-      })
-      .from(productAttributeValues)
-      .innerJoin(
-        productAttributes,
-        and(
-          eq(productAttributeValues.attributeId, productAttributes.id),
-          eq(productAttributes.filterable, true),
-          isNull(productAttributes.deletedAt),
-        ),
-      )
-      .innerJoin(
-        products,
-        and(
-          eq(productAttributeValues.productId, products.id),
-          eq(products.categoryId, category.id),
-          eq(products.isActive, true),
-          isNull(products.deletedAt),
-        ),
-      );
-
-    // 3. Group by attribute and collect values
-    const attributeMap = new Map();
-    categoryAttributes.forEach((item) => {
-      if (!attributeMap.has(item.attributeId)) {
-        attributeMap.set(item.attributeId, {
-          id: item.attributeId,
-          name: item.attributeName,
-          slug: item.attributeSlug,
-          values: new Set(),
-        });
-      }
-      attributeMap.get(item.attributeId).values.add(item.value);
-    });
-
-    // 4. Convert to final format
-    const filters = Array.from(attributeMap.values()).map((attr) => ({
-      id: attr.id,
-      name: attr.name,
-      slug: attr.slug,
-      values: Array.from(attr.values).sort(),
-    }));
-
-    return c.json({ filters });
-  } catch (error) {
-    console.error("Error fetching category attributes by slug:", error);
-    return c.json({ error: "Failed to fetch category filters" }, 500);
-  }
+// GET /attributes/category/:categoryId
+const categoryAttributesRoute = createRoute({
+  method: "get",
+  path: "/category/{categoryId}",
+  tags: ["Attributes"],
+  summary: "Get filterable attributes for a category by ID",
+  request: {
+    params: z.object({
+      categoryId: z.string().openapi({ description: "Category ID" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Category-specific filterable attributes",
+      content: { "application/json": { schema: z.object({ filters: z.array(z.any()) }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
 });
 
-// Get attributes and values for search results
-app.get("/search-filters", async (c) => {
-  try {
-    const db = c.get("db");
-    const query = c.req.query("q");
-    const categoryId = c.req.query("categoryId"); // Optional: if you want to limit to a specific category
+app.openapi(categoryAttributesRoute, async (c) => {
+  const db = c.get("db");
+  const { categoryId } = c.req.valid("param");
 
-    if (!query || query.trim().length === 0) {
-      return c.json({ filters: [] });
+  // 1. Get all filterable attributes that have values in products of this category
+  const categoryAttributes = await db
+    .selectDistinct({
+      attributeId: productAttributeValues.attributeId,
+      attributeName: productAttributes.name,
+      attributeSlug: productAttributes.slug,
+      value: productAttributeValues.value,
+    })
+    .from(productAttributeValues)
+    .innerJoin(
+      productAttributes,
+      and(
+        eq(productAttributeValues.attributeId, productAttributes.id),
+        eq(productAttributes.filterable, true),
+        isNull(productAttributes.deletedAt),
+      ),
+    )
+    .innerJoin(
+      products,
+      and(
+        eq(productAttributeValues.productId, products.id),
+        eq(products.categoryId, categoryId),
+        eq(products.isActive, true),
+        isNull(products.deletedAt),
+      ),
+    );
+
+  // 2. Group by attribute and collect values
+  const attributeMap = new Map();
+  categoryAttributes.forEach((item) => {
+    if (!attributeMap.has(item.attributeId)) {
+      attributeMap.set(item.attributeId, {
+        id: item.attributeId,
+        name: item.attributeName,
+        slug: item.attributeSlug,
+        values: new Set(),
+      });
     }
+    attributeMap.get(item.attributeId).values.add(item.value);
+  });
 
-    let searchConditions = [
-      eq(products.isActive, true),
-      isNull(products.deletedAt),
-    ];
+  // 3. Convert to final format
+  const filters = Array.from(attributeMap.values()).map((attr) => ({
+    id: attr.id,
+    name: attr.name,
+    slug: attr.slug,
+    values: Array.from(attr.values).sort(),
+  }));
 
-    const ftsCond = ftsMatch("products_fts", "products", query.trim());
-    if (ftsCond) searchConditions.push(ftsCond);
+  return c.json({ filters }, 200);
+});
 
-    // If categoryId is provided, add it to conditions
-    if (categoryId) {
-      searchConditions.push(eq(products.categoryId, categoryId));
-    }
+// GET /attributes/category-slug/:categorySlug
+const categorySlugAttributesRoute = createRoute({
+  method: "get",
+  path: "/category-slug/{categorySlug}",
+  tags: ["Attributes"],
+  summary: "Get filterable attributes for a category by slug",
+  request: {
+    params: z.object({
+      categorySlug: z.string().openapi({ description: "Category slug" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Category-specific filterable attributes",
+      content: { "application/json": { schema: z.object({ filters: z.array(z.any()) }) } },
+    },
+    404: {
+      description: "Category not found",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
+});
 
-    // 1. Find products that match the search query
-    const matchingProducts = await db
-      .select({ id: products.id, categoryId: products.categoryId })
-      .from(products)
-      .where(and(...searchConditions))
-      .limit(100); // Limit to prevent excessive queries
+app.openapi(categorySlugAttributesRoute, async (c) => {
+  const db = c.get("db");
+  const { categorySlug } = c.req.valid("param");
 
-    if (matchingProducts.length === 0) {
-      return c.json({ filters: [] });
-    }
+  // 1. First get the category ID from slug
+  const category = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(
+      and(eq(categories.slug, categorySlug), isNull(categories.deletedAt)),
+    )
+    .get();
 
-    // 2. Get all categories from matching products
-    const categoryIds = [...new Set(matchingProducts.map((p) => p.categoryId))];
-
-    // 3. Get all filterable attributes that have values in products of these categories
-    const searchAttributes = await db
-      .selectDistinct({
-        attributeId: productAttributeValues.attributeId,
-        attributeName: productAttributes.name,
-        attributeSlug: productAttributes.slug,
-        value: productAttributeValues.value,
-      })
-      .from(productAttributeValues)
-      .innerJoin(
-        productAttributes,
-        and(
-          eq(productAttributeValues.attributeId, productAttributes.id),
-          eq(productAttributes.filterable, true),
-          isNull(productAttributes.deletedAt),
-        ),
-      )
-      .innerJoin(
-        products,
-        and(
-          eq(productAttributeValues.productId, products.id),
-          inArray(products.categoryId, categoryIds),
-          eq(products.isActive, true),
-          isNull(products.deletedAt),
-        ),
-      );
-
-    // 4. Group by attribute and collect values
-    const attributeMap = new Map();
-    searchAttributes.forEach((item) => {
-      if (!attributeMap.has(item.attributeId)) {
-        attributeMap.set(item.attributeId, {
-          id: item.attributeId,
-          name: item.attributeName,
-          slug: item.attributeSlug,
-          values: new Set(),
-        });
-      }
-      attributeMap.get(item.attributeId).values.add(item.value);
-    });
-
-    // 5. Convert to final format
-    const filters = Array.from(attributeMap.values()).map((attr) => ({
-      id: attr.id,
-      name: attr.name,
-      slug: attr.slug,
-      values: Array.from(attr.values).sort(),
-    }));
-
-    return c.json({ filters });
-  } catch (error) {
-    console.error("Error fetching search filters:", error);
-    return c.json({ error: "Failed to fetch search filters" }, 500);
+  if (!category) {
+    throw new NotFoundError("Category not found");
   }
+
+  // 2. Get all filterable attributes that have values in products of this category
+  const categoryAttributes = await db
+    .selectDistinct({
+      attributeId: productAttributeValues.attributeId,
+      attributeName: productAttributes.name,
+      attributeSlug: productAttributes.slug,
+      value: productAttributeValues.value,
+    })
+    .from(productAttributeValues)
+    .innerJoin(
+      productAttributes,
+      and(
+        eq(productAttributeValues.attributeId, productAttributes.id),
+        eq(productAttributes.filterable, true),
+        isNull(productAttributes.deletedAt),
+      ),
+    )
+    .innerJoin(
+      products,
+      and(
+        eq(productAttributeValues.productId, products.id),
+        eq(products.categoryId, category.id),
+        eq(products.isActive, true),
+        isNull(products.deletedAt),
+      ),
+    );
+
+  // 3. Group by attribute and collect values
+  const attributeMap = new Map();
+  categoryAttributes.forEach((item) => {
+    if (!attributeMap.has(item.attributeId)) {
+      attributeMap.set(item.attributeId, {
+        id: item.attributeId,
+        name: item.attributeName,
+        slug: item.attributeSlug,
+        values: new Set(),
+      });
+    }
+    attributeMap.get(item.attributeId).values.add(item.value);
+  });
+
+  // 4. Convert to final format
+  const filters = Array.from(attributeMap.values()).map((attr) => ({
+    id: attr.id,
+    name: attr.name,
+    slug: attr.slug,
+    values: Array.from(attr.values).sort(),
+  }));
+
+  return c.json({ filters }, 200);
+});
+
+// GET /attributes/search-filters
+const searchFiltersRoute = createRoute({
+  method: "get",
+  path: "/search-filters",
+  tags: ["Attributes"],
+  summary: "Get filterable attributes for search results",
+  request: {
+    query: z.object({
+      q: z.string().optional().openapi({ description: "Search query" }),
+      categoryId: z.string().optional().openapi({ description: "Optional category filter" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Search-specific filterable attributes",
+      content: { "application/json": { schema: z.object({ filters: z.array(z.any()) }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+    },
+  },
+});
+
+app.openapi(searchFiltersRoute, async (c) => {
+  const db = c.get("db");
+  const { q: query, categoryId } = c.req.valid("query");
+
+  if (!query || query.trim().length === 0) {
+    return c.json({ filters: [] }, 200);
+  }
+
+  let searchConditions = [
+    eq(products.isActive, true),
+    isNull(products.deletedAt),
+  ];
+
+  const ftsCond = ftsMatch("products_fts", "products", query.trim());
+  if (ftsCond) searchConditions.push(ftsCond);
+
+  // If categoryId is provided, add it to conditions
+  if (categoryId) {
+    searchConditions.push(eq(products.categoryId, categoryId));
+  }
+
+  // 1. Find products that match the search query
+  const matchingProducts = await db
+    .select({ id: products.id, categoryId: products.categoryId })
+    .from(products)
+    .where(and(...searchConditions))
+    .limit(100);
+
+  if (matchingProducts.length === 0) {
+    return c.json({ filters: [] }, 200);
+  }
+
+  // 2. Get all categories from matching products
+  const categoryIds = [...new Set(matchingProducts.map((p) => p.categoryId))];
+
+  // 3. Get all filterable attributes that have values in products of these categories
+  const searchAttributes = await db
+    .selectDistinct({
+      attributeId: productAttributeValues.attributeId,
+      attributeName: productAttributes.name,
+      attributeSlug: productAttributes.slug,
+      value: productAttributeValues.value,
+    })
+    .from(productAttributeValues)
+    .innerJoin(
+      productAttributes,
+      and(
+        eq(productAttributeValues.attributeId, productAttributes.id),
+        eq(productAttributes.filterable, true),
+        isNull(productAttributes.deletedAt),
+      ),
+    )
+    .innerJoin(
+      products,
+      and(
+        eq(productAttributeValues.productId, products.id),
+        inArray(products.categoryId, categoryIds),
+        eq(products.isActive, true),
+        isNull(products.deletedAt),
+      ),
+    );
+
+  // 4. Group by attribute and collect values
+  const attributeMap = new Map();
+  searchAttributes.forEach((item) => {
+    if (!attributeMap.has(item.attributeId)) {
+      attributeMap.set(item.attributeId, {
+        id: item.attributeId,
+        name: item.attributeName,
+        slug: item.attributeSlug,
+        values: new Set(),
+      });
+    }
+    attributeMap.get(item.attributeId).values.add(item.value);
+  });
+
+  // 5. Convert to final format
+  const filters = Array.from(attributeMap.values()).map((attr) => ({
+    id: attr.id,
+    name: attr.name,
+    slug: attr.slug,
+    values: Array.from(attr.values).sort(),
+  }));
+
+  return c.json({ filters }, 200);
 });
 
 export { app as attributeRoutes };

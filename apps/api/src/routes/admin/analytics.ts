@@ -1,105 +1,155 @@
 // src/server/routes/admin/analytics.ts
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+// Admin OpenAPI routes for analytics scripts.
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { AnalyticsService, createAnalyticsSchema, updateAnalyticsSchema, toggleAnalyticsSchema } from "@scalius/core/modules/analytics";
+import { NotFoundError } from "../../utils/api-error";
 
-const app = new Hono<{ Bindings: any }>();
+const app = new OpenAPIHono();
 
-app.get("/", async (c) => {
-    try {
-        const db = c.get("db");
-        const scripts = await AnalyticsService.listScripts(db);
-        return c.json(scripts, 200);
-    } catch (error: any) {
-        console.error("Error fetching analytics scripts:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
+// ── List Analytics Scripts ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Analytics"],
+    summary: "List all analytics scripts",
+    responses: {
+        200: { description: "Analytics script list", content: { "application/json": { schema: z.any() } } },
+    },
 });
 
-app.post("/", zValidator("json", createAnalyticsSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const data = c.req.valid("json");
-        const result = await AnalyticsService.createScript(db, data);
-        return c.json(result, 201);
-    } catch (error: any) {
-        console.error("Error creating analytics script:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
+app.openapi(listRoute, async (c) => {
+    const db = c.get("db");
+    const scripts = await AnalyticsService.listScripts(db);
+    return c.json(scripts, 200);
 });
 
-app.get("/:id", async (c) => {
-    try {
-        const db = c.get("db");
-        const id = c.req.param("id");
-        const script = await AnalyticsService.getScript(db, id);
-        if (!script) {
-            return c.json({ error: "Analytics script not found" }, 404);
-        }
-        return c.json(script, 200);
-    } catch (error: any) {
-        console.error("Error fetching analytics script:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
+// ── Create Analytics Script ──
+
+const createScriptRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Analytics"],
+    summary: "Create an analytics script",
+    request: {
+        body: { content: { "application/json": { schema: createAnalyticsSchema } } },
+    },
+    responses: {
+        201: { description: "Script created", content: { "application/json": { schema: z.any() } } },
+    },
 });
 
-app.put("/:id", zValidator("json", updateAnalyticsSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const id = c.req.param("id");
-        const data = c.req.valid("json");
-
-        // Validate ID match
-        if (data.id && data.id !== id) {
-            return c.json({ error: "ID mismatch" }, 400);
-        }
-
-        const updated = await AnalyticsService.updateScript(db, id, data);
-        if (!updated) {
-            return c.json({ error: "Analytics script not found" }, 404);
-        }
-        return c.json({ success: true, script: updated }, 200);
-    } catch (error: any) {
-        console.error("Error updating analytics script:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
+app.openapi(createScriptRoute, async (c) => {
+    const db = c.get("db");
+    const data = c.req.valid("json");
+    const result = await AnalyticsService.createScript(db, data);
+    return c.json(result, 201);
 });
 
-app.delete("/:id", async (c) => {
-    try {
-        const db = c.get("db");
-        const id = c.req.param("id");
+// ── Get Analytics Script ──
 
-        const deleted = await AnalyticsService.deleteScript(db, id);
-        if (!deleted) {
-            return c.json({ error: "Analytics script not found" }, 404);
-        }
-        return c.json({ success: true, message: "Analytics script deleted", deletedScript: deleted }, 200);
-    } catch (error: any) {
-        console.error("Error deleting analytics script:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
+const getByIdRoute = createRoute({
+    method: "get",
+    path: "/{id}",
+    tags: ["Admin - Analytics"],
+    summary: "Get an analytics script by ID",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Script ID" }) }),
+    },
+    responses: {
+        200: { description: "Script details", content: { "application/json": { schema: z.any() } } },
+    },
 });
 
-app.post("/:id/toggle", zValidator("json", toggleAnalyticsSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const id = c.req.param("id");
-        const data = c.req.valid("json");
+app.openapi(getByIdRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const script = await AnalyticsService.getScript(db, id);
+    if (!script) throw new NotFoundError("Analytics script not found");
+    return c.json(script, 200);
+});
 
-        const toggled = await AnalyticsService.toggleScript(db, id, data.isActive);
-        if (!toggled) {
-            return c.json({ error: "Analytics script not found" }, 404);
-        }
-        return c.json({
-            success: true,
-            message: `Analytics script ${data.isActive ? "activated" : "deactivated"}`,
-            script: toggled
-        }, 200);
-    } catch (error: any) {
-        console.error("Error toggling analytics script status:", error);
-        return c.json({ error: "Internal server error" }, 500);
+// ── Update Analytics Script ──
+
+const updateScriptRoute = createRoute({
+    method: "put",
+    path: "/{id}",
+    tags: ["Admin - Analytics"],
+    summary: "Update an analytics script",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Script ID" }) }),
+        body: { content: { "application/json": { schema: updateAnalyticsSchema } } },
+    },
+    responses: {
+        200: { description: "Script updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateScriptRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+
+    if (data.id && data.id !== id) {
+        return c.json({ error: "ID mismatch" }, 400);
     }
+
+    const updated = await AnalyticsService.updateScript(db, id, data);
+    if (!updated) throw new NotFoundError("Analytics script not found");
+    return c.json({ success: true, script: updated }, 200);
+});
+
+// ── Delete Analytics Script ──
+
+const deleteScriptRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Analytics"],
+    summary: "Delete an analytics script",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Script ID" }) }),
+    },
+    responses: {
+        200: { description: "Script deleted", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(deleteScriptRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const deleted = await AnalyticsService.deleteScript(db, id);
+    if (!deleted) throw new NotFoundError("Analytics script not found");
+    return c.json({ success: true, message: "Analytics script deleted", deletedScript: deleted }, 200);
+});
+
+// ── Toggle Analytics Script ──
+
+const toggleScriptRoute = createRoute({
+    method: "post",
+    path: "/{id}/toggle",
+    tags: ["Admin - Analytics"],
+    summary: "Toggle an analytics script active status",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Script ID" }) }),
+        body: { content: { "application/json": { schema: toggleAnalyticsSchema } } },
+    },
+    responses: {
+        200: { description: "Script toggled", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(toggleScriptRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+    const toggled = await AnalyticsService.toggleScript(db, id, data.isActive);
+    if (!toggled) throw new NotFoundError("Analytics script not found");
+    return c.json({
+        success: true,
+        message: `Analytics script ${data.isActive ? "activated" : "deactivated"}`,
+        script: toggled
+    }, 200);
 });
 
 export { app as adminAnalyticsRoutes };

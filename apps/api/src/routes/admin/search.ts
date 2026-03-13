@@ -1,42 +1,64 @@
 // src/server/routes/admin/search.ts
-import { Hono } from "hono";
+// Admin OpenAPI routes for search.
+
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { search } from "@scalius/core/search";
 
-const app = new Hono<{ Bindings: any }>();
+const app = new OpenAPIHono();
 
-app.get("/", async (c) => {
+// ── Search ──
+
+const searchRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Search"],
+    summary: "Search across products, pages, and categories",
+    request: {
+        query: z.object({
+            q: z.string().optional().default("").openapi({ description: "Search query" }),
+            categoryId: z.string().optional().openapi({ description: "Category ID filter" }),
+            minPrice: z.string().optional().openapi({ description: "Minimum price" }),
+            maxPrice: z.string().optional().openapi({ description: "Maximum price" }),
+            limit: z.coerce.number().default(10).openapi({ description: "Max results" }),
+            searchPages: z.string().optional().default("true").openapi({ description: "Include pages" }),
+            searchCategories: z.string().optional().default("true").openapi({ description: "Include categories" }),
+        }),
+    },
+    responses: {
+        200: { description: "Search results", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(searchRoute, async (c) => {
     try {
-        const query = c.req.query("q") || "";
-        const categoryId = c.req.query("categoryId");
-        const minPriceStr = c.req.query("minPrice");
-        const maxPriceStr = c.req.query("maxPrice");
-        const minPrice = minPriceStr ? parseFloat(minPriceStr) : undefined;
-        const maxPrice = maxPriceStr ? parseFloat(maxPriceStr) : undefined;
-        const limit = parseInt(c.req.query("limit") || "10", 10);
-        const searchPages = c.req.query("searchPages") !== "false";
-        const searchCategories = c.req.query("searchCategories") !== "false";
+        const query = c.req.valid("query");
+        const q = query.q || "";
+        const minPrice = query.minPrice ? parseFloat(query.minPrice) : undefined;
+        const maxPrice = query.maxPrice ? parseFloat(query.maxPrice) : undefined;
+        const searchPagesFlag = query.searchPages !== "false";
+        const searchCategoriesFlag = query.searchCategories !== "false";
 
-        if (!query.trim()) {
+        if (!q.trim()) {
             return c.json({
                 products: [],
                 pages: [],
                 categories: [],
                 success: true,
                 query: "",
-            });
+            }, 200);
         }
 
         const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error("Search timed out")), 5000);
         });
 
-        const searchPromise = search(query, {
-            categoryId,
+        const searchPromise = search(q, {
+            categoryId: query.categoryId,
             minPrice,
             maxPrice,
-            limit,
-            searchPages,
-            searchCategories,
+            limit: query.limit,
+            searchPages: searchPagesFlag,
+            searchCategories: searchCategoriesFlag,
         });
 
         const results: any = await Promise.race([searchPromise, timeoutPromise]);
@@ -44,9 +66,9 @@ app.get("/", async (c) => {
         return c.json({
             ...results,
             success: true,
-            query,
+            query: q,
             timestamp: new Date().toISOString(),
-        });
+        }, 200);
     } catch (error: any) {
         console.error("Search error:", error);
         if (error.message === "Search timed out") {
@@ -56,9 +78,20 @@ app.get("/", async (c) => {
     }
 });
 
-app.post("/reindex", async (c) => {
-    // Hook up to actual reindex logic if available.
-    return c.json({ success: true, message: "Reindex initiated" });
+// ── Reindex ──
+
+const reindexRoute = createRoute({
+    method: "post",
+    path: "/reindex",
+    tags: ["Admin - Search"],
+    summary: "Trigger search reindex",
+    responses: {
+        200: { description: "Reindex initiated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(reindexRoute, async (c) => {
+    return c.json({ success: true, message: "Reindex initiated" }, 200);
 });
 
 export { app as adminSearchRoutes };

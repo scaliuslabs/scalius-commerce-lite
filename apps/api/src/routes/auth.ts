@@ -1,9 +1,10 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { generateToken, revokeToken, getTokenStats } from "../utils/jwt";
 import { authMiddleware } from "../middleware/auth";
 import { db } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
+import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 
 // Define the user type for type safety
 interface User {
@@ -13,7 +14,7 @@ interface User {
   role: string;
 }
 
-// Constant-time secret comparison — hash both values to SHA-256 then compare bytes
+// Constant-time secret comparison
 async function timingSafeCompare(a: string, b: string): Promise<boolean> {
   const encoder = new TextEncoder();
   const [hashA, hashB] = await Promise.all([
@@ -30,38 +31,38 @@ async function timingSafeCompare(a: string, b: string): Promise<boolean> {
   return result === 0;
 }
 
-// Create a Hono app with typed context
-const app = new Hono<{
+const app = new OpenAPIHono<{
   Bindings: Env;
   Variables: {
     user: User;
   };
 }>();
 
-// Get token for service-to-service communication
-app.get("/token", async (c) => {
-  // Read API_TOKEN from Cloudflare Worker env bindings (c.env) first,
-  // falling back to process.env for local dev compatibility.
+// ─── GET /token ──────────────────────────────────────────────────────────────
+
+const getTokenRoute = createRoute({
+  method: "get",
+  path: "/token",
+  tags: ["Auth"],
+  summary: "Get JWT token for service-to-service communication",
+  responses: {
+    200: { description: "Token generated", content: { "application/json": { schema: z.any() } } },
+    401: { description: "Unauthorized", content: { "application/json": { schema: z.any() } } },
+  },
+});
+
+app.openapi(getTokenRoute, async (c) => {
   const API_TOKEN =
     c.env.API_TOKEN ||
     process.env.API_TOKEN ||
     "default-api-token-change-in-production";
 
-  // Check if request has the correct API token
   const apiToken = c.req.header("X-API-Token");
 
   if (!apiToken || !(await timingSafeCompare(apiToken, API_TOKEN))) {
-    return c.json(
-      {
-        success: false,
-        error: "Unauthorized",
-        message: "Invalid API token",
-      },
-      401,
-    );
+    throw new UnauthorizedError("Invalid API token");
   }
 
-  // Generate JWT token for service
   const token = generateToken({
     id: "system",
     email: "system@internal",
@@ -71,115 +72,122 @@ app.get("/token", async (c) => {
 
   return c.json({
     success: true,
-    data: {
-      token,
-    },
-  });
+    data: { token },
+  }, 200);
 });
 
-// Get public firebase config for client setup
-app.get("/firebase-config", async (c) => {
-  try {
-    const result = await db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(
-        and(
-          eq(settings.key, "public_config"),
-          eq(settings.category, "firebase"),
-        ),
-      )
-      .get();
+// ─── GET /firebase-config ────────────────────────────────────────────────────
 
-    let config = {};
-    if (result && result.value) {
-      config = JSON.parse(result.value);
-    }
+const firebaseConfigRoute = createRoute({
+  method: "get",
+  path: "/firebase-config",
+  tags: ["Auth"],
+  summary: "Get public Firebase config for client setup",
+  responses: {
+    200: { description: "Firebase config", content: { "application/json": { schema: z.any() } } },
+  },
+});
 
-    return c.json(config);
-  } catch (error) {
-    console.error("Error fetching firebase config:", error);
-    return c.json({ error: "Failed to load config" }, 500);
+app.openapi(firebaseConfigRoute, async (c) => {
+  const result = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(
+      and(
+        eq(settings.key, "public_config"),
+        eq(settings.category, "firebase"),
+      ),
+    )
+    .get();
+
+  let config = {};
+  if (result && result.value) {
+    config = JSON.parse(result.value);
   }
+
+  return c.json(config, 200);
 });
 
 // Apply auth middleware to all routes below
 app.use("/*", authMiddleware);
 
-// Get current user/service info
-app.get("/me", (c) => {
+// ─── GET /me ─────────────────────────────────────────────────────────────────
+
+const getMeRoute = createRoute({
+  method: "get",
+  path: "/me",
+  tags: ["Auth"],
+  summary: "Get current user/service info",
+  responses: {
+    200: { description: "Current user info", content: { "application/json": { schema: z.any() } } },
+  },
+});
+
+app.openapi(getMeRoute, (c) => {
   const user = c.get("user");
+  return c.json({
+    success: true,
+    data: { user },
+  }, 200);
+});
+
+// ─── POST /revoke ────────────────────────────────────────────────────────────
+
+const revokeRoute = createRoute({
+  method: "post",
+  path: "/revoke",
+  tags: ["Auth"],
+  summary: "Revoke current token",
+  responses: {
+    200: { description: "Token revoked", content: { "application/json": { schema: z.any() } } },
+    400: { description: "Invalid token", content: { "application/json": { schema: z.any() } } },
+  },
+});
+
+app.openapi(revokeRoute, async (c) => {
+  const authHeader = c.req.header("Authorization") || null;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return c.json({
+      success: false,
+      error: "Invalid token",
+      message: "No valid token provided",
+    }, 400);
+  }
+
+  const token = authHeader.substring(7);
+  await revokeToken(token);
 
   return c.json({
     success: true,
-    data: {
-      user,
-    },
-  });
+    message: "Token revoked successfully",
+  }, 200);
 });
 
+// ─── GET /token-stats ────────────────────────────────────────────────────────
 
-
-// Revoke current token
-app.post("/revoke", async (c) => {
-  try {
-    // Get authorization header
-    const authHeader = c.req.header("Authorization") || null;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json(
-        {
-          success: false,
-          error: "Invalid token",
-          message: "No valid token provided",
-        },
-        400,
-      );
-    }
-
-    const token = authHeader.substring(7);
-
-    // Revoke token (async - stores in Redis)
-    await revokeToken(token);
-
-    return c.json({
-      success: true,
-      message: "Token revoked successfully",
-    });
-  } catch (error) {
-    console.error("Token revocation error:", error);
-
-    return c.json(
-      {
-        success: false,
-        error: "Server error",
-        message: "An unexpected error occurred during token revocation",
-      },
-      500,
-    );
-  }
+const tokenStatsRoute = createRoute({
+  method: "get",
+  path: "/token-stats",
+  tags: ["Auth"],
+  summary: "Get token stats (admin/system only)",
+  responses: {
+    200: { description: "Token stats", content: { "application/json": { schema: z.any() } } },
+    403: { description: "Forbidden", content: { "application/json": { schema: z.any() } } },
+  },
 });
 
-// Get token stats (admin/system only)
-app.get("/token-stats", (c) => {
+app.openapi(tokenStatsRoute, (c) => {
   const user = c.get("user");
 
-  // Check if user is admin or system
   if (user.role !== "admin" && user.role !== "system") {
-    return c.json(
-      {
-        success: false,
-        error: "Unauthorized",
-        message: "You do not have permission to access this resource",
-      },
-      403,
-    );
+    throw new ForbiddenError("You do not have permission to access this resource");
   }
 
   return c.json({
     success: true,
     data: getTokenStats(),
-  });
+  }, 200);
 });
 
 export default app;

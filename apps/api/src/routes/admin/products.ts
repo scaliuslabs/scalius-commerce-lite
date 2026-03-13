@@ -1,137 +1,6 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import * as ProductsService from "@scalius/core/modules/products/products.service";
 import { createProductSchema, updateProductSchema } from "@scalius/core/modules/products/products.validation";
-
-const app = new Hono<{
-    Variables: {
-        db: any; // using any to bypass the missing type declaration issue for now
-        user: any;
-        session: any;
-    };
-    Bindings: {
-        CACHE: KVNamespace;
-    };
-}>();
-
-const bulkDeleteSchema = z.object({
-    productIds: z.array(z.string()),
-    permanent: z.boolean().default(false),
-});
-
-// GET /api/v1/admin/products
-app.get("/", async (c) => {
-    try {
-        const db = c.get("db");
-        const query = c.req.query();
-        const result = await ProductsService.getProducts(db, {
-            page: parseInt(query.page || "1"),
-            limit: parseInt(query.limit || "10"),
-            search: query.search || undefined,
-            categoryId: query.category || undefined,
-            showTrashed: query.trashed === "true",
-            sort: (query.sort || "updatedAt") as any,
-            order: (query.order || "desc") as "asc" | "desc",
-        });
-        return c.json(result);
-    } catch (error: any) {
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
-// POST /api/v1/admin/products
-app.post("/", zValidator("json", createProductSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const data = c.req.valid("json");
-        const result = await ProductsService.createProduct(db, data);
-        return c.json(result, 201);
-    } catch (error: any) {
-        if (error.message?.includes("slug")) {
-            return c.json({ error: error.message }, 400);
-        }
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
-// POST /api/v1/admin/products/bulk-delete
-app.post("/bulk-delete", zValidator("json", bulkDeleteSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const data = c.req.valid("json");
-        await ProductsService.bulkDeleteProducts(db, data.productIds, data.permanent);
-        return new Response(null, { status: 204 });
-    } catch (error: any) {
-        if (error.message?.includes("delete")) {
-            return c.json({ error: error.message }, 409);
-        }
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
-// PUT /api/v1/admin/products/:id
-app.put("/:id", zValidator("json", updateProductSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
-
-        const data = c.req.valid("json");
-        await ProductsService.updateProduct(db, productId, data);
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
-        if (error.message === "Product not found") return c.json({ error: error.message }, 404);
-        if (error.message?.includes("slug")) return c.json({ error: error.message }, 400);
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
-// DELETE /api/v1/admin/products/:id
-app.delete("/:id", async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
-
-        await ProductsService.deleteProduct(db, productId);
-        return new Response(null, { status: 204 });
-    } catch (error: any) {
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
-// POST /api/v1/admin/products/:id/restore
-app.post("/:id/restore", async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
-
-        await ProductsService.restoreProduct(db, productId);
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
-// DELETE /api/v1/admin/products/:id/permanent
-app.delete("/:id/permanent", async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
-
-        await ProductsService.permanentDeleteProduct(db, productId);
-        return new Response(null, { status: 204 });
-    } catch (error: any) {
-        if (error.message?.includes("delete")) {
-            return c.json({ error: error.message }, 409);
-        }
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
 import {
     createVariantSchema,
     updateVariantSchema,
@@ -140,162 +9,480 @@ import {
     bulkUpdateVariantsSchema,
     updateSortOrderSchema,
 } from "@scalius/core/modules/products/products.service";
+import { NotFoundError, ConflictError, ValidationError } from "../../utils/api-error";
 
-// POST /api/v1/admin/products/:id/variants
-app.post("/:id/variants", zValidator("json", createVariantSchema), async (c) => {
+const app = new OpenAPIHono();
+
+const bulkDeleteSchema = z.object({
+    productIds: z.array(z.string()),
+    permanent: z.boolean().default(false),
+});
+
+// ── List Products ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Products"],
+    summary: "List all products",
+    request: {
+        query: z.object({
+            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().default(10).openapi({ description: "Items per page" }),
+            search: z.string().optional().openapi({ description: "Search term" }),
+            category: z.string().optional().openapi({ description: "Category ID filter" }),
+            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
+            sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
+        }),
+    },
+    responses: {
+        200: { description: "Product list with pagination", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listRoute, async (c) => {
+    const db = c.get("db");
+    const query = c.req.valid("query");
+    const result = await ProductsService.getProducts(db, {
+        page: query.page,
+        limit: query.limit,
+        search: query.search || undefined,
+        categoryId: query.category || undefined,
+        showTrashed: query.trashed === "true",
+        sort: (query.sort || "updatedAt") as any,
+        order: (query.order || "desc") as "asc" | "desc",
+    });
+    return c.json(result, 200);
+});
+
+// ── Create Product ──
+
+const createProductRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Products"],
+    summary: "Create a product",
+    request: {
+        body: { content: { "application/json": { schema: createProductSchema } } },
+    },
+    responses: {
+        201: { description: "Product created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(createProductRoute, async (c) => {
+    const db = c.get("db");
+    const data = c.req.valid("json");
     try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
-
-        const data = c.req.valid("json");
-        const result = await ProductsService.createVariant(db, productId, data);
+        const result = await ProductsService.createProduct(db, data);
         return c.json(result, 201);
     } catch (error: any) {
-        if (error.message?.includes("SKU")) return c.json({ error: error.message }, 400);
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
+        if (error.message?.includes("slug")) {
+            throw new ValidationError(error.message);
+        }
+        throw error;
     }
 });
 
-// GET /api/v1/admin/products/:id/variants
-app.get("/:id/variants", async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
+// ── Bulk Delete Products ──
 
-        const variants = await ProductsService.getProductVariants(db, productId);
-        return c.json({ variants }, 200);
+const bulkDeleteRoute = createRoute({
+    method: "post",
+    path: "/bulk-delete",
+    tags: ["Admin - Products"],
+    summary: "Bulk delete products",
+    request: {
+        body: { content: { "application/json": { schema: bulkDeleteSchema } } },
+    },
+    responses: {
+        204: { description: "Products deleted" },
+    },
+});
+
+app.openapi(bulkDeleteRoute, async (c) => {
+    const db = c.get("db");
+    const data = c.req.valid("json");
+    try {
+        await ProductsService.bulkDeleteProducts(db, data.productIds, data.permanent);
+        return new Response(null, { status: 204 }) as any;
     } catch (error: any) {
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
+        if (error.message?.includes("delete")) {
+            throw new ConflictError(error.message);
+        }
+        throw error;
     }
 });
 
-// PUT /api/v1/admin/products/:id/variants/:variantId
-app.put("/:id/variants/:variantId", zValidator("json", updateVariantSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        const variantId = c.req.param("variantId");
-        if (!productId || !variantId) return c.json({ error: "Product ID and Variant ID are required" }, 400);
+// ── Update Product ──
 
-        const data = c.req.valid("json");
-        const result = await ProductsService.updateVariant(db, productId, variantId, data);
-        return c.json(result, 200);
-    } catch (error: any) {
-        if (error.message === "Variant not found") return c.json({ error: error.message }, 404);
-        if (error.message?.includes("SKU")) return c.json({ error: error.message }, 400);
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
+const updateProductRoute = createRoute({
+    method: "put",
+    path: "/{id}",
+    tags: ["Admin - Products"],
+    summary: "Update a product",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+        body: { content: { "application/json": { schema: updateProductSchema } } },
+    },
+    responses: {
+        200: { description: "Product updated", content: { "application/json": { schema: z.any() } } },
+    },
 });
 
-// DELETE /api/v1/admin/products/:id/variants/:variantId
-app.delete("/:id/variants/:variantId", async (c) => {
+app.openapi(updateProductRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
     try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        const variantId = c.req.param("variantId");
-        if (!productId || !variantId) return c.json({ error: "Product ID and Variant ID are required" }, 400);
-
-        await ProductsService.deleteVariant(db, productId, variantId);
-        return new Response(null, { status: 204 });
-    } catch (error: any) {
-        if (error.message === "Variant not found") return c.json({ error: error.message }, 404);
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
-// POST /api/v1/admin/products/:id/variants/bulk-create
-app.post("/:id/variants/bulk-create", zValidator("json", bulkCreateVariantsSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
-
-        const data = c.req.valid("json");
-        const variants = await ProductsService.bulkCreateVariants(db, productId, data.variants);
-        return c.json({ success: true, variants, count: variants.length }, 201);
-    } catch (error: any) {
-        if (error.message?.includes("SKU")) return c.json({ error: error.message }, 400);
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
-// POST /api/v1/admin/products/:id/variants/bulk-delete
-app.post("/:id/variants/bulk-delete", zValidator("json", bulkDeleteVariantsSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
-
-        const data = c.req.valid("json");
-        await ProductsService.bulkDeleteVariants(db, productId, data.variantIds);
-        return new Response(null, { status: 204 });
-    } catch (error: any) {
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
-    }
-});
-
-// POST /api/v1/admin/products/:id/variants/bulk-update
-app.post("/:id/variants/bulk-update", zValidator("json", bulkUpdateVariantsSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
-
-        const data = c.req.valid("json");
-        if (data.updates.length === 0) return c.json({ error: "No updates provided" }, 400);
-
-        await ProductsService.bulkUpdateVariants(db, productId, data.updates);
+        await ProductsService.updateProduct(db, id, data);
         return c.json({ success: true }, 200);
     } catch (error: any) {
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
+        if (error.message === "Product not found") throw new NotFoundError(error.message);
+        if (error.message?.includes("slug")) throw new ValidationError(error.message);
+        throw error;
     }
 });
 
-// POST /api/v1/admin/products/:id/variants/:variantId/duplicate
-app.post("/:id/variants/:variantId/duplicate", async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        const variantId = c.req.param("variantId");
-        if (!productId || !variantId) return c.json({ error: "Product ID and Variant ID are required" }, 400);
+// ── Delete Product ──
 
-        const variant = await ProductsService.duplicateVariant(db, productId, variantId);
-        return c.json(variant, 201);
+const deleteProductRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Products"],
+    summary: "Soft-delete a product",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+    },
+    responses: {
+        204: { description: "Product deleted" },
+    },
+});
+
+app.openapi(deleteProductRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    await ProductsService.deleteProduct(db, id);
+    return new Response(null, { status: 204 }) as any;
+});
+
+// ── Restore Product ──
+
+const restoreProductRoute = createRoute({
+    method: "post",
+    path: "/{id}/restore",
+    tags: ["Admin - Products"],
+    summary: "Restore a soft-deleted product",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+    },
+    responses: {
+        200: { description: "Product restored", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(restoreProductRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    await ProductsService.restoreProduct(db, id);
+    return c.json({ success: true }, 200);
+});
+
+// ── Permanent Delete Product ──
+
+const permanentDeleteRoute = createRoute({
+    method: "delete",
+    path: "/{id}/permanent",
+    tags: ["Admin - Products"],
+    summary: "Permanently delete a product",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+    },
+    responses: {
+        204: { description: "Product permanently deleted" },
+    },
+});
+
+app.openapi(permanentDeleteRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    try {
+        await ProductsService.permanentDeleteProduct(db, id);
+        return new Response(null, { status: 204 }) as any;
     } catch (error: any) {
-        if (error.message === "Variant not found") return c.json({ error: error.message }, 404);
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
+        if (error.message?.includes("delete")) {
+            throw new ConflictError(error.message);
+        }
+        throw error;
     }
 });
 
-// GET /api/v1/admin/products/:id/variants/sort-order
-app.get("/:id/variants/sort-order", async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
+// ── Create Variant ──
 
-        const result = await ProductsService.getVariantSortOrder(db, productId);
+const createVariantRoute = createRoute({
+    method: "post",
+    path: "/{id}/variants",
+    tags: ["Admin - Products"],
+    summary: "Create a product variant",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+        body: { content: { "application/json": { schema: createVariantSchema } } },
+    },
+    responses: {
+        201: { description: "Variant created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(createVariantRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+    try {
+        const result = await ProductsService.createVariant(db, id, data);
+        return c.json(result, 201);
+    } catch (error: any) {
+        if (error.message?.includes("SKU")) throw new ValidationError(error.message);
+        throw error;
+    }
+});
+
+// ── List Variants ──
+
+const listVariantsRoute = createRoute({
+    method: "get",
+    path: "/{id}/variants",
+    tags: ["Admin - Products"],
+    summary: "List variants for a product",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+    },
+    responses: {
+        200: { description: "Variant list", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(listVariantsRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const variants = await ProductsService.getProductVariants(db, id);
+    return c.json({ variants }, 200);
+});
+
+// ── Update Variant ──
+
+const updateVariantRoute = createRoute({
+    method: "put",
+    path: "/{id}/variants/{variantId}",
+    tags: ["Admin - Products"],
+    summary: "Update a product variant",
+    request: {
+        params: z.object({
+            id: z.string().openapi({ description: "Product ID" }),
+            variantId: z.string().openapi({ description: "Variant ID" }),
+        }),
+        body: { content: { "application/json": { schema: updateVariantSchema } } },
+    },
+    responses: {
+        200: { description: "Variant updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateVariantRoute, async (c) => {
+    const db = c.get("db");
+    const { id, variantId } = c.req.valid("param");
+    const data = c.req.valid("json");
+    try {
+        const result = await ProductsService.updateVariant(db, id, variantId, data);
         return c.json(result, 200);
     } catch (error: any) {
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
+        if (error.message === "Variant not found") throw new NotFoundError(error.message);
+        if (error.message?.includes("SKU")) throw new ValidationError(error.message);
+        throw error;
     }
 });
 
-// POST /api/v1/admin/products/:id/variants/sort-order
-app.post("/:id/variants/sort-order", zValidator("json", updateSortOrderSchema), async (c) => {
-    try {
-        const db = c.get("db");
-        const productId = c.req.param("id");
-        if (!productId) return c.json({ error: "Product ID is required" }, 400);
+// ── Delete Variant ──
 
-        const data = c.req.valid("json");
-        await ProductsService.updateVariantSortOrder(db, productId, data);
-        return c.json({ success: true, message: "Sort order updated successfully" }, 200);
+const deleteVariantRoute = createRoute({
+    method: "delete",
+    path: "/{id}/variants/{variantId}",
+    tags: ["Admin - Products"],
+    summary: "Delete a product variant",
+    request: {
+        params: z.object({
+            id: z.string().openapi({ description: "Product ID" }),
+            variantId: z.string().openapi({ description: "Variant ID" }),
+        }),
+    },
+    responses: {
+        204: { description: "Variant deleted" },
+    },
+});
+
+app.openapi(deleteVariantRoute, async (c) => {
+    const db = c.get("db");
+    const { id, variantId } = c.req.valid("param");
+    try {
+        await ProductsService.deleteVariant(db, id, variantId);
+        return new Response(null, { status: 204 }) as any;
     } catch (error: any) {
-        return c.json({ error: error.message || "Internal Server Error" }, 500);
+        if (error.message === "Variant not found") throw new NotFoundError(error.message);
+        throw error;
     }
+});
+
+// ── Bulk Create Variants ──
+
+const bulkCreateVariantsRoute = createRoute({
+    method: "post",
+    path: "/{id}/variants/bulk-create",
+    tags: ["Admin - Products"],
+    summary: "Bulk create variants",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+        body: { content: { "application/json": { schema: bulkCreateVariantsSchema } } },
+    },
+    responses: {
+        201: { description: "Variants created", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(bulkCreateVariantsRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+    try {
+        const variants = await ProductsService.bulkCreateVariants(db, id, data.variants);
+        return c.json({ success: true, variants, count: variants.length }, 201);
+    } catch (error: any) {
+        if (error.message?.includes("SKU")) throw new ValidationError(error.message);
+        throw error;
+    }
+});
+
+// ── Bulk Delete Variants ──
+
+const bulkDeleteVariantsRoute = createRoute({
+    method: "post",
+    path: "/{id}/variants/bulk-delete",
+    tags: ["Admin - Products"],
+    summary: "Bulk delete variants",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+        body: { content: { "application/json": { schema: bulkDeleteVariantsSchema } } },
+    },
+    responses: {
+        204: { description: "Variants deleted" },
+    },
+});
+
+app.openapi(bulkDeleteVariantsRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+    await ProductsService.bulkDeleteVariants(db, id, data.variantIds);
+    return new Response(null, { status: 204 }) as any;
+});
+
+// ── Bulk Update Variants ──
+
+const bulkUpdateVariantsRoute = createRoute({
+    method: "post",
+    path: "/{id}/variants/bulk-update",
+    tags: ["Admin - Products"],
+    summary: "Bulk update variants",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+        body: { content: { "application/json": { schema: bulkUpdateVariantsSchema } } },
+    },
+    responses: {
+        200: { description: "Variants updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(bulkUpdateVariantsRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+    if (data.updates.length === 0) throw new ValidationError("No updates provided");
+    await ProductsService.bulkUpdateVariants(db, id, data.updates);
+    return c.json({ success: true }, 200);
+});
+
+// ── Duplicate Variant ──
+
+const duplicateVariantRoute = createRoute({
+    method: "post",
+    path: "/{id}/variants/{variantId}/duplicate",
+    tags: ["Admin - Products"],
+    summary: "Duplicate a variant",
+    request: {
+        params: z.object({
+            id: z.string().openapi({ description: "Product ID" }),
+            variantId: z.string().openapi({ description: "Variant ID" }),
+        }),
+    },
+    responses: {
+        201: { description: "Variant duplicated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(duplicateVariantRoute, async (c) => {
+    const db = c.get("db");
+    const { id, variantId } = c.req.valid("param");
+    try {
+        const variant = await ProductsService.duplicateVariant(db, id, variantId);
+        return c.json(variant, 201);
+    } catch (error: any) {
+        if (error.message === "Variant not found") throw new NotFoundError(error.message);
+        throw error;
+    }
+});
+
+// ── Get Variant Sort Order ──
+
+const getVariantSortOrderRoute = createRoute({
+    method: "get",
+    path: "/{id}/variants/sort-order",
+    tags: ["Admin - Products"],
+    summary: "Get variant sort order",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+    },
+    responses: {
+        200: { description: "Sort order data", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(getVariantSortOrderRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const result = await ProductsService.getVariantSortOrder(db, id);
+    return c.json(result, 200);
+});
+
+// ── Update Variant Sort Order ──
+
+const updateVariantSortOrderRoute = createRoute({
+    method: "post",
+    path: "/{id}/variants/sort-order",
+    tags: ["Admin - Products"],
+    summary: "Update variant sort order",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
+        body: { content: { "application/json": { schema: updateSortOrderSchema } } },
+    },
+    responses: {
+        200: { description: "Sort order updated", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+app.openapi(updateVariantSortOrderRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+    await ProductsService.updateVariantSortOrder(db, id, data);
+    return c.json({ success: true, message: "Sort order updated successfully" }, 200);
 });
 
 export { app as adminProductsRoutes };

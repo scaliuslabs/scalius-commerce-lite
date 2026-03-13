@@ -1,11 +1,7 @@
 // src/server/routes/webhooks/steadfast.ts
 // Webhook endpoint for receiving Steadfast delivery status push notifications.
-//
-// Steadfast sends status updates when a shipment's status changes.
-// This endpoint validates the request, maps the status, updates the
-// shipment record, and auto-updates the order status.
 
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { deliveryShipments } from "@scalius/database/schema";
 import { getDb } from "@scalius/database/client";
@@ -13,20 +9,8 @@ import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper"
 import { ShipmentTracker } from "@scalius/core/modules/delivery/tracking";
 import { recordWebhookEvent } from "@scalius/core/modules/payments/process-payment";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
-/**
- * POST /webhooks/steadfast
- *
- * Steadfast webhook payload typically contains:
- * - consignment_id: number
- * - tracking_code: string
- * - status: string (e.g., "in_review", "delivered", "cancelled", etc.)
- * - invoice: string
- * - recipient_name: string
- * - recipient_phone: string
- * - note: string
- */
 app.post("/", async (c) => {
     const db = getDb(c.env);
 
@@ -51,7 +35,6 @@ app.post("/", async (c) => {
             return c.json({ success: false, error: "Missing status or consignment identifiers" }, 400);
         }
 
-        // Find shipment by external ID or tracking ID
         let shipment = await db
             .select()
             .from(deliveryShipments)
@@ -71,11 +54,9 @@ app.post("/", async (c) => {
             return c.json({ success: true, message: "Shipment not found, ignored" });
         }
 
-        // Map Steadfast status to our standardized status
         const normalizedStatus = mapProviderStatus("steadfast", rawStatus);
         const previousStatus = shipment.status;
 
-        // Update shipment record
         await db
             .update(deliveryShipments)
             .set({
@@ -92,13 +73,11 @@ app.post("/", async (c) => {
             })
             .where(eq(deliveryShipments.id, shipment.id));
 
-        // Auto-update order status based on shipment status
         if (normalizedStatus !== previousStatus) {
             await ShipmentTracker.updateOrderStatusFromShipment(shipment.id, normalizedStatus);
             await ShipmentTracker.notifyStatusChange(shipment.id, previousStatus, normalizedStatus);
         }
 
-        // Record webhook event
         await recordWebhookEvent(
             db,
             `steadfast_${consignmentId}_${rawStatus}`,

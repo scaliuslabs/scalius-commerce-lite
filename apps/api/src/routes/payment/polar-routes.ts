@@ -1,8 +1,7 @@
 // src/server/routes/payment/polar-routes.ts
 // Hono API routes for Polar payment operations (storefront-initiated).
-// Pattern mirrors sslcommerz-routes.ts — redirect-based checkout flow.
 
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { type Database } from "@scalius/database/client";
 import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
@@ -10,166 +9,170 @@ import { getPolarSettings } from "@scalius/core/modules/payments/gateway-setting
 import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
 import { getKv } from "../../utils/kv-cache";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { NotFoundError } from "../../utils/api-error";
 
-export const polarPaymentRoutes = new Hono<{ Bindings: Env }>();
+export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
 
-// ---------------------------------------------------------------------------
-// POST /payment/polar/session — Create a Polar checkout session
-// ---------------------------------------------------------------------------
+// ─── POST /session ───────────────────────────────────────────────────────────
 
-polarPaymentRoutes.post("/session", async (c) => {
-    try {
-        const body = await c.req.json<{
-            orderId: string;
-            depositAmount?: number;
-            currency?: string;
-            type?: "full" | "deposit" | "balance";
-            paymentType?: "full" | "deposit" | "balance";
-            customerName?: string;
-            customerEmail?: string;
-            customerPhone?: string;
-            successUrl?: string;
-            cancelUrl?: string;
-        }>();
-
-        const orderId = body.orderId;
-        const type = body.paymentType || body.type || "full";
-
-        if (!orderId) {
-            return c.json({ error: "orderId is required" }, 400);
-        }
-
-        const db: Database = c.get("db");
-        const kv = getKv();
-
-        // Get Polar credentials from DB
-        const polarSettings = await getPolarSettings(db, kv);
-        if (!polarSettings || !polarSettings.enabled) {
-            return c.json({ error: "Polar is not configured or disabled" }, 503);
-        }
-
-        // Validate the order exists and is in a payable state
-        const order = await db
-            .select({
-                id: orders.id,
-                totalAmount: orders.totalAmount,
-                status: orders.status,
-                paymentMethod: orders.paymentMethod,
-                paymentStatus: orders.paymentStatus,
-                paidAmount: orders.paidAmount,
-            })
-            .from(orders)
-            .where(eq(orders.id, orderId))
-            .get();
-
-        if (!order) {
-            return c.json({ error: "Order not found" }, 404);
-        }
-
-        // Get configured currency
-        const currencyConfig = await getCurrencyConfig(db);
-        const currency = (body.currency ?? currencyConfig.code).toLowerCase();
-
-        // Determine the correct amount based on payment type
-        let paymentAmount = order.totalAmount;
-        if (type === "deposit") {
-            paymentAmount = body.depositAmount || order.totalAmount;
-        } else if (type === "balance") {
-            const plan = await db
-                .select()
-                .from(paymentPlans)
-                .where(eq(paymentPlans.orderId, orderId))
-                .get();
-            if (plan) {
-                paymentAmount = plan.balanceDue;
-            }
-        }
-
-        // Convert to cents (smallest unit) for Polar
-        const amountInCents = Math.round(paymentAmount * 100);
-
-        // Build success URL with checkout ID placeholder
-        const baseUrl = (c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin).trim();
-        const successUrl = body.successUrl || `${baseUrl}/api/v1/payment/polar/success?order_id=${orderId}`;
-
-        // Create Polar checkout session
-        const result = await createPolarCheckout(polarSettings, {
-            orderId,
-            amount: amountInCents,
-            currency,
-            productId: polarSettings.productId,
-            paymentType: type,
-            successUrl,
-            cancelUrl: body.cancelUrl,
-            customerName: body.customerName,
-            customerEmail: body.customerEmail,
-            metadata: {
-                orderId,
-                paymentType: type,
-            },
-        });
-
-        if (!result.success || !result.checkoutUrl) {
-            return c.json(
-                { error: result.error || "Failed to create Polar checkout" },
-                500
-            );
-        }
-
-        // Save the Polar checkout ID to the order
-        await db
-            .update(orders)
-            .set({
-                paymentIntentId: result.checkoutId, // Reuse existing field
-                paymentMethod: PaymentMethod.POLAR,
-                updatedAt: new Date(),
-            })
-            .where(eq(orders.id, orderId));
-
-        // Set up payment plan for deposit orders
-        if (type === "deposit") {
-            const depositAmount = paymentAmount;
-            const balanceDue = order.totalAmount - depositAmount;
-
-            await db
-                .insert(paymentPlans)
-                .values({
-                    id: crypto.randomUUID(),
-                    orderId,
-                    totalAmount: order.totalAmount,
-                    depositAmount,
-                    balanceDue,
-                    status: "pending",
-                })
-                .onConflictDoUpdate({
-                    target: paymentPlans.orderId,
-                    set: {
-                        depositAmount,
-                        balanceDue,
-                        updatedAt: new Date(),
-                    },
-                });
-        }
-
-        return c.json({
-            success: true,
-            gatewayUrl: result.checkoutUrl,
-            checkoutId: result.checkoutId,
-        });
-    } catch (error) {
-        console.error("[polar-routes] Error creating checkout session:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
+const polarSessionSchema = z.object({
+    orderId: z.string().min(1),
+    depositAmount: z.number().positive().optional(),
+    currency: z.string().optional(),
+    type: z.enum(["full", "deposit", "balance"]).optional(),
+    paymentType: z.enum(["full", "deposit", "balance"]).optional(),
+    customerName: z.string().optional(),
+    customerEmail: z.string().optional(),
+    customerPhone: z.string().optional(),
+    successUrl: z.string().optional(),
+    cancelUrl: z.string().optional(),
 });
 
-// ---------------------------------------------------------------------------
-// GET /payment/polar/success — Redirect after successful Polar payment
-// ---------------------------------------------------------------------------
+const createPolarSessionRoute = createRoute({
+    method: "post",
+    path: "/session",
+    tags: ["Payments - Polar"],
+    summary: "Create a Polar checkout session",
+    request: {
+        body: {
+            content: {
+                "application/json": { schema: polarSessionSchema },
+            },
+        },
+    },
+    responses: {
+        200: { description: "Polar checkout session created", content: { "application/json": { schema: z.any() } } },
+        400: { description: "Invalid request", content: { "application/json": { schema: z.any() } } },
+        404: { description: "Order not found", content: { "application/json": { schema: z.any() } } },
+        503: { description: "Polar not configured", content: { "application/json": { schema: z.any() } } },
+    },
+});
+
+polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
+    const body = c.req.valid("json");
+    const orderId = body.orderId;
+    const type = body.paymentType || body.type || "full";
+
+    const db: Database = c.get("db");
+    const kv = getKv();
+
+    // Get Polar credentials from DB
+    const polarSettings = await getPolarSettings(db, kv);
+    if (!polarSettings || !polarSettings.enabled) {
+        return c.json({ error: "Polar is not configured or disabled" }, 503);
+    }
+
+    // Validate the order exists
+    const order = await db
+        .select({
+            id: orders.id,
+            totalAmount: orders.totalAmount,
+            status: orders.status,
+            paymentMethod: orders.paymentMethod,
+            paymentStatus: orders.paymentStatus,
+            paidAmount: orders.paidAmount,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .get();
+
+    if (!order) throw new NotFoundError("Order not found");
+
+    // Get configured currency
+    const currencyConfig = await getCurrencyConfig(db);
+    const currency = (body.currency ?? currencyConfig.code).toLowerCase();
+
+    // Determine the correct amount based on payment type
+    let paymentAmount = order.totalAmount;
+    if (type === "deposit") {
+        paymentAmount = body.depositAmount || order.totalAmount;
+    } else if (type === "balance") {
+        const plan = await db
+            .select()
+            .from(paymentPlans)
+            .where(eq(paymentPlans.orderId, orderId))
+            .get();
+        if (plan) {
+            paymentAmount = plan.balanceDue;
+        }
+    }
+
+    const amountInCents = Math.round(paymentAmount * 100);
+
+    const baseUrl = (c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin).trim();
+    const successUrl = body.successUrl || `${baseUrl}/api/v1/payment/polar/success?order_id=${orderId}`;
+
+    const result = await createPolarCheckout(polarSettings, {
+        orderId,
+        amount: amountInCents,
+        currency,
+        productId: polarSettings.productId,
+        paymentType: type,
+        successUrl,
+        cancelUrl: body.cancelUrl,
+        customerName: body.customerName,
+        customerEmail: body.customerEmail,
+        metadata: {
+            orderId,
+            paymentType: type,
+        },
+    });
+
+    if (!result.success || !result.checkoutUrl) {
+        return c.json(
+            { error: result.error || "Failed to create Polar checkout" },
+            500
+        );
+    }
+
+    // Save the Polar checkout ID to the order
+    await db
+        .update(orders)
+        .set({
+            paymentIntentId: result.checkoutId,
+            paymentMethod: PaymentMethod.POLAR,
+            updatedAt: new Date(),
+        })
+        .where(eq(orders.id, orderId));
+
+    // Set up payment plan for deposit orders
+    if (type === "deposit") {
+        const depositAmount = paymentAmount;
+        const balanceDue = order.totalAmount - depositAmount;
+
+        await db
+            .insert(paymentPlans)
+            .values({
+                id: crypto.randomUUID(),
+                orderId,
+                totalAmount: order.totalAmount,
+                depositAmount,
+                balanceDue,
+                status: "pending",
+            })
+            .onConflictDoUpdate({
+                target: paymentPlans.orderId,
+                set: {
+                    depositAmount,
+                    balanceDue,
+                    updatedAt: new Date(),
+                },
+            });
+    }
+
+    return c.json({
+        success: true,
+        gatewayUrl: result.checkoutUrl,
+        checkoutId: result.checkoutId,
+    }, 200);
+});
+
+// ─── GET /success ────────────────────────────────────────────────────────────
+// Redirect handlers — not OpenAPI routes (external callbacks)
 
 polarPaymentRoutes.get("/success", async (c) => {
     const orderId = c.req.query("order_id");
 
-    // Read storefront URL from env or settings
     const envObj = c.env as any;
     const storefrontUrl = envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "";
 
@@ -180,9 +183,7 @@ polarPaymentRoutes.get("/success", async (c) => {
     return c.json({ success: true, message: "Payment received", orderId });
 });
 
-// ---------------------------------------------------------------------------
-// GET /payment/polar/cancel — Redirect after cancelled Polar payment
-// ---------------------------------------------------------------------------
+// ─── GET /cancel ─────────────────────────────────────────────────────────────
 
 polarPaymentRoutes.get("/cancel", async (c) => {
     const orderId = c.req.query("order_id");

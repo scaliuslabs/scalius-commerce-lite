@@ -1,35 +1,50 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getBucket } from "@scalius/core/integrations/storage";
 
-const app = new Hono<{ Bindings: any }>();
+const app = new OpenAPIHono<{ Bindings: any }>();
 
-// Simple route to serve R2 objects in local development
-app.get("/:key", async (c) => {
-    const key = c.req.param("key");
+// ─── GET /:key ───────────────────────────────────────────────────────────────
 
-    const bucket = c.env.BUCKET || c.env.STORAGE || getBucket();
-    if (!bucket) {
-        return c.text("R2 Bucket binding not found. Expected binding 'BUCKET' or 'STORAGE'.", 500);
-    }
+const getMediaRoute = createRoute({
+  method: "get",
+  path: "/:key",
+  tags: ["Media Server"],
+  summary: "Serve R2 objects in local development",
+  request: {
+    params: z.object({
+      key: z.string().openapi({ description: "R2 object key" }),
+    }),
+  },
+  responses: {
+    200: { description: "Media file" },
+    404: { description: "Not found" },
+    500: { description: "R2 bucket not available" },
+  },
+});
 
-    const object = await bucket.get(key);
-    if (!object || !object.body) {
-        return c.notFound();
-    }
+app.openapi(getMediaRoute, async (c) => {
+  const key = c.req.valid("param").key;
 
-    const headers = new Headers();
+  const bucket = c.env.BUCKET || c.env.STORAGE || getBucket();
+  if (!bucket) {
+    return c.text("R2 Bucket binding not found. Expected binding 'BUCKET' or 'STORAGE'.", 500) as any;
+  }
 
-    // Workaround for Miniflare V3 proxy IPC bug with writeHttpMetadata
-    if (object.httpMetadata?.contentType) {
-        headers.set("Content-Type", object.httpMetadata.contentType);
-    }
+  const object = await bucket.get(key);
+  if (!object || !object.body) {
+    return c.notFound() as any;
+  }
 
-    headers.set("etag", object.httpEtag);
+  const headers = new Headers();
 
-    // Basic Cache-Control for local media
-    headers.set("Cache-Control", "public, max-age=31536000");
+  if (object.httpMetadata?.contentType) {
+    headers.set("Content-Type", object.httpMetadata.contentType);
+  }
 
-    return new Response(object.body as ReadableStream, { headers });
+  headers.set("etag", object.httpEtag);
+  headers.set("Cache-Control", "public, max-age=31536000");
+
+  return new Response(object.body as ReadableStream, { headers }) as any;
 });
 
 export { app as serveMediaRoute };

@@ -1,16 +1,15 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { db } from "@scalius/database/client";
 import { heroSliders } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 import { sql, and, eq, isNull } from "drizzle-orm";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import { NotFoundError } from "../../../utils/api-error";
 
-const app = new Hono<{ Bindings: any, Variables: any }>();
+const app = new OpenAPIHono();
 
 const sliderImageSchema = z.object({
     id: z.string(),
-    url: z.url(),
+    url: z.string().url(),
     title: z.string(),
     link: z.string(),
 });
@@ -27,19 +26,38 @@ const updateHeroSliderSchema = z.object({
     isActive: z.boolean().optional(),
 });
 
-// GET all sliders
-app.get("/", async (c) => {
+// ── List Sliders ──
+
+const listRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Hero Sliders"],
+    summary: "List all hero sliders",
+    responses: { 200: { description: "Slider list", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(listRoute, async (c) => {
     try {
         const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
         const parsedData = data.map((slider) => ({ ...slider, images: JSON.parse(slider.images) }));
-        return c.json({ success: true, data: parsedData });
+        return c.json({ success: true, data: parsedData }, 200);
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
 });
 
-// POST create a slider
-app.post("/", zValidator("json", createHeroSliderSchema), async (c) => {
+// ── Create Slider ──
+
+const createSliderRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Admin - Hero Sliders"],
+    summary: "Create a hero slider",
+    request: { body: { content: { "application/json": { schema: createHeroSliderSchema } } } },
+    responses: { 201: { description: "Slider created", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(createSliderRoute, async (c) => {
     try {
         const data = c.req.valid("json");
         const existingSlider = await db.select().from(heroSliders).where(sql`type = ${data.type} AND deleted_at IS NULL`).get();
@@ -64,23 +82,46 @@ app.post("/", zValidator("json", createHeroSliderSchema), async (c) => {
     }
 });
 
-// GET a single slider
-app.get("/:id", async (c) => {
+// ── Get Slider ──
+
+const getByIdRoute = createRoute({
+    method: "get",
+    path: "/{id}",
+    tags: ["Admin - Hero Sliders"],
+    summary: "Get a hero slider by ID",
+    request: { params: z.object({ id: z.string().openapi({ description: "Slider ID" }) }) },
+    responses: { 200: { description: "Slider details", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(getByIdRoute, async (c) => {
     try {
-        const id = c.req.param("id");
+        const { id } = c.req.valid("param");
         const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
 
         if (!slider) return c.json({ success: false, error: "Slider not found" }, 404);
-        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } });
+        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } }, 200);
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
 });
 
-// PUT update a slider
-app.put("/:id", zValidator("json", updateHeroSliderSchema), async (c) => {
+// ── Update Slider ──
+
+const updateSliderRoute = createRoute({
+    method: "put",
+    path: "/{id}",
+    tags: ["Admin - Hero Sliders"],
+    summary: "Update a hero slider",
+    request: {
+        params: z.object({ id: z.string().openapi({ description: "Slider ID" }) }),
+        body: { content: { "application/json": { schema: updateHeroSliderSchema } } },
+    },
+    responses: { 200: { description: "Slider updated", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(updateSliderRoute, async (c) => {
     try {
-        const id = c.req.param("id");
+        const { id } = c.req.valid("param");
         const data = c.req.valid("json");
 
         const updateData = {
@@ -95,23 +136,33 @@ app.put("/:id", zValidator("json", updateHeroSliderSchema), async (c) => {
             .returning();
 
         if (!slider) return c.json({ success: false, error: "Slider not found" }, 404);
-        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } });
+        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } }, 200);
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
 });
 
-// DELETE a slider
-app.delete("/:id", async (c) => {
+// ── Delete Slider ──
+
+const deleteSliderRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Hero Sliders"],
+    summary: "Soft-delete a hero slider",
+    request: { params: z.object({ id: z.string().openapi({ description: "Slider ID" }) }) },
+    responses: { 200: { description: "Slider deleted", content: { "application/json": { schema: z.any() } } } },
+});
+
+app.openapi(deleteSliderRoute, async (c) => {
     try {
-        const id = c.req.param("id");
+        const { id } = c.req.valid("param");
         const [slider] = await db.update(heroSliders)
             .set({ deletedAt: sql`CURRENT_TIMESTAMP` })
             .where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt)))
             .returning();
 
         if (!slider) return c.json({ success: false, error: "Slider not found" }, 404);
-        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } });
+        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } }, 200);
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }

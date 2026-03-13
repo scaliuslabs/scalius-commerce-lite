@@ -4,63 +4,33 @@
  * Handles bare R2 object keys (e.g. "abc123.jpg") that were stored in the
  * database before R2_PUBLIC_URL was configured, as well as already-complete
  * URLs and local/CDN-optimized paths.
+ *
+ * This is a PURE function — it accepts cdnBase as a parameter rather than
+ * reading environment variables directly. Each app is responsible for
+ * resolving cdnBase from its own runtime environment and passing it in.
  */
+
 /**
- * CDN base URL resolved from env vars (R2_PUBLIC_URL or CDN_DOMAIN_URL).
- * Resolved lazily per-call (NOT at module init) because in Cloudflare Workers,
- * import.meta.env values may differ between build time and runtime.
+ * Resolve a media URL to a full, absolute CDN URL.
+ *
+ * @param url - The original image URL or bare R2 object key
+ * @param cdnBase - The CDN base URL (e.g. "https://cloud.scalius.com"). When
+ *   empty/undefined, bare R2 keys are returned as-is.
+ * @returns Resolved absolute URL, or empty string for null/undefined/empty input
  */
-function resolveCdnBase(): string {
-  const r2Url = import.meta.env?.R2_PUBLIC_URL;
-  if (r2Url) return r2Url.replace(/\/$/, '');
-
-  const cdnDomain = import.meta.env?.CDN_DOMAIN_URL;
-  if (cdnDomain) {
-    const d = cdnDomain.replace(/^https?:\/\//, '');
-    return `https://${d}`;
-  }
-
-  return '';
-}
-
-export function resolveMediaUrl(url: string | null | undefined): string {
+export function resolveMediaUrl(url: string | null | undefined, cdnBase?: string): string {
   if (!url || url.trim() === "") return "";
 
-  let resolvedUrl = url;
-
-  // Determine if we are in development mode
-  const isDevelopment =
-    import.meta.env?.MODE === "development" ||
-    import.meta.env?.DEV === true ||
-    (typeof window !== "undefined" &&
-      (window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1" ||
-        window.location.hostname.startsWith("192.168.") ||
-        window.location.hostname.includes("local"))) ||
-    (typeof process !== "undefined" && process.env.NODE_ENV === "development");
-
-  // Rewrite ANY URL (absolute or relative) containing the old /media/ path to /api/v1/media/ in dev
-  if (isDevelopment && resolvedUrl.includes("/media/") && !resolvedUrl.includes("/api/v1/media/")) {
-    resolvedUrl = resolvedUrl.replace("/media/", "/api/v1/media/");
-  }
-
   // Already a full absolute URL — return as-is
-  if (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://")) return resolvedUrl;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
 
   // Already a Cloudflare-optimized path
-  if (resolvedUrl.startsWith("/cdn-cgi/")) return resolvedUrl;
+  if (url.startsWith("/cdn-cgi/")) return url;
 
   // Local asset path (e.g. /img/no-image.webp)
-  if (resolvedUrl.startsWith("/")) {
-    return resolvedUrl;
-  }
+  if (url.startsWith("/")) return url;
 
   // Bare R2 object key — prepend CDN base
-  // In development, return the local api media URL for bare keys
-  if (isDevelopment) {
-    return `/api/v1/media/${resolvedUrl}`;
-  }
-
-  const cdnBase = resolveCdnBase();
-  return cdnBase ? `${cdnBase}/${resolvedUrl}` : resolvedUrl;
+  const base = cdnBase?.replace(/\/$/, "");
+  return base ? `${base}/${url}` : url;
 }

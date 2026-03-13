@@ -18,6 +18,10 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
+    "test": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "db:generate": { "cache": false },
     "db:migrate:local": { "cache": false },
     "db:migrate:remote": { "cache": false }

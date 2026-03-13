@@ -1,18 +1,19 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, asc } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
+import { ValidationError } from "../utils/api-error";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware - locations change infrequently
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 600000, // 10 minutes — cities/zones/areas are admin-managed and rarely change
+    ttl: 600000, // 10 minutes
     keyPrefix: "api:locations:",
-    varyByQuery: true, // Cache based on query params (cityId, zoneId)
+    varyByQuery: true,
     methods: ["GET"],
   }),
 );
@@ -23,98 +24,137 @@ const formatLocation = (location: any) => ({
   name: location.name,
   type: location.type,
   parentId: location.parentId,
-  // Avoid sending potentially large/sensitive data if not needed
-  // externalIds: location.externalIds ? JSON.parse(location.externalIds) : {},
-  // metadata: location.metadata ? JSON.parse(location.metadata) : {},
   isActive: location.isActive,
   sortOrder: location.sortOrder,
 });
 
-// GET all active cities
-app.get("/cities", async (c) => {
-  try {
-    const db = c.get("db");
-    const cities = await db
-      .select()
-      .from(deliveryLocations)
-      .where(
-        and(
-          eq(deliveryLocations.type, "city"),
-          isNull(deliveryLocations.deletedAt),
-          eq(deliveryLocations.isActive, true),
-        ),
-      )
-      .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
-
-    return c.json({ success: true, data: cities.map(formatLocation) });
-  } catch (error) {
-    console.error("Error fetching cities:", error);
-    return c.json({ success: false, error: "Failed to fetch cities" }, 500);
-  }
+// GET /locations/cities — get all active cities
+const listCitiesRoute = createRoute({
+  method: "get",
+  path: "/cities",
+  tags: ["Locations"],
+  summary: "Get all active cities",
+  responses: {
+    200: {
+      description: "City list",
+      content: { "application/json": { schema: z.object({ success: z.literal(true), data: z.array(z.any()) }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+    },
+  },
 });
 
-// GET all active zones for a given city
-app.get("/zones", async (c) => {
-  const cityId = c.req.query("cityId");
-  if (!cityId) {
-    return c.json(
-      { success: false, error: "cityId parameter is required" },
-      400,
-    );
-  }
+app.openapi(listCitiesRoute, async (c) => {
+  const db = c.get("db");
+  const cities = await db
+    .select()
+    .from(deliveryLocations)
+    .where(
+      and(
+        eq(deliveryLocations.type, "city"),
+        isNull(deliveryLocations.deletedAt),
+        eq(deliveryLocations.isActive, true),
+      ),
+    )
+    .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
 
-  try {
-    const db = c.get("db");
-    const zones = await db
-      .select()
-      .from(deliveryLocations)
-      .where(
-        and(
-          eq(deliveryLocations.type, "zone"),
-          eq(deliveryLocations.parentId, cityId),
-          isNull(deliveryLocations.deletedAt),
-          eq(deliveryLocations.isActive, true),
-        ),
-      )
-      .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
-
-    return c.json({ success: true, data: zones.map(formatLocation) });
-  } catch (error) {
-    console.error("Error fetching zones:", error);
-    return c.json({ success: false, error: "Failed to fetch zones" }, 500);
-  }
+  return c.json({ success: true as const, data: cities.map(formatLocation) }, 200);
 });
 
-// GET all active areas for a given zone
-app.get("/areas", async (c) => {
-  const zoneId = c.req.query("zoneId");
-  if (!zoneId) {
-    return c.json(
-      { success: false, error: "zoneId parameter is required" },
-      400,
-    );
-  }
+// GET /locations/zones — get all active zones for a given city
+const listZonesRoute = createRoute({
+  method: "get",
+  path: "/zones",
+  tags: ["Locations"],
+  summary: "Get all active zones for a given city",
+  request: {
+    query: z.object({
+      cityId: z.string().openapi({ description: "City ID to get zones for" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Zone list",
+      content: { "application/json": { schema: z.object({ success: z.literal(true), data: z.array(z.any()) }) } },
+    },
+    400: {
+      description: "Bad request",
+      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+    },
+  },
+});
 
-  try {
-    const db = c.get("db");
-    const areas = await db
-      .select()
-      .from(deliveryLocations)
-      .where(
-        and(
-          eq(deliveryLocations.type, "area"),
-          eq(deliveryLocations.parentId, zoneId),
-          isNull(deliveryLocations.deletedAt),
-          eq(deliveryLocations.isActive, true),
-        ),
-      )
-      .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
+app.openapi(listZonesRoute, async (c) => {
+  const { cityId } = c.req.valid("query");
 
-    return c.json({ success: true, data: areas.map(formatLocation) });
-  } catch (error) {
-    console.error("Error fetching areas:", error);
-    return c.json({ success: false, error: "Failed to fetch areas" }, 500);
-  }
+  const db = c.get("db");
+  const zones = await db
+    .select()
+    .from(deliveryLocations)
+    .where(
+      and(
+        eq(deliveryLocations.type, "zone"),
+        eq(deliveryLocations.parentId, cityId),
+        isNull(deliveryLocations.deletedAt),
+        eq(deliveryLocations.isActive, true),
+      ),
+    )
+    .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
+
+  return c.json({ success: true as const, data: zones.map(formatLocation) }, 200);
+});
+
+// GET /locations/areas — get all active areas for a given zone
+const listAreasRoute = createRoute({
+  method: "get",
+  path: "/areas",
+  tags: ["Locations"],
+  summary: "Get all active areas for a given zone",
+  request: {
+    query: z.object({
+      zoneId: z.string().openapi({ description: "Zone ID to get areas for" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Area list",
+      content: { "application/json": { schema: z.object({ success: z.literal(true), data: z.array(z.any()) }) } },
+    },
+    400: {
+      description: "Bad request",
+      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+    },
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
+    },
+  },
+});
+
+app.openapi(listAreasRoute, async (c) => {
+  const { zoneId } = c.req.valid("query");
+
+  const db = c.get("db");
+  const areas = await db
+    .select()
+    .from(deliveryLocations)
+    .where(
+      and(
+        eq(deliveryLocations.type, "area"),
+        eq(deliveryLocations.parentId, zoneId),
+        isNull(deliveryLocations.deletedAt),
+        eq(deliveryLocations.isActive, true),
+      ),
+    )
+    .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
+
+  return c.json({ success: true as const, data: areas.map(formatLocation) }, 200);
 });
 
 export { app as locationRoutes };
