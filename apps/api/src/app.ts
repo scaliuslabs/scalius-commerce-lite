@@ -319,7 +319,7 @@ app.get("/openapi.json", (c) => {
         description:
           "E-commerce platform API powering admin dashboard and storefront",
       },
-      servers: [{ url: "/api/v1", description: "API v1" }],
+      servers: [{ url: "/", description: "Default" }],
     });
     return c.json(spec);
   } catch (error) {
