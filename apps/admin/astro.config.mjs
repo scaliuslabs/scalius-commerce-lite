@@ -117,6 +117,7 @@ export default defineConfig({
     server: {
       hmr: {
         overlay: true,
+        port: 24678,
       },
       // Proxy /api/v1/* to the standalone API worker in dev.
       // Vite intercepts before workerd, so multipart bodies stream correctly.
