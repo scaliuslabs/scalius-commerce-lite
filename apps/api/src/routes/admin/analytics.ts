@@ -54,6 +54,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Analytics"],
     summary: "Get an analytics script by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Script details"  }
     }
@@ -75,7 +78,7 @@ const updateScriptRoute = createRoute({
     tags: ["Admin - Analytics"],
     summary: "Update an analytics script",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateAnalyticsSchema } } }
     },
     responses: {
@@ -104,6 +107,9 @@ const deleteScriptRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Analytics"],
     summary: "Delete an analytics script",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Script deleted"  }
     }
@@ -125,7 +131,7 @@ const toggleScriptRoute = createRoute({
     tags: ["Admin - Analytics"],
     summary: "Toggle an analytics script active status",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: toggleAnalyticsSchema } } }
     },
     responses: {

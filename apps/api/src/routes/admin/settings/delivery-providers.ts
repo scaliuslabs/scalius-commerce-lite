@@ -224,6 +224,9 @@ const getProviderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Providers"],
     summary: "Get a delivery provider by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 200: { description: "Provider details"  } }
 });
 
@@ -246,6 +249,9 @@ const testExistingRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Providers"],
     summary: "Test an existing provider connection",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 200: { description: "Test result"  } }
 });
 
@@ -278,6 +284,9 @@ const deleteProviderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Providers"],
     summary: "Delete a delivery provider",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 200: { description: "Provider deleted"  } }
 });
 

@@ -115,6 +115,11 @@ const categoryAttributesRoute = createRoute({
   path: "/category/{categoryId}",
   tags: ["Attributes"],
   summary: "Get filterable attributes for a category by ID",
+  request: {
+    params: z.object({
+      categoryId: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Category-specific filterable attributes"
@@ -187,6 +192,11 @@ const categorySlugAttributesRoute = createRoute({
   path: "/category-slug/{categorySlug}",
   tags: ["Attributes"],
   summary: "Get filterable attributes for a category by slug",
+  request: {
+    params: z.object({
+      categorySlug: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Category-specific filterable attributes"

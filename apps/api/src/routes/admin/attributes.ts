@@ -223,7 +223,7 @@ const updateAttributeRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Update a product attribute",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateAttributeSchema } } }
     },
     responses: {
@@ -280,6 +280,9 @@ const deleteAttributeRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Attributes"],
     summary: "Soft-delete a product attribute",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Attribute deleted" }
     }
@@ -325,6 +328,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Attributes"],
     summary: "Permanently delete a product attribute",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Attribute permanently deleted" }
     }
@@ -420,7 +426,7 @@ const listValuesRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "List all unique values for an attribute",
     request: {
-        
+        params: z.object({ id: z.string() }),
         query: z.object({
             search: z.string().optional().openapi({ description: "Filter values" }),
             sort: z.string().optional().default("desc").openapi({ description: "Sort order" }),
@@ -547,7 +553,7 @@ const addValueRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Add a preset value to an attribute",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: addValueSchema } } }
     },
     responses: {
@@ -594,7 +600,7 @@ const updateValueRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Rename an attribute value across all products",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateValueSchema } } }
     },
     responses: {
@@ -656,7 +662,7 @@ const deleteValueRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Delete an attribute value from all products",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: deleteValueSchema } } }
     },
     responses: {

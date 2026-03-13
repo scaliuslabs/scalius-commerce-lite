@@ -141,6 +141,9 @@ const getOrderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Orders"],
     summary: "Get order details",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Order details"  },
         404: { description: "Order not found"  }
@@ -162,7 +165,7 @@ const updateOrderRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Update an order",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateOrderSchema } } }
     },
     responses: {
@@ -184,6 +187,9 @@ const deleteOrderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Orders"],
     summary: "Soft delete an order",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Order deleted" }
     }
@@ -202,6 +208,9 @@ const restoreOrderRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Orders"],
     summary: "Restore a soft-deleted order",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Order restored" }
     }
@@ -220,6 +229,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Orders"],
     summary: "Permanently delete an order",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Order permanently deleted" }
     }
@@ -238,6 +250,9 @@ const getCodRoute = createRoute({
     path: "/{id}/cod",
     tags: ["Admin - Orders"],
     summary: "Get COD tracking for an order",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "COD tracking info"  }
     }
@@ -266,7 +281,7 @@ const postCodRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Process COD action",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: codActionSchema } } }
     },
     responses: {
@@ -288,6 +303,9 @@ const getFulfillRoute = createRoute({
     path: "/{id}/fulfill",
     tags: ["Admin - Orders"],
     summary: "Get fulfillment shipments for an order",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Order shipments"  }
     }
@@ -317,7 +335,7 @@ const postFulfillRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Create a fulfillment shipment",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: fulfillSchema } } }
     },
     responses: {
@@ -340,7 +358,7 @@ const updateStatusRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Update order status",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: z.object({ status: z.string() }) } } }
     },
     responses: {
@@ -362,6 +380,9 @@ const getItemsRoute = createRoute({
     path: "/{id}/items",
     tags: ["Admin - Orders"],
     summary: "Get order items with product details",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Order items"  }
     }
@@ -405,6 +426,9 @@ const getPaymentsRoute = createRoute({
     path: "/{id}/payments",
     tags: ["Admin - Orders"],
     summary: "Get order payments and payment plan",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Order payments"  }
     }
@@ -429,6 +453,9 @@ const getShipmentsRoute = createRoute({
     path: "/{id}/shipments",
     tags: ["Admin - Orders"],
     summary: "Get order shipments",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Order shipments"  }
     }
@@ -466,7 +493,7 @@ const createShipmentRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Create a shipment for an order",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: createShipmentSchema } } }
     },
     responses: {
@@ -514,6 +541,9 @@ const getShipmentRoute = createRoute({
     path: "/{id}/shipments/{shipmentId}",
     tags: ["Admin - Orders"],
     summary: "Get a specific shipment",
+    request: {
+        params: z.object({ id: z.string(), shipmentId: z.string() }),
+    },
     responses: {
         200: { description: "Shipment details"  },
         404: { description: "Shipment not found"  }
@@ -538,6 +568,9 @@ const deleteShipmentRoute = createRoute({
     path: "/{id}/shipments/{shipmentId}",
     tags: ["Admin - Orders"],
     summary: "Delete a shipment",
+    request: {
+        params: z.object({ id: z.string(), shipmentId: z.string() }),
+    },
     responses: {
         200: { description: "Shipment deleted"  },
         404: { description: "Shipment not found"  }
@@ -563,6 +596,9 @@ const checkShipmentStatusRoute = createRoute({
     path: "/{id}/shipments/{shipmentId}/status",
     tags: ["Admin - Orders"],
     summary: "Check shipment status from provider",
+    request: {
+        params: z.object({ id: z.string(), shipmentId: z.string() }),
+    },
     responses: {
         200: { description: "Status checked"  },
         404: { description: "Shipment not found"  }
@@ -588,6 +624,9 @@ const refreshShipmentRoute = createRoute({
     path: "/{id}/shipments/{shipmentId}/refresh",
     tags: ["Admin - Orders"],
     summary: "Refresh shipment status and update order",
+    request: {
+        params: z.object({ id: z.string(), shipmentId: z.string() }),
+    },
     responses: {
         200: { description: "Shipment refreshed"  },
         400: { description: "Failed to refresh"  },
@@ -648,7 +687,7 @@ const returnOrderRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Process order return",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: z.object({ reason: z.string().optional(), autoRefund: z.boolean().optional() }) } } }
     },
     responses: {
@@ -673,7 +712,7 @@ const refundOrderRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Process order refund",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: {
             content: {
                 "application/json": {

@@ -171,6 +171,9 @@ const getRoleRoute = createRoute({
     path: "/roles/{id}",
     tags: ["Admin - RBAC"],
     summary: "Get a single role with permissions",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Role details"  }
     }
@@ -219,7 +222,7 @@ const updateRoleRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "Update a role",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateRoleSchema } } }
     },
     responses: {
@@ -309,6 +312,9 @@ const deleteRoleRoute = createRoute({
     path: "/roles/{id}",
     tags: ["Admin - RBAC"],
     summary: "Delete a role",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Role deleted"  }
     }

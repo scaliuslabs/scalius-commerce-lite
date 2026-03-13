@@ -62,6 +62,11 @@ const getWidgetByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Widgets"],
   summary: "Get widget by ID",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Widget details"

@@ -181,6 +181,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Pages"],
     summary: "Get a page by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Page details"  }
     }
@@ -202,7 +205,7 @@ const updatePageRoute = createRoute({
     tags: ["Admin - Pages"],
     summary: "Update a page",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updatePageSchema } } }
     },
     responses: {
@@ -228,6 +231,9 @@ const deletePageRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Pages"],
     summary: "Soft-delete a page",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Page deleted" }
     }
@@ -247,6 +253,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Pages"],
     summary: "Permanently delete a page",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Page permanently deleted" }
     }

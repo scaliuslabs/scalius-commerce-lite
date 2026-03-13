@@ -159,6 +159,11 @@ const getSliderByIdRoute = createRoute({
   path: "/sliders/{id}",
   tags: ["Hero"],
   summary: "Get hero slider by ID",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Hero slider details"

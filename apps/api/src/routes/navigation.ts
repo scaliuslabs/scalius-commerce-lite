@@ -167,6 +167,11 @@ const getNavigationByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Navigation"],
   summary: "Get navigation menu by ID",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Navigation menu data"

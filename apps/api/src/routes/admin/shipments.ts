@@ -16,6 +16,9 @@ const getShipmentRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Shipments"],
     summary: "Get shipment by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Shipment details"  },
         404: { description: "Shipment not found"  }
@@ -39,6 +42,9 @@ const deleteShipmentRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Shipments"],
     summary: "Delete a shipment",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Shipment deleted"  },
         404: { description: "Shipment not found"  }
@@ -64,6 +70,9 @@ const checkStatusRoute = createRoute({
     path: "/{id}/check-status",
     tags: ["Admin - Shipments"],
     summary: "Check and update shipment status from provider",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Status checked"  },
         404: { description: "Shipment not found"  }

@@ -152,7 +152,7 @@ const updateCategoryRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Update a category",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateCategorySchema } } }
     },
     responses: {
@@ -179,6 +179,9 @@ const deleteCategoryRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Categories"],
     summary: "Soft-delete a category",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Category deleted" }
     }
@@ -202,6 +205,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Categories"],
     summary: "Permanently delete a category",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Category permanently deleted" }
     }
@@ -221,6 +227,9 @@ const restoreCategoryRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Categories"],
     summary: "Restore a soft-deleted category",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Category restored"  }
     }

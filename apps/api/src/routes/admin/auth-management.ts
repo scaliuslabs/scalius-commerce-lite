@@ -183,6 +183,9 @@ const deleteUserRoute = createRoute({
     path: "/users/{id}",
     tags: ["Admin - Auth Management"],
     summary: "Delete an admin user",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "User deleted"  }
     }

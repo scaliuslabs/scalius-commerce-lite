@@ -144,6 +144,11 @@ const getPageBySlugRoute = createRoute({
   path: "/slug/{slug}",
   tags: ["Pages"],
   summary: "Get page by slug",
+  request: {
+    params: z.object({
+      slug: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Page details"
@@ -209,6 +214,11 @@ const getPageByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Pages"],
   summary: "Get page by ID",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Page details"

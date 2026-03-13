@@ -281,10 +281,15 @@ const getByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Checkout Languages"],
   summary: "Get checkout language by ID",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Checkout language details"
-      
+
     },
     404: {
       description: "Not found"
@@ -307,7 +312,9 @@ const updateRoute = createRoute({
   tags: ["Checkout Languages"],
   summary: "Update a checkout language",
   request: {
-    
+    params: z.object({
+      id: z.string(),
+    }),
     body: {
       content: {
         "application/json": {
@@ -367,6 +374,11 @@ const softDeleteRoute = createRoute({
   path: "/{id}",
   tags: ["Checkout Languages"],
   summary: "Soft delete a checkout language",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Success"
@@ -387,6 +399,11 @@ const hardDeleteRoute = createRoute({
   path: "/{id}",
   tags: ["Checkout Languages"],
   summary: "Hard delete a checkout language",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     204: {
       description: "No content"
@@ -407,6 +424,11 @@ const restoreRoute = createRoute({
   path: "/{id}/restore",
   tags: ["Checkout Languages"],
   summary: "Restore a soft-deleted checkout language",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Success"

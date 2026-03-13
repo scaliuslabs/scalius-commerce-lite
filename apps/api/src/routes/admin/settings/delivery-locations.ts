@@ -181,6 +181,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Locations"],
     summary: "Get a delivery location by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 200: { description: "Location details"  } }
 });
 
@@ -205,7 +208,7 @@ const updateLocationRoute = createRoute({
     tags: ["Admin - Delivery Locations"],
     summary: "Update a delivery location",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateLocationSchema } } }
     },
     responses: { 200: { description: "Location updated"  } }
@@ -252,6 +255,9 @@ const deleteLocationRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Locations"],
     summary: "Soft-delete a delivery location",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 200: { description: "Location deleted"  } }
 });
 

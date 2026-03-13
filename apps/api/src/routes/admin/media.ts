@@ -77,7 +77,7 @@ const patchMediaRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Update media metadata (PATCH)",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateMediaSchema } } }
     },
     responses: {
@@ -105,7 +105,7 @@ const putMediaRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Update media metadata (PUT)",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateMediaSchema } } }
     },
     responses: {
@@ -154,6 +154,9 @@ const deleteFileRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Media"],
     summary: "Delete a media file",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "File deleted" }
     }
@@ -217,6 +220,9 @@ const deleteFolderRoute = createRoute({
     path: "/folders/{id}",
     tags: ["Admin - Media"],
     summary: "Delete a media folder",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Folder deleted" }
     }

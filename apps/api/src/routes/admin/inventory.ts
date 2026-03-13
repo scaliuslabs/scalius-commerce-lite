@@ -120,7 +120,7 @@ const adjustRoute = createRoute({
     tags: ["Admin - Inventory"],
     summary: "Adjust inventory for a variant",
     request: {
-        
+        params: z.object({ variantId: z.string() }),
         body: { content: { "application/json": { schema: adjustInventorySchema } } }
     },
     responses: {
