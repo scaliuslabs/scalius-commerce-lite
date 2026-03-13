@@ -1,0 +1,199 @@
+---
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import RichContent from "@/components/RichContent.astro";
+import type { Product } from "@/lib/api";
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+
+const tabs = [];
+
+if (product.description || (product.features && product.features.length > 0)) {
+  tabs.push({ id: "description", label: "Description" });
+}
+
+if (product.additionalInfo && product.additionalInfo.length > 0) {
+  product.additionalInfo.forEach((section) => {
+    tabs.push({ id: section.id, label: section.title });
+  });
+}
+
+const hasManyTabs = tabs.length > 4;
+---
+
+{
+  tabs.length > 0 && (
+    <div class="mt-2 pt-2 border-t border-gray-200">
+      <div class="product-details-tabs">
+        <div class="border-b border-gray-200 relative">
+          {hasManyTabs && (
+            <button
+              type="button"
+              id="scroll-left"
+              class="absolute left-0 top-0 bottom-0 z-10 w-10 bg-linear-to-r from-white via-white to-transparent flex items-center justify-center opacity-0 transition-opacity duration-200 hover:opacity-100"
+              aria-label="Scroll left"
+            >
+              <ChevronLeft className="h-5 w-5 text-gray-600" />
+            </button>
+          )}
+
+          <nav
+            id="tab-nav"
+            class="-mb-px flex space-x-4 md:space-x-6 overflow-x-auto scrollbar-hide scroll-smooth px-2 md:px-0"
+            role="tablist"
+            style="scrollbar-width: none; -ms-overflow-style: none;"
+          >
+            {tabs.map((tab, index) => (
+              <button
+                type="button"
+                role="tab"
+                data-tab-id={tab.id}
+                aria-selected={index === 0 ? "true" : "false"}
+                aria-controls={`panel-${tab.id}`}
+                class:list={[
+                  "shrink-0 whitespace-nowrap py-3 md:py-4 px-2 md:px-1 border-b-2 font-medium text-sm transition-all duration-200 min-h-[44px] flex items-center",
+                  index === 0
+                    ? "border-primary text-primary"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
+                ]}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          {hasManyTabs && (
+            <button
+              type="button"
+              id="scroll-right"
+              class="absolute right-0 top-0 bottom-0 z-10 w-10 bg-linear-to-l from-white via-white to-transparent flex items-center justify-center opacity-0 transition-opacity duration-200 hover:opacity-100"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="h-5 w-5 text-gray-600" />
+            </button>
+          )}
+
+          {hasManyTabs && (
+            <>
+              <div
+                id="fade-left"
+                class="pointer-events-none absolute left-0 top-0 bottom-0 w-12 bg-linear-to-r from-white to-transparent opacity-0 transition-opacity duration-200"
+              />
+              <div
+                id="fade-right"
+                class="pointer-events-none absolute right-0 top-0 bottom-0 w-12 bg-linear-to-l from-white to-transparent opacity-0 transition-opacity duration-200"
+              />
+            </>
+          )}
+        </div>
+
+        <div class="mt-4">
+          {(product.description ||
+            (product.features && product.features.length > 0)) && (
+            <div
+              id="panel-description"
+              role="tabpanel"
+              aria-labelledby="description"
+              data-tab-panel="description"
+              class="tab-panel"
+            >
+              {product.features && product.features.length > 0 && (
+                <div class="mb-6">
+                  <h3 class="text-sm font-medium text-gray-900 mb-3">
+                    Key Features
+                  </h3>
+                  <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                    {product.features.map((feature) => (
+                      <li class="flex items-start">
+                        <Check className="h-4 w-4 text-green-600 mr-2 shrink-0 mt-0.5" />
+                        <span class="text-sm text-gray-700">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {product.description && (
+                <div class="prose prose-sm max-w-none text-gray-700">
+                  <RichContent content={product.description} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {product.additionalInfo && product.additionalInfo.length > 0 && (
+            <>
+              {product.additionalInfo.map((section) => (
+                <div
+                  id={`panel-${section.id}`}
+                  role="tabpanel"
+                  aria-labelledby={section.id}
+                  data-tab-panel={section.id}
+                  class="tab-panel hidden"
+                >
+                  <div class="prose prose-sm max-w-none text-gray-700">
+                    <RichContent content={section.content} />
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+<script src="./scripts/product-tabs.ts"></script>
+
+<style>
+  /* Tab panel animation - GPU accelerated */
+  .tab-panel {
+    animation: fadeIn 0.2s ease-in-out;
+    will-change: opacity, transform;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Ensure tab navigation has proper overflow */
+  #tab-nav {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  #tab-nav::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  /* Optimize button transitions */
+  [role="tab"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Prevent layout shift for scroll buttons */
+  #scroll-left,
+  #scroll-right,
+  #fade-left,
+  #fade-right {
+    pointer-events: none;
+  }
+
+  #scroll-left:not([style*="opacity: 0"]),
+  #scroll-right:not([style*="opacity: 0"]) {
+    pointer-events: auto;
+  }
+</style>

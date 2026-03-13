@@ -1,0 +1,109 @@
+---
+// src/components/cards/ProductCard.astro
+import type { Product } from "@/lib/api";
+import { ArrowRight } from "lucide-react";
+import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+
+interface Props {
+  product: Product;
+  currencySymbol?: string;
+}
+
+const { product, currencySymbol = "৳" } = Astro.props;
+
+const hasDiscount = product.discountedPrice < product.price;
+const discountBadge = formatDiscountBadge(
+  product.discountType,
+  product.discountPercentage,
+  product.discountAmount
+);
+
+const productImageUrl = getOptimizedImageUrl(product.imageUrl, {
+  width: 400,
+  height: 400,
+  quality: 80,
+});
+---
+
+<div
+  class="group relative flex flex-col h-full bg-card rounded-2xl overflow-hidden transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-border/50 hover:border-transparent"
+>
+  <!-- Image Container -->
+  <div class="relative aspect-[4/5] overflow-hidden bg-muted">
+    <a
+      href={`/products/${product.slug}`}
+      class="block w-full h-full"
+      aria-label={`View ${product.name}`}
+    >
+      <img
+        src={productImageUrl}
+        alt={product.name}
+        loading="lazy"
+        decoding="async"
+        class="w-full h-full object-contain object-center transition-transform duration-700 ease-out group-hover:scale-110"
+      />
+    </a>
+
+    <!-- Badges -->
+    <div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
+      {
+        discountBadge && (
+          <span class="px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase text-destructive-foreground bg-destructive rounded-full shadow-sm">
+            {discountBadge}
+          </span>
+        )
+      }
+    </div>
+
+    <!-- Floating View Button (Desktop) -->
+    <div
+      class="absolute inset-x-0 bottom-0 p-4 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 ease-out hidden lg:block"
+    >
+      <a
+        href={`/products/${product.slug}`}
+        class="w-full h-11 flex items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-semibold rounded-xl shadow-xl hover:bg-primary/90 transition-colors"
+      >
+        <span>View Details</span>
+        <ArrowRight className="h-4 w-4" />
+      </a>
+    </div>
+  </div>
+
+  <!-- Details -->
+  <div class="p-3 sm:p-4 flex flex-col flex-1">
+    <div class="mb-1">
+      <h3
+        class="text-[14px] sm:text-[15px] font-semibold text-foreground leading-tight line-clamp-2 min-h-[2.25rem] group-hover:text-primary transition-colors duration-300"
+      >
+        <a href={`/products/${product.slug}`}>
+          {product.name}
+        </a>
+      </h3>
+    </div>
+
+    <div class="mt-auto flex items-center justify-between gap-1.5">
+      <div class="flex flex-col gap-0">
+        {
+          hasDiscount && (
+            <span class="text-[10px] sm:text-xs text-muted-foreground line-through font-medium leading-none">
+              {currencySymbol}{product.price.toLocaleString()}
+            </span>
+          )
+        }
+        <span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight">
+          {currencySymbol}{product.discountedPrice.toLocaleString()}
+        </span>
+      </div>
+
+      <!-- Mobile Action -->
+      <a
+        href={`/products/${product.slug}`}
+        class="lg:hidden h-8 w-8 flex items-center justify-center rounded-xl bg-muted text-foreground active:scale-90 transition-all border border-border"
+        aria-label="View product"
+      >
+        <ArrowRight className="h-3.5 w-3.5" />
+      </a>
+    </div>
+  </div>
+</div>

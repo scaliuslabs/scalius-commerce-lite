@@ -1,0 +1,86 @@
+---
+import { Image } from "astro:assets";
+import { Truck } from "lucide-react";
+import type { Product } from "@/lib/api";
+import { formatDiscountBadge } from "./lib/pricing-engine";
+
+interface Props {
+  relatedProducts: Product[];
+  currencySymbol?: string;
+}
+
+const { relatedProducts, currencySymbol = "৳" } = Astro.props;
+
+const formatPrice = (price: number) =>
+  `${currencySymbol}${price.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+---
+
+{
+  relatedProducts.length > 0 && (
+    <section class="bg-muted/50 py-6 mt-4" id="related-products">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h2 class="text-lg font-bold text-foreground mb-4">
+          You might also like
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-6">
+          {relatedProducts.map((relatedProduct) => (
+            <a href={`/products/${relatedProduct.slug}`} class="group">
+              <div class="aspect-square w-full overflow-hidden rounded-lg bg-muted shadow-sm border border-border group-hover:shadow-md transition-all duration-300 relative">
+                {relatedProduct.imageUrl ? (
+                  <Image
+                    src={relatedProduct.imageUrl}
+                    alt={relatedProduct.name}
+                    width={300}
+                    height={300}
+                    class="h-full w-full object-contain object-center group-hover:scale-105 transition-all duration-300 mix-blend-multiply"
+                    format="avif"
+                  />
+                ) : (
+                  <div class="h-full w-full flex items-center justify-center bg-muted">
+                    <span class="text-muted-foreground text-xs font-medium">No image</span>
+                  </div>
+                )}
+                {formatDiscountBadge(
+                  relatedProduct.discountType,
+                  relatedProduct.discountPercentage,
+                  relatedProduct.discountAmount
+                ) && (
+                  <div class="absolute top-2 left-2 rounded-full bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive shadow-xs">
+                    {formatDiscountBadge(
+                      relatedProduct.discountType,
+                      relatedProduct.discountPercentage,
+                      relatedProduct.discountAmount
+                    )}
+                  </div>
+                )}
+              </div>
+              <div class="mt-2 flex flex-col">
+                <h3 class="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors min-h-[2.5em]">
+                  {relatedProduct.name}
+                </h3>
+                <div class="mt-1 flex items-center gap-1.5">
+                  <p class="font-medium text-foreground text-sm">
+                    {formatPrice(relatedProduct.discountedPrice)}
+                  </p>
+                  {relatedProduct.discountedPrice < relatedProduct.price && (
+                    <p class="text-xs text-muted-foreground line-through">
+                      {formatPrice(relatedProduct.price)}
+                    </p>
+                  )}
+                </div>
+                {relatedProduct.freeDelivery && (
+                  <p class="mt-1 text-xs text-primary font-medium flex items-center">
+                    <Truck className="h-3 w-3 mr-0.5" /> Free Delivery
+                  </p>
+                )}
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}

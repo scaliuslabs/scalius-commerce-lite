@@ -1,0 +1,444 @@
+---
+// Optimized carousel component for best performance and LCP
+import { Image } from "astro:assets";
+
+interface Props {
+  images: {
+    url: string;
+    title?: string;
+    link: string;
+    id?: string;
+  }[];
+  height: number;
+  type: "desktop" | "mobile";
+  autoRotate?: boolean;
+  interval?: number;
+}
+
+const {
+  images,
+  height,
+  type,
+  autoRotate = true,
+  interval = 3000,
+} = Astro.props;
+
+// Ensure we have at least one image
+if (images.length === 0) return;
+---
+
+<div
+  class={`${type}-carousel relative w-full overflow-hidden rounded-xl`}
+  style={`height: ${height}px;`}
+  data-carousel-type={type}
+  data-auto-rotate={autoRotate}
+  data-interval={interval}
+>
+  <div class="carousel-container relative w-full h-full">
+    {/* Slides */}
+    <div class="slides-container w-full h-full relative">
+      {
+        images.map((image: Props["images"][0], index: number) => (
+          <div
+            class={`slide absolute inset-0 transition-opacity duration-500 ${index === 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            data-slide-index={index}
+          >
+            <a
+              href={image.link || "#"}
+              class="slide-link block w-full h-full group"
+              aria-label={image.title || `Slide ${index + 1}`}
+              target={image.link?.startsWith("http") ? "_blank" : undefined}
+              rel={image.link?.startsWith("http") ? "noopener" : undefined}
+            >
+              <Image
+                src={image.url}
+                alt={image.title || `Slide ${index + 1}`}
+                width={type === "desktop" ? 1300 : 640}
+                height={height}
+                class="w-full h-full object-cover"
+                loading={index === 0 ? "eager" : "lazy"}
+                fetchpriority={index === 0 ? "high" : "auto"}
+                decoding={index === 0 ? "sync" : "async"}
+                format="webp"
+                quality={index === 0 ? 90 : 80}
+              />
+
+              {/* Hover overlay - only appears on hover */}
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+
+            </a>
+          </div>
+        ))
+      }
+    </div>
+
+    {/* Navigation dots - Enhanced visibility */}
+    {
+      images.length > 1 && (
+        <div class="absolute bottom-4 left-0 right-0 flex justify-center gap-3 z-10">
+          {images.map((_: Props["images"][0], index: number) => (
+            <button
+              type="button"
+              class={`w-3 h-3 rounded-full transition-all ${
+                index === 0
+                  ? "bg-white scale-110 ring-2 ring-white/30"
+                  : "bg-white/70 hover:bg-white hover:scale-110"
+              } shadow-[0_0_5px_rgba(0,0,0,0.5)] hover:shadow-[0_0_8px_rgba(255,255,255,0.5)]`}
+              aria-label={`Go to slide ${index + 1}`}
+              data-nav-index={index}
+            />
+          ))}
+        </div>
+      )
+    }
+
+    {/* Navigation arrows - Fixed for both desktop and mobile */}
+    {
+      images.length > 1 && (
+        <>
+          <button
+            type="button"
+            class="nav-button absolute left-4 top-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/80 text-gray-800 z-10 hover:bg-white transition-colors shadow-lg backdrop-blur-sm border border-white/20"
+            aria-label="Previous slide"
+            data-nav="prev"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2.5"
+              stroke="currentColor"
+              class="w-5 h-5"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15.75 19.5L8.25 12l7.5-7.5"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="nav-button absolute right-4 top-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/80 text-gray-800 z-10 hover:bg-white transition-colors shadow-lg backdrop-blur-sm border border-white/20"
+            aria-label="Next slide"
+            data-nav="next"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2.5"
+              stroke="currentColor"
+              class="w-5 h-5"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M8.25 4.5l7.5 7.5-7.5 7.5"
+              />
+            </svg>
+          </button>
+        </>
+      )
+    }
+  </div>
+</div>
+
+<script>
+  // Encapsulate script in an IIFE to avoid polluting the global scope
+  (() => {
+    class CarouselController {
+      carousel: HTMLElement;
+      slides: HTMLElement[];
+      navDots!: HTMLElement[];
+      currentIndex: number = 0;
+      autoRotate: boolean;
+      interval: number;
+      timer: ReturnType<typeof setInterval> | null = null;
+      isHovering: boolean = false;
+      touchStartX: number = 0;
+      touchEndX: number = 0;
+      isSwiping: boolean = false;
+      isTransitioning: boolean = false; // Flag to prevent rapid transitions
+      transitionDuration: number = 500; // Match this with CSS transition duration
+
+      constructor(carousel: HTMLElement) {
+        this.carousel = carousel;
+        this.autoRotate = carousel.dataset.autoRotate === "true";
+        this.interval = parseInt(carousel.dataset.interval || "3000");
+
+        // Get all slides
+        this.slides = Array.from(carousel.querySelectorAll("[data-slide-index]"));
+        if (this.slides.length <= 1) return; // No need for controls with only one slide
+
+        // Get navigation dots
+        this.navDots = Array.from(carousel.querySelectorAll("[data-nav-index]"));
+
+        this.initEventListeners();
+
+        // Start auto-rotation immediately
+        if (this.autoRotate) {
+          this.startAutoRotation();
+        }
+      }
+
+      initEventListeners() {
+        // Navigation dot clicks
+        this.navDots.forEach((dot, index) => {
+          dot.addEventListener("click", (e) => {
+            e.preventDefault();
+            if (!this.isTransitioning) {
+              this.goToSlide(index);
+            }
+          });
+        });
+
+        // Previous/Next buttons
+        const prevButton = this.carousel.querySelector('[data-nav="prev"]');
+        const nextButton = this.carousel.querySelector('[data-nav="next"]');
+
+        if (prevButton) {
+          prevButton.addEventListener("click", (e) => {
+            e.preventDefault();
+            if (!this.isTransitioning) {
+              this.goToPrevSlide();
+            }
+          });
+        }
+
+        if (nextButton) {
+          nextButton.addEventListener("click", (e) => {
+            e.preventDefault();
+            if (!this.isTransitioning) {
+              this.goToNextSlide();
+            }
+          });
+        }
+
+        // Pause auto-rotation on hover
+        this.carousel.addEventListener("mouseenter", () => {
+          this.isHovering = true;
+          if (this.timer) {
+            clearInterval(this.timer);
+            this.timer = null;
+          }
+        });
+
+        this.carousel.addEventListener("mouseleave", () => {
+          this.isHovering = false;
+          if (this.autoRotate && !this.timer) {
+            this.startAutoRotation();
+          }
+        });
+
+        // Touch events for swipe functionality
+        this.carousel.addEventListener(
+          "touchstart",
+          (e) => {
+            if (this.isTransitioning) return;
+
+            this.touchStartX = e.changedTouches[0].screenX;
+            this.isSwiping = true;
+
+            // Pause auto-rotation during swipe
+            if (this.timer) {
+              clearInterval(this.timer);
+              this.timer = null;
+            }
+          },
+          { passive: true }
+        );
+
+        this.carousel.addEventListener(
+          "touchmove",
+          (e) => {
+            if (!this.isSwiping) return;
+            this.touchEndX = e.changedTouches[0].screenX;
+          },
+          { passive: true }
+        );
+
+        this.carousel.addEventListener(
+          "touchend",
+          () => {
+            if (!this.isSwiping || this.isTransitioning) return;
+
+            const swipeDistance = this.touchEndX - this.touchStartX;
+            const threshold = 50; // Minimum swipe distance
+
+            if (swipeDistance > threshold) {
+              // Swipe right - go to previous slide
+              this.goToPrevSlide();
+            } else if (swipeDistance < -threshold) {
+              // Swipe left - go to next slide
+              this.goToNextSlide();
+            }
+
+            this.isSwiping = false;
+
+            // Resume auto-rotation after swipe
+            if (this.autoRotate && !this.timer && !this.isHovering) {
+              this.startAutoRotation();
+            }
+          },
+          { passive: true }
+        );
+
+        // Listen for transition end to reset the transition flag
+        this.slides.forEach((slide) => {
+          slide.addEventListener("transitionend", () => {
+            if (slide.classList.contains("opacity-100")) {
+              this.isTransitioning = false;
+            }
+          });
+        });
+      }
+
+      startAutoRotation() {
+        if (this.timer) {
+          clearInterval(this.timer);
+        }
+
+        this.timer = setInterval(() => {
+          if (!this.isHovering && !this.isSwiping && !this.isTransitioning) {
+            this.goToNextSlide();
+          }
+        }, this.interval);
+      }
+
+      goToSlide(index: number) {
+        // Don't do anything if we're trying to go to the current slide
+        if (index === this.currentIndex) return;
+
+        // Set transitioning flag
+        this.isTransitioning = true;
+
+        // Hide current slide
+        this.slides[this.currentIndex].classList.remove("opacity-100");
+        this.slides[this.currentIndex].classList.add(
+          "opacity-0",
+          "pointer-events-none"
+        );
+
+        // Update nav dots
+        if (this.navDots[this.currentIndex]) {
+          this.navDots[this.currentIndex].classList.remove(
+            "bg-white",
+            "scale-110",
+            "ring-2",
+            "ring-white/30"
+          );
+          this.navDots[this.currentIndex].classList.add("bg-white/70");
+        }
+
+        // Show new slide
+        this.currentIndex = index;
+        this.slides[this.currentIndex].classList.remove(
+          "opacity-0",
+          "pointer-events-none"
+        );
+        this.slides[this.currentIndex].classList.add("opacity-100");
+
+        // Update nav dots
+        if (this.navDots[this.currentIndex]) {
+          this.navDots[this.currentIndex].classList.remove("bg-white/70");
+          this.navDots[this.currentIndex].classList.add(
+            "bg-white",
+            "scale-110",
+            "ring-2",
+            "ring-white/30"
+          );
+        }
+
+        // Preload next image for smoother transitions
+        const nextIndex = (this.currentIndex + 1) % this.slides.length;
+        const nextSlide = this.slides[nextIndex];
+        const nextImage = nextSlide.querySelector("img");
+        if (nextImage && nextImage.loading === "lazy") {
+          nextImage.loading = "eager";
+        }
+
+        // Set a fallback timeout to reset the transition flag in case the transitionend event doesn't fire
+        setTimeout(() => {
+          this.isTransitioning = false;
+        }, this.transitionDuration + 50);
+      }
+
+      goToNextSlide() {
+        const nextIndex = (this.currentIndex + 1) % this.slides.length;
+        this.goToSlide(nextIndex);
+      }
+
+      goToPrevSlide() {
+        const prevIndex =
+          (this.currentIndex - 1 + this.slides.length) % this.slides.length;
+        this.goToSlide(prevIndex);
+      }
+    }
+
+    // Initialize carousels immediately
+    const initCarousels = () => {
+      const carousels = document.querySelectorAll("[data-carousel-type]");
+      carousels.forEach((carousel) => {
+        if (carousel instanceof HTMLElement) {
+          // Prevent re-initialization
+          if (!(carousel as any).__carouselController) {
+            (carousel as any).__carouselController = new CarouselController(carousel);
+          }
+        }
+      });
+    };
+
+    // Initialize immediately if DOM is ready, otherwise wait for DOMContentLoaded
+    if (document.readyState !== "loading") {
+      initCarousels();
+    } else {
+      document.addEventListener("DOMContentLoaded", initCarousels);
+    }
+
+    // Also initialize after Astro page transitions
+    document.addEventListener("astro:page-load", initCarousels);
+  })();
+</script>
+
+<style>
+  /* Ensure smooth transitions */
+  .slide {
+    will-change: opacity;
+    transition: opacity 0.5s ease;
+  }
+
+  /* Prevent layout shifts */
+  .carousel-container {
+    contain: layout;
+  }
+
+  /* Fix for jumpy navigation buttons */
+  .nav-button {
+    transform: translateY(-50%);
+    opacity: 0.95;
+    transition:
+      background-color 0.2s ease,
+      opacity 0.2s ease;
+    box-shadow:
+      0 0 10px rgba(0, 0, 0, 0.2),
+      0 0 5px rgba(255, 255, 255, 0.1);
+  }
+
+  .nav-button:hover {
+    opacity: 1;
+  }
+
+  /* Ensure buttons are visible on all backgrounds */
+  [data-nav-index] {
+    box-shadow:
+      0 0 5px rgba(0, 0, 0, 0.3),
+      0 0 3px rgba(255, 255, 255, 0.2);
+    transition: all 0.2s ease;
+  }
+
+  /* Enhance title visibility */
+  .slide-link h2 {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  }
+</style>

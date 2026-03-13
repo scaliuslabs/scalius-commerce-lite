@@ -1,0 +1,505 @@
+---
+// src/pages/categories/[slug].astro
+import Layout from "@/layouts/Layout.astro";
+import {
+  getProductsByCategory,
+  getCategoryBySlug,
+  getFilterableAttributes,
+  getLayoutData,
+  type Product,
+  type ProductListOptions,
+  type PaginatedResponse,
+  type FilterableAttribute,
+  type LayoutData,
+} from "@/lib/api";
+import CategoryFilters from "@/components/CategoryFilters";
+import RichContent from "@/components/RichContent.astro";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import {
+  SlidersHorizontal,
+  X,
+  Tags,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft,
+  Search,
+} from "lucide-react";
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect("/404");
+
+const params = Astro.url.searchParams;
+const page = parseInt(params.get("page") || "1");
+const sortBy = params.get("sortBy") || "newest";
+
+let category: any = null;
+let productsResponse: PaginatedResponse<Product> | null = null;
+let attributes: FilterableAttribute[] = [];
+let layoutData: LayoutData | null = null;
+let error: string | null = null;
+
+try {
+  // Parallel fetch: layout + category data
+  const [fetchedLayoutData, fetchedCategory] = await Promise.all([
+    getLayoutData(),
+    getCategoryBySlug(slug),
+  ]);
+  layoutData = fetchedLayoutData;
+  category = fetchedCategory;
+  if (!category) return Astro.redirect("/404");
+
+  // Build product list options
+  const productListOptions: ProductListOptions = {
+    page,
+    limit: 20,
+    sort: sortBy as ProductListOptions["sort"],
+  };
+
+  // Add filter parameters (excluding standard navigation params)
+  const filterParams = ["page", "sortBy"];
+  for (const [key, value] of params.entries()) {
+    if (!filterParams.includes(key) && value) {
+      productListOptions[key] = value;
+    }
+  }
+
+  // Fetch products and attributes in parallel
+  const [fetchedProducts, fetchedAttributes] = await Promise.all([
+    getProductsByCategory(slug, productListOptions),
+    getFilterableAttributes({ categorySlug: slug }),
+  ]);
+
+  productsResponse = fetchedProducts;
+  attributes = fetchedAttributes || [];
+} catch (e) {
+  console.error("Error fetching category data:", e);
+  error = "An error occurred while fetching products. Please try again.";
+}
+
+const products: Product[] = productsResponse?.data || [];
+const pagination = productsResponse?.pagination || {
+  total: 0,
+  totalPages: 0,
+  page: 1,
+};
+
+const pageTitle = category?.metaTitle || category?.name || "Category";
+const pageDescription =
+  category?.metaDescription ||
+  `Browse products in the ${category?.name} category.`;
+
+const currentFilters = Object.fromEntries(params.entries());
+
+function getPaginationUrl(pageNum: number) {
+  const url = new URL(Astro.url);
+  url.searchParams.set("page", pageNum.toString());
+  return url.toString();
+}
+
+function generatePaginationLinks(
+  currentPage: number,
+  totalPages: number
+): (number | "...")[] {
+  if (totalPages <= 7)
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  if (currentPage <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
+  if (currentPage >= totalPages - 3)
+    return [
+      1,
+      "...",
+      totalPages - 4,
+      totalPages - 3,
+      totalPages - 2,
+      totalPages - 1,
+      totalPages,
+    ];
+  return [
+    1,
+    "...",
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+    "...",
+    totalPages,
+  ];
+}
+
+const activeFilterCount = Object.keys(currentFilters).filter(
+  (key) => !["page", "sortBy"].includes(key) && currentFilters[key]
+).length;
+
+// Include product name for richer analytics data
+const currencySymbol = layoutData?.currency?.symbol ?? "৳";
+
+const analyticsProductData = products.map((p) => ({
+  id: p.id,
+  name: p.name,
+  price: p.discountedPrice,
+}));
+---
+
+<Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>
+  <main
+    class="min-h-screen bg-gray-50"
+    data-category-name={category?.name}
+    data-products-for-analytics={JSON.stringify(analyticsProductData)}
+  >
+    <div
+      class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100"
+    >
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <nav class="text-sm mb-4">
+          <ol class="flex items-center space-x-2">
+            <li>
+              <a href="/" class="text-gray-500 hover:text-gray-900">Home</a>
+            </li>
+            <li class="text-gray-300">/</li>
+            <li>
+              <span class="text-gray-900 font-medium">{category?.name}</span>
+            </li>
+          </ol>
+        </nav>
+        <div class="flex justify-between items-start gap-4 flex-wrap">
+          <div class="space-y-2 max-w-xl">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">
+              {category?.name}
+            </h1>
+            {
+              category?.description && (
+                <RichContent
+                  content={category.description}
+                  className="text-gray-500 text-lg"
+                  processShortcodes={false}
+                />
+              )
+            }
+          </div>
+          <div
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100 shadow-sm"
+          >
+            <Tags className="w-4 h-4 text-gray-400" />
+            <span class="font-medium text-gray-900 text-sm"
+              >{pagination.total} products</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <div class="flex flex-col lg:flex-row gap-6">
+        <button
+          id="mobile-filter-toggle"
+          class="lg:hidden flex items-center justify-center gap-2 w-full py-3 px-4 bg-primary text-primary-foreground rounded-lg shadow-sm font-medium mb-4 relative"
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          <span>Filters</span>
+          {
+            activeFilterCount > 0 && (
+              <span class="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )
+          }
+        </button>
+
+        <aside
+          id="filter-section"
+          class="fixed inset-0 bg-black/50 z-50 hidden lg:static lg:block lg:bg-transparent lg:z-auto lg:w-80 lg:shrink-0"
+        >
+          <div
+            class="bg-white h-full w-4/5 max-w-sm lg:w-full flex flex-col lg:rounded-lg lg:shadow-sm lg:border lg:border-gray-100"
+          >
+            <div
+              class="flex justify-between items-center lg:hidden p-4 border-b bg-white"
+            >
+              <h3 class="font-semibold text-lg">Filters</h3>
+              <button
+                id="mobile-filter-close"
+                class="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              id="filterForm"
+              method="get"
+              class="grow overflow-y-auto"
+            >
+              <input type="hidden" name="page" value="1" />
+              <!-- Hidden sortBy field to maintain sort state -->
+              <input type="hidden" name="sortBy" value={sortBy} />
+
+              <div class="p-4 lg:p-6">
+                <CategoryFilters
+                  client:load
+                  attributes={attributes}
+                  currentFilters={currentFilters}
+                  categorySlug={slug}
+                />
+              </div>
+            </form>
+          </div>
+        </aside>
+
+        <div class="flex-1 min-w-0">
+          <div
+            class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-100"
+          >
+            <p class="text-sm font-medium text-gray-700">
+              Showing <span class="font-bold text-primary"
+                >{products.length}</span
+              > of{" "}
+              <span class="font-bold text-primary">{pagination.total}</span> products
+            </p>
+
+            <div class="flex items-center gap-3">
+              <label
+                for="sortBy"
+                class="text-sm font-medium text-gray-700 whitespace-nowrap"
+              >
+                Sort by:
+              </label>
+              <select
+                id="sortBy"
+                name="sortBy"
+                class="rounded-lg border-gray-300 text-sm focus:ring-2 focus:ring-primary focus:border-primary min-w-[140px]"
+              >
+                <option value="newest" selected={sortBy === "newest"}>
+                  Latest
+                </option>
+                <option value="price-asc" selected={sortBy === "price-asc"}>
+                  Price: Low to High
+                </option>
+                <option value="price-desc" selected={sortBy === "price-desc"}>
+                  Price: High to Low
+                </option>
+              </select>
+            </div>
+          </div>
+
+          {
+            error && (
+              <div class="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-lg mb-6">
+                {error}
+              </div>
+            )
+          }
+
+          {
+            products.length === 0 && !error && (
+              <div class="flex flex-col items-center justify-center py-16 px-4 bg-white rounded-lg shadow-sm border border-gray-100 text-center">
+                <Search className="w-16 h-16 text-gray-400 mb-4" />
+                <h3 class="text-xl font-bold text-gray-900 mb-2">
+                  No products found
+                </h3>
+                <p class="text-gray-500 mb-6 max-w-md">
+                  Try adjusting your filters to find what you're looking for.
+                </p>
+                <a
+                  href={`/categories/${category?.slug}`}
+                  class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Reset All Filters
+                </a>
+              </div>
+            )
+          }
+
+          {
+            products.length > 0 && (
+              <Fragment>
+                <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
+                  {products.map((product) => (
+                    <ProductCard product={product} currencySymbol={currencySymbol} />
+                  ))}
+                </div>
+
+                {pagination.totalPages > 1 && (
+                  <nav
+                    class="flex items-center justify-center mt-8 mb-20 lg:mb-8"
+                    aria-label="Pagination"
+                  >
+                    <div class="flex items-center space-x-1 bg-white rounded-lg shadow-sm border border-gray-100 p-2">
+                      <a
+                        href={
+                          pagination.page > 1
+                            ? getPaginationUrl(pagination.page - 1)
+                            : "#"
+                        }
+                        class:list={[
+                          "inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors",
+                          pagination.page > 1
+                            ? "border-gray-200 hover:bg-gray-50 text-gray-700"
+                            : "border-gray-100 text-gray-300 cursor-not-allowed",
+                        ]}
+                        aria-disabled={pagination.page <= 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </a>
+
+                      {generatePaginationLinks(
+                        pagination.page,
+                        pagination.totalPages
+                      ).map((pageNum) =>
+                        typeof pageNum === "number" ? (
+                          <a
+                            href={getPaginationUrl(pageNum)}
+                            class:list={[
+                              "inline-flex h-9 min-w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors",
+                              pagination.page === pageNum
+                                ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                                : "border-gray-200 hover:bg-gray-50 text-gray-700",
+                            ]}
+                            aria-current={
+                              pagination.page === pageNum ? "page" : undefined
+                            }
+                          >
+                            {pageNum}
+                          </a>
+                        ) : (
+                          <span class="inline-flex h-9 w-9 items-center justify-center text-sm text-gray-400">
+                            ...
+                          </span>
+                        )
+                      )}
+
+                      <a
+                        href={
+                          pagination.page < pagination.totalPages
+                            ? getPaginationUrl(pagination.page + 1)
+                            : "#"
+                        }
+                        class:list={[
+                          "inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors",
+                          pagination.page < pagination.totalPages
+                            ? "border-gray-200 hover:bg-gray-50 text-gray-700"
+                            : "border-gray-100 text-gray-300 cursor-not-allowed",
+                        ]}
+                        aria-disabled={pagination.page >= pagination.totalPages}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </a>
+                    </div>
+                  </nav>
+                )}
+              </Fragment>
+            )
+          }
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  function setupFilterInteractivity() {
+    const toggleBtn = document.getElementById("mobile-filter-toggle");
+    const closeBtn = document.getElementById("mobile-filter-close");
+    const filterSection = document.getElementById("filter-section");
+
+    if (!filterSection || !toggleBtn || !closeBtn) return;
+
+    const openFilters = () => {
+      filterSection.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+    };
+
+    const closeFilters = () => {
+      filterSection.classList.add("hidden");
+      document.body.style.overflow = "";
+    };
+
+    toggleBtn.addEventListener("click", openFilters);
+    closeBtn.addEventListener("click", closeFilters);
+
+    filterSection.addEventListener("click", (e) => {
+      if (e.target === filterSection) {
+        closeFilters();
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !filterSection.classList.contains("hidden")) {
+        closeFilters();
+      }
+    });
+  }
+
+  function setupSortFunctionality() {
+    const sortSelect = document.getElementById("sortBy");
+    if (!(sortSelect instanceof HTMLSelectElement)) return;
+
+    sortSelect.addEventListener("change", () => {
+      const url = new URL(window.location.href);
+      url.searchParams.set("sortBy", sortSelect.value);
+      url.searchParams.set("page", "1"); // Reset to first page when sorting
+      window.location.href = url.toString();
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setupFilterInteractivity();
+    setupSortFunctionality();
+  });
+
+  document.addEventListener("astro:page-load", () => {
+    setupFilterInteractivity();
+    setupSortFunctionality();
+  });
+</script>
+
+<script>
+  import { trackFbViewContent } from "@/lib/analytics";
+
+  type ProductAnalyticsData = {
+    id: string;
+    name: string;
+    price: number;
+  };
+
+  function trackCategoryView() {
+    const mainElement = document.querySelector<HTMLElement>(
+      "main[data-products-for-analytics]"
+    );
+    if (!mainElement || mainElement.dataset.viewContentTracked === "true")
+      return;
+
+    try {
+      const productsData: ProductAnalyticsData[] = JSON.parse(
+        mainElement.dataset.productsForAnalytics || "[]"
+      );
+      const categoryName = mainElement.dataset.categoryName || "Category";
+
+      if (productsData.length === 0) return;
+
+      const content_ids = productsData.map((p) => p.id);
+      const contents = productsData.map((p) => ({
+        id: p.id,
+        item_name: p.name,
+        quantity: 1,
+        item_price: p.price,
+      }));
+      const value = productsData.reduce((sum, p) => sum + p.price, 0);
+
+      trackFbViewContent({
+        content_ids,
+        content_name: `Product list for category: ${categoryName}`,
+        content_type: "product_group",
+        content_category: categoryName,
+        contents,
+        currency: (window as any).__CURRENCY_CODE__ || "BDT",
+        value,
+      });
+
+      mainElement.dataset.viewContentTracked = "true";
+    } catch (error) {
+      console.error("Failed to track category view content:", error);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", trackCategoryView);
+  document.addEventListener("astro:page-load", trackCategoryView);
+</script>

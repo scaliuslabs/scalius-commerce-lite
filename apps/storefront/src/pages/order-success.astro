@@ -1,0 +1,513 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import OrderSuccessButtons from "../components/OrderSuccessButtons";
+import { getOrderDetails, getLayoutData, type Order, type OrderItem, type LayoutData } from "@/lib/api";
+
+
+const orderId = Astro.url.searchParams.get("orderId");
+
+if (!orderId) {
+  return Astro.redirect("/");
+}
+
+let order: Order | null = null;
+let layoutData: LayoutData | null = null;
+let errorFetching = false;
+
+try {
+  // Parallel fetch: layout + order details
+  const [fetchedLayoutData, fetchedOrder] = await Promise.all([
+    getLayoutData(),
+    getOrderDetails(orderId),
+  ]);
+  layoutData = fetchedLayoutData;
+  order = fetchedOrder;
+  if (!order) {
+    errorFetching = true;
+    Astro.response.status = 404;
+  }
+} catch (e) {
+  console.error(`Error fetching order details for ID ${orderId}:`, e);
+  errorFetching = true;
+  Astro.response.status = 500;
+}
+
+if (errorFetching || !order) {
+  return Astro.redirect("/");
+}
+
+const orderItemsFromApi: OrderItem[] = order.items || [];
+const currencySymbol = layoutData?.currency?.symbol ?? "৳";
+---
+
+<Layout title="Order Successful" layoutData={layoutData}>
+  <main
+    class="container mx-auto px-4 py-8 max-w-2xl"
+    data-fb-order-details={JSON.stringify({
+      order: order,
+      items: orderItemsFromApi,
+    })}
+  >
+    <div class="text-center mb-8 animate-fade-in">
+      <div class="success-checkmark">
+        <div class="check-icon">
+          <span class="icon-line line-tip"></span>
+          <span class="icon-line line-long"></span>
+          <div class="icon-circle"></div>
+          <div class="icon-fix"></div>
+        </div>
+      </div>
+      <h1 class="text-2xl font-bold mb-2">Order Placed Successfully!</h1>
+      <p class="text-gray-600">
+        Thank you for your order, #{order.id}. We'll start processing it right
+        away.
+      </p>
+    </div>
+
+    <div class="space-y-6 animate-slide-up">
+      <!-- Order details sections -->
+      <div
+        class="bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+      >
+        <h2 class="text-lg font-medium mb-4 flex items-center">
+          <svg
+            class="w-5 h-5 mr-2 text-gray-700"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+            ></path>
+          </svg>
+          Order Details
+        </h2>
+        <div class="space-y-4">
+          <div class="flex justify-between">
+            <span class="text-gray-600">Order ID:</span>
+            <span class="font-medium">{order.id}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Order Status:</span>
+            <span
+              class="font-medium capitalize bg-primary/20 text-primary px-2 py-0.5 rounded-full text-sm"
+              >{order.status === "incomplete" ? "Processing" : order.status}</span
+            >
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Total Amount:</span>
+            <span class="font-medium">{currencySymbol}{order.totalAmount.toFixed(2)}</span>
+          </div>
+          {
+            order.shippingCharge > 0 && (
+              <div class="flex justify-between">
+                <span class="text-gray-600">Shipping Charge:</span>
+                <span class="font-medium">
+                  {currencySymbol}{order.shippingCharge.toFixed(2)}
+                </span>
+              </div>
+            )
+          }
+          {
+            (order.discountAmount ?? 0) > 0 && (
+              <div class="flex justify-between">
+                <span class="text-gray-600">Discount:</span>
+                <span class="font-medium text-primary">
+                  -{currencySymbol}{(order.discountAmount ?? 0).toFixed(2)}
+                </span>
+              </div>
+            )
+          }
+        </div>
+      </div>
+
+      <div
+        class="bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+      >
+        <h2 class="text-lg font-medium mb-4 flex items-center">
+          <svg
+            class="w-5 h-5 mr-2 text-gray-700"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+            ></path>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>
+          Shipping Details
+        </h2>
+        <div class="space-y-2">
+          <p>
+            <span class="text-gray-600">Name:</span>{" "}
+            <span class="font-medium">{order.customerName}</span>
+          </p>
+          <p>
+            <span class="text-gray-600">Phone:</span>{" "}
+            <span class="font-medium">{order.customerPhone}</span>
+          </p>
+          {
+            order.customerEmail && (
+              <p>
+                <span class="text-gray-600">Email:</span>{" "}
+                <span class="font-medium">{order.customerEmail}</span>
+              </p>
+            )
+          }
+          <p>
+            <span class="text-gray-600">Address:</span>{" "}
+            <span class="font-medium">{order.shippingAddress}</span>
+          </p>
+          <div class="flex flex-col items-center md:items-start">
+            <p class="flex items-center gap-1 text-sm">
+              <span class="text-gray-600">City:</span>{" "}
+              <span class="font-medium">{order.cityName || order.city}</span>
+            </p>
+            <p class="flex items-center gap-1 text-sm">
+              <span class="text-gray-600">Zone:</span>{" "}
+              <span class="font-medium">{order.zoneName || order.zone}</span>
+            </p>
+            {
+              (order.areaName || order.area) && (
+                <p class="flex items-center gap-1 text-sm">
+                  <span class="text-gray-600">Area:</span>{" "}
+                  <span class="font-medium">
+                    {order.areaName || order.area}
+                  </span>
+                </p>
+              )
+            }
+          </div>
+        </div>
+      </div>
+
+      <div
+        class="bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+      >
+        <h2 class="text-lg font-medium mb-4 flex items-center">
+          <svg
+            class="w-5 h-5 mr-2 text-gray-700"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+          </svg>
+          Order Items
+        </h2>
+        <div class="space-y-4">
+          {
+            orderItemsFromApi.map((item) => {
+              return (
+                <div class="flex justify-between items-center border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                  <div>
+                    <p class="font-medium">
+                      {item.productName || "Product Unavailable"}
+                    </p>
+                    {(item.variantSize || item.variantColor) && (
+                      <p class="text-xs text-gray-500 mt-1">
+                        {item.variantSize && (
+                          <span>Size: {item.variantSize}</span>
+                        )}
+                        {item.variantSize && item.variantColor && (
+                          <span> • </span>
+                        )}
+                        {item.variantColor && (
+                          <span>Color: {item.variantColor}</span>
+                        )}
+                      </p>
+                    )}
+                    <p class="text-sm text-gray-600 mt-1">
+                      Quantity: {item.quantity} × {currencySymbol}{item.price.toFixed(2)}
+                    </p>
+                  </div>
+                  <p class="font-medium">
+                    {currencySymbol}{(item.quantity * item.price).toFixed(2)}
+                  </p>
+                </div>
+              );
+            })
+          }
+        </div>
+      </div>
+    </div>
+
+    <OrderSuccessButtons client:load />
+  </main>
+</Layout>
+
+<script>
+  import { trackFbPurchase } from "@/lib/analytics";
+  import type { OrderItem, Order } from "@/lib/api";
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const mainElement = document.querySelector(
+      "main[data-fb-order-details]"
+    ) as HTMLElement | null;
+    if (!mainElement) {
+      console.error(
+        "FB Purchase: Could not find main element with data attribute."
+      );
+      return;
+    }
+
+    const orderDataAttr = mainElement.dataset.fbOrderDetails;
+    if (!orderDataAttr) {
+      console.error("FB Purchase: Missing data attribute on main element.");
+      return;
+    }
+
+    try {
+      const parsedData: { order: Order; items: OrderItem[] } =
+        JSON.parse(orderDataAttr);
+      const { order, items: orderItems } = parsedData;
+
+      setTimeout(() => {
+        if (typeof window.fbq === "function" && order && orderItems) {
+          // --- CAPI: Call trackFbPurchase with PII from the order object ---
+          trackFbPurchase(
+            {
+              order_id: order.id,
+              content_name: `Order ${order.id}`,
+              content_ids: orderItems.map(
+                (item) => item.variantId || item.productId
+              ),
+              content_type: "product_group",
+              contents: orderItems.map((item) => ({
+                id: item.variantId || item.productId,
+                quantity: item.quantity,
+                item_price: item.price,
+              })),
+              currency: (window as any).__CURRENCY_CODE__ || "BDT",
+              num_items: orderItems.reduce(
+                (sum, item) => sum + item.quantity,
+                0
+              ),
+              value: order.totalAmount,
+            },
+            {
+              em: order.customerEmail || undefined,
+              ph: order.customerPhone,
+            }
+          );
+          console.log("FB Purchase event tracked for order:", order.id);
+        } else {
+          if (!order || !orderItems) {
+            console.warn("Order data not available for FB Purchase tracking.");
+          } else {
+            console.warn("fbq not available when attempting to track Purchase");
+          }
+        }
+      }, 500);
+    } catch (error) {
+      console.error("FB Purchase: Error parsing data attribute:", error);
+    }
+  });
+</script>
+
+<style>
+  /* Success checkmark animation */
+  .success-checkmark {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 20px;
+    position: relative;
+  }
+
+  .success-checkmark .check-icon {
+    width: 80px;
+    height: 80px;
+    position: relative;
+    border-radius: 50%;
+    box-sizing: content-box;
+    border: 4px solid var(--color-primary);
+  }
+
+  .success-checkmark .check-icon::before {
+    top: 3px;
+    left: -2px;
+    width: 30px;
+    transform-origin: 100% 50%;
+    border-radius: 100px 0 0 100px;
+  }
+
+  .success-checkmark .check-icon::after {
+    top: 0;
+    left: 30px;
+    width: 60px;
+    transform-origin: 0 50%;
+    border-radius: 0 100px 100px 0;
+    animation: rotate-circle 4.25s ease-in;
+  }
+
+  .success-checkmark .check-icon::before,
+  .success-checkmark .check-icon::after {
+    content: "";
+    height: 100px;
+    position: absolute;
+    background: #ffffff;
+    transform: rotate(-45deg);
+  }
+
+  .success-checkmark .check-icon .icon-line {
+    display: block;
+    border-radius: 2px;
+    position: absolute;
+    z-index: 10;
+  }
+
+  .success-checkmark .check-icon .icon-line.line-tip {
+    top: 46px;
+    left: 14px;
+    width: 25px;
+    transform: rotate(45deg);
+    animation: icon-line-tip 0.75s;
+  }
+
+  .success-checkmark .check-icon .icon-line.line-long {
+    top: 38px;
+    right: 8px;
+    width: 47px;
+    transform: rotate(-45deg);
+    animation: icon-line-long 0.75s;
+  }
+
+  .success-checkmark .check-icon .icon-circle {
+    top: -4px;
+    left: -4px;
+    z-index: 10;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    position: absolute;
+    box-sizing: content-box;
+    border: 4px solid var(--color-primary);
+  }
+
+  .success-checkmark .check-icon .icon-fix {
+    top: 8px;
+    width: 5px;
+    left: 26px;
+    z-index: 1;
+    height: 85px;
+    position: absolute;
+    transform: rotate(-45deg);
+    background-color: #ffffff;
+  }
+
+  @keyframes rotate-circle {
+    0% {
+      transform: rotate(-45deg);
+    }
+    5% {
+      transform: rotate(-45deg);
+    }
+    12% {
+      transform: rotate(-405deg);
+    }
+    100% {
+      transform: rotate(-405deg);
+    }
+  }
+
+  @keyframes icon-line-tip {
+    0% {
+      width: 0;
+      left: 1px;
+      top: 19px;
+    }
+    54% {
+      width: 0;
+      left: 1px;
+      top: 19px;
+    }
+    70% {
+      width: 50px;
+      left: -8px;
+      top: 37px;
+    }
+    84% {
+      width: 17px;
+      left: 21px;
+      top: 48px;
+    }
+    100% {
+      width: 25px;
+      left: 14px;
+      top: 46px;
+    }
+  }
+
+  @keyframes icon-line-long {
+    0% {
+      width: 0;
+      right: 46px;
+      top: 54px;
+    }
+    65% {
+      width: 0;
+      right: 46px;
+      top: 54px;
+    }
+    84% {
+      width: 55px;
+      right: 0px;
+      top: 35px;
+    }
+    100% {
+      width: 47px;
+      right: 8px;
+      top: 38px;
+    }
+  }
+
+  /* Fade in animation */
+  .animate-fade-in {
+    animation: fadeIn 1s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Slide up animation */
+  .animate-slide-up {
+    animation: slideUp 0.8s ease-out forwards;
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Card hover effect */
+  .transition-shadow {
+    transition: box-shadow 0.3s ease;
+  }
+</style>

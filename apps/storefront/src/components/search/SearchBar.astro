@@ -1,0 +1,78 @@
+---
+// src/components/search/SearchBar.astro
+import { Search } from "lucide-react";
+
+interface Props {
+  containerClass?: string;
+  mobileView?: boolean;
+}
+
+const { containerClass = "", mobileView = false } = Astro.props;
+
+// Simplified classes to avoid "box-in-box" issues
+const baseButtonClass =
+  "group relative flex items-center w-full text-left cursor-text transition-all duration-200 ease-out outline-none overflow-hidden";
+const mobileClasses = "bg-muted h-12 px-4 rounded-xl active:scale-[0.98]";
+// Desktop: Card background with border, shadow on hover
+const desktopClasses =
+  "bg-card border border-input hover:border-primary/50 hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/20 h-11 px-4 rounded-full";
+
+const finalButtonClass = `${baseButtonClass} ${mobileView ? mobileClasses : desktopClasses}`;
+---
+
+<div class={`w-full ${containerClass}`}>
+  <button
+    type="button"
+    id={mobileView ? "mobile-search-trigger" : "desktop-search-trigger"}
+    class={finalButtonClass}
+    aria-label="Search products"
+  >
+    <!-- Icon -->
+    <Search
+      className={`shrink-0 transition-colors duration-200 ${
+        mobileView
+          ? "w-5 h-5 text-muted-foreground"
+          : "w-4 h-4 text-muted-foreground group-hover:text-foreground"
+      }`}
+    />
+
+    <!-- Placeholder Text -->
+    <span
+      class={`ml-3 text-sm truncate font-medium select-none flex-1 ${
+        mobileView ? "text-muted-foreground" : "text-muted-foreground group-hover:text-foreground"
+      }`}
+    >
+      {mobileView ? "Search for products..." : "Search store..."}
+    </span>
+
+    <!-- Keyboard Shortcut Hint (Desktop Only) -->
+    {
+      !mobileView && (
+        <div class="hidden xl:flex items-center gap-1 ml-auto pl-3 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity">
+          <kbd class="inline-flex h-5 items-center justify-center rounded bg-muted border border-input px-1.5 font-sans text-[10px] font-bold text-muted-foreground">
+            <span class="text-xs">⌘</span>K
+          </kbd>
+        </div>
+      )
+    }
+  </button>
+</div>
+
+<script>
+  const initSearchTriggers = () => {
+    const openSearch = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      document.dispatchEvent(new CustomEvent("open-search-palette"));
+    };
+
+    const desktopTrigger = document.getElementById("desktop-search-trigger");
+    const mobileTrigger = document.getElementById("mobile-search-trigger");
+
+    if (desktopTrigger) desktopTrigger.addEventListener("click", openSearch);
+    if (mobileTrigger) mobileTrigger.addEventListener("click", openSearch);
+  };
+
+  document.addEventListener("astro:page-load", initSearchTriggers);
+  document.addEventListener("DOMContentLoaded", initSearchTriggers);
+</script>

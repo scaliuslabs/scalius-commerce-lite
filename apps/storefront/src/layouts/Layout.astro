@@ -1,0 +1,221 @@
+---
+// src/layouts/Layout.astro
+import "../styles/global.css";
+import Header from "../components/header/header.astro";
+import Footer from "../components/Footer.astro";
+import { Toaster } from "@/components/ui/sonner";
+import { getLayoutData, type LayoutData } from "@/lib/api";
+import type { AnalyticsConfig } from "@/lib/api";
+import CommandPalette from "@/components/search/CommandPalette";
+import AuthModal from "@/components/AuthModal";
+
+interface Props {
+  title: string;
+  description?: string;
+  hideHeader?: boolean;
+  hideFooter?: boolean;
+  /** Pre-fetched layout data for parallel loading optimization */
+  layoutData?: LayoutData | null;
+}
+
+const {
+  title,
+  description = "",
+  hideHeader = false,
+  hideFooter = false,
+  layoutData: providedLayoutData,
+} = Astro.props;
+
+// Use provided layout data if available (parallel fetch), otherwise fetch here (backward compat)
+const layoutData = providedLayoutData ?? await getLayoutData();
+
+const analyticsScripts: AnalyticsConfig[] = layoutData?.analytics || [];
+const navigationData = layoutData?.navigation || [];
+
+// Provide sensible defaults if API fails to prevent blank header/footer
+const headerData = layoutData?.header ?? {
+  topBar: { text: "", isEnabled: false },
+  logo: { src: "", alt: "Store" },
+  favicon: { src: "/favicon.svg", alt: "" },
+  contact: { phone: "", text: "", isEnabled: false },
+  social: [],
+};
+
+const footerData = layoutData?.footer ?? {
+  logo: { src: "", alt: "Store" },
+  favicon: { src: "/favicon.svg", alt: "" },
+  tagline: "",
+  description: "",
+  copyrightText: "Your Store",
+  menus: [],
+  social: [],
+};
+
+const faviconUrl = headerData?.favicon?.src || "/favicon.svg";
+
+const currencySymbol = layoutData?.currency?.symbol ?? "৳";
+const currencyCode = layoutData?.currency?.code ?? "BDT";
+
+// Build dynamic CSS overrides from admin-configured theme colors.
+// Only non-empty color values are included.
+const themeColors = layoutData?.theme?.colors ?? {};
+const themeColorEntries = Object.entries(themeColors).filter(
+  ([, v]) => v && v.trim()
+);
+const themeStyleBlock =
+  themeColorEntries.length > 0
+    ? `:root, .site-root { ${themeColorEntries.map(([k, v]) => `--${k}: ${v}`).join("; ")}; }`
+    : "";
+
+const headScripts = analyticsScripts.filter(
+  (script) => script.location === "head"
+);
+const bodyStartScripts = analyticsScripts.filter(
+  (script) => script.location === "body_start"
+);
+const bodyEndScripts = analyticsScripts.filter(
+  (script) => script.location === "body_end"
+);
+
+// Derive preconnect origins from Cloudflare Worker runtime env (wrangler.jsonc vars).
+// Falls back to import.meta.env for environments where runtime isn't available.
+const runtimeEnv = Astro.locals.runtime?.env;
+const publicApiUrl = (runtimeEnv?.PUBLIC_API_URL as string) || import.meta.env.PUBLIC_API_URL || "";
+const cdnDomainUrl = (runtimeEnv?.CDN_DOMAIN_URL as string) || import.meta.env.CDN_DOMAIN_URL || "";
+
+const apiOrigin = publicApiUrl ? new URL(publicApiUrl).origin : null;
+const cdnDomain = cdnDomainUrl || null;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Preconnect: warm up DNS + TLS for API and CDN origins early -->
+    {apiOrigin && <link rel="dns-prefetch" href={apiOrigin} />}
+    {apiOrigin && <link rel="preconnect" href={apiOrigin} crossorigin />}
+    {cdnDomain && <link rel="dns-prefetch" href={`https://${cdnDomain}`} />}
+    {cdnDomain && <link rel="preconnect" href={`https://${cdnDomain}`} crossorigin />}
+
+
+    <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
+    <script is:inline define:vars={{ __apiBaseUrl: publicApiUrl || "/api/v1", __cdnDomain: cdnDomainUrl, __currencySymbol: currencySymbol, __currencyCode: currencyCode }}>
+      window.__API_BASE_URL__ = __apiBaseUrl;
+      window.__CDN_DOMAIN__ = __cdnDomain;
+      window.__CURRENCY_SYMBOL__ = __currencySymbol;
+      window.__CURRENCY_CODE__ = __currencyCode;
+    </script>
+
+    <!-- Stale Asset Detector -->
+    <script is:inline>
+      (function () {
+        var r = sessionStorage.getItem("_ar");
+        if (r && Date.now() - parseInt(r, 10) < 30000) return;
+
+        window.addEventListener(
+          "error",
+          function (e) {
+            var t = e.target;
+            if (!t || !t.tagName) return;
+            var tag = t.tagName.toUpperCase();
+            var url = t.src || t.href || "";
+            if (
+              (tag === "SCRIPT" || tag === "LINK") &&
+              url.indexOf("/_astro/") > -1
+            ) {
+              console.warn("[StaleAsset] 404:", url);
+              sessionStorage.setItem("_ar", Date.now().toString());
+              location.reload();
+            }
+          },
+          true
+        );
+
+        window.addEventListener("unhandledrejection", function (e) {
+          if (
+            e.reason &&
+            e.reason.message &&
+            e.reason.message.indexOf("dynamically imported") > -1 &&
+            e.reason.message.indexOf("/_astro/") > -1
+          ) {
+            console.warn("[StaleAsset] Import failed");
+            sessionStorage.setItem("_ar", Date.now().toString());
+            location.reload();
+          }
+        });
+      })();
+    </script>
+
+    <!-- Prevent browser from caching this HTML -->
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <link rel="icon" href={faviconUrl} />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+
+    {headScripts.map((script) => <Fragment set:html={script.config} />)}
+
+    <script is:inline>
+      // Stub for Facebook Pixel on the main thread
+      window.fbq = window.fbq || function() { (window.fbq.q = window.fbq.q || []).push(arguments) };
+    </script>
+    <script type="text/partytown" is:inline>
+      // Stub for Facebook Pixel INSIDE the Partytown Web Worker
+      // Prevents "TypeError: Cannot read properties of undefined (reading 'apply')" 
+      // when Partytown proxies fbq() calls here but the real script hasn't loaded.
+      self.fbq = self.fbq || function() { (self.fbq.q = self.fbq.q || []).push(arguments) };
+    </script>
+    <script is:inline>
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const fbclid = urlParams.get("fbclid");
+        if (fbclid) {
+          const creationTime = Date.now();
+          const fbcValue = `fb.1.${creationTime}.${fbclid}`;
+          document.cookie = `_fbc=${fbcValue}; path=/; max-age=7776000`;
+          sessionStorage.setItem("scalius_fbc", fbcValue);
+        }
+      } catch (e) {
+        console.warn("Could not process fbclid:", e);
+      }
+    </script>
+
+    {themeStyleBlock && <style set:html={themeStyleBlock} />}
+
+    <slot name="head" />
+  </head>
+  <body class="flex flex-col min-h-screen site-root">
+    {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
+
+    <div class="site-wrapper grow">
+      {
+        !hideHeader && (
+          <Header headerData={headerData} navigation={navigationData} />
+        )
+      }
+      <main class="w-full h-full mb-3">
+        <slot />
+      </main>
+    </div>
+
+    {!hideFooter && <Footer footerData={footerData} />}
+
+    <Toaster position="top-right" expand={false} richColors closeButton />
+
+    <CommandPalette client:idle />
+    <AuthModal client:idle />
+
+    {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
+  </body>
+</html>

@@ -1,0 +1,197 @@
+---
+// src/pages/[slug].astro
+// Dynamic route for CMS pages
+// IMPORTANT: Validates slug BEFORE making API calls to prevent unnecessary requests
+
+import Layout from "../layouts/Layout.astro";
+import RichContent from "../components/RichContent.astro"; // CORRECTED: Path to RichContent
+import { getPageBySlug, getLayoutData } from "../lib/api";
+import { processShortcodes } from "../lib/shortcodes";
+
+// ... rest of the file is the same as in step 1 ...
+const { slug } = Astro.params;
+
+// === EARLY VALIDATION ===
+// Return 404 immediately for invalid slugs WITHOUT making API calls.
+// This prevents unnecessary API requests from reaching the backend.
+
+// 1. No slug provided
+if (!slug) {
+  return Astro.redirect("/404");
+}
+
+// 2. Reject file extensions (these should be served from /public or other routes)
+// Common extensions that might accidentally fall through to this catch-all route
+const hasFileExtension = /\.[a-zA-Z0-9]{2,5}$/.test(slug);
+if (hasFileExtension) {
+  return new Response(null, { status: 404 });
+}
+
+// 3. Reject known non-page paths that might slip through routing
+const invalidSlugs = [
+  "api",
+  "favicon",
+  "_astro",
+  "_worker",
+  "assets",
+  "images",
+  "fonts",
+  "static",
+];
+if (invalidSlugs.some((invalid) => slug.startsWith(invalid))) {
+  return new Response(null, { status: 404 });
+}
+
+// 4. Validate slug format (only allow lowercase letters, numbers, hyphens)
+// Most CMS systems use clean URL slugs - reject anything weird
+const validSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+if (!validSlugPattern.test(slug)) {
+  return new Response(null, { status: 404 });
+}
+
+// === NOW SAFE TO MAKE API CALL ===
+// Parallel fetch: layout + page data
+const [layoutData, page] = await Promise.all([
+  getLayoutData(),
+  getPageBySlug(slug),
+]);
+
+if (!page) {
+  return Astro.redirect("/404");
+}
+
+const title = page.metaTitle || page.title;
+const description = page.metaDescription || "";
+
+let processedContent = page.content;
+if (page.content) {
+  try {
+    processedContent = await processShortcodes(page.content);
+  } catch (error) {
+    console.error(`Error processing shortcodes for page "${slug}":`, error);
+    processedContent = page.content;
+  }
+}
+
+const hasProductShortcode = processedContent.includes(
+  'class="product-shortcode-container"'
+);
+---
+
+<Layout
+  title={title}
+  description={description}
+  hideHeader={page.hideHeader}
+  hideFooter={page.hideFooter}
+  layoutData={layoutData}
+>
+  {
+    /* 
+  Layout Logic:
+  - If widgets exist → Full Width Layout (widgets control their own width, content is constrained).
+  - If no widgets → Contained Layout (everything is constrained).
+*/
+  }
+  {
+    (() => {
+      const widgets = page.widgets || [];
+      const isFullWidth = widgets.length > 0;
+
+      return (
+        <div
+          class={isFullWidth ? "w-full" : "w-full max-w-7xl mx-auto px-4 py-8"}
+        >
+          <div class={isFullWidth ? "max-w-7xl mx-auto px-4" : ""}>
+            <div class="text-center mb-8">
+              {/* Conditionally render the title based on the new flag */}
+              {!page.hideTitle && (
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-3 tracking-tight">
+                  {page.title}
+                </h1>
+              )}
+            </div>
+
+            {/* Rich Content - Always Contained */}
+            <div class="w-full">
+              <RichContent
+                content={processedContent}
+                className="prose prose-lg prose-gray max-w-none w-full prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl"
+              />
+            </div>
+
+            <div class="text-center mt-10 pt-6 border-t border-gray-100">
+              <a
+                href="/"
+                class="inline-flex items-center px-4 py-2 text-gray-500 hover:text-gray-900 transition-colors text-sm font-medium"
+              >
+                <svg
+                  class="w-4 h-4 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                  />
+                </svg>
+                Back to Home
+              </a>
+            </div>
+          </div>
+
+          {/* Widgets - Full Width if Layout is Full Width */}
+          {widgets.length > 0 && (
+            <div class="w-full mt-12">
+              {widgets.map((widget) => (
+                <div class="widget-container mb-2">
+                  {widget.cssContent && <style set:html={widget.cssContent} />}
+                  <div set:html={widget.htmlContent} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    })()
+  }
+  {
+    hasProductShortcode && (
+      <script>import "../scripts/hydrateProductShortcodes.ts";</script>
+    )
+  }
+</Layout>
+<style>
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  @media (min-width: 640px) {
+    .container {
+      max-width: 640px;
+    }
+  }
+  @media (min-width: 768px) {
+    .container {
+      max-width: 768px;
+    }
+  }
+  @media (min-width: 1024px) {
+    .container {
+      max-width: 1024px;
+    }
+  }
+  @media (min-width: 1280px) {
+    .container {
+      max-width: 1280px;
+    }
+  }
+  @media (min-width: 1536px) {
+    .container {
+      max-width: 1536px;
+    }
+  }
+</style>

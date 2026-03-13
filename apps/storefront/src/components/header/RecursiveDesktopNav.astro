@@ -1,0 +1,59 @@
+---
+import type { NavigationItem } from "@/lib/api";
+import { ChevronRight } from "lucide-react";
+
+interface Props {
+  items: NavigationItem[];
+  depth?: number;
+}
+
+const { items = [], depth = 0 } = Astro.props;
+---
+
+<ul
+  class="recursive-nav-list min-w-60 py-2 bg-card rounded-2xl shadow-xl border border-border"
+>
+  {
+    Array.isArray(items) &&
+      items.map((item) => (
+        <li class="recursive-nav-item relative">
+          <a
+            href={item.href || "#"}
+            class="flex items-center justify-between px-4 py-2.5 mx-1.5 rounded-lg text-sm font-medium text-foreground transition-colors duration-200 outline-none hover:text-foreground hover:bg-muted focus-visible:bg-muted"
+          >
+            <span class="flex-1 block truncate pr-4">{item.title}</span>
+            {item.subMenu && item.subMenu.length > 0 && (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200" />
+            )}
+          </a>
+
+          {item.subMenu && item.subMenu.length > 0 && (
+            <div class="recursive-nav-flyout absolute left-full top-0 ml-0.5 opacity-0 invisible -translate-x-2 transition-all duration-200 ease-out z-50">
+              {/* Invisible Bridge to prevent closing on gap crossing */}
+              <div class="absolute -left-2 top-0 bottom-0 w-4 bg-transparent -z-10" />
+
+              <Astro.self items={item.subMenu} depth={depth + 1} />
+            </div>
+          )}
+        </li>
+      ))
+  }
+</ul>
+
+<style>
+  /* 
+    Strict Child Selectors for Recursive Logic 
+    We use standard CSS to ensure only the direct child flies out, 
+    preventing the "all levels open" bug caused by nested Tailwind groups.
+  */
+
+  .recursive-nav-item:hover > .recursive-nav-flyout {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+  }
+
+  .recursive-nav-item:hover > a :global(svg) {
+    color: var(--foreground);
+  }
+</style>

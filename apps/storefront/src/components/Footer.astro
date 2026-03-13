@@ -1,0 +1,327 @@
+---
+// src/components/Footer.astro
+// Footer component - receives data from Layout.astro
+import { Image, getImage } from "astro:assets";
+import type {
+  FooterData,
+  FooterMenu,
+  SocialLink,
+  FooterMenuLink,
+} from "@/lib/api";
+import RecursiveFooterLink from "./RecursiveFooterLink.astro";
+
+interface Props {
+  footerData: FooterData;
+}
+
+const { footerData } = Astro.props;
+
+const logo = footerData?.logo || { src: "/logo.svg", alt: "Store Logo" };
+const favicon = footerData?.favicon;
+const tagline = footerData?.tagline || "";
+const description = footerData?.description || "";
+const copyrightText = footerData?.copyrightText || "";
+const rawMenus: FooterMenu[] = footerData?.menus || [];
+const socialRaw: SocialLink[] = footerData?.social || [];
+
+const social = await Promise.all(
+  socialRaw.map(async (item) => {
+    if (item.iconUrl && !item.iconUrl.endsWith(".svg")) {
+      try {
+        const opt = await getImage({
+          src: item.iconUrl,
+          width: 20,
+          height: 20,
+          format: "avif",
+        });
+        return { ...item, optimizedIconUrl: opt.src };
+      } catch (e) {
+        return { ...item, optimizedIconUrl: item.iconUrl };
+      }
+    }
+    return { ...item, optimizedIconUrl: item.iconUrl };
+  })
+);
+
+/**
+ * Convert flat menu structure to nested.
+ */
+function convertFlatMenuToNested(menu: FooterMenu): FooterMenuLink[] {
+  // If menu already has nested links, use them
+  if (menu.links && Array.isArray(menu.links) && menu.links.length > 0) {
+    return menu.links;
+  }
+
+  // If no flat structure, return empty array
+  if (!menu.items || !menu.rootIds) {
+    return [];
+  }
+
+  const items = menu.items;
+  const rootIds = menu.rootIds;
+
+  // Recursively build nested structure from flat items
+  function buildNestedLinks(itemIds: string[]): FooterMenuLink[] {
+    return itemIds
+      .map((id) => {
+        const item = items[id];
+        if (!item) return null;
+
+        const link: FooterMenuLink = {
+          id: item.id,
+          title: item.title,
+          href: item.href || "#",
+        };
+
+        // Recursively add children if any
+        if (item.childIds && item.childIds.length > 0) {
+          link.subMenu = buildNestedLinks(item.childIds);
+        }
+
+        return link;
+      })
+      .filter((link): link is FooterMenuLink => link !== null);
+  }
+
+  return buildNestedLinks(rootIds);
+}
+
+// Convert all menus to have nested links structure
+const menus: Array<FooterMenu & { links: FooterMenuLink[] }> = rawMenus.map(
+  (menu) => ({
+    ...menu,
+    links: convertFlatMenuToNested(menu),
+  })
+);
+
+const menuCount = menus.length;
+let menuGridCols = "grid-cols-2"; // Default to 2 columns on mobile
+if (menuCount >= 3) menuGridCols = "grid-cols-2 lg:grid-cols-3";
+if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
+---
+
+<footer class="relative bg-primary text-primary-foreground overflow-hidden">
+  <div class="relative mx-auto w-full max-w-7xl px-4 sm:px-6 py-5 lg:py-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5">
+      <div class="lg:col-span-4">
+        <a
+          href="/"
+          class="group inline-block transform transition-transform hover:scale-105 duration-300"
+        >
+          {
+            logo.src ? (
+              <Image
+                src={logo.src}
+                alt={logo.alt}
+                width={344}
+                height={256}
+                format="avif"
+                loading="lazy"
+                decoding="async"
+                class="h-12 sm:h-14 w-auto object-contain drop-shadow-lg"
+              />
+            ) : (
+              <div class="h-12 sm:h-14 w-auto bg-gray-700 flex items-center justify-center px-4 rounded">
+                <span class="text-white text-sm">{logo.alt}</span>
+              </div>
+            )
+          }
+        </a>
+        {
+          tagline && (
+            <p class="mt-3 text-base font-medium text-white/90 leading-relaxed max-w-md">
+              {tagline}
+            </p>
+          )
+        }
+
+        {/* Rich text description from API */}
+        {
+          description && (
+            <div
+              class="mt-2 text-base text-white/80 leading-relaxed max-w-md prose prose-base prose-invert prose-p:my-1 prose-p:leading-relaxed prose-a:text-white prose-a:underline hover:prose-a:text-white/90"
+              set:html={description}
+            />
+          )
+        }
+      </div>
+
+      <div class="lg:col-span-8">
+        <div class={`grid ${menuGridCols} gap-8 sm:gap-10`}>
+          {
+            menus.map((menu) => (
+              <div class="flex flex-col gap-4">
+                <h2 class="text-sm font-bold tracking-widest text-white uppercase opacity-90">
+                  {menu.title}
+                </h2>
+
+                <RecursiveFooterLink links={menu.links} />
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      {/* Mobile Social Links - Positioned below menus */}
+      {
+        social.length > 0 && (
+          <div class="lg:col-span-12 lg:hidden flex justify-center mt-8 w-full">
+            <div class="flex items-center gap-4 flex-wrap">
+              {social.map((item: SocialLink & { optimizedIconUrl?: string | null }) => {
+                if (!item.url) return null;
+                const displayTitle = item.label || item.platform || "Social";
+                const href = item.url.startsWith("http")
+                  ? item.url
+                  : `https://${item.url}`;
+
+                return (
+                  <a
+                    href={href}
+                    class="group text-white transition-all duration-300"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={displayTitle}
+                  >
+                    <div class="relative p-2.5 rounded-full bg-white/10 backdrop-blur-sm group-hover:bg-white/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
+                      {item.optimizedIconUrl ? (
+                        <img
+                          src={item.optimizedIconUrl}
+                          alt={displayTitle}
+                          class="w-4 h-4 sm:w-5 sm:h-5 object-contain"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span class="w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-bold text-sm uppercase">
+                          {displayTitle.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <span class="sr-only">{displayTitle}</span>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )
+      }
+    </div>
+
+    <div class="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-white/20">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
+        <span
+          class="text-sm text-white/80 font-normal text-center sm:text-left [text-shadow:0_1px_2px_rgba(0,0,0,0.3)]"
+        >
+          © {new Date().getFullYear()}
+          <span class="text-white font-semibold ml-1">{copyrightText}</span>.
+          All rights reserved.
+        </span>
+
+        {
+          social.length > 0 && (
+            <div class="hidden lg:flex items-center gap-5 flex-wrap">
+              {social.map((item: SocialLink & { optimizedIconUrl?: string | null }) => {
+                if (!item.url) return null;
+                const displayTitle = item.label || item.platform || "Social";
+                const href = item.url.startsWith("http")
+                  ? item.url
+                  : `https://${item.url}`;
+
+                return (
+                  <a
+                    href={href}
+                    class="group text-white transition-all duration-300"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={displayTitle}
+                  >
+                    <div class="relative p-2.5 rounded-full bg-white/10 backdrop-blur-sm group-hover:bg-white/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
+                      {item.optimizedIconUrl ? (
+                        <img
+                          src={item.optimizedIconUrl}
+                          alt={displayTitle}
+                          class="w-5 h-5 object-contain"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span class="w-5 h-5 flex items-center justify-center font-bold text-sm uppercase">
+                          {displayTitle.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <span class="sr-only">{displayTitle}</span>
+                  </a>
+                );
+              })}
+            </div>
+          )
+        }
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script
+  is:inline
+  define:vars={{
+    siteName: footerData?.copyrightText || "Your Store",
+    socialData: JSON.stringify(social),
+    faviconData: favicon ? JSON.stringify(favicon) : null,
+  }}
+>
+  const siteSettings = {
+    siteName: siteName,
+    social: JSON.parse(socialData),
+    favicon: faviconData ? JSON.parse(faviconData) : null,
+  };
+
+  try {
+    localStorage.setItem("siteSettings", JSON.stringify(siteSettings));
+
+    // Only update favicon if it's a valid absolute URL (CDN), not a fallback
+    // This prevents overwriting the correct favicon set by Layout.astro
+    if (
+      siteSettings.favicon &&
+      siteSettings.favicon.src &&
+      siteSettings.favicon.src.startsWith("http")
+    ) {
+      const existingFavicon = document.querySelector('link[rel="icon"]');
+      if (existingFavicon) {
+        existingFavicon.href = siteSettings.favicon.src;
+      } else {
+        const newFavicon = document.createElement("link");
+        newFavicon.rel = "icon";
+        newFavicon.href = siteSettings.favicon.src;
+        document.head.appendChild(newFavicon);
+      }
+    }
+  } catch (e) {
+    console.error("Error storing site settings in localStorage:", e);
+  }
+</script>
+
+<style>
+  html,
+  body {
+    min-height: 100%;
+    background-color: #ffffff;
+  }
+
+  footer {
+    /* Edge-to-edge: Add safe area padding using Chrome's optimized pattern */
+    padding-bottom: var(--safe-area-max-inset-bottom);
+    margin-bottom: calc(
+      env(safe-area-inset-bottom, 0px) - var(--safe-area-max-inset-bottom)
+    );
+  }
+
+  footer::after {
+    content: "";
+    position: absolute;
+    bottom: calc(-100vh - env(safe-area-inset-bottom, 0px));
+    left: 0;
+    right: 0;
+    height: 100vh;
+    background-color: oklch(0.53 0.14 150);
+    z-index: -20;
+  }
+</style>

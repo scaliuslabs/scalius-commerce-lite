@@ -1,0 +1,234 @@
+---
+import type { NavigationItem, SocialLink } from "@/lib/api";
+import { X, ChevronDown, Phone, ChevronRight } from "lucide-react";
+
+interface Props {
+  navigation: NavigationItem[];
+  contact: { phone: string; text: string };
+  social?: SocialLink[];
+}
+
+const { navigation = [], contact, social = [] } = Astro.props;
+
+// Helper function to generate unique IDs for nested items
+function generateMenuId(item: NavigationItem, prefix: string = ""): string {
+  const baseId = item.id || item.title.toLowerCase().replace(/\s+/g, "-");
+  return prefix ? `${prefix}-${baseId}` : baseId;
+}
+---
+
+<div
+  id="mobile-menu-overlay"
+  class="fixed inset-0 z-60 bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-500 lg:hidden"
+  aria-hidden="true"
+>
+</div>
+
+<div
+  id="mobile-menu-panel"
+  class="fixed top-0 left-0 z-70 h-dvh w-[90vw] max-w-[380px] bg-card text-foreground shadow-2xl transform -translate-x-full transition-transform duration-500 cubic-bezier(0.19, 1, 0.22, 1) lg:hidden flex flex-col border-r border-border"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Mobile Menu"
+>
+  <div
+    class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03)] z-10"
+  >
+    <h2 class="text-base font-bold tracking-tight text-foreground uppercase">
+      Menu
+    </h2>
+    <button
+      id="mobile-menu-close"
+      type="button"
+      class="p-2 -mr-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors active:scale-95"
+      aria-label="Close menu"
+    >
+      <X className="h-5 w-5 stroke-[1.5]" />
+    </button>
+  </div>
+
+  <nav
+    class="flex-1 overflow-y-auto overscroll-contain px-5 py-3 scrollbar-hide relative group"
+    id="mobile-nav-container"
+  >
+    <ul class="space-y-1">
+      {
+        Array.isArray(navigation) &&
+          navigation.map((item) => {
+            const menuId = generateMenuId(item);
+            const hasSubMenu = item.subMenu && item.subMenu.length > 0;
+            return (
+              <li>
+                {hasSubMenu ? (
+                  <div class="group/item">
+                    <div class="flex items-center justify-between">
+                      <a
+                        href={item.href || "#"}
+                        class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5"
+                      >
+                        {item.title}
+                      </a>
+                      <button
+                        type="button"
+                        class="flex items-center justify-center w-10 h-10 -mr-2 text-muted-foreground hover:text-foreground active:bg-muted rounded-full transition-all"
+                        data-menu-toggle={menuId}
+                        aria-expanded="false"
+                        aria-label={`Toggle ${item.title} submenu`}
+                      >
+                        <ChevronDown className="h-4.5 w-4.5 stroke-2 transition-transform duration-300 pointer-events-none" />
+                      </button>
+                    </div>
+
+                    <div
+                      class="hidden overflow-hidden transition-[height] duration-300 ease-in-out"
+                      data-submenu={menuId}
+                    >
+                      <div class="border-l-2 border-border ml-2.5 pl-3 mt-1 mb-2 space-y-1">
+                        <ul class="space-y-0.5">
+                          {(item.subMenu || []).map((level2Item) => {
+                            const level2Id = generateMenuId(level2Item, menuId);
+                            const hasLevel2Sub =
+                              level2Item.subMenu &&
+                              level2Item.subMenu.length > 0;
+                            return (
+                              <li>
+                                {hasLevel2Sub ? (
+                                  <div>
+                                    <div class="flex items-center justify-between group/sub">
+                                      <a
+                                        href={level2Item.href || "#"}
+                                        class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2"
+                                      >
+                                        {level2Item.title}
+                                      </a>
+                                      <button
+                                        type="button"
+                                        class="flex items-center justify-center w-9 h-9 -mr-1 text-muted-foreground hover:text-foreground rounded-full transition-colors"
+                                        data-menu-toggle={level2Id}
+                                        aria-expanded="false"
+                                      >
+                                        <ChevronDown className="h-4 w-4 stroke-2 transition-transform duration-300 pointer-events-none" />
+                                      </button>
+                                    </div>
+
+                                    <div class="hidden" data-submenu={level2Id}>
+                                      <ul class="space-y-0.5 border-l border-border ml-2 pl-3 mt-0.5 py-1">
+                                        {(level2Item.subMenu || []).map(
+                                          (level3Item) => {
+                                            return (
+                                              <li>
+                                                <a
+                                                  href={level3Item.href || "#"}
+                                                  class="block text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors py-1.5"
+                                                >
+                                                  {level3Item.title}
+                                                </a>
+                                              </li>
+                                            );
+                                          }
+                                        )}
+                                      </ul>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <a
+                                    href={level2Item.href || "#"}
+                                    class="block text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2"
+                                  >
+                                    {level2Item.title}
+                                  </a>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <a
+                    href={item.href || "#"}
+                    class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5"
+                  >
+                    {item.title}
+                  </a>
+                )}
+              </li>
+            );
+          })
+      }
+    </ul>
+
+    <div class="h-4"></div>
+  </nav>
+
+  <!-- Scroll Hint Shadow (Visible when content overflows) -->
+  <div
+    class="absolute bottom-[calc(88px+env(safe-area-inset-bottom))] left-0 right-0 h-8 bg-linear-to-t from-card to-transparent pointer-events-none z-10 lg:hidden"
+  >
+  </div>
+
+  <div class="border-t border-border bg-muted p-4 space-y-3 shrink-0 z-20">
+    {
+      contact.phone && (
+        <a
+          href={`tel:${contact.phone}`}
+          class="flex items-center gap-3 p-3 bg-card border border-border rounded-xl shadow-sm active:scale-[0.99] transition-all group hover:border-primary/50"
+        >
+          <div class="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+            <Phone className="h-4.5 w-4.5 fill-current" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-[10px] text-muted-foreground font-bold uppercase tracking-wider leading-none mb-0.5">
+              Call Support
+            </p>
+            <p class="text-sm font-bold text-foreground tracking-tight truncate">
+              {contact.phone}
+            </p>
+          </div>
+          <div class="w-8 h-8 rounded-full bg-muted flex items-center justify-center group-hover:bg-accent transition-colors">
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
+          </div>
+        </a>
+      )
+    }
+
+    {
+      social && social.length > 0 && (
+        <div class="flex items-center justify-center gap-3">
+          {social.map((item) => {
+            if (!item.url) return null;
+            const displayTitle = item.label || item.platform || "Social";
+            const href = item.url.startsWith("http")
+              ? item.url
+              : `https://${item.url}`;
+
+            return (
+              <a
+                href={href}
+                class="flex items-center justify-center h-9 w-9 rounded-full bg-card border border-input text-muted-foreground hover:border-primary/50 hover:text-foreground hover:shadow-sm transition-all"
+                target="_blank"
+                rel="noopener noreferrer"
+                title={displayTitle}
+              >
+                {item.iconUrl ? (
+                  <img
+                    src={item.iconUrl}
+                    alt={displayTitle}
+                    class="w-4 h-4 object-contain"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span class="text-[10px] font-bold uppercase">
+                    {displayTitle.charAt(0)}
+                  </span>
+                )}
+                <span class="sr-only">{displayTitle}</span>
+              </a>
+            );
+          })}
+        </div>
+      )
+    }
+  </div>
+</div>

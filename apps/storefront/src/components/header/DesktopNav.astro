@@ -1,0 +1,302 @@
+---
+import type { NavigationItem } from "@/lib/api";
+import { ChevronDown } from "lucide-react";
+import RecursiveDesktopNav from "./RecursiveDesktopNav.astro";
+
+interface Props {
+  navigation: NavigationItem[];
+  id?: string;
+}
+
+const { navigation = [], id = "desktop-nav" } = Astro.props;
+const items = Array.isArray(navigation) ? navigation : [];
+
+const navItemClass =
+  "group/nav relative flex items-center justify-center px-4 py-2 rounded-full text-sm font-bold text-foreground bg-muted hover:bg-accent hover:text-foreground transition-all duration-200 ease-out cursor-pointer tracking-wide whitespace-nowrap nav-item hover:scale-[1.02] active:scale-[0.98]";
+const dropdownPanelClass =
+  "absolute top-full left-0 mt-2 pt-2 w-56 opacity-0 invisible group-hover/nav:opacity-100 group-hover/nav:visible transition-all duration-200 transform origin-top-left scale-95 group-hover/nav:scale-100 z-[100]";
+---
+
+<nav
+  id={id}
+  aria-label="Main navigation"
+  class="hidden lg:block w-full h-full data-nav-container"
+>
+  <ul
+    class="flex items-center justify-center gap-0.5 h-full w-full opacity-0 transition-opacity duration-300"
+    data-nav-list
+  >
+    {
+      items.map((item, index) => (
+        <li class={navItemClass} data-index={index}>
+          <a
+            href={item.href || "#"}
+            class="flex items-center gap-1.5 w-full h-full"
+          >
+            <span>{item.title}</span>
+            {item.subMenu && item.subMenu.length > 0 && (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover/nav:text-foreground transition-transform duration-200 group-hover/nav:-rotate-180" />
+            )}
+          </a>
+
+          {item.subMenu && item.subMenu.length > 0 && (
+            <div class={dropdownPanelClass}>
+              <div class="absolute -top-2 left-0 right-0 h-2 bg-transparent" />
+              <RecursiveDesktopNav items={item.subMenu} />
+            </div>
+          )}
+        </li>
+      ))
+    }
+
+    <li class={`${navItemClass} hidden`} data-more-nav-item>
+      <button class="flex items-center gap-1.5 w-full h-full outline-none">
+        <span>More</span>
+        <ChevronDown
+          className="h-3.5 w-3.5 text-gray-400 group-hover/nav:text-gray-600 transition-transform duration-200 group-hover/nav:-rotate-180"
+        />
+      </button>
+
+      <div class={dropdownPanelClass}>
+        <div class="absolute -top-2 left-0 right-0 h-2 bg-transparent"></div>
+        <ul
+          data-more-nav-container
+          class="bg-card rounded-xl shadow-xl border border-border p-2 min-w-[200px]"
+        >
+        </ul>
+      </div>
+    </li>
+  </ul>
+</nav>
+
+<script>
+  class DynamicNav {
+    container: HTMLElement;
+    navList: HTMLElement;
+    moreItem: HTMLElement;
+    moreContainer: HTMLElement;
+    originalItems: HTMLElement[] = [];
+
+    constructor(container: HTMLElement) {
+      this.container = container;
+      this.navList = container.querySelector("[data-nav-list]") as HTMLElement;
+      this.moreItem = container.querySelector(
+        "[data-more-nav-item]"
+      ) as HTMLElement;
+      this.moreContainer = container.querySelector(
+        "[data-more-nav-container]"
+      ) as HTMLElement;
+
+      if (!this.navList || !this.moreItem || !this.moreContainer) return;
+
+      this.originalItems = Array.from(
+        this.navList.querySelectorAll(".nav-item:not([data-more-nav-item])")
+      ) as HTMLElement[];
+
+      this.updateNav = this.updateNav.bind(this);
+
+      this.init();
+    }
+
+    init() {
+      // Use ResizeObserver for robust size detection
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect.width > 0) {
+            this.updateNav();
+          }
+        }
+      });
+      observer.observe(this.container);
+
+      requestAnimationFrame(this.updateNav);
+
+      // Safety: Ensure nav becomes visible even if logic fails or hangs
+      setTimeout(() => {
+        this.navList.classList.remove("opacity-0");
+      }, 1000);
+    }
+
+    updateNav() {
+      if (!this.navList || !this.moreItem) return;
+
+      if (this.container.offsetParent === null) {
+        return;
+      }
+
+      this.originalItems.forEach((item) => {
+        this.navList.insertBefore(item, this.moreItem);
+        // Reset styles for top-bar look
+        item.classList.add(
+          "px-4",
+          "lg:px-4",
+          "py-2",
+          "rounded-full",
+          "text-sm",
+          "font-bold",
+          "bg-muted"
+        );
+        item.classList.remove(
+          "w-full",
+          "px-4",
+          "py-2.5",
+          "hover:bg-accent",
+          "text-foreground",
+          "rounded-lg"
+        );
+      });
+
+      this.moreItem.classList.add("hidden");
+
+      const containerWidth = this.navList.offsetWidth;
+
+      // If width is 0, we can't calculate.
+      if (containerWidth === 0) return;
+
+      this.moreItem.classList.remove("hidden");
+      const moreButtonWidth = this.moreItem.offsetWidth || 80;
+      this.moreItem.classList.add("hidden");
+
+      // OPTIMIZATION: Batch ALL DOM reads before any DOM writes to prevent Forced Reflow
+      const itemsWidths = this.originalItems.map(item => item.offsetWidth);
+
+      let currentWidth = 0;
+      const gap = 4; // gap-1 is 4px
+      let overflowStartIndex = -1;
+
+      for (let i = 0; i < this.originalItems.length; i++) {
+        const itemWidth = itemsWidths[i];
+
+        // Check if adding this item exceeds container
+        const isLast = i === this.originalItems.length - 1;
+        const availableSpace = isLast
+          ? containerWidth
+          : containerWidth - moreButtonWidth - gap;
+
+        if (currentWidth + itemWidth > availableSpace) {
+          overflowStartIndex = i;
+          break;
+        }
+
+        currentWidth += itemWidth + gap;
+      }
+
+      // DOM WRITES (No more offsetWidth layout reads after this point)
+      if (overflowStartIndex !== -1) {
+        this.moreItem.classList.remove("hidden");
+        const itemsToMove = this.originalItems.slice(overflowStartIndex);
+
+        itemsToMove.forEach((item) => {
+          // Adapt styles for vertical list inside dropdown
+          item.classList.remove(
+            "px-4",
+            "lg:px-4",
+            "py-2",
+            "rounded-full",
+            "text-sm",
+            "font-bold",
+            "bg-muted"
+          );
+          item.classList.add(
+            "w-full",
+            "block",
+            "px-4",
+            "py-2.5",
+            "hover:bg-accent",
+            "text-foreground",
+            "rounded-lg",
+            "text-sm"
+          );
+          this.moreContainer.appendChild(item);
+        });
+      }
+
+      this.navList.classList.remove("opacity-0");
+    }
+  }
+
+  function initDynamicNavs() {
+    const navs = document.querySelectorAll(".data-nav-container");
+    navs.forEach((nav) => {
+      new DynamicNav(nav as HTMLElement);
+    });
+
+    // Special handling for the sticky/compact nav which might start hidden
+    // We need to re-calculate when it becomes visible.
+    // Using IntersectionObserver or MutationObserver on the header class could work.
+    // Simpler: observe body/header logic?
+    // Actually, the header scroll logic adds classes.
+    // Let's listen for that custom scroll event if possible, or just poll/observer.
+    // Since HeaderLayout toggles opacity/pointer-events but NOT display:none (it uses absolute positioning tricks),
+    // wait... in HeaderLayout.astro:
+    // The compact nav is inside a div with:
+    // class="... opacity-0 scale-95 ... absolute"
+    // It is rendered, but it might have layout issues if parent has 0 width or absolute?
+    // "absolute" elements have width determined by content or specific width.
+    // Center Morphing Zone is flex flex-1.
+    // If we want it to verify size, we might need to rely on ResizeObserver on the container document.
+    const header = document.getElementById("main-header");
+    if (header) {
+      const observer = new MutationObserver(() => {
+        // When classes change (like is-scrolled), force update
+        // specifically for instances that might have been hidden/zero-width
+        navs.forEach((_nav) => {
+          // @ts-ignore
+          // We can't easily access the instance from here without storing it.
+          // Re-instantiating is bad.
+          // Ideally we trigger a window resize event which they listen to.
+          window.dispatchEvent(new Event("resize"));
+        });
+      });
+      observer.observe(header, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+    }
+  }
+
+  initDynamicNavs();
+  document.addEventListener("astro:page-load", initDynamicNavs);
+</script>
+
+<style>
+  /* Fix for submenus inside the "More" dropdown */
+  /* Target the dropdown panel div inside the list item when it's in the More container */
+  :global([data-more-nav-container]) :global(.nav-item) > :global(.absolute) {
+    top: 0 !important;
+    left: auto !important;
+    right: 100% !important;
+    margin-top: -0.5rem !important;
+    margin-right: 0.5rem !important;
+    transform: none !important;
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  /* RECURSIVE FIX: Ensure ALL deep submenus inside "More" also open to the LEFT */
+  :global([data-more-nav-container]) :global(.recursive-nav-flyout) {
+    left: auto !important;
+    right: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0.5rem !important;
+    transform: none !important;
+  }
+
+  /* Show it on hover */
+  :global([data-more-nav-container])
+    :global(.nav-item:hover)
+    > :global(.absolute) {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  /* Rotate chevron to point LEFT when in "More" menu */
+  :global([data-more-nav-container])
+    :global(.nav-item)
+    :global(svg.lucide-chevron-down),
+  :global([data-more-nav-container])
+    :global(.nav-item:hover)
+    :global(svg.lucide-chevron-down) {
+    transform: rotate(90deg) !important;
+  }
+</style>

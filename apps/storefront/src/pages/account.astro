@@ -1,0 +1,504 @@
+---
+// src/pages/account.astro
+// Customer dashboard — order history, profile info, and quick actions.
+// Protected: redirects to /cart if not logged in.
+
+import Layout from "@/layouts/Layout.astro";
+import { getLayoutData } from "@/lib/api";
+
+const layoutData = await getLayoutData();
+---
+
+<Layout title="My Account" layoutData={layoutData}>
+  <main class="container max-w-4xl mx-auto px-4 py-8">
+    <!-- Loading state (shown while checking auth) -->
+    <div id="loadingState" class="flex items-center justify-center min-h-[400px]">
+      <div class="text-center">
+        <div class="inline-block w-8 h-8 border-3 border-border border-t-primary rounded-full animate-spin mb-4"></div>
+        <p class="text-sm text-muted-foreground">Loading your account...</p>
+      </div>
+    </div>
+
+    <!-- Unauthenticated state -->
+    <div id="unauthState" class="hidden">
+      <div class="max-w-md mx-auto text-center py-16">
+        <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-muted flex items-center justify-center">
+          <svg class="h-10 w-10 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold mb-2">Sign in to view your account</h1>
+        <p class="text-muted-foreground mb-6">View your orders, manage your profile, and more.</p>
+        <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors shadow-sm">
+          Sign In or Create Account
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Authenticated state -->
+    <div id="authState" class="hidden max-w-5xl mx-auto">
+      
+      <!-- Top header / Breadcrumb area (optional) -->
+      <div class="flex items-center justify-between mb-8">
+        <h1 class="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">Account Overview</h1>
+        <form method="POST" action="/api/auth/signout" class="ml-4">
+            <button type="submit" class="text-sm font-medium text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-destructive/5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              Sign Out
+            </button>
+          </form>
+        <a href="/" class="text-sm font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+          Back to Shop
+        </a>
+      </div>
+
+      <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
+        <!-- Sidebar: Profile & Delivery -->
+        <div class="w-full lg:w-1/3 space-y-6">
+          
+          <!-- Identity Card -->
+          <div class="bg-muted rounded-2xl p-6 sm:p-8">
+            <div class="flex items-start justify-between mb-6">
+              <div class="h-14 w-14 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xl font-bold shadow-sm" id="profileAvatar">
+                ?
+              </div>
+              <button id="logoutBtn" class="text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors uppercase tracking-wider">
+                Sign Out
+              </button>
+            </div>
+            <h2 class="text-xl font-bold text-foreground" id="profileName">Loading...</h2>
+            <p class="text-muted-foreground text-sm mt-1" id="profileEmail"></p>
+            <p class="text-muted-foreground text-sm mt-0.5" id="profilePhone"></p>
+          </div>
+
+          <!-- Quick Stats inline -->
+          <div class="grid grid-cols-2 gap-3" id="statsGrid">
+            <div class="bg-card border border-border rounded-xl p-4 shadow-sm text-center">
+              <p class="text-2xl font-bold text-foreground" id="statTotalOrders">–</p>
+              <p class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mt-1">Orders</p>
+            </div>
+            <div class="bg-card border border-border rounded-xl p-4 shadow-sm text-center">
+              <p class="text-2xl font-bold text-foreground" id="statTotalSpent">–</p>
+              <p class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mt-1">Total Spent</p>
+            </div>
+          </div>
+
+          <!-- Settings / Address Card -->
+          <div class="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+            <button id="profileToggle" class="w-full p-5 flex items-center justify-between text-left hover:bg-muted/50 transition-colors">
+              <span class="text-sm font-bold text-foreground uppercase tracking-wider">Delivery Details</span>
+              <span class="text-xs font-medium text-primary">Edit</span>
+            </button>
+            <div id="profileForm" class="hidden p-5 pt-0 border-t border-border mt-2 space-y-4">
+              <div>
+                <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Full Name</label>
+                <input id="fieldName" type="text" class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Phone (Read-only)</label>
+                <input id="fieldPhone" type="tel" disabled class="w-full bg-muted border-transparent text-muted-foreground rounded-lg text-sm px-3 py-2.5 cursor-not-allowed outline-none" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Address</label>
+                <input id="fieldAddress" type="text" class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none" placeholder="Apt, Street" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">City</label>
+                  <select id="fieldCity" class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none">
+                    <option value="">City</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Zone</label>
+                  <select id="fieldZone" disabled class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none disabled:opacity-50">
+                    <option value="">Zone</option>
+                  </select>
+                </div>
+              </div>
+              <button id="saveProfileBtn" class="w-full mt-2 py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm">
+                Save Address
+              </button>
+              <p id="profileSaveStatus" class="text-xs text-center hidden mt-2"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Content: Orders -->
+        <div class="w-full lg:w-2/3">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-bold text-foreground">Order History</h2>
+            <span class="text-xs font-semibold text-muted-foreground tracking-wider uppercase bg-muted px-3 py-1 rounded-full" id="orderCount"></span>
+          </div>
+
+          <!-- Empty state -->
+          <div id="emptyOrders" class="hidden p-12 text-center bg-muted rounded-2xl border border-dashed border-border">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-card shadow-sm flex items-center justify-center">
+              <svg class="h-6 w-6 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-foreground mb-1">No orders yet</h3>
+            <p class="text-sm text-muted-foreground mb-6">When you buy something, your receipt will be here.</p>
+            <a href="/" class="inline-flex items-center px-5 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors">Start Shopping</a>
+          </div>
+
+          <!-- Orders list -->
+          <div id="ordersList" class="space-y-4"></div>
+
+          <!-- Pagination / Show More -->
+          <div id="showMoreContainer" class="hidden mt-6 text-center">
+            <button id="showMoreBtn" class="inline-flex items-center gap-2 px-6 py-3 bg-muted hover:bg-accent text-foreground text-sm font-semibold rounded-xl transition-colors border border-border shadow-sm">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              <span id="showMoreText">Show More</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { getCustomerSession, getCustomerOrders, logoutCustomer, updateCustomerProfile, type CustomerOrder } from "@/lib/api/customer-auth";
+  import { getCities, getZones } from "@/lib/api/shipping";
+
+
+
+  function formatDate(iso: string | null): string {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function formatCurrency(amount: number): string {
+    const sym = (window as any).__CURRENCY_SYMBOL__ || "৳";
+    return sym + amount.toFixed(0);
+  }
+
+  function renderOrder(order: CustomerOrder): string {
+    let statusClass = "bg-muted text-muted-foreground"; // Default or fallback
+
+    switch(order.status) {
+      case 'pending': statusClass = "bg-muted/50 text-muted-foreground"; break;
+      case 'confirmed': statusClass = "bg-primary/10 text-primary"; break;
+      case 'processing': statusClass = "bg-primary/10 text-primary"; break;
+      case 'shipped': statusClass = "bg-primary/10 text-primary"; break;
+      case 'delivered': statusClass = "bg-primary/20 text-primary"; break;
+      case 'completed': statusClass = "bg-primary/20 text-primary"; break;
+      case 'cancelled': statusClass = "bg-destructive/10 text-destructive"; break;
+      case 'refunded': statusClass = "bg-muted text-muted-foreground"; break;
+    }
+
+    const itemCount = order.items.reduce((s, i) => s + i.quantity, 0);
+
+    // Item details layout (shown when expanded)
+    const itemDetails = order.items.map((item) =>
+      `<div class="flex items-start gap-4 py-3">
+        <img src="${item.productImage || "/placeholder.jpg"}" alt="" class="w-12 h-12 rounded-md object-cover border border-border shrink-0 bg-card" loading="lazy" />
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-foreground truncate">${item.productName || "Product"}</p>
+          ${(item.variantSize || item.variantColor)
+            ? `<p class="text-[11px] font-medium text-muted-foreground mt-0.5">${[item.variantSize && `Size: ${item.variantSize}`, item.variantColor && `Color: ${item.variantColor}`].filter(Boolean).join(" • ")}</p>`
+            : ""}
+        </div>
+        <div class="text-right shrink-0">
+          <p class="text-sm font-bold text-foreground">${formatCurrency(item.quantity * item.price)}</p>
+          <p class="text-[11px] text-muted-foreground mt-0.5">${item.quantity} × ${formatCurrency(item.price)}</p>
+        </div>
+      </div>`
+    ).join("");
+
+    return `
+      <div class="order-card bg-card border border-border rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+           <div>
+             <div class="flex items-center gap-3">
+               <span class="text-lg font-bold text-foreground">#${order.id}</span>
+               <span class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${statusClass}">${order.status}</span>
+             </div>
+             <p class="text-sm text-muted-foreground mt-1">${formatDate(order.createdAt)} • ${itemCount} item${itemCount !== 1 ? "s" : ""}</p>
+           </div>
+           <div class="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start">
+             <p class="text-xl font-bold text-foreground">${formatCurrency(order.totalAmount)}</p>
+             <button class="text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors mt-1" onclick="this.closest('.order-card').querySelector('.order-details').classList.toggle('hidden')">View Details</button>
+           </div>
+        </div>
+        <div class="order-details hidden border-t border-border pt-2 mt-4">
+           <div class="divide-y divide-border">
+             ${itemDetails}
+           </div>
+           
+           <div class="mt-3 pt-3 border-t border-border flex flex-col items-end gap-1 text-sm bg-muted/50 p-3 rounded-lg">
+             ${order.shippingCharge > 0 ? `<div class="w-full sm:w-64 flex justify-between text-muted-foreground text-xs"><span>Delivery Fee</span><span>${formatCurrency(order.shippingCharge)}</span></div>` : ""}
+             ${(order.discountAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between text-primary text-xs"><span>Discount</span><span>-${formatCurrency(order.discountAmount!)}</span></div>` : ""}
+             <div class="w-full sm:w-64 flex justify-between font-bold text-foreground mt-1 pt-1 border-t border-border"><span>Order Total</span><span>${formatCurrency(order.totalAmount)}</span></div>
+             ${(order.paidAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-emerald-600 mt-1 pt-1 border-t border-border"><span>Paid Amount</span><span>${formatCurrency(order.paidAmount)}</span></div>` : ""}
+             ${(order.totalAmount - (order.paidAmount || 0)) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-destructive mt-1 pt-0.5"><span>Due Amount</span><span>${formatCurrency(order.totalAmount - (order.paidAmount || 0))}</span></div>` : ""}
+             ${order.shippingAddress ? `<div class="w-full text-left mt-2 text-[11px] text-muted-foreground"><span class="font-semibold text-foreground">Shipped to:</span> ${order.shippingAddress}${order.cityName ? `, ${order.cityName}` : ""}${order.zoneName ? `, ${order.zoneName}` : ""}</div>` : ""}
+           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    const loadingState = document.getElementById("loadingState")!;
+    const unauthState = document.getElementById("unauthState")!;
+    const authState = document.getElementById("authState")!;
+
+    // Check session
+    const session = await getCustomerSession();
+
+    if (!session.authenticated || !session.customer) {
+      loadingState.classList.add("hidden");
+      unauthState.classList.remove("hidden");
+      return;
+    }
+
+    // Fill profile info
+    const customer = session.customer;
+    document.getElementById("profileAvatar")!.textContent = customer.name.charAt(0).toUpperCase();
+    document.getElementById("profileName")!.textContent = customer.name;
+    document.getElementById("profileEmail")!.textContent = customer.email;
+    if (customer.phone) {
+      document.getElementById("profilePhone")!.textContent = customer.phone;
+    }
+
+    // Fetch orders
+    const result = await getCustomerOrders();
+
+    // Render stats
+    const orders = result.orders || [];
+    const totalSpent = orders.reduce((s, o) => s + o.totalAmount, 0);
+    const completed = orders.filter((o) => o.status === "delivered" || o.status === "completed").length;
+    const pending = orders.filter((o) => o.status === "pending" || o.status === "confirmed" || o.status === "processing").length;
+
+    document.getElementById("statTotalOrders")!.textContent = String(orders.length);
+    document.getElementById("statTotalSpent")!.textContent = formatCurrency(totalSpent);
+    
+    const statCompleted = document.getElementById("statCompleted");
+    if (statCompleted) statCompleted.textContent = String(completed);
+    
+    const statPending = document.getElementById("statPending");
+    if (statPending) statPending.textContent = String(pending);
+    document.getElementById("orderCount")!.textContent = `${orders.length} order${orders.length !== 1 ? "s" : ""}`;
+
+    // Render orders
+    const ordersList = document.getElementById("ordersList")!;
+    const emptyOrders = document.getElementById("emptyOrders")!;
+
+    if (orders.length === 0) {
+      emptyOrders.classList.remove("hidden");
+    } else {
+      // Client-side pagination: show ORDERS_PER_PAGE at a time
+      const ORDERS_PER_PAGE = 5;
+      let visibleCount = Math.min(ORDERS_PER_PAGE, orders.length);
+
+      function renderVisibleOrders() {
+        ordersList.innerHTML = orders.slice(0, visibleCount).map(renderOrder).join("");
+        
+        const showMoreContainer = document.getElementById("showMoreContainer")!;
+        const showMoreText = document.getElementById("showMoreText")!;
+        
+        if (visibleCount < orders.length) {
+          const remaining = orders.length - visibleCount;
+          showMoreText.textContent = `Show More (${remaining} remaining)`;
+          showMoreContainer.classList.remove("hidden");
+        } else {
+          showMoreContainer.classList.add("hidden");
+        }
+      }
+
+      renderVisibleOrders();
+
+      document.getElementById("showMoreBtn")?.addEventListener("click", () => {
+        visibleCount = Math.min(visibleCount + ORDERS_PER_PAGE, orders.length);
+        renderVisibleOrders();
+        // Scroll smoothly to show new orders
+        ordersList.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    }
+
+    // Show auth state
+    loadingState.classList.add("hidden");
+    authState.classList.remove("hidden");
+
+    // Pre-fill profile fields: prefer customer DB profile, fallback to latest order
+    let fName = document.getElementById("fieldName") as HTMLInputElement;
+    let fPhone = document.getElementById("fieldPhone") as HTMLInputElement;
+    let fAddress = document.getElementById("fieldAddress") as HTMLInputElement;
+    let fCity = document.getElementById("fieldCity") as unknown as HTMLSelectElement;
+    let fZone = document.getElementById("fieldZone") as unknown as HTMLSelectElement;
+
+    const dbCustomer = result.customer && Object.keys(result.customer).length > 0 ? result.customer : null;
+    const latestOrder = orders.length > 0 ? orders[0] : null;
+
+    if (fName) fName.value = dbCustomer?.name || customer.name || "";
+    if (fPhone) fPhone.value = customer.phone || ""; // Phone MUST be from session
+    if (fAddress) fAddress.value = dbCustomer?.address || latestOrder?.shippingAddress || "";
+
+    // Load locations and handle City/Zone dependent dropdowns
+    if (fCity && fZone) {
+      const cities = await getCities() || [];
+      
+      // Populate cities
+      fCity.innerHTML = '<option value="">Select City</option>';
+      cities.forEach(city => {
+        const option = document.createElement("option");
+        option.value = city.id; // API requires external names mostly, let's store name as value if needed, or rely on id.
+        option.textContent = city.name;
+        // if value comes down as name we need to match it, LocationData has {id, name}
+        // Actually ProfileUpdateData uses 'cityName'. We should set value to name for the form submit.
+        option.value = city.name; 
+        option.dataset.id = city.id; 
+        fCity.appendChild(option);
+      });
+
+      const initialCityName = dbCustomer?.cityName || dbCustomer?.city || latestOrder?.cityName || "";
+      let initialCityId = "";
+
+      if (initialCityName) {
+        // Find city option by name and select it
+        const cityOption = Array.from(fCity.options).find(opt => opt.value === initialCityName);
+        if (cityOption) {
+          fCity.value = cityOption.value;
+          initialCityId = cityOption.dataset.id || "";
+        }
+      }
+
+      // Handle city change
+      fCity.addEventListener("change", async (e) => {
+        const target = e.target as HTMLSelectElement;
+        const selectedOption = target.options[target.selectedIndex];
+        const cityId = selectedOption?.dataset?.id;
+        
+        fZone.innerHTML = '<option value="">Select Zone</option>';
+        fZone.disabled = true;
+
+        if (cityId) {
+          const zones = await getZones(cityId) || [];
+          zones.forEach(zone => {
+            const option = document.createElement("option");
+            option.value = zone.name;
+            option.textContent = zone.name;
+            fZone.appendChild(option);
+          });
+          fZone.disabled = false;
+        }
+      });
+
+      // Populate zones initially if a city is already selected
+      if (initialCityId) {
+        const zones = await getZones(initialCityId) || [];
+        fZone.innerHTML = '<option value="">Select Zone</option>';
+        zones.forEach(zone => {
+          const option = document.createElement("option");
+          option.value = zone.name;
+          option.textContent = zone.name;
+          fZone.appendChild(option);
+        });
+        fZone.disabled = false;
+        
+        const initialZoneName = dbCustomer?.zoneName || dbCustomer?.zone || latestOrder?.zoneName || "";
+        if (initialZoneName) {
+          const zoneOption = Array.from(fZone.options).find(opt => opt.value === initialZoneName);
+          if (zoneOption) fZone.value = zoneOption.value;
+        }
+      }
+    }
+
+    // Profile toggle
+    const profileToggle = document.getElementById("profileToggle");
+    const profileForm = document.getElementById("profileForm");
+    const profileChevron = document.getElementById("profileChevron");
+    profileToggle?.addEventListener("click", () => {
+      profileForm?.classList.toggle("hidden");
+      profileChevron?.classList.toggle("rotate-180");
+    });
+
+    // Save profile handler
+    document.getElementById("saveProfileBtn")?.addEventListener("click", async () => {
+      const btn = document.getElementById("saveProfileBtn") as HTMLButtonElement;
+      const status = document.getElementById("profileSaveStatus")!;
+      const originalText = btn.textContent;
+
+      const fName = (document.getElementById("fieldName") as HTMLInputElement).value;
+      const fAddress = (document.getElementById("fieldAddress") as HTMLInputElement).value;
+      const fCity = (document.getElementById("fieldCity") as unknown as HTMLSelectElement).value;
+      const fZone = (document.getElementById("fieldZone") as unknown as HTMLSelectElement).value;
+
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+      status.classList.add("hidden");
+      status.className = "text-sm";
+
+      const res = await updateCustomerProfile({
+        name: fName,
+        address: fAddress,
+        cityName: fCity,
+        zoneName: fZone,
+      });
+
+      btn.disabled = false;
+      btn.textContent = originalText;
+
+      if (res.success) {
+        status.textContent = "Profile updated successfully!";
+        status.classList.add("text-primary");
+        status.classList.remove("hidden");
+        // Update name in header if changed
+        if (fName) {
+          document.getElementById("profileName")!.textContent = fName;
+          document.getElementById("profileAvatar")!.textContent = fName.charAt(0).toUpperCase();
+        }
+        setTimeout(() => status.classList.add("hidden"), 3000);
+      } else {
+        status.textContent = res.error || "Failed to update profile";
+        status.classList.add("text-red-600");
+        status.classList.remove("hidden");
+      }
+    });
+
+    // Logout handler
+    document.getElementById("logoutBtn")!.addEventListener("click", async () => {
+      // Clear cs_auth for BOTH host-only and the root domain (.wrygo.com)
+      // to cover however the cookie was originally set.
+      const rootDomain = window.location.hostname.split(".").slice(-2).join(".");
+      document.cookie = "cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      document.cookie = `cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${rootDomain};`;
+
+      await logoutCustomer();
+      window.location.href = "/";
+    });
+
+    // Login handler (from modal)
+    window.addEventListener("customer-login", () => {
+      window.location.reload();
+    });
+  });
+
+  // Init on page load
+  document.addEventListener("astro:page-load", () => {
+    // Re-run the DOMContentLoaded logic for Astro page loads
+    (document.querySelector("script") as HTMLScriptElement).dispatchEvent(new Event("DOMContentLoaded"));
+  });
+</script>
+
+<style>
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
+  .border-3 {
+    border-width: 3px;
+  }
+  .order-card {
+    transition: background-color 0.15s ease;
+  }
+</style>
