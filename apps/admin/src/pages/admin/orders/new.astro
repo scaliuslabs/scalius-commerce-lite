@@ -1,0 +1,33 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { OrderForm } from "../../../components/admin/OrderForm";
+import { getOrderFormProducts } from "@/loaders/admin/orders";
+
+const productsWithVariants = await getOrderFormProducts();
+
+// Default values for the form
+const defaultValues = {
+  customerName: "",
+  customerPhone: "",
+  customerEmail: null,
+  shippingAddress: "",
+  city: "",
+  zone: "",
+  area: null,
+  notes: null,
+  items: [],
+  discountAmount: null,
+  shippingCharge: 0,
+};
+---
+
+<AdminLayout title="New Order">
+  <div class="container max-w-7xl py-4 pb-8">
+    <OrderForm
+      client:idle
+      products={productsWithVariants}
+      defaultValues={defaultValues}
+      isEdit={false}
+    />
+  </div>
+</AdminLayout>

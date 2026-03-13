@@ -1,0 +1,125 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { AmountOffProductsForm } from "@/components/admin/discount/AmountOffProductsForm";
+import { AmountOffOrderForm } from "@/components/admin/discount/AmountOffOrderForm";
+import { FreeShippingForm } from "@/components/admin/discount/FreeShippingForm";
+import { getDiscountEditData } from "@/loaders/admin/discounts";
+
+// Get discount ID from URL params
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect("/admin/discounts");
+}
+
+const discountData = await getDiscountEditData(id);
+if (!discountData) {
+  return Astro.redirect("/admin/discounts");
+}
+const { discount, formattedDiscount, selectedProducts, selectedCollections } =
+  discountData;
+---
+
+<AdminLayout title="Edit Discount">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Edit Discount</h1>
+      <p class="text-muted-foreground">
+        Modify the discount "{discount.code}"
+      </p>
+    </div>
+    <a
+      href="/admin/discounts"
+      class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2"
+    >
+      Cancel
+    </a>
+  </div>
+
+  <div>
+    {
+      discount.type === "amount_off_products" && (
+        <AmountOffProductsForm
+          client:visible
+          defaultValues={{
+            id: discount.id,
+            code: discount.code,
+            valueType: discount.valueType as "percentage" | "fixed_amount",
+            discountValue: discount.discountValue,
+            minPurchaseAmount: discount.minPurchaseAmount,
+            minQuantity: discount.minQuantity,
+            maxUsesPerOrder: discount.maxUsesPerOrder,
+            maxUses: discount.maxUses,
+            limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
+            combineWithProductDiscounts: Boolean(
+              discount.combineWithProductDiscounts
+            ),
+            combineWithOrderDiscounts: Boolean(
+              discount.combineWithOrderDiscounts
+            ),
+            combineWithShippingDiscounts: Boolean(
+              discount.combineWithShippingDiscounts
+            ),
+            startDate: formattedDiscount.startDate,
+            endDate: formattedDiscount.endDate,
+            isActive: Boolean(discount.isActive),
+          }}
+          initialSelectedProducts={selectedProducts}
+          initialSelectedCollections={selectedCollections}
+        />
+      )
+    }
+
+    {
+      discount.type === "amount_off_order" && (
+        <AmountOffOrderForm
+          client:visible
+          defaultValues={{
+            id: discount.id,
+            code: discount.code,
+            valueType: discount.valueType as "percentage" | "fixed_amount",
+            discountValue: discount.discountValue,
+            minPurchaseAmount: discount.minPurchaseAmount,
+            maxUsesPerOrder: discount.maxUsesPerOrder,
+            maxUses: discount.maxUses,
+            limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
+            combineWithProductDiscounts: Boolean(
+              discount.combineWithProductDiscounts
+            ),
+            combineWithShippingDiscounts: Boolean(
+              discount.combineWithShippingDiscounts
+            ),
+            startDate: formattedDiscount.startDate,
+            endDate: formattedDiscount.endDate,
+            isActive: Boolean(discount.isActive),
+          }}
+        />
+      )
+    }
+
+    {
+      discount.type === "free_shipping" && (
+        <FreeShippingForm
+          client:visible
+          defaultValues={{
+            id: discount.id,
+            code: discount.code,
+            minPurchaseAmount: discount.minPurchaseAmount,
+            maxUsesPerOrder: discount.maxUsesPerOrder,
+            maxUses: discount.maxUses,
+            limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
+            combineWithProductDiscounts: Boolean(
+              discount.combineWithProductDiscounts
+            ),
+            combineWithOrderDiscounts: Boolean(
+              discount.combineWithOrderDiscounts
+            ),
+            startDate: formattedDiscount.startDate,
+            endDate: formattedDiscount.endDate,
+            isActive: Boolean(discount.isActive),
+          }}
+        />
+      )
+    }
+  </div>
+</AdminLayout>

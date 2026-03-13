@@ -1,0 +1,983 @@
+---
+// src/components/admin/SideBar.astro
+import { Button } from "@/components/ui/button.tsx";
+import { ChevronDown, Store, ExternalLink, X } from "lucide-react";
+import { getSidebarStorefrontUrl } from "@/loaders/admin/layout";
+import favicon from "@/assets/favicon.png";
+import logoDark from "@/assets/logo-dark.png";
+import logoLight from "@/assets/logo-light.png";
+
+export interface NavSubItem {
+  name: string;
+  href: string;
+  icon?: any;
+}
+export interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+  subItems?: NavSubItem[];
+}
+export interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+interface Props {
+  navSections: NavSection[];
+  currentPath: string;
+}
+
+const { navSections, currentPath } = Astro.props;
+const path = currentPath;
+
+const storefrontUrl = await getSidebarStorefrontUrl();
+---
+
+<!-- Inline style to prevent FOUC -->
+<style is:inline>
+  .sidebar-desktop {
+    width: 240px;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar-collapsed {
+    width: 60px !important;
+  }
+
+  .sidebar-collapsed .sidebar-brand,
+  .sidebar-collapsed .sidebar-nav-text,
+  .sidebar-collapsed .sidebar-section-label,
+  .sidebar-collapsed .sidebar-subnav-text,
+  .sidebar-collapsed .sidebar-store-text,
+  .sidebar-collapsed .sidebar-submenu,
+  .sidebar-collapsed .sidebar-chevron,
+  .sidebar-collapsed .sidebar-external-icon {
+    display: none !important;
+  }
+
+  .sidebar-desktop:not(.sidebar-collapsed) .sidebar-collapsed-only {
+    display: none !important;
+  }
+
+  .sidebar-collapsed .sidebar-nav-item {
+    justify-content: center !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .sidebar-collapsed .sidebar-store-link {
+    justify-content: center !important;
+  }
+
+  /* Disable all submenu animations during sidebar initialization */
+  .sidebar-no-transition .submenu-container {
+    transition: none !important;
+  }
+
+  /* Mobile sidebar opaque background */
+  #mobile-sidebar {
+    background-color: var(--sidebar) !important;
+    color: var(--sidebar-foreground);
+  }
+</style>
+
+<!-- Pre-load collapsed state to prevent FOUC -->
+<script is:inline>
+  (function () {
+    const isCollapsed = localStorage.getItem("sidebar-collapsed") === "true";
+    if (isCollapsed) {
+      document.documentElement.style.setProperty("--sidebar-width", "60px");
+      document.body.classList.add("sidebar-pre-collapsed");
+    } else {
+      document.documentElement.style.setProperty("--sidebar-width", "240px");
+    }
+  })();
+</script>
+
+<aside
+  class="hidden md:flex md:flex-col bg-sidebar border-r border-sidebar-border sticky top-0 h-screen transition-all duration-300 ease-in-out z-20 sidebar-desktop"
+  style="width: var(--sidebar-width, 240px);"
+  id="desktop-sidebar"
+  transition:persist="sidebar-desktop"
+>
+  <div
+    class="flex items-center h-14 px-6 border-b border-sidebar-border bg-sidebar"
+  >
+    <a href="/admin" class="flex items-center gap-3 group">
+      <div
+        class="w-8 h-8 bg-sidebar-accent rounded-lg flex items-center justify-center sidebar-logo sidebar-collapsed-only transition-transform group-hover:scale-105"
+      >
+        <img
+          src={favicon.src}
+          alt="Site icon"
+          class="w-7 h-7 left-1/2 -translate-x-1/2"
+        />
+      </div>
+      <div class="sidebar-brand">
+        <img
+          src={logoLight.src}
+          alt="Scalius"
+          class="h-8 w-auto block dark:hidden"
+        />
+        <img
+          src={logoDark.src}
+          alt="Scalius"
+          class="h-8 w-auto hidden dark:block"
+        />
+      </div>
+    </a>
+  </div>
+
+  <nav
+    class="flex-1 px-3 py-4 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground sidebar-nav"
+    id="sidebar-nav"
+  >
+    <div class="space-y-6 pb-4">
+      {
+        navSections.map((section: NavSection) => (
+          <div class="sidebar-section">
+            <div class="px-3 mb-3 sidebar-section-label">
+              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {section.label}
+              </span>
+            </div>
+            <div class="space-y-1">
+              {section.items.map((item: NavItem) => (
+                <div class="nav-item-container">
+                  {Array.isArray(item.subItems) && item.subItems.length > 0 ? (
+                    <button
+                      type="button"
+                      data-toggle-submenu="true"
+                      data-sidebar-parent="true"
+                      data-href={item.href}
+                      data-submenu-key={item.name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}
+                      data-is-settings={
+                        item.name.toLowerCase() === "settings"
+                          ? "true"
+                          : undefined
+                      }
+                      aria-expanded={path.startsWith(item.href) ? "true" : "false"}
+                      aria-controls={`desktop-submenu-${item.name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}`}
+                      class:list={[
+                        "group flex w-full items-center gap-3 rounded-lg border border-transparent bg-transparent px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02] hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground cursor-pointer",
+                        path === item.href ||
+                        (item.subItems &&
+                          item.subItems.some((sub) => path === sub.href))
+                          ? "is-active"
+                          : undefined,
+                      ]}
+                    >
+                      <item.icon
+                        className="w-5 h-5 shrink-0 sidebar-nav-icon text-muted-foreground transition-all duration-200 group-hover:text-sidebar-accent-foreground"
+                        strokeWidth={2}
+                      />
+                      <span class="sidebar-nav-text flex-1">{item.name}</span>
+                      <ChevronDown
+                        className={`submenu-chevron w-4 h-4 text-muted-foreground/70 transition-all duration-300 sidebar-chevron ${
+                          path.startsWith(item.href) ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                  ) : (
+                    <a
+                      href={item.href}
+                      data-sidebar-link="true"
+                      data-sidebar-item-href={item.href}
+                      class:list={[
+                        "group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg border border-transparent text-sidebar-foreground transition-all duration-200 relative sidebar-nav-item hover:scale-[1.02] hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                        path === item.href ? "is-active" : undefined,
+                      ]}
+                      aria-current={path === item.href ? "page" : undefined}
+                    >
+                      <item.icon
+                        className="w-5 h-5 shrink-0 sidebar-nav-icon text-muted-foreground transition-all duration-200 group-hover:text-sidebar-accent-foreground"
+                        strokeWidth={2}
+                      />
+                      <span class="sidebar-nav-text flex-1">{item.name}</span>
+                    </a>
+                  )}
+
+                  {Array.isArray(item.subItems) && item.subItems.length > 0 && (
+                    <div
+                      id={`desktop-submenu-${item.name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}`}
+                      class="submenu-container ml-6 mt-1 space-y-1 sidebar-submenu overflow-hidden transition-all duration-300 ease-in-out"
+                    >
+                      {item.subItems.map((subItem: NavSubItem) => (
+                        <a
+                          href={subItem.href}
+                          data-sidebar-subitem="true"
+                          data-sidebar-item-href={subItem.href}
+                          class:list={[
+                            "group flex items-center gap-3 px-3 py-2 text-sm rounded-lg text-muted-foreground transition-all duration-200 sidebar-subnav-item hover:scale-[1.01] hover:translate-x-1 hover:bg-sidebar-accent/30 hover:text-sidebar-accent-foreground",
+                            path === subItem.href ? "is-active" : undefined,
+                          ]}
+                          aria-current={path === subItem.href ? "page" : undefined}
+                        >
+                          {subItem.icon && (
+                            <subItem.icon
+                              className="w-4 h-4 shrink-0 sidebar-subnav-icon text-muted-foreground transition-all duration-200 group-hover:text-sidebar-accent-foreground"
+                              strokeWidth={2}
+                            />
+                          )}
+                          <span class="sidebar-subnav-text">
+                            {subItem.name}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </nav>
+
+  <div class="px-3 py-4 border-t border-sidebar-border bg-sidebar mt-auto">
+    <Button
+      asChild
+      variant="ghost"
+      size="sm"
+      className="w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent h-9 px-3 rounded-lg transition-all duration-200 group hover:scale-[1.02]"
+    >
+      <a
+        href={storefrontUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="sidebar-store-link"
+      >
+        <div class="flex items-center gap-3">
+          <Store
+            className="w-4 h-4 text-muted-foreground group-hover:text-sidebar-accent-foreground sidebar-store-icon transition-all duration-200"
+          />
+          <span class="text-sm sidebar-store-text">View Store</span>
+          <ExternalLink
+            className="w-3.5 h-3.5 text-muted-foreground group-hover:text-sidebar-accent-foreground transition-all duration-200 sidebar-external-icon"
+          />
+        </div>
+      </a>
+    </Button>
+  </div>
+</aside>
+
+<div
+  class="fixed inset-0 bg-black/60 z-40 md:hidden transition-opacity duration-300 opacity-0 pointer-events-none"
+  id="sidebar-overlay"
+>
+</div>
+
+<aside
+  class="fixed inset-y-0 left-0 w-72 z-50 md:hidden flex flex-col transform -translate-x-full transition-transform duration-300 ease-in-out shadow-xl border-r border-sidebar-border"
+  style="background-color: var(--sidebar); color: var(--sidebar-foreground); border-color: var(--sidebar-border);"
+  id="mobile-sidebar"
+>
+  <!-- Header -->
+  <div class="flex items-center justify-between h-14 px-4 border-b border-sidebar-border shrink-0">
+    <a href="/admin" class="flex items-center gap-2">
+      <img src={logoLight.src} alt="Scalius" class="h-7 w-auto block dark:hidden" />
+      <img src={logoDark.src} alt="Scalius" class="h-7 w-auto hidden dark:block" />
+    </a>
+    <Button
+      variant="ghost"
+      size="icon"
+      id="close-sidebar"
+      aria-label="Close sidebar"
+      className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg"
+    >
+      <X className="w-5 h-5" />
+    </Button>
+  </div>
+
+  <!-- Nav -->
+  <nav class="flex-1 px-3 py-3 overflow-y-auto">
+    <div class="space-y-5 pb-4">
+      {
+        navSections.map((section: NavSection) => (
+          <div>
+            <div class="px-2 mb-2">
+              <span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+                {section.label}
+              </span>
+            </div>
+            <div class="space-y-0.5">
+              {section.items.map((item: NavItem) => (
+                <div class="nav-item-container">
+                  {Array.isArray(item.subItems) && item.subItems.length > 0 ? (
+                    <button
+                      type="button"
+                      data-toggle-submenu="true"
+                      data-sidebar-parent="true"
+                      data-href={item.href}
+                      data-submenu-key={item.name.toLowerCase().replace(/\s+/g, "-")}
+                      data-is-settings={item.name.toLowerCase() === "settings" ? "true" : undefined}
+                      aria-expanded={path.startsWith(item.href) ? "true" : "false"}
+                      aria-controls={`mobile-submenu-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      class:list={[
+                        "group flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium text-sidebar-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground active:bg-accent cursor-pointer",
+                        path === item.href || (item.subItems && item.subItems.some((sub) => path === sub.href)) ? "is-active" : undefined,
+                      ]}
+                    >
+                      <item.icon className="w-5 h-5 shrink-0 text-muted-foreground" strokeWidth={2} />
+                      <span class="flex-1 font-medium">{item.name}</span>
+                      <ChevronDown className={`submenu-chevron w-4 h-4 text-muted-foreground transition-transform duration-200 ${path.startsWith(item.href) ? "rotate-180" : ""}`} />
+                    </button>
+                  ) : (
+                    <a
+                      href={item.href}
+                      data-sidebar-link="true"
+                      data-sidebar-item-href={item.href}
+                      class:list={[
+                        "group flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-lg text-sidebar-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground active:bg-accent",
+                        path === item.href ? "is-active" : undefined,
+                      ]}
+                      aria-current={path === item.href ? "page" : undefined}
+                    >
+                      <item.icon className="w-5 h-5 shrink-0 text-muted-foreground" strokeWidth={2} />
+                      <span class="flex-1">{item.name}</span>
+                    </a>
+                  )}
+                  {Array.isArray(item.subItems) && item.subItems.length > 0 && (
+                    <div
+                      id={`mobile-submenu-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      class="submenu-container ml-8 mt-0.5 space-y-0.5 overflow-hidden transition-all duration-300 ease-in-out"
+                    >
+                      {item.subItems.map((subItem: NavSubItem) => (
+                        <a
+                          href={subItem.href}
+                          data-sidebar-subitem="true"
+                          data-sidebar-item-href={subItem.href}
+                          class:list={[
+                            "group flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground",
+                            path === subItem.href ? "is-active" : undefined,
+                          ]}
+                          aria-current={path === subItem.href ? "page" : undefined}
+                        >
+                          {subItem.icon && (
+                            <subItem.icon className="w-4 h-4 shrink-0" strokeWidth={2} />
+                          )}
+                          <span>{subItem.name}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </nav>
+
+  <!-- Footer -->
+  <div class="px-3 py-3 border-t border-sidebar-border shrink-0">
+    <a
+      href={storefrontUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      class="flex items-center gap-3 px-3 py-3 text-sm font-medium text-muted-foreground rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
+    >
+      <Store className="w-5 h-5 shrink-0" />
+      <span class="flex-1">View Store</span>
+      <ExternalLink className="w-4 h-4" />
+    </a>
+  </div>
+</aside>
+
+
+<script is:inline>
+  /**
+   * Admin Sidebar Component
+   *
+   * Features:
+   * - Responsive design with desktop/mobile variants
+   * - Collapsible sidebar with persistent state
+   * - FOUC (Flash of Unstyled Content) prevention
+   * - Expandable submenu navigation with state persistence
+   * - Smart scroll behavior for Settings dropdown
+   * - Smooth animations and transitions
+   *
+   * Key behaviors:
+   * - Settings dropdown auto-scrolls to ensure all items are visible above "View Store"
+   * - Sidebar collapse state persists across page reloads using localStorage
+   * - Submenu states are remembered per navigation item
+   * - Scroll position is preserved when navigating between pages
+   *
+   * Performance optimizations:
+   * - Uses requestAnimationFrame for smooth initialization
+   * - Debounced scroll position saving
+   * - CSS custom properties for efficient transitions
+   * - Graceful handling of localStorage errors
+   */
+
+  const STORAGE_KEYS = {
+    collapsed: "sidebar-collapsed",
+    submenus: "sidebar-submenu-states",
+    scrollPosition: "sidebar-scroll-position",
+  };
+  const sidebarState = window.__adminSidebarState || {
+    globalListenersBound: false,
+    isCollapsed: false,
+    scrollTimeout: null,
+  };
+  window.__adminSidebarState = sidebarState;
+
+  function getDesktopSidebar() {
+    return document.getElementById("desktop-sidebar");
+  }
+
+  function getMobileSidebar() {
+    return document.getElementById("mobile-sidebar");
+  }
+
+  function getSidebarOverlay() {
+    return document.getElementById("sidebar-overlay");
+  }
+
+  function getCloseSidebarButton() {
+    return document.getElementById("close-sidebar");
+  }
+
+  function getSidebarNav() {
+    return document.getElementById("sidebar-nav");
+  }
+
+  function getCurrentPath() {
+    return window.location.pathname;
+  }
+
+  function readStorage(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeStorage(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      // Ignore localStorage write failures.
+    }
+  }
+
+  function isExactPathMatch(targetPath) {
+    return getCurrentPath() === targetPath;
+  }
+
+  function isPrefixPathMatch(targetPath) {
+    const currentPath = getCurrentPath();
+    if (targetPath === "/admin") {
+      return currentPath === targetPath;
+    }
+    return (
+      currentPath === targetPath || currentPath.startsWith(`${targetPath}/`)
+    );
+  }
+
+  function getSubmenuContainer(toggleButton) {
+    return toggleButton.parentElement?.querySelector(".submenu-container");
+  }
+
+  function getSubmenuChevron(toggleButton) {
+    return toggleButton.querySelector(".submenu-chevron");
+  }
+
+  function isSubmenuOpen(submenu) {
+    if (!submenu) return false;
+    return (
+      !submenu.classList.contains("hidden") && submenu.style.maxHeight !== "0px"
+    );
+  }
+
+  function setSubmenuOpen(toggleButton, shouldOpen, save = true) {
+    const submenu = getSubmenuContainer(toggleButton);
+    const chevron = getSubmenuChevron(toggleButton);
+
+    if (!submenu) return;
+
+    if (shouldOpen) {
+      submenu.classList.remove("hidden");
+      submenu.style.maxHeight = `${submenu.scrollHeight}px`;
+      chevron?.classList.add("rotate-180");
+    } else {
+      submenu.style.maxHeight = "0px";
+      chevron?.classList.remove("rotate-180");
+      window.setTimeout(() => {
+        if (submenu.style.maxHeight === "0px") {
+          submenu.classList.add("hidden");
+        }
+      }, 300);
+    }
+
+    toggleButton.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+
+    if (save) {
+      saveSubmenuStates();
+    }
+  }
+
+  // Sets submenu open/closed state instantly without CSS animation
+  function setSubmenuOpenInstant(toggleButton, shouldOpen) {
+    const submenu = getSubmenuContainer(toggleButton);
+    const chevron = getSubmenuChevron(toggleButton);
+    if (!submenu) return;
+    if (shouldOpen) {
+      submenu.classList.remove("hidden");
+      submenu.style.maxHeight = `${submenu.scrollHeight}px`;
+      chevron?.classList.add("rotate-180");
+    } else {
+      submenu.style.maxHeight = "0px";
+      submenu.classList.add("hidden");
+      chevron?.classList.remove("rotate-180");
+    }
+    toggleButton.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+  }
+
+  function syncOpenSubmenuHeights() {
+    document
+      .querySelectorAll('[data-toggle-submenu="true"]')
+      .forEach((toggleButton) => {
+        const submenu = getSubmenuContainer(toggleButton);
+        if (submenu && isSubmenuOpen(submenu)) {
+          submenu.style.maxHeight = `${submenu.scrollHeight}px`;
+        }
+      });
+  }
+
+  function saveSubmenuStates() {
+    const states = {};
+    document
+      .querySelectorAll('#desktop-sidebar [data-toggle-submenu="true"]')
+      .forEach((toggleButton) => {
+        const key = toggleButton.getAttribute("data-submenu-key");
+        const submenu = getSubmenuContainer(toggleButton);
+        if (key && submenu) {
+          states[key] = isSubmenuOpen(submenu);
+        }
+      });
+    writeStorage(STORAGE_KEYS.submenus, JSON.stringify(states));
+  }
+
+  function getSavedSubmenuStates() {
+    try {
+      return JSON.parse(readStorage(STORAGE_KEYS.submenus) || "{}");
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function parentContainsActiveSubItem(toggleButton) {
+    return Array.from(
+      toggleButton.parentElement?.querySelectorAll("[data-sidebar-subitem]") || []
+    ).some((subItem) => isExactPathMatch(subItem.getAttribute("data-sidebar-item-href")));
+  }
+
+  function isParentItemActive(toggleButton) {
+    const itemHref = toggleButton.getAttribute("data-href");
+    if (!itemHref) return false;
+    return isPrefixPathMatch(itemHref) || parentContainsActiveSubItem(toggleButton);
+  }
+
+  function restoreSubmenuStates() {
+    const savedStates = getSavedSubmenuStates();
+
+    document
+      .querySelectorAll('[data-toggle-submenu="true"]')
+      .forEach((toggleButton) => {
+        const key = toggleButton.getAttribute("data-submenu-key");
+        const storedState =
+          key && Object.prototype.hasOwnProperty.call(savedStates, key)
+            ? Boolean(savedStates[key])
+            : false;
+        const shouldOpen = isParentItemActive(toggleButton) || storedState;
+        // Use instant (no-animation) version to avoid jump during initialization
+        setSubmenuOpenInstant(toggleButton, shouldOpen);
+      });
+  }
+
+  function saveScrollPosition() {
+    const sidebarNavEl = getSidebarNav();
+    if (!sidebarNavEl) return;
+    writeStorage(STORAGE_KEYS.scrollPosition, sidebarNavEl.scrollTop.toString());
+  }
+
+  function restoreScrollPosition() {
+    const sidebarNavEl = getSidebarNav();
+    const scrollPosition = readStorage(STORAGE_KEYS.scrollPosition);
+    if (!sidebarNavEl || !scrollPosition) return;
+    // Set synchronously — no rAF, no smooth scroll — prevents visible jump
+    sidebarNavEl.scrollTop = Number.parseInt(scrollPosition, 10) || 0;
+  }
+
+  function setSidebarCollapsed(shouldCollapse, save = true) {
+    const desktopSidebarEl = getDesktopSidebar();
+    const collapseButton = document.getElementById("sidebar-collapse");
+
+    if (!desktopSidebarEl) return;
+
+    sidebarState.isCollapsed = shouldCollapse;
+    document.body.classList.remove("sidebar-pre-collapsed");
+
+    if (shouldCollapse) {
+      desktopSidebarEl.style.width = "60px";
+      desktopSidebarEl.classList.add("sidebar-collapsed");
+    } else {
+      desktopSidebarEl.style.width = "240px";
+      desktopSidebarEl.classList.remove("sidebar-collapsed");
+    }
+
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      shouldCollapse ? "60px" : "240px"
+    );
+
+    if (collapseButton) {
+      collapseButton
+        .querySelector(".sidebar-icon-expanded")
+        ?.classList.toggle("hidden", shouldCollapse);
+      collapseButton
+        .querySelector(".sidebar-icon-collapsed")
+        ?.classList.toggle("hidden", !shouldCollapse);
+    }
+
+    if (save) {
+      writeStorage(STORAGE_KEYS.collapsed, shouldCollapse.toString());
+    }
+
+    requestAnimationFrame(syncOpenSubmenuHeights);
+  }
+
+  function toggleSidebarCollapse() {
+    setSidebarCollapsed(!sidebarState.isCollapsed);
+  }
+
+  function toggleMobileSidebar() {
+    getMobileSidebar()?.classList.toggle("-translate-x-full");
+    getSidebarOverlay()?.classList.toggle("opacity-0");
+    getSidebarOverlay()?.classList.toggle("pointer-events-none");
+  }
+
+  function applyActiveStates() {
+    document.querySelectorAll("[data-sidebar-link]").forEach((link) => {
+      const href = link.getAttribute("data-sidebar-item-href");
+      const isActive = href ? isPrefixPathMatch(href) : false;
+      link.classList.toggle("is-active", isActive);
+      isActive ? link.setAttribute("aria-current", "page") : link.removeAttribute("aria-current");
+    });
+
+    document.querySelectorAll("[data-sidebar-subitem]").forEach((link) => {
+      const href = link.getAttribute("data-sidebar-item-href");
+      const isActive = href ? isExactPathMatch(href) : false;
+      link.classList.toggle("is-active", isActive);
+      isActive ? link.setAttribute("aria-current", "page") : link.removeAttribute("aria-current");
+    });
+
+    document.querySelectorAll("[data-sidebar-parent]").forEach((toggleButton) => {
+      const isActive = isParentItemActive(toggleButton);
+      toggleButton.classList.toggle("is-active", isActive);
+      // Auto-close submenu when navigating away from its section
+      if (!isActive) {
+        setSubmenuOpenInstant(toggleButton, false);
+      }
+    });
+  }
+
+  function revealSettingsSubmenu(toggleButton) {
+    const sidebarNavEl = getSidebarNav();
+    const submenu = getSubmenuContainer(toggleButton);
+
+    if (!sidebarNavEl || !submenu || !toggleButton.closest("#desktop-sidebar")) return;
+
+    // Wait for the max-height CSS transition (350ms) to finish before measuring
+    window.setTimeout(() => {
+      const lastSubItem = submenu.lastElementChild;
+      if (!lastSubItem) return;
+      const navRect = sidebarNavEl.getBoundingClientRect();
+      const itemRect = lastSubItem.getBoundingClientRect();
+      const bottomPadding = 16;
+      if (itemRect.bottom > navRect.bottom - bottomPadding) {
+        sidebarNavEl.scrollBy({
+          top: itemRect.bottom - (navRect.bottom - bottomPadding),
+          behavior: "smooth",
+        });
+      }
+    }, 360);
+  }
+
+  function bindSubmenuToggleHandlers(rootElement) {
+    if (!rootElement || rootElement.dataset.sidebarBound === "true") return;
+
+    rootElement.addEventListener("click", (event) => {
+      const toggleButton = event.target.closest('[data-toggle-submenu="true"]');
+      if (!toggleButton || !rootElement.contains(toggleButton)) return;
+
+      const isSettings = toggleButton.getAttribute("data-is-settings") === "true";
+
+      if (toggleButton.closest("#desktop-sidebar") && sidebarState.isCollapsed) {
+        setSidebarCollapsed(false);
+        setSubmenuOpen(toggleButton, true);
+      } else {
+        const submenu = getSubmenuContainer(toggleButton);
+        setSubmenuOpen(toggleButton, !isSubmenuOpen(submenu));
+      }
+
+      if (isSettings) {
+        revealSettingsSubmenu(toggleButton);
+      }
+    });
+
+    rootElement.dataset.sidebarBound = "true";
+  }
+
+  function bindScrollPersistence() {
+    const sidebarNavEl = getSidebarNav();
+    if (!sidebarNavEl || sidebarNavEl.dataset.scrollBound === "true") return;
+
+    sidebarNavEl.addEventListener("scroll", () => {
+      window.clearTimeout(sidebarState.scrollTimeout);
+      sidebarState.scrollTimeout = window.setTimeout(saveScrollPosition, 150);
+    });
+
+    sidebarNavEl.dataset.scrollBound = "true";
+  }
+
+  function bindStaticControl(control, handler) {
+    if (!control || control.dataset.bound === "true") return;
+    control.addEventListener("click", handler);
+    control.dataset.bound = "true";
+  }
+
+  function bindGlobalListeners() {
+    if (sidebarState.globalListenersBound) return;
+
+    window.addEventListener("toggleMobileSidebar", toggleMobileSidebar);
+    window.addEventListener("toggleSidebarCollapse", toggleSidebarCollapse);
+    window.addEventListener("beforeunload", () => {
+      saveSubmenuStates();
+      saveScrollPosition();
+    });
+
+    // Save state RIGHT BEFORE Astro swaps the DOM
+    document.addEventListener("astro:before-swap", () => {
+      saveSubmenuStates();
+      saveScrollPosition();
+    });
+
+    // Restore state RIGHT AFTER the DOM swap, before the browser paints
+    document.addEventListener("astro:after-swap", () => {
+      const sidebarNavEl = getSidebarNav();
+      if (!sidebarNavEl) return;
+
+      // Instantly restore scroll position (no animation, no rAF)
+      const scrollPos = readStorage(STORAGE_KEYS.scrollPosition);
+      if (scrollPos) {
+        sidebarNavEl.scrollTop = Number.parseInt(scrollPos, 10) || 0;
+      }
+
+      // Instantly sync submenu open/close states without animation
+      const savedStates = getSavedSubmenuStates();
+      document
+        .querySelectorAll('[data-toggle-submenu="true"]')
+        .forEach((toggleButton) => {
+          const key = toggleButton.getAttribute("data-submenu-key");
+          const storedState =
+            key && Object.prototype.hasOwnProperty.call(savedStates, key)
+              ? Boolean(savedStates[key])
+              : false;
+          const shouldOpen = isParentItemActive(toggleButton) || storedState;
+          setSubmenuOpenInstant(toggleButton, shouldOpen);
+        });
+    });
+
+    // Update active styles after load is complete
+    document.addEventListener("astro:page-load", () => {
+      applyActiveStates();
+      syncOpenSubmenuHeights();
+    });
+
+    sidebarState.globalListenersBound = true;
+  }
+
+  function initializeSidebar() {
+    const desktopSidebarEl = getDesktopSidebar();
+
+    sidebarState.isCollapsed = readStorage(STORAGE_KEYS.collapsed) === "true";
+    setSidebarCollapsed(sidebarState.isCollapsed, false);
+
+    bindSubmenuToggleHandlers(desktopSidebarEl);
+    bindSubmenuToggleHandlers(getMobileSidebar());
+    bindStaticControl(getSidebarOverlay(), toggleMobileSidebar);
+    bindStaticControl(getCloseSidebarButton(), toggleMobileSidebar);
+    bindScrollPersistence();
+    bindGlobalListeners();
+
+    if (desktopSidebarEl && desktopSidebarEl.dataset.sidebarInitialized !== "true") {
+      restoreSubmenuStates();
+      restoreScrollPosition();
+      desktopSidebarEl.dataset.sidebarInitialized = "true";
+    }
+
+    applyActiveStates();
+    syncOpenSubmenuHeights();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeSidebar, { once: true });
+  } else {
+    requestAnimationFrame(initializeSidebar);
+  }
+</script>
+
+<style>
+  .sidebar-desktop {
+    transition:
+      width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.3s ease;
+    will-change: width;
+  }
+
+  .sidebar-collapsed .sidebar-nav-item {
+    justify-content: center;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .sidebar-collapsed .sidebar-store-link {
+    justify-content: center;
+  }
+
+  .submenu-container {
+    max-height: 0;
+    transition:
+      max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.25s ease,
+      margin 0.3s ease;
+    opacity: 0;
+    overflow: hidden;
+  }
+
+  .submenu-container:not(.hidden) {
+    max-height: 600px;
+    opacity: 1;
+  }
+
+  .sidebar-nav-item.is-active {
+    background: oklch(var(--sidebar-accent));
+    color: oklch(var(--sidebar-accent-foreground));
+    border-color: oklch(var(--sidebar-border));
+    box-shadow: 0 1px 2px 0 oklch(var(--sidebar-accent-foreground) / 0.08);
+  }
+
+  .sidebar-nav-item.is-active .sidebar-nav-icon,
+  .sidebar-nav-item.is-active .submenu-chevron {
+    color: oklch(var(--sidebar-accent-foreground));
+  }
+
+  .sidebar-subnav-item.is-active {
+    background: oklch(var(--sidebar-accent));
+    color: oklch(var(--sidebar-accent-foreground));
+    font-weight: 500;
+    box-shadow: 0 1px 2px 0 oklch(var(--sidebar-accent-foreground) / 0.08);
+  }
+
+  .sidebar-subnav-item.is-active .sidebar-subnav-icon {
+    color: oklch(var(--sidebar-accent-foreground));
+  }
+
+  .sidebar-nav-item {
+    position: relative;
+    transform-origin: center;
+  }
+
+  /* Remove old hover transform to prevent conflicts with global.css */
+  .sidebar-nav-item:hover .sidebar-nav-icon {
+    /* Removed - handled in global.css */
+  }
+
+  .sidebar-subnav-item {
+    position: relative;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar-subnav-item:hover {
+    transform: translateX(3px);
+  }
+
+  /* Enhanced scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 4px 0;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: oklch(var(--muted-foreground) / 0.25);
+    border-radius: 3px;
+    transition: background 0.2s ease;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--muted-foreground) / 0.45);
+  }
+
+  .nav-item-container {
+    position: relative;
+  }
+
+  .nav-item-container:hover {
+    z-index: 1;
+  }
+
+  /* Smooth chevron rotation */
+  .submenu-chevron {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Enhanced FOUC prevention */
+  .sidebar-pre-collapsed .sidebar-desktop {
+    width: 60px !important;
+  }
+
+  .sidebar-pre-collapsed .sidebar-brand,
+  .sidebar-pre-collapsed .sidebar-nav-text,
+  .sidebar-pre-collapsed .sidebar-section-label,
+  .sidebar-pre-collapsed .sidebar-subnav-text,
+  .sidebar-pre-collapsed .sidebar-store-text,
+  .sidebar-pre-collapsed .sidebar-submenu,
+  .sidebar-pre-collapsed .sidebar-chevron,
+  .sidebar-pre-collapsed .sidebar-external-icon {
+    display: none !important;
+  }
+
+  .sidebar-pre-collapsed .sidebar-nav-item {
+    justify-content: center !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .sidebar-pre-collapsed .sidebar-store-link {
+    justify-content: center !important;
+  }
+
+  /* Only show icon when collapsed */
+  .sidebar-collapsed-only {
+    display: none;
+  }
+  .sidebar-collapsed .sidebar-collapsed-only {
+    display: flex !important;
+  }
+</style>

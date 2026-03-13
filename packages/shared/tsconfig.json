@@ -1,0 +1,7 @@
+{
+  "extends": "@scalius/tsconfig/base.json",
+  "compilerOptions": {
+    "baseUrl": "."
+  },
+  "include": ["src/**/*"]
+}
