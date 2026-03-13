@@ -53,7 +53,7 @@
     }
   ],
   "vars": {
-    "PUBLIC_API_BASE_URL": "https://dashboard.scalius.com",
+    "PUBLIC_API_BASE_URL": "https://api.scalius.com",
     "BETTER_AUTH_URL": "https://dashboard.scalius.com",
     "STOREFRONT_URL": "https://store.wrygo.com",
     "CDN_DOMAIN_URL": "cloud.scalius.com",

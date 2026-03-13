@@ -1,5 +1,6 @@
 ---
 import { getProductBySlug } from "@/lib/api";
+import { env as cfEnv } from "cloudflare:workers";
 import Layout from "@/layouts/Layout.astro";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
@@ -61,7 +62,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? "৳";
 <Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>
   <Fragment slot="head">
     {images.length > 0 && (() => {
-      const cdnDom = ((Astro.locals.runtime?.env?.CDN_DOMAIN_URL as string) || import.meta.env.CDN_DOMAIN_URL || '').replace(/^https?:\/\//, '');
+      const cdnDom = ((cfEnv as unknown as Env)?.CDN_DOMAIN_URL as string || import.meta.env.CDN_DOMAIN_URL || '').replace(/^https?:\/\//, '');
       const imgUrl = images[0].url;
       const preloadHref = cdnDom && imgUrl.includes(cdnDom)
         ? `https://${cdnDom}/cdn-cgi/image/width=600,height=600,quality=85,format=auto,fit=cover${new URL(imgUrl).pathname}`

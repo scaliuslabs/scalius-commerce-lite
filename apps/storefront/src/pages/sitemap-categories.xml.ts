@@ -11,9 +11,9 @@ import type { APIContext, APIRoute } from 'astro';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ locals }: APIContext) => {
+export const GET: APIRoute = async (_context: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl(locals);
+    const baseUrl = getRuntimeStorefrontUrl();
     const categories = await getAllCategories();
 
     if (!categories) {

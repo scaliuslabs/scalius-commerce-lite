@@ -3,14 +3,14 @@
  * deploy.mjs — Full deploy pipeline for Cloudflare Workers
  *
  * Usage:
- *   node scripts/deploy.mjs                  # full deploy (build + migrate + deploy both workers)
+ *   node scripts/deploy.mjs                  # full deploy (build + migrate + deploy all workers)
  *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
  *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
  *
  * Runs in order (full deploy):
  *   1. turbo build       — builds all workspaces
  *   2. wrangler d1 migrations apply --remote  — applies pending migrations to D1
- *   3. wrangler deploy   — deploys both workers
+ *   3. wrangler deploy   — deploys all three workers (API, Admin, Storefront)
  *
  * The database name is read from apps/api/wrangler.jsonc (API worker owns D1).
  */
@@ -98,11 +98,12 @@ function run(cmd, label, cwd = root) {
       apiDir
     );
 
-    // 3. Deploy both workers
+    // 3. Deploy all three workers
     run("pnpm exec wrangler deploy", "Deploy API Worker", apiDir);
     run("pnpm exec wrangler deploy", "Deploy Admin Worker", resolve(root, "apps", "admin"));
+    run("pnpm exec wrangler deploy", "Deploy Storefront Worker", resolve(root, "apps", "storefront"));
 
-    console.log("\n✓ Deploy complete.");
+    console.log("\n✓ Deploy complete (API + Admin + Storefront).");
   } catch {
     console.error("\n✗ Deploy failed. See error above.");
     process.exit(1);

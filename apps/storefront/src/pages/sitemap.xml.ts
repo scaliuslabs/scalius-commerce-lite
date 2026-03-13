@@ -14,9 +14,9 @@ export const prerender = false;
 // Max URLs per sitemap chunk
 const PRODUCTS_PER_SITEMAP = 5000;
 
-export const GET: APIRoute = async ({ locals }: APIContext) => {
+export const GET: APIRoute = async (_context: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl(locals);
+    const baseUrl = getRuntimeStorefrontUrl();
     const now = new Date().toISOString();
 
     // Generate sitemap index with all sub-sitemaps

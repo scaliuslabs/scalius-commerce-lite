@@ -106,11 +106,9 @@ const [layoutData, checkoutConfig] = await Promise.all([
   .space-y-3 > div { position: relative; }
 </style>
 
-<script is:inline define:vars={{ checkoutConfigJson: JSON.stringify(checkoutConfig) }}>
-// ── Types ────────────────────────────────────────────────────────────────────
-/** @type {string} injected by Astro define:vars */
-var checkoutConfigJson;
-const checkoutConfig = JSON.parse(checkoutConfigJson);
+<script is:inline set:html={`window.__CHECKOUT_CONFIG__=${JSON.stringify(checkoutConfig)};`}></script>
+<script is:inline>
+const checkoutConfig = window.__CHECKOUT_CONFIG__;
 
 // ── State ────────────────────────────────────────────────────────────────────
 

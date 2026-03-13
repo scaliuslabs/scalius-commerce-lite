@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { Fetcher } from "@cloudflare/workers-types";
+// Fetcher type is defined globally in env.d.ts
 
 // Context injected per-request by Astro middleware.
 // Carries Cloudflare Worker runtime bindings (from wrangler.jsonc vars)

@@ -16,9 +16,9 @@ export const prerender = false;
 
 const URLS_PER_SITEMAP = 5000; // Chunk size safe for Cloudflare Workers
 
-export const GET: APIRoute = async ({ url, locals }: APIContext) => {
+export const GET: APIRoute = async ({ url }: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl(locals);
+    const baseUrl = getRuntimeStorefrontUrl();
 
     // Get page number from query params (default to 1)
     const pageParam = url.searchParams.get('page');

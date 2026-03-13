@@ -168,9 +168,9 @@ function generateFacebookFeed(products: Product[], baseUrl: string, currencyCode
 import { getRuntimeStorefrontUrl } from "@/lib/runtime-env";
 import type { APIContext } from 'astro';
 
-export const GET: APIRoute = async ({ url, locals }: APIContext) => {
+export const GET: APIRoute = async ({ url }: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl(locals);
+    const baseUrl = getRuntimeStorefrontUrl();
     if (!baseUrl) {
       return new Response('STOREFRONT_URL not configured', { status: 500 });
     }

@@ -9,8 +9,6 @@
  * When KV version bumps, new cache keys are used, effectively invalidating old entries.
  */
 
-/// <reference types="@cloudflare/workers-types" />
-
 import { smartCache } from "./smart-cache";
 import { BUILD_ID } from "@/config/build-id";
 

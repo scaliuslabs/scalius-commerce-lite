@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { env as cfEnv } from "cloudflare:workers";
 import { getSeoSettings } from "@/lib/api";
 
 export const prerender = false;
@@ -13,7 +14,8 @@ export const GET: APIRoute = async ({ locals }) => {
   }
 
   // Append sitemap reference
-  const storefrontUrl = (locals.runtime?.env?.STOREFRONT_URL as string) || import.meta.env.STOREFRONT_URL || '';
+  const env = cfEnv as unknown as Env;
+  const storefrontUrl = (env?.STOREFRONT_URL as string) || import.meta.env.STOREFRONT_URL || '';
   const sitemapUrl = storefrontUrl
     ? `${storefrontUrl.replace(/\/$/, '')}/sitemap.xml`
     : '/sitemap.xml';
