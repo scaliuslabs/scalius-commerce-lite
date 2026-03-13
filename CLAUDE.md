@@ -132,7 +132,7 @@ import { fetchWithRetry } from "@/lib/api/client";
 ```
 dashboard.scalius.com  → scalius-admin (Admin Worker)
 api.scalius.com        → scalius-api (API Worker)
-store.wrygo.com        → scalius-storefront (Storefront Worker)
+storefront.scalius.com → scalius-storefront (Storefront Worker)
 cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 ```
 

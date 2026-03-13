@@ -1,8 +1,8 @@
 // Same-origin proxy for customer auth endpoints.
 //
-// The storefront (store.wrygo.com) and API (api.scalius.com) are on
-// different domains. Modern browsers silently drop cross-origin
-// Set-Cookie headers, even with SameSite=None + credentials:include.
+// The storefront and API may be on different domains. Modern browsers
+// silently drop cross-origin Set-Cookie headers, even with
+// SameSite=None + credentials:include.
 //
 // This proxy ensures all customer auth requests go through the
 // storefront's own origin so cookies (cs_tok, cs_auth) are set and
@@ -20,6 +20,12 @@ const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
 export const ALL: APIRoute = async ({ request, params }) => {
   const subpath = params.path || "";
+
+  // Security: reject path traversal and restrict to safe characters
+  if (subpath.includes("..") || !/^[a-zA-Z0-9\-\/]*$/.test(subpath)) {
+    return new Response("Bad request", { status: 400 });
+  }
+
   const apiPath = `/api/v1/customer-auth/${subpath}`;
 
   if (!ALLOWED_METHODS.has(request.method)) {
@@ -67,8 +73,22 @@ export const ALL: APIRoute = async ({ request, params }) => {
 
     // Copy all headers from API response
     for (const [key, value] of apiResponse.headers.entries()) {
+      const lk = key.toLowerCase();
       // Skip hop-by-hop headers
-      if (key.toLowerCase() === "transfer-encoding") continue;
+      if (lk === "transfer-encoding") continue;
+
+      if (lk === "set-cookie") {
+        // The API worker may set cookies with a Domain attr from its STOREFRONT_URL.
+        // Since this proxy serves from the storefront's own origin, we must:
+        // 1. Strip Domain= so the cookie becomes host-only (works on any storefront domain)
+        // 2. Change SameSite=None to SameSite=Lax (same-origin doesn't need cross-site)
+        const rewritten = value
+          .replace(/;\s*Domain=[^;]*/gi, "")
+          .replace(/;\s*SameSite=None/gi, "; SameSite=Lax");
+        responseHeaders.append(key, rewritten);
+        continue;
+      }
+
       responseHeaders.append(key, value);
     }
 

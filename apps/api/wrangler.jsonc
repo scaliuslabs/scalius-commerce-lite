@@ -94,7 +94,7 @@
   "vars": {
     "PUBLIC_API_BASE_URL": "https://api.scalius.com",
     "BETTER_AUTH_URL": "https://dashboard.scalius.com",
-    "STOREFRONT_URL": "https://store.wrygo.com",
+    "STOREFRONT_URL": "https://storefront.scalius.com",
     "CDN_DOMAIN_URL": "cloud.scalius.com",
     "R2_PUBLIC_URL": "https://cloud.scalius.com",
     "PURGE_URL": "https://storefront.scalius.com/api/purge-cache"
