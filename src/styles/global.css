@@ -149,22 +149,11 @@
     @apply hover:brightness-105 active:scale-[0.98];
   }
 
-  /* Enhanced focus states for better accessibility */
-  *:focus-visible {
-    @apply outline-none ring-2 ring-ring/40 ring-offset-1 ring-offset-background;
-  }
-
   /* Form elements */
   input,
   select,
   textarea {
-    @apply transition-all duration-200 ease-out;
-  }
-
-  input:focus,
-  select:focus,
-  textarea:focus {
-    @apply ring-2 ring-primary/40 border-primary/50;
+    @apply transition-colors duration-200 ease-out;
   }
 
   /* Table enhancements */
