@@ -13,7 +13,7 @@ const deliveryService = new DeliveryService();
 
 const getShipmentRoute = createRoute({
     method: "get",
-    path: "/:id",
+    path: "/{id}",
     tags: ["Admin - Shipments"],
     summary: "Get shipment by ID",
     request: {
@@ -39,7 +39,7 @@ app.openapi(getShipmentRoute, async (c) => {
 
 const deleteShipmentRoute = createRoute({
     method: "delete",
-    path: "/:id",
+    path: "/{id}",
     tags: ["Admin - Shipments"],
     summary: "Delete a shipment",
     request: {
@@ -67,7 +67,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
 
 const checkStatusRoute = createRoute({
     method: "post",
-    path: "/:id/check-status",
+    path: "/{id}/check-status",
     tags: ["Admin - Shipments"],
     summary: "Check and update shipment status from provider",
     request: {

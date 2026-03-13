@@ -138,7 +138,7 @@ app.openapi(bulkShipRoute, async (c) => {
 
 const getOrderRoute = createRoute({
     method: "get",
-    path: "/:id",
+    path: "/{id}",
     tags: ["Admin - Orders"],
     summary: "Get order details",
     request: {
@@ -161,7 +161,7 @@ app.openapi(getOrderRoute, async (c) => {
 
 const updateOrderRoute = createRoute({
     method: "put",
-    path: "/:id",
+    path: "/{id}",
     tags: ["Admin - Orders"],
     summary: "Update an order",
     request: {
@@ -184,7 +184,7 @@ app.openapi(updateOrderRoute, async (c) => {
 
 const deleteOrderRoute = createRoute({
     method: "delete",
-    path: "/:id",
+    path: "/{id}",
     tags: ["Admin - Orders"],
     summary: "Soft delete an order",
     request: {
@@ -205,7 +205,7 @@ app.openapi(deleteOrderRoute, async (c) => {
 
 const restoreOrderRoute = createRoute({
     method: "post",
-    path: "/:id/restore",
+    path: "/{id}/restore",
     tags: ["Admin - Orders"],
     summary: "Restore a soft-deleted order",
     request: {
@@ -226,7 +226,7 @@ app.openapi(restoreOrderRoute, async (c) => {
 
 const permanentDeleteRoute = createRoute({
     method: "delete",
-    path: "/:id/permanent",
+    path: "/{id}/permanent",
     tags: ["Admin - Orders"],
     summary: "Permanently delete an order",
     request: {
@@ -247,7 +247,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
 
 const getCodRoute = createRoute({
     method: "get",
-    path: "/:id/cod",
+    path: "/{id}/cod",
     tags: ["Admin - Orders"],
     summary: "Get COD tracking for an order",
     request: {
@@ -277,7 +277,7 @@ const codActionSchema = z.object({
 
 const postCodRoute = createRoute({
     method: "post",
-    path: "/:id/cod",
+    path: "/{id}/cod",
     tags: ["Admin - Orders"],
     summary: "Process COD action",
     request: {
@@ -300,7 +300,7 @@ app.openapi(postCodRoute, async (c) => {
 
 const getFulfillRoute = createRoute({
     method: "get",
-    path: "/:id/fulfill",
+    path: "/{id}/fulfill",
     tags: ["Admin - Orders"],
     summary: "Get fulfillment shipments for an order",
     request: {
@@ -331,7 +331,7 @@ const fulfillSchema = z.object({
 
 const postFulfillRoute = createRoute({
     method: "post",
-    path: "/:id/fulfill",
+    path: "/{id}/fulfill",
     tags: ["Admin - Orders"],
     summary: "Create a fulfillment shipment",
     request: {
@@ -354,7 +354,7 @@ app.openapi(postFulfillRoute, async (c) => {
 
 const updateStatusRoute = createRoute({
     method: "put",
-    path: "/:id/status",
+    path: "/{id}/status",
     tags: ["Admin - Orders"],
     summary: "Update order status",
     request: {
@@ -377,7 +377,7 @@ app.openapi(updateStatusRoute, async (c) => {
 
 const getItemsRoute = createRoute({
     method: "get",
-    path: "/:id/items",
+    path: "/{id}/items",
     tags: ["Admin - Orders"],
     summary: "Get order items with product details",
     request: {
@@ -423,7 +423,7 @@ app.openapi(getItemsRoute, async (c) => {
 
 const getPaymentsRoute = createRoute({
     method: "get",
-    path: "/:id/payments",
+    path: "/{id}/payments",
     tags: ["Admin - Orders"],
     summary: "Get order payments and payment plan",
     request: {
@@ -450,7 +450,7 @@ app.openapi(getPaymentsRoute, async (c) => {
 
 const getShipmentsRoute = createRoute({
     method: "get",
-    path: "/:id/shipments",
+    path: "/{id}/shipments",
     tags: ["Admin - Orders"],
     summary: "Get order shipments",
     request: {
@@ -489,7 +489,7 @@ const createShipmentSchema = z.object({
 
 const createShipmentRoute = createRoute({
     method: "post",
-    path: "/:id/shipments",
+    path: "/{id}/shipments",
     tags: ["Admin - Orders"],
     summary: "Create a shipment for an order",
     request: {
@@ -538,7 +538,7 @@ app.openapi(createShipmentRoute, async (c) => {
 
 const getShipmentRoute = createRoute({
     method: "get",
-    path: "/:id/shipments/:shipmentId",
+    path: "/{id}/shipments/{shipmentId}",
     tags: ["Admin - Orders"],
     summary: "Get a specific shipment",
     request: {
@@ -568,7 +568,7 @@ app.openapi(getShipmentRoute, async (c) => {
 
 const deleteShipmentRoute = createRoute({
     method: "delete",
-    path: "/:id/shipments/:shipmentId",
+    path: "/{id}/shipments/{shipmentId}",
     tags: ["Admin - Orders"],
     summary: "Delete a shipment",
     request: {
@@ -595,11 +595,11 @@ app.openapi(deleteShipmentRoute, async (c) => {
     return c.json({ success: true }, 200);
 });
 
-// ─── POST /:id/shipments/:shipmentId/status ──────────────────────────────────
+// ─── POST /:id/shipments/{shipmentId}/status ──────────────────────────────────
 
 const checkShipmentStatusRoute = createRoute({
     method: "post",
-    path: "/:id/shipments/:shipmentId/status",
+    path: "/{id}/shipments/{shipmentId}/status",
     tags: ["Admin - Orders"],
     summary: "Check shipment status from provider",
     request: {
@@ -626,11 +626,11 @@ app.openapi(checkShipmentStatusRoute, async (c) => {
     return c.json(updatedShipment, 200);
 });
 
-// ─── POST /:id/shipments/:shipmentId/refresh ─────────────────────────────────
+// ─── POST /:id/shipments/{shipmentId}/refresh ─────────────────────────────────
 
 const refreshShipmentRoute = createRoute({
     method: "post",
-    path: "/:id/shipments/:shipmentId/refresh",
+    path: "/{id}/shipments/{shipmentId}/refresh",
     tags: ["Admin - Orders"],
     summary: "Refresh shipment status and update order",
     request: {
@@ -695,7 +695,7 @@ app.openapi(refreshShipmentRoute, async (c) => {
 
 const returnOrderRoute = createRoute({
     method: "post",
-    path: "/:id/return",
+    path: "/{id}/return",
     tags: ["Admin - Orders"],
     summary: "Process order return",
     request: {
@@ -720,7 +720,7 @@ app.openapi(returnOrderRoute, async (c) => {
 
 const refundOrderRoute = createRoute({
     method: "post",
-    path: "/:id/refund",
+    path: "/{id}/refund",
     tags: ["Admin - Orders"],
     summary: "Process order refund",
     request: {
