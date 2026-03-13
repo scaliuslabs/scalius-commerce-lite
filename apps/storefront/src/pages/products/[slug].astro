@@ -1,0 +1,204 @@
+---
+import { getProductBySlug } from "@/lib/api";
+import Layout from "@/layouts/Layout.astro";
+import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
+import ProductGallery from "@/components/product/ProductGallery.astro";
+import ProductSummary from "@/components/product/ProductSummary.astro";
+import RelatedProducts from "@/components/product/RelatedProducts.astro";
+import { loadPageWithLayout } from "@/lib/page-data";
+
+const { slug } = Astro.params;
+if (!slug) {
+  return Astro.redirect("/404");
+}
+
+// Parallel fetch: layout data + product data
+const { layoutData, pageData: productData } = await loadPageWithLayout(
+  () => getProductBySlug(slug)
+);
+if (!productData) {
+  return Astro.redirect("/404");
+}
+
+const { product, category, images, variants, relatedProducts } = productData;
+
+const isVariantSpecificImagesEnabled = !!product.metaDescription?.includes(
+  "<!--variant_images:enabled-->"
+);
+const cleanMetaDescription =
+  product.metaDescription
+    ?.replace(/<!--variant_images:enabled-->/g, "")
+    .trim() || "";
+
+const discountedPrice = product.discountedPrice;
+const productCategory = category ?? null;
+
+const sizeOrderMap = new Map<string, number>();
+variants.forEach((v) => {
+  if (v.size && !sizeOrderMap.has(v.size)) {
+    sizeOrderMap.set(v.size, v.sizeSortOrder);
+  }
+});
+const sizeOptions = Array.from(sizeOrderMap.entries())
+  .sort((a, b) => a[1] - b[1])
+  .map((entry) => entry[0]);
+
+const colorOrderMap = new Map<string, number>();
+variants.forEach((v) => {
+  if (v.color && !colorOrderMap.has(v.color)) {
+    colorOrderMap.set(v.color, v.colorSortOrder);
+  }
+});
+const colorOptions = Array.from(colorOrderMap.entries())
+  .sort((a, b) => a[1] - b[1])
+  .map((entry) => entry[0]);
+
+const pageTitle = product.metaTitle || product.name;
+const pageDescription = cleanMetaDescription;
+const currencySymbol = layoutData?.currency?.symbol ?? "৳";
+---
+
+<Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>
+  <Fragment slot="head">
+    {images.length > 0 && (() => {
+      const cdnDom = ((Astro.locals.runtime?.env?.CDN_DOMAIN_URL as string) || import.meta.env.CDN_DOMAIN_URL || '').replace(/^https?:\/\//, '');
+      const imgUrl = images[0].url;
+      const preloadHref = cdnDom && imgUrl.includes(cdnDom)
+        ? `https://${cdnDom}/cdn-cgi/image/width=600,height=600,quality=85,format=auto,fit=cover${new URL(imgUrl).pathname}`
+        : imgUrl;
+      return (
+        <link 
+          rel="preload" 
+          as="image" 
+          href={preloadHref} 
+          fetchpriority="high" 
+        />
+      );
+    })()}
+  </Fragment>
+
+  <main
+    class="min-h-screen bg-white product-container"
+    id="product-container"
+    data-product-id={product.id}
+    data-product-slug={product.slug}
+    data-product-name={product.name}
+    data-product-price={String(discountedPrice)}
+    data-product-original-price={String(product.price)}
+    data-product-image={images[0]?.url || ""}
+    data-product-discount-type={product.discountType || ""}
+    data-product-discount-percentage={String(product.discountPercentage || 0)}
+    data-product-discount-amount={String(product.discountAmount || 0)}
+    data-product-free-delivery={product.freeDelivery.toString()}
+    data-fb-product-details={JSON.stringify({
+      id: product.id,
+      slug: product.slug,
+      name: product.name,
+      discountedPrice: discountedPrice,
+    })}
+    data-fb-category-details={JSON.stringify(productCategory)}
+    data-fb-variants-details={JSON.stringify(variants.slice(0, 1))}
+  >
+    <div class="lg:pt-2">
+      <ProductBreadcrumbs product={product} category={productCategory} />
+    </div>
+
+    <section
+      class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-4 lg:py-6"
+    >
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-3 lg:gap-y-8">
+        <ProductGallery product={product} images={images} />
+        <ProductSummary
+          product={product}
+          category={productCategory}
+          variants={variants}
+          sizeOptions={sizeOptions}
+          colorOptions={colorOptions}
+          isVariantSpecificImagesEnabled={isVariantSpecificImagesEnabled}
+          currencySymbol={currencySymbol}
+        />
+      </div>
+    </section>
+
+    <RelatedProducts relatedProducts={relatedProducts} currencySymbol={currencySymbol} />
+  </main>
+</Layout>
+
+<script>
+  // Defer the product controller to break the critical chain for pricing-engine.js.
+  // The controller only needs to run after DOM is ready (init() does DOM queries).
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      import('@/components/product/scripts/product-controller').then(m => m.init());
+    }, { once: true });
+  } else {
+    import('@/components/product/scripts/product-controller').then(m => m.init());
+  }
+</script>
+<script>
+  import type { Product, Category, ProductVariant } from "@/lib/api";
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const container = document.getElementById("product-container");
+    if (!container) return;
+
+    const productDataAttr = container.dataset.fbProductDetails;
+    const categoryDataAttr = container.dataset.fbCategoryDetails;
+    const variantsDataAttr = container.dataset.fbVariantsDetails;
+
+    if (!productDataAttr || !categoryDataAttr || !variantsDataAttr) {
+      console.error("FB ViewContent: Missing data attributes on container.");
+      return;
+    }
+
+    try {
+      const product: Product = JSON.parse(productDataAttr);
+      const category: Category | null = JSON.parse(categoryDataAttr);
+      const variants: ProductVariant[] = JSON.parse(variantsDataAttr);
+
+      // DEFER DEPENDENCY CHAIN:
+      // Dynamically load the analytics tracker only after the page has fully loaded
+      // to remove it from the Lighthouse Critical Request Chain. We use the 'load'
+      // event instead of a 'setTimeout' to avoid arbitrary delays and ensure data
+      // isn't dropped for fast-bouncing visitors while remaining predictable for developers.
+      const triggerAnalytics = () => {
+        if (typeof window.fbq === "function") {
+          import("@/lib/analytics").then(({ trackFbViewContent }) => {
+            trackFbViewContent({
+              content_ids: [product.id],
+              content_name: product.name,
+              content_category: category?.name,
+              content_type: "product",
+              currency: (window as any).__CURRENCY_CODE__ || "BDT",
+              value: product.discountedPrice,
+              contents: variants.map((v: ProductVariant) => ({
+                id: v.id && v.id !== "default" ? v.id : product.id,
+                quantity: 1,
+                item_price: v.price || product.discountedPrice,
+              })),
+            });
+          });
+        }
+      };
+
+      if (document.readyState === "complete") {
+        setTimeout(triggerAnalytics, 1);
+      } else {
+        window.addEventListener("load", triggerAnalytics, { once: true });
+      }
+    } catch (error) {
+      console.error("FB ViewContent: Error parsing data attributes:", error);
+    }
+  });
+</script>
+
+<style is:inline>
+  .product-container {
+    scroll-behavior: smooth;
+  }
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+  }
+</style>

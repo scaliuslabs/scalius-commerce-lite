@@ -1,0 +1,348 @@
+---
+import { Image } from "astro:assets";
+import SearchBar from "../search/SearchBar.astro";
+import { Phone, ShoppingCart, Menu, Search, Check, Copy } from "lucide-react";
+import type { HeaderData, SocialLink } from "@/lib/api";
+
+interface Props {
+  headerData: HeaderData;
+}
+
+const { headerData } = Astro.props;
+---
+
+<!-- Sentinel for Scroll Detection -->
+<div
+  id="header-sentinel"
+  class="absolute top-0 w-full h-px -translate-y-px pointer-events-none opacity-0 z-0"
+>
+</div>
+
+{
+  headerData.topBar.isEnabled !== false &&
+    headerData.topBar.text &&
+    headerData.topBar.text.trim().length > 0 && (
+      <div class="relative z-50 bg-primary text-primary-foreground overflow-hidden shrink-0 w-full h-8 sm:h-9 flex items-center justify-center border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-4 w-full">
+          <p class="text-[10px] sm:text-xs font-medium text-center tracking-[0.15em] uppercase opacity-90 truncate">
+            {headerData.topBar.text}
+          </p>
+        </div>
+      </div>
+    )
+}
+
+<div
+  id="main-header"
+  class="sticky top-0 z-50 w-full bg-background/95 backdrop-blur-xl border-b border-border transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group/header"
+>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- ROW 1 -->
+    <div
+      class="flex items-center justify-between h-14 lg:h-18 group-[.is-scrolled]/header:lg:h-16 gap-4 relative z-20 transition-[height] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
+    >
+      <div class="flex items-center shrink-0 lg:hidden z-30 gap-2">
+        <button
+          id="mobile-menu-toggle"
+          type="button"
+          class="p-2 -ml-2 text-foreground rounded-full hover:bg-muted active:bg-accent transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="h-6 w-6 stroke-[1.5]" />
+        </button>
+
+        <button
+          id="mobile-search-toggle"
+          type="button"
+          class="p-2 text-foreground rounded-full hover:bg-muted active:bg-accent transition-colors"
+          aria-label="Search"
+        >
+          <Search className="h-5 w-5 stroke-[1.5]" />
+        </button>
+      </div>
+
+      <div
+        class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:translate-x-0 lg:translate-y-0 shrink-0 z-20 flex items-center justify-center lg:justify-start"
+      >
+        <a href="/" class="block group" aria-label="Go to homepage">
+          {headerData.logo.src ? (
+            <Image
+              src={headerData.logo.src}
+              alt={headerData.logo.alt}
+              class="h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-transform duration-300 group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
+              width={240}
+              height={80}
+              loading="eager"
+              fetchpriority="high"
+              format="avif"
+            />
+          ) : (
+            <span class="font-bold text-xl tracking-tight transition-transform duration-300 group-hover:scale-[1.02]">
+              {headerData.logo.alt}
+            </span>
+          )}
+        </a>
+      </div>
+
+      <!-- 3. CENTER: Desktop Morphing Zone -->
+      <div
+        class="hidden lg:flex flex-1 items-center justify-center px-8 min-w-0 relative h-full z-10"
+      >
+        <div
+          class="w-full max-w-lg transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] opacity-100 scale-100 translate-y-0 group-[.is-scrolled]/header:opacity-0 group-[.is-scrolled]/header:scale-90 group-[.is-scrolled]/header:-translate-y-4 group-[.is-scrolled]/header:pointer-events-none absolute"
+        >
+          <SearchBar />
+        </div>
+        <!-- Compact Nav (Visible on Scroll) -->
+        <div
+          class="transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] opacity-0 scale-95 translate-y-4 pointer-events-none group-[.is-scrolled]/header:opacity-100 group-[.is-scrolled]/header:scale-100 group-[.is-scrolled]/header:translate-y-0 group-[.is-scrolled]/header:pointer-events-auto absolute w-full inset-x-0 flex justify-center"
+        >
+          <slot name="desktop-nav-compact" />
+        </div>
+      </div>
+
+      <div
+        class="flex items-center justify-end gap-1 sm:gap-3 shrink-0 z-30 ml-auto lg:ml-0"
+      >
+        <button
+          id="scrolled-search-trigger"
+          type="button"
+          class="hidden lg:hidden lg:group-[.is-scrolled]/header:flex items-center justify-center h-10 w-10 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-300 opacity-0 -translate-x-2 lg:group-[.is-scrolled]/header:opacity-100 lg:group-[.is-scrolled]/header:translate-x-0"
+          aria-label="Search"
+        >
+          <Search className="h-5 w-5 stroke-[1.5]" />
+        </button>
+
+        {
+          headerData.social && headerData.social.length > 0 && (
+            <div class="hidden lg:flex lg:group-[.is-scrolled]/header:hidden items-center gap-1">
+              {headerData.social.map((item: SocialLink) => {
+                if (!item.url) return null;
+                const displayTitle = item.label || item.platform || "Social";
+                const href = item.url.startsWith("http")
+                  ? item.url
+                  : `https://${item.url}`;
+
+                return (
+                  <a
+                    href={href}
+                    class="group flex items-center justify-center h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={displayTitle}
+                  >
+                    {item.iconUrl ? (
+                      <img
+                        src={item.iconUrl}
+                        alt={displayTitle}
+                        class="w-4 h-4 object-contain"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span class="w-4 h-4 flex items-center justify-center text-xs font-bold uppercase">
+                        {displayTitle.charAt(0)}
+                      </span>
+                    )}
+                    <span class="sr-only">{displayTitle}</span>
+                  </a>
+                );
+              })}
+            </div>
+          )
+        }
+
+        {
+          headerData.contact.isEnabled !== false &&
+            headerData.contact.phone && (
+              <button
+                type="button"
+                id="desktop-phone-btn"
+                data-phone={headerData.contact.phone}
+                class="hidden xl:flex xl:group-[.is-scrolled]/header:hidden group items-center justify-center h-10 w-10 rounded-full bg-background border border-input text-muted-foreground hover:border-primary/50 hover:text-foreground hover:shadow-sm transition-all duration-200 active:scale-95 relative overflow-hidden"
+                aria-label="Copy phone number"
+                title={headerData.contact.phone}
+              >
+                <div
+                  class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-full"
+                  id="phone-icon-normal"
+                >
+                  <Phone className="h-4 w-4 stroke-[1.5]" />
+                </div>
+                <div
+                  class="absolute inset-0 flex items-center justify-center translate-y-full transition-transform duration-300 group-hover:translate-y-0"
+                  id="phone-icon-hover"
+                >
+                  <Copy className="h-4 w-4 stroke-2" />
+                </div>
+                <div
+                  class="absolute inset-0 flex items-center justify-center translate-y-full transition-transform duration-200 text-primary bg-primary/10"
+                  id="phone-icon-success"
+                >
+                  <Check className="h-4 w-4 stroke-[2.5]" />
+                </div>
+              </button>
+            )
+        }
+
+        <div class="group flex items-center h-9 lg:h-11 bg-card-foreground text-card transition-all duration-300 rounded-full pl-1 pr-1 lg:pr-1.5 shadow-md hover:shadow-xl hover:-translate-y-0.5 shrink-0 relative">
+          <a
+            id="account-link"
+            href="/account"
+            class="flex items-center justify-center h-7 w-7 lg:h-8 lg:w-8 rounded-full text-card/80 hover:bg-card/10 hover:text-card transition-colors duration-200 ml-1 mr-1 lg:mr-2"
+            aria-label="My Account"
+            title="My Account"
+          >
+            <svg class="h-4 w-4 lg:h-[18px] lg:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"></path>
+            </svg>
+          </a>
+
+          <button
+            type="button"
+            id="cart-button"
+            class="relative flex items-center pl-2 lg:pl-2 gap-2 lg:gap-3 cursor-pointer active:scale-[0.98] outline-none"
+            aria-label="Open shopping cart"
+          >
+            <span
+              id="cart-total-display"
+              class="hidden md:block text-[14px] font-bold tracking-tight whitespace-nowrap tabular-nums text-card"
+            >
+              0
+            </span>
+
+            <span class="hidden md:block h-5 w-px bg-card/20"></span>
+
+            <div
+              class="relative w-7 h-7 lg:w-8 lg:h-8 shrink-0 flex items-center justify-center bg-card/10 rounded-full hover:bg-card/20 transition-colors"
+            >
+              <ShoppingCart className="h-3.5 w-3.5 lg:h-4 lg:w-4 stroke-2" />
+              <span
+                id="cart-count"
+                class="absolute -top-1 -right-1 flex h-3.5 w-3.5 lg:h-4 lg:w-4 min-w-3.5 lg:min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground px-0.5 text-[9px] lg:text-[10px] font-bold ring-2 ring-card-foreground transition-all duration-300 scale-0 opacity-0 shadow-sm"
+              >
+                0
+              </span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 
+      ROW 2: Desktop Nav
+      CRITICAL FIX: Removed 'overflow-hidden' from default state. 
+      Added 'group-[.is-scrolled]/header:overflow-hidden' to clip ONLY when collapsing.
+    -->
+    <div
+      class="hidden lg:block border-t border-border transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] max-h-14 opacity-100 overflow-visible group-[.is-scrolled]/header:max-h-0 group-[.is-scrolled]/header:opacity-0 group-[.is-scrolled]/header:border-none group-[.is-scrolled]/header:overflow-hidden"
+    >
+      <div class="py-2 flex justify-center relative z-50">
+        <slot name="desktop-nav-full" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { toast } from "sonner";
+
+  const header = document.getElementById("main-header");
+  const sentinel = document.getElementById("header-sentinel");
+
+  function updateHeaderHeight() {
+    if (!header) return;
+    const height = header.offsetHeight;
+    document.documentElement.style.setProperty(
+      "--header-height",
+      `${height}px`
+    );
+  }
+
+  // Robust Scroll Detection using IntersectionObserver
+  function initializeScrollObserver() {
+    if (!header || !sentinel) return;
+
+    // We want to trigger when the Page is scrolled DOWN past the sentinel.
+    // Sentinel is at top: 0.
+    // When sentinel is NOT intersecting (is above viewport), we are scrolled.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            // Sentinel is out of view -> Scrolled
+            header.classList.add("is-scrolled", "shadow-md");
+          } else {
+            // Sentinel is in view -> Top of page
+            header.classList.remove("is-scrolled", "shadow-md");
+          }
+          // Update height after transition (300ms + buffer)
+          setTimeout(updateHeaderHeight, 350);
+        });
+      },
+      {
+        root: null,
+        threshold: 0,
+      }
+    );
+
+    observer.observe(sentinel);
+  }
+
+  const triggerSearch = (e: Event) => {
+    e.preventDefault();
+    document.dispatchEvent(new CustomEvent("open-search-palette"));
+  };
+
+  document
+    .getElementById("mobile-search-toggle")
+    ?.addEventListener("click", triggerSearch);
+  document
+    .getElementById("scrolled-search-trigger")
+    ?.addEventListener("click", triggerSearch);
+
+  const phoneBtn = document.getElementById("desktop-phone-btn");
+  const iconSuccess = document.getElementById("phone-icon-success");
+  if (phoneBtn && iconSuccess) {
+    phoneBtn.addEventListener("click", async () => {
+      const phone = phoneBtn.getAttribute("data-phone");
+      if (!phone) return;
+      try {
+        await navigator.clipboard.writeText(phone);
+        iconSuccess.classList.remove("translate-y-full");
+        toast.success("Copied to clipboard", { duration: 2000 });
+        setTimeout(() => iconSuccess.classList.add("translate-y-full"), 2000);
+      } catch (err) {
+        window.location.href = `tel:${phone}`;
+      }
+    });
+  }
+
+  window.addEventListener("resize", updateHeaderHeight);
+  initializeScrollObserver();
+  // Double check in case of existing scroll (InterSectionObserver handles this, but good to be same)
+  updateHeaderHeight();
+
+  // Re-run on astro navigation
+  document.addEventListener("astro:page-load", () => {
+    initializeScrollObserver();
+    updateHeaderHeight();
+  });
+
+  // Handle account icon click (check for cs_auth cookie)
+  function checkCustomerSession() {
+    const hasCookie = document.cookie.split(";").some((c) => c.trim().startsWith("cs_auth=1"));
+    const accountLink = document.getElementById("account-link");
+    if (accountLink) {
+      accountLink.onclick = (e) => {
+        if (!hasCookie) {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent("open-auth-modal"));
+        }
+      };
+    }
+  }
+  checkCustomerSession();
+  window.addEventListener("customer-login", checkCustomerSession);
+  window.addEventListener("customer-logout", checkCustomerSession);
+  document.addEventListener("astro:page-load", checkCustomerSession);
+</script>

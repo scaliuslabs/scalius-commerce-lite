@@ -1,0 +1,17 @@
+---
+// src/components/collection2.astro
+// Carousel layout collection component - receives pre-populated data from parent
+import ProductCarousel from "@/components/sliders/ProductCarousel.tsx";
+import type { CollectionWithProducts } from "@/lib/api";
+
+interface Props {
+  collection: CollectionWithProducts;
+}
+
+const { collection } = Astro.props;
+
+// Skip rendering if no products
+const hasProducts = collection.products && collection.products.length > 0;
+---
+
+{hasProducts && <ProductCarousel client:load collection={collection} />}

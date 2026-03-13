@@ -1,0 +1,183 @@
+---
+// Header component - receives data from Layout.astro
+import type { HeaderData, NavigationItem } from "@/lib/api";
+import CartFlyout from "../CartFlyout";
+import HeaderLayout from "./HeaderLayout.astro";
+import DesktopNav from "./DesktopNav.astro";
+import MobileMenu from "./MobileMenu.astro";
+
+interface Props {
+  headerData: HeaderData;
+  navigation: NavigationItem[];
+}
+
+const { headerData: apiHeaderData, navigation: navigationItems } = Astro.props;
+
+const headerData: HeaderData = {
+  topBar: {
+    text: apiHeaderData?.topBar?.text || "",
+    isEnabled: apiHeaderData?.topBar?.isEnabled ?? true,
+  },
+  logo: (apiHeaderData?.logo?.src)
+    ? apiHeaderData.logo
+    : { src: "", alt: apiHeaderData?.logo?.alt || "Store" },
+  contact: {
+    phone: apiHeaderData?.contact?.phone || "",
+    text: apiHeaderData?.contact?.text || "",
+    isEnabled: apiHeaderData?.contact?.isEnabled ?? true,
+  },
+  social: apiHeaderData?.social || [],
+};
+---
+
+<header id="site-header" class="contents">
+  <HeaderLayout headerData={headerData}>
+    <DesktopNav
+      slot="desktop-nav-full"
+      navigation={navigationItems}
+      id="desktop-nav-full"
+    />
+
+    <DesktopNav
+      slot="desktop-nav-compact"
+      navigation={navigationItems}
+      id="desktop-nav-compact"
+    />
+  </HeaderLayout>
+
+  <MobileMenu
+    navigation={navigationItems}
+    contact={headerData.contact}
+    social={headerData.social}
+  />
+
+  <CartFlyout client:idle />
+</header>
+
+<script>
+  import { cartStore } from "@/store/cart";
+  import { debounce } from "@/lib/utils";
+
+  const openCart = debounce(() => {
+    document.dispatchEvent(new CustomEvent("open-cart"));
+  }, 50);
+
+  function initializeHeader() {
+    function updateCartDisplay() {
+      const { totalItems, totalAmount } = cartStore.get();
+      const sym = (window as any).__CURRENCY_SYMBOL__ || "৳";
+      const formattedTotal = `${sym}${totalAmount.toLocaleString()}`;
+
+      const countElements = document.querySelectorAll(
+        "#cart-count, #mobile-cart-count"
+      );
+      countElements.forEach((el) => {
+        if (el instanceof HTMLElement) {
+          el.textContent = String(totalItems);
+          el.classList.remove(
+            "scale-0",
+            "opacity-0",
+            "scale-100",
+            "opacity-100"
+          );
+          if (totalItems > 0) {
+            el.classList.add("scale-100", "opacity-100");
+            requestAnimationFrame(() => {
+              el.style.transform = "scale(1.2)";
+              setTimeout(() => (el.style.transform = "scale(1)"), 150);
+            });
+          } else {
+            el.classList.add("scale-0", "opacity-0");
+          }
+        }
+      });
+
+      const totalDisplay = document.getElementById("cart-total-display");
+      if (totalDisplay) {
+        totalDisplay.textContent = formattedTotal;
+      }
+    }
+
+    updateCartDisplay();
+    cartStore.subscribe(updateCartDisplay);
+    document.addEventListener("cart-updated", updateCartDisplay);
+
+    // Event Delegation for clicks
+    const addClick = (id: string, fn: (e: MouseEvent) => void) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.removeEventListener("click", fn);
+        el.addEventListener("click", fn);
+      }
+    };
+
+    const handleOpenCart = (e: MouseEvent) => {
+      e.preventDefault();
+      openCart();
+    };
+
+    addClick("cart-button", handleOpenCart);
+    addClick("mobile-cart-button", handleOpenCart);
+
+    addClick("mobile-search-toggle", (e) => {
+      e.preventDefault();
+      const container = document.getElementById("mobile-search-container");
+      if (!container) return;
+      if (container.classList.contains("hidden")) {
+        container.classList.remove("hidden");
+        const input = container.querySelector("input");
+        if (input) setTimeout(() => input.focus(), 100);
+      } else {
+        container.classList.add("hidden");
+      }
+    });
+
+    const menuPanel = document.getElementById("mobile-menu-panel");
+    const menuOverlay = document.getElementById("mobile-menu-overlay");
+
+    const toggleMenu = (show: boolean) => {
+      if (!menuPanel || !menuOverlay) return;
+      if (show) {
+        menuPanel.classList.remove("-translate-x-full");
+        menuOverlay.classList.remove("opacity-0", "pointer-events-none");
+        document.body.style.overflow = "hidden";
+      } else {
+        menuPanel.classList.add("-translate-x-full");
+        menuOverlay.classList.add("opacity-0", "pointer-events-none");
+        document.body.style.overflow = "";
+      }
+    };
+
+    addClick("mobile-menu-toggle", () => toggleMenu(true));
+    addClick("mobile-menu-close", () => toggleMenu(false));
+    if (menuOverlay) {
+      menuOverlay.onclick = () => toggleMenu(false);
+    }
+
+    if (menuPanel) {
+      menuPanel.onclick = (e) => {
+        const target = e.target as HTMLElement;
+        const btn = target.closest("[data-menu-toggle]");
+        if (btn) {
+          e.preventDefault();
+          const id = btn.getAttribute("data-menu-toggle");
+          const submenu = menuPanel.querySelector(`[data-submenu="${id}"]`);
+          const icon = btn.querySelector("svg");
+          if (submenu) {
+            const isHidden = submenu.classList.contains("hidden");
+            if (isHidden) {
+              submenu.classList.remove("hidden");
+              icon?.classList.add("rotate-180");
+            } else {
+              submenu.classList.add("hidden");
+              icon?.classList.remove("rotate-180");
+            }
+          }
+        }
+      };
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", initializeHeader);
+  document.addEventListener("astro:page-load", initializeHeader);
+</script>

@@ -1,0 +1,135 @@
+---
+import Layout from "../layouts/Layout.astro";
+import "../styles/global.css";
+import Collection2 from "@/components/collection2.astro";
+import Collection1 from "../components/collection1.astro";
+import Hero from "@/components/hero.astro";
+import {
+  getHomepageData,
+  type CollectionWithProducts,
+  type ApiWidget,
+} from "@/lib/api";
+import { loadPageWithLayout } from "@/lib/page-data";
+
+// Parallel fetch: layout data + homepage data
+const { layoutData, pageData: homepageData } = await loadPageWithLayout(
+  () => getHomepageData()
+);
+
+const seo = homepageData?.seo ?? {
+  siteTitle: null as string | null,
+  homepageTitle: null as string | null,
+  homepageMetaDescription: null as string | null,
+};
+const hero = homepageData?.hero || { desktop: null, mobile: null };
+const activeWidgets = homepageData?.widgets || [];
+const activeCollections = homepageData?.collections || [];
+
+const homepageTitle =
+  seo.homepageTitle || seo.siteTitle || "Welcome to Our Store";
+const homepageMetaDescription =
+  seo.homepageMetaDescription || "Find the best products here.";
+
+const fixedTopWidgets: ApiWidget[] = [];
+const fixedBottomWidgets: ApiWidget[] = [];
+const widgetsBeforeCollection: Record<string, ApiWidget[]> = {};
+const widgetsAfterCollection: Record<string, ApiWidget[]> = {};
+
+activeWidgets.forEach((widget) => {
+  if (widget.placementRule === "fixed_top_homepage") {
+    fixedTopWidgets.push(widget);
+  } else if (widget.placementRule === "fixed_bottom_homepage") {
+    fixedBottomWidgets.push(widget);
+  } else if (
+    widget.placementRule === "before_collection" &&
+    widget.referenceCollectionId
+  ) {
+    if (!widgetsBeforeCollection[widget.referenceCollectionId]) {
+      widgetsBeforeCollection[widget.referenceCollectionId] = [];
+    }
+    widgetsBeforeCollection[widget.referenceCollectionId].push(widget);
+  } else if (
+    widget.placementRule === "after_collection" &&
+    widget.referenceCollectionId
+  ) {
+    if (!widgetsAfterCollection[widget.referenceCollectionId]) {
+      widgetsAfterCollection[widget.referenceCollectionId] = [];
+    }
+    widgetsAfterCollection[widget.referenceCollectionId].push(widget);
+  }
+});
+
+const sortBySortOrder = (a: ApiWidget, b: ApiWidget) =>
+  a.sortOrder - b.sortOrder;
+fixedTopWidgets.sort(sortBySortOrder);
+fixedBottomWidgets.sort(sortBySortOrder);
+Object.values(widgetsBeforeCollection).forEach((widgets) =>
+  widgets.sort(sortBySortOrder)
+);
+Object.values(widgetsAfterCollection).forEach((widgets) =>
+  widgets.sort(sortBySortOrder)
+);
+
+const currencySymbol = layoutData?.currency?.symbol ?? "৳";
+
+function isCollection1(
+  collection: CollectionWithProducts
+): collection is CollectionWithProducts & { type: "collection1" } {
+  return collection.type === "collection1";
+}
+
+function isCollection2(
+  collection: CollectionWithProducts
+): collection is CollectionWithProducts & { type: "collection2" } {
+  return collection.type === "collection2";
+}
+---
+
+<Layout title={homepageTitle} description={homepageMetaDescription} layoutData={layoutData}>
+  {
+    fixedTopWidgets.map((widget) => (
+      <div class="widget-container">
+        {widget.cssContent && <style set:html={widget.cssContent} />}
+        <div set:html={widget.htmlContent} />
+      </div>
+    ))
+  }
+
+  <section class="w-full">
+    <Hero hero={hero} />
+  </section>
+
+  <div class="flex flex-col">
+    {
+      activeCollections.map((collection) => (
+        <Fragment key={collection.id}>
+          {(widgetsBeforeCollection[collection.id] || []).map((widget) => (
+            <div class="widget-container mb-2">
+              {widget.cssContent && <style set:html={widget.cssContent} />}
+              <div set:html={widget.htmlContent} />
+            </div>
+          ))}
+
+          {isCollection1(collection) && <Collection1 collection={collection} currencySymbol={currencySymbol} />}
+          {isCollection2(collection) && <Collection2 collection={collection} />}
+
+          {(widgetsAfterCollection[collection.id] || []).map((widget) => (
+            <div class="widget-container mt-2">
+              {widget.cssContent && <style set:html={widget.cssContent} />}
+              <div set:html={widget.htmlContent} />
+            </div>
+          ))}
+        </Fragment>
+      ))
+    }
+  </div>
+
+  {
+    fixedBottomWidgets.map((widget) => (
+      <div class="widget-container mt-1">
+        {widget.cssContent && <style set:html={widget.cssContent} />}
+        <div set:html={widget.htmlContent} />
+      </div>
+    ))
+  }
+</Layout>

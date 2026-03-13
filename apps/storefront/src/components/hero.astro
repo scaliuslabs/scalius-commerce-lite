@@ -1,0 +1,57 @@
+---
+// src/components/hero.astro
+// Hero component containing main carousel - receives data from parent
+import CustomCarousel from "./sliders/CustomCarousel.astro";
+import type { HomepageHero } from "@/lib/api";
+
+interface Props {
+  hero: HomepageHero;
+}
+
+const { hero } = Astro.props;
+
+// Use appropriate sliders based on device type
+const desktopImages = hero?.desktop?.images || [];
+const mobileImages = hero?.mobile?.images || [];
+---
+
+<div class="relative w-full">
+  <!-- 
+    NOTE: The manual <link rel="preload"> has been removed. 
+    Astro's <Image /> component, when used with `loading="eager"` and `fetchpriority="high"`,
+    automatically handles preloading for the LCP (Largest Contentful Paint) image.
+    This logic is now correctly handled inside the CustomCarousel.astro component.
+  -->
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 md:pt-4">
+    <!-- Desktop Slider -->
+    <div class="hidden md:block relative">
+      {
+        desktopImages.length > 0 && (
+          <CustomCarousel
+            images={desktopImages}
+            height={500}
+            type="desktop"
+            autoRotate={true}
+            interval={3000}
+          />
+        )
+      }
+    </div>
+
+    <!-- Mobile Slider -->
+    <div class="md:hidden relative">
+      {
+        mobileImages.length > 0 && (
+          <CustomCarousel
+            images={mobileImages}
+            height={300}
+            type="mobile"
+            autoRotate={true}
+            interval={3000}
+          />
+        )
+      }
+    </div>
+  </div>
+</div>

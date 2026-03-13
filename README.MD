@@ -14,7 +14,7 @@
 </h4>
 
 <p align="center">
-  Full-stack e-commerce admin dashboard + storefront API — Turborepo monorepo with Astro, Hono, and Cloudflare D1.
+  Full-stack e-commerce platform — admin dashboard, storefront, and API — Turborepo monorepo with Astro, Hono, and Cloudflare D1.
 </p>
 
 <p align="center">
@@ -49,19 +49,21 @@
 
 ## Get Started
 
-Scalius Commerce Lite is a **Turborepo monorepo** containing two Cloudflare Workers and four shared packages:
+Scalius Commerce Lite is a **Turborepo monorepo** containing three Cloudflare Workers and four shared packages:
 
 - **Admin dashboard** (`apps/admin`) — Astro 6 SSR + React 19 admin UI
 - **API worker** (`apps/api`) — Standalone Hono API + queue consumer
+- **Storefront** (`apps/storefront`) — Astro 5 SSR + React 19 customer-facing store
 
-The admin worker communicates with the API worker via **Cloudflare Service Bindings** (zero-latency, no network hop in production) and a Vite proxy in development.
+Admin and storefront communicate with the API worker via **Cloudflare Service Bindings** (zero-latency, no network hop in production).
 
 ### Monorepo structure
 
 ```text
 apps/
-  admin/          # @scalius/admin — Astro SSR admin dashboard (Cloudflare Worker)
+  admin/          # @scalius/admin — Astro 6 SSR admin dashboard (Cloudflare Worker)
   api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
+  storefront/     # @scalius/storefront — Astro 5 SSR customer store (Cloudflare Worker)
 packages/
   core/           # @scalius/core — Domain modules, auth, integrations, search
   database/       # @scalius/database — Drizzle schema, client, migrations
@@ -76,6 +78,7 @@ scripts/          # Dev setup, deploy, reset scripts
 |-----|---------|
 | `http://localhost:4321/admin` | Admin dashboard |
 | `http://localhost:4321/auth/login` | Auth pages |
+| `http://localhost:4322` | Storefront |
 | `http://localhost:8787/api/v1/` | API root |
 | `http://localhost:8787/api/v1/docs` | Swagger UI |
 | `http://localhost:8787/api/v1/openapi.json` | OpenAPI spec |
@@ -115,24 +118,19 @@ scripts/          # Dev setup, deploy, reset scripts
 
 ```mermaid
 flowchart TB
-    subgraph Admin ["Admin Worker (Astro SSR)"]
+    subgraph Admin ["Admin Worker (Astro 6 SSR)"]
         AdminPages[Astro Pages /admin]
-        AdminComponents[React Components]
         AuthPages[Better Auth /api/auth/*]
-        Middleware[Middleware: Auth + RBAC + CSP]
+    end
+
+    subgraph Storefront ["Storefront Worker (Astro 5 SSR)"]
+        StorefrontPages[Product/Cart/Checkout Pages]
+        EdgeCache[L1 + L2 Edge Cache]
     end
 
     subgraph API ["API Worker (Hono)"]
         HonoApp[Hono App /api/v1/*]
-        AdminAPI[Admin Routes /api/v1/admin/*]
-        StorefrontAPI[Storefront Routes /api/v1/*]
         QueueConsumer[Queue Consumer]
-    end
-
-    subgraph Packages [Shared Packages]
-        Core["@scalius/core<br/>Domain services, auth, integrations"]
-        Database["@scalius/database<br/>Drizzle schema, migrations"]
-        Shared["@scalius/shared<br/>Pure utilities"]
     end
 
     subgraph Infra [Cloudflare Infrastructure]
@@ -142,17 +140,13 @@ flowchart TB
         Queues[Queues]
     end
 
-    AdminPages -->|Service Binding| HonoApp
-    AdminComponents -->|Service Binding / HTTP| HonoApp
-    HonoApp --> Core
-    Core --> Database
-    Database --> D1
+    AdminPages -->|Service Binding env.API| HonoApp
+    StorefrontPages -->|Service Binding env.BACKEND_API| HonoApp
+    HonoApp --> D1
     HonoApp -->|Cache| KV
-    Core --> R2
-    Core -->|Enqueue| Queues
+    HonoApp --> R2
+    HonoApp -->|Enqueue| Queues
     Queues -->|Consume| QueueConsumer
-    Middleware -->|Session via D1| D1
-    Middleware -->|RBAC via KV| KV
 ```
 
 ### Admin Worker (`apps/admin`)
@@ -162,6 +156,15 @@ flowchart TB
 - Middleware handles session validation, RBAC, CSP headers
 - Proxies `/api/v1/*` to the API worker via service binding (prod) or Vite proxy (dev)
 - Has direct D1 access only for auth/session/RBAC (not for business data)
+
+### Storefront Worker (`apps/storefront`)
+
+- Astro 5 SSR + React 19 customer-facing store
+- Product pages, cart, checkout, search, account, sitemaps
+- Service binding `BACKEND_API` → API worker (0ms latency in prod)
+- Two-tier caching: L1 in-memory + L2 Cloudflare Cache API with KV version control
+- JWT authentication via API_TOKEN for server-side proxy routes
+- Standalone codebase (does not import from `@scalius/*` packages)
 
 ### API Worker (`apps/api`)
 
@@ -188,6 +191,7 @@ All packages are consumed directly as TypeScript by the bundler (esbuild/wrangle
 @scalius/core            → @scalius/database, @scalius/shared
 @scalius/api             → @scalius/core, @scalius/database, @scalius/shared, hono
 @scalius/admin           → @scalius/core, @scalius/database, @scalius/shared, astro, react
+@scalius/storefront      → astro, react (standalone — no @scalius/* package deps)
 ```
 
 ---
@@ -197,7 +201,9 @@ All packages are consumed directly as TypeScript by the bundler (esbuild/wrangle
 All commands run from the repo root via Turborepo:
 
 ```bash
-pnpm dev              # Start both workers (admin :4321, API :8787)
+pnpm dev              # Start admin :4321 + API :8787
+pnpm dev:storefront   # Start storefront :4322 + API :8787
+pnpm dev:all          # Start all three workers
 pnpm build            # Build all workspaces
 pnpm deploy           # Build + migrate + deploy all workers
 pnpm dev:setup        # First-time local setup (creates .dev.vars, applies migrations)
@@ -225,11 +231,12 @@ This creates `.dev.vars` in both `apps/admin/` and `apps/api/`, creates `apps/ad
 pnpm dev
 ```
 
-Turborepo starts both workers in parallel:
+Turborepo starts the selected workers in parallel:
 - **Admin** (`apps/admin`): Astro dev server on port 4321 with workerd runtime (D1/KV/R2 emulated)
 - **API** (`apps/api`): Wrangler dev on port 8787
+- **Storefront** (`apps/storefront`): Astro dev server on port 4322
 
-In dev, the admin's Vite config proxies `/api/v1/*` requests to `http://localhost:8787`, so API calls from the browser go directly to the API worker.
+In dev, the admin's Vite config proxies `/api/v1/*` requests to `http://localhost:8787`. The storefront's API client falls back to HTTP fetch to `http://localhost:8787` when the service binding isn't available.
 
 ### 3) Create the first admin account
 
@@ -317,6 +324,14 @@ Both workers need identical secrets:
 | `SHARED_AUTH_CACHE` | KVNamespace | Auth token cache |
 | `BUCKET` | R2Bucket | R2 storage (initialized for shared core modules) |
 | `API` | Service Binding | Routes requests to the API worker |
+| `ASSETS` | Fetcher | Static asset serving |
+
+### Storefront Worker (`apps/storefront/wrangler.jsonc`)
+
+| Binding | Type | Purpose |
+|---------|------|---------|
+| `CACHE_CONTROL` | KVNamespace | Cache version control for L2 invalidation |
+| `BACKEND_API` | Service Binding | Routes API calls to the API worker |
 | `ASSETS` | Fetcher | Static asset serving |
 
 ---
@@ -454,6 +469,10 @@ Worker configs: `apps/admin/wrangler.jsonc` and `apps/api/wrangler.jsonc`.
 | `apps/admin/src/middleware.ts` | Auth + RBAC + CSP middleware |
 | `packages/core/src/auth/auth.ts` | Better Auth config |
 | `apps/admin/src/lib/auth-client.ts` | Better Auth React client |
+| `apps/storefront/astro.config.mjs` | Storefront Astro config |
+| `apps/storefront/wrangler.jsonc` | Storefront Cloudflare config |
+| `apps/storefront/src/middleware.ts` | Storefront caching + context middleware |
+| `apps/storefront/src/lib/api/client.ts` | Storefront API client (JWT + service binding) |
 | `packages/database/src/schema/` | Drizzle schema (11 files) |
 | `packages/database/migrations/` | SQL migrations |
 | `packages/database/drizzle.config.ts` | Drizzle config |

@@ -1,0 +1,37 @@
+# build output
+dist/
+
+# generated types
+.astro/
+
+# auto-generated build ID (generated on every build)
+src/config/build-id.ts
+
+# dependencies
+node_modules/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+#docs
+.Docs/
+clerk-docs/
+astro-docs/
+# environment variables
+.env
+.env.production
+
+# macOS-specific files
+.DS_Store
+
+# jetbrains setting folder
+.idea/
+.vercel
+/Docs
+dev.vars
+/.wrangler
+/llms-docs
+*.vars

@@ -36,20 +36,20 @@ async function getAllowedCorsOrigins(c: any): Promise<string[]> {
   }
 
   const cdnDomain = c.env?.CDN_DOMAIN_URL;
-  // Use PUBLIC_API_BASE_URL environment variable - no hardcoded fallbacks
-  const currentOrigin = (c.env?.PUBLIC_API_BASE_URL || "").trim();
 
+  // Auto-allow all platform URLs from env
   const origins = [
-    currentOrigin,
     // Allow all localhost ports in development
     "http://localhost:*",
     "http://127.0.0.1:*",
-    // Keep specific ports for backward compatibility
-    "http://localhost:4321",
-    "http://localhost:4322",
-    "http://127.0.0.1:4321",
-    "http://127.0.0.1:4322",
   ];
+
+  // Add platform URLs from env (API, admin, storefront, CDN)
+  const envKeys = ["PUBLIC_API_BASE_URL", "BETTER_AUTH_URL", "STOREFRONT_URL"];
+  for (const key of envKeys) {
+    const val = (c.env?.[key] || "").trim();
+    if (val) origins.push(val);
+  }
 
   if (cdnDomain) {
     origins.push(`https://${cdnDomain}`, `https://*.${cdnDomain}`);
