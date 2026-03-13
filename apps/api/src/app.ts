@@ -308,48 +308,23 @@ app.route("/payment/polar", polarPaymentRoutes);
 // Swagger URL needs full path as it's resolved by browser/Swagger tool
 app.get("/docs", swaggerUI({ url: "/api/v1/openapi.json" }));
 
-// Add OpenAPI specification (relative path '/openapi.json')
-// Generates spec from the registry. Falls back to a route-list-only spec
-// if zod-to-openapi throws due to Zod v4 incompatibilities.
+// Add OpenAPI specification
 app.get("/openapi.json", (c) => {
-  const baseSpec = {
-    openapi: "3.0.0" as const,
-    info: {
-      title: "Scalius Commerce API",
-      version: "1.0.0",
-      description: "E-commerce platform API powering admin dashboard and storefront",
-    },
-    servers: [{ url: "/api/v1", description: "API v1" }],
-    security: [{ bearerAuth: [] }],
-  };
-
   try {
-    const spec = app.getOpenAPIDocument(baseSpec);
+    const spec = app.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: {
+        title: "Scalius Commerce API",
+        version: "1.0.0",
+        description:
+          "E-commerce platform API powering admin dashboard and storefront",
+      },
+      servers: [{ url: "/api/v1", description: "API v1" }],
+    });
     return c.json(spec);
-  } catch {
-    // Zod v4 + zod-to-openapi@7 has compat issues. Build a minimal spec
-    // from the registry so the endpoint returns valid JSON instead of 500.
-    const paths: Record<string, Record<string, { summary?: string; tags?: string[]; responses: Record<string, { description: string }> }>> = {};
-    for (const def of app.openAPIRegistry.definitions) {
-      if (def.type === "route") {
-        const r = def.route;
-        const method = r.method;
-        const path = r.path;
-        const responses: Record<string, { description: string }> = {};
-        if (r.responses) {
-          for (const [code, resp] of Object.entries(r.responses)) {
-            responses[code] = { description: (resp as { description?: string }).description || "" };
-          }
-        }
-        if (!paths[path]) paths[path] = {};
-        paths[path][method] = {
-          summary: r.summary,
-          tags: r.tags,
-          responses,
-        };
-      }
-    }
-    return c.json({ ...baseSpec, paths });
+  } catch (error) {
+    console.error("OpenAPI spec generation error:", error);
+    throw error;
   }
 });
 

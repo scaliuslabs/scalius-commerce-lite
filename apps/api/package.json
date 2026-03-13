@@ -14,34 +14,33 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^1.2.2",
+    "@hono/zod-validator": "^0.7.6",
+    "@paralleldrive/cuid2": "^2.3.1",
+    "@polar-sh/sdk": "^0.46.4",
     "@scalius/core": "workspace:*",
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",
-    "@hono/swagger-ui": "^0.5.3",
-    "@hono/zod-openapi": "^0.19.10",
-    "@hono/zod-validator": "^0.4.3",
-    "@paralleldrive/cuid2": "^2.3.1",
-    "@polar-sh/sdk": "^0.46.3",
-    "better-auth": "^1.5.5",
     "bcryptjs": "^3.0.3",
-    "drizzle-orm": "^0.39.3",
+    "better-auth": "^1.5.5",
+    "drizzle-orm": "^0.45.1",
+    "fast-xml-parser": "^5.5.5",
+    "firebase": "^11.10.0",
     "hono": "^4.12.7",
     "jsonwebtoken": "^9.0.3",
     "mimetext": "^3.0.28",
     "nanoid": "^5.1.6",
     "standardwebhooks": "^1.0.0",
     "stripe": "^20.4.1",
-    "fast-xml-parser": "^5.5.3",
-    "firebase": "^11.10.0",
-    "zod": "^4.3.6",
-    "zod-openapi": "^4.2.4"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260310.1",
+    "@cloudflare/workers-types": "^4.20260313.1",
     "@scalius/tsconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0",
-    "wrangler": "^4.72.0"
+    "wrangler": "^4.73.0"
   }
 }
