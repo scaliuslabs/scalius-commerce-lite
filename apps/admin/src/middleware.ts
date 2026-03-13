@@ -102,9 +102,11 @@ const authMiddleware = defineMiddleware(async (context, next) => {
   const pathname = url.pathname;
 
   // Use native CF Worker env in prod/dev, fallback to process.env for scripts
-  const env = Object.keys(cfEnv).length > 0 ? (cfEnv as unknown as Env) : (typeof process !== "undefined" ? process.env as unknown as Env : {} as Env);
+  // NOTE: Do NOT use Object.keys(cfEnv) — it returns [] on CF Workers proxy objects.
+  const isCfEnv = (() => { try { return !!(cfEnv as any)?.ASSETS || !!(cfEnv as any)?.DB || !!(cfEnv as any)?.PUBLIC_API_BASE_URL; } catch { return false; } })();
+  const env = isCfEnv ? (cfEnv as unknown as Env) : (typeof process !== "undefined" ? process.env as unknown as Env : {} as Env);
 
-  if (Object.keys(cfEnv).length > 0) {
+  if (isCfEnv) {
     const [{ getDb }, { initKv }, { initStorage }] = await Promise.all([
       import("@scalius/database/client"),
       import("@scalius/core/utils/kv-cache"),
@@ -324,7 +326,8 @@ const cspMiddleware = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url);
 
   if (!url.pathname.startsWith("/api/")) {
-    const env = Object.keys(cfEnv).length > 0 ? (cfEnv as unknown as Env) : (typeof process !== "undefined" ? process.env as unknown as Env : {} as Env);
+    const cspIsCfEnv = (() => { try { return !!(cfEnv as any)?.ASSETS || !!(cfEnv as any)?.DB; } catch { return false; } })();
+    const env = cspIsCfEnv ? (cfEnv as unknown as Env) : (typeof process !== "undefined" ? process.env as unknown as Env : {} as Env);
     return await setPageCspHeader(response, env);
   }
 

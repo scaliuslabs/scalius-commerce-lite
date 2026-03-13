@@ -28,15 +28,13 @@ const getCdnDomains = (): string[] => {
   }
 
   if (!cdnDomainUrl) {
-    return ['cdn.scalius.com'];
+    return [];
   }
 
-  const domains = cdnDomainUrl
+  return cdnDomainUrl
     .split(',')
     .map((domain: string) => domain.trim())
     .filter((domain: string) => domain.length > 0);
-
-  return domains.length > 0 ? domains : ['cdn.scalius.com'];
 };
 
 // Capture CDN domains at build time

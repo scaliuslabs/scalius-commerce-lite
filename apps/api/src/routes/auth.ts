@@ -64,7 +64,7 @@ app.get("/token", async (c) => {
   // Generate JWT token for service
   const token = generateToken({
     id: "system",
-    email: "system@scalius.com",
+    email: "system@internal",
     name: "System Service",
     role: "system",
   });

@@ -383,7 +383,7 @@ export const otherPaths = {
                         imageUrl: {
                           type: "string",
                           nullable: true,
-                          example: "https://cdn.scalius.com/image.png",
+                          example: "https://cdn.example.com/image.png",
                         },
                         categoryId: {
                           type: "string",
@@ -598,7 +598,7 @@ export const otherPaths = {
                         properties: {
                           src: {
                             type: "string",
-                            example: "https://cdn.scalius.com/logo.png",
+                            example: "https://cdn.example.com/logo.png",
                           },
                           alt: {
                             type: "string",

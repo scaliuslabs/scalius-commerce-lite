@@ -148,7 +148,7 @@ export const productPaths = {
                           type: "string",
                           nullable: true,
                           description: "URL of the product's primary image.",
-                          example: "https://cdn.scalius.com/galaxy-s23.png",
+                          example: "https://cdn.example.com/galaxy-s23.png",
                         },
                         category: {
                           type: "object",
@@ -401,7 +401,7 @@ export const productPaths = {
                         url: {
                           type: "string",
                           example:
-                            "https://cdn.scalius.com/Nur_AVLkaIoEeFCRphKhq.png",
+                            "https://cdn.example.com/Nur_AVLkaIoEeFCRphKhq.png",
                         },
                         alt: {
                           type: "string",
@@ -537,7 +537,7 @@ export const productPaths = {
                           type: "string",
                           nullable: true,
                           example:
-                            "https://cdn.scalius.com/9UiALYviYt69DdLiGSJ7t.png",
+                            "https://cdn.example.com/9UiALYviYt69DdLiGSJ7t.png",
                         },
                         discountedPrice: { type: "number", example: 2200 },
                       },
@@ -728,7 +728,7 @@ export const productPaths = {
                           type: "string",
                           nullable: true,
                           example:
-                            "https://cdn.scalius.com/Nur_AVLkaIoEeFCRphKhq.png",
+                            "https://cdn.example.com/Nur_AVLkaIoEeFCRphKhq.png",
                         },
                         variants: {
                           type: "array",

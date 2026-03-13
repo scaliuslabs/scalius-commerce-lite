@@ -272,7 +272,7 @@ export const collectionPaths = {
                               type: "string",
                               nullable: true,
                               example:
-                                "https://cdn.scalius.com/Nur_AVLkaIoEeFCRphKhq.png",
+                                "https://cdn.example.com/Nur_AVLkaIoEeFCRphKhq.png",
                             },
                             discountedPrice: { type: "number", example: 5208 },
                           },
@@ -298,7 +298,7 @@ export const collectionPaths = {
                           price: 9999,
                           discountPercentage: 10,
                           slug: "featured-smartwatch",
-                          imageUrl: "https://cdn.scalius.com/featured.png",
+                          imageUrl: "https://cdn.example.com/featured.png",
                           discountedPrice: 8999,
                         },
                       },

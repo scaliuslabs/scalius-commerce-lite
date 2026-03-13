@@ -80,7 +80,7 @@ export const authPaths = {
                           id: { type: "string", example: "system" },
                           email: {
                             type: "string",
-                            example: "system@scalius.com",
+                            example: "system@internal",
                           },
                           name: { type: "string", example: "System Service" },
                           role: { type: "string", example: "system" },

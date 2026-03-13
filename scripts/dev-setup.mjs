@@ -122,7 +122,7 @@ if (existsSync(storefrontDevVarsPath) && !forceRegenerate) {
     'PUBLIC_API_URL=http://localhost:8787/api/v1',
     'PUBLIC_API_BASE_URL=http://localhost:8787',
     'STOREFRONT_URL=http://localhost:4322',
-    'CDN_DOMAIN_URL=cloud.scalius.com',
+    '# CDN_DOMAIN_URL=your-cdn-domain.example.com',
     "",
   ].join("\n");
   writeFileSync(storefrontDevVarsPath, devVars);

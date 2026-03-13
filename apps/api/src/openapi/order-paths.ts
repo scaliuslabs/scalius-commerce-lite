@@ -450,7 +450,7 @@ export const orderPaths = {
                             productImage: {
                               type: "string",
                               nullable: true,
-                              example: "https://cdn.scalius.com/image.png",
+                              example: "https://cdn.example.com/image.png",
                             },
                             variantSize: { type: "string", nullable: true },
                             variantColor: {

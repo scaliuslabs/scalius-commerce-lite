@@ -62,7 +62,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? "৳";
 <Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>
   <Fragment slot="head">
     {images.length > 0 && (() => {
-      const cdnDom = ((cfEnv as unknown as Env)?.CDN_DOMAIN_URL as string || import.meta.env.CDN_DOMAIN_URL || '').replace(/^https?:\/\//, '');
+      const cdnDom = ((cfEnv as unknown as Env)?.CDN_DOMAIN_URL as string || '').replace(/^https?:\/\//, '');
       const imgUrl = images[0].url;
       const preloadHref = cdnDom && imgUrl.includes(cdnDom)
         ? `https://${cdnDom}/cdn-cgi/image/onerror=redirect,width=600,height=600,quality=85,format=auto,fit=cover${new URL(imgUrl).pathname}`

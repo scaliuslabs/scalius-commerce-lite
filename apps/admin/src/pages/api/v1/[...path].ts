@@ -7,9 +7,13 @@ import { env as cfEnv } from "cloudflare:workers";
 export const prerender = false;
 
 export const ALL: APIRoute = async (ctx) => {
-  const env = Object.keys(cfEnv).length > 0
-    ? (cfEnv as unknown as Env)
-    : undefined;
+  // Probe known properties — Object.keys() returns [] on CF Workers proxy objects
+  const env = (() => {
+    try {
+      const e = cfEnv as unknown as Env;
+      return (e?.API || e?.PUBLIC_API_BASE_URL || e?.ASSETS) ? e : undefined;
+    } catch { return undefined; }
+  })();
 
   const url = new URL(ctx.request.url);
   const pathAndQuery = url.pathname + url.search;
