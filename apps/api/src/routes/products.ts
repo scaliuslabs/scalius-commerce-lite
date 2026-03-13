@@ -108,6 +108,11 @@ const getProductBySlugRoute = createRoute({
   path: "/{slug}",
   tags: ["Products"],
   summary: "Get product by slug",
+  request: {
+    params: z.object({
+      slug: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Product details"

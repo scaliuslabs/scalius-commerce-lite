@@ -105,6 +105,11 @@ const getCategoryBySlugRoute = createRoute({
   path: "/{slug}",
   tags: ["Categories"],
   summary: "Get category by slug",
+  request: {
+    params: z.object({
+      slug: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Category details"
@@ -156,7 +161,9 @@ const getCategoryProductsRoute = createRoute({
   tags: ["Categories"],
   summary: "Get products in a category with filtering",
   request: {
-    
+    params: z.object({
+      slug: z.string(),
+    }),
     query: categoryProductFilterSchema
   },
   responses: {

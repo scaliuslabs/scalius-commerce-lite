@@ -174,6 +174,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Shipping Methods"],
     summary: "Get a shipping method by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 200: { description: "Shipping method details"  } }
 });
 
@@ -204,7 +207,7 @@ const updateRoute = createRoute({
     tags: ["Admin - Shipping Methods"],
     summary: "Update a shipping method",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateShippingMethodSchema } } }
     },
     responses: { 200: { description: "Shipping method updated"  } }
@@ -273,6 +276,9 @@ const deleteRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Shipping Methods"],
     summary: "Soft-delete a shipping method",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 204: { description: "Shipping method deleted" } }
 });
 
@@ -310,6 +316,9 @@ const restoreRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Shipping Methods"],
     summary: "Restore a soft-deleted shipping method",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 200: { description: "Shipping method restored"  } }
 });
 
@@ -358,6 +367,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent-delete",
     tags: ["Admin - Shipping Methods"],
     summary: "Permanently delete a shipping method",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 204: { description: "Shipping method permanently deleted" } }
 });
 

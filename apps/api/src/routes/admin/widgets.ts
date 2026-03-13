@@ -156,6 +156,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Widgets"],
     summary: "Get a widget by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Widget details"  }
     }
@@ -177,7 +180,7 @@ const updateWidgetRoute = createRoute({
     tags: ["Admin - Widgets"],
     summary: "Update a widget",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateWidgetSchema } } }
     },
     responses: {
@@ -203,6 +206,9 @@ const deleteWidgetRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Widgets"],
     summary: "Soft-delete a widget",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Widget deleted" }
     }
@@ -222,6 +228,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Widgets"],
     summary: "Permanently delete a widget",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Widget permanently deleted" }
     }
@@ -241,6 +250,9 @@ const restoreWidgetRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Widgets"],
     summary: "Restore a soft-deleted widget",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Widget restored" }
     }
@@ -260,6 +272,9 @@ const toggleStatusRoute = createRoute({
     path: "/{id}/toggle-status",
     tags: ["Admin - Widgets"],
     summary: "Toggle widget active status",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Widget status toggled"  }
     }

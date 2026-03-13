@@ -137,6 +137,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Discounts"],
     summary: "Get a discount by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Discount details"  }
     }
@@ -158,7 +161,7 @@ const updateDiscountRoute = createRoute({
     tags: ["Admin - Discounts"],
     summary: "Update a discount",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateDiscountSchema } } }
     },
     responses: {
@@ -185,6 +188,9 @@ const deleteDiscountRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Discounts"],
     summary: "Soft-delete a discount",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Discount deleted" }
     }
@@ -204,6 +210,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Discounts"],
     summary: "Permanently delete a discount",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Discount permanently deleted" }
     }
@@ -223,6 +232,9 @@ const restoreDiscountRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Discounts"],
     summary: "Restore a soft-deleted discount",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Discount restored"  }
     }

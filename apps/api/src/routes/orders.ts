@@ -42,6 +42,11 @@ const getOrderRoute = createRoute({
   path: "/{id}",
   tags: ["Orders"],
   summary: "Get order by ID",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     200: { description: "Order details"  },
     404: { description: "Order not found"  }
@@ -127,6 +132,11 @@ const getOrderStatusRoute = createRoute({
   path: "/status/{token}",
   tags: ["Orders"],
   summary: "Check order processing status by checkout token",
+  request: {
+    params: z.object({
+      token: z.string(),
+    }),
+  },
   responses: {
     200: { description: "Order status"  },
     202: { description: "Order is processing"  },

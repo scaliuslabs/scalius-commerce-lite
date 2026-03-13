@@ -118,6 +118,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Customers"],
     summary: "Get a customer by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Customer details"  }
     }
@@ -139,7 +142,7 @@ const updateCustomerRoute = createRoute({
     tags: ["Admin - Customers"],
     summary: "Update a customer",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateCustomerSchema } } }
     },
     responses: {
@@ -165,6 +168,9 @@ const deleteCustomerRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Customers"],
     summary: "Soft-delete a customer",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Customer deleted" }
     }
@@ -184,6 +190,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Customers"],
     summary: "Permanently delete a customer",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Customer permanently deleted" }
     }
@@ -203,6 +212,9 @@ const restoreCustomerRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Customers"],
     summary: "Restore a soft-deleted customer",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Customer restored" }
     }

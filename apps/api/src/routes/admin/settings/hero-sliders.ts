@@ -89,6 +89,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Hero Sliders"],
     summary: "Get a hero slider by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 200: { description: "Slider details"  } }
 });
 
@@ -112,7 +115,7 @@ const updateSliderRoute = createRoute({
     tags: ["Admin - Hero Sliders"],
     summary: "Update a hero slider",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateHeroSliderSchema } } }
     },
     responses: { 200: { description: "Slider updated"  } }
@@ -148,6 +151,9 @@ const deleteSliderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Hero Sliders"],
     summary: "Soft-delete a hero slider",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: { 200: { description: "Slider deleted"  } }
 });
 

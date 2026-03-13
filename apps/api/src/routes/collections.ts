@@ -100,6 +100,11 @@ const getCollectionByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Collections"],
   summary: "Get collection by ID with resolved products",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
   responses: {
     200: {
       description: "Collection details with resolved products"

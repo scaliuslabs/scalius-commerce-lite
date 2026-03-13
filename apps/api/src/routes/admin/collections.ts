@@ -212,6 +212,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Collections"],
     summary: "Get a collection by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Collection details"  }
     }
@@ -233,7 +236,7 @@ const updateCollectionRoute = createRoute({
     tags: ["Admin - Collections"],
     summary: "Update a collection",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateCollectionSchema } } }
     },
     responses: {
@@ -255,6 +258,9 @@ const deleteCollectionRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Collections"],
     summary: "Soft-delete a collection",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Collection deleted" }
     }
@@ -278,6 +284,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Collections"],
     summary: "Permanently delete a collection",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Collection permanently deleted" }
     }

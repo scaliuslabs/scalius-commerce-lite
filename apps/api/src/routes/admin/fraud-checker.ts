@@ -121,6 +121,9 @@ const deleteProviderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Fraud Checker"],
     summary: "Delete a fraud checker provider",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Provider deleted"  }
     }
@@ -143,6 +146,9 @@ const testProviderRoute = createRoute({
     path: "/{id}/test",
     tags: ["Admin - Fraud Checker"],
     summary: "Test a fraud checker provider connection",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Test result"  }
     }

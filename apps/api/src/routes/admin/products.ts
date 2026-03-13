@@ -122,7 +122,7 @@ const updateProductRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Update a product",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateProductSchema } } }
     },
     responses: {
@@ -151,6 +151,9 @@ const deleteProductRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Products"],
     summary: "Soft-delete a product",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Product deleted" }
     }
@@ -170,6 +173,9 @@ const restoreProductRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Products"],
     summary: "Restore a soft-deleted product",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Product restored"  }
     }
@@ -189,6 +195,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Products"],
     summary: "Permanently delete a product",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         204: { description: "Product permanently deleted" }
     }
@@ -216,7 +225,7 @@ const createVariantRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Create a product variant",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: createVariantSchema } } }
     },
     responses: {
@@ -244,6 +253,9 @@ const listVariantsRoute = createRoute({
     path: "/{id}/variants",
     tags: ["Admin - Products"],
     summary: "List variants for a product",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Variant list"  }
     }
@@ -264,7 +276,7 @@ const updateVariantRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Update a product variant",
     request: {
-        
+        params: z.object({ id: z.string(), variantId: z.string() }),
         body: { content: { "application/json": { schema: updateVariantSchema } } }
     },
     responses: {
@@ -293,6 +305,9 @@ const deleteVariantRoute = createRoute({
     path: "/{id}/variants/{variantId}",
     tags: ["Admin - Products"],
     summary: "Delete a product variant",
+    request: {
+        params: z.object({ id: z.string(), variantId: z.string() }),
+    },
     responses: {
         204: { description: "Variant deleted" }
     }
@@ -318,7 +333,7 @@ const bulkCreateVariantsRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Bulk create variants",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: bulkCreateVariantsSchema } } }
     },
     responses: {
@@ -347,7 +362,7 @@ const bulkDeleteVariantsRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Bulk delete variants",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: bulkDeleteVariantsSchema } } }
     },
     responses: {
@@ -371,7 +386,7 @@ const bulkUpdateVariantsRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Bulk update variants",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: bulkUpdateVariantsSchema } } }
     },
     responses: {
@@ -395,6 +410,9 @@ const duplicateVariantRoute = createRoute({
     path: "/{id}/variants/{variantId}/duplicate",
     tags: ["Admin - Products"],
     summary: "Duplicate a variant",
+    request: {
+        params: z.object({ id: z.string(), variantId: z.string() }),
+    },
     responses: {
         201: { description: "Variant duplicated"  }
     }
@@ -419,6 +437,9 @@ const getVariantSortOrderRoute = createRoute({
     path: "/{id}/variants/sort-order",
     tags: ["Admin - Products"],
     summary: "Get variant sort order",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
     responses: {
         200: { description: "Sort order data"  }
     }
@@ -439,7 +460,7 @@ const updateVariantSortOrderRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Update variant sort order",
     request: {
-        
+        params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateSortOrderSchema } } }
     },
     responses: {

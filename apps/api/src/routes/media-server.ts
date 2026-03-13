@@ -10,6 +10,11 @@ const getMediaRoute = createRoute({
   path: "/{key}",
   tags: ["Media Server"],
   summary: "Serve R2 objects in local development",
+  request: {
+    params: z.object({
+      key: z.string(),
+    }),
+  },
   responses: {
     200: { description: "Media file" },
     404: { description: "Not found" },
