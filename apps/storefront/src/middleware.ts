@@ -1,7 +1,7 @@
 // src/middleware.ts
-/// <reference types="@cloudflare/workers-types" />
 
 import { defineMiddleware, sequence } from "astro:middleware";
+import { env as cfEnv } from "cloudflare:workers";
 import { apiContext } from "@/lib/api/context";
 import { setRuntimeEnv } from "@/lib/api/runtime-env";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
@@ -62,6 +62,19 @@ function buildCacheKeyUrl(url: URL): URL {
   return cacheUrl;
 }
 
+// Resolve Cloudflare env — in production `cfEnv` is populated by the adapter;
+// in local dev (wrangler) it may be empty, so fall back gracefully.
+function getEnv(): Env | null {
+  try {
+    if (cfEnv && Object.keys(cfEnv).length > 0) {
+      return cfEnv as unknown as Env;
+    }
+  } catch {
+    // cfEnv not available (e.g. `astro dev` without wrangler)
+  }
+  return null;
+}
+
 const cachingMiddleware = defineMiddleware(async (context, next) => {
   const { request, url, locals } = context;
   const hostname = url.hostname;
@@ -73,7 +86,8 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
 
   // Only enable caching if we're in Cloudflare environment and have KV binding
   const isCloudflareEnv = isCloudflareEnvironment();
-  const kvBinding = locals.runtime?.env?.CACHE_CONTROL;
+  const env = getEnv();
+  const kvBinding = env?.CACHE_CONTROL;
 
   // Store cache version for reuse (avoid duplicate KV lookups)
   let resolvedCacheVersion: string | null = null;
@@ -102,7 +116,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
 
       if (!cacheVersion) {
         cacheVersion = "1";
-        locals.runtime.ctx.waitUntil(
+        locals.cfContext.waitUntil(
           kvBinding.put(projectCacheVersionKey, cacheVersion),
         );
       }
@@ -115,7 +129,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         cfCache,
         cacheVersion,
         hostname,
-        (promise: Promise<unknown>) => locals.runtime.ctx.waitUntil(promise),
+        (promise: Promise<unknown>) => locals.cfContext.waitUntil(promise),
       );
     } catch (error) {
       console.warn("Failed to initialize edge cache context:", error);
@@ -162,7 +176,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         response.headers.set("Expires", "0");
         const cacheStatus = `HIT; v=${cacheVersion}; build=${BUILD_ID}; project=${hostname}`;
         response.headers.set("X-Cache-Status", cacheStatus);
-        return await setPageCspHeader(response, locals.runtime?.env);
+        return await setPageCspHeader(response, env);
       }
 
       const response = await next();
@@ -184,7 +198,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
           "X-Cache-Status",
           `MISS; v=${cacheVersion}; build=${BUILD_ID}; project=${hostname}`,
         );
-        await setPageCspHeader(response, locals.runtime?.env);
+        await setPageCspHeader(response, env);
 
         const responseToCache = response.clone();
         // CRITICAL FIX: Override Cache-Control for the internal Cache API storage
@@ -195,7 +209,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
           "public, max-age=31536000, immutable",
         );
 
-        locals.runtime.ctx.waitUntil(cfCache.put(cacheKey, responseToCache));
+        locals.cfContext.waitUntil(cfCache.put(cacheKey, responseToCache));
       } else {
         response.headers.set("X-Cache-Status", "SKIP");
       }
@@ -206,7 +220,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       // Fallback to regular response if caching fails
       const response = await next();
       response.headers.set("X-Cache-Status", "ERROR");
-      return await setPageCspHeader(response, locals.runtime?.env);
+      return await setPageCspHeader(response, env);
     }
   }
 
@@ -242,23 +256,23 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       );
     }
   }
-  return await setPageCspHeader(response, locals.runtime?.env);
+  return await setPageCspHeader(response, env);
 });
 
 const apiContextMiddleware = defineMiddleware((context, next) => {
-  const runtimeEnv = context.locals.runtime?.env;
+  const env = getEnv();
   // Set module-level env vars for sync access by client.ts + media-url.ts
   setRuntimeEnv({
-    PUBLIC_API_URL: runtimeEnv?.PUBLIC_API_URL as string | undefined,
-    PUBLIC_API_BASE_URL: runtimeEnv?.PUBLIC_API_BASE_URL as string | undefined,
-    CDN_DOMAIN_URL: runtimeEnv?.CDN_DOMAIN_URL as string | undefined,
-    STOREFRONT_URL: runtimeEnv?.STOREFRONT_URL as string | undefined,
-    API_TOKEN: runtimeEnv?.API_TOKEN as string | undefined,
+    PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,
+    PUBLIC_API_BASE_URL: env?.PUBLIC_API_BASE_URL as string | undefined,
+    CDN_DOMAIN_URL: env?.CDN_DOMAIN_URL as string | undefined,
+    STOREFRONT_URL: env?.STOREFRONT_URL as string | undefined,
+    API_TOKEN: env?.API_TOKEN as string | undefined,
   });
   return apiContext.run({
-    BACKEND_API: runtimeEnv?.BACKEND_API as any,
-    PUBLIC_API_URL: runtimeEnv?.PUBLIC_API_URL as string | undefined,
-    CDN_DOMAIN_URL: runtimeEnv?.CDN_DOMAIN_URL as string | undefined,
+    BACKEND_API: env?.BACKEND_API as any,
+    PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,
+    CDN_DOMAIN_URL: env?.CDN_DOMAIN_URL as string | undefined,
   }, next);
 });
 

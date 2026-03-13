@@ -20,7 +20,8 @@ const hasMultipleImages = images.length > 1;
  * If the image is on the configured CDN domain, instruct the edge to resize it directly.
  * CDN domain resolved from Cloudflare Worker runtime env (wrangler.jsonc vars).
  */
-const cdnDomainRaw = (Astro.locals.runtime?.env?.CDN_DOMAIN_URL as string) || import.meta.env.CDN_DOMAIN_URL || '';
+import { env as cfEnv } from "cloudflare:workers";
+const cdnDomainRaw = ((cfEnv as unknown as Env)?.CDN_DOMAIN_URL as string) || import.meta.env.CDN_DOMAIN_URL || '';
 const cdnHost = cdnDomainRaw.replace(/^https?:\/\//, '');
 
 function getCloudOptimizedUrl(url: string, width: number, height: number, quality: number) {

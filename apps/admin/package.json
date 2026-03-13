@@ -7,6 +7,7 @@
     "dev": "astro dev --host",
     "build": "astro check && astro build",
     "preview": "astro preview",
+    "deploy": "pnpm exec wrangler deploy",
     "typecheck": "astro check"
   },
   "dependencies": {

@@ -260,35 +260,20 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
   </div>
 </footer>
 
-<script
-  is:inline
-  define:vars={{
-    siteName: footerData?.copyrightText || "Your Store",
-    socialData: JSON.stringify(social),
-    faviconData: favicon ? JSON.stringify(favicon) : null,
-  }}
->
-  const siteSettings = {
-    siteName: siteName,
-    social: JSON.parse(socialData),
-    favicon: faviconData ? JSON.parse(faviconData) : null,
+<script is:inline set:html={`
+  var siteSettings = {
+    siteName: ${JSON.stringify(footerData?.copyrightText || "Your Store")},
+    social: ${JSON.stringify(social)},
+    favicon: ${JSON.stringify(favicon || null)},
   };
-
   try {
     localStorage.setItem("siteSettings", JSON.stringify(siteSettings));
-
-    // Only update favicon if it's a valid absolute URL (CDN), not a fallback
-    // This prevents overwriting the correct favicon set by Layout.astro
-    if (
-      siteSettings.favicon &&
-      siteSettings.favicon.src &&
-      siteSettings.favicon.src.startsWith("http")
-    ) {
-      const existingFavicon = document.querySelector('link[rel="icon"]');
+    if (siteSettings.favicon && siteSettings.favicon.src && siteSettings.favicon.src.startsWith("http")) {
+      var existingFavicon = document.querySelector('link[rel="icon"]');
       if (existingFavicon) {
         existingFavicon.href = siteSettings.favicon.src;
       } else {
-        const newFavicon = document.createElement("link");
+        var newFavicon = document.createElement("link");
         newFavicon.rel = "icon";
         newFavicon.href = siteSettings.favicon.src;
         document.head.appendChild(newFavicon);
@@ -297,7 +282,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
   } catch (e) {
     console.error("Error storing site settings in localStorage:", e);
   }
-</script>
+`}></script>
 
 <style>
   html,

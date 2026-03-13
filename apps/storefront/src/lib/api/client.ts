@@ -24,13 +24,13 @@ function getApiBaseUrl(): string {
     if (runtimeUrl) return runtimeUrl;
   }
 
-  // Client-side: read from injected window var
+  // Client-side: read from injected window var (set by Layout.astro from runtime env)
   if (typeof window !== "undefined" && (window as any).__API_BASE_URL__) {
     return (window as any).__API_BASE_URL__;
   }
 
-  // Build-time fallback (from .env if present)
-  return import.meta.env.PUBLIC_API_URL || "/api/v1";
+  // Fallback: same-origin relative path (works for both dev proxy and production)
+  return "/api/v1";
 }
 
 // --- JWT Token Management ---
@@ -144,10 +144,11 @@ export async function fetchWithRetry(
       options.cache = "no-store";
     }
 
-    // Use Cloudflare Service Bindings if available during SSR for 0ms latency
-    // Extracted via dynamic import of node:async_hooks to prevent breaking browser builds
+    // Use Cloudflare Service Bindings if available during SSR for 0ms latency.
+    // Skip in local dev — each worker runs in a separate miniflare process,
+    // so the BACKEND_API Fetcher proxy can't reach the standalone API worker.
     let backendApi: any = undefined;
-    if (import.meta.env.SSR) {
+    if (import.meta.env.SSR && !import.meta.env.DEV) {
       try {
         const { apiContext } = await import("./context");
         backendApi = apiContext.getStore()?.BACKEND_API;

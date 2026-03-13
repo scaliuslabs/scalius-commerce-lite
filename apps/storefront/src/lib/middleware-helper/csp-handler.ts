@@ -82,19 +82,15 @@ const ESSENTIAL_SCRIPT_SRC = [
 
 const ESSENTIAL_CONNECT_SRC = [
   "'self'",
-  "http://localhost:*", // Explicitly allow localhost for dev
-  "http://12.0.0.1:*", // Allow loopback alias
-  "http://127.0.2.2:4321", // User specified local IP
-  "http://192.168.0.152:4321", // Allow specific local network IP from logs
 ];
 
 const ESSENTIAL_FRAME_SRC = ["'self'"];
 
 const ESSENTIAL_IMG_SRC = [
   "'self'",
-  "data:", // Allow data URIs for images
-  "https:", // Allow any HTTPS source for images
-  "blob:", // Allow blob URLs for images
+  "data:",
+  "https:",
+  "blob:",
 ];
 
 const ESSENTIAL_WORKER_SRC = [

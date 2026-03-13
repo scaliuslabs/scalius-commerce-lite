@@ -77,11 +77,12 @@ const bodyEndScripts = analyticsScripts.filter(
   (script) => script.location === "body_end"
 );
 
-// Derive preconnect origins from Cloudflare Worker runtime env (wrangler.jsonc vars).
+// Derive preconnect origins from Cloudflare Worker env (wrangler.jsonc vars).
 // Falls back to import.meta.env for environments where runtime isn't available.
-const runtimeEnv = Astro.locals.runtime?.env;
-const publicApiUrl = (runtimeEnv?.PUBLIC_API_URL as string) || import.meta.env.PUBLIC_API_URL || "";
-const cdnDomainUrl = (runtimeEnv?.CDN_DOMAIN_URL as string) || import.meta.env.CDN_DOMAIN_URL || "";
+import { env as cfEnv } from "cloudflare:workers";
+const workerEnv = (() => { try { return Object.keys(cfEnv).length > 0 ? (cfEnv as unknown as Env) : null; } catch { return null; } })();
+const publicApiUrl = (workerEnv?.PUBLIC_API_URL as string) || import.meta.env.PUBLIC_API_URL || "";
+const cdnDomainUrl = (workerEnv?.CDN_DOMAIN_URL as string) || import.meta.env.CDN_DOMAIN_URL || "";
 
 const apiOrigin = publicApiUrl ? new URL(publicApiUrl).origin : null;
 const cdnDomain = cdnDomainUrl || null;
@@ -100,12 +101,7 @@ const cdnDomain = cdnDomainUrl || null;
 
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
-    <script is:inline define:vars={{ __apiBaseUrl: publicApiUrl || "/api/v1", __cdnDomain: cdnDomainUrl, __currencySymbol: currencySymbol, __currencyCode: currencyCode }}>
-      window.__API_BASE_URL__ = __apiBaseUrl;
-      window.__CDN_DOMAIN__ = __cdnDomain;
-      window.__CURRENCY_SYMBOL__ = __currencySymbol;
-      window.__CURRENCY_CODE__ = __currencyCode;
-    </script>
+    <script is:inline set:html={`window.__API_BASE_URL__=${JSON.stringify(publicApiUrl || "/api/v1")};window.__CDN_DOMAIN__=${JSON.stringify(cdnDomainUrl || "")};window.__CURRENCY_SYMBOL__=${JSON.stringify(currencySymbol)};window.__CURRENCY_CODE__=${JSON.stringify(currencyCode)};`}></script>
 
     <!-- Stale Asset Detector -->
     <script is:inline>

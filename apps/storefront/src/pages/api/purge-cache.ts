@@ -1,5 +1,6 @@
 // src/pages/api/purge-cache.ts
 import type { APIRoute } from "astro";
+import { env as cfEnv } from "cloudflare:workers";
 import { smartCache } from "@/lib/smart-cache";
 import { clearL1ByPrefixes } from "@/lib/edge-cache";
 
@@ -70,8 +71,9 @@ export const GET: APIRoute = async ({ url, locals }) => {
   const hostname = url.hostname;
   const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
 
-  const secretToken = (locals.runtime.env.PURGE_TOKEN as string) || import.meta.env.PURGE_TOKEN;
-  const kv = locals.runtime.env.CACHE_CONTROL;
+  const env = cfEnv as unknown as Env;
+  const secretToken = (env.PURGE_TOKEN as string) || import.meta.env.PURGE_TOKEN;
+  const kv = env.CACHE_CONTROL;
 
   if (!secretToken) {
     console.error("PURGE_TOKEN is not set in environment variables.");
@@ -109,7 +111,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
     // Uses waitUntil to avoid blocking the purge response
     const protocol = url.protocol; // 'https:' or 'http:'
     const baseUrl = `${protocol}//${hostname}`;
-    locals.runtime.ctx.waitUntil(warmCriticalCaches(baseUrl));
+    locals.cfContext.waitUntil(warmCriticalCaches(baseUrl));
 
     return new Response(
       JSON.stringify({
@@ -141,8 +143,9 @@ export const GET: APIRoute = async ({ url, locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, url, locals }) => {
-  const secretToken = (locals.runtime.env.PURGE_TOKEN as string) || import.meta.env.PURGE_TOKEN;
-  const kv = locals.runtime.env.CACHE_CONTROL;
+  const env = cfEnv as unknown as Env;
+  const secretToken = (env.PURGE_TOKEN as string) || import.meta.env.PURGE_TOKEN;
+  const kv = env.CACHE_CONTROL;
 
   if (!secretToken) {
     console.error("PURGE_TOKEN is not set in environment variables.");
@@ -206,7 +209,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     if (newVersion !== null) {
       const protocol = url.protocol;
       const baseUrl = `${protocol}//${hostname}`;
-      locals.runtime.ctx.waitUntil(warmCriticalCaches(baseUrl));
+      locals.cfContext.waitUntil(warmCriticalCaches(baseUrl));
     }
 
     return new Response(

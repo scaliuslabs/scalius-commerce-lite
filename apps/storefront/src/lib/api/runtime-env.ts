@@ -10,8 +10,8 @@
  * `node:async_hooks`, so it can be safely imported in client-side code
  * (the SSR-only writes are tree-shaken by Vite).
  *
- * For Astro pages/layouts (.astro files), prefer `Astro.locals.runtime.env`
- * directly instead of this module.
+ * For Astro pages/layouts (.astro files), prefer importing
+ * `import { env } from 'cloudflare:workers'` directly.
  */
 
 let _publicApiUrl: string | undefined;
@@ -22,7 +22,7 @@ let _apiToken: string | undefined;
 
 /**
  * Called by middleware on each request to set runtime env vars
- * from `locals.runtime.env` (wrangler.jsonc vars).
+ * from Cloudflare Workers env (wrangler.jsonc vars).
  */
 export function setRuntimeEnv(vars: {
     PUBLIC_API_URL?: string;

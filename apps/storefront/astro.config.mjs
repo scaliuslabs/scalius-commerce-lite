@@ -1,7 +1,7 @@
 // astro.config.mjs
 
 // @ts-check
-import { defineConfig, envField } from "astro/config";
+import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import partytown from "@astrojs/partytown";
 import tailwindcss from "@tailwindcss/vite";
@@ -13,13 +13,8 @@ import cloudflare from "@astrojs/cloudflare";
 export default defineConfig({
   devToolbar: { enabled: false },
 
-  // This `image` block is used for build-time rendering and local development.
-  // The `squoosh` service works locally without needing a Cloudflare environment.
   image: {
     domains: CDN_DOMAINS,
-    service: {
-      entrypoint: "astro/assets/services/squoosh",
-    },
     remotePatterns: [{ protocol: "https" }],
   },
 
@@ -44,6 +39,7 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     resolve: {
+      dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
       alias:
         process.env.NODE_ENV === "production"
           ? {
@@ -52,7 +48,17 @@ export default defineConfig({
           : undefined,
     },
     ssr: {
-      noExternal: [/^@radix-ui\/.*/, "lucide-react"],
+      noExternal: [
+        /^@radix-ui\/.*/,
+        "lucide-react",
+        "sonner",
+        "@nanostores/react",
+        "nanostores",
+        "embla-carousel-react",
+        "class-variance-authority",
+        "clsx",
+        "tailwind-merge",
+      ],
       external: ["node:buffer", "node:crypto", "node:util", "node:stream"],
       resolve: {
         conditions: ["workerd", "node", "worker"],
@@ -69,13 +75,8 @@ export default defineConfig({
     },
   },
 
-  // This adapter configures the production deployment for Cloudflare.
   adapter: cloudflare({
-    // THIS IS THE KEY CHANGE:
-    // This tells the adapter to use Cloudflare's real-time image resizing service
-    // for all server-rendered pages, overriding the `squoosh` service defined above.
     imageService: "cloudflare",
-
-    platformProxy: { enabled: true },
+    persistState: { path: "../../.wrangler/state" },
   }),
 });

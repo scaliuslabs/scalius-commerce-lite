@@ -1,17 +1,21 @@
-import type { APIContext } from "astro";
+import { env as cfEnv } from "cloudflare:workers";
 
 /**
  * Safely extracts the storefront URL from the Cloudflare environment
- * or Node environment vars during the Astro build/runtime.
+ * or Vite build-time env vars.
  *
- * It checks locals.runtime.env first for Cloudflare Workers compatibility,
- * then falls back to import.meta.env for Node or standard Astro dev setups.
+ * Uses `import { env } from 'cloudflare:workers'` for Cloudflare Workers,
+ * then falls back to import.meta.env for standard Astro dev setups.
  */
-export function getRuntimeStorefrontUrl(locals: APIContext['locals']): string {
-    const envUrl =
-        (locals.runtime?.env?.STOREFRONT_URL as string) ||
-        import.meta.env.STOREFRONT_URL ||
-        '';
+export function getRuntimeStorefrontUrl(): string {
+    let workerUrl: string | undefined;
+    try {
+        const env = cfEnv as unknown as Env;
+        workerUrl = env?.STOREFRONT_URL as string | undefined;
+    } catch {
+        // Not running in Cloudflare Workers
+    }
 
+    const envUrl = workerUrl || import.meta.env.STOREFRONT_URL || '';
     return envUrl.replace(/\/$/, '');
 }
