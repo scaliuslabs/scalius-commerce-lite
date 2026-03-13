@@ -15,7 +15,7 @@ app.use(
     ttl: 3600,
     keyPrefix: "api:pages:",
     varyByQuery: true,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -43,7 +43,7 @@ const pagesQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(10).openapi({ description: "Items per page" }),
   page: z.coerce.number().min(1).default(1).openapi({ description: "Page number" }),
   sort: z.enum(["title", "createdAt", "-title", "-createdAt"]).default("title").openapi({ description: "Sort field (prefix with - for descending)" }),
-  publishedOnly: z.coerce.boolean().default(true).openapi({ description: "Only return published pages" }),
+  publishedOnly: z.coerce.boolean().default(true).openapi({ description: "Only return published pages" })
 });
 
 // GET /pages — list all pages
@@ -53,18 +53,16 @@ const listPagesRoute = createRoute({
   tags: ["Pages"],
   summary: "List all pages with pagination",
   request: {
-    query: pagesQuerySchema,
+    query: pagesQuerySchema
   },
   responses: {
     200: {
-      description: "Page list with pagination",
-      content: { "application/json": { schema: z.object({ pages: z.array(z.any()), pagination: z.any(), success: z.literal(true) }) } },
+      description: "Page list with pagination"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listPagesRoute, async (c) => {
@@ -120,7 +118,7 @@ app.openapi(listPagesRoute, async (c) => {
       sortOrder: pages.sortOrder,
       createdAt: pages.createdAt,
       updatedAt: pages.updatedAt,
-      deletedAt: pages.deletedAt,
+      deletedAt: pages.deletedAt
     })
     .from(pages)
     .where(and(...conditions))
@@ -134,9 +132,9 @@ app.openapi(listPagesRoute, async (c) => {
       page,
       limit,
       total,
-      totalPages,
+      totalPages
     },
-    success: true as const,
+    success: true as const
   }, 200);
 });
 
@@ -146,29 +144,20 @@ const getPageBySlugRoute = createRoute({
   path: "/slug/{slug}",
   tags: ["Pages"],
   summary: "Get page by slug",
-  request: {
-    params: z.object({
-      slug: z.string().openapi({ description: "Page slug" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Page details",
-      content: { "application/json": { schema: z.object({ page: z.any(), success: z.literal(true) }) } },
+      description: "Page details"
     },
     400: {
-      description: "Bad request",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+      description: "Bad request"
     },
     404: {
-      description: "Page not found",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+      description: "Page not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getPageBySlugRoute, async (c) => {
@@ -198,7 +187,7 @@ app.openapi(getPageBySlugRoute, async (c) => {
       sortOrder: pages.sortOrder,
       createdAt: pages.createdAt,
       updatedAt: pages.updatedAt,
-      deletedAt: pages.deletedAt,
+      deletedAt: pages.deletedAt
     })
     .from(pages)
     .where(and(...conditions))
@@ -210,7 +199,7 @@ app.openapi(getPageBySlugRoute, async (c) => {
 
   return c.json({
     page,
-    success: true as const,
+    success: true as const
   }, 200);
 });
 
@@ -220,25 +209,17 @@ const getPageByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Pages"],
   summary: "Get page by ID",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Page ID" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Page details",
-      content: { "application/json": { schema: z.object({ page: z.any(), success: z.literal(true) }) } },
+      description: "Page details"
     },
     404: {
-      description: "Page not found",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+      description: "Page not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getPageByIdRoute, async (c) => {
@@ -267,7 +248,7 @@ app.openapi(getPageByIdRoute, async (c) => {
       sortOrder: pages.sortOrder,
       createdAt: pages.createdAt,
       updatedAt: pages.updatedAt,
-      deletedAt: pages.deletedAt,
+      deletedAt: pages.deletedAt
     })
     .from(pages)
     .where(and(...conditions))
@@ -279,7 +260,7 @@ app.openapi(getPageByIdRoute, async (c) => {
 
   return c.json({
     page,
-    success: true as const,
+    success: true as const
   }, 200);
 });
 

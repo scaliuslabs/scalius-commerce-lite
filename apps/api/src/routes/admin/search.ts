@@ -21,12 +21,12 @@ const searchRoute = createRoute({
             maxPrice: z.string().optional().openapi({ description: "Maximum price" }),
             limit: z.coerce.number().default(10).openapi({ description: "Max results" }),
             searchPages: z.string().optional().default("true").openapi({ description: "Include pages" }),
-            searchCategories: z.string().optional().default("true").openapi({ description: "Include categories" }),
-        }),
+            searchCategories: z.string().optional().default("true").openapi({ description: "Include categories" })
+        })
     },
     responses: {
-        200: { description: "Search results", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Search results"  }
+    }
 });
 
 app.openapi(searchRoute, async (c) => {
@@ -44,7 +44,7 @@ app.openapi(searchRoute, async (c) => {
                 pages: [],
                 categories: [],
                 success: true,
-                query: "",
+                query: ""
             }, 200);
         }
 
@@ -58,7 +58,7 @@ app.openapi(searchRoute, async (c) => {
             maxPrice,
             limit: query.limit,
             searchPages: searchPagesFlag,
-            searchCategories: searchCategoriesFlag,
+            searchCategories: searchCategoriesFlag
         });
 
         const results: any = await Promise.race([searchPromise, timeoutPromise]);
@@ -67,7 +67,7 @@ app.openapi(searchRoute, async (c) => {
             ...results,
             success: true,
             query: q,
-            timestamp: new Date().toISOString(),
+            timestamp: new Date().toISOString()
         }, 200);
     } catch (error: any) {
         console.error("Search error:", error);
@@ -86,8 +86,8 @@ const reindexRoute = createRoute({
     tags: ["Admin - Search"],
     summary: "Trigger search reindex",
     responses: {
-        200: { description: "Reindex initiated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Reindex initiated"  }
+    }
 });
 
 app.openapi(reindexRoute, async (c) => {

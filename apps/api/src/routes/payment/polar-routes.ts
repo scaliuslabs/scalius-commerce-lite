@@ -25,7 +25,7 @@ const polarSessionSchema = z.object({
     customerEmail: z.string().optional(),
     customerPhone: z.string().optional(),
     successUrl: z.string().optional(),
-    cancelUrl: z.string().optional(),
+    cancelUrl: z.string().optional()
 });
 
 const createPolarSessionRoute = createRoute({
@@ -36,16 +36,16 @@ const createPolarSessionRoute = createRoute({
     request: {
         body: {
             content: {
-                "application/json": { schema: polarSessionSchema },
-            },
-        },
+                "application/json": { schema: polarSessionSchema }
+            }
+        }
     },
     responses: {
-        200: { description: "Polar checkout session created", content: { "application/json": { schema: z.any() } } },
-        400: { description: "Invalid request", content: { "application/json": { schema: z.any() } } },
-        404: { description: "Order not found", content: { "application/json": { schema: z.any() } } },
-        503: { description: "Polar not configured", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Polar checkout session created"  },
+        400: { description: "Invalid request"  },
+        404: { description: "Order not found"  },
+        503: { description: "Polar not configured"  }
+    }
 });
 
 polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
@@ -70,7 +70,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
             status: orders.status,
             paymentMethod: orders.paymentMethod,
             paymentStatus: orders.paymentStatus,
-            paidAmount: orders.paidAmount,
+            paidAmount: orders.paidAmount
         })
         .from(orders)
         .where(eq(orders.id, orderId))
@@ -114,8 +114,8 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         customerEmail: body.customerEmail,
         metadata: {
             orderId,
-            paymentType: type,
-        },
+            paymentType: type
+        }
     });
 
     if (!result.success || !result.checkoutUrl) {
@@ -131,7 +131,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         .set({
             paymentIntentId: result.checkoutId,
             paymentMethod: PaymentMethod.POLAR,
-            updatedAt: new Date(),
+            updatedAt: new Date()
         })
         .where(eq(orders.id, orderId));
 
@@ -148,22 +148,22 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
                 totalAmount: order.totalAmount,
                 depositAmount,
                 balanceDue,
-                status: "pending",
+                status: "pending"
             })
             .onConflictDoUpdate({
                 target: paymentPlans.orderId,
                 set: {
                     depositAmount,
                     balanceDue,
-                    updatedAt: new Date(),
-                },
+                    updatedAt: new Date()
+                }
             });
     }
 
     return c.json({
         success: true,
         gatewayUrl: result.checkoutUrl,
-        checkoutId: result.checkoutId,
+        checkoutId: result.checkoutId
     }, 200);
 });
 

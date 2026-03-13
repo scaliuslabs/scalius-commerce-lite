@@ -13,7 +13,7 @@ app.use(
     ttl: 300000, // 5 minutes
     keyPrefix: "api:shipping-methods:",
     varyByQuery: false,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -31,14 +31,12 @@ const listShippingMethodsRoute = createRoute({
   summary: "List all active shipping methods",
   responses: {
     200: {
-      description: "Shipping methods list",
-      content: { "application/json": { schema: z.object({ shippingMethods: z.array(z.any()) }) } },
+      description: "Shipping methods list"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listShippingMethodsRoute, async (c) => {
@@ -52,7 +50,7 @@ app.openapi(listShippingMethodsRoute, async (c) => {
       isActive: shippingMethodsTable.isActive,
       sortOrder: shippingMethodsTable.sortOrder,
       createdAt: shippingMethodsTable.createdAt,
-      updatedAt: shippingMethodsTable.updatedAt,
+      updatedAt: shippingMethodsTable.updatedAt
     })
     .from(shippingMethodsTable)
     .where(
@@ -73,7 +71,7 @@ app.openapi(listShippingMethodsRoute, async (c) => {
       null,
     updatedAt:
       unixToDate(method.updatedAt as unknown as number)?.toISOString() ||
-      null,
+      null
   }));
 
   return c.json({ shippingMethods: formattedMethods }, 200);

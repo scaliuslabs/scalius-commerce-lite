@@ -5,7 +5,7 @@ import {
   productAttributes,
   productAttributeValues,
   products,
-  categories,
+  categories
 } from "@scalius/database/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { ftsMatch } from "@scalius/core/search";
@@ -19,7 +19,7 @@ app.use(
   "/filterable",
   cacheMiddleware({
     ttl: 3600, // 1 hour
-    keyPrefix: "api:attributes:filterable",
+    keyPrefix: "api:attributes:filterable"
   }),
 );
 
@@ -29,7 +29,7 @@ app.use(
   cacheMiddleware({
     ttl: 1800, // 30 minutes
     keyPrefix: "api:attributes:category",
-    varyByQuery: false,
+    varyByQuery: false
   }),
 );
 
@@ -39,7 +39,7 @@ app.use(
   cacheMiddleware({
     ttl: 1800, // 30 minutes
     keyPrefix: "api:attributes:category-slug",
-    varyByQuery: false,
+    varyByQuery: false
   }),
 );
 
@@ -51,14 +51,12 @@ const filterableRoute = createRoute({
   summary: "Get all filterable product attributes with values",
   responses: {
     200: {
-      description: "Filterable attributes list",
-      content: { "application/json": { schema: z.object({ filters: z.array(z.any()) }) } },
+      description: "Filterable attributes list"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(filterableRoute, async (c) => {
@@ -68,7 +66,7 @@ app.openapi(filterableRoute, async (c) => {
     .select({
       id: productAttributes.id,
       name: productAttributes.name,
-      slug: productAttributes.slug,
+      slug: productAttributes.slug
     })
     .from(productAttributes)
     .where(
@@ -89,7 +87,7 @@ app.openapi(filterableRoute, async (c) => {
       ? await db
           .selectDistinct({
             attributeId: productAttributeValues.attributeId,
-            value: productAttributeValues.value,
+            value: productAttributeValues.value
           })
           .from(productAttributeValues)
           .where(inArray(productAttributeValues.attributeId, attributeIds))
@@ -104,7 +102,7 @@ app.openapi(filterableRoute, async (c) => {
       values: uniqueValues
         .filter((uv) => uv.attributeId === attr.id)
         .map((uv) => uv.value)
-        .sort(),
+        .sort()
     }))
     .filter((filter) => filter.values.length > 0);
 
@@ -117,21 +115,14 @@ const categoryAttributesRoute = createRoute({
   path: "/category/{categoryId}",
   tags: ["Attributes"],
   summary: "Get filterable attributes for a category by ID",
-  request: {
-    params: z.object({
-      categoryId: z.string().openapi({ description: "Category ID" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Category-specific filterable attributes",
-      content: { "application/json": { schema: z.object({ filters: z.array(z.any()) }) } },
+      description: "Category-specific filterable attributes"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(categoryAttributesRoute, async (c) => {
@@ -144,7 +135,7 @@ app.openapi(categoryAttributesRoute, async (c) => {
       attributeId: productAttributeValues.attributeId,
       attributeName: productAttributes.name,
       attributeSlug: productAttributes.slug,
-      value: productAttributeValues.value,
+      value: productAttributeValues.value
     })
     .from(productAttributeValues)
     .innerJoin(
@@ -173,7 +164,7 @@ app.openapi(categoryAttributesRoute, async (c) => {
         id: item.attributeId,
         name: item.attributeName,
         slug: item.attributeSlug,
-        values: new Set(),
+        values: new Set()
       });
     }
     attributeMap.get(item.attributeId).values.add(item.value);
@@ -184,7 +175,7 @@ app.openapi(categoryAttributesRoute, async (c) => {
     id: attr.id,
     name: attr.name,
     slug: attr.slug,
-    values: Array.from(attr.values).sort(),
+    values: Array.from(attr.values).sort()
   }));
 
   return c.json({ filters }, 200);
@@ -196,25 +187,17 @@ const categorySlugAttributesRoute = createRoute({
   path: "/category-slug/{categorySlug}",
   tags: ["Attributes"],
   summary: "Get filterable attributes for a category by slug",
-  request: {
-    params: z.object({
-      categorySlug: z.string().openapi({ description: "Category slug" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Category-specific filterable attributes",
-      content: { "application/json": { schema: z.object({ filters: z.array(z.any()) }) } },
+      description: "Category-specific filterable attributes"
     },
     404: {
-      description: "Category not found",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+      description: "Category not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(categorySlugAttributesRoute, async (c) => {
@@ -240,7 +223,7 @@ app.openapi(categorySlugAttributesRoute, async (c) => {
       attributeId: productAttributeValues.attributeId,
       attributeName: productAttributes.name,
       attributeSlug: productAttributes.slug,
-      value: productAttributeValues.value,
+      value: productAttributeValues.value
     })
     .from(productAttributeValues)
     .innerJoin(
@@ -269,7 +252,7 @@ app.openapi(categorySlugAttributesRoute, async (c) => {
         id: item.attributeId,
         name: item.attributeName,
         slug: item.attributeSlug,
-        values: new Set(),
+        values: new Set()
       });
     }
     attributeMap.get(item.attributeId).values.add(item.value);
@@ -280,7 +263,7 @@ app.openapi(categorySlugAttributesRoute, async (c) => {
     id: attr.id,
     name: attr.name,
     slug: attr.slug,
-    values: Array.from(attr.values).sort(),
+    values: Array.from(attr.values).sort()
   }));
 
   return c.json({ filters }, 200);
@@ -295,19 +278,17 @@ const searchFiltersRoute = createRoute({
   request: {
     query: z.object({
       q: z.string().optional().openapi({ description: "Search query" }),
-      categoryId: z.string().optional().openapi({ description: "Optional category filter" }),
-    }),
+      categoryId: z.string().optional().openapi({ description: "Optional category filter" })
+    })
   },
   responses: {
     200: {
-      description: "Search-specific filterable attributes",
-      content: { "application/json": { schema: z.object({ filters: z.array(z.any()) }) } },
+      description: "Search-specific filterable attributes"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(searchFiltersRoute, async (c) => {
@@ -351,7 +332,7 @@ app.openapi(searchFiltersRoute, async (c) => {
       attributeId: productAttributeValues.attributeId,
       attributeName: productAttributes.name,
       attributeSlug: productAttributes.slug,
-      value: productAttributeValues.value,
+      value: productAttributeValues.value
     })
     .from(productAttributeValues)
     .innerJoin(
@@ -380,7 +361,7 @@ app.openapi(searchFiltersRoute, async (c) => {
         id: item.attributeId,
         name: item.attributeName,
         slug: item.attributeSlug,
-        values: new Set(),
+        values: new Set()
       });
     }
     attributeMap.get(item.attributeId).values.add(item.value);
@@ -391,7 +372,7 @@ app.openapi(searchFiltersRoute, async (c) => {
     id: attr.id,
     name: attr.name,
     slug: attr.slug,
-    values: Array.from(attr.values).sort(),
+    values: Array.from(attr.values).sort()
   }));
 
   return c.json({ filters }, 200);

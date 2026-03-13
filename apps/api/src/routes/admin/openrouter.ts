@@ -9,7 +9,7 @@ import {
     OPENROUTER_HEADERS,
     GENERATION_CONFIG,
     getTimeout,
-    ERROR_MESSAGES,
+    ERROR_MESSAGES
 } from "@scalius/core/modules/ai/ai-config";
 
 const app = new OpenAPIHono();
@@ -22,8 +22,8 @@ const listModelsRoute = createRoute({
     tags: ["Admin - OpenRouter"],
     summary: "List available OpenRouter models",
     responses: {
-        200: { description: "Model list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Model list"  }
+    }
 });
 
 app.openapi(listModelsRoute, async (c) => {
@@ -47,7 +47,7 @@ app.openapi(listModelsRoute, async (c) => {
             supportsImageGeneration: model.architecture?.output_modalities?.includes('image') || false,
             modality: model.architecture?.modality || 'text->text',
             inputModalities: model.architecture?.input_modalities || ['text'],
-            outputModalities: model.architecture?.output_modalities || ['text'],
+            outputModalities: model.architecture?.output_modalities || ['text']
         }));
 
         return c.json({ models: processedModels }, 200);
@@ -65,8 +65,8 @@ const generateRoute = createRoute({
     tags: ["Admin - OpenRouter"],
     summary: "Generate AI content via OpenRouter",
     responses: {
-        200: { description: "Generation result", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Generation result"  }
+    }
 });
 
 app.openapi(generateRoute, async (c) => {
@@ -125,15 +125,15 @@ app.openapi(generateRoute, async (c) => {
                         "Authorization": `Bearer ${apiKey}`,
                         "Content-Type": "application/json",
                         "HTTP-Referer": OPENROUTER_HEADERS.referer,
-                        "X-Title": OPENROUTER_HEADERS.title,
+                        "X-Title": OPENROUTER_HEADERS.title
                     },
                     body: JSON.stringify({
                         model: model,
                         messages: finalMessages,
                         stream: stream || false,
-                        temperature: GENERATION_CONFIG.temperature.generation,
+                        temperature: GENERATION_CONFIG.temperature.generation
                     }),
-                    signal: controller.signal,
+                    signal: controller.signal
                 }
             );
 
@@ -160,8 +160,8 @@ app.openapi(generateRoute, async (c) => {
                     headers: {
                         "Content-Type": "text/event-stream",
                         "Connection": "keep-alive",
-                        "Cache-Control": "no-cache",
-                    },
+                        "Cache-Control": "no-cache"
+                    }
                 }) as any;
             } else {
                 const data = await response.json();
@@ -187,7 +187,7 @@ app.openapi(generateRoute, async (c) => {
         console.error("Error in generate endpoint:", error);
         return c.json({
             message: ERROR_MESSAGES.networkError,
-            details: error.message,
+            details: error.message
         }, 500);
     }
 });
@@ -200,8 +200,8 @@ const generateStagedRoute = createRoute({
     tags: ["Admin - OpenRouter"],
     summary: "Generate AI content in stages via OpenRouter",
     responses: {
-        200: { description: "Staged generation result", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Staged generation result"  }
+    }
 });
 
 app.openapi(generateStagedRoute, async (c) => {
@@ -223,7 +223,7 @@ app.openapi(generateStagedRoute, async (c) => {
             messages,
             stage,
             sectionIndex,
-            totalSections,
+            totalSections
         } = await c.req.json();
 
         if (!model || !messages) {
@@ -246,7 +246,7 @@ app.openapi(generateStagedRoute, async (c) => {
                         Authorization: `Bearer ${apiKey}`,
                         "Content-Type": "application/json",
                         "HTTP-Referer": OPENROUTER_HEADERS.referer,
-                        "X-Title": OPENROUTER_HEADERS.title,
+                        "X-Title": OPENROUTER_HEADERS.title
                     },
                     body: JSON.stringify({
                         model: model,
@@ -255,9 +255,9 @@ app.openapi(generateStagedRoute, async (c) => {
                         ...(stage === 'plan' ? { response_format: { type: "json_object" } } : {}),
                         temperature: stage === "plan"
                             ? GENERATION_CONFIG.temperature.planning
-                            : GENERATION_CONFIG.temperature.generation,
+                            : GENERATION_CONFIG.temperature.generation
                     }),
-                    signal: controller.signal,
+                    signal: controller.signal
                 }
             );
 
@@ -295,7 +295,7 @@ app.openapi(generateStagedRoute, async (c) => {
                 ...data,
                 stage,
                 sectionIndex,
-                totalSections,
+                totalSections
             }, 200);
         } catch (error: any) {
             clearTimeout(timeoutId);
@@ -308,7 +308,7 @@ app.openapi(generateStagedRoute, async (c) => {
         console.error("Error in staged generation endpoint:", error);
         return c.json({
             message: ERROR_MESSAGES.networkError,
-            details: error.message,
+            details: error.message
         }, 500);
     }
 });

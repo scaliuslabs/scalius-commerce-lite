@@ -39,12 +39,12 @@ const listAbandonedCheckoutsRoute = createRoute({
             limit: z.coerce.number().default(20).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
-        }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+        })
     },
     responses: {
-        200: { description: "Abandoned checkout list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Abandoned checkout list"  }
+    }
 });
 
 app.openapi(listAbandonedCheckoutsRoute, async (c) => {
@@ -71,7 +71,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
                     customerPhone: io.customerPhone,
                     checkoutData: JSON.stringify(io),
                     createdAt: io.createdAt || new Date(),
-                    updatedAt: io.updatedAt || new Date(),
+                    updatedAt: io.updatedAt || new Date()
                 }).onConflictDoNothing();
             }
 
@@ -122,7 +122,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
                 page,
                 limit,
                 total,
-                totalPages: Math.ceil(total / limit),
+                totalPages: Math.ceil(total / limit)
             }
         }, 200);
 
@@ -135,7 +135,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
 // ── Bulk Delete Abandoned Checkouts (POST) ──
 
 const bulkDeleteSchema = z.object({
-    ids: z.array(z.string()).min(1, "No IDs provided"),
+    ids: z.array(z.string()).min(1, "No IDs provided")
 });
 
 const bulkDeleteCheckoutsRoute = createRoute({
@@ -144,11 +144,11 @@ const bulkDeleteCheckoutsRoute = createRoute({
     tags: ["Admin - System Utils"],
     summary: "Bulk delete abandoned checkouts",
     request: {
-        body: { content: { "application/json": { schema: bulkDeleteSchema } } },
+        body: { content: { "application/json": { schema: bulkDeleteSchema } } }
     },
     responses: {
-        204: { description: "Checkouts deleted" },
-    },
+        204: { description: "Checkouts deleted" }
+    }
 });
 
 app.openapi(bulkDeleteCheckoutsRoute, async (c) => {
@@ -171,11 +171,11 @@ const deleteCheckoutsRoute = createRoute({
     tags: ["Admin - System Utils"],
     summary: "Delete abandoned checkouts by IDs",
     request: {
-        body: { content: { "application/json": { schema: bulkDeleteSchema } } },
+        body: { content: { "application/json": { schema: bulkDeleteSchema } } }
     },
     responses: {
-        204: { description: "Checkouts deleted" },
-    },
+        204: { description: "Checkouts deleted" }
+    }
 });
 
 app.openapi(deleteCheckoutsRoute, async (c) => {
@@ -195,7 +195,7 @@ app.openapi(deleteCheckoutsRoute, async (c) => {
 const fcmTokenSchema = z.object({
     token: z.string().min(1, "FCM token is required"),
     userId: z.string().min(1, "User ID is required"),
-    deviceInfo: z.string().optional(),
+    deviceInfo: z.string().optional()
 });
 
 const registerFcmTokenRoute = createRoute({
@@ -204,11 +204,11 @@ const registerFcmTokenRoute = createRoute({
     tags: ["Admin - System Utils"],
     summary: "Register an FCM push notification token",
     request: {
-        body: { content: { "application/json": { schema: fcmTokenSchema } } },
+        body: { content: { "application/json": { schema: fcmTokenSchema } } }
     },
     responses: {
-        200: { description: "Token registered", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Token registered"  }
+    }
 });
 
 app.openapi(registerFcmTokenRoute, async (c) => {
@@ -233,7 +233,7 @@ app.openapi(registerFcmTokenRoute, async (c) => {
                 isActive: true,
                 lastUsed: sql`(cast(strftime('%s','now') as int))`,
                 createdAt: sql`(cast(strftime('%s','now') as int))`,
-                updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                updatedAt: sql`(cast(strftime('%s','now') as int))`
             })
             .onConflictDoUpdate({
                 target: adminFcmTokens.token,
@@ -242,8 +242,8 @@ app.openapi(registerFcmTokenRoute, async (c) => {
                     deviceInfo: deviceInfo || null,
                     isActive: true,
                     lastUsed: sql`(cast(strftime('%s','now') as int))`,
-                    updatedAt: sql`(cast(strftime('%s','now') as int))`,
-                },
+                    updatedAt: sql`(cast(strftime('%s','now') as int))`
+                }
             });
 
         return c.json({ message: "FCM token registered successfully" }, 200);
@@ -254,7 +254,7 @@ app.openapi(registerFcmTokenRoute, async (c) => {
 });
 
 const cleanupSchema = z.object({
-    invalidTokens: z.array(z.string()).min(1),
+    invalidTokens: z.array(z.string()).min(1)
 });
 
 const cleanupFcmTokensRoute = createRoute({
@@ -263,11 +263,11 @@ const cleanupFcmTokensRoute = createRoute({
     tags: ["Admin - System Utils"],
     summary: "Clean up invalid FCM tokens",
     request: {
-        body: { content: { "application/json": { schema: cleanupSchema } } },
+        body: { content: { "application/json": { schema: cleanupSchema } } }
     },
     responses: {
-        200: { description: "Cleanup result", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Cleanup result"  }
+    }
 });
 
 app.openapi(cleanupFcmTokensRoute, async (c) => {
@@ -283,7 +283,7 @@ app.openapi(cleanupFcmTokensRoute, async (c) => {
                 .update(adminFcmTokens)
                 .set({
                     isActive: false,
-                    updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                    updatedAt: sql`(cast(strftime('%s','now') as int))`
                 })
                 .where(inArray(adminFcmTokens.token, invalidTokens));
         }
@@ -293,7 +293,7 @@ app.openapi(cleanupFcmTokensRoute, async (c) => {
             .update(adminFcmTokens)
             .set({
                 isActive: false,
-                updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                updatedAt: sql`(cast(strftime('%s','now') as int))`
             })
             .where(
                 sql`${adminFcmTokens.lastUsed} < ${thirtyDaysAgo} OR ${adminFcmTokens.lastUsed} IS NULL`
@@ -301,7 +301,7 @@ app.openapi(cleanupFcmTokensRoute, async (c) => {
 
         return c.json({
             message: "Token cleanup completed successfully.",
-            cleanedCount: invalidTokens.length,
+            cleanedCount: invalidTokens.length
         }, 200);
     } catch (error) {
         console.error("Error cleaning up FCM tokens:", error);

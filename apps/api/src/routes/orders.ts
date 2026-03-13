@@ -7,7 +7,7 @@ import {
   products,
   productImages,
   PaymentMethod,
-  InventoryPool,
+  InventoryPool
 } from "@scalius/database/schema";
 import { isDiscountValid, calculateDiscountAmount } from "./discounts";
 import { eq, sql } from "drizzle-orm";
@@ -33,7 +33,7 @@ app.use(
     ttl: 2592000,
     methods: ["GET"],
     varyByQuery: false,
-    varyByAuth: true,
+    varyByAuth: true
   }),
 );
 
@@ -42,15 +42,10 @@ const getOrderRoute = createRoute({
   path: "/{id}",
   tags: ["Orders"],
   summary: "Get order by ID",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Order ID" }),
-    }),
-  },
   responses: {
-    200: { description: "Order details", content: { "application/json": { schema: z.any() } } },
-    404: { description: "Order not found", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Order details"  },
+    404: { description: "Order not found"  }
+  }
 });
 
 app.openapi(getOrderRoute, async (c) => {
@@ -77,7 +72,7 @@ app.openapi(getOrderRoute, async (c) => {
       areaName: orders.areaName,
       status: orders.status,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
-      updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
+      updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`
     })
     .from(orders)
     .where(eq(orders.id, id));
@@ -103,7 +98,7 @@ app.openapi(getOrderRoute, async (c) => {
         LIMIT 1
       )`.as("productImage"),
       variantSize: productVariants.size,
-      variantColor: productVariants.color,
+      variantColor: productVariants.color
     })
     .from(orderItems)
     .leftJoin(products, eq(products.id, orderItems.productId))
@@ -119,7 +114,7 @@ app.openapi(getOrderRoute, async (c) => {
     updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
     items,
     shipments,
-    deliveryProviders: activeProviders,
+    deliveryProviders: activeProviders
   };
 
   return c.json({ order: formattedOrder }, 200);
@@ -132,16 +127,11 @@ const getOrderStatusRoute = createRoute({
   path: "/status/{token}",
   tags: ["Orders"],
   summary: "Check order processing status by checkout token",
-  request: {
-    params: z.object({
-      token: z.string().openapi({ description: "Checkout token" }),
-    }),
-  },
   responses: {
-    200: { description: "Order status", content: { "application/json": { schema: z.any() } } },
-    202: { description: "Order is processing", content: { "application/json": { schema: z.any() } } },
-    400: { description: "Invalid token", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Order status"  },
+    202: { description: "Order is processing"  },
+    400: { description: "Invalid token"  }
+  }
 });
 
 app.openapi(getOrderStatusRoute, async (c) => {
@@ -214,7 +204,7 @@ const createOrderSchema = z.object({
       quantity: z.number().min(1, "Quantity must be at least 1"),
       price: z.number().min(0, "Price must be greater than or equal to 0"),
       productName: z.string().optional().nullable(),
-      variantLabel: z.string().optional().nullable(),
+      variantLabel: z.string().optional().nullable()
     }),
   ),
   discountAmount: z
@@ -231,7 +221,7 @@ const createOrderSchema = z.object({
     .default(PaymentMethod.COD),
   inventoryPool: z
     .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
-    .default(InventoryPool.REGULAR),
+    .default(InventoryPool.REGULAR)
 });
 
 const createOrderRoute = createRoute({
@@ -243,15 +233,15 @@ const createOrderRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: createOrderSchema,
-        },
-      },
-    },
+          schema: createOrderSchema
+        }
+      }
+    }
   },
   responses: {
-    202: { description: "Order placed in processing queue", content: { "application/json": { schema: z.any() } } },
-    400: { description: "Validation error", content: { "application/json": { schema: z.any() } } },
-  },
+    202: { description: "Order placed in processing queue"  },
+    400: { description: "Validation error"  }
+  }
 });
 
 app.openapi(createOrderRoute, async (c) => {
@@ -287,8 +277,8 @@ app.openapi(createOrderRoute, async (c) => {
           orderId: result.orderId,
           paymentMethod: result.paymentMethod,
           totalAmount: result.totalAmount,
-          message: "Order placed in processing queue",
-        },
+          message: "Order placed in processing queue"
+        }
       },
       202,
     );
@@ -299,8 +289,8 @@ app.openapi(createOrderRoute, async (c) => {
           success: false,
           error: {
             code: "VALIDATION_ERROR",
-            message: error.message.replace("VALIDATION_ERROR:", ""),
-          },
+            message: error.message.replace("VALIDATION_ERROR:", "")
+          }
         },
         400,
       );
@@ -312,8 +302,8 @@ app.openapi(createOrderRoute, async (c) => {
           success: false,
           error: {
             code: "INSUFFICIENT_STOCK",
-            message: error.message.replace("INSUFFICIENT_STOCK:", ""),
-          },
+            message: error.message.replace("INSUFFICIENT_STOCK:", "")
+          }
         },
         400,
       );
@@ -326,8 +316,8 @@ app.openapi(createOrderRoute, async (c) => {
           error: {
             code: "VALIDATION_ERROR",
             message: "Invalid input data",
-            details: error.issues,
-          },
+            details: error.issues
+          }
         },
         400,
       );

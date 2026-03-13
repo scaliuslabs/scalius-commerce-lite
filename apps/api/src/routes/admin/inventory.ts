@@ -22,12 +22,12 @@ const listRoute = createRoute({
             status: z.string().optional().default("all").openapi({ description: "Status filter" }),
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().default(50).openapi({ description: "Items per page" }),
-            alertStatus: z.string().optional().openapi({ description: "Alert status filter" }),
-        }),
+            alertStatus: z.string().optional().openapi({ description: "Alert status filter" })
+        })
     },
     responses: {
-        200: { description: "Inventory overview", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Inventory overview"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -40,7 +40,7 @@ app.openapi(listRoute, async (c) => {
             status: query.status,
             page: query.page,
             limit: query.limit,
-            alertStatus: query.alertStatus,
+            alertStatus: query.alertStatus
         });
         return c.json(result, 200);
     } catch (error: any) {
@@ -60,12 +60,12 @@ const alertsRoute = createRoute({
     summary: "Get inventory alerts",
     request: {
         query: z.object({
-            status: z.string().optional().default("active").openapi({ description: "Alert status" }),
-        }),
+            status: z.string().optional().default("active").openapi({ description: "Alert status" })
+        })
     },
     responses: {
-        200: { description: "Inventory alerts", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Inventory alerts"  }
+    }
 });
 
 app.openapi(alertsRoute, async (c) => {
@@ -77,7 +77,7 @@ app.openapi(alertsRoute, async (c) => {
         status: "all",
         page: 1,
         limit: 50,
-        alertStatus: status,
+        alertStatus: status
     });
     return c.json(result, 200);
 });
@@ -94,15 +94,15 @@ const acknowledgeAlertRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        variantId: z.string().openapi({ description: "Variant ID" }),
-                    }),
-                },
-            },
-        },
+                        variantId: z.string().openapi({ description: "Variant ID" })
+                    })
+                }
+            }
+        }
     },
     responses: {
-        200: { description: "Alert acknowledged", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Alert acknowledged"  }
+    }
 });
 
 app.openapi(acknowledgeAlertRoute, async (c) => {
@@ -120,12 +120,12 @@ const adjustRoute = createRoute({
     tags: ["Admin - Inventory"],
     summary: "Adjust inventory for a variant",
     request: {
-        params: z.object({ variantId: z.string().openapi({ description: "Variant ID" }) }),
-        body: { content: { "application/json": { schema: adjustInventorySchema } } },
+        
+        body: { content: { "application/json": { schema: adjustInventorySchema } } }
     },
     responses: {
-        200: { description: "Inventory adjusted", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Inventory adjusted"  }
+    }
 });
 
 app.openapi(adjustRoute, async (c) => {

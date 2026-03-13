@@ -24,7 +24,7 @@ import {
   getCookieConfig,
   buildSetCookieHeader,
   COOKIE_NAME,
-  SESSION_TTL_SECONDS,
+  SESSION_TTL_SECONDS
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { customers, orders, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
 import { eq, sql, desc } from "drizzle-orm";
@@ -46,18 +46,18 @@ const sendOtpRoute = createRoute({
           schema: z.object({
             method: z.enum(["email", "phone"]).optional().default("email"),
             identifier: z.string().openapi({ description: "Email or phone number" }),
-            name: z.string().optional(),
-          }),
-        },
-      },
-    },
+            name: z.string().optional()
+          })
+        }
+      }
+    }
   },
   responses: {
-    200: { description: "OTP sent successfully", content: { "application/json": { schema: z.any() } } },
-    400: { description: "Invalid input", content: { "application/json": { schema: z.any() } } },
-    403: { description: "Method disabled", content: { "application/json": { schema: z.any() } } },
-    429: { description: "Rate limited", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "OTP sent successfully"  },
+    400: { description: "Invalid input"  },
+    403: { description: "Method disabled"  },
+    429: { description: "Rate limited"  }
+  }
 });
 
 app.openapi(sendOtpRoute, async (c) => {
@@ -104,17 +104,17 @@ const verifyOtpRoute = createRoute({
             identifier: z.string().openapi({ description: "Email or phone number" }),
             code: z.string().openapi({ description: "6-digit OTP code" }),
             name: z.string().optional(),
-            phone: z.string().optional(),
-          }),
-        },
-      },
-    },
+            phone: z.string().optional()
+          })
+        }
+      }
+    }
   },
   responses: {
-    200: { description: "OTP verified, session created", content: { "application/json": { schema: z.any() } } },
-    400: { description: "Invalid code or input", content: { "application/json": { schema: z.any() } } },
-    429: { description: "Too many attempts", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "OTP verified, session created"  },
+    400: { description: "Invalid code or input"  },
+    429: { description: "Too many attempts"  }
+  }
 });
 
 app.openapi(verifyOtpRoute, async (c) => {
@@ -133,7 +133,7 @@ app.openapi(verifyOtpRoute, async (c) => {
     identifier: identifier!,
     code: code!,
     name,
-    phone,
+    phone
   });
 
   if (!result.success) {
@@ -153,7 +153,7 @@ app.openapi(verifyOtpRoute, async (c) => {
   return c.json({
     success: true,
     customer: result.customer,
-    isNewUser: result.isNewUser,
+    isNewUser: result.isNewUser
   }, 200);
 });
 
@@ -165,8 +165,8 @@ const getMeRoute = createRoute({
   tags: ["Customer Auth"],
   summary: "Get current customer session info",
   responses: {
-    200: { description: "Customer session info", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Customer session info"  }
+  }
 });
 
 app.openapi(getMeRoute, async (c) => {
@@ -190,8 +190,8 @@ app.openapi(getMeRoute, async (c) => {
       email: session.email,
       name: session.name,
       phone: session.phone,
-      customerId: session.customerId,
-    },
+      customerId: session.customerId
+    }
   }, 200);
 });
 
@@ -203,8 +203,8 @@ const logoutRoute = createRoute({
   tags: ["Customer Auth"],
   summary: "Logout and clear session",
   responses: {
-    200: { description: "Logged out successfully", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Logged out successfully"  }
+  }
 });
 
 app.openapi(logoutRoute, async (c) => {
@@ -251,16 +251,16 @@ const updateProfileRoute = createRoute({
             city: z.string().optional(),
             zone: z.string().optional(),
             cityName: z.string().optional(),
-            zoneName: z.string().optional(),
-          }),
-        },
-      },
-    },
+            zoneName: z.string().optional()
+          })
+        }
+      }
+    }
   },
   responses: {
-    200: { description: "Profile updated", content: { "application/json": { schema: z.any() } } },
-    401: { description: "Authentication required", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Profile updated"  },
+    401: { description: "Authentication required"  }
+  }
 });
 
 app.openapi(updateProfileRoute, async (c) => {
@@ -300,8 +300,8 @@ app.openapi(updateProfileRoute, async (c) => {
       phone: result.session.phone,
       address: updates.address,
       cityName: updates.cityName,
-      zoneName: updates.zoneName,
-    },
+      zoneName: updates.zoneName
+    }
   }, 200);
 });
 
@@ -313,9 +313,9 @@ const getCustomerOrdersRoute = createRoute({
   tags: ["Customer Auth"],
   summary: "Get orders for authenticated customer",
   responses: {
-    200: { description: "Customer orders list", content: { "application/json": { schema: z.any() } } },
-    401: { description: "Authentication required", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Customer orders list"  },
+    401: { description: "Authentication required"  }
+  }
 });
 
 app.openapi(getCustomerOrdersRoute, async (c) => {
@@ -349,7 +349,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
   } = {
     name: session.name || "Customer",
     email: session.email,
-    phone: session.phone,
+    phone: session.phone
   };
 
   if (session.customerId) {
@@ -369,7 +369,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
         cityName: dbCustomer.cityName,
         zoneName: dbCustomer.zoneName,
         city: dbCustomer.city,
-        zone: dbCustomer.zone,
+        zone: dbCustomer.zone
       };
     }
   }
@@ -396,7 +396,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
       cityName: orders.cityName,
       zoneName: orders.zoneName,
       notes: orders.notes,
-      createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
+      createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`
     })
     .from(orders)
     .where(whereClause)
@@ -425,7 +425,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
           LIMIT 1
         )`.as("productImage"),
         variantSize: productVariants.size,
-        variantColor: productVariants.color,
+        variantColor: productVariants.color
       })
       .from(orderItems)
       .leftJoin(products, eq(products.id, orderItems.productId))
@@ -445,13 +445,13 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
     createdAt: order.createdAt
       ? new Date(order.createdAt * 1000).toISOString()
       : null,
-    items: itemsByOrder.get(order.id) || [],
+    items: itemsByOrder.get(order.id) || []
   }));
 
   return c.json({
     success: true,
     orders: formattedOrders,
-    customer: customerProfile,
+    customer: customerProfile
   }, 200);
 });
 

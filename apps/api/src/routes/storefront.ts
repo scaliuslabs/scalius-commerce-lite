@@ -18,14 +18,12 @@ const homepageRoute = createRoute({
   summary: "Get consolidated homepage data (SEO, hero, widgets, collections + products)",
   responses: {
     200: {
-      description: "Homepage data",
-      content: { "application/json": { schema: z.object({ success: z.literal(true), data: z.any() }) } },
+      description: "Homepage data"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.use(
@@ -47,14 +45,12 @@ const layoutRoute = createRoute({
   summary: "Get consolidated layout data (analytics, header, navigation, footer, currency, theme)",
   responses: {
     200: {
-      description: "Layout data",
-      content: { "application/json": { schema: z.object({ success: z.literal(true), data: z.any() }) } },
+      description: "Layout data"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.use(
@@ -76,14 +72,12 @@ const cspRoute = createRoute({
   summary: "Get CSP allowed domains configuration",
   responses: {
     200: {
-      description: "CSP configuration",
-      content: { "application/json": { schema: z.object({ success: z.literal(true), cspAllowedDomains: z.string() }) } },
+      description: "CSP configuration"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ success: z.literal(false), error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.use(

@@ -68,8 +68,8 @@ app.post("/", async (c) => {
                     ...JSON.parse(shipment.metadata ?? "{}"),
                     lastWebhookPayload: payload,
                     lastWebhookAt: new Date().toISOString(),
-                    codAmount: payload.cod_amount,
-                }),
+                    codAmount: payload.cod_amount
+                })
             })
             .where(eq(deliveryShipments.id, shipment.id));
 

@@ -57,7 +57,7 @@ const listRoute = createRoute({
     path: "/",
     tags: ["Admin - Delivery Providers"],
     summary: "List all delivery providers",
-    responses: { 200: { description: "Provider list", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Provider list"  } }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -65,7 +65,7 @@ app.openapi(listRoute, async (c) => {
         const providers = await deliveryService.getProviders();
         const maskedProviders = providers.map((provider) => ({
             ...provider,
-            credentials: maskCredentialsForClient(provider.credentials),
+            credentials: maskCredentialsForClient(provider.credentials)
         }));
 
         return c.json(maskedProviders, 200);
@@ -81,7 +81,7 @@ const createProviderRoute = createRoute({
     path: "/",
     tags: ["Admin - Delivery Providers"],
     summary: "Create a delivery provider",
-    responses: { 201: { description: "Provider created", content: { "application/json": { schema: z.any() } } } },
+    responses: { 201: { description: "Provider created"  } }
 });
 
 app.openapi(createProviderRoute, async (c) => {
@@ -102,7 +102,7 @@ app.openapi(createProviderRoute, async (c) => {
         const savedProvider = await deliveryService.saveProvider(provider);
         const maskedResponse = {
             ...savedProvider,
-            credentials: maskCredentialsForClient(savedProvider.credentials),
+            credentials: maskCredentialsForClient(savedProvider.credentials)
         };
 
         return c.json(maskedResponse, 201);
@@ -118,7 +118,7 @@ const updateProviderRoute = createRoute({
     path: "/",
     tags: ["Admin - Delivery Providers"],
     summary: "Update a delivery provider",
-    responses: { 200: { description: "Provider updated", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Provider updated"  } }
 });
 
 app.openapi(updateProviderRoute, async (c) => {
@@ -141,7 +141,7 @@ app.openapi(updateProviderRoute, async (c) => {
             const savedProvider = await deliveryService.saveProvider(provider);
             const maskedResponse = {
                 ...savedProvider,
-                credentials: maskCredentialsForClient(savedProvider.credentials),
+                credentials: maskCredentialsForClient(savedProvider.credentials)
             };
             return c.json(maskedResponse, 201);
         }
@@ -154,12 +154,12 @@ app.openapi(updateProviderRoute, async (c) => {
             id: provider.id,
             name: provider.name,
             type: provider.type,
-            isActive: provider.isActive !== undefined ? provider.isActive : existingProvider.isActive,
+            isActive: provider.isActive !== undefined ? provider.isActive : existingProvider.isActive
         });
 
         const maskedResponse = {
             ...savedProvider,
-            credentials: maskCredentialsForClient(savedProvider.credentials),
+            credentials: maskCredentialsForClient(savedProvider.credentials)
         };
 
         return c.json(maskedResponse, 200);
@@ -175,7 +175,7 @@ const createTestRoute = createRoute({
     path: "/create-test",
     tags: ["Admin - Delivery Providers"],
     summary: "Test a new provider connection before saving",
-    responses: { 200: { description: "Test result", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Test result"  } }
 });
 
 app.openapi(createTestRoute, async (c) => {
@@ -195,7 +195,7 @@ app.openapi(createTestRoute, async (c) => {
             credentials: typeof credentials === "string" ? credentials : JSON.stringify(credentials),
             config: typeof config === "string" ? config : JSON.stringify(config),
             createdAt: new Date(),
-            updatedAt: new Date(),
+            updatedAt: new Date()
         };
 
         try {
@@ -204,12 +204,12 @@ app.openapi(createTestRoute, async (c) => {
 
             return c.json({
                 ...result,
-                provider: { type, name, credentials: "...", config: "..." },
+                provider: { type, name, credentials: "...", config: "..." }
             }, 200);
         } catch (testError: any) {
             return c.json({
                 success: false,
-                message: testError.message || "Failed to test provider connection",
+                message: testError.message || "Failed to test provider connection"
             }, 200);
         }
     } catch (error: any) {
@@ -224,8 +224,7 @@ const getProviderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Providers"],
     summary: "Get a delivery provider by ID",
-    request: { params: z.object({ id: z.string().openapi({ description: "Provider ID" }) }) },
-    responses: { 200: { description: "Provider details", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Provider details"  } }
 });
 
 app.openapi(getProviderRoute, async (c) => {
@@ -247,8 +246,7 @@ const testExistingRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Providers"],
     summary: "Test an existing provider connection",
-    request: { params: z.object({ id: z.string().openapi({ description: "Provider ID" }) }) },
-    responses: { 200: { description: "Test result", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Test result"  } }
 });
 
 app.openapi(testExistingRoute, async (c) => {
@@ -264,7 +262,7 @@ app.openapi(testExistingRoute, async (c) => {
         } catch (testError: any) {
             return c.json({
                 success: false,
-                message: testError.message || "Failed to test provider connection",
+                message: testError.message || "Failed to test provider connection"
             }, 200);
         }
     } catch (error: any) {
@@ -280,8 +278,7 @@ const deleteProviderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Providers"],
     summary: "Delete a delivery provider",
-    request: { params: z.object({ id: z.string().openapi({ description: "Provider ID" }) }) },
-    responses: { 200: { description: "Provider deleted", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Provider deleted"  } }
 });
 
 app.openapi(deleteProviderRoute, async (c) => {

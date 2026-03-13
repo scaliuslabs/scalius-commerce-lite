@@ -12,8 +12,8 @@ const listItemsRoute = createRoute({
     tags: ["Admin - Navigation"],
     summary: "Get navigation items",
     responses: {
-        200: { description: "Navigation items list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Navigation items list"  }
+    }
 });
 
 app.openapi(listItemsRoute, async (c) => {

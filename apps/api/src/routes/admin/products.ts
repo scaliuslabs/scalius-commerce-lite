@@ -7,7 +7,7 @@ import {
     bulkCreateVariantsSchema,
     bulkDeleteVariantsSchema,
     bulkUpdateVariantsSchema,
-    updateSortOrderSchema,
+    updateSortOrderSchema
 } from "@scalius/core/modules/products/products.service";
 import { NotFoundError, ConflictError, ValidationError } from "../../utils/api-error";
 
@@ -15,7 +15,7 @@ const app = new OpenAPIHono();
 
 const bulkDeleteSchema = z.object({
     productIds: z.array(z.string()),
-    permanent: z.boolean().default(false),
+    permanent: z.boolean().default(false)
 });
 
 // ── List Products ──
@@ -33,12 +33,12 @@ const listRoute = createRoute({
             category: z.string().optional().openapi({ description: "Category ID filter" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
-        }),
+            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+        })
     },
     responses: {
-        200: { description: "Product list with pagination", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Product list with pagination"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -51,7 +51,7 @@ app.openapi(listRoute, async (c) => {
         categoryId: query.category || undefined,
         showTrashed: query.trashed === "true",
         sort: (query.sort || "updatedAt") as any,
-        order: (query.order || "desc") as "asc" | "desc",
+        order: (query.order || "desc") as "asc" | "desc"
     });
     return c.json(result, 200);
 });
@@ -64,11 +64,11 @@ const createProductRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Create a product",
     request: {
-        body: { content: { "application/json": { schema: createProductSchema } } },
+        body: { content: { "application/json": { schema: createProductSchema } } }
     },
     responses: {
-        201: { description: "Product created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Product created"  }
+    }
 });
 
 app.openapi(createProductRoute, async (c) => {
@@ -93,11 +93,11 @@ const bulkDeleteRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Bulk delete products",
     request: {
-        body: { content: { "application/json": { schema: bulkDeleteSchema } } },
+        body: { content: { "application/json": { schema: bulkDeleteSchema } } }
     },
     responses: {
-        204: { description: "Products deleted" },
-    },
+        204: { description: "Products deleted" }
+    }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
@@ -122,12 +122,12 @@ const updateProductRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Update a product",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-        body: { content: { "application/json": { schema: updateProductSchema } } },
+        
+        body: { content: { "application/json": { schema: updateProductSchema } } }
     },
     responses: {
-        200: { description: "Product updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Product updated"  }
+    }
 });
 
 app.openapi(updateProductRoute, async (c) => {
@@ -151,12 +151,9 @@ const deleteProductRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Products"],
     summary: "Soft-delete a product",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-    },
     responses: {
-        204: { description: "Product deleted" },
-    },
+        204: { description: "Product deleted" }
+    }
 });
 
 app.openapi(deleteProductRoute, async (c) => {
@@ -173,12 +170,9 @@ const restoreProductRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Products"],
     summary: "Restore a soft-deleted product",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-    },
     responses: {
-        200: { description: "Product restored", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Product restored"  }
+    }
 });
 
 app.openapi(restoreProductRoute, async (c) => {
@@ -195,12 +189,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Products"],
     summary: "Permanently delete a product",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-    },
     responses: {
-        204: { description: "Product permanently deleted" },
-    },
+        204: { description: "Product permanently deleted" }
+    }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {
@@ -225,12 +216,12 @@ const createVariantRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Create a product variant",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-        body: { content: { "application/json": { schema: createVariantSchema } } },
+        
+        body: { content: { "application/json": { schema: createVariantSchema } } }
     },
     responses: {
-        201: { description: "Variant created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Variant created"  }
+    }
 });
 
 app.openapi(createVariantRoute, async (c) => {
@@ -253,12 +244,9 @@ const listVariantsRoute = createRoute({
     path: "/{id}/variants",
     tags: ["Admin - Products"],
     summary: "List variants for a product",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-    },
     responses: {
-        200: { description: "Variant list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Variant list"  }
+    }
 });
 
 app.openapi(listVariantsRoute, async (c) => {
@@ -276,15 +264,12 @@ const updateVariantRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Update a product variant",
     request: {
-        params: z.object({
-            id: z.string().openapi({ description: "Product ID" }),
-            variantId: z.string().openapi({ description: "Variant ID" }),
-        }),
-        body: { content: { "application/json": { schema: updateVariantSchema } } },
+        
+        body: { content: { "application/json": { schema: updateVariantSchema } } }
     },
     responses: {
-        200: { description: "Variant updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Variant updated"  }
+    }
 });
 
 app.openapi(updateVariantRoute, async (c) => {
@@ -308,15 +293,9 @@ const deleteVariantRoute = createRoute({
     path: "/{id}/variants/{variantId}",
     tags: ["Admin - Products"],
     summary: "Delete a product variant",
-    request: {
-        params: z.object({
-            id: z.string().openapi({ description: "Product ID" }),
-            variantId: z.string().openapi({ description: "Variant ID" }),
-        }),
-    },
     responses: {
-        204: { description: "Variant deleted" },
-    },
+        204: { description: "Variant deleted" }
+    }
 });
 
 app.openapi(deleteVariantRoute, async (c) => {
@@ -339,12 +318,12 @@ const bulkCreateVariantsRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Bulk create variants",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-        body: { content: { "application/json": { schema: bulkCreateVariantsSchema } } },
+        
+        body: { content: { "application/json": { schema: bulkCreateVariantsSchema } } }
     },
     responses: {
-        201: { description: "Variants created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Variants created"  }
+    }
 });
 
 app.openapi(bulkCreateVariantsRoute, async (c) => {
@@ -368,12 +347,12 @@ const bulkDeleteVariantsRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Bulk delete variants",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-        body: { content: { "application/json": { schema: bulkDeleteVariantsSchema } } },
+        
+        body: { content: { "application/json": { schema: bulkDeleteVariantsSchema } } }
     },
     responses: {
-        204: { description: "Variants deleted" },
-    },
+        204: { description: "Variants deleted" }
+    }
 });
 
 app.openapi(bulkDeleteVariantsRoute, async (c) => {
@@ -392,12 +371,12 @@ const bulkUpdateVariantsRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Bulk update variants",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-        body: { content: { "application/json": { schema: bulkUpdateVariantsSchema } } },
+        
+        body: { content: { "application/json": { schema: bulkUpdateVariantsSchema } } }
     },
     responses: {
-        200: { description: "Variants updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Variants updated"  }
+    }
 });
 
 app.openapi(bulkUpdateVariantsRoute, async (c) => {
@@ -416,15 +395,9 @@ const duplicateVariantRoute = createRoute({
     path: "/{id}/variants/{variantId}/duplicate",
     tags: ["Admin - Products"],
     summary: "Duplicate a variant",
-    request: {
-        params: z.object({
-            id: z.string().openapi({ description: "Product ID" }),
-            variantId: z.string().openapi({ description: "Variant ID" }),
-        }),
-    },
     responses: {
-        201: { description: "Variant duplicated", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Variant duplicated"  }
+    }
 });
 
 app.openapi(duplicateVariantRoute, async (c) => {
@@ -446,12 +419,9 @@ const getVariantSortOrderRoute = createRoute({
     path: "/{id}/variants/sort-order",
     tags: ["Admin - Products"],
     summary: "Get variant sort order",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-    },
     responses: {
-        200: { description: "Sort order data", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Sort order data"  }
+    }
 });
 
 app.openapi(getVariantSortOrderRoute, async (c) => {
@@ -469,12 +439,12 @@ const updateVariantSortOrderRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Update variant sort order",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Product ID" }) }),
-        body: { content: { "application/json": { schema: updateSortOrderSchema } } },
+        
+        body: { content: { "application/json": { schema: updateSortOrderSchema } } }
     },
     responses: {
-        200: { description: "Sort order updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Sort order updated"  }
+    }
 });
 
 app.openapi(updateVariantSortOrderRoute, async (c) => {

@@ -15,7 +15,7 @@ app.use(
     ttl: 3600,
     keyPrefix: "api:navigation:",
     varyByQuery: true,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -30,7 +30,7 @@ interface NavigationItem {
 function mapCategoriesToNavigation(categoriesData: any[]): NavigationItem[] {
   return categoriesData.map((cat) => ({
     title: cat.name,
-    href: `/categories/${cat.slug}`,
+    href: `/categories/${cat.slug}`
   }));
 }
 
@@ -42,23 +42,20 @@ const getNavigationRoute = createRoute({
   summary: "Get navigation menu items",
   request: {
     query: z.object({
-      type: z.enum(["header", "footer", "all"]).optional().default("all").openapi({ description: "Navigation type" }),
-    }),
+      type: z.enum(["header", "footer", "all"]).optional().default("all").openapi({ description: "Navigation type" })
+    })
   },
   responses: {
     200: {
-      description: "Navigation data",
-      content: { "application/json": { schema: z.object({ navigation: z.any(), success: z.literal(true) }) } },
+      description: "Navigation data"
     },
     404: {
-      description: "Navigation configuration not found",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+      description: "Navigation configuration not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getNavigationRoute, async (c) => {
@@ -82,7 +79,7 @@ app.openapi(getNavigationRoute, async (c) => {
     if (headerConfig && headerConfig.navigation) {
       navigationConfig = {
         ...navigationConfig,
-        header: headerConfig.navigation,
+        header: headerConfig.navigation
       };
     }
   }
@@ -95,7 +92,7 @@ app.openapi(getNavigationRoute, async (c) => {
     if (footerConfig && footerConfig.menus) {
       navigationConfig = {
         ...navigationConfig,
-        footer: footerConfig.menus,
+        footer: footerConfig.menus
       };
     }
   }
@@ -106,7 +103,7 @@ app.openapi(getNavigationRoute, async (c) => {
       .select({
         id: categories.id,
         name: categories.name,
-        slug: categories.slug,
+        slug: categories.slug
       })
       .from(categories)
       .where(isNull(categories.deletedAt))
@@ -117,7 +114,7 @@ app.openapi(getNavigationRoute, async (c) => {
         id: pages.id,
         title: pages.title,
         slug: pages.slug,
-        isPublished: pages.isPublished,
+        isPublished: pages.isPublished
       })
       .from(pages)
       .where(sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = true`)
@@ -126,7 +123,7 @@ app.openapi(getNavigationRoute, async (c) => {
     const defaultNavigation: NavigationItem[] = [
       {
         title: "Home",
-        href: "/",
+        href: "/"
       },
     ];
 
@@ -134,14 +131,14 @@ app.openapi(getNavigationRoute, async (c) => {
       defaultNavigation.push({
         title: "Categories",
         href: "#",
-        subMenu: mapCategoriesToNavigation(categoriesData),
+        subMenu: mapCategoriesToNavigation(categoriesData)
       });
     }
 
     pagesData.forEach((page) => {
       defaultNavigation.push({
         title: page.title,
-        href: `/${page.slug}`,
+        href: `/${page.slug}`
       });
     });
 
@@ -160,7 +157,7 @@ app.openapi(getNavigationRoute, async (c) => {
 
   return c.json({
     navigation: navigationConfig,
-    success: true as const,
+    success: true as const
   }, 200);
 });
 
@@ -170,25 +167,17 @@ const getNavigationByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Navigation"],
   summary: "Get navigation menu by ID",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Navigation menu ID (e.g. 'header', 'footer', or specific menu ID)" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Navigation menu data",
-      content: { "application/json": { schema: z.object({ menu: z.any(), success: z.literal(true) }) } },
+      description: "Navigation menu data"
     },
     404: {
-      description: "Navigation menu not found",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+      description: "Navigation menu not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getNavigationByIdRoute, async (c) => {
@@ -218,7 +207,7 @@ app.openapi(getNavigationByIdRoute, async (c) => {
       menu = {
         id: "header",
         name: "Header Navigation",
-        items: headerConfig.navigation,
+        items: headerConfig.navigation
       };
     }
   }
@@ -229,7 +218,7 @@ app.openapi(getNavigationByIdRoute, async (c) => {
       menu = {
         id: "footer",
         name: "Footer Navigation",
-        items: footerConfig.menus,
+        items: footerConfig.menus
       };
     } else {
       const footerMenu = footerConfig.menus.find(
@@ -240,7 +229,7 @@ app.openapi(getNavigationByIdRoute, async (c) => {
         menu = {
           id: footerMenu.id || id,
           name: footerMenu.title,
-          items: footerMenu.links || [],
+          items: footerMenu.links || []
         };
       }
     }
@@ -252,7 +241,7 @@ app.openapi(getNavigationByIdRoute, async (c) => {
 
   return c.json({
     menu,
-    success: true as const,
+    success: true as const
   }, 200);
 });
 

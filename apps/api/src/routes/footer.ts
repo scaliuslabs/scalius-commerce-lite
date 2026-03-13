@@ -14,7 +14,7 @@ app.use(
     ttl: 3600,
     keyPrefix: "api:footer:",
     varyByQuery: false,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -50,18 +50,15 @@ const getFooterRoute = createRoute({
   summary: "Get footer configuration data",
   responses: {
     200: {
-      description: "Footer configuration",
-      content: { "application/json": { schema: z.object({ data: z.any(), success: z.literal(true) }) } },
+      description: "Footer configuration"
     },
     404: {
-      description: "Footer configuration not found",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
+      description: "Footer configuration not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string(), success: z.literal(false) }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getFooterRoute, async (c) => {
@@ -81,7 +78,7 @@ app.openapi(getFooterRoute, async (c) => {
     return c.json(
       {
         error: "Invalid footer configuration",
-        success: false as const,
+        success: false as const
       },
       500,
     );
@@ -100,12 +97,12 @@ app.openapi(getFooterRoute, async (c) => {
       footerConfig.copyrightText || settings.siteName || "Your Store",
     menus: footerConfig.menus || [],
     social: socialLinks,
-    description: footerConfig.description || "",
+    description: footerConfig.description || ""
   };
 
   return c.json({
     data: footerData,
-    success: true as const,
+    success: true as const
   }, 200);
 });
 

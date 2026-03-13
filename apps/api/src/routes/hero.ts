@@ -15,7 +15,7 @@ app.use(
     ttl: 3600000,
     keyPrefix: "api:hero:",
     varyByQuery: false,
-    methods: ["GET"],
+    methods: ["GET"]
   }),
 );
 
@@ -33,19 +33,18 @@ const listSlidersRoute = createRoute({
   summary: "Get all active hero sliders",
   request: {
     query: z.object({
-      type: z.enum(["desktop", "mobile"]).optional().openapi({ description: "Slider type filter" }),
-    }),
+      type: z.enum(["desktop", "mobile"]).optional().openapi({ description: "Slider type filter" })
+    })
   },
   responses: {
     200: {
-      description: "Hero slider data",
-      content: { "application/json": { schema: z.any() } },
+      description: "Hero slider data"
+      
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(listSlidersRoute, async (c) => {
@@ -124,7 +123,7 @@ app.openapi(listSlidersRoute, async (c) => {
       images: JSON.parse(slider.images),
       isActive: slider.isActive,
       createdAt,
-      updatedAt,
+      updatedAt
     };
   };
 
@@ -135,12 +134,12 @@ app.openapi(listSlidersRoute, async (c) => {
   if (requestedType === "desktop") {
     return c.json({
       slider: formatSlider(desktopSlider),
-      images: desktopImages,
+      images: desktopImages
     }, 200);
   } else if (requestedType === "mobile") {
     return c.json({
       slider: formatSlider(mobileSlider),
-      images: mobileImages,
+      images: mobileImages
     }, 200);
   }
 
@@ -150,7 +149,7 @@ app.openapi(listSlidersRoute, async (c) => {
     mobile: formatSlider(mobileSlider),
     images:
       isMobile && mobileImages.length > 0 ? mobileImages : desktopImages,
-    isMobile,
+    isMobile
   }, 200);
 });
 
@@ -160,25 +159,17 @@ const getSliderByIdRoute = createRoute({
   path: "/sliders/{id}",
   tags: ["Hero"],
   summary: "Get hero slider by ID",
-  request: {
-    params: z.object({
-      id: z.string().openapi({ description: "Slider ID" }),
-    }),
-  },
   responses: {
     200: {
-      description: "Hero slider details",
-      content: { "application/json": { schema: z.object({ slider: z.any() }) } },
+      description: "Hero slider details"
     },
     404: {
-      description: "Slider not found",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
+      description: "Slider not found"
     },
     500: {
-      description: "Server error",
-      content: { "application/json": { schema: z.object({ error: z.string() }) } },
-    },
-  },
+      description: "Server error"
+    }
+  }
 });
 
 app.openapi(getSliderByIdRoute, async (c) => {
@@ -234,8 +225,8 @@ app.openapi(getSliderByIdRoute, async (c) => {
       images,
       isActive: slider.isActive,
       createdAt,
-      updatedAt,
-    },
+      updatedAt
+    }
   }, 200);
 });
 

@@ -11,18 +11,18 @@ const locationSchema = z.object({
     type: z.enum(["city", "zone", "area"]),
     parentId: z.string().nullish(),
     externalIds: z.record(z.string(), z.union([z.string(), z.number()])).optional().default({}),
-    metadata: z.record(z.string(), z.any()).optional().default({}),
+    metadata: z.record(z.string(), z.string()).optional().default({}),
     isActive: z.boolean().optional().default(true),
-    sortOrder: z.number().optional().default(0),
+    sortOrder: z.number().optional().default(0)
 });
 
 const updateLocationSchema = z.object({
     name: z.string().min(1, "Name is required").optional(),
     parentId: z.string().nullish().optional(),
     externalIds: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
-    metadata: z.record(z.string(), z.any()).optional(),
+    metadata: z.record(z.string(), z.string()).optional(),
     isActive: z.boolean().optional(),
-    sortOrder: z.number().optional(),
+    sortOrder: z.number().optional()
 });
 
 // ── List Locations ──
@@ -38,10 +38,10 @@ const listRoute = createRoute({
             parentId: z.string().optional().openapi({ description: "Parent ID filter" }),
             search: z.string().optional().openapi({ description: "Search term" }),
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(100).openapi({ description: "Items per page" }),
-        }),
+            limit: z.coerce.number().default(100).openapi({ description: "Items per page" })
+        })
     },
-    responses: { 200: { description: "Location list", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Location list"  } }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -82,7 +82,7 @@ app.openapi(listRoute, async (c) => {
             ...location,
             externalIds: location.externalIds ? JSON.parse(location.externalIds) : {},
             metadata: location.metadata ? JSON.parse(location.metadata) : {},
-            displayName: `${location.name}`,
+            displayName: `${location.name}`
         }));
 
         return c.json({
@@ -91,8 +91,8 @@ app.openapi(listRoute, async (c) => {
                 total: totalCount,
                 page,
                 limit,
-                totalPages: Math.ceil(totalCount / limit),
-            },
+                totalPages: Math.ceil(totalCount / limit)
+            }
         }, 200);
     } catch (error: any) {
         console.error("Error fetching delivery locations:", error);
@@ -108,7 +108,7 @@ const createLocationRoute = createRoute({
     tags: ["Admin - Delivery Locations"],
     summary: "Create a delivery location",
     request: { body: { content: { "application/json": { schema: locationSchema } } } },
-    responses: { 201: { description: "Location created", content: { "application/json": { schema: z.any() } } } },
+    responses: { 201: { description: "Location created"  } }
 });
 
 app.openapi(createLocationRoute, async (c) => {
@@ -129,7 +129,7 @@ const deleteAllRoute = createRoute({
     path: "/all",
     tags: ["Admin - Delivery Locations"],
     summary: "Delete all delivery locations permanently",
-    responses: { 200: { description: "All locations deleted", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "All locations deleted"  } }
 });
 
 app.openapi(deleteAllRoute, async (c) => {
@@ -151,9 +151,9 @@ const bulkDeleteRoute = createRoute({
     tags: ["Admin - Delivery Locations"],
     summary: "Bulk soft-delete delivery locations",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } },
+        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
-    responses: { 200: { description: "Locations deleted", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Locations deleted"  } }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
@@ -181,8 +181,7 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Locations"],
     summary: "Get a delivery location by ID",
-    request: { params: z.object({ id: z.string().openapi({ description: "Location ID" }) }) },
-    responses: { 200: { description: "Location details", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Location details"  } }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -206,10 +205,10 @@ const updateLocationRoute = createRoute({
     tags: ["Admin - Delivery Locations"],
     summary: "Update a delivery location",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Location ID" }) }),
-        body: { content: { "application/json": { schema: updateLocationSchema } } },
+        
+        body: { content: { "application/json": { schema: updateLocationSchema } } }
     },
-    responses: { 200: { description: "Location updated", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Location updated"  } }
 });
 
 app.openapi(updateLocationRoute, async (c) => {
@@ -237,7 +236,7 @@ app.openapi(updateLocationRoute, async (c) => {
         return c.json({
             ...updatedLocation,
             externalIds: updatedLocation.externalIds ? JSON.parse(updatedLocation.externalIds) : {},
-            metadata: updatedLocation.metadata ? JSON.parse(updatedLocation.metadata) : {},
+            metadata: updatedLocation.metadata ? JSON.parse(updatedLocation.metadata) : {}
         }, 200);
     } catch (error: any) {
         if (error.name === "NotFoundError") throw error;
@@ -253,8 +252,7 @@ const deleteLocationRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Delivery Locations"],
     summary: "Soft-delete a delivery location",
-    request: { params: z.object({ id: z.string().openapi({ description: "Location ID" }) }) },
-    responses: { 200: { description: "Location deleted", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Location deleted"  } }
 });
 
 app.openapi(deleteLocationRoute, async (c) => {

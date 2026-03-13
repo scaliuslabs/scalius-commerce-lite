@@ -18,7 +18,7 @@ const intentSchema = z.object({
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
   depositAmount: z.number().positive().optional(),
   currency: z.string().length(3).optional(),
-  manualCapture: z.boolean().default(false),
+  manualCapture: z.boolean().default(false)
 });
 
 const createIntentRoute = createRoute({
@@ -29,16 +29,16 @@ const createIntentRoute = createRoute({
   request: {
     body: {
       content: {
-        "application/json": { schema: intentSchema },
-      },
-    },
+        "application/json": { schema: intentSchema }
+      }
+    }
   },
   responses: {
-    200: { description: "PaymentIntent created", content: { "application/json": { schema: z.any() } } },
-    400: { description: "Invalid request", content: { "application/json": { schema: z.any() } } },
-    404: { description: "Order not found", content: { "application/json": { schema: z.any() } } },
-    503: { description: "Stripe not configured", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "PaymentIntent created"  },
+    400: { description: "Invalid request"  },
+    404: { description: "Order not found"  },
+    503: { description: "Stripe not configured"  }
+  }
 });
 
 app.openapi(createIntentRoute, async (c) => {
@@ -48,7 +48,7 @@ app.openapi(createIntentRoute, async (c) => {
   if (!stripe) {
     return c.json({
       success: false,
-      error: "Stripe is not configured. Please set credentials in the admin dashboard.",
+      error: "Stripe is not configured. Please set credentials in the admin dashboard."
     }, 503);
   }
   if (!stripe.enabled) {
@@ -65,7 +65,7 @@ app.openapi(createIntentRoute, async (c) => {
       status: orders.status,
       paymentStatus: orders.paymentStatus,
       paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue,
+      balanceDue: orders.balanceDue
     })
     .from(orders)
     .where(eq(orders.id, body.orderId))
@@ -110,7 +110,7 @@ app.openapi(createIntentRoute, async (c) => {
     amount: amountInSmallestUnit,
     currency: body.currency,
     paymentType: body.paymentType,
-    manualCapture: body.manualCapture,
+    manualCapture: body.manualCapture
   });
 
   if (!result.success) {
@@ -133,7 +133,7 @@ app.openapi(createIntentRoute, async (c) => {
       balanceDue: order.totalAmount - body.depositAmount,
       status: "pending",
       createdAt: new Date(),
-      updatedAt: new Date(),
+      updatedAt: new Date()
     }).onConflictDoNothing();
   }
 
@@ -143,7 +143,7 @@ app.openapi(createIntentRoute, async (c) => {
     paymentIntentId: result.paymentIntentId,
     publishableKey: stripe.publishableKey,
     amount: chargeAmount,
-    currency: body.currency,
+    currency: body.currency
   }, 200);
 });
 

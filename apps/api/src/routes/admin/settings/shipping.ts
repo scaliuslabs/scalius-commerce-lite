@@ -11,7 +11,7 @@ const createShippingMethodSchema = z.object({
     fee: z.number().min(0, "Fee must be a positive number"),
     description: z.string().max(255).optional().nullable(),
     isActive: z.boolean().optional().default(true),
-    sortOrder: z.number().int().optional().default(0),
+    sortOrder: z.number().int().optional().default(0)
 });
 
 const updateShippingMethodSchema = z.object({
@@ -19,7 +19,7 @@ const updateShippingMethodSchema = z.object({
     fee: z.number().min(0, "Fee must be a positive number").optional(),
     description: z.string().max(255).optional().nullable(),
     isActive: z.boolean().optional(),
-    sortOrder: z.number().int().optional(),
+    sortOrder: z.number().int().optional()
 });
 
 // ── List Shipping Methods ──
@@ -36,10 +36,10 @@ const listRoute = createRoute({
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             sort: z.string().optional().default("sortOrder").openapi({ description: "Sort field" }),
             order: z.string().optional().default("asc").openapi({ description: "Sort order" }),
-            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
-        }),
+            trashed: z.string().optional().openapi({ description: "Show trashed items" })
+        })
     },
-    responses: { 200: { description: "Shipping method list", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Shipping method list"  } }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -103,8 +103,8 @@ app.openapi(listRoute, async (c) => {
                 total,
                 totalPages,
                 hasNextPage: page < totalPages,
-                hasPrevPage: page > 1,
-            },
+                hasPrevPage: page > 1
+            }
         }, 200);
     } catch (error) {
         console.error("Error fetching shipping methods:", error);
@@ -120,9 +120,9 @@ const createRoute_ = createRoute({
     tags: ["Admin - Shipping Methods"],
     summary: "Create a shipping method",
     request: {
-        body: { content: { "application/json": { schema: createShippingMethodSchema } } },
+        body: { content: { "application/json": { schema: createShippingMethodSchema } } }
     },
-    responses: { 201: { description: "Shipping method created", content: { "application/json": { schema: z.any() } } } },
+    responses: { 201: { description: "Shipping method created"  } }
 });
 
 app.openapi(createRoute_, async (c) => {
@@ -153,7 +153,7 @@ app.openapi(createRoute_, async (c) => {
                 isActive,
                 sortOrder,
                 createdAt: sql`(cast(strftime('%s','now') as int))`,
-                updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                updatedAt: sql`(cast(strftime('%s','now') as int))`
             })
             .returning();
 
@@ -174,8 +174,7 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Shipping Methods"],
     summary: "Get a shipping method by ID",
-    request: { params: z.object({ id: z.string().openapi({ description: "Shipping method ID" }) }) },
-    responses: { 200: { description: "Shipping method details", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Shipping method details"  } }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -205,10 +204,10 @@ const updateRoute = createRoute({
     tags: ["Admin - Shipping Methods"],
     summary: "Update a shipping method",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Shipping method ID" }) }),
-        body: { content: { "application/json": { schema: updateShippingMethodSchema } } },
+        
+        body: { content: { "application/json": { schema: updateShippingMethodSchema } } }
     },
-    responses: { 200: { description: "Shipping method updated", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Shipping method updated"  } }
 });
 
 app.openapi(updateRoute, async (c) => {
@@ -248,7 +247,7 @@ app.openapi(updateRoute, async (c) => {
             .update(shippingMethods)
             .set({
                 ...data,
-                updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                updatedAt: sql`(cast(strftime('%s','now') as int))`
             })
             .where(eq(shippingMethods.id, id))
             .returning();
@@ -274,8 +273,7 @@ const deleteRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Shipping Methods"],
     summary: "Soft-delete a shipping method",
-    request: { params: z.object({ id: z.string().openapi({ description: "Shipping method ID" }) }) },
-    responses: { 204: { description: "Shipping method deleted" } },
+    responses: { 204: { description: "Shipping method deleted" } }
 });
 
 app.openapi(deleteRoute, async (c) => {
@@ -312,8 +310,7 @@ const restoreRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Shipping Methods"],
     summary: "Restore a soft-deleted shipping method",
-    request: { params: z.object({ id: z.string().openapi({ description: "Shipping method ID" }) }) },
-    responses: { 200: { description: "Shipping method restored", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Shipping method restored"  } }
 });
 
 app.openapi(restoreRoute, async (c) => {
@@ -324,7 +321,7 @@ app.openapi(restoreRoute, async (c) => {
         const methodToRestore = await db
             .select({
                 id: shippingMethods.id,
-                deletedAt: shippingMethods.deletedAt,
+                deletedAt: shippingMethods.deletedAt
             })
             .from(shippingMethods)
             .where(
@@ -343,7 +340,7 @@ app.openapi(restoreRoute, async (c) => {
             .update(shippingMethods)
             .set({
                 deletedAt: null,
-                updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                updatedAt: sql`(cast(strftime('%s','now') as int))`
             })
             .where(eq(shippingMethods.id, id));
 
@@ -361,8 +358,7 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent-delete",
     tags: ["Admin - Shipping Methods"],
     summary: "Permanently delete a shipping method",
-    request: { params: z.object({ id: z.string().openapi({ description: "Shipping method ID" }) }) },
-    responses: { 204: { description: "Shipping method permanently deleted" } },
+    responses: { 204: { description: "Shipping method permanently deleted" } }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {

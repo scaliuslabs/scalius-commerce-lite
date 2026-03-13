@@ -13,7 +13,7 @@ const metaConversionsSettingsSchema = z.object({
     accessToken: z.string().optional(),
     testEventCode: z.string().optional(),
     isEnabled: z.boolean().default(false),
-    logRetentionDays: z.number().int().min(1).max(365).default(30),
+    logRetentionDays: z.number().int().min(1).max(365).default(30)
 });
 
 // ── Get Settings ──
@@ -23,7 +23,7 @@ const getSettingsRoute = createRoute({
     path: "/",
     tags: ["Admin - Meta Conversions"],
     summary: "Get Meta Conversions API settings",
-    responses: { 200: { description: "Settings", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Settings"  } }
 });
 
 app.openapi(getSettingsRoute, async (c) => {
@@ -44,7 +44,7 @@ const saveSettingsRoute = createRoute({
     tags: ["Admin - Meta Conversions"],
     summary: "Save Meta Conversions API settings",
     request: { body: { content: { "application/json": { schema: metaConversionsSettingsSchema } } } },
-    responses: { 200: { description: "Settings saved", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Settings saved"  } }
 });
 
 app.openapi(saveSettingsRoute, async (c) => {
@@ -85,10 +85,10 @@ const getLogsRoute = createRoute({
     request: {
         query: z.object({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(20).openapi({ description: "Items per page" }),
-        }),
+            limit: z.coerce.number().default(20).openapi({ description: "Items per page" })
+        })
     },
-    responses: { 200: { description: "Logs with pagination", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Logs with pagination"  } }
 });
 
 app.openapi(getLogsRoute, async (c) => {
@@ -105,7 +105,7 @@ app.openapi(getLogsRoute, async (c) => {
         return c.json({
             data: logs,
             pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-            retention: { hours: getLogRetentionHours(), cleanupIntervalHours: getCleanupCheckIntervalHours(), nextCleanupMessage: "Cleanup active" },
+            retention: { hours: getLogRetentionHours(), cleanupIntervalHours: getCleanupCheckIntervalHours(), nextCleanupMessage: "Cleanup active" }
         }, 200);
     } catch (error) {
         return c.json({ error: "Failed to fetch logs" }, 500);
@@ -119,7 +119,7 @@ const clearLogsRoute = createRoute({
     path: "/logs",
     tags: ["Admin - Meta Conversions"],
     summary: "Clear all Meta Conversions API logs",
-    responses: { 200: { description: "Logs cleared", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Logs cleared"  } }
 });
 
 app.openapi(clearLogsRoute, async (c) => {
@@ -138,7 +138,7 @@ const manualCleanupRoute = createRoute({
     path: "/logs",
     tags: ["Admin - Meta Conversions"],
     summary: "Trigger manual log cleanup",
-    responses: { 200: { description: "Cleanup result", content: { "application/json": { schema: z.any() } } } },
+    responses: { 200: { description: "Cleanup result"  } }
 });
 
 app.openapi(manualCleanupRoute, async (c) => {

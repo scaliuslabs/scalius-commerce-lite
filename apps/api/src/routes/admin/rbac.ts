@@ -25,29 +25,29 @@ const createRoleSchema = z.object({
     name: z.string().min(1).max(50).regex(/^[a-z0-9_]+$/, "Name must be lowercase alphanumeric with underscores"),
     displayName: z.string().min(1).max(100),
     description: z.string().max(500).optional(),
-    permissions: z.array(z.string()).default([]),
+    permissions: z.array(z.string()).default([])
 });
 
 const updateRoleSchema = z.object({
     displayName: z.string().min(1).max(100).optional(),
     description: z.string().max(500).optional(),
-    permissions: z.array(z.string()).optional(),
+    permissions: z.array(z.string()).optional()
 });
 
 const userRoleSchema = z.object({
     userId: z.string().min(1),
-    roleId: z.string().min(1),
+    roleId: z.string().min(1)
 });
 
 const setOverrideSchema = z.object({
     userId: z.string().min(1),
     permission: z.string().min(1),
-    granted: z.boolean(),
+    granted: z.boolean()
 });
 
 const removeOverrideSchema = z.object({
     userId: z.string().min(1),
-    permission: z.string().min(1),
+    permission: z.string().min(1)
 });
 
 // ── List Roles ──
@@ -58,8 +58,8 @@ const listRolesRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "List all roles with permissions",
     responses: {
-        200: { description: "Role list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Role list"  }
+    }
 });
 
 app.openapi(listRolesRoute, async (c) => {
@@ -92,11 +92,11 @@ const createRoleRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "Create a new role",
     request: {
-        body: { content: { "application/json": { schema: createRoleSchema } } },
+        body: { content: { "application/json": { schema: createRoleSchema } } }
     },
     responses: {
-        201: { description: "Role created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Role created"  }
+    }
 });
 
 app.openapi(createRoleRoute, async (c) => {
@@ -126,7 +126,7 @@ app.openapi(createRoleRoute, async (c) => {
             description: data.description || null,
             isSystem: false,
             createdAt: new Date(),
-            updatedAt: new Date(),
+            updatedAt: new Date()
         });
 
         if (data.permissions.length > 0) {
@@ -140,7 +140,7 @@ app.openapi(createRoleRoute, async (c) => {
                     id: crypto.randomUUID(),
                     roleId,
                     permissionId: perm.id,
-                    createdAt: new Date(),
+                    createdAt: new Date()
                 });
             }
         }
@@ -155,8 +155,8 @@ app.openapi(createRoleRoute, async (c) => {
                 displayName: data.displayName,
                 description: data.description,
                 isSystem: false,
-                permissions: data.permissions,
-            },
+                permissions: data.permissions
+            }
         }, 201);
     } catch (error: any) {
         console.error("Error creating role:", error);
@@ -171,12 +171,9 @@ const getRoleRoute = createRoute({
     path: "/roles/{id}",
     tags: ["Admin - RBAC"],
     summary: "Get a single role with permissions",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Role ID" }) }),
-    },
     responses: {
-        200: { description: "Role details", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Role details"  }
+    }
 });
 
 app.openapi(getRoleRoute, async (c) => {
@@ -205,8 +202,8 @@ app.openapi(getRoleRoute, async (c) => {
         return c.json({
             role: {
                 ...role[0],
-                permissions: perms,
-            },
+                permissions: perms
+            }
         }, 200);
     } catch (error) {
         console.error("Error fetching role:", error);
@@ -222,12 +219,12 @@ const updateRoleRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "Update a role",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Role ID" }) }),
-        body: { content: { "application/json": { schema: updateRoleSchema } } },
+        
+        body: { content: { "application/json": { schema: updateRoleSchema } } }
     },
     responses: {
-        200: { description: "Role updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Role updated"  }
+    }
 });
 
 app.openapi(updateRoleRoute, async (c) => {
@@ -258,7 +255,7 @@ app.openapi(updateRoleRoute, async (c) => {
                 .set({
                     ...(data.displayName && { displayName: data.displayName }),
                     ...(data.description !== undefined && { description: data.description }),
-                    updatedAt: new Date(),
+                    updatedAt: new Date()
                 })
                 .where(eq(roles.id, roleId));
         }
@@ -281,7 +278,7 @@ app.openapi(updateRoleRoute, async (c) => {
                         id: crypto.randomUUID(),
                         roleId,
                         permissionId: perm.id,
-                        createdAt: new Date(),
+                        createdAt: new Date()
                     });
                 }
             }
@@ -296,8 +293,8 @@ app.openapi(updateRoleRoute, async (c) => {
             success: true,
             role: {
                 ...updatedRole[0],
-                permissions: updatedPerms,
-            },
+                permissions: updatedPerms
+            }
         }, 200);
     } catch (error: any) {
         console.error("Error updating role:", error);
@@ -312,12 +309,9 @@ const deleteRoleRoute = createRoute({
     path: "/roles/{id}",
     tags: ["Admin - RBAC"],
     summary: "Delete a role",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Role ID" }) }),
-    },
     responses: {
-        200: { description: "Role deleted", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Role deleted"  }
+    }
 });
 
 app.openapi(deleteRoleRoute, async (c) => {
@@ -375,11 +369,11 @@ const assignRoleRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "Assign a role to a user",
     request: {
-        body: { content: { "application/json": { schema: userRoleSchema } } },
+        body: { content: { "application/json": { schema: userRoleSchema } } }
     },
     responses: {
-        201: { description: "Role assigned", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Role assigned"  }
+    }
 });
 
 app.openapi(assignRoleRoute, async (c) => {
@@ -441,11 +435,11 @@ const removeRoleRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "Remove a role from a user",
     request: {
-        body: { content: { "application/json": { schema: userRoleSchema } } },
+        body: { content: { "application/json": { schema: userRoleSchema } } }
     },
     responses: {
-        200: { description: "Role removed", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Role removed"  }
+    }
 });
 
 app.openapi(removeRoleRoute, async (c) => {
@@ -492,11 +486,11 @@ const setOverrideRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "Set a permission override for a user",
     request: {
-        body: { content: { "application/json": { schema: setOverrideSchema } } },
+        body: { content: { "application/json": { schema: setOverrideSchema } } }
     },
     responses: {
-        200: { description: "Override set", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Override set"  }
+    }
 });
 
 app.openapi(setOverrideRoute, async (c) => {
@@ -550,11 +544,11 @@ const removeOverrideRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "Remove a permission override",
     request: {
-        body: { content: { "application/json": { schema: removeOverrideSchema } } },
+        body: { content: { "application/json": { schema: removeOverrideSchema } } }
     },
     responses: {
-        200: { description: "Override removed", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Override removed"  }
+    }
 });
 
 app.openapi(removeOverrideRoute, async (c) => {
@@ -601,8 +595,8 @@ const listPermissionsRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "List all available permissions",
     responses: {
-        200: { description: "Permissions list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Permissions list"  }
+    }
 });
 
 app.openapi(listPermissionsRoute, async (c) => {
@@ -624,7 +618,7 @@ app.openapi(listPermissionsRoute, async (c) => {
 
         return c.json({
             permissions: allPermissions,
-            grouped: groupedPermissions,
+            grouped: groupedPermissions
         }, 200);
     } catch (error) {
         console.error("Error fetching permissions:", error);
@@ -640,8 +634,8 @@ const myPermissionsRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "Get current user's permission context",
     responses: {
-        200: { description: "User permission context", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "User permission context"  }
+    }
 });
 
 app.openapi(myPermissionsRoute, async (c) => {
@@ -662,7 +656,7 @@ app.openapi(myPermissionsRoute, async (c) => {
             isSuperAdmin: context.isSuperAdmin,
             roles: context.roles,
             permissions: Array.from(context.effectivePermissions),
-            overrides: context.overrides,
+            overrides: context.overrides
         }, 200);
     } catch (error) {
         console.error("Error fetching user permissions:", error);

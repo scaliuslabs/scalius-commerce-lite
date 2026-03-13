@@ -15,8 +15,8 @@ const listRoute = createRoute({
     tags: ["Admin - Analytics"],
     summary: "List all analytics scripts",
     responses: {
-        200: { description: "Analytics script list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Analytics script list"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -33,11 +33,11 @@ const createScriptRoute = createRoute({
     tags: ["Admin - Analytics"],
     summary: "Create an analytics script",
     request: {
-        body: { content: { "application/json": { schema: createAnalyticsSchema } } },
+        body: { content: { "application/json": { schema: createAnalyticsSchema } } }
     },
     responses: {
-        201: { description: "Script created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Script created"  }
+    }
 });
 
 app.openapi(createScriptRoute, async (c) => {
@@ -54,12 +54,9 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Analytics"],
     summary: "Get an analytics script by ID",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Script ID" }) }),
-    },
     responses: {
-        200: { description: "Script details", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Script details"  }
+    }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -78,12 +75,12 @@ const updateScriptRoute = createRoute({
     tags: ["Admin - Analytics"],
     summary: "Update an analytics script",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Script ID" }) }),
-        body: { content: { "application/json": { schema: updateAnalyticsSchema } } },
+        
+        body: { content: { "application/json": { schema: updateAnalyticsSchema } } }
     },
     responses: {
-        200: { description: "Script updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Script updated"  }
+    }
 });
 
 app.openapi(updateScriptRoute, async (c) => {
@@ -107,12 +104,9 @@ const deleteScriptRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Analytics"],
     summary: "Delete an analytics script",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Script ID" }) }),
-    },
     responses: {
-        200: { description: "Script deleted", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Script deleted"  }
+    }
 });
 
 app.openapi(deleteScriptRoute, async (c) => {
@@ -131,12 +125,12 @@ const toggleScriptRoute = createRoute({
     tags: ["Admin - Analytics"],
     summary: "Toggle an analytics script active status",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Script ID" }) }),
-        body: { content: { "application/json": { schema: toggleAnalyticsSchema } } },
+        
+        body: { content: { "application/json": { schema: toggleAnalyticsSchema } } }
     },
     responses: {
-        200: { description: "Script toggled", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Script toggled"  }
+    }
 });
 
 app.openapi(toggleScriptRoute, async (c) => {

@@ -73,7 +73,7 @@ function buildQueueMessage(event: Stripe.Event): PaymentQueueMessage | null {
         amount: pi.amount_received,
         currency: pi.currency,
         chargeId,
-        metadata: pi.metadata as Record<string, string>,
+        metadata: pi.metadata as Record<string, string>
       };
     }
 
@@ -87,7 +87,7 @@ function buildQueueMessage(event: Stripe.Event): PaymentQueueMessage | null {
         orderId,
         paymentIntentId: pi.id,
         failureCode: pi.last_payment_error?.code ?? undefined,
-        failureMessage: pi.last_payment_error?.message ?? undefined,
+        failureMessage: pi.last_payment_error?.message ?? undefined
       };
     }
 
@@ -99,7 +99,7 @@ function buildQueueMessage(event: Stripe.Event): PaymentQueueMessage | null {
       return {
         type: "payment.stripe.canceled",
         orderId,
-        paymentIntentId: pi.id,
+        paymentIntentId: pi.id
       };
     }
 
@@ -115,7 +115,7 @@ function buildQueueMessage(event: Stripe.Event): PaymentQueueMessage | null {
           ? charge.payment_intent
           : (charge.payment_intent as any)?.id ?? "",
         amountRefunded: charge.amount_refunded,
-        chargeId: charge.id,
+        chargeId: charge.id
       };
     }
 

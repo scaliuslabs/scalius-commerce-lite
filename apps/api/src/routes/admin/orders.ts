@@ -41,12 +41,12 @@ const listOrdersRoute = createRoute({
             sort: z.enum(["customerName", "totalAmount", "status", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
             startDate: z.string().optional().openapi({ description: "Start date filter" }),
-            endDate: z.string().optional().openapi({ description: "End date filter" }),
-        }),
+            endDate: z.string().optional().openapi({ description: "End date filter" })
+        })
     },
     responses: {
-        200: { description: "Paginated order list", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Paginated order list"  }
+    }
 });
 
 app.openapi(listOrdersRoute, async (c) => {
@@ -60,7 +60,7 @@ app.openapi(listOrdersRoute, async (c) => {
         sort: query.sort as any,
         order: query.order as "asc" | "desc",
         startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined,
+        endDate: query.endDate ? new Date(query.endDate) : undefined
     });
     return c.json(result, 200);
 });
@@ -73,11 +73,11 @@ const createOrderRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Create a new order (admin)",
     request: {
-        body: { content: { "application/json": { schema: createOrderSchema } } },
+        body: { content: { "application/json": { schema: createOrderSchema } } }
     },
     responses: {
-        201: { description: "Order created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Order created"  }
+    }
 });
 
 app.openapi(createOrderRoute, async (c) => {
@@ -94,11 +94,11 @@ const bulkDeleteRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Bulk delete orders",
     request: {
-        body: { content: { "application/json": { schema: bulkDeleteOrderSchema } } },
+        body: { content: { "application/json": { schema: bulkDeleteOrderSchema } } }
     },
     responses: {
-        204: { description: "Orders deleted" },
-    },
+        204: { description: "Orders deleted" }
+    }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
@@ -115,11 +115,11 @@ const bulkShipRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Bulk ship orders",
     request: {
-        body: { content: { "application/json": { schema: bulkShipOrderSchema } } },
+        body: { content: { "application/json": { schema: bulkShipOrderSchema } } }
     },
     responses: {
-        200: { description: "Bulk ship results", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Bulk ship results"  }
+    }
 });
 
 app.openapi(bulkShipRoute, async (c) => {
@@ -130,7 +130,7 @@ app.openapi(bulkShipRoute, async (c) => {
         totalProcessed: results.length,
         successCount,
         failureCount: results.length - successCount,
-        results,
+        results
     }, 200);
 });
 
@@ -141,13 +141,10 @@ const getOrderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Orders"],
     summary: "Get order details",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-    },
     responses: {
-        200: { description: "Order details", content: { "application/json": { schema: z.any() } } },
-        404: { description: "Order not found", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Order details"  },
+        404: { description: "Order not found"  }
+    }
 });
 
 app.openapi(getOrderRoute, async (c) => {
@@ -165,12 +162,12 @@ const updateOrderRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Update an order",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-        body: { content: { "application/json": { schema: updateOrderSchema } } },
+        
+        body: { content: { "application/json": { schema: updateOrderSchema } } }
     },
     responses: {
-        200: { description: "Order updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Order updated"  }
+    }
 });
 
 app.openapi(updateOrderRoute, async (c) => {
@@ -187,12 +184,9 @@ const deleteOrderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Orders"],
     summary: "Soft delete an order",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-    },
     responses: {
-        204: { description: "Order deleted" },
-    },
+        204: { description: "Order deleted" }
+    }
 });
 
 app.openapi(deleteOrderRoute, async (c) => {
@@ -208,12 +202,9 @@ const restoreOrderRoute = createRoute({
     path: "/{id}/restore",
     tags: ["Admin - Orders"],
     summary: "Restore a soft-deleted order",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-    },
     responses: {
-        204: { description: "Order restored" },
-    },
+        204: { description: "Order restored" }
+    }
 });
 
 app.openapi(restoreOrderRoute, async (c) => {
@@ -229,12 +220,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Orders"],
     summary: "Permanently delete an order",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-    },
     responses: {
-        204: { description: "Order permanently deleted" },
-    },
+        204: { description: "Order permanently deleted" }
+    }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {
@@ -250,12 +238,9 @@ const getCodRoute = createRoute({
     path: "/{id}/cod",
     tags: ["Admin - Orders"],
     summary: "Get COD tracking for an order",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-    },
     responses: {
-        200: { description: "COD tracking info", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "COD tracking info"  }
+    }
 });
 
 app.openapi(getCodRoute, async (c) => {
@@ -281,12 +266,12 @@ const postCodRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Process COD action",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-        body: { content: { "application/json": { schema: codActionSchema } } },
+        
+        body: { content: { "application/json": { schema: codActionSchema } } }
     },
     responses: {
-        200: { description: "COD action processed", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "COD action processed"  }
+    }
 });
 
 app.openapi(postCodRoute, async (c) => {
@@ -303,12 +288,9 @@ const getFulfillRoute = createRoute({
     path: "/{id}/fulfill",
     tags: ["Admin - Orders"],
     summary: "Get fulfillment shipments for an order",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-    },
     responses: {
-        200: { description: "Order shipments", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Order shipments"  }
+    }
 });
 
 app.openapi(getFulfillRoute, async (c) => {
@@ -335,12 +317,12 @@ const postFulfillRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Create a fulfillment shipment",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-        body: { content: { "application/json": { schema: fulfillSchema } } },
+        
+        body: { content: { "application/json": { schema: fulfillSchema } } }
     },
     responses: {
-        201: { description: "Fulfillment created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Fulfillment created"  }
+    }
 });
 
 app.openapi(postFulfillRoute, async (c) => {
@@ -358,12 +340,12 @@ const updateStatusRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Update order status",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-        body: { content: { "application/json": { schema: z.object({ status: z.string() }) } } },
+        
+        body: { content: { "application/json": { schema: z.object({ status: z.string() }) } } }
     },
     responses: {
-        200: { description: "Status updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Status updated"  }
+    }
 });
 
 app.openapi(updateStatusRoute, async (c) => {
@@ -380,12 +362,9 @@ const getItemsRoute = createRoute({
     path: "/{id}/items",
     tags: ["Admin - Orders"],
     summary: "Get order items with product details",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-    },
     responses: {
-        200: { description: "Order items", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Order items"  }
+    }
 });
 
 app.openapi(getItemsRoute, async (c) => {
@@ -402,7 +381,7 @@ app.openapi(getItemsRoute, async (c) => {
             variantSize: productVariants.size,
             variantColor: productVariants.color,
             quantity: orderItems.quantity,
-            price: orderItems.price,
+            price: orderItems.price
         })
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId))
@@ -426,12 +405,9 @@ const getPaymentsRoute = createRoute({
     path: "/{id}/payments",
     tags: ["Admin - Orders"],
     summary: "Get order payments and payment plan",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-    },
     responses: {
-        200: { description: "Order payments", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Order payments"  }
+    }
 });
 
 app.openapi(getPaymentsRoute, async (c) => {
@@ -453,12 +429,9 @@ const getShipmentsRoute = createRoute({
     path: "/{id}/shipments",
     tags: ["Admin - Orders"],
     summary: "Get order shipments",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-    },
     responses: {
-        200: { description: "Order shipments", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Order shipments"  }
+    }
 });
 
 app.openapi(getShipmentsRoute, async (c) => {
@@ -472,7 +445,7 @@ app.openapi(getShipmentsRoute, async (c) => {
             return {
                 ...shipment,
                 providerName: provider?.name || shipment.providerType,
-                lastChecked: shipment.lastChecked || shipment.updatedAt,
+                lastChecked: shipment.lastChecked || shipment.updatedAt
             };
         })
     );
@@ -484,7 +457,7 @@ app.openapi(getShipmentsRoute, async (c) => {
 
 const createShipmentSchema = z.object({
     providerId: z.string(),
-    options: z.record(z.string(), z.any()).optional(),
+    options: z.record(z.string(), z.string()).optional().openapi({ description: "Provider-specific options" })
 });
 
 const createShipmentRoute = createRoute({
@@ -493,13 +466,13 @@ const createShipmentRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Create a shipment for an order",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-        body: { content: { "application/json": { schema: createShipmentSchema } } },
+        
+        body: { content: { "application/json": { schema: createShipmentSchema } } }
     },
     responses: {
-        201: { description: "Shipment created", content: { "application/json": { schema: z.any() } } },
-        400: { description: "Failed to create shipment", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Shipment created"  },
+        400: { description: "Failed to create shipment"  }
+    }
 });
 
 app.openapi(createShipmentRoute, async (c) => {
@@ -528,7 +501,7 @@ app.openapi(createShipmentRoute, async (c) => {
     const enhancedShipment = {
         ...createdShipment,
         providerName: provider?.name || createdShipment.providerType,
-        lastChecked: now.toISOString(),
+        lastChecked: now.toISOString()
     };
 
     return c.json(enhancedShipment, 201);
@@ -541,16 +514,10 @@ const getShipmentRoute = createRoute({
     path: "/{id}/shipments/{shipmentId}",
     tags: ["Admin - Orders"],
     summary: "Get a specific shipment",
-    request: {
-        params: z.object({
-            id: z.string().openapi({ description: "Order ID" }),
-            shipmentId: z.string().openapi({ description: "Shipment ID" }),
-        }),
-    },
     responses: {
-        200: { description: "Shipment details", content: { "application/json": { schema: z.any() } } },
-        404: { description: "Shipment not found", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Shipment details"  },
+        404: { description: "Shipment not found"  }
+    }
 });
 
 app.openapi(getShipmentRoute, async (c) => {
@@ -571,16 +538,10 @@ const deleteShipmentRoute = createRoute({
     path: "/{id}/shipments/{shipmentId}",
     tags: ["Admin - Orders"],
     summary: "Delete a shipment",
-    request: {
-        params: z.object({
-            id: z.string().openapi({ description: "Order ID" }),
-            shipmentId: z.string().openapi({ description: "Shipment ID" }),
-        }),
-    },
     responses: {
-        200: { description: "Shipment deleted", content: { "application/json": { schema: z.any() } } },
-        404: { description: "Shipment not found", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Shipment deleted"  },
+        404: { description: "Shipment not found"  }
+    }
 });
 
 app.openapi(deleteShipmentRoute, async (c) => {
@@ -602,16 +563,10 @@ const checkShipmentStatusRoute = createRoute({
     path: "/{id}/shipments/{shipmentId}/status",
     tags: ["Admin - Orders"],
     summary: "Check shipment status from provider",
-    request: {
-        params: z.object({
-            id: z.string().openapi({ description: "Order ID" }),
-            shipmentId: z.string().openapi({ description: "Shipment ID" }),
-        }),
-    },
     responses: {
-        200: { description: "Status checked", content: { "application/json": { schema: z.any() } } },
-        404: { description: "Shipment not found", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Status checked"  },
+        404: { description: "Shipment not found"  }
+    }
 });
 
 app.openapi(checkShipmentStatusRoute, async (c) => {
@@ -633,17 +588,11 @@ const refreshShipmentRoute = createRoute({
     path: "/{id}/shipments/{shipmentId}/refresh",
     tags: ["Admin - Orders"],
     summary: "Refresh shipment status and update order",
-    request: {
-        params: z.object({
-            id: z.string().openapi({ description: "Order ID" }),
-            shipmentId: z.string().openapi({ description: "Shipment ID" }),
-        }),
-    },
     responses: {
-        200: { description: "Shipment refreshed", content: { "application/json": { schema: z.any() } } },
-        400: { description: "Failed to refresh", content: { "application/json": { schema: z.any() } } },
-        404: { description: "Shipment not found", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Shipment refreshed"  },
+        400: { description: "Failed to refresh"  },
+        404: { description: "Shipment not found"  }
+    }
 });
 
 app.openapi(refreshShipmentRoute, async (c) => {
@@ -687,7 +636,7 @@ app.openapi(refreshShipmentRoute, async (c) => {
         providerType: updatedShipment.providerType,
         lastChecked: now.toISOString(),
         statusChanged,
-        orderStatusUpdate,
+        orderStatusUpdate
     }, 200);
 });
 
@@ -699,12 +648,12 @@ const returnOrderRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Process order return",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
-        body: { content: { "application/json": { schema: z.object({ reason: z.string().optional(), autoRefund: z.boolean().optional() }) } } },
+        
+        body: { content: { "application/json": { schema: z.object({ reason: z.string().optional(), autoRefund: z.boolean().optional() }) } } }
     },
     responses: {
-        200: { description: "Return processed", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Return processed"  }
+    }
 });
 
 app.openapi(returnOrderRoute, async (c) => {
@@ -724,22 +673,22 @@ const refundOrderRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Process order refund",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Order ID" }) }),
+        
         body: {
             content: {
                 "application/json": {
                     schema: z.object({
                         amount: z.number().optional(),
                         reason: z.string().optional(),
-                        gateway: z.enum(["stripe", "sslcommerz"]).optional(),
-                    }),
-                },
-            },
-        },
+                        gateway: z.enum(["stripe", "sslcommerz"]).optional()
+                    })
+                }
+            }
+        }
     },
     responses: {
-        200: { description: "Refund processed", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Refund processed"  }
+    }
 });
 
 app.openapi(refundOrderRoute, async (c) => {

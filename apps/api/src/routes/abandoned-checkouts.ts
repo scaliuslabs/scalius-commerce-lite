@@ -12,7 +12,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const abandonedCheckoutSchema = z.object({
   checkoutId: z.string().min(1, "checkoutId is required"),
   customerPhone: z.string().optional(),
-  checkoutData: z.record(z.string(), z.any()),
+  checkoutData: z.record(z.string(), z.string()).openapi({ description: "Checkout data" })
 });
 
 const saveAbandonedCheckoutRoute = createRoute({
@@ -23,13 +23,13 @@ const saveAbandonedCheckoutRoute = createRoute({
   request: {
     body: {
       content: {
-        "application/json": { schema: abandonedCheckoutSchema },
-      },
-    },
+        "application/json": { schema: abandonedCheckoutSchema }
+      }
+    }
   },
   responses: {
-    200: { description: "Abandoned checkout saved", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Abandoned checkout saved"  }
+  }
 });
 
 app.openapi(saveAbandonedCheckoutRoute, async (c) => {
@@ -49,7 +49,7 @@ app.openapi(saveAbandonedCheckoutRoute, async (c) => {
       .set({
         customerPhone: customerPhone,
         checkoutData: checkoutDataString,
-        updatedAt: sql`(cast(strftime('%s','now') as int))`,
+        updatedAt: sql`(cast(strftime('%s','now') as int))`
       })
       .where(eq(abandonedCheckouts.id, existingCheckout.id));
   } else {
@@ -59,7 +59,7 @@ app.openapi(saveAbandonedCheckoutRoute, async (c) => {
       customerPhone: customerPhone,
       checkoutData: checkoutDataString,
       createdAt: sql`(cast(strftime('%s','now') as int))`,
-      updatedAt: sql`(cast(strftime('%s','now') as int))`,
+      updatedAt: sql`(cast(strftime('%s','now') as int))`
     });
   }
 
@@ -69,7 +69,7 @@ app.openapi(saveAbandonedCheckoutRoute, async (c) => {
 // ─── POST /cleanup ───────────────────────────────────────────────────────────
 
 const cleanupSchema = z.object({
-  checkoutId: z.string().min(1, "checkoutId is required for cleanup"),
+  checkoutId: z.string().min(1, "checkoutId is required for cleanup")
 });
 
 const cleanupRoute = createRoute({
@@ -80,13 +80,13 @@ const cleanupRoute = createRoute({
   request: {
     body: {
       content: {
-        "application/json": { schema: cleanupSchema },
-      },
-    },
+        "application/json": { schema: cleanupSchema }
+      }
+    }
   },
   responses: {
-    200: { description: "Abandoned checkout cleaned up", content: { "application/json": { schema: z.any() } } },
-  },
+    200: { description: "Abandoned checkout cleaned up"  }
+  }
 });
 
 // Auth middleware for cleanup
@@ -102,7 +102,7 @@ app.openapi(cleanupRoute, async (c) => {
 
   return c.json({
     success: true,
-    message: `Abandoned checkout record ${checkoutId} deleted.`,
+    message: `Abandoned checkout record ${checkoutId} deleted.`
   }, 200);
 });
 

@@ -56,8 +56,8 @@ app.post("/", async (c) => {
                 metadata: JSON.stringify({
                     ...JSON.parse(shipment.metadata ?? "{}"),
                     lastWebhookPayload: payload,
-                    lastWebhookAt: new Date().toISOString(),
-                }),
+                    lastWebhookAt: new Date().toISOString()
+                })
             })
             .where(eq(deliveryShipments.id, shipment.id));
 

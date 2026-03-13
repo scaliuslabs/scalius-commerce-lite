@@ -73,7 +73,7 @@ polarWebhookRoutes.post("/", async (c) => {
                         type: "payment.polar.failed",
                         orderId: orderId || "",
                         checkoutId: eventId,
-                        reason: status,
+                        reason: status
                     });
                     console.log(`[Polar Webhook] Enqueued payment.polar.failed for order ${orderId}`);
                 }
@@ -89,7 +89,7 @@ polarWebhookRoutes.post("/", async (c) => {
                         amount: payload.data.amount,
                         currency: payload.data.currency,
                         paymentType: payload.data.metadata?.paymentType || "full",
-                        metadata: payload.data.metadata,
+                        metadata: payload.data.metadata
                     });
                     console.log(`[Polar Webhook] Enqueued payment.polar.confirmed (order.paid) for order ${orderId}`);
                 }

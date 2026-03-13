@@ -16,7 +16,7 @@ const createAttributeSchema = z.object({
         .min(2, "Slug must be at least 2 characters long")
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
     filterable: z.boolean().default(true),
-    options: z.array(z.string()).optional(),
+    options: z.array(z.string()).optional()
 });
 
 const updateAttributeSchema = z.object({
@@ -27,25 +27,25 @@ const updateAttributeSchema = z.object({
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format")
         .optional(),
     filterable: z.boolean().optional(),
-    options: z.array(z.string()).optional().nullable(),
+    options: z.array(z.string()).optional().nullable()
 });
 
 const bulkActionSchema = z.object({
     ids: z.array(z.string()).min(1, "No IDs provided"),
-    permanent: z.boolean().default(false),
+    permanent: z.boolean().default(false)
 });
 
 const addValueSchema = z.object({
-    value: z.string().min(1, "Value is required"),
+    value: z.string().min(1, "Value is required")
 });
 
 const updateValueSchema = z.object({
     oldValue: z.string().min(1, "Old value is required"),
-    newValue: z.string().min(1, "New value is required"),
+    newValue: z.string().min(1, "New value is required")
 });
 
 const deleteValueSchema = z.object({
-    value: z.string().min(1, "Value is required"),
+    value: z.string().min(1, "Value is required")
 });
 
 // ── List Attributes ──
@@ -62,12 +62,12 @@ const listRoute = createRoute({
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             sort: z.string().optional().default("name").openapi({ description: "Sort field" }),
             order: z.string().optional().default("asc").openapi({ description: "Sort order" }),
-            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
-        }),
+            trashed: z.string().optional().openapi({ description: "Show trashed items" })
+        })
     },
     responses: {
-        200: { description: "Attribute list with pagination", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Attribute list with pagination"  }
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -128,7 +128,7 @@ app.openapi(listRoute, async (c) => {
                 ? await db
                     .select({
                         attributeId: productAttributeValues.attributeId,
-                        valueCount: count(sql`DISTINCT ${productAttributeValues.value}`),
+                        valueCount: count(sql`DISTINCT ${productAttributeValues.value}`)
                     })
                     .from(productAttributeValues)
                     .where(inArray(productAttributeValues.attributeId, attributeIds))
@@ -142,7 +142,7 @@ app.openapi(listRoute, async (c) => {
 
         const data = attributes.map((attr: any) => ({
             ...attr,
-            valueCount: valueCountMap.get(attr.id) || 0,
+            valueCount: valueCountMap.get(attr.id) || 0
         }));
 
         return c.json({
@@ -151,8 +151,8 @@ app.openapi(listRoute, async (c) => {
                 page,
                 limit,
                 total,
-                totalPages: Math.ceil(total / limit),
-            },
+                totalPages: Math.ceil(total / limit)
+            }
         }, 200);
     } catch (error) {
         console.error("Error fetching attributes:", error);
@@ -168,11 +168,11 @@ const createAttributeRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Create a product attribute",
     request: {
-        body: { content: { "application/json": { schema: createAttributeSchema } } },
+        body: { content: { "application/json": { schema: createAttributeSchema } } }
     },
     responses: {
-        201: { description: "Attribute created", content: { "application/json": { schema: z.any() } } },
-    },
+        201: { description: "Attribute created"  }
+    }
 });
 
 app.openapi(createAttributeRoute, async (c) => {
@@ -203,7 +203,7 @@ app.openapi(createAttributeRoute, async (c) => {
                 filterable,
                 options: options || null,
                 createdAt: sql`(cast(strftime('%s','now') as int))`,
-                updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                updatedAt: sql`(cast(strftime('%s','now') as int))`
             })
             .returning();
 
@@ -223,12 +223,12 @@ const updateAttributeRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Update a product attribute",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
-        body: { content: { "application/json": { schema: updateAttributeSchema } } },
+        
+        body: { content: { "application/json": { schema: updateAttributeSchema } } }
     },
     responses: {
-        200: { description: "Attribute updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Attribute updated"  }
+    }
 });
 
 app.openapi(updateAttributeRoute, async (c) => {
@@ -258,7 +258,7 @@ app.openapi(updateAttributeRoute, async (c) => {
             .update(productAttributes)
             .set({
                 ...data,
-                updatedAt: sql`(cast(strftime('%s','now') as int))`,
+                updatedAt: sql`(cast(strftime('%s','now') as int))`
             })
             .where(eq(productAttributes.id, id))
             .returning();
@@ -280,12 +280,9 @@ const deleteAttributeRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Attributes"],
     summary: "Soft-delete a product attribute",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
-    },
     responses: {
-        204: { description: "Attribute deleted" },
-    },
+        204: { description: "Attribute deleted" }
+    }
 });
 
 app.openapi(deleteAttributeRoute, async (c) => {
@@ -296,7 +293,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
         const usage = await db
             .select({
                 productName: products.name,
-                productId: products.id,
+                productId: products.id
             })
             .from(productAttributeValues)
             .leftJoin(products, eq(productAttributeValues.productId, products.id))
@@ -328,12 +325,9 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Attributes"],
     summary: "Permanently delete a product attribute",
-    request: {
-        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
-    },
     responses: {
-        204: { description: "Attribute permanently deleted" },
-    },
+        204: { description: "Attribute permanently deleted" }
+    }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {
@@ -360,11 +354,11 @@ const bulkDeleteRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Bulk delete attributes",
     request: {
-        body: { content: { "application/json": { schema: bulkActionSchema } } },
+        body: { content: { "application/json": { schema: bulkActionSchema } } }
     },
     responses: {
-        204: { description: "Attributes deleted" },
-    },
+        204: { description: "Attributes deleted" }
+    }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
@@ -396,11 +390,11 @@ const bulkRestoreRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Bulk restore attributes",
     request: {
-        body: { content: { "application/json": { schema: bulkActionSchema } } },
+        body: { content: { "application/json": { schema: bulkActionSchema } } }
     },
     responses: {
-        204: { description: "Attributes restored" },
-    },
+        204: { description: "Attributes restored" }
+    }
 });
 
 app.openapi(bulkRestoreRoute, async (c) => {
@@ -426,17 +420,17 @@ const listValuesRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "List all unique values for an attribute",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
+        
         query: z.object({
             search: z.string().optional().openapi({ description: "Filter values" }),
             sort: z.string().optional().default("desc").openapi({ description: "Sort order" }),
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(20).openapi({ description: "Items per page" }),
-        }),
+            limit: z.coerce.number().default(20).openapi({ description: "Items per page" })
+        })
     },
     responses: {
-        200: { description: "Attribute values", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Attribute values"  }
+    }
 });
 
 app.openapi(listValuesRoute, async (c) => {
@@ -462,7 +456,7 @@ app.openapi(listValuesRoute, async (c) => {
             .select({
                 value: productAttributeValues.value,
                 createdAt: productAttributeValues.createdAt,
-                productName: products.name,
+                productName: products.name
             })
             .from(productAttributeValues)
             .innerJoin(products, eq(productAttributeValues.productId, products.id))
@@ -482,7 +476,7 @@ app.openapi(listValuesRoute, async (c) => {
                 productCount: 0,
                 createdAt: row.createdAt,
                 isPreset: false,
-                sampleProducts: [],
+                sampleProducts: []
             };
 
             existing.productCount++;
@@ -505,7 +499,7 @@ app.openapi(listValuesRoute, async (c) => {
                     productCount: 0,
                     createdAt: attribute.updatedAt,
                     isPreset: true,
-                    sampleProducts: [],
+                    sampleProducts: []
                 });
             }
         }
@@ -536,7 +530,7 @@ app.openapi(listValuesRoute, async (c) => {
             values: paginatedValues,
             totalValues: allValues.length,
             page,
-            totalPages: Math.ceil(allValues.length / limit),
+            totalPages: Math.ceil(allValues.length / limit)
         }, 200);
     } catch (error: any) {
         if (error.name === "NotFoundError") throw error;
@@ -553,12 +547,12 @@ const addValueRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Add a preset value to an attribute",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
-        body: { content: { "application/json": { schema: addValueSchema } } },
+        
+        body: { content: { "application/json": { schema: addValueSchema } } }
     },
     responses: {
-        200: { description: "Value added", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Value added"  }
+    }
 });
 
 app.openapi(addValueRoute, async (c) => {
@@ -600,12 +594,12 @@ const updateValueRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Rename an attribute value across all products",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
-        body: { content: { "application/json": { schema: updateValueSchema } } },
+        
+        body: { content: { "application/json": { schema: updateValueSchema } } }
     },
     responses: {
-        200: { description: "Value updated", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Value updated"  }
+    }
 });
 
 app.openapi(updateValueRoute, async (c) => {
@@ -646,7 +640,7 @@ app.openapi(updateValueRoute, async (c) => {
 
         return c.json({
             success: true,
-            message: `Value "${oldValue}" renamed to "${newValue}"`,
+            message: `Value "${oldValue}" renamed to "${newValue}"`
         }, 200);
     } catch (error) {
         console.error("Error updating attribute value:", error);
@@ -662,12 +656,12 @@ const deleteValueRoute = createRoute({
     tags: ["Admin - Attributes"],
     summary: "Delete an attribute value from all products",
     request: {
-        params: z.object({ id: z.string().openapi({ description: "Attribute ID" }) }),
-        body: { content: { "application/json": { schema: deleteValueSchema } } },
+        
+        body: { content: { "application/json": { schema: deleteValueSchema } } }
     },
     responses: {
-        200: { description: "Value deleted", content: { "application/json": { schema: z.any() } } },
-    },
+        200: { description: "Value deleted"  }
+    }
 });
 
 app.openapi(deleteValueRoute, async (c) => {
@@ -705,7 +699,7 @@ app.openapi(deleteValueRoute, async (c) => {
 
         return c.json({
             success: true,
-            message: `Value "${value}" deleted from all products`,
+            message: `Value "${value}" deleted from all products`
         }, 200);
     } catch (error) {
         console.error("Error deleting attribute value:", error);
