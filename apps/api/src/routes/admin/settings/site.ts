@@ -92,7 +92,19 @@ const navigationItemSchema: z.ZodType<any> = z.object({
     id: z.string(),
     title: z.string(),
     href: z.string().optional(),
-    subMenu: z.lazy(() => z.array(navigationItemSchema)).optional()
+    subMenu: z.any().optional().openapi({
+        type: "array",
+        items: {
+            type: "object",
+            properties: {
+                id: { type: "string" },
+                title: { type: "string" },
+                href: { type: "string" },
+                subMenu: { type: "array", items: { type: "object" } },
+            },
+        },
+        description: "Nested navigation items",
+    }),
 });
 const headerConfigSchema = z.object({
     topBar: z.object({ text: z.string(), isEnabled: z.boolean().optional().default(true) }),

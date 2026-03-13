@@ -18,17 +18,17 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "dependencies": {
+    "@paralleldrive/cuid2": "^2.3.1",
+    "@polar-sh/sdk": "^0.46.4",
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",
-    "@paralleldrive/cuid2": "^2.3.1",
-    "better-auth": "^1.5.5",
     "bcryptjs": "^3.0.3",
-    "drizzle-orm": "^0.39.3",
-    "fast-xml-parser": "^5.5.3",
+    "better-auth": "^1.5.5",
+    "drizzle-orm": "^0.45.1",
+    "fast-xml-parser": "^5.5.5",
     "firebase": "^11.10.0",
     "mimetext": "^3.0.28",
     "nanoid": "^5.1.6",
-    "@polar-sh/sdk": "^0.46.3",
     "standardwebhooks": "^1.0.0",
     "stripe": "^20.4.1",
     "zod": "^4.3.6"
@@ -37,7 +37,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260310.1",
+    "@cloudflare/workers-types": "^4.20260313.1",
     "@scalius/tsconfig": "workspace:*",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
