@@ -158,7 +158,8 @@ app.openapi(createUserRoute, async (c) => {
             await assignRoleToUser(db, signUpResult.user.id, roleId, sessionUser.id);
         }
 
-        const baseUrl = env.BETTER_AUTH_URL || env.PUBLIC_API_BASE_URL || process.env.BETTER_AUTH_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:4321";
+        const baseUrl = env.BETTER_AUTH_URL || env.PUBLIC_API_BASE_URL;
+        if (!baseUrl) throw new Error("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
         const loginUrl = `${baseUrl}/auth/login`;
 
         try {

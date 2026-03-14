@@ -68,7 +68,7 @@ async function getJwtToken(): Promise<string | null> {
 
   tokenRefreshPromise = (async () => {
     try {
-      const apiToken = getRuntimeApiToken() || import.meta.env.API_TOKEN;
+      const apiToken = getRuntimeApiToken();
       if (!apiToken) {
         console.error(
           "[API Client] API_TOKEN is not configured in environment variables.",
