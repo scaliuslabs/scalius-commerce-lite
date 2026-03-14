@@ -383,9 +383,9 @@ export async function getProductDetails(
             ? new Date(Number(result.deletedAt) * 1000)
             : null,
         variants,
-        images: images.map((img: { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number }) => ({
+        images: images.map((img) => ({
             ...img,
-            createdAt: new Date(Number(img.createdAt) * 1000),
+            createdAt: img.createdAt instanceof Date ? img.createdAt : new Date(Number(img.createdAt) * 1000),
         })),
     } as ProductWithDetails;
 }
@@ -824,7 +824,7 @@ export async function getStorefrontProducts(db: DrizzleD1Database<typeof schema>
         conditions.push(inArray(products.id, productIds));
     }
 
-    let orderBy: unknown;
+    let orderBy: SQL | ReturnType<typeof desc> | typeof products.name;
     if (sort === "price-asc") {
         orderBy = sql`CASE WHEN ${products.discountPercentage} > 0 THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100)) ELSE ${products.price} END`;
     } else if (sort === "price-desc") {
@@ -1112,8 +1112,13 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
 
     const hasVariants = variants.length > 0;
 
+    interface VariantResult { id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
+    interface ImageResult { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number; }
+    const typedVariants = variants as VariantResult[];
+    const typedImages = images as ImageResult[];
+
     const formattedVariants = hasVariants
-        ? variants.map((v) => ({
+        ? typedVariants.map((v) => ({
             ...v,
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(v.updatedAt)?.toISOString() || null,
@@ -1154,7 +1159,7 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
             additionalInfo,
         },
         category,
-        images: images.map((img) => ({
+        images: typedImages.map((img) => ({
             ...img,
             createdAt: unixToDate(img.createdAt)?.toISOString() || null,
             alt: img.alt || product.name,

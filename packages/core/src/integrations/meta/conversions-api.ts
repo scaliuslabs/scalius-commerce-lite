@@ -87,49 +87,49 @@ async function prepareUserData(
 
   // Copy non-hashed fields directly
   if (userData.client_ip_address)
-    prepared.client_ip_address = userData.client_ip_address;
+    prepared.client_ip_address = userData.client_ip_address as string;
   if (userData.client_user_agent)
-    prepared.client_user_agent = userData.client_user_agent;
-  if (userData.fbc) prepared.fbc = userData.fbc;
-  if (userData.fbp) prepared.fbp = userData.fbp;
+    prepared.client_user_agent = userData.client_user_agent as string;
+  if (userData.fbc) prepared.fbc = userData.fbc as string;
+  if (userData.fbp) prepared.fbp = userData.fbp as string;
   if (userData.subscription_id)
-    prepared.subscription_id = userData.subscription_id;
-  if (userData.lead_id) prepared.lead_id = userData.lead_id;
+    prepared.subscription_id = userData.subscription_id as string;
+  if (userData.lead_id) prepared.lead_id = userData.lead_id as number;
   if (userData.external_id)
     prepared.external_id = Array.isArray(userData.external_id)
-      ? userData.external_id
-      : [userData.external_id];
+      ? userData.external_id as string[]
+      : [userData.external_id as string];
 
   // Hash PII fields according to Meta's formatting rules
-  if (userData.em) prepared.em = [await hashEmail(userData.em)];
-  if (userData.ph) prepared.ph = [await hashPhone(userData.ph)];
+  if (userData.em) prepared.em = [await hashEmail(userData.em as string)];
+  if (userData.ph) prepared.ph = [await hashPhone(userData.ph as string)];
 
   // Name fields
-  if (userData.fn) prepared.fn = await sha256(userData.fn.trim().toLowerCase());
-  if (userData.ln) prepared.ln = await sha256(userData.ln.trim().toLowerCase());
+  if (userData.fn) prepared.fn = await sha256((userData.fn as string).trim().toLowerCase());
+  if (userData.ln) prepared.ln = await sha256((userData.ln as string).trim().toLowerCase());
 
   // Gender
-  if (userData.ge && ["f", "m"].includes(userData.ge.toLowerCase()))
-    prepared.ge = await sha256(userData.ge.toLowerCase());
+  if (userData.ge && ["f", "m"].includes((userData.ge as string).toLowerCase()))
+    prepared.ge = await sha256((userData.ge as string).toLowerCase());
 
   // Date of Birth - normalize to YYYYMMDD
-  if (userData.db) prepared.db = await sha256(userData.db.replace(/\D/g, ""));
+  if (userData.db) prepared.db = await sha256((userData.db as string).replace(/\D/g, ""));
 
   // Location data
   if (userData.ct)
     prepared.ct = await sha256(
-      userData.ct.toLowerCase().replace(/[^a-z]/g, ""),
+      (userData.ct as string).toLowerCase().replace(/[^a-z]/g, ""),
     );
   if (userData.st)
     prepared.st = await sha256(
-      userData.st.toLowerCase().replace(/[^a-z]/g, ""),
+      (userData.st as string).toLowerCase().replace(/[^a-z]/g, ""),
     );
   if (userData.zp)
     prepared.zp = await sha256(
-      userData.zp.toLowerCase().replace(/[^a-z0-9]/g, ""),
+      (userData.zp as string).toLowerCase().replace(/[^a-z0-9]/g, ""),
     );
   if (userData.country)
-    prepared.country = await sha256(userData.country.trim().toLowerCase());
+    prepared.country = await sha256((userData.country as string).trim().toLowerCase());
 
   return prepared;
 }
@@ -183,10 +183,10 @@ export async function sendCapiEvent(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const responseData = await response.json();
+    const responseData = await response.json() as Record<string, unknown>;
     if (!response.ok) {
-      const errorMessage =
-        responseData.error?.message || `HTTP Error: ${response.status}`;
+      const errorObj = responseData.error as Record<string, unknown> | undefined;
+      const errorMessage = String(errorObj?.message || `HTTP Error: ${response.status}`);
       throw new Error(errorMessage);
     }
     await MetaService.logCapiEvent(db, {
@@ -206,7 +206,7 @@ export async function sendCapiEvent(
       status: "failed",
       errorMessage: error instanceof Error ? error.message : String(error),
       responsePayload: (error as { response?: Response }).response
-        ? JSON.stringify(await error.response.json())
+        ? JSON.stringify(await (error as { response: Response }).response.json())
         : "",
     }, LOG_RETENTION_HOURS);
     return { success: false, error: error instanceof Error ? error.message : String(error) };

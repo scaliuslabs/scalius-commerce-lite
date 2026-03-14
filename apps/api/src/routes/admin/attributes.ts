@@ -475,7 +475,7 @@ app.openapi(listValuesRoute, async (c) => {
             )
             .all();
 
-        const valueMap = new Map<string, { value: string; productCount: number; createdAt: number; isPreset: boolean; sampleProducts: string[] }>();
+        const valueMap = new Map<string, { value: string; productCount: number; createdAt: Date; isPreset: boolean; sampleProducts: string[] }>();
 
         for (const row of allRows) {
             const existing = valueMap.get(row.value) || {
@@ -483,11 +483,11 @@ app.openapi(listValuesRoute, async (c) => {
                 productCount: 0,
                 createdAt: row.createdAt,
                 isPreset: false,
-                sampleProducts: []
+                sampleProducts: [] as string[]
             };
 
             existing.productCount++;
-            if (new Date(row.createdAt * 1000) < new Date(existing.createdAt * 1000)) {
+            if (row.createdAt < existing.createdAt) {
                 existing.createdAt = row.createdAt;
             }
             if (existing.sampleProducts.length < 5) {
@@ -521,8 +521,8 @@ app.openapi(listValuesRoute, async (c) => {
 
         const sort = query.sort || "desc";
         allValues.sort((a, b) => {
-            const timeA = new Date(a.createdAt * 1000).getTime();
-            const timeB = new Date(b.createdAt * 1000).getTime();
+            const timeA = a.createdAt.getTime();
+            const timeB = b.createdAt.getTime();
             return sort === "asc" ? timeA - timeB : timeB - timeA;
         });
 

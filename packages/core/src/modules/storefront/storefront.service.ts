@@ -148,7 +148,7 @@ export async function getHomepageData(db: Database) {
     const mobileSlider = (heroResults as { type: string }[]).find((s) => s.type === "mobile");
     const formatSlider = (slider: Record<string, unknown> | undefined) => {
         if (!slider) return null;
-        return { id: slider.id, type: slider.type, images: JSON.parse(slider.images || "[]") };
+        return { id: slider.id, type: slider.type, images: JSON.parse((slider.images as string) || "[]") };
     };
     const hero = { desktop: formatSlider(desktopSlider), mobile: formatSlider(mobileSlider) };
 
@@ -167,8 +167,12 @@ export async function getHomepageData(db: Database) {
 
     // === BATCH 2: Products for collections ===
     const parsedCollections = (collectionResults as Record<string, unknown>[]).map((col) => ({
-        ...col,
-        parsedConfig: JSON.parse(col.config || "{}"),
+        id: col.id as string,
+        name: col.name as string,
+        type: col.type as string,
+        sortOrder: col.sortOrder as number,
+        isActive: col.isActive as boolean,
+        parsedConfig: JSON.parse((col.config as string) || "{}"),
     }));
 
     const allProductIds = new Set<string>();
@@ -216,29 +220,29 @@ export async function getHomepageData(db: Database) {
 
     for (const prod of productBatchResults[0] as Record<string, unknown>[]) {
         if (prod.id && prod.id !== null) {
-            specificProductsById.set(prod.id, {
+            specificProductsById.set(prod.id as string, {
                 ...prod,
-                discountedPrice: calculateDiscountedPrice(prod.price, prod.discountType, prod.discountPercentage, prod.discountAmount),
+                discountedPrice: calculateDiscountedPrice(prod.price as number, prod.discountType as string | null, prod.discountPercentage as number | null, prod.discountAmount as number | null),
             });
         }
     }
     for (const prod of productBatchResults[1] as Record<string, unknown>[]) {
         if (prod.categoryId) {
-            if (!categoryProductsByCategoryId.has(prod.categoryId)) categoryProductsByCategoryId.set(prod.categoryId, []);
-            categoryProductsByCategoryId.get(prod.categoryId)!.push({
+            if (!categoryProductsByCategoryId.has(prod.categoryId as string)) categoryProductsByCategoryId.set(prod.categoryId as string, []);
+            categoryProductsByCategoryId.get(prod.categoryId as string)!.push({
                 ...prod,
-                discountedPrice: calculateDiscountedPrice(prod.price, prod.discountType, prod.discountPercentage, prod.discountAmount),
+                discountedPrice: calculateDiscountedPrice(prod.price as number, prod.discountType as string | null, prod.discountPercentage as number | null, prod.discountAmount as number | null),
             });
         }
     }
     for (const cat of productBatchResults[2] as Record<string, unknown>[]) {
-        if (cat.id && cat.id !== null) categoryMetadataById.set(cat.id, cat);
+        if (cat.id && cat.id !== null) categoryMetadataById.set(cat.id as string, cat);
     }
     for (const prod of productBatchResults[3] as Record<string, unknown>[]) {
         if (prod.id && prod.id !== null) {
-            featuredProductsById.set(prod.id, {
+            featuredProductsById.set(prod.id as string, {
                 ...prod,
-                discountedPrice: calculateDiscountedPrice(prod.price, prod.discountType, prod.discountPercentage, prod.discountAmount),
+                discountedPrice: calculateDiscountedPrice(prod.price as number, prod.discountType as string | null, prod.discountPercentage as number | null, prod.discountAmount as number | null),
             });
         }
     }
@@ -256,7 +260,7 @@ export async function getHomepageData(db: Database) {
             let featuredProduct: Record<string, unknown> | null = null;
 
             if (productIds.length > 0) {
-                collectionProducts = productIds.map((id) => specificProductsById.get(id)).filter(Boolean).slice(0, maxProducts);
+                collectionProducts = productIds.map((id) => specificProductsById.get(id)).filter((p): p is Record<string, unknown> => p != null).slice(0, maxProducts);
                 collectionCategories = [];
             } else if (categoryIds.length > 0) {
                 const categoryProducts: Record<string, unknown>[] = [];
@@ -264,8 +268,8 @@ export async function getHomepageData(db: Database) {
                     categoryProducts.push(...(categoryProductsByCategoryId.get(catId) || []));
                 }
                 const seen = new Set<string>();
-                collectionProducts = categoryProducts.filter((p) => { if (seen.has(p.id)) return false; seen.add(p.id); return true; }).slice(0, maxProducts);
-                collectionCategories = categoryIds.map((id) => categoryMetadataById.get(id)).filter(Boolean);
+                collectionProducts = categoryProducts.filter((p) => { if (seen.has(p.id as string)) return false; seen.add(p.id as string); return true; }).slice(0, maxProducts);
+                collectionCategories = categoryIds.map((id) => categoryMetadataById.get(id)).filter((c): c is Record<string, unknown> => c != null);
             }
 
             if (cfg.featuredProductId) {

@@ -12,7 +12,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
   }
 
   // Queues: payment events, order ingest, OTP, notifications
-  async queue(batch: MessageBatch) {
-    return handleQueueBatch(batch, this.env);
+  async queue(batch: MessageBatch<Record<string, unknown>>) {
+    return handleQueueBatch(batch as Parameters<typeof handleQueueBatch>[0], this.env);
   }
 }

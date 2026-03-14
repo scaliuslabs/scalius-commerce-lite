@@ -101,9 +101,12 @@ app.openapi(createProviderRoute, async (c) => {
         }
 
         const savedProvider = await deliveryService.saveProvider(provider);
+        const credentials = typeof savedProvider.credentials === 'string'
+            ? savedProvider.credentials
+            : JSON.stringify(savedProvider.credentials);
         const maskedResponse = {
             ...savedProvider,
-            credentials: maskCredentialsForClient(savedProvider.credentials)
+            credentials: maskCredentialsForClient(credentials)
         };
 
         return created(c, maskedResponse);
@@ -140,14 +143,23 @@ app.openapi(updateProviderRoute, async (c) => {
         const existingProvider = await deliveryService.getProvider(provider.id);
         if (!existingProvider) {
             const savedProvider = await deliveryService.saveProvider(provider);
+            const newCredentials = typeof savedProvider.credentials === 'string'
+                ? savedProvider.credentials
+                : JSON.stringify(savedProvider.credentials);
             const maskedResponse = {
                 ...savedProvider,
-                credentials: maskCredentialsForClient(savedProvider.credentials)
+                credentials: maskCredentialsForClient(newCredentials)
             };
             return created(c, maskedResponse);
         }
 
-        const unmaskedCreds = unmaskedCredentials(provider.credentials, existingProvider.credentials);
+        const providerCredentials = typeof provider.credentials === 'string'
+            ? provider.credentials
+            : JSON.stringify(provider.credentials);
+        const existingCredentials = typeof existingProvider.credentials === 'string'
+            ? existingProvider.credentials
+            : JSON.stringify(existingProvider.credentials);
+        const unmaskedCreds = unmaskedCredentials(providerCredentials, existingCredentials);
 
         const savedProvider = await deliveryService.saveProvider({
             ...provider,
@@ -158,9 +170,12 @@ app.openapi(updateProviderRoute, async (c) => {
             isActive: provider.isActive !== undefined ? provider.isActive : existingProvider.isActive
         });
 
+        const updatedCredentials = typeof savedProvider.credentials === 'string'
+            ? savedProvider.credentials
+            : JSON.stringify(savedProvider.credentials);
         const maskedResponse = {
             ...savedProvider,
-            credentials: maskCredentialsForClient(savedProvider.credentials)
+            credentials: maskCredentialsForClient(updatedCredentials)
         };
 
         return ok(c, maskedResponse);

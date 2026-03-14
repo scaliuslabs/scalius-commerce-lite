@@ -7,14 +7,13 @@ import type { Database } from "@scalius/database/client";
 declare module "hono" {
   interface ContextVariableMap {
     db: Database;
-    user: {
+    user: Record<string, unknown> & {
       id: string;
       name: string;
       email: string;
       role?: string;
       isSuperAdmin?: boolean;
       twoFactorEnabled?: boolean;
-      [key: string]: unknown;
     };
     session: {
       id: string;

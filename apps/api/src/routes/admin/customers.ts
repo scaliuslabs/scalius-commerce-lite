@@ -14,7 +14,7 @@ import {
     restoreCustomer,
     bulkDeleteCustomers
 } from "@scalius/core/modules/customers";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ApiError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
@@ -49,8 +49,8 @@ app.openapi(listRoute, async (c) => {
         limit: q.limit,
         search: q.search || "",
         showTrashed: q.trashed === "true",
-        sort: (q.sort || "updatedAt") as string,
-        order: (q.order || "desc") as string
+        sort: q.sort as "name" | "totalOrders" | "totalSpent" | "lastOrderAt" | "createdAt" | "updatedAt" | undefined,
+        order: q.order as "asc" | "desc" | undefined
     });
     return ok(c, result);
 });
@@ -78,7 +78,7 @@ app.openapi(createCustomerRoute, async (c) => {
         return created(c, result);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 
@@ -160,7 +160,7 @@ app.openapi(updateCustomerRoute, async (c) => {
         return ok(c, {});
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 

@@ -338,23 +338,21 @@ export async function verifyOtp(
             // Create new customer record
             customerId = nanoid();
 
-            const insertPayload: Record<string, unknown> = {
-                id: customerId,
-                name: customerName,
-                status: "active",
-            };
-
-            if (resolvedEmail) insertPayload.email = resolvedEmail;
+            // Determine phone value
+            let customerPhone = resolvedPhone;
             if (method === "email" && phone) {
-                insertPayload.phone = phone;
+                customerPhone = phone;
                 resolvedPhone = phone;
             }
-            if (method === "phone") insertPayload.phone = resolvedPhone;
 
-            insertPayload.createdAt = sql`unixepoch()`;
-            insertPayload.updatedAt = sql`unixepoch()`;
-
-            await db.insert(customers).values(insertPayload);
+            await db.insert(customers).values({
+                id: customerId,
+                name: customerName,
+                email: resolvedEmail || null,
+                phone: customerPhone || "",
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            });
             isNewUser = true;
         }
     } catch (dbError) {

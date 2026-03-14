@@ -3,6 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
+import { ApiError } from "../../utils/api-error";
 import {
     MediaService,
     updateMediaSchema,
@@ -63,11 +64,12 @@ app.openapi(uploadRoute, async (c) => {
     const folderId = (body["folderId"] as string) || null;
 
     try {
-        const result = await MediaService.uploadFiles(db, files, folderId);
-        return c.json(result, result.status);
+        const validFiles = (files as unknown[]).filter((f): f is File => f instanceof File);
+        const result = await MediaService.uploadFiles(db, validFiles, folderId);
+        return c.json(result, result.status as 200 | 201);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 
@@ -96,7 +98,7 @@ app.openapi(patchMediaRoute, async (c) => {
         return ok(c, { file });
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 500);
+        throw new ApiError(err.statusCode || 500, "ERROR", err.message || "Unknown error");
     }
 });
 
@@ -125,7 +127,7 @@ app.openapi(putMediaRoute, async (c) => {
         return ok(c, { file });
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 500);
+        throw new ApiError(err.statusCode || 500, "ERROR", err.message || "Unknown error");
     }
 });
 
@@ -174,7 +176,7 @@ app.openapi(deleteFileRoute, async (c) => {
         return noContent(c);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 500);
+        throw new ApiError(err.statusCode || 500, "ERROR", err.message || "Unknown error");
     }
 });
 

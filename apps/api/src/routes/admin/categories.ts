@@ -4,6 +4,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
+import { ApiError } from "../../utils/api-error";
 import {
     listCategories,
     createCategory,
@@ -48,8 +49,8 @@ app.openapi(listRoute, async (c) => {
         limit: query.limit,
         search: query.search || "",
         showTrashed: query.trashed === "true",
-        sort: (query.sort || "updatedAt") as string,
-        order: (query.order || "desc") as string
+        sort: query.sort as "name" | "createdAt" | "updatedAt" | undefined,
+        order: query.order as "asc" | "desc" | undefined
     });
     return ok(c, result);
 });
@@ -77,7 +78,7 @@ app.openapi(createCategoryRoute, async (c) => {
         return created(c, result);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number; suggestion?: string; affectedProducts?: unknown };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 
@@ -114,7 +115,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
         return noContent(c);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number; suggestion?: string; affectedProducts?: unknown };
-        return c.json({ error: err.message || "Unknown error", ...(err.affectedProducts ? { suggestion: err.suggestion, affectedProducts: err.affectedProducts } : {}) }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error", err.affectedProducts ? { suggestion: err.suggestion, affectedProducts: err.affectedProducts } : undefined);
     }
 });
 
@@ -172,7 +173,7 @@ app.openapi(updateCategoryRoute, async (c) => {
         return ok(c, {});
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number; suggestion?: string; affectedProducts?: unknown };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 
@@ -199,7 +200,7 @@ app.openapi(deleteCategoryRoute, async (c) => {
         return noContent(c);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number; suggestion?: string; affectedProducts?: unknown };
-        return c.json({ error: err.message || "Unknown error", ...(err.affectedProducts ? { suggestion: err.suggestion, affectedProducts: err.affectedProducts } : {}) }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error", err.affectedProducts ? { suggestion: err.suggestion, affectedProducts: err.affectedProducts } : undefined);
     }
 });
 

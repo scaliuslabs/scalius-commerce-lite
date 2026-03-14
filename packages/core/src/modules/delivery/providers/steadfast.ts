@@ -64,7 +64,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         return { success: true, message: "Connection successful" };
       } else {
         try {
-          const data = await response.json();
+          const data = await response.json() as Record<string, unknown>;
           return {
             success: false,
             message: `Connection failed: ${data.message || response.statusText}`,
@@ -234,7 +234,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         status: mappedStatus,
         rawStatus: responseData.delivery_status,
         updatedAt: new Date(),
-        metadata: responseData,
+        metadata: responseData as unknown as Record<string, unknown>,
       };
     } catch (error) {
       return {

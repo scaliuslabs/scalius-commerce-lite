@@ -44,12 +44,12 @@ export class AnalyticsService {
             .insert(analytics)
             .values({
                 id: analyticsId,
-                name: data.name,
-                type: data.type,
-                isActive: data.isActive,
-                usePartytown: data.usePartytown,
-                config: data.config,
-                location: data.location,
+                name: data.name as string,
+                type: data.type as string,
+                isActive: data.isActive as boolean,
+                usePartytown: data.usePartytown as boolean,
+                config: data.config as string,
+                location: data.location as string,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
             })
@@ -72,12 +72,12 @@ export class AnalyticsService {
         await db
             .update(analytics)
             .set({
-                name: data.name,
-                type: data.type,
-                isActive: data.isActive,
-                usePartytown: data.usePartytown,
-                config: data.config,
-                location: data.location,
+                name: data.name as string,
+                type: data.type as string,
+                isActive: data.isActive as boolean,
+                usePartytown: data.usePartytown as boolean,
+                config: data.config as string,
+                location: data.location as string,
                 updatedAt: sql`unixepoch()`,
             })
             .where(eq(analytics.id, id));

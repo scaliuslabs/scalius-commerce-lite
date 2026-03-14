@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { DiscountService, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ApiError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
@@ -39,7 +39,7 @@ app.openapi(listRoute, async (c) => {
         search: query.search || "",
         showTrashed: query.trashed === "true",
         sort: query.sort || "updatedAt",
-        order: query.order || "desc"
+        order: (query.order || "desc") as "asc" | "desc"
     });
     return ok(c, result);
 });
@@ -67,7 +67,7 @@ app.openapi(createDiscountRoute, async (c) => {
         return created(c, result);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 
@@ -180,7 +180,7 @@ app.openapi(updateDiscountRoute, async (c) => {
         return ok(c, result);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 

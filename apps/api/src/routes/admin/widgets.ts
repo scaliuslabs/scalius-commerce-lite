@@ -15,7 +15,7 @@ import {
     createWidgetSchema,
     updateWidgetSchema
 } from "@scalius/core/modules/widgets";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ApiError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
@@ -197,7 +197,7 @@ app.openapi(updateWidgetRoute, async (c) => {
         return ok(c, result);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 
