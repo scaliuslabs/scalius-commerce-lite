@@ -58,8 +58,12 @@ export const bulkDeleteOrderSchema = z.object({
     permanent: z.boolean().default(false),
 });
 
+export type BulkDeleteOrderInput = z.infer<typeof bulkDeleteOrderSchema>;
+
 export const bulkShipOrderSchema = z.object({
     orderIds: z.array(z.string()),
     providerId: z.string(),
     options: z.any().optional(),
 });
+
+export type BulkShipOrderInput = z.infer<typeof bulkShipOrderSchema>;

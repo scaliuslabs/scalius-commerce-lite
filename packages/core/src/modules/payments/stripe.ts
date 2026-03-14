@@ -1,4 +1,4 @@
-// src/lib/payment/stripe.ts
+// src/modules/payments/stripe.ts
 // Stripe PaymentIntents API wrapper for Cloudflare Workers.
 // Stripe SDK v17+ uses the Web Fetch API natively — no special config needed.
 
@@ -7,6 +7,16 @@ import type {
   CreateStripePaymentIntentParams,
   StripePaymentIntentResult,
 } from "./types";
+import type { StripeSettings } from "./gateway-settings";
+import type {
+  PaymentProvider,
+  CreatePaymentParams,
+  CreatePaymentResult,
+  RefundParams,
+  RefundResult,
+  WebhookPayload,
+} from "./provider";
+import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 
 // Module-level singleton — Stripe client is stateless and reusable.
 // Tracks the key used to create it so credential rotations take effect.
@@ -151,5 +161,84 @@ export async function verifyStripeWebhook(
     return event;
   } catch {
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PaymentProvider implementation
+// ---------------------------------------------------------------------------
+
+/**
+ * Stripe PaymentProvider implementation.
+ * Wraps the existing Stripe functions behind the unified PaymentProvider interface.
+ */
+export class StripeProvider implements PaymentProvider {
+  readonly type = "stripe" as const;
+  readonly name = "Stripe";
+
+  constructor(private readonly settings: StripeSettings) {}
+
+  async createPayment(params: CreatePaymentParams): Promise<CreatePaymentResult> {
+    const result = await createPaymentIntent(this.settings.secretKey, {
+      orderId: params.orderId,
+      amount: params.amount,
+      currency: params.currency,
+      paymentType: params.paymentType,
+      manualCapture: params.manualCapture,
+      metadata: params.metadata,
+    });
+
+    if (!result.success) {
+      throw new ServiceUnavailableError(result.error ?? "Failed to create Stripe payment intent");
+    }
+
+    return {
+      transactionId: result.paymentIntentId,
+      clientSecret: result.clientSecret,
+    };
+  }
+
+  async createRefund(params: RefundParams): Promise<RefundResult> {
+    if (!params.transactionId) {
+      throw new ValidationError("Stripe charge ID is required for refunds");
+    }
+
+    const reason = params.reason === "duplicate"
+      ? "duplicate" as const
+      : params.reason === "fraudulent"
+        ? "fraudulent" as const
+        : "requested_by_customer" as const;
+
+    const result = await createRefund(
+      this.settings.secretKey,
+      params.transactionId,
+      params.amount,
+      reason,
+    );
+
+    if (!result.success) {
+      throw new ServiceUnavailableError(result.error ?? "Failed to create Stripe refund");
+    }
+
+    return { refundId: result.refundId };
+  }
+
+  async verifyWebhook(rawBody: string, headers: Record<string, string>): Promise<WebhookPayload> {
+    const signature = headers["stripe-signature"] ?? "";
+    const event = await verifyStripeWebhook(
+      this.settings.secretKey,
+      this.settings.webhookSecret,
+      rawBody,
+      signature,
+    );
+
+    if (!event) {
+      throw new ValidationError("Invalid Stripe webhook signature");
+    }
+
+    return {
+      eventType: event.type,
+      data: event.data as unknown as Record<string, unknown>,
+    };
   }
 }

@@ -6,6 +6,13 @@ import { nanoid } from "nanoid";
 import { customers, siteSettings } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
+import {
+    ValidationError,
+    RateLimitError,
+    ForbiddenError,
+    ServiceUnavailableError,
+} from "@scalius/core/errors";
+import { getOtpTransport, type OtpQueuePayload } from "./otp-transport";
 
 // ─────────────────────────────────────────
 // Constants
@@ -52,7 +59,7 @@ export interface SendOtpResult {
     retryAfter?: number;
     httpStatus?: number;
     /** Queue payload for async OTP delivery */
-    queuePayload?: Record<string, unknown>;
+    queuePayload?: OtpQueuePayload;
 }
 
 export interface VerifyOtpInput {
@@ -128,6 +135,16 @@ export function getCookieConfig(storefrontUrl?: string): { sameSite: string; dom
     };
 }
 
+/**
+ * Determine which internal methods ("email" | "phone") are permitted
+ * based on the store's authVerificationMethod setting.
+ */
+function getAllowedInternalMethods(allowedMethod: string): string[] {
+    if (allowedMethod === "both") return ["email", "phone"];
+    if (allowedMethod === "phone" || allowedMethod === "whatsapp_otp" || allowedMethod === "sms_otp") return ["phone"];
+    return ["email"];
+}
+
 // ─────────────────────────────────────────
 // Service functions
 // ─────────────────────────────────────────
@@ -135,6 +152,11 @@ export function getCookieConfig(storefrontUrl?: string): { sameSite: string; dom
 /**
  * Handles OTP generation, rate limiting, and queueing for delivery.
  * Returns a queue payload that the route should send to AUTH_OTP_QUEUE.
+ *
+ * @throws {ValidationError} if the identifier is missing or malformed
+ * @throws {ForbiddenError} if the requested method is disabled by the store
+ * @throws {RateLimitError} if the IP or identifier is rate-limited
+ * @throws {ServiceUnavailableError} if the transport is misconfigured
  */
 export async function sendOtp(
     db: Database,
@@ -145,15 +167,15 @@ export async function sendOtp(
 
     // Validate identifier format
     if (!identifier) {
-        return { success: false, error: "Contact identifier required (email or phone)", httpStatus: 400 };
+        throw new ValidationError("Contact identifier required (email or phone)");
     }
 
     if (method === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
-        return { success: false, error: "Valid email address required", httpStatus: 400 };
+        throw new ValidationError("Valid email address required");
     }
 
     if (method === "phone" && !/^\+?[1-9]\d{1,14}$/.test(identifier)) {
-        return { success: false, error: "Valid phone number required", httpStatus: 400 };
+        throw new ValidationError("Valid phone number required");
     }
 
     // Fetch site settings
@@ -161,16 +183,10 @@ export async function sendOtp(
 
     // Check if the requested method is allowed by admin
     const allowedMethod = settings?.authVerificationMethod || "email";
-
-    let allowedInternalMethods = ["email"];
-    if (allowedMethod === "both") {
-        allowedInternalMethods = ["email", "phone"];
-    } else if (allowedMethod === "phone" || allowedMethod === "whatsapp_otp" || allowedMethod === "sms_otp") {
-        allowedInternalMethods = ["phone"];
-    }
+    const allowedInternalMethods = getAllowedInternalMethods(allowedMethod);
 
     if (!allowedInternalMethods.includes(method)) {
-        return { success: false, error: `Verification via ${method} is currently disabled by the store.`, httpStatus: 403 };
+        throw new ForbiddenError(`Verification via ${method} is currently disabled by the store.`);
     }
 
     const otpKey = `${OTP_PREFIX}${identifier}`;
@@ -186,7 +202,7 @@ export async function sendOtp(
         }
 
         if (ipCount >= 5) {
-            return { success: false, error: "Too many requests from this IP. Please try again later.", httpStatus: 429 };
+            throw new RateLimitError("Too many requests from this IP. Please try again later.", rlWindow);
         }
 
         await kv.put(ipRateKey, (ipCount + 1).toString(), { expirationTtl: rlWindow });
@@ -198,12 +214,10 @@ export async function sendOtp(
         const existing = JSON.parse(existingOtpRaw) as StoredOtp;
         const now = Date.now();
         if (existing.expiresAt - now > (OTP_TTL_SECONDS - 120) * 1000) {
-            return {
-                success: false,
-                error: "A verification code was recently sent. Please wait a moment before requesting a new one.",
-                retryAfter: 120,
-                httpStatus: 429,
-            };
+            throw new RateLimitError(
+                "A verification code was recently sent. Please wait a moment before requesting a new one.",
+                120,
+            );
         }
     }
 
@@ -219,40 +233,30 @@ export async function sendOtp(
 
     await kv.put(otpKey, JSON.stringify(storedOtp), { expirationTtl: OTP_TTL_SECONDS });
 
-    if (method === "phone" && allowedMethod === "whatsapp_otp") {
-        const waToken = settings?.whatsappAccessToken;
-        const waPhoneId = settings?.whatsappPhoneNumberId;
-        if (!waToken || !waPhoneId) {
-            console.error("[CustomerAuth] WhatsApp API keys missing in DB settings.");
-            return { success: false, error: "WhatsApp verification is currently unavailable. Contact store support.", httpStatus: 500 };
-        }
+    // Resolve transport and validate its configuration
+    const transport = getOtpTransport(method, allowedMethod);
+    const configError = settings ? transport.validateConfig(settings) : null;
+    if (configError) {
+        console.error(`[CustomerAuth] Transport ${transport.label} misconfigured: ${configError}`);
+        throw new ServiceUnavailableError(configError);
     }
 
-    // Build queue payload for async delivery
-    const queuePayload = {
-        type: "auth.send_otp",
-        method,
-        allowedMethod,
-        identifier,
-        code,
-        name,
-        waToken: settings?.whatsappAccessToken,
-        waPhoneId: settings?.whatsappPhoneNumberId,
-        waTemplate: settings?.whatsappTemplateName || "auth_otp",
+    // Build queue payload via transport
+    const queuePayload = transport.buildQueuePayload(code, identifier, name, settings!);
+
+    return {
+        success: true,
+        message: `Verification code sent${method === "email" ? " to your email" : ` via ${transport.label}`}`,
+        queuePayload,
     };
-
-    const successMessage = method === "email"
-        ? "Verification code sent to your email"
-        : allowedMethod === "whatsapp_otp"
-            ? "Verification code sent via WhatsApp"
-            : "Verification code sent via SMS";
-
-    return { success: true, message: successMessage, queuePayload };
 }
 
 /**
  * Verifies an OTP code and creates a customer session.
  * Handles customer lookup/creation in DB.
+ *
+ * @throws {ValidationError} if the identifier/code is missing, expired, or incorrect
+ * @throws {RateLimitError} if too many failed attempts
  */
 export async function verifyOtp(
     db: Database,
@@ -262,7 +266,7 @@ export async function verifyOtp(
     const { method, identifier, code, name, phone } = input;
 
     if (!identifier || !code) {
-        return { success: false, error: "Contact identifier and code are required", httpStatus: 400 };
+        throw new ValidationError("Contact identifier and code are required");
     }
 
     const otpKey = `${OTP_PREFIX}${identifier}`;
@@ -270,7 +274,7 @@ export async function verifyOtp(
     // Fetch stored OTP
     const storedRaw = await kv.get(otpKey, "text");
     if (!storedRaw) {
-        return { success: false, error: "No verification code found. Please request a new one.", httpStatus: 400 };
+        throw new ValidationError("No verification code found. Please request a new one.");
     }
 
     const stored = JSON.parse(storedRaw) as StoredOtp;
@@ -278,7 +282,7 @@ export async function verifyOtp(
     // Check expiry
     if (Date.now() > stored.expiresAt) {
         await kv.delete(otpKey);
-        return { success: false, error: "Verification code has expired. Please request a new one.", httpStatus: 400 };
+        throw new ValidationError("Verification code has expired. Please request a new one.");
     }
 
     // Increment attempts
@@ -287,19 +291,16 @@ export async function verifyOtp(
     // Max 5 attempts
     if (stored.attempts > 5) {
         await kv.delete(otpKey);
-        return { success: false, error: "Too many failed attempts. Please request a new code.", httpStatus: 429 };
+        throw new RateLimitError("Too many failed attempts. Please request a new code.");
     }
 
     // Verify code
     if (stored.code !== code) {
         const remaining = OTP_TTL_SECONDS - Math.floor((Date.now() - (stored.expiresAt - OTP_TTL_SECONDS * 1000)) / 1000);
         await kv.put(otpKey, JSON.stringify(stored), { expirationTtl: Math.max(remaining, 1) });
-        return {
-            success: false,
-            error: "Incorrect code. Please try again.",
+        throw new ValidationError("Incorrect code. Please try again.", {
             attemptsLeft: 5 - stored.attempts,
-            httpStatus: 400,
-        };
+        });
     }
 
     // OTP is valid — delete it
@@ -325,12 +326,12 @@ export async function verifyOtp(
         } else {
             if (method === "email") {
                 if (!phone) {
-                    return { success: false, error: "Phone number is required for registration.", httpStatus: 400 };
+                    throw new ValidationError("Phone number is required for registration.");
                 }
                 // Prevent duplicates/account takeover
                 const phoneExists = await db.select().from(customers).where(eq(customers.phone, phone)).get();
                 if (phoneExists) {
-                    return { success: false, error: "This phone number is already registered. Please sign in with it instead.", httpStatus: 400 };
+                    throw new ValidationError("This phone number is already registered. Please sign in with it instead.");
                 }
             }
 
@@ -357,6 +358,8 @@ export async function verifyOtp(
             isNewUser = true;
         }
     } catch (dbError) {
+        // Re-throw typed errors (ValidationError etc.) as-is
+        if (dbError instanceof ValidationError) throw dbError;
         console.warn("[CustomerAuth] DB lookup/insert failed (non-critical):", dbError);
     }
 

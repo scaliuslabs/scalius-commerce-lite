@@ -15,3 +15,7 @@ export const createFolderSchema = z.object({
     name: z.string().min(1, "Folder name is required"),
     parentId: z.string().nullable().optional(),
 });
+
+export type UpdateMediaInput = z.infer<typeof updateMediaSchema>;
+export type MoveMediaInput = z.infer<typeof moveMediaSchema>;
+export type CreateFolderInput = z.infer<typeof createFolderSchema>;

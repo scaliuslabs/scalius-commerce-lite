@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./errors": "./src/errors/index.ts",
     "./modules/*": "./src/modules/*/index.ts",
     "./modules/*/*": "./src/modules/*/*.ts",
     "./auth": "./src/auth/index.ts",

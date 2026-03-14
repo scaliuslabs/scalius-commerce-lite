@@ -7,6 +7,7 @@ import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError, ConflictError } from "@scalius/core/errors";
 
 // ─────────────────────────────────────────
 // Schema
@@ -123,7 +124,7 @@ export async function createPage(db: Database, data: CreatePageInput): Promise<{
         .where(sql`slug = ${data.slug} AND deleted_at IS NULL`)
         .get();
 
-    if (existing) throw Object.assign(new Error("A page with this slug already exists"), { statusCode: 400 });
+    if (existing) throw new ConflictError("A page with this slug already exists");
 
     const pageId = "page_" + nanoid();
     await db.insert(pages).values({
@@ -147,7 +148,7 @@ export async function createPage(db: Database, data: CreatePageInput): Promise<{
 
 export async function updatePage(db: Database, id: string, data: UpdatePageInput): Promise<void> {
     const existing = await getPageById(db, id);
-    if (!existing) throw Object.assign(new Error("Page not found"), { statusCode: 404 });
+    if (!existing) throw new NotFoundError("Page not found");
 
     if (data.slug && data.slug !== existing.slug) {
         const slugConflict = await db
@@ -155,7 +156,7 @@ export async function updatePage(db: Database, id: string, data: UpdatePageInput
             .from(pages)
             .where(sql`slug = ${data.slug} AND deleted_at IS NULL AND id != ${id}`)
             .get();
-        if (slugConflict) throw Object.assign(new Error("A page with this slug already exists"), { statusCode: 400 });
+        if (slugConflict) throw new ConflictError("A page with this slug already exists");
     }
 
     await db.update(pages).set({ ...data, updatedAt: sql`unixepoch()` }).where(eq(pages.id, id));

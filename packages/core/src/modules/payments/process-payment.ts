@@ -1,4 +1,4 @@
-// src/lib/payment/process-payment.ts
+// src/modules/payments/process-payment.ts
 // Shared business logic for processing confirmed payments.
 // Called by both Stripe and SSLCommerz webhook handlers after signature verification.
 

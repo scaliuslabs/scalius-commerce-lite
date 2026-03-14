@@ -6,6 +6,7 @@ import { isNull, asc, and, sql, inArray, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError } from "@scalius/core/errors";
 
 // ─────────────────────────────────────────
 // Schema
@@ -126,7 +127,7 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
 
 export async function updateWidget(db: Database, id: string, data: UpdateWidgetInput) {
     const existing = await getWidgetById(db, id);
-    if (!existing) throw Object.assign(new Error("Widget not found"), { statusCode: 404 });
+    if (!existing) throw new NotFoundError("Widget not found");
 
     const updateData: Record<string, unknown> = { updatedAt: sql`unixepoch()` };
     if (data.name !== undefined) updateData.name = data.name;

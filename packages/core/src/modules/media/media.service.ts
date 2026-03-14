@@ -4,6 +4,7 @@ import { deleteFile, uploadFile } from "../../integrations/storage";
 import { desc, isNull, sql, like, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
 
 const MAX_FILE_SIZE_MB = 20; // Increased to 20MB for robustness
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -49,13 +50,11 @@ export const MediaService = {
 
     async uploadFiles(dbOp: Database, files: File[], folderId: string | null) {
         if (!files.length) {
-            throw Object.assign(new Error("No files provided"), { statusCode: 400 });
-            throw error;
+            throw new ValidationError("No files provided");
         }
 
         if (files.length > MAX_FILES_PER_UPLOAD) {
-            throw Object.assign(new Error("Too many files"), { statusCode: 400 });
-            throw error;
+            throw new ValidationError("Too many files");
         }
 
         const uploadedFiles = [];
@@ -142,8 +141,7 @@ export const MediaService = {
 
         if (response.status === 400) {
             // Throw it instead of returning so normal Hono error catch maps it properly, but format it as UI expects under data.error and data.details
-            throw Object.assign(new Error("All files failed to upload"), {
-                statusCode: 400,
+            throw new ValidationError("All files failed to upload", {
                 details: response.details,
                 summary: response.summary
             });
@@ -155,7 +153,7 @@ export const MediaService = {
     async updateFile(dbOp: Database, id: string, data: { filename?: string; folderId?: string | null }) {
         const [file] = await dbOp.select().from(media).where(eq(media.id, id));
         if (!file) {
-            throw Object.assign(new Error("File not found"), { statusCode: 404 });
+            throw new NotFoundError("File not found");
         }
 
         const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -169,7 +167,7 @@ export const MediaService = {
     async deleteFile(dbOp: Database, id: string) {
         const [file] = await dbOp.select().from(media).where(eq(media.id, id));
         if (!file) {
-            throw Object.assign(new Error("File not found"), { statusCode: 404 });
+            throw new NotFoundError("File not found");
         }
         const key = file.url.split("/").pop()!;
         await deleteFile(key);
