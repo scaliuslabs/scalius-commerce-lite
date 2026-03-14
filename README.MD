@@ -21,8 +21,8 @@
   <a href="https://github.com/scaliuslabs/scalius-commerce-lite/blob/master/LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="Scalius Commerce Lite is released under the AGPL v3 license." />
   </a>
-  <a href="https://github.com/scaliuslabs/scalius-commerce-lite/blob/master/CONTRIBUTING.md">
-    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" alt="PRs welcome!" />
+  <a href="https://github.com/scaliuslabs/scalius-commerce-lite/issues">
+    <img src="https://img.shields.io/badge/Issues-welcome-brightgreen.svg?style=flat" alt="Issues welcome!" />
   </a>
   <a href="https://github.com/scaliuslabs/scalius-commerce-lite/blob/master/SECURITY.md">
     <img src="https://img.shields.io/badge/Security-Policy-red.svg" alt="Security Policy" />
