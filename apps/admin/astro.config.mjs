@@ -131,13 +131,9 @@ export default defineConfig({
   },
 
   adapter: cloudflare({
-    // Use passthrough — we handle all image optimization ourselves via
-    // getOptimizedImageUrl() which routes transforms through the CDN origin.
-    // This avoids depending on Image Resizing being enabled on the app zone.
     imageService: "passthrough",
-    // Share D1/KV/R2 state with API worker (both persist to root .wrangler/state/)
     persistState: { path: "../../.wrangler/state" },
-    // Unique inspector port so admin + storefront + API can run concurrently
-    // API uses 9229 (wrangler default), admin uses 9230, storefront uses 9231
+    // Unique inspector port so admin (9230) + storefront (9231) + API (9229) don't clash during parallel builds
+    inspectorPort: 9230,
   }),
 });

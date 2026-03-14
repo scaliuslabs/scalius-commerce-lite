@@ -18,6 +18,7 @@ import {
 } from "@scalius/database/schema";
 import * as SettingsService from "@scalius/core/modules/settings/settings.service";
 
+import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 interface VariantWithBuyNowUrl extends ProductVariant {
@@ -91,9 +92,9 @@ app.openapi(batchDetailsRoute, async (c) => {
                 .where(inArray(products.id, productIds));
 
             if (productResults.length > 0) {
-                const allProductIds = productResults.map((p: any) => p.id);
+                const allProductIds = productResults.map((p) => p.id);
                 const allCategoryIds = productResults
-                    .map((p: any) => p.categoryId)
+                    .map((p) => p.categoryId)
                     .filter(Boolean) as string[];
 
                 const [images, variants, attributesResult, categoryResults] =
@@ -126,12 +127,12 @@ app.openapi(batchDetailsRoute, async (c) => {
                     ]);
 
                 const categoriesWithUrls = await Promise.all(
-                    categoryResults.map(async (cat: any) => ({
+                    categoryResults.map(async (cat) => ({
                         ...cat,
                         url: await SettingsService.getStorefrontPath(db, `/categories/${cat.slug}`, kv)
                     })),
                 );
-                const categoryMap = new Map(categoriesWithUrls.map((c: any) => [c.id, c]));
+                const categoryMap = new Map(categoriesWithUrls.map((c) => [c.id, c]));
 
                 for (const product of productResults) {
                     const productUrl = await SettingsService.getStorefrontPath(db, `/products/${product.slug}`, kv);
@@ -140,9 +141,9 @@ app.openapi(batchDetailsRoute, async (c) => {
                         ? categoryMap.get(product.categoryId)
                         : null;
 
-                    const productVariantsList = variants.filter((v: any) => v.productId === product.id);
+                    const productVariantsList = variants.filter((v) => v.productId === product.id);
                     const variantsWithBuyNowUrls: VariantWithBuyNowUrl[] = await Promise.all(
-                        productVariantsList.map(async (variant: any) => {
+                        productVariantsList.map(async (variant) => {
                             const finalPrice = calculateFinalPrice(
                                 variant.price,
                                 variant.discountType,
@@ -178,16 +179,16 @@ app.openapi(batchDetailsRoute, async (c) => {
                                 url: productCategory.url
                             }
                             : null,
-                        images: images.filter((img: any) => img.productId === product.id),
+                        images: images.filter((img) => img.productId === product.id),
                         variants: variantsWithBuyNowUrls,
                         attributes: attributesResult
-                            .filter((attr: any) => attr.value.productId === product.id)
-                            .map((res: any) => ({
+                            .filter((attr) => attr.value.productId === product.id)
+                            .map((res) => ({
                                 ...res.value,
                                 name: res.attribute.name,
                                 slug: res.attribute.slug
                             }))
-                    } as any);
+                    } as ProductContextDetail);
                 }
             }
         }
@@ -211,14 +212,14 @@ app.openapi(batchDetailsRoute, async (c) => {
             }),
         );
 
-        return c.json({
+        return ok(c, {
             products: productsData,
             categories: categoriesData
-        }, 200);
-    } catch (error: any) {
+        });
+    } catch (error: unknown) {
         console.error("Batch fetch error:", error);
         return c.json(
-            { error: "Failed to fetch details", message: error.message },
+            { error: "Failed to fetch details", message: error instanceof Error ? error.message : String(error) },
             500,
         );
     }

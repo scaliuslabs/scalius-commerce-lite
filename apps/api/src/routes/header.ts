@@ -4,6 +4,7 @@ import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for header routes
 const app = new OpenAPIHono();
 
@@ -102,10 +103,10 @@ app.openapi(getHeaderRoute, async (c) => {
     }
   };
 
-  return c.json({
+  return ok(c, {
     header: headerData,
     success: true as const
-  }, 200);
+  });
 });
 
 // Export the header routes

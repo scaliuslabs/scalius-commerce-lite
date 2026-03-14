@@ -8,6 +8,7 @@ import { siteSettings, settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── GET /config ─────────────────────────────────────────────────────────────
@@ -35,7 +36,7 @@ app.use(
 app.openapi(getCheckoutConfigRoute, async (c) => {
   try {
     const db = getDb(c.env);
-    const kv: KVNamespace | undefined = (c.env as any).CACHE;
+    const kv: KVNamespace | undefined = c.env.CACHE;
 
     const [stripeSettings, sslSettings, polarSettings, siteSettingsRow, currencyRows] = await Promise.all([
       getStripeSettings(db, kv).catch(() => null),
@@ -103,24 +104,24 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       });
     }
 
-    return c.json({
+    return ok(c, {
       gateways,
       guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,
       authVerificationMethod: siteSettingsRow?.authVerificationMethod ?? "email",
       checkoutMode,
       partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
       partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0
-    }, 200);
+    });
   } catch (error) {
     console.error("Error fetching checkout config:", error);
-    return c.json({
+    return ok(c, {
       gateways: [{ id: "cod", name: "Cash on Delivery", currencies: ["bdt"] }],
       guestCheckoutEnabled: true,
       authVerificationMethod: "email",
       checkoutMode: "all",
       partialPaymentEnabled: false,
       partialPaymentAmount: 0
-    }, 200);
+    });
   }
 });
 

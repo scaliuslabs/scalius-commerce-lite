@@ -9,9 +9,10 @@ import {
 import { sql, desc, asc, isNull, and, isNotNull, eq, count, sum, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
+import type { Database } from "@scalius/database/client";
 
 export const DiscountService = {
-    async list(db: any, options: { page: number; limit: number; search: string; showTrashed: boolean; sort: any; order: any }) {
+    async list(db: Database, options: { page: number; limit: number; search: string; showTrashed: boolean; sort: string; order: "asc" | "desc" }) {
         const { page, limit, search, showTrashed, sort, order } = options;
         const offset = (page - 1) * limit;
 
@@ -55,7 +56,7 @@ export const DiscountService = {
             .limit(limit)
             .offset(offset);
 
-        const discountIds = results.map((d: any) => d.id);
+        const discountIds = results.map((d) => d.id);
         let relatedProducts: Record<string, { buy: string[]; get: string[] }> = {};
         let relatedCollections: Record<string, { buy: string[]; get: string[] }> = {};
         let usageStats: Record<string, { count: number; total: number }> = {};
@@ -81,24 +82,24 @@ export const DiscountService = {
                 .where(inArray(discountUsage.discountId, discountIds))
                 .groupBy(discountUsage.discountId);
 
-            usageResults.forEach((result: any) => {
+            usageResults.forEach((result) => {
                 usageStats[result.discountId] = {
                     count: result.count ? parseInt(String(result.count), 10) : 0,
                     total: result.total ? parseFloat(String(result.total)) : 0,
                 };
             });
 
-            productsResult.forEach((dp: any) => {
+            productsResult.forEach((dp) => {
                 if (!relatedProducts[dp.discountId]) relatedProducts[dp.discountId] = { buy: [], get: [] };
                 relatedProducts[dp.discountId][dp.applicationType as 'buy' | 'get'].push(dp.productId);
             });
-            collectionsResult.forEach((dc: any) => {
+            collectionsResult.forEach((dc) => {
                 if (!relatedCollections[dc.discountId]) relatedCollections[dc.discountId] = { buy: [], get: [] };
                 relatedCollections[dc.discountId][dc.applicationType as 'buy' | 'get'].push(dc.collectionId);
             });
         }
 
-        const formattedResults = results.map((discount: any) => {
+        const formattedResults = results.map((discount) => {
             const stats = usageStats[discount.id] || { count: 0, total: 0 };
             return {
                 ...discount,
@@ -122,7 +123,7 @@ export const DiscountService = {
         };
     },
 
-    async getById(db: any, id: string) {
+    async getById(db: Database, id: string) {
         const discount = await db.select().from(discounts).where(eq(discounts.id, id)).get();
         if (!discount) return null;
 
@@ -132,8 +133,8 @@ export const DiscountService = {
         const relatedProducts: { buy: string[]; get: string[] } = { buy: [], get: [] };
         const relatedCollections: { buy: string[]; get: string[] } = { buy: [], get: [] };
 
-        productsResult.forEach((dp: any) => relatedProducts[dp.applicationType as 'buy' | 'get'].push(dp.productId));
-        collectionsResult.forEach((dc: any) => relatedCollections[dc.applicationType as 'buy' | 'get'].push(dc.collectionId));
+        productsResult.forEach((dp) => relatedProducts[dp.applicationType as 'buy' | 'get'].push(dp.productId));
+        collectionsResult.forEach((dc) => relatedCollections[dc.applicationType as 'buy' | 'get'].push(dc.collectionId));
 
         return {
             ...discount,
@@ -147,7 +148,7 @@ export const DiscountService = {
         };
     },
 
-    async create(db: any, data: any) {
+    async create(db: Database, data: Record<string, unknown>) {
         const existingCode = await db
             .select({ id: discounts.id })
             .from(discounts)
@@ -155,14 +156,12 @@ export const DiscountService = {
             .get();
 
         if (existingCode) {
-            const error = new Error("A discount with this code already exists");
-            (error as any).statusCode = 400;
-            throw error;
+            throw Object.assign(new Error("A discount with this code already exists"), { statusCode: 400 });
         }
 
         const discountId = "disc_" + nanoid();
-        const productsToInsert: any[] = [];
-        const collectionsToInsert: any[] = [];
+        const productsToInsert: { id: string; discountId: string; productId: string; applicationType: string }[] = [];
+        const collectionsToInsert: { id: string; discountId: string; collectionId: string; applicationType: string }[] = [];
 
         if (data.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
             (data.appliesToProducts || []).forEach((productId: string) =>
@@ -173,7 +172,8 @@ export const DiscountService = {
             );
         }
 
-        const batchOps: any[] = [
+        // Drizzle D1 batch() requires specific tuple types
+        const batchOps: unknown[] = [
             db.insert(discounts).values({
                 id: discountId,
                 code: data.code,
@@ -204,12 +204,10 @@ export const DiscountService = {
         return { id: discountId };
     },
 
-    async update(db: any, id: string, data: any) {
+    async update(db: Database, id: string, data: Record<string, unknown>) {
         const existingDiscount = await db.select({ id: discounts.id }).from(discounts).where(eq(discounts.id, id)).get();
         if (!existingDiscount) {
-            const error = new Error("Discount not found");
-            (error as any).statusCode = 404;
-            throw error;
+            throw Object.assign(new Error("Discount not found"), { statusCode: 404 });
         }
 
         const existingCode = await db
@@ -219,9 +217,7 @@ export const DiscountService = {
             .get();
 
         if (existingCode) {
-            const error = new Error("A discount with this code already exists");
-            (error as any).statusCode = 400;
-            throw error;
+            throw Object.assign(new Error("A discount with this code already exists"), { statusCode: 400 });
         }
 
         const currentTimestamp = Math.floor(Date.now() / 1000);
@@ -238,8 +234,8 @@ export const DiscountService = {
             endDateTimestamp = Math.floor(data.endDate.getTime() / 1000);
         }
 
-        const productsToInsert: any[] = [];
-        const collectionsToInsert: any[] = [];
+        const productsToInsert: { id: string; discountId: string; productId: string; applicationType: string }[] = [];
+        const collectionsToInsert: { id: string; discountId: string; collectionId: string; applicationType: string }[] = [];
 
         if (data.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
             (data.appliesToProducts || []).forEach((productId: string) =>
@@ -250,7 +246,8 @@ export const DiscountService = {
             );
         }
 
-        const batchOps: any[] = [
+        // Drizzle D1 batch() requires specific tuple types
+        const batchOps: unknown[] = [
             db.update(discounts).set({
                 code: data.code,
                 type: data.type,
@@ -281,11 +278,11 @@ export const DiscountService = {
         return { success: true };
     },
 
-    async delete(db: any, id: string) {
+    async delete(db: Database, id: string) {
         await db.update(discounts).set({ deletedAt: sql`unixepoch()` }).where(eq(discounts.id, id));
     },
 
-    async bulkDelete(db: any, discountIds: string[], permanent: boolean = false) {
+    async bulkDelete(db: Database, discountIds: string[], permanent: boolean = false) {
         if (permanent) {
             await db.delete(discounts).where(inArray(discounts.id, discountIds));
         } else {
@@ -293,11 +290,11 @@ export const DiscountService = {
         }
     },
 
-    async restore(db: any, discountIds: string[]) {
+    async restore(db: Database, discountIds: string[]) {
         await db.update(discounts).set({ deletedAt: null }).where(inArray(discounts.id, discountIds));
     },
 
-    async permanentlyDelete(db: any, id: string) {
+    async permanentlyDelete(db: Database, id: string) {
         await db.delete(discounts).where(eq(discounts.id, id));
     }
 };

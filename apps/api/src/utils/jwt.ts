@@ -12,11 +12,16 @@ const BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
 // 60 s – an acceptable security trade-off for short-lived tokens.
 const MIN_BLACKLIST_TTL = 60;
 
+interface JwtEnv {
+  JWT_SECRET?: string;
+  [key: string]: unknown;
+}
+
 /**
  * Retrieve the JWT secret from the Workers env or process.env.
  * Called at request time (not module load) to avoid the missing-env issue.
  */
-function getJwtSecret(env?: { JWT_SECRET?: string } | any): string {
+function getJwtSecret(env?: JwtEnv): string {
   const secret =
     env?.JWT_SECRET ||
     (typeof process !== "undefined" ? process.env.JWT_SECRET : undefined) ||
@@ -39,14 +44,13 @@ function getJwtSecret(env?: { JWT_SECRET?: string } | any): string {
  * Generate a JWT token.
  */
 export function generateToken(
-  payload: Record<string, any>,
+  payload: Record<string, unknown>,
   expiresIn: string = DEFAULT_EXPIRATION,
-  env?: { JWT_SECRET?: string } | any,
+  env?: JwtEnv,
 ): string {
   try {
     const secret = getJwtSecret(env);
-    const jwtSign: any = jwt.sign;
-    return jwtSign(payload, secret, { expiresIn });
+    return (jwt.sign as (...args: unknown[]) => string)(payload, secret, { expiresIn });
   } catch (error) {
     console.error("Error generating JWT token:", error);
     throw new Error("Failed to generate authentication token");
@@ -58,16 +62,15 @@ export function generateToken(
  */
 export async function verifyToken(
   token: string,
-  env?: { JWT_SECRET?: string } | any,
-): Promise<any> {
+  env?: JwtEnv,
+): Promise<jwt.JwtPayload | string> {
   try {
     if (await isTokenBlacklisted(token)) {
       throw new Error("Token has been revoked");
     }
 
     const secret = getJwtSecret(env);
-    const jwtVerify: any = jwt.verify;
-    return jwtVerify(token, secret);
+    return (jwt.verify as (...args: unknown[]) => jwt.JwtPayload | string)(token, secret);
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
       throw new Error("Invalid token");
@@ -79,7 +82,7 @@ export async function verifyToken(
 /**
  * Decode a JWT token without verification.
  */
-export function decodeToken(token: string): any {
+export function decodeToken(token: string): jwt.JwtPayload | string | null {
   try {
     return jwt.decode(token);
   } catch (error) {
@@ -110,11 +113,11 @@ export function isTokenExpiringSoon(
 export function refreshTokenIfNeeded(
   token: string,
   thresholdMinutes = 5,
-  env?: { JWT_SECRET?: string } | any,
+  env?: JwtEnv,
 ): string {
   try {
     if (isTokenExpiringSoon(token, thresholdMinutes)) {
-      const decoded = jwt.decode(token) as Record<string, any>;
+      const decoded = jwt.decode(token) as Record<string, unknown>;
       const { iat, exp, nbf, jti, ...payload } = decoded;
       return generateToken(payload, DEFAULT_EXPIRATION, env);
     }
@@ -189,7 +192,7 @@ export function extractTokenFromHeader(
  * Get token statistics (for diagnostics).
  */
 export function getTokenStats(
-  env?: { JWT_SECRET?: string } | any,
+  env?: JwtEnv,
 ): {
   blacklistStorage: string;
   jwtSecret: string;
@@ -200,7 +203,7 @@ export function getTokenStats(
   return {
     blacklistStorage: "cloudflare-kv",
     jwtSecret:
-      secret.length > 6
+      typeof secret === "string" && secret.length > 6
         ? `${secret.substring(0, 3)}...${secret.substring(secret.length - 3)}`
         : "***",
     isUsingDefaultSecret: secret === defaultSecret,

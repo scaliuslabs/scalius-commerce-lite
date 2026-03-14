@@ -17,6 +17,7 @@ import { createStorefrontOrder } from "@scalius/core/modules/orders/orders.servi
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const deliveryService = new DeliveryService();
 
@@ -122,7 +123,7 @@ app.openapi(getOrderRoute, async (c) => {
     deliveryProviders: activeProviders
   };
 
-  return c.json({ order: formattedOrder }, 200);
+  return ok(c, { order: formattedOrder });
 });
 
 // ─── GET /status/:token ──────────────────────────────────────────────────────
@@ -156,7 +157,7 @@ app.openapi(getOrderStatusRoute, async (c) => {
 
   if (!c.env.CACHE) {
     console.warn("[Orders] Polling endpoint hit but CACHE KV is not bound!");
-    return c.json({ status: "processing" }, 200);
+    return ok(c, { status: "processing" });
   }
 
   const kvKey = `checkout_status:${token}`;
@@ -177,11 +178,11 @@ app.openapi(getOrderStatusRoute, async (c) => {
       .limit(1);
 
     if (orderExists.length > 0) {
-      return c.json({ status: "completed", orderId: statusData.orderId }, 200);
+      return ok(c, { status: "completed", orderId: statusData.orderId });
     }
   }
 
-  return c.json(statusData, 200);
+  return ok(c, statusData);
 });
 
 // ─── POST / ──────────────────────────────────────────────────────────────────

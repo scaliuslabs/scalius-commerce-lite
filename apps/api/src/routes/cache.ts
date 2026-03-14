@@ -10,10 +10,11 @@ import {
 } from "../utils/cache-invalidation";
 import { ValidationError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 function kv(c: { env: Env }): KVNamespace | undefined {
-  return (c.env as any)?.CACHE as KVNamespace | undefined;
+  return c.env?.CACHE;
 }
 
 // ─── GET /stats ──────────────────────────────────────────────────────────────
@@ -30,7 +31,7 @@ const getStatsRoute = createRoute({
 
 app.openapi(getStatsRoute, async (c) => {
   const stats = await getCacheStats(kv(c));
-  return c.json({ success: true, stats }, 200);
+  return ok(c, { success: true, stats });
 });
 
 // ─── GET /groups ─────────────────────────────────────────────────────────────
@@ -46,11 +47,11 @@ const getGroupsRoute = createRoute({
 });
 
 app.openapi(getGroupsRoute, async (c) => {
-  return c.json({
+  return ok(c, {
     success: true,
     groups: INVALIDATION_GROUPS,
     pathMapping: ADMIN_PATH_TO_GROUPS
-  }, 200);
+  });
 });
 
 // ─── GET /last-cleared ───────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ app.openapi(getLastClearedRoute, async (c) => {
     );
   }
 
-  return c.json({ success: true, timestamps }, 200);
+  return ok(c, { success: true, timestamps });
 });
 
 // ─── POST /clear ─────────────────────────────────────────────────────────────
@@ -110,7 +111,7 @@ app.openapi(clearAllRoute, async (c) => {
     );
   }
 
-  return c.json({ success: true, message: "All cache cleared successfully" }, 200);
+  return ok(c, { success: true, message: "All cache cleared successfully" });
 });
 
 // ─── POST /clear-group ───────────────────────────────────────────────────────
@@ -183,12 +184,12 @@ app.openapi(clearGroupRoute, async (c) => {
     );
   }
 
-  return c.json({
+  return ok(c, {
     success: true,
     message: `Cache cleared for groups: ${validGroups.join(", ")}`,
     groups: validGroups,
     bumpedHtml: bumpVersion
-  }, 200);
+  });
 });
 
 export { app as cacheControlRoutes };

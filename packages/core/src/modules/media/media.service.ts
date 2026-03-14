@@ -3,6 +3,7 @@ import { media, mediaFolders } from "@scalius/database/schema";
 import { deleteFile, uploadFile } from "../../integrations/storage";
 import { desc, isNull, sql, like, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type { Database } from "@scalius/database/client";
 
 const MAX_FILE_SIZE_MB = 20; // Increased to 20MB for robustness
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -10,7 +11,7 @@ const MAX_FILES_PER_UPLOAD = 50; // Increased to 50 for robust bulk uploads
 const BATCH_SIZE = 5;
 
 export const MediaService = {
-    async listFiles(dbOp: any, page: number, limit: number, searchQuery: string, folderId?: string) {
+    async listFiles(dbOp: Database, page: number, limit: number, searchQuery: string, folderId?: string) {
         const offset = (page - 1) * limit;
         const conditions = [isNull(media.deletedAt)];
 
@@ -46,16 +47,14 @@ export const MediaService = {
         };
     },
 
-    async uploadFiles(dbOp: any, files: File[], folderId: string | null) {
+    async uploadFiles(dbOp: Database, files: File[], folderId: string | null) {
         if (!files.length) {
-            const error = new Error("No files provided");
-            (error as any).statusCode = 400;
+            throw Object.assign(new Error("No files provided"), { statusCode: 400 });
             throw error;
         }
 
         if (files.length > MAX_FILES_PER_UPLOAD) {
-            const error = new Error(`Too many files. Maximum ${MAX_FILES_PER_UPLOAD} files allowed per upload. You tried to upload ${files.length} files.`);
-            (error as any).statusCode = 400;
+            throw Object.assign(new Error("Too many files"), { statusCode: 400 });
             throw error;
         }
 
@@ -107,8 +106,8 @@ export const MediaService = {
                         mimeType: mediaFile.mimeType,
                         createdAt: now,
                     });
-                } catch (fileError: any) {
-                    let errorMessage = fileError.message || "Upload failed for unknown reason";
+                } catch (fileError: unknown) {
+                    let errorMessage = fileError instanceof Error ? fileError.message : "Upload failed for unknown reason";
                     if (errorMessage.includes("Deserialization error")) {
                         errorMessage = "File processing error - the file may be corrupted or in an unsupported format";
                     }
@@ -120,7 +119,7 @@ export const MediaService = {
             }
         }
 
-        const response: any = {
+        const response: Record<string, unknown> = {
             files: uploadedFiles,
             summary: errors.length === 0
                 ? `Successfully uploaded ${uploadedFiles.length} file(s)`
@@ -128,8 +127,8 @@ export const MediaService = {
         };
 
         if (errors.length > 0) {
-            response.warnings = errors.map((e: any) => ({ filename: e.filename, error: e.error }));
-            response.details = errors.map((e: any) => ({ filename: e.filename, error: e.error })); // Maintain for UI
+            response.warnings = errors.map((e) => ({ filename: e.filename, error: e.error }));
+            response.details = errors.map((e) => ({ filename: e.filename, error: e.error })); // Maintain for UI
 
             if (uploadedFiles.length === 0) {
                 response.status = 400;
@@ -153,15 +152,13 @@ export const MediaService = {
         return response;
     },
 
-    async updateFile(dbOp: any, id: string, data: any) {
+    async updateFile(dbOp: Database, id: string, data: { filename?: string; folderId?: string | null }) {
         const [file] = await dbOp.select().from(media).where(eq(media.id, id));
         if (!file) {
-            const error = new Error("File not found");
-            (error as any).statusCode = 404;
-            throw error;
+            throw Object.assign(new Error("File not found"), { statusCode: 404 });
         }
 
-        const updates: any = { updatedAt: new Date() };
+        const updates: Record<string, unknown> = { updatedAt: new Date() };
         if (data.filename !== undefined) updates.filename = data.filename;
         if (data.folderId !== undefined) updates.folderId = data.folderId || null;
 
@@ -169,27 +166,25 @@ export const MediaService = {
         return updatedFile;
     },
 
-    async deleteFile(dbOp: any, id: string) {
+    async deleteFile(dbOp: Database, id: string) {
         const [file] = await dbOp.select().from(media).where(eq(media.id, id));
         if (!file) {
-            const error = new Error("File not found");
-            (error as any).statusCode = 404;
-            throw error;
+            throw Object.assign(new Error("File not found"), { statusCode: 404 });
         }
         const key = file.url.split("/").pop()!;
         await deleteFile(key);
         await dbOp.delete(media).where(eq(media.id, id));
     },
 
-    async moveFiles(dbOp: any, fileIds: string[], folderId: string | null) {
+    async moveFiles(dbOp: Database, fileIds: string[], folderId: string | null) {
         await dbOp.update(media).set({ folderId: folderId || null, updatedAt: new Date() }).where(inArray(media.id, fileIds));
     },
 
-    async listFolders(dbOp: any) {
+    async listFolders(dbOp: Database) {
         return await dbOp.select().from(mediaFolders).where(isNull(mediaFolders.deletedAt)).orderBy(desc(mediaFolders.createdAt));
     },
 
-    async createFolder(dbOp: any, name: string, parentId?: string | null) {
+    async createFolder(dbOp: Database, name: string, parentId?: string | null) {
         const now = new Date();
         const [folder] = await dbOp.insert(mediaFolders).values({
             id: "folder_" + nanoid(),
@@ -201,7 +196,7 @@ export const MediaService = {
         return folder;
     },
 
-    async deleteFolder(dbOp: any, id: string) {
+    async deleteFolder(dbOp: Database, id: string) {
         await dbOp.update(media).set({ folderId: null, updatedAt: new Date() }).where(eq(media.folderId, id));
         await dbOp.update(mediaFolders).set({ deletedAt: new Date() }).where(eq(mediaFolders.id, id));
     }

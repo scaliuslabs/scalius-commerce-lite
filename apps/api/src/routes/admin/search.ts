@@ -4,6 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { search } from "@scalius/core/search";
 
+import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // ── Search ──
@@ -39,13 +40,13 @@ app.openapi(searchRoute, async (c) => {
         const searchCategoriesFlag = query.searchCategories !== "false";
 
         if (!q.trim()) {
-            return c.json({
+            return ok(c, {
                 products: [],
                 pages: [],
                 categories: [],
                 success: true,
                 query: ""
-            }, 200);
+            });
         }
 
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -61,17 +62,17 @@ app.openapi(searchRoute, async (c) => {
             searchCategories: searchCategoriesFlag
         });
 
-        const results: any = await Promise.race([searchPromise, timeoutPromise]);
+        const results = await Promise.race([searchPromise, timeoutPromise]);
 
-        return c.json({
+        return ok(c, {
             ...results,
             success: true,
             query: q,
             timestamp: new Date().toISOString()
-        }, 200);
-    } catch (error: any) {
+        });
+    } catch (error: unknown) {
         console.error("Search error:", error);
-        if (error.message === "Search timed out") {
+        if (error instanceof Error && error.message === "Search timed out") {
             return c.json({ error: "Search timed out", success: false }, 504);
         }
         return c.json({ error: "Internal server error", success: false }, 500);
@@ -91,7 +92,7 @@ const reindexRoute = createRoute({
 });
 
 app.openapi(reindexRoute, async (c) => {
-    return c.json({ success: true, message: "Reindex initiated" }, 200);
+    return ok(c, { success: true, message: "Reindex initiated" });
 });
 
 export { app as adminSearchRoutes };

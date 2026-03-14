@@ -43,8 +43,8 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: SeoSettings & { success: boolean } = await response.json();
-        return data.success ? data : null;
+        const json: { success: boolean; data: SeoSettings } = await response.json();
+        return json.success ? json.data : null;
       } catch (error) {
         console.error("Error fetching SEO settings:", error);
         return null;
@@ -72,8 +72,8 @@ export async function getAnalyticsConfigurations(): Promise<
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { analytics: AnalyticsConfig[] } = await response.json();
-        return data.analytics;
+        const json: { success: boolean; data: { analytics: AnalyticsConfig[] } } = await response.json();
+        return json.data.analytics;
       } catch (error) {
         console.error("Error fetching analytics configurations:", error);
         return null;
@@ -99,8 +99,8 @@ export async function getActiveCheckoutLanguage(): Promise<CheckoutLanguageData 
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { language: CheckoutLanguageData } = await response.json();
-        return data.language;
+        const json: { success: boolean; data: { language: CheckoutLanguageData } } = await response.json();
+        return json.data.language;
       } catch (error) {
         console.error("Error fetching active checkout language:", error);
         return null;
@@ -126,7 +126,8 @@ export async function getHeroSliders(): Promise<HeroSliderData | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        return (await response.json()) as HeroSliderData;
+        const json: { success: boolean; data: HeroSliderData } = await response.json();
+        return json.data as HeroSliderData;
       } catch (error) {
         console.error("Error fetching hero sliders:", error);
         return null;

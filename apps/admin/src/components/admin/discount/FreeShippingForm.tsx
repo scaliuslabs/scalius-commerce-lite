@@ -265,7 +265,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                           disabled={(date) =>
                             date < new Date(new Date().setHours(0, 0, 0, 0))
                           }
-                          initialFocus
+                          autoFocus
                         />
                       </PopoverContent>
                     </Popover>
@@ -322,7 +322,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                               new Date().setHours(0, 0, 0, 0),
                             )
                           }
-                          initialFocus
+                          autoFocus
                         />
                       </PopoverContent>
                     </Popover>

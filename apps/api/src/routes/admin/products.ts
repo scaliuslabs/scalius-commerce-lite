@@ -11,6 +11,7 @@ import {
 } from "@scalius/core/modules/products/products.service";
 import { NotFoundError, ConflictError, ValidationError } from "../../utils/api-error";
 
+import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 const bulkDeleteSchema = z.object({
@@ -50,10 +51,10 @@ app.openapi(listRoute, async (c) => {
         search: query.search || undefined,
         categoryId: query.category || undefined,
         showTrashed: query.trashed === "true",
-        sort: (query.sort || "updatedAt") as any,
+        sort: (query.sort || "updatedAt") as string,
         order: (query.order || "desc") as "asc" | "desc"
     });
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ── Create Product ──
@@ -76,9 +77,9 @@ app.openapi(createProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await ProductsService.createProduct(db, data);
-        return c.json(result, 201);
-    } catch (error: any) {
-        if (error.message?.includes("slug")) {
+        return created(c, result);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message?.includes("slug")) {
             throw new ValidationError(error.message);
         }
         throw error;
@@ -105,9 +106,9 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         await ProductsService.bulkDeleteProducts(db, data.productIds, data.permanent);
-        return new Response(null, { status: 204 }) as any;
-    } catch (error: any) {
-        if (error.message?.includes("delete")) {
+        return noContent(c);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message?.includes("delete")) {
             throw new ConflictError(error.message);
         }
         throw error;
@@ -136,10 +137,12 @@ app.openapi(updateProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         await ProductsService.updateProduct(db, id, data);
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
-        if (error.message === "Product not found") throw new NotFoundError(error.message);
-        if (error.message?.includes("slug")) throw new ValidationError(error.message);
+        return ok(c, { success: true });
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            if (error.message === "Product not found") throw new NotFoundError(error.message);
+            if (error.message?.includes("slug")) throw new ValidationError(error.message);
+        }
         throw error;
     }
 });
@@ -163,7 +166,7 @@ app.openapi(deleteProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await ProductsService.deleteProduct(db, id);
-    return new Response(null, { status: 204 }) as any;
+    return noContent(c);
 });
 
 // ── Restore Product ──
@@ -185,7 +188,7 @@ app.openapi(restoreProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await ProductsService.restoreProduct(db, id);
-    return c.json({ success: true }, 200);
+    return ok(c, { success: true });
 });
 
 // ── Permanent Delete Product ──
@@ -208,9 +211,9 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         await ProductsService.permanentDeleteProduct(db, id);
-        return new Response(null, { status: 204 }) as any;
-    } catch (error: any) {
-        if (error.message?.includes("delete")) {
+        return noContent(c);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message?.includes("delete")) {
             throw new ConflictError(error.message);
         }
         throw error;
@@ -239,9 +242,9 @@ app.openapi(createVariantRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await ProductsService.createVariant(db, id, data);
-        return c.json(result, 201);
-    } catch (error: any) {
-        if (error.message?.includes("SKU")) throw new ValidationError(error.message);
+        return created(c, result);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
         throw error;
     }
 });
@@ -265,7 +268,7 @@ app.openapi(listVariantsRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const variants = await ProductsService.getProductVariants(db, id);
-    return c.json({ variants }, 200);
+    return ok(c, { variants });
 });
 
 // ── Update Variant ──
@@ -290,10 +293,12 @@ app.openapi(updateVariantRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await ProductsService.updateVariant(db, id, variantId, data);
-        return c.json(result, 200);
-    } catch (error: any) {
-        if (error.message === "Variant not found") throw new NotFoundError(error.message);
-        if (error.message?.includes("SKU")) throw new ValidationError(error.message);
+        return ok(c, result);
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            if (error.message === "Variant not found") throw new NotFoundError(error.message);
+            if (error.message?.includes("SKU")) throw new ValidationError(error.message);
+        }
         throw error;
     }
 });
@@ -318,9 +323,9 @@ app.openapi(deleteVariantRoute, async (c) => {
     const { id, variantId } = c.req.valid("param");
     try {
         await ProductsService.deleteVariant(db, id, variantId);
-        return new Response(null, { status: 204 }) as any;
-    } catch (error: any) {
-        if (error.message === "Variant not found") throw new NotFoundError(error.message);
+        return noContent(c);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;
     }
 });
@@ -347,9 +352,9 @@ app.openapi(bulkCreateVariantsRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const variants = await ProductsService.bulkCreateVariants(db, id, data.variants);
-        return c.json({ success: true, variants, count: variants.length }, 201);
-    } catch (error: any) {
-        if (error.message?.includes("SKU")) throw new ValidationError(error.message);
+        return created(c, { success: true, variants, count: variants.length });
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
         throw error;
     }
 });
@@ -375,7 +380,7 @@ app.openapi(bulkDeleteVariantsRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     await ProductsService.bulkDeleteVariants(db, id, data.variantIds);
-    return new Response(null, { status: 204 }) as any;
+    return noContent(c);
 });
 
 // ── Bulk Update Variants ──
@@ -400,7 +405,7 @@ app.openapi(bulkUpdateVariantsRoute, async (c) => {
     const data = c.req.valid("json");
     if (data.updates.length === 0) throw new ValidationError("No updates provided");
     await ProductsService.bulkUpdateVariants(db, id, data.updates);
-    return c.json({ success: true }, 200);
+    return ok(c, { success: true });
 });
 
 // ── Duplicate Variant ──
@@ -423,9 +428,9 @@ app.openapi(duplicateVariantRoute, async (c) => {
     const { id, variantId } = c.req.valid("param");
     try {
         const variant = await ProductsService.duplicateVariant(db, id, variantId);
-        return c.json(variant, 201);
-    } catch (error: any) {
-        if (error.message === "Variant not found") throw new NotFoundError(error.message);
+        return created(c, variant);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;
     }
 });
@@ -449,7 +454,7 @@ app.openapi(getVariantSortOrderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const result = await ProductsService.getVariantSortOrder(db, id);
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ── Update Variant Sort Order ──
@@ -473,7 +478,7 @@ app.openapi(updateVariantSortOrderRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     await ProductsService.updateVariantSortOrder(db, id, data);
-    return c.json({ success: true, message: "Sort order updated successfully" }, 200);
+    return ok(c, { success: true, message: "Sort order updated successfully" });
 });
 
 export { app as adminProductsRoutes };

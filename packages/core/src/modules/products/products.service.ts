@@ -1,6 +1,7 @@
 // src/modules/products/products.service.ts
 // Product service: admin queries, storefront queries, and CRUD mutations.
 import type { DrizzleD1Database } from "drizzle-orm/d1";
+type Database = DrizzleD1Database<typeof schema>;
 import * as schema from "@scalius/database/schema";
 import {
     products,
@@ -13,7 +14,7 @@ import {
     orderItems,
     discountProducts,
 } from "@scalius/database/schema";
-import { and, sql, desc, eq, asc, isNull, inArray, or } from "drizzle-orm";
+import { and, sql, desc, eq, asc, isNull, inArray, or, type SQL } from "drizzle-orm";
 import { sanitizeFtsQuery, ftsMatch } from "../../search/fts5";
 import type { Product, ProductVariant, ProductImage } from "@scalius/database/schema";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
@@ -333,7 +334,7 @@ export async function getProducts(db: DrizzleD1Database<typeof schema>, options:
  * Returns null if the product does not exist.
  */
 export async function getProductDetails(
-    db: any,
+    db: Database,
     id: string,
 ): Promise<ProductWithDetails | null> {
     const [result] = await db
@@ -475,7 +476,8 @@ export async function createProduct(db: DrizzleD1Database<typeof schema>, data: 
 
     const productId = "prod_" + nanoid();
 
-    const batchOps: any[] = [
+    // Drizzle D1 batch() requires specific tuple types
+    const batchOps: unknown[] = [
         db.insert(products).values({
             id: productId,
             name: data.name,
@@ -539,6 +541,7 @@ export async function createProduct(db: DrizzleD1Database<typeof schema>, data: 
         }
     }
 
+    // Drizzle D1 batch() requires specific tuple types — safe to cast
     await db.batch(batchOps as any);
     return { id: productId };
 }
@@ -593,7 +596,8 @@ export async function updateProduct(db: DrizzleD1Database<typeof schema>, id: st
             sortOrder: item.sortOrder,
         }));
 
-    const batchOps: any[] = [
+    // Drizzle D1 batch() requires specific tuple types
+    const batchOps: unknown[] = [
         db.update(products)
             .set({
                 name: data.name,
@@ -639,6 +643,7 @@ export async function updateProduct(db: DrizzleD1Database<typeof schema>, id: st
         batchOps.push(db.insert(productRichContent).values(contentToInsert));
     }
 
+    // Drizzle D1 batch() requires specific tuple types — safe to cast
     await db.batch(batchOps as any);
 }
 
@@ -694,6 +699,7 @@ export async function permanentDeleteProduct(db: DrizzleD1Database<typeof schema
         db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
         db.delete(productRichContent).where(eq(productRichContent.productId, id)),
         db.delete(products).where(eq(products.id, id)),
+    // Drizzle D1 batch() requires specific tuple types — safe to cast
     ] as any);
 }
 
@@ -723,6 +729,7 @@ export async function bulkUpdateVariants(db: DrizzleD1Database<typeof schema>, p
     }
 
     if (statements.length > 0) {
+        // Drizzle D1 batch() requires specific tuple types — safe to cast
         await db.batch(statements as any);
     }
 }
@@ -795,7 +802,7 @@ export async function getStorefrontProducts(db: DrizzleD1Database<typeof schema>
         attributeFilters = [],
     } = params;
 
-    const conditions: any[] = [
+    const conditions: (SQL | undefined)[] = [
         eq(products.isActive, true),
         isNull(products.deletedAt),
     ];
@@ -816,7 +823,7 @@ export async function getStorefrontProducts(db: DrizzleD1Database<typeof schema>
         conditions.push(inArray(products.id, productIds));
     }
 
-    let orderBy: any;
+    let orderBy: unknown;
     if (sort === "price-asc") {
         orderBy = sql`CASE WHEN ${products.discountPercentage} > 0 THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100)) ELSE ${products.price} END`;
     } else if (sort === "price-desc") {
@@ -895,7 +902,7 @@ export async function getStorefrontProducts(db: DrizzleD1Database<typeof schema>
         imageMap = new Map(images.map((img: { productId: string; url: string }) => [img.productId, img.url]));
     }
 
-    let categoryMap = new Map<string, any>();
+    let categoryMap = new Map<string, { id: string; name: string; slug: string }>();
     const categoryIds = [...new Set(productsList.map((p) => p.categoryId).filter(Boolean))] as string[];
     if (categoryIds.length > 0) {
         const categoriesData: Array<{ id: string; name: string; slug: string }> = await db
@@ -989,7 +996,7 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
 
     if (!product) return null;
 
-    const promises: Promise<any>[] = [
+    const promises: Promise<{ type: string; data: unknown }>[] = [
         db.select({
             id: productImages.id,
             productId: productImages.productId,
@@ -1095,12 +1102,12 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
 
     const results = await Promise.all(promises);
 
-    const images = (results.find((r) => r.type === "images")?.data as any[]) || [];
-    const variants = (results.find((r) => r.type === "variants")?.data as any[]) || [];
-    const category = (results.find((r) => r.type === "category")?.data as any) || null;
-    const additionalInfo = (results.find((r) => r.type === "additionalInfo")?.data as any[]) || [];
-    const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as any[]) || [];
-    const attributes = (results.find((r) => r.type === "attributes")?.data as any[]) || [];
+    const images = (results.find((r) => r.type === "images")?.data as unknown[]) || [];
+    const variants = (results.find((r) => r.type === "variants")?.data as unknown[]) || [];
+    const category = (results.find((r) => r.type === "category")?.data as unknown) || null;
+    const additionalInfo = (results.find((r) => r.type === "additionalInfo")?.data as unknown[]) || [];
+    const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
+    const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
 
     const hasVariants = variants.length > 0;
 

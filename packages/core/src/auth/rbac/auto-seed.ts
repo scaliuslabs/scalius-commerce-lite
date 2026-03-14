@@ -46,10 +46,10 @@ async function seedPermissions(db: Database): Promise<void> {
         isSensitive: perm.isSensitive,
         createdAt: new Date(),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Skip if already exists (UNIQUE constraint)
-      if (!error.message?.includes("UNIQUE constraint failed")) {
-        console.error(`Error seeding permission ${perm.name}:`, error.message);
+      if (!(error instanceof Error && error.message?.includes("UNIQUE constraint failed"))) {
+        console.error(`Error seeding permission ${perm.name}:`, error instanceof Error ? error.message : String(error));
       }
     }
   }
@@ -208,8 +208,8 @@ async function seedRoles(db: Database): Promise<void> {
           }
         }
       }
-    } catch (error: any) {
-      console.error(`Error seeding role ${roleData.name}:`, error.message);
+    } catch (error: unknown) {
+      console.error(`Error seeding role ${roleData.name}:`, error instanceof Error ? error.message : String(error));
     }
   }
 }

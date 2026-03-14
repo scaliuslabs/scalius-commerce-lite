@@ -2,6 +2,7 @@
 // Admin order service: queries and CRUD mutations.
 
 import { db } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import {
     orders,
     orderItems,
@@ -613,7 +614,7 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
     return { id: order.id };
 }
 
-export async function updateOrder(id: string, data: any): Promise<{ id: string }> {
+export async function updateOrder(id: string, data: Record<string, unknown>): Promise<{ id: string }> {
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
     const locationMap = new Map<string, string>();
     if (locationIds.length > 0) {
@@ -654,8 +655,8 @@ export async function updateOrder(id: string, data: any): Promise<{ id: string }
             .filter((i) => i.variantId)
             .map((i) => ({ variantId: i.variantId!, quantity: i.quantity, pool }));
         const newEntries: ReservationEntry[] = data.items
-            .filter((i: any) => i.variantId)
-            .map((i: any) => ({ variantId: i.variantId!, quantity: i.quantity, pool }));
+            .filter((i) => i.variantId)
+            .map((i) => ({ variantId: i.variantId!, quantity: i.quantity, pool }));
 
         if (oldEntries.length > 0) await releaseMultiple(db, oldEntries, id);
 
@@ -671,7 +672,7 @@ export async function updateOrder(id: string, data: any): Promise<{ id: string }
         for (const existingItem of existingItems) {
             if (existingItem.variantId) {
                 const matchingNewItem = data.items.find(
-                    (item: any) => item.variantId === existingItem.variantId && item.quantity === existingItem.quantity
+                    (item: Record<string, unknown>) => item.variantId === existingItem.variantId && item.quantity === existingItem.quantity
                 );
                 if (!matchingNewItem) {
                     await db.update(productVariants)
@@ -699,7 +700,7 @@ export async function updateOrder(id: string, data: any): Promise<{ id: string }
         }
     }
 
-    const totalAmount = data.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0) + data.shippingCharge - (data.discountAmount || 0);
+    const totalAmount = data.items.reduce((sum: number, item: Record<string, unknown>) => sum + (item.price as number) * (item.quantity as number), 0) + data.shippingCharge - (data.discountAmount || 0);
     let customerId = existingOrder.customerId;
 
     if (data.customerPhone !== existingOrder.customerPhone) {
@@ -755,7 +756,7 @@ export async function updateOrder(id: string, data: any): Promise<{ id: string }
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
 
     if (data.items.length > 0) {
-        await db.insert(orderItems).values(data.items.map((item: any) => ({
+        await db.insert(orderItems).values(data.items.map((item: Record<string, unknown>) => ({
             id: "item_" + nanoid(),
             orderId: order.id,
             productId: item.productId,
@@ -831,7 +832,7 @@ export async function bulkDeleteOrders(orderIds: string[], permanent: boolean = 
 
 const deliveryService = new DeliveryService();
 
-export async function bulkShipOrders(orderIds: string[], providerId: string, options: any) {
+export async function bulkShipOrders(orderIds: string[], providerId: string, options: Record<string, unknown>) {
     const results = [];
     for (const orderId of orderIds) {
         try {
@@ -853,7 +854,7 @@ export async function bulkShipOrders(orderIds: string[], providerId: string, opt
     return results;
 }
 
-export async function processCodAction(orderId: string, body: any) {
+export async function processCodAction(orderId: string, body: Record<string, unknown>) {
     switch (body.action) {
         case "collected":
             const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy, collectedAmount: body.collectedAmount, receiptUrl: body.receiptUrl });
@@ -879,7 +880,7 @@ export async function getOrderShipments(orderId: string) {
     return db.select().from(deliveryShipments).where(eq(deliveryShipments.orderId, orderId)).all();
 }
 
-export async function createFulfillmentShipment(orderId: string, body: any) {
+export async function createFulfillmentShipment(orderId: string, body: Record<string, unknown>) {
     const order = await db.select({ id: orders.id, status: orders.status, fulfillmentStatus: orders.fulfillmentStatus }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error("Order not found");
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
@@ -898,7 +899,8 @@ export async function createFulfillmentShipment(orderId: string, body: any) {
     const isFinalShipment = body.isFinalShipment ?? (shipmentItemIds.every((sid: string) => unfulfilledItemIds.includes(sid)) && unfulfilledItemIds.every((uid) => shipmentItemIds.includes(uid)));
 
     const newFulfillmentStatus = isFinalShipment ? FulfillmentStatus.COMPLETE : FulfillmentStatus.PARTIAL;
-    const writes: any[] = [];
+    // Drizzle D1 batch() requires specific tuple types
+    const writes: unknown[] = [];
 
     writes.push(db.insert(deliveryShipments).values({
         id: shipmentId, orderId, trackingId: body.trackingId ?? null, trackingUrl: body.trackingUrl ?? null,
@@ -911,7 +913,7 @@ export async function createFulfillmentShipment(orderId: string, body: any) {
         writes.push(db.update(orderItems).set({ fulfillmentStatus: ItemFulfillmentStatus.SHIPPED }).where(eq(orderItems.id, itemId)));
     }
 
-    const orderUpdate: Record<string, any> = { fulfillmentStatus: newFulfillmentStatus, updatedAt: sql`unixepoch()` };
+    const orderUpdate: Record<string, unknown> = { fulfillmentStatus: newFulfillmentStatus, updatedAt: sql`unixepoch()` };
     if (isFinalShipment && order.status === OrderStatus.CONFIRMED) orderUpdate.status = OrderStatus.SHIPPED;
 
     writes.push(db.update(orders).set(orderUpdate).where(eq(orders.id, orderId)));
@@ -978,11 +980,11 @@ export interface CreateStorefrontOrderResult {
  * @param calculateDiscountAmount - Discount calculation function (from discounts route)
  */
 export async function createStorefrontOrder(
-    storefrontDb: any,
+    storefrontDb: Database,
     data: CreateStorefrontOrderInput,
     requestUrl: string,
-    isDiscountValid: (db: any, code: string, total: number, items: any[], customerPhone: string) => Promise<any>,
-    calculateDiscountAmount: (db: any, discount: any, total: number, items: any[], shippingCost: number) => number,
+    isDiscountValid: (db: Database, code: string, total: number, items: unknown[], customerPhone: string) => Promise<unknown>,
+    calculateDiscountAmount: (db: Database, discount: unknown, total: number, items: unknown[], shippingCost: number) => number,
 ): Promise<CreateStorefrontOrderResult> {
     // ------------------------------------------------------------------
     // 1. Batched Reads
@@ -993,7 +995,8 @@ export async function createStorefrontOrder(
 
     const locationIds = [data.city, data.zone, data.area].filter(Boolean);
 
-    const readBatch: any[] = [];
+    // Drizzle D1 batch() requires specific tuple types
+    const readBatch: unknown[] = [];
 
     // 1. Variants
     if (variantIds.length > 0) {
@@ -1103,11 +1106,11 @@ export async function createStorefrontOrder(
     }
 
     // Execute Read Batch
-    const readResults = await storefrontDb.batch(readBatch as [any, any, any, any, any, any, any]);
+    const readResults = await storefrontDb.batch(readBatch as [unknown, unknown, unknown, unknown, unknown, unknown, unknown]);
 
     // Unpack Results
-    const variants = variantIds.length > 0 ? (readResults[0] as any[]) : [];
-    const locationResults = locationIds.length > 0 ? (readResults[1] as any[]) : [];
+    const variants = variantIds.length > 0 ? (readResults[0] as unknown[]) : [];
+    const locationResults = locationIds.length > 0 ? (readResults[1] as unknown[]) : [];
 
     const customerList = readResults[2] as { id: string; totalOrders: number; totalSpent: number }[];
     const existingCustomer = customerList.length > 0 ? customerList[0] : undefined;
@@ -1127,14 +1130,14 @@ export async function createStorefrontOrder(
         : [];
     const productMap = new Map(productList.map((p) => [p.id, p]));
 
-    const settingsList = readResults[5] as any[];
+    const settingsList = readResults[5] as unknown[];
     const settings = settingsList.length > 0 ? settingsList[0] : null;
 
-    const shippingMethodList = readResults[6] as any[];
+    const shippingMethodList = readResults[6] as unknown[];
     const shippingMethod = shippingMethodList.length > 0 ? shippingMethodList[0] : null;
 
     // Validation (Pre-Check)
-    const variantMap = new Map(variants.map((v: any) => [v.id, v]));
+    const variantMap = new Map(variants.map((v) => [v.id, v]));
     for (const item of data.items) {
         if (item.variantId) {
             const variant = variantMap.get(item.variantId);
@@ -1156,7 +1159,7 @@ export async function createStorefrontOrder(
         let unitPrice: number;
 
         if (item.variantId) {
-            const variant = variantMap.get(item.variantId) as any;
+            const variant = variantMap.get(item.variantId) as Record<string, unknown>;
             unitPrice = variant.price;
 
             if (variant.discountType === "percentage" && variant.discountPercentage > 0) {
@@ -1229,7 +1232,7 @@ export async function createStorefrontOrder(
     }
 
     // Process Location Data
-    const locationMap = new Map(locationResults.map((l: any) => [l.id, l.name]));
+    const locationMap = new Map(locationResults.map((l) => [l.id, l.name]));
     const cityName = locationMap.get(data.city) || data.cityName || null;
     const zoneName = locationMap.get(data.zone) || data.zoneName || null;
     const areaName = locationMap.get(data.area || "") || data.areaName || null;

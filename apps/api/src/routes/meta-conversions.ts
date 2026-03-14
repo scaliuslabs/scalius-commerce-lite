@@ -4,6 +4,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import { sendCapiEvent } from "@scalius/core/integrations/meta/conversions-api";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const eventPayloadSchema = z.object({
@@ -126,11 +127,11 @@ app.openapi(postEventRoute, async (c) => {
     await eventPromise;
   }
 
-  return c.json({
+  return ok(c, {
     success: true,
     message: "Event received and is being processed.",
     eventId: eventId
-  }, 200);
+  });
 });
 
 export { app as metaConversionsRoutes };

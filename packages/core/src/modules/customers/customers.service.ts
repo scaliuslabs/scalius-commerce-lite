@@ -2,11 +2,12 @@
 // All DB queries and business logic for the customers domain.
 
 import { customers, customerHistory, deliveryLocations } from "@scalius/database/schema";
-import { sql, and, isNull, inArray, asc, desc, eq } from "drizzle-orm";
+import { sql, and, isNull, inArray, asc, desc, eq, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { z } from "zod";
+import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Schema
@@ -29,7 +30,7 @@ export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
 // ─────────────────────────────────────────
 
 export async function listCustomers(
-    db: any,
+    db: Database,
     options: {
         page?: number;
         limit?: number;
@@ -48,7 +49,7 @@ export async function listCustomers(
         order = "desc",
     } = options;
 
-    const whereConditions: any[] = [];
+    const whereConditions: (SQL | undefined)[] = [];
     if (showTrashed) {
         whereConditions.push(sql`${customers.deletedAt} IS NOT NULL`);
     } else {
@@ -106,7 +107,7 @@ export async function listCustomers(
 
     const [[{ count }], results] = await db.batch([countQuery, resultsQuery]);
 
-    const formattedCustomers = results.map((c: any) => ({
+    const formattedCustomers = results.map((c) => ({
         ...c,
         lastOrderAt: c.lastOrderAt ? new Date(c.lastOrderAt * 1000).toISOString() : null,
         createdAt: new Date(c.createdAt * 1000).toISOString(),
@@ -115,7 +116,7 @@ export async function listCustomers(
 
     // Enrich with location names
     const allLocationIds = [
-        ...new Set(formattedCustomers.flatMap((c: any) => [c.city, c.zone, c.area]).filter(Boolean)),
+        ...new Set(formattedCustomers.flatMap((c) => [c.city, c.zone, c.area]).filter(Boolean)),
     ] as string[];
 
     let locationMap = new Map<string, string>();
@@ -124,10 +125,10 @@ export async function listCustomers(
             .select({ id: deliveryLocations.id, name: deliveryLocations.name })
             .from(deliveryLocations)
             .where(and(inArray(deliveryLocations.id, allLocationIds), isNull(deliveryLocations.deletedAt)));
-        locationResults.forEach((loc: any) => locationMap.set(loc.id, loc.name));
+        locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
     }
 
-    const enhanced = formattedCustomers.map((c: any) => ({
+    const enhanced = formattedCustomers.map((c) => ({
         ...c,
         cityName: c.city ? locationMap.get(c.city) ?? c.city : null,
         zoneName: c.zone ? locationMap.get(c.zone) ?? c.zone : null,
@@ -145,7 +146,7 @@ export async function listCustomers(
 // ─────────────────────────────────────────
 
 export async function createCustomer(
-    db: any,
+    db: Database,
     data: CreateCustomerInput,
 ): Promise<{ id: string }> {
     const existing = await db
@@ -164,7 +165,7 @@ export async function createCustomer(
             .select({ id: deliveryLocations.id, name: deliveryLocations.name })
             .from(deliveryLocations)
             .where(sql`${deliveryLocations.id} IN ${locationIds}`);
-        const locMap = new Map(locs.map((l: any) => [l.id, l.name]));
+        const locMap = new Map(locs.map((l) => [l.id, l.name]));
         if (data.city) cityName = locMap.get(data.city) ?? null;
         if (data.zone) zoneName = locMap.get(data.zone) ?? null;
         if (data.area) areaName = locMap.get(data.area) ?? null;
@@ -212,12 +213,12 @@ export async function createCustomer(
 export const updateCustomerSchema = createCustomerSchema.partial();
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 
-export async function getCustomerById(db: any, id: string) {
+export async function getCustomerById(db: Database, id: string) {
     return db.select().from(customers).where(eq(customers.id, id)).get() ?? null;
 }
 
 export async function updateCustomer(
-    db: any,
+    db: Database,
     id: string,
     data: UpdateCustomerInput,
 ) {
@@ -241,7 +242,7 @@ export async function updateCustomer(
             .select({ id: deliveryLocations.id, name: deliveryLocations.name })
             .from(deliveryLocations)
             .where(inArray(deliveryLocations.id, locationIds));
-        const locMap = new Map(locs.map((l: any) => [l.id, l.name]));
+        const locMap = new Map(locs.map((l) => [l.id, l.name]));
         if (data.city !== undefined) cityName = data.city ? locMap.get(data.city) ?? null : null;
         if (data.zone !== undefined) zoneName = data.zone ? locMap.get(data.zone) ?? null : null;
         if (data.area !== undefined) areaName = data.area ? locMap.get(data.area) ?? null : null;
@@ -277,20 +278,20 @@ export async function updateCustomer(
     return { success: true };
 }
 
-export async function deleteCustomer(db: any, id: string): Promise<void> {
+export async function deleteCustomer(db: Database, id: string): Promise<void> {
     await db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(eq(customers.id, id));
 }
 
-export async function permanentDeleteCustomer(db: any, id: string): Promise<void> {
+export async function permanentDeleteCustomer(db: Database, id: string): Promise<void> {
     await db.delete(customerHistory).where(eq(customerHistory.customerId, id));
     await db.delete(customers).where(eq(customers.id, id));
 }
 
-export async function restoreCustomer(db: any, id: string): Promise<void> {
+export async function restoreCustomer(db: Database, id: string): Promise<void> {
     await db.update(customers).set({ deletedAt: null }).where(eq(customers.id, id));
 }
 
-export async function bulkDeleteCustomers(db: any, ids: string[], permanent = false): Promise<void> {
+export async function bulkDeleteCustomers(db: Database, ids: string[], permanent = false): Promise<void> {
     if (permanent) {
         await db.delete(customerHistory).where(inArray(customerHistory.customerId, ids));
         await db.delete(customers).where(inArray(customers.id, ids));

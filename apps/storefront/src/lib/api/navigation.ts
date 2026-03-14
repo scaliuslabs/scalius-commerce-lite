@@ -24,13 +24,15 @@ export async function getNavigationData(
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: {
-          navigation: Record<string, NavigationItem[]>;
+        const json: {
           success: boolean;
+          data: {
+            navigation: Record<string, NavigationItem[]>;
+          };
         } = await response.json();
 
-        if (data.success && data.navigation) {
-          return data.navigation[type] || [];
+        if (json.success && json.data.navigation) {
+          return json.data.navigation[type] || [];
         }
         return null;
       } catch (error) {

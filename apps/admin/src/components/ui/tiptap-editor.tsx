@@ -1,16 +1,13 @@
 import { useEffect, useState, useRef } from "react";
-import { useEditor, EditorContent, Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Heading from "@tiptap/extension-heading";
-import Link from "@tiptap/extension-link";
-import Placeholder from "@tiptap/extension-placeholder";
-import Underline from "@tiptap/extension-underline";
-import TextAlign from "@tiptap/extension-text-align";
-import Table from "@tiptap/extension-table";
-import TableRow from "@tiptap/extension-table-row";
-import TableHeader from "@tiptap/extension-table-header";
-import TableCell from "@tiptap/extension-table-cell";
-import Youtube from "@tiptap/extension-youtube";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { StarterKit } from "@tiptap/starter-kit";
+import { Placeholder } from "@tiptap/extension-placeholder";
+import { TextAlign } from "@tiptap/extension-text-align";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table/row";
+import { TableHeader } from "@tiptap/extension-table/header";
+import { TableCell } from "@tiptap/extension-table/cell";
+import { Youtube } from "@tiptap/extension-youtube";
 import { ResizableImage } from "./tiptap-extensions/resizable-image";
 import { cn } from "@scalius/shared/utils";
 import {
@@ -791,7 +788,16 @@ export function TiptapEditor({
   const editorInstance = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: false,
+        heading: {
+          levels: [1, 2, 3],
+        },
+        link: {
+          openOnClick: false,
+          HTMLAttributes: {
+            class: "text-primary underline",
+          },
+        },
+        underline: {},
         bulletList: {
           HTMLAttributes: {
             class: "list-disc pl-5",
@@ -808,20 +814,10 @@ export function TiptapEditor({
         strike: false,
         horizontalRule: false,
       }),
-      Heading.configure({
-        levels: [1, 2, 3],
-      }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: "text-primary underline",
-        },
-      }),
       ResizableImage,
       Placeholder.configure({
         placeholder,
       }),
-      Underline,
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
@@ -847,11 +843,12 @@ export function TiptapEditor({
       },
     },
     immediatelyRender: false,
+    shouldRerenderOnTransaction: true,
   });
 
   useEffect(() => {
     if (editorInstance && content !== editorInstance.getHTML() && isMounted) {
-      editorInstance.commands.setContent(content);
+      editorInstance.commands.setContent(content, { emitUpdate: false });
     }
   }, [content, editorInstance, isMounted]);
 

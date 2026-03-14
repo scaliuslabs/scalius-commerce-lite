@@ -2,12 +2,14 @@
 import { analytics } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type { Database } from "@scalius/database/client";
+import type { Analytics } from "@scalius/database/schema";
 
 export class AnalyticsService {
     /**
      * Format dates for consistent API responses
      */
-    private static formatScriptResponse(script: any) {
+    private static formatScriptResponse(script: Analytics | undefined | null) {
         if (!script) return null;
         return {
             ...script,
@@ -20,12 +22,12 @@ export class AnalyticsService {
         };
     }
 
-    static async listScripts(db: any) {
+    static async listScripts(db: Database) {
         const results = await db.select().from(analytics);
         return results.map(this.formatScriptResponse);
     }
 
-    static async getScript(db: any, id: string) {
+    static async getScript(db: Database, id: string) {
         const script = await db
             .select()
             .from(analytics)
@@ -35,7 +37,7 @@ export class AnalyticsService {
         return this.formatScriptResponse(script);
     }
 
-    static async createScript(db: any, data: any) {
+    static async createScript(db: Database, data: Record<string, unknown>) {
         const analyticsId = "analytics_" + nanoid();
 
         const [script] = await db
@@ -56,7 +58,7 @@ export class AnalyticsService {
         return { id: analyticsId, script: this.formatScriptResponse(script) };
     }
 
-    static async updateScript(db: any, id: string, data: any) {
+    static async updateScript(db: Database, id: string, data: Record<string, unknown>) {
         const existingScript = await db
             .select({ id: analytics.id })
             .from(analytics)
@@ -83,7 +85,7 @@ export class AnalyticsService {
         return this.getScript(db, id);
     }
 
-    static async toggleScript(db: any, id: string, isActive: boolean) {
+    static async toggleScript(db: Database, id: string, isActive: boolean) {
         const existingScript = await db
             .select({ id: analytics.id })
             .from(analytics)
@@ -105,7 +107,7 @@ export class AnalyticsService {
         return this.getScript(db, id);
     }
 
-    static async deleteScript(db: any, id: string) {
+    static async deleteScript(db: Database, id: string) {
         const script = await db
             .select()
             .from(analytics)

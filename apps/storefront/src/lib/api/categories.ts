@@ -21,8 +21,8 @@ export async function getAllCategories(): Promise<Category[] | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { categories: Category[] } = await response.json();
-        return data.categories;
+        const json: { success: boolean; data: { categories: Category[] } } = await response.json();
+        return json.data.categories;
       } catch (error) {
         console.error("Error fetching all categories:", error);
         return null;
@@ -58,8 +58,8 @@ export async function getCategoryBySlug(
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { category: Category } = await response.json();
-        return data.category;
+        const json: { success: boolean; data: { category: Category } } = await response.json();
+        return json.data.category;
       } catch (error) {
         console.error(`Error fetching category by slug "${slug}":`, error);
         return null;

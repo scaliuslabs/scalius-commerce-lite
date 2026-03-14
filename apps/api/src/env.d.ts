@@ -158,10 +158,10 @@ interface Env {
   EMAIL?: SendEmail;
 
   // Cloudflare Queue bindings
-  PAYMENT_EVENTS_QUEUE: Queue<any>;
-  ORDER_NOTIFICATIONS_QUEUE: Queue<any>;
-  AUTH_OTP_QUEUE: Queue<any>;
-  ORDER_INGEST_QUEUE: Queue<any>;
+  PAYMENT_EVENTS_QUEUE: Queue;
+  ORDER_NOTIFICATIONS_QUEUE: Queue;
+  AUTH_OTP_QUEUE: Queue;
+  ORDER_INGEST_QUEUE: Queue;
 
   // Secrets (set via `wrangler secret put`)
   BETTER_AUTH_SECRET: string;
@@ -190,7 +190,7 @@ declare module "cloudflare:workers" {
     protected env: E;
     protected ctx: ExecutionContext;
     fetch?(request: Request): Promise<Response>;
-    queue?(batch: MessageBatch<any>): Promise<void>;
+    queue?(batch: MessageBatch): Promise<void>;
   }
   export const env: Env;
 }

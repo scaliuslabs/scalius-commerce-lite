@@ -3,6 +3,17 @@ import * as RechartsPrimitive from "recharts"
 
 import { cn } from "@scalius/shared/utils"
 
+// Recharts v3 payload item shape used by Tooltip and Legend
+type ChartPayloadItem = {
+  name?: string
+  value?: React.ReactNode
+  dataKey?: string
+  color?: string
+  fill?: string
+  payload?: Record<string, unknown>
+  [key: string]: unknown
+}
+
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
 
@@ -116,13 +127,20 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
-}: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
-  React.ComponentProps<"div"> & {
+}: {
+    active?: boolean
+    payload?: Array<ChartPayloadItem>
+    label?: string
+    labelFormatter?: (label: React.ReactNode, payload: Array<ChartPayloadItem>) => React.ReactNode
+    formatter?: (value: React.ReactNode, name: string, item: ChartPayloadItem, index: number, payload: ChartPayloadItem[]) => React.ReactNode
+    className?: string
     hideLabel?: boolean
     hideIndicator?: boolean
     indicator?: "line" | "dot" | "dashed"
     nameKey?: string
     labelKey?: string
+    labelClassName?: string
+    color?: string
   }) {
   const { config } = useChart()
 
@@ -142,7 +160,7 @@ function ChartTooltipContent({
     if (labelFormatter) {
       return (
         <div className={cn("font-medium", labelClassName)}>
-          {labelFormatter(value, payload)}
+          {labelFormatter(value as React.ReactNode, payload)}
         </div>
       )
     }
@@ -180,7 +198,7 @@ function ChartTooltipContent({
         {payload.map((item, index) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
-          const indicatorColor = color || item.payload.fill || item.color
+          const indicatorColor = color || (item.payload as Record<string, unknown>)?.fill as string || item.color
 
           return (
             <div
@@ -191,7 +209,7 @@ function ChartTooltipContent({
               )}
             >
               {formatter && item?.value !== undefined && item.name ? (
-                formatter(item.value, item.name, item, index, item.payload)
+                formatter(item.value, item.name ?? "", item, index, payload)
               ) : (
                 <>
                   {itemConfig?.icon ? (
@@ -230,9 +248,9 @@ function ChartTooltipContent({
                         {itemConfig?.label || item.name}
                       </span>
                     </div>
-                    {item.value && (
+                    {item.value !== undefined && item.value !== null && (
                       <span className="text-foreground font-mono font-medium tabular-nums">
-                        {item.value.toLocaleString()}
+                        {typeof item.value === "number" ? item.value.toLocaleString() : String(item.value)}
                       </span>
                     )}
                   </div>
@@ -254,8 +272,10 @@ function ChartLegendContent({
   payload,
   verticalAlign = "bottom",
   nameKey,
-}: React.ComponentProps<"div"> &
-  Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+}: {
+    className?: string
+    payload?: Array<ChartPayloadItem>
+    verticalAlign?: "top" | "bottom" | "middle"
     hideIcon?: boolean
     nameKey?: string
   }) {
@@ -273,13 +293,13 @@ function ChartLegendContent({
         className
       )}
     >
-      {payload.map((item) => {
+      {payload.map((item, idx) => {
         const key = `${nameKey || item.dataKey || "value"}`
         const itemConfig = getPayloadConfigFromPayload(config, item, key)
 
         return (
           <div
-            key={item.value}
+            key={String(item.value ?? item.dataKey ?? idx)}
             className={cn(
               "[&>svg]:text-muted-foreground flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3"
             )}
@@ -290,7 +310,7 @@ function ChartLegendContent({
               <div
                 className="h-2 w-2 shrink-0 rounded-[2px]"
                 style={{
-                  backgroundColor: item.color,
+                  backgroundColor: item.color as string,
                 }}
               />
             )}

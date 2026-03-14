@@ -4,6 +4,7 @@ import { settings, siteSettings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
+import { ok } from "../../../utils/api-response";
 const app = new OpenAPIHono();
 const MASKED = "••••••••••••";
 
@@ -24,7 +25,7 @@ app.openapi(getAuthRoute, async (c) => {
         const [row] = await db.select().from(siteSettings).limit(1);
         if (!row) return c.json({ message: "Settings not found" }, 404);
 
-        return c.json({
+        return ok(c, {
             authVerificationMethod: row.authVerificationMethod,
             guestCheckoutEnabled: row.guestCheckoutEnabled,
             whatsappAccessToken: row.whatsappAccessToken ? MASKED : "",
@@ -33,7 +34,7 @@ app.openapi(getAuthRoute, async (c) => {
             checkoutMode: row.checkoutMode,
             partialPaymentEnabled: row.partialPaymentEnabled,
             partialPaymentAmount: row.partialPaymentAmount
-        }, 200);
+        });
     } catch (error) {
         return c.json({ message: "Error fetching auth settings" }, 500);
     }
@@ -49,7 +50,7 @@ const saveAuthRoute = createRoute({
 
 app.openapi(saveAuthRoute, async (c) => {
     try {
-        const body = (await c.req.json()) as any;
+        const body = (await c.req.json()) as Record<string, unknown>;
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
 
         if (!existingSettings) return c.json({ message: "Base Site Settings must be configured first" }, 400);
@@ -73,7 +74,7 @@ app.openapi(saveAuthRoute, async (c) => {
             .set(updates)
             .where(eq(siteSettings.id, existingSettings.id));
 
-        return c.json({ message: "Auth settings saved successfully" }, 200);
+        return ok(c, { message: "Auth settings saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving auth settings" }, 500);
     }
@@ -99,7 +100,7 @@ app.openapi(getSecurityRoute, async (c) => {
             .where(and(eq(settings.key, "csp_allowed_domains"), eq(settings.category, "security")))
             .get();
 
-        return c.json({ cspAllowedDomains: row?.value || "" }, 200);
+        return ok(c, { cspAllowedDomains: row?.value || "" });
     } catch (error) {
         return c.json({ message: "Error fetching security settings" }, 500);
     }
@@ -132,13 +133,13 @@ app.openapi(saveSecurityRoute, async (c) => {
                     set: { value: cspAllowedDomains, updatedAt: new Date() }
                 });
 
-            const env = c.env as any;
+            const env = c.env;
             if (env?.CACHE) {
                 c.executionCtx.waitUntil(env.CACHE.put("security:csp_allowed_domains", cspAllowedDomains));
             }
         }
 
-        return c.json({ message: "Security settings saved successfully" }, 200);
+        return ok(c, { message: "Security settings saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving security settings" }, 500);
     }
@@ -163,10 +164,10 @@ app.openapi(getEmailRoute, async (c) => {
             db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "email_sender"), eq(settings.category, "email"))).get(),
         ]);
 
-        return c.json({
+        return ok(c, {
             apiKey: apiKeyRow?.value ? MASKED : "",
             sender: senderRow?.value || ""
-        }, 200);
+        });
     } catch (error) {
         return c.json({ message: "Error fetching email settings" }, 500);
     }
@@ -183,7 +184,7 @@ const saveEmailRoute = createRoute({
 app.openapi(saveEmailRoute, async (c) => {
     try {
         const { apiKey, sender } = await c.req.json();
-        const updates: Promise<any>[] = [];
+        const updates: Promise<unknown>[] = [];
 
         if (typeof apiKey === "string" && apiKey !== MASKED) {
             updates.push(
@@ -202,7 +203,7 @@ app.openapi(saveEmailRoute, async (c) => {
         }
 
         await Promise.all(updates);
-        return c.json({ message: "Email settings saved successfully" }, 200);
+        return ok(c, { message: "Email settings saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving email settings" }, 500);
     }
@@ -224,7 +225,7 @@ app.openapi(getFirebaseRoute, async (c) => {
     try {
         const results = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "firebase")).all();
 
-        const config: any = { serviceAccount: "", publicConfig: {} };
+        const config: { serviceAccount: string; publicConfig: Record<string, unknown> } = { serviceAccount: "", publicConfig: {} };
 
         results.forEach((row) => {
             if (row.key === "service_account") config.serviceAccount = row.value ? MASKED : "";
@@ -233,7 +234,7 @@ app.openapi(getFirebaseRoute, async (c) => {
             }
         });
 
-        return c.json(config, 200);
+        return ok(c, config);
     } catch (error) {
         return c.json({ error: "Internal Server Error" }, 500);
     }
@@ -250,7 +251,7 @@ const saveFirebaseRoute = createRoute({
 app.openapi(saveFirebaseRoute, async (c) => {
     try {
         const { serviceAccount, publicConfig } = await c.req.json();
-        const updates: Promise<any>[] = [];
+        const updates: Promise<unknown>[] = [];
 
         if (serviceAccount && serviceAccount !== MASKED) {
             try {
@@ -278,7 +279,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
         const { layoutCache, CACHE_KEYS } = await import("@scalius/shared/layout-cache");
         layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);
 
-        return c.json({ message: "Settings saved successfully" }, 200);
+        return ok(c, { message: "Settings saved successfully" });
     } catch (error) {
         return c.json({ error: "Internal Server Error" }, 500);
     }

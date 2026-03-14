@@ -17,6 +17,7 @@ import {
 } from "@scalius/core/modules/widgets";
 import { NotFoundError } from "../../utils/api-error";
 
+import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // ── List Widgets ──
@@ -34,7 +35,7 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const result = await listWidgets(db);
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ── Create Widget ──
@@ -55,7 +56,7 @@ const createWidgetRoute = createRoute({
 app.openapi(createWidgetRoute, async (c) => {
     const db = c.get("db");
     const widget = await createWidget(db, c.req.valid("json"));
-    return c.json(widget, 201);
+    return created(c, widget);
 });
 
 // ── Bulk Delete Widgets ──
@@ -83,7 +84,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { ids, permanent } = c.req.valid("json");
     await bulkDeleteWidgets(db, ids, permanent);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Bulk Activate Widgets ──
@@ -104,7 +105,7 @@ const bulkActivateRoute = createRoute({
 app.openapi(bulkActivateRoute, async (c) => {
     const db = c.get("db");
     await bulkActivateWidgets(db, c.req.valid("json").ids);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Bulk Deactivate Widgets ──
@@ -125,7 +126,7 @@ const bulkDeactivateRoute = createRoute({
 app.openapi(bulkDeactivateRoute, async (c) => {
     const db = c.get("db");
     await bulkDeactivateWidgets(db, c.req.valid("json").ids);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Bulk Restore Widgets ──
@@ -146,7 +147,7 @@ const bulkRestoreRoute = createRoute({
 app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     await restoreWidgets(db, c.req.valid("json").ids);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Get Widget By ID ──
@@ -169,7 +170,7 @@ app.openapi(getByIdRoute, async (c) => {
     const { id } = c.req.valid("param");
     const widget = await getWidgetById(db, id);
     if (!widget) throw new NotFoundError("Widget not found");
-    return c.json(widget, 200);
+    return ok(c, widget);
 });
 
 // ── Update Widget ──
@@ -193,9 +194,10 @@ app.openapi(updateWidgetRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         const result = await updateWidget(db, id, c.req.valid("json"));
-        return c.json(result, 200);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 400);
+        return ok(c, result);
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
     }
 });
 
@@ -218,7 +220,7 @@ app.openapi(deleteWidgetRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteWidget(db, id);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Permanent Delete Widget ──
@@ -240,7 +242,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await bulkDeleteWidgets(db, [id], true);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Restore Widget ──
@@ -262,7 +264,7 @@ app.openapi(restoreWidgetRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreWidgets(db, [id]);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Toggle Widget Status ──
@@ -286,7 +288,7 @@ app.openapi(toggleStatusRoute, async (c) => {
     const widget = await getWidgetById(db, id);
     if (!widget) throw new NotFoundError("Widget not found");
     const result = await updateWidget(db, id, { isActive: !widget.isActive });
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 export { app as adminWidgetRoutes };

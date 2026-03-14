@@ -12,6 +12,7 @@ import { ftsMatch } from "@scalius/core/search";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Cache this endpoint as it changes infrequently
@@ -77,7 +78,7 @@ app.openapi(filterableRoute, async (c) => {
     );
 
   if (filterableAttributes.length === 0) {
-    return c.json({ filters: [] }, 200);
+    return ok(c, { filters: [] });
   }
 
   // 2. For each attribute, get all unique values assigned to products
@@ -106,7 +107,7 @@ app.openapi(filterableRoute, async (c) => {
     }))
     .filter((filter) => filter.values.length > 0);
 
-  return c.json({ filters }, 200);
+  return ok(c, { filters });
 });
 
 // GET /attributes/category/:categoryId
@@ -183,7 +184,7 @@ app.openapi(categoryAttributesRoute, async (c) => {
     values: Array.from(attr.values).sort()
   }));
 
-  return c.json({ filters }, 200);
+  return ok(c, { filters });
 });
 
 // GET /attributes/category-slug/:categorySlug
@@ -276,7 +277,7 @@ app.openapi(categorySlugAttributesRoute, async (c) => {
     values: Array.from(attr.values).sort()
   }));
 
-  return c.json({ filters }, 200);
+  return ok(c, { filters });
 });
 
 // GET /attributes/search-filters
@@ -306,7 +307,7 @@ app.openapi(searchFiltersRoute, async (c) => {
   const { q: query, categoryId } = c.req.valid("query");
 
   if (!query || query.trim().length === 0) {
-    return c.json({ filters: [] }, 200);
+    return ok(c, { filters: [] });
   }
 
   let searchConditions = [
@@ -330,7 +331,7 @@ app.openapi(searchFiltersRoute, async (c) => {
     .limit(100);
 
   if (matchingProducts.length === 0) {
-    return c.json({ filters: [] }, 200);
+    return ok(c, { filters: [] });
   }
 
   // 2. Get all categories from matching products
@@ -385,7 +386,7 @@ app.openapi(searchFiltersRoute, async (c) => {
     values: Array.from(attr.values).sort()
   }));
 
-  return c.json({ filters }, 200);
+  return ok(c, { filters });
 });
 
 export { app as attributeRoutes };

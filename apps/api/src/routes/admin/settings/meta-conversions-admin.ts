@@ -5,6 +5,7 @@ import { sql, eq, desc, count } from "drizzle-orm";
 import { getLogRetentionHours, getCleanupCheckIntervalHours } from "@scalius/core/integrations/meta/conversions-api";
 import { MetaService } from "@scalius/core/modules/analytics/meta.service";
 
+import { ok, created } from "../../../utils/api-response";
 const app = new OpenAPIHono();
 const MASKED_VALUE = "••••••••••••";
 
@@ -30,7 +31,7 @@ app.openapi(getSettingsRoute, async (c) => {
     try {
         const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
         const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
-        return c.json({ data: maskedSettings }, 200);
+        return ok(c, { data: maskedSettings });
     } catch (error) {
         return c.json({ error: "Failed to fetch settings" }, 500);
     }
@@ -69,7 +70,7 @@ app.openapi(saveSettingsRoute, async (c) => {
         }
 
         const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
-        return c.json({ data: maskedResult }, existingSettings ? 200 : 201);
+        return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
     } catch (error) {
         return c.json({ error: "Failed to save settings" }, 500);
     }
@@ -102,11 +103,11 @@ app.openapi(getLogsRoute, async (c) => {
         const total = totalResult?.count ?? 0;
         const logs = await db.select().from(metaConversionsLogs).orderBy(desc(metaConversionsLogs.createdAt)).limit(limit).offset(offset).all();
 
-        return c.json({
+        return ok(c, {
             data: logs,
             pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
             retention: { hours: getLogRetentionHours(), cleanupIntervalHours: getCleanupCheckIntervalHours(), nextCleanupMessage: "Cleanup active" }
-        }, 200);
+        });
     } catch (error) {
         return c.json({ error: "Failed to fetch logs" }, 500);
     }
@@ -125,7 +126,7 @@ const clearLogsRoute = createRoute({
 app.openapi(clearLogsRoute, async (c) => {
     try {
         await db.delete(metaConversionsLogs);
-        return c.json({ message: "All logs cleared" }, 200);
+        return ok(c, { message: "All logs cleared" });
     } catch (error) {
         return c.json({ error: "Failed to clear logs" }, 500);
     }
@@ -144,7 +145,7 @@ const manualCleanupRoute = createRoute({
 app.openapi(manualCleanupRoute, async (c) => {
     try {
         const result = await MetaService.manualLogCleanup(db, getLogRetentionHours());
-        if (result.success) return c.json({ message: result.message }, 200);
+        if (result.success) return ok(c, { message: result.message });
         return c.json({ error: result.message }, 500);
     } catch (error) {
         return c.json({ error: "Manual log cleanup failed" }, 500);

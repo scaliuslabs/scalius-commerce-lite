@@ -5,6 +5,7 @@ import { sql, isNull } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for navigation routes
 const app = new OpenAPIHono();
 
@@ -27,7 +28,7 @@ interface NavigationItem {
 }
 
 // Helper to recursively map categories to navigation items
-function mapCategoriesToNavigation(categoriesData: any[]): NavigationItem[] {
+function mapCategoriesToNavigation(categoriesData: Array<{ name: string; slug: string }>): NavigationItem[] {
   return categoriesData.map((cat) => ({
     title: cat.name,
     href: `/categories/${cat.slug}`
@@ -69,7 +70,7 @@ app.openapi(getNavigationRoute, async (c) => {
   }
 
   // Extract navigation configuration based on type
-  let navigationConfig: any = null;
+  let navigationConfig: Record<string, unknown> | null = null;
 
   if (type === "header" || type === "all") {
     const headerConfig = settings.headerConfig
@@ -155,10 +156,10 @@ app.openapi(getNavigationRoute, async (c) => {
     throw new NotFoundError("Navigation configuration not found");
   }
 
-  return c.json({
+  return ok(c, {
     navigation: navigationConfig,
     success: true as const
-  }, 200);
+  });
 });
 
 // GET /navigation/:id — get navigation menu items by ID
@@ -227,7 +228,7 @@ app.openapi(getNavigationByIdRoute, async (c) => {
       };
     } else {
       const footerMenu = footerConfig.menus.find(
-        (m: any) => m.id === id || m.title === id,
+        (m: { id?: string; title?: string }) => m.id === id || m.title === id,
       );
 
       if (footerMenu) {
@@ -244,10 +245,10 @@ app.openapi(getNavigationByIdRoute, async (c) => {
     throw new NotFoundError(`Navigation menu with ID '${id}' not found`);
   }
 
-  return c.json({
+  return ok(c, {
     menu,
     success: true as const
-  }, 200);
+  });
 });
 
 // Export the navigation routes

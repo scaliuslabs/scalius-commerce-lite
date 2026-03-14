@@ -75,9 +75,9 @@ app.openapi(sendOtpRoute, async (c) => {
   if (!result.success) {
     const status = result.httpStatus || 400;
     if (result.retryAfter) {
-      return c.json({ error: result.error, retryAfter: result.retryAfter }, status as any);
+      return c.json({ error: result.error, retryAfter: result.retryAfter }, status as 400 | 401 | 403 | 404 | 429 | 500);
     }
-    return c.json({ error: result.error }, status as any);
+    return c.json({ error: result.error }, status as 400 | 401 | 403 | 404 | 429 | 500);
   }
 
   // Dispatch OTP delivery to queue
@@ -138,11 +138,11 @@ app.openapi(verifyOtpRoute, async (c) => {
 
   if (!result.success) {
     const status = result.httpStatus || 400;
-    const payload: any = { error: result.error };
+    const payload: { error: string | undefined; attemptsLeft?: number } = { error: result.error };
     if (result.attemptsLeft !== undefined) {
       payload.attemptsLeft = result.attemptsLeft;
     }
-    return c.json(payload, status as any);
+    return c.json(payload, status as 400 | 401 | 403 | 404 | 429 | 500);
   }
 
   // Set cookies
@@ -405,7 +405,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
 
   // Fetch items for all orders in one batch
   const orderIds = customerOrders.map((o) => o.id);
-  let itemsByOrder = new Map<string, any[]>();
+  let itemsByOrder = new Map<string, Array<Record<string, unknown>>>();
 
   if (orderIds.length > 0) {
     const allItems = await db

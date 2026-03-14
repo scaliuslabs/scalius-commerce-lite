@@ -2,6 +2,7 @@
 // Storefront product routes — thin HTTP layer.
 // All query logic lives in src/modules/products/products.service.ts.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Database } from "@scalius/database/client";
 import { cacheMiddleware } from "../middleware/cache";
 import {
   getStorefrontProducts,
@@ -10,6 +11,7 @@ import {
 } from "@scalius/core/modules/products/products.service";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono();
 
 app.use(
@@ -73,7 +75,7 @@ app.openapi(listProductsRoute, async (c) => {
   const attributeFilters = await getAttributeFilters(db, queryParams, params);
 
   const result = await getStorefrontProducts(db, { ...params, attributeFilters });
-  return c.json({ success: true as const, ...result }, 200);
+  return ok(c, { success: true as const, ...result });
 });
 
 // GET /api/storefront/products/search
@@ -99,7 +101,7 @@ app.openapi(searchProductsRoute, async (c) => {
   const db = c.get("db");
   const { search, page, limit } = c.req.valid("query");
   const result = await searchStorefrontProducts(db, { search, page, limit });
-  return c.json({ success: true as const, ...result }, 200);
+  return ok(c, { success: true as const, ...result });
 });
 
 // GET /api/storefront/products/:slug
@@ -131,12 +133,12 @@ app.openapi(getProductBySlugRoute, async (c) => {
   const { slug } = c.req.valid("param");
   const result = await getStorefrontProductBySlug(db, slug);
   if (!result) throw new NotFoundError("Product not found");
-  return c.json({ success: true as const, ...result }, 200);
+  return ok(c, { success: true as const, ...result });
 });
 
 /** Extracts attribute-based filters from raw query params by checking known attribute slugs. */
 async function getAttributeFilters(
-  db: any,
+  db: Database,
   queryParams: Record<string, string>,
   parsedParams: ReturnType<typeof productFilterSchema.parse>,
 ): Promise<Array<{ slug: string; value: string }>> {

@@ -5,6 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { AnalyticsService, createAnalyticsSchema, updateAnalyticsSchema, toggleAnalyticsSchema } from "@scalius/core/modules/analytics";
 import { NotFoundError } from "../../utils/api-error";
 
+import { ok, created } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // ── List Analytics Scripts ──
@@ -22,7 +23,7 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const scripts = await AnalyticsService.listScripts(db);
-    return c.json(scripts, 200);
+    return ok(c, scripts);
 });
 
 // ── Create Analytics Script ──
@@ -44,7 +45,7 @@ app.openapi(createScriptRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await AnalyticsService.createScript(db, data);
-    return c.json(result, 201);
+    return created(c, result);
 });
 
 // ── Get Analytics Script ──
@@ -67,7 +68,7 @@ app.openapi(getByIdRoute, async (c) => {
     const { id } = c.req.valid("param");
     const script = await AnalyticsService.getScript(db, id);
     if (!script) throw new NotFoundError("Analytics script not found");
-    return c.json(script, 200);
+    return ok(c, script);
 });
 
 // ── Update Analytics Script ──
@@ -97,7 +98,7 @@ app.openapi(updateScriptRoute, async (c) => {
 
     const updated = await AnalyticsService.updateScript(db, id, data);
     if (!updated) throw new NotFoundError("Analytics script not found");
-    return c.json({ success: true, script: updated }, 200);
+    return ok(c, { success: true, script: updated });
 });
 
 // ── Delete Analytics Script ──
@@ -120,7 +121,7 @@ app.openapi(deleteScriptRoute, async (c) => {
     const { id } = c.req.valid("param");
     const deleted = await AnalyticsService.deleteScript(db, id);
     if (!deleted) throw new NotFoundError("Analytics script not found");
-    return c.json({ success: true, message: "Analytics script deleted", deletedScript: deleted }, 200);
+    return ok(c, { success: true, message: "Analytics script deleted", deletedScript: deleted });
 });
 
 // ── Toggle Analytics Script ──
@@ -145,11 +146,11 @@ app.openapi(toggleScriptRoute, async (c) => {
     const data = c.req.valid("json");
     const toggled = await AnalyticsService.toggleScript(db, id, data.isActive);
     if (!toggled) throw new NotFoundError("Analytics script not found");
-    return c.json({
+    return ok(c, {
         success: true,
         message: `Analytics script ${data.isActive ? "activated" : "deactivated"}`,
         script: toggled
-    }, 200);
+    });
 });
 
 export { app as adminAnalyticsRoutes };

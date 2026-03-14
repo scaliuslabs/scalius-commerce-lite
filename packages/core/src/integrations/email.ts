@@ -86,7 +86,7 @@ export async function sendEmail({
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(
-          (error as any).message || `Resend API error: ${response.status}`,
+          error instanceof Error ? error.message : `Resend API error: ${response.status}`,
         );
       }
 

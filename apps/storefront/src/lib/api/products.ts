@@ -49,7 +49,8 @@ export async function getProductBySlug(
           throw new Error(`API error: ${response.status}`);
         }
 
-        return (await response.json()) as ProductPageData;
+        const json: { success: boolean; data: ProductPageData } = await response.json();
+        return json.data as ProductPageData;
       } catch (error) {
         console.error(`Error fetching product by slug "${slug}":`, error);
         return null;
@@ -84,8 +85,8 @@ export async function getProductVariants(
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { variants: ProductVariant[] } = await response.json();
-        return data.variants;
+        const json: { success: boolean; data: { variants: ProductVariant[] } } = await response.json();
+        return json.data.variants;
       } catch (error) {
         console.error(
           `Error fetching variants for product ID "${productId}":`,
@@ -170,11 +171,14 @@ export async function getProductsByCategory(
           throw new Error(`API error: ${response.status}`);
         }
 
-        const result: {
-          products: Product[];
-          pagination: PaginatedResponse<any>["pagination"];
+        const json: {
+          success: boolean;
+          data: {
+            products: Product[];
+            pagination: PaginatedResponse<any>["pagination"];
+          };
         } = await response.json();
-        return { data: result.products, pagination: result.pagination };
+        return { data: json.data.products, pagination: json.data.pagination };
       } catch (error) {
         console.error(
           `Error fetching products for category "${categorySlug}":`,
@@ -220,11 +224,14 @@ export async function getAllProducts(
           throw new Error(`API error: ${response.status}`);
         }
 
-        const result = (await response.json()) as {
-          products: Product[];
-          pagination: PaginatedResponse<any>["pagination"];
+        const json = (await response.json()) as {
+          success: boolean;
+          data: {
+            products: Product[];
+            pagination: PaginatedResponse<any>["pagination"];
+          };
         };
-        return { data: result.products, pagination: result.pagination };
+        return { data: json.data.products, pagination: json.data.pagination };
       } catch (error) {
         console.error("Error fetching all products:", error);
         return null;
@@ -274,20 +281,23 @@ export async function searchProductsForForm(
       throw new Error(`API error: ${response.status}`);
     }
 
-    // The /search endpoint returns { products, categories, pages, success, query, timestamp }
-    const result = (await response.json()) as {
-      products: Product[];
+    // The /search endpoint returns { success, data: { products, categories, pages, success, query, timestamp } }
+    const json = (await response.json()) as {
       success: boolean;
+      data: {
+        products: Product[];
+        success: boolean;
+      };
     };
 
-    if (result.success) {
+    if (json.success) {
       // Note: /search doesn't include variants inline - they need separate fetching if required
       return {
-        data: result.products as (Product & { variants?: ProductVariant[] })[],
+        data: json.data.products as (Product & { variants?: ProductVariant[] })[],
         pagination: {
           page: 1,
           limit,
-          total: result.products.length,
+          total: json.data.products.length,
           totalPages: 1,
         },
       };

@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { authMiddleware } from "../middleware/auth";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── POST / (Create or Update) ──────────────────────────────────────────────
@@ -63,7 +64,7 @@ app.openapi(saveAbandonedCheckoutRoute, async (c) => {
     });
   }
 
-  return c.json({ success: true, message: "Abandoned checkout saved." }, 200);
+  return ok(c, { success: true, message: "Abandoned checkout saved." });
 });
 
 // ─── POST /cleanup ───────────────────────────────────────────────────────────
@@ -100,10 +101,10 @@ app.openapi(cleanupRoute, async (c) => {
     .delete(abandonedCheckouts)
     .where(eq(abandonedCheckouts.checkoutId, checkoutId));
 
-  return c.json({
+  return ok(c, {
     success: true,
     message: `Abandoned checkout record ${checkoutId} deleted.`
-  }, 200);
+  });
 });
 
 export { app as abandonedCheckoutsRoutes };

@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getBucket } from "@scalius/core/integrations/storage";
 
-const app = new OpenAPIHono<{ Bindings: any }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── GET /:key ───────────────────────────────────────────────────────────────
 
@@ -27,12 +27,12 @@ app.openapi(getMediaRoute, async (c) => {
 
   const bucket = c.env.BUCKET || c.env.STORAGE || getBucket();
   if (!bucket) {
-    return c.text("R2 Bucket binding not found. Expected binding 'BUCKET' or 'STORAGE'.", 500) as any;
+    return c.text("R2 Bucket binding not found. Expected binding 'BUCKET' or 'STORAGE'.", 500);
   }
 
   const object = await bucket.get(key);
   if (!object || !object.body) {
-    return c.notFound() as any;
+    return c.notFound();
   }
 
   const headers = new Headers();
@@ -44,7 +44,7 @@ app.openapi(getMediaRoute, async (c) => {
   headers.set("etag", object.httpEtag);
   headers.set("Cache-Control", "public, max-age=31536000");
 
-  return new Response(object.body as ReadableStream, { headers }) as any;
+  return new Response(object.body as ReadableStream, { headers });
 });
 
 export { app as serveMediaRoute };

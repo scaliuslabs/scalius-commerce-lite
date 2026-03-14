@@ -23,8 +23,8 @@ export async function getActiveHomepageWidgets(): Promise<ApiWidget[] | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { widgets: ApiWidget[] } = await response.json();
-        return data.widgets;
+        const json: { success: boolean; data: { widgets: ApiWidget[] } } = await response.json();
+        return json.data.widgets;
       } catch (error) {
         console.error("Error fetching active homepage widgets:", error);
         return null;
@@ -61,9 +61,9 @@ export async function getWidgetById(
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { widget: ApiWidget; success: boolean } =
+        const json: { success: boolean; data: { widget: ApiWidget } } =
           await response.json();
-        return data.success ? data.widget : null;
+        return json.success ? json.data.widget : null;
       } catch (error) {
         console.error(`Error fetching widget by ID "${widgetId}":`, error);
         return null;

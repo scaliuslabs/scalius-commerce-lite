@@ -227,7 +227,7 @@ export async function processReturn(
     }
 
     const returnableStatuses = [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.SHIPPED];
-    if (!returnableStatuses.includes(order.status as any)) {
+    if (!returnableStatuses.includes(order.status as string)) {
         return {
             success: false,
             error: `Cannot return an order in '${order.status}' status. Order must be delivered, completed, or shipped.`,

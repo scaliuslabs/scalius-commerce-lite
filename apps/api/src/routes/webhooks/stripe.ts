@@ -64,7 +64,7 @@ function buildQueueMessage(event: Stripe.Event): PaymentQueueMessage | null {
 
       const chargeId = typeof pi.latest_charge === "string"
         ? pi.latest_charge
-        : (pi.latest_charge as any)?.id ?? undefined;
+        : (pi.latest_charge as { id?: string })?.id ?? undefined;
 
       return {
         type: "payment.stripe.confirmed",
@@ -113,7 +113,7 @@ function buildQueueMessage(event: Stripe.Event): PaymentQueueMessage | null {
         orderId,
         paymentIntentId: typeof charge.payment_intent === "string"
           ? charge.payment_intent
-          : (charge.payment_intent as any)?.id ?? "",
+          : (charge.payment_intent as { id?: string })?.id ?? "",
         amountRefunded: charge.amount_refunded,
         chargeId: charge.id
       };

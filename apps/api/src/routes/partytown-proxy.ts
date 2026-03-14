@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ValidationError, ForbiddenError } from "../utils/api-error";
 
-async function getAllowedDomainsAsync(c: any): Promise<string[]> {
+async function getAllowedDomainsAsync(c: { env: Env; req: { url: string } }): Promise<string[]> {
   let cspAllowed = c.env?.CSP_ALLOWED || "";
   try {
     if (c.env?.CACHE) {
@@ -77,7 +77,7 @@ app.openapi(proxyRoute, async (c) => {
   if (!urlParam) {
     return c.json({ error: "Missing url parameter" }, 400, {
       "Access-Control-Allow-Origin": "*"
-    }) as any;
+    });
   }
 
   let targetUrl: URL;
@@ -86,7 +86,7 @@ app.openapi(proxyRoute, async (c) => {
   } catch (e) {
     return c.json({ error: "Invalid url parameter" }, 400, {
       "Access-Control-Allow-Origin": "*"
-    }) as any;
+    });
   }
 
   const allowedDomains = await getAllowedDomainsAsync(c);
@@ -105,7 +105,7 @@ app.openapi(proxyRoute, async (c) => {
     console.warn(`Allowed domains: ${allowedDomains.join(", ")}`);
     return c.json({ error: "Proxying to this domain is not allowed" }, 403, {
       "Access-Control-Allow-Origin": "*"
-    }) as any;
+    });
   }
 
   try {
@@ -129,7 +129,7 @@ app.openapi(proxyRoute, async (c) => {
         headers: {
           "Access-Control-Allow-Origin": "*"
         }
-      }) as any;
+      });
     }
 
     const contentType =
@@ -148,12 +148,12 @@ app.openapi(proxyRoute, async (c) => {
       }
     });
 
-    return proxyResponse as any;
+    return proxyResponse;
   } catch (error) {
     console.error(`Proxy error fetching ${targetUrl}:`, error);
     return c.json({ error: "Proxy failed" }, 500, {
       "Access-Control-Allow-Origin": "*"
-    }) as any;
+    });
   }
 });
 

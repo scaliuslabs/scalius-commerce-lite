@@ -5,6 +5,7 @@
 import { nanoid } from "nanoid";
 import { customers, siteSettings } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Constants
@@ -136,7 +137,7 @@ export function getCookieConfig(storefrontUrl?: string): { sameSite: string; dom
  * Returns a queue payload that the route should send to AUTH_OTP_QUEUE.
  */
 export async function sendOtp(
-    db: any,
+    db: Database,
     kv: KVNamespace,
     input: SendOtpInput,
 ): Promise<SendOtpResult> {
@@ -254,7 +255,7 @@ export async function sendOtp(
  * Handles customer lookup/creation in DB.
  */
 export async function verifyOtp(
-    db: any,
+    db: Database,
     kv: KVNamespace,
     input: VerifyOtpInput,
 ): Promise<VerifyOtpResult> {
@@ -336,7 +337,7 @@ export async function verifyOtp(
             // Create new customer record
             customerId = nanoid();
 
-            const insertPayload: any = {
+            const insertPayload: Record<string, unknown> = {
                 id: customerId,
                 name: customerName,
                 status: "active",
@@ -426,7 +427,7 @@ export async function deleteCustomerSession(
  * Updates a customer profile and refreshes the session in KV.
  */
 export async function updateCustomerProfile(
-    db: any,
+    db: Database,
     kv: KVNamespace,
     session: CustomerSession,
     sessionToken: string,
@@ -434,7 +435,7 @@ export async function updateCustomerProfile(
 ): Promise<{ session: CustomerSession; updates: Record<string, string | undefined> }> {
     // Update customer record in DB if customerId exists
     if (session.customerId) {
-        const dbUpdates: Record<string, any> = {
+        const dbUpdates: Record<string, unknown> = {
             updatedAt: new Date(),
         };
         if (updates.name) dbUpdates.name = updates.name;

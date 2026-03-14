@@ -3,6 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { analytics, type Analytics } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
+import { ok } from "../utils/api-response";
 import {
   processAnalyticsScript,
   shouldUsePartytown
@@ -58,7 +59,7 @@ app.openapi(getConfigurationsRoute, async (c) => {
     },
   );
 
-  return c.json({ analytics: processedScripts }, 200);
+  return ok(c, { analytics: processedScripts });
 });
 
 export { app as analyticsRoutes };

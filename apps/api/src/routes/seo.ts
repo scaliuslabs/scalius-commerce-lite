@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
 
+import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for SEO routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -52,19 +53,19 @@ app.openapi(getSeoSettingsRoute, async (c) => {
 
   if (!settings) {
     // Return default/empty values if no settings are found
-    return c.json({
+    return ok(c, {
       siteTitle: "Scalius Commerce",
       homepageTitle: "Welcome to Scalius Commerce",
       homepageMetaDescription: "Your one-stop shop for everything amazing.",
       robotsTxt: "User-agent: *\nAllow: /",
       success: true as const
-    }, 200);
+    });
   }
 
-  return c.json({
+  return ok(c, {
     ...settings,
     success: true as const
-  }, 200);
+  });
 });
 
 export { app as seoRoutes };

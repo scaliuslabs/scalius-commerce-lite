@@ -4,6 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { FraudCheckerService } from "@scalius/core/modules/fraud-checker/service";
 
+import { ok, created } from "../../utils/api-response";
 const app = new OpenAPIHono();
 const fraudCheckerService = new FraudCheckerService();
 const MASKED_VALUE = "••••••••••••";
@@ -29,8 +30,8 @@ app.openapi(listRoute, async (c) => {
             apiKey: provider.apiKey ? MASKED_VALUE : ""
         }));
 
-        return c.json(maskedProviders, 200);
-    } catch (error: any) {
+        return ok(c, maskedProviders);
+    } catch (error: unknown) {
         return c.json({ error: "Internal server error" }, 500);
     }
 });
@@ -65,8 +66,8 @@ app.openapi(createProviderRoute, async (c) => {
             apiKey: savedProvider.apiKey ? MASKED_VALUE : ""
         };
 
-        return c.json(maskedResponse, 201);
-    } catch (error: any) {
+        return created(c, maskedResponse);
+    } catch (error: unknown) {
         return c.json({ error: "Internal server error" }, 500);
     }
 });
@@ -108,8 +109,8 @@ app.openapi(updateProviderRoute, async (c) => {
             apiKey: savedProvider.apiKey ? MASKED_VALUE : ""
         };
 
-        return c.json(maskedResponse, 200);
-    } catch (error: any) {
+        return ok(c, maskedResponse);
+    } catch (error: unknown) {
         return c.json({ error: "Internal server error" }, 500);
     }
 });
@@ -133,8 +134,8 @@ app.openapi(deleteProviderRoute, async (c) => {
     try {
         const { id } = c.req.valid("param");
         await fraudCheckerService.deleteProvider(id);
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true });
+    } catch (error: unknown) {
         return c.json({ error: "Internal server error" }, 500);
     }
 });
@@ -158,8 +159,8 @@ app.openapi(testProviderRoute, async (c) => {
     try {
         const { id } = c.req.valid("param");
         const result = await fraudCheckerService.testProvider(id);
-        return c.json(result, 200);
-    } catch (error: any) {
+        return ok(c, result);
+    } catch (error: unknown) {
         return c.json({ error: "Internal server error" }, 500);
     }
 });

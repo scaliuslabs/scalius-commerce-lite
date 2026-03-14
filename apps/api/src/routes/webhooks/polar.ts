@@ -55,7 +55,7 @@ polarWebhookRoutes.post("/", async (c) => {
             await kv.put(idempotencyKey, "1", { expirationTtl: 86400 });
         }
 
-        const queue = (c.env as any).PAYMENT_EVENTS_QUEUE as Queue;
+        const queue = c.env.PAYMENT_EVENTS_QUEUE as Queue;
 
         if (!queue) {
             console.error("[Polar Webhook] PAYMENT_EVENTS_QUEUE not available");

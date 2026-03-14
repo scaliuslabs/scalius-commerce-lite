@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { sql, and, eq, isNull } from "drizzle-orm";
 import { NotFoundError } from "../../../utils/api-error";
 
+import { ok, created } from "../../../utils/api-response";
 const app = new OpenAPIHono();
 
 const sliderImageSchema = z.object({
@@ -40,7 +41,7 @@ app.openapi(listRoute, async (c) => {
     try {
         const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
         const parsedData = data.map((slider) => ({ ...slider, images: JSON.parse(slider.images) }));
-        return c.json({ success: true, data: parsedData }, 200);
+        return ok(c, { success: true, data: parsedData });
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
@@ -76,7 +77,7 @@ app.openapi(createSliderRoute, async (c) => {
             updatedAt: sql`CURRENT_TIMESTAMP`
         }).returning();
 
-        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } }, 201);
+        return created(c, { success: true, data: { ...slider, images: JSON.parse(slider.images) } });
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
@@ -101,7 +102,7 @@ app.openapi(getByIdRoute, async (c) => {
         const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
 
         if (!slider) return c.json({ success: false, error: "Slider not found" }, 404);
-        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } }, 200);
+        return ok(c, { success: true, data: { ...slider, images: JSON.parse(slider.images) } });
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
@@ -138,7 +139,7 @@ app.openapi(updateSliderRoute, async (c) => {
             .returning();
 
         if (!slider) return c.json({ success: false, error: "Slider not found" }, 404);
-        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } }, 200);
+        return ok(c, { success: true, data: { ...slider, images: JSON.parse(slider.images) } });
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
@@ -166,7 +167,7 @@ app.openapi(deleteSliderRoute, async (c) => {
             .returning();
 
         if (!slider) return c.json({ success: false, error: "Slider not found" }, 404);
-        return c.json({ success: true, data: { ...slider, images: JSON.parse(slider.images) } }, 200);
+        return ok(c, { success: true, data: { ...slider, images: JSON.parse(slider.images) } });
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }

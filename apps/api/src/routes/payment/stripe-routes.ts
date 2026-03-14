@@ -9,6 +9,7 @@ import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settin
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
+import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── POST /intent ────────────────────────────────────────────────────────────
@@ -137,14 +138,14 @@ app.openapi(createIntentRoute, async (c) => {
     }).onConflictDoNothing();
   }
 
-  return c.json({
+  return ok(c, {
     success: true,
     clientSecret: result.clientSecret,
     paymentIntentId: result.paymentIntentId,
     publishableKey: stripe.publishableKey,
     amount: chargeAmount,
     currency: body.currency
-  }, 200);
+  });
 });
 
 export const stripePaymentRoutes = app;

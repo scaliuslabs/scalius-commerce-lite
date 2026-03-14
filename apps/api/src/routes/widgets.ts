@@ -5,6 +5,7 @@ import { cacheMiddleware } from "../middleware/cache";
 import type { Widget } from "@scalius/database/schema";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use(
@@ -27,7 +28,7 @@ app.use(
   }),
 );
 
-const convertTimestampToISO = (timestamp: any): string | null => {
+const convertTimestampToISO = (timestamp: number | string | Date | null | undefined): string | null => {
   if (timestamp === null || typeof timestamp === "undefined") return null;
 
   let dateObj: Date | null = null;
@@ -110,10 +111,10 @@ app.openapi(getWidgetByIdRoute, async (c) => {
     deletedAt: convertTimestampToISO(widget.deletedAt)
   };
 
-  return c.json({
+  return ok(c, {
     success: true as const,
     widget: formattedWidget
-  }, 200);
+  });
 });
 
 // GET /widgets/active/homepage — get active widgets for the homepage
@@ -153,7 +154,7 @@ app.openapi(getActiveHomepageWidgetsRoute, async (c) => {
     deletedAt: convertTimestampToISO(widget.deletedAt)
   }));
 
-  return c.json({ widgets: formattedWidgets }, 200);
+  return ok(c, { widgets: formattedWidgets });
 });
 
 // Export the widget routes

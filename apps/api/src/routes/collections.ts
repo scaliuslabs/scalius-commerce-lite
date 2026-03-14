@@ -4,6 +4,7 @@ import { eq, isNull, and, inArray, desc, sql } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for collection routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -91,7 +92,7 @@ app.openapi(listCollectionsRoute, async (c) => {
     )
   }));
 
-  return c.json({ collections: formattedCollections }, 200);
+  return ok(c, { collections: formattedCollections });
 });
 
 // GET /collections/:id — get collection by ID
@@ -154,9 +155,9 @@ app.openapi(getCollectionByIdRoute, async (c) => {
   const maxProducts = Math.min(Math.max(config.maxProducts || 8, 1), 24);
 
   // Initialize response data
-  let resolvedProducts: any[] = [];
-  let resolvedCategories: any[] = [];
-  let featuredProduct: any = null;
+  let resolvedProducts: unknown[] = [];
+  let resolvedCategories: unknown[] = [];
+  let featuredProduct: unknown = null;
 
   // PRODUCT SELECTION LOGIC
   // Priority: productIds > categoryIds
@@ -413,7 +414,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
   // CASE 4: Both empty - resolvedProducts and resolvedCategories stay empty
 
   // Format the response
-  return c.json({
+  return ok(c, {
     collection: {
       ...collection,
       config,
@@ -431,7 +432,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     categories: resolvedCategories,
     products: resolvedProducts,
     ...(featuredProduct && { featuredProduct })
-  }, 200);
+  });
 });
 
 // Export the collection routes

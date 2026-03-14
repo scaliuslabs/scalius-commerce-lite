@@ -17,6 +17,7 @@ import {
 } from "@scalius/core/modules/pages";
 import { NotFoundError } from "../../utils/api-error";
 
+import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // ── List Pages ──
@@ -49,10 +50,10 @@ app.openapi(listRoute, async (c) => {
         limit: q.limit,
         search: q.search || "",
         showTrashed: q.trashed === "true",
-        sort: (q.sort as any) || "updatedAt",
-        order: (q.order as any) || "desc"
+        sort: (q.sort || "updatedAt") as string,
+        order: (q.order || "desc") as string
     });
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ── Create Page ──
@@ -74,9 +75,10 @@ app.openapi(createPageRoute, async (c) => {
     const db = c.get("db");
     try {
         const result = await createPage(db, c.req.valid("json"));
-        return c.json(result, 201);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 400);
+        return created(c, result);
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
     }
 });
 
@@ -108,7 +110,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { pageIds, permanent } = c.req.valid("json");
     await bulkDeletePages(db, pageIds, permanent);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Bulk Publish Pages ──
@@ -129,7 +131,7 @@ const bulkPublishRoute = createRoute({
 app.openapi(bulkPublishRoute, async (c) => {
     const db = c.get("db");
     await bulkPublishPages(db, c.req.valid("json").ids);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Bulk Unpublish Pages ──
@@ -150,7 +152,7 @@ const bulkUnpublishRoute = createRoute({
 app.openapi(bulkUnpublishRoute, async (c) => {
     const db = c.get("db");
     await bulkUnpublishPages(db, c.req.valid("json").ids);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Bulk Restore Pages ──
@@ -171,7 +173,7 @@ const bulkRestoreRoute = createRoute({
 app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     await restorePages(db, c.req.valid("json").ids);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Get Page By ID ──
@@ -194,7 +196,7 @@ app.openapi(getByIdRoute, async (c) => {
     const { id } = c.req.valid("param");
     const page = await getPageById(db, id);
     if (!page) throw new NotFoundError("Page not found");
-    return c.json(page, 200);
+    return ok(c, page);
 });
 
 // ── Update Page ──
@@ -218,9 +220,10 @@ app.openapi(updatePageRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         await updatePage(db, id, c.req.valid("json"));
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 400);
+        return ok(c, { success: true });
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
     }
 });
 
@@ -243,7 +246,7 @@ app.openapi(deletePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deletePage(db, id);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Permanent Delete Page ──
@@ -265,7 +268,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await bulkDeletePages(db, [id], true);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 export { app as adminPageRoutes };

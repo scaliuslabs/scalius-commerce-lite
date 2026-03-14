@@ -6,6 +6,7 @@ import { InventoryService, adjustInventorySchema } from "@scalius/core/modules/i
 import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
+import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // ── List Inventory ──
@@ -42,9 +43,9 @@ app.openapi(listRoute, async (c) => {
             limit: query.limit,
             alertStatus: query.alertStatus
         });
-        return c.json(result, 200);
-    } catch (error: any) {
-        if (error.message === "Invalid section parameter") {
+        return ok(c, result);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message === "Invalid section parameter") {
             throw new ValidationError(error.message);
         }
         throw error;
@@ -79,7 +80,7 @@ app.openapi(alertsRoute, async (c) => {
         limit: 50,
         alertStatus: status
     });
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ── Acknowledge Alert ──
@@ -109,7 +110,7 @@ app.openapi(acknowledgeAlertRoute, async (c) => {
     const db = c.get("db");
     const { variantId } = c.req.valid("json");
     await acknowledgeLowStockAlert(db, variantId);
-    return c.json({ success: true }, 200);
+    return ok(c, { success: true });
 });
 
 // ── Adjust Inventory ──
@@ -132,12 +133,12 @@ app.openapi(adjustRoute, async (c) => {
     const db = c.get("db");
     const { variantId } = c.req.valid("param");
     const payload = c.req.valid("json");
-    const user = c.get("user" as any);
+    const user = c.get("user");
     try {
         const result = await InventoryService.adjustInventory(db, variantId, payload, user?.id);
-        return c.json(result, 200);
-    } catch (error: any) {
-        if (error.message === "Variant not found") throw new NotFoundError(error.message);
+        return ok(c, result);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;
     }
 });

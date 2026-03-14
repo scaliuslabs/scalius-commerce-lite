@@ -582,7 +582,7 @@ export function AmountOffOrderForm({
                               // Disable past dates, but allow today
                               date < new Date(new Date().setHours(0, 0, 0, 0))
                             }
-                            initialFocus
+                            autoFocus
                           />
                         </PopoverContent>
                       </Popover>
@@ -644,7 +644,7 @@ export function AmountOffOrderForm({
                               // Disable dates before start date
                               date < (form.getValues("startDate") || new Date())
                             }
-                            initialFocus
+                            autoFocus
                           />
                         </PopoverContent>
                       </Popover>

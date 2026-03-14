@@ -2,6 +2,7 @@
 // Admin OpenAPI routes for media.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { ok, created, noContent } from "../../utils/api-response";
 import {
     MediaService,
     updateMediaSchema,
@@ -35,7 +36,7 @@ app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
     const result = await MediaService.listFiles(db, query.page, query.limit, query.search || "", query.folderId);
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ── Upload Media ──
@@ -55,7 +56,7 @@ app.openapi(uploadRoute, async (c) => {
     const db = c.get("db");
     const body = await c.req.parseBody({ all: true });
 
-    let files: any = body["files"];
+    let files: unknown = body["files"];
     if (!files) files = [];
     if (!Array.isArray(files)) files = [files];
 
@@ -64,8 +65,9 @@ app.openapi(uploadRoute, async (c) => {
     try {
         const result = await MediaService.uploadFiles(db, files, folderId);
         return c.json(result, result.status);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 400);
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
     }
 });
 
@@ -91,9 +93,10 @@ app.openapi(patchMediaRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const file = await MediaService.updateFile(db, id, data);
-        return c.json({ file }, 200);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 500);
+        return ok(c, { file });
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 500);
     }
 });
 
@@ -119,9 +122,10 @@ app.openapi(putMediaRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const file = await MediaService.updateFile(db, id, data);
-        return c.json({ file }, 200);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 500);
+        return ok(c, { file });
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 500);
     }
 });
 
@@ -144,7 +148,7 @@ app.openapi(moveRoute, async (c) => {
     const db = c.get("db");
     const { fileIds, folderId } = c.req.valid("json");
     await MediaService.moveFiles(db, fileIds, folderId || null);
-    return c.json({ success: true, message: `Moved ${fileIds.length} file(s)` }, 200);
+    return ok(c, { success: true, message: `Moved ${fileIds.length} file(s)` });
 });
 
 // ── Delete File ──
@@ -167,9 +171,10 @@ app.openapi(deleteFileRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         await MediaService.deleteFile(db, id);
-        return c.body(null, 204);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 500);
+        return noContent(c);
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 500);
     }
 });
 
@@ -188,7 +193,7 @@ const listFoldersRoute = createRoute({
 app.openapi(listFoldersRoute, async (c) => {
     const db = c.get("db");
     const folders = await MediaService.listFolders(db);
-    return c.json({ folders }, 200);
+    return ok(c, { folders });
 });
 
 // ── Create Folder ──
@@ -210,7 +215,7 @@ app.openapi(createFolderRoute, async (c) => {
     const db = c.get("db");
     const { name, parentId } = c.req.valid("json");
     const folder = await MediaService.createFolder(db, name, parentId);
-    return c.json({ folder }, 201);
+    return created(c, { folder });
 });
 
 // ── Delete Folder ──
@@ -232,7 +237,7 @@ app.openapi(deleteFolderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await MediaService.deleteFolder(db, id);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 export { app as adminMediaRoutes };

@@ -50,8 +50,8 @@ export async function getFilterableAttributes(
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { filters: FilterableAttribute[] } = await response.json();
-        return data.filters;
+        const json: { success: boolean; data: { filters: FilterableAttribute[] } } = await response.json();
+        return json.data.filters;
       } catch (error) {
         console.error("Error fetching filterable attributes:", error);
         return null;

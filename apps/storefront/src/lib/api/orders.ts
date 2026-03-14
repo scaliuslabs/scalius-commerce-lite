@@ -98,8 +98,8 @@ export async function getOrderDetails(orderId: string): Promise<Order | null> {
       throw new Error(`API error: ${response.status}`);
     }
 
-    const data: { order: Order } = await response.json();
-    return data.order;
+    const json: { success: boolean; data: { order: Order } } = await response.json();
+    return json.data.order;
   } catch (error) {
     console.error(`Error fetching details for order "${orderId}":`, error);
     return null;

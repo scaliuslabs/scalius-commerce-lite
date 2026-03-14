@@ -6,6 +6,7 @@ import { settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 // Define the user type for type safety
 interface User {
   id: string;
@@ -70,10 +71,10 @@ app.openapi(getTokenRoute, async (c) => {
     role: "system"
   });
 
-  return c.json({
+  return ok(c, {
     success: true,
     data: { token }
-  }, 200);
+  });
 });
 
 // ─── GET /firebase-config ────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ app.openapi(firebaseConfigRoute, async (c) => {
     config = JSON.parse(result.value);
   }
 
-  return c.json(config, 200);
+  return ok(c, config);
 });
 
 // Apply auth middleware to all routes below
@@ -125,10 +126,10 @@ const getMeRoute = createRoute({
 
 app.openapi(getMeRoute, (c) => {
   const user = c.get("user");
-  return c.json({
+  return ok(c, {
     success: true,
     data: { user }
-  }, 200);
+  });
 });
 
 // ─── POST /revoke ────────────────────────────────────────────────────────────
@@ -158,10 +159,10 @@ app.openapi(revokeRoute, async (c) => {
   const token = authHeader.substring(7);
   await revokeToken(token);
 
-  return c.json({
+  return ok(c, {
     success: true,
     message: "Token revoked successfully"
-  }, 200);
+  });
 });
 
 // ─── GET /token-stats ────────────────────────────────────────────────────────
@@ -184,10 +185,10 @@ app.openapi(tokenStatsRoute, (c) => {
     throw new ForbiddenError("You do not have permission to access this resource");
   }
 
-  return c.json({
+  return ok(c, {
     success: true,
     data: getTokenStats()
-  }, 200);
+  });
 });
 
 export default app;

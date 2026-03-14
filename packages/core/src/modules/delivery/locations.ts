@@ -13,7 +13,7 @@ export interface LocationData {
   type: "city" | "zone" | "area";
   parentId?: string | null;
   externalIds: Record<string, string | number>;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   isActive?: boolean;
   sortOrder?: number;
 }
@@ -74,7 +74,7 @@ export async function searchLocations(
   query: string,
   type?: "city" | "zone" | "area",
 ) {
-  const whereConditions: any[] = [
+  const whereConditions: (ReturnType<typeof like> | ReturnType<typeof isNull> | ReturnType<typeof eq>)[] = [
     like(deliveryLocations.name, `%${query}%`),
     isNull(deliveryLocations.deletedAt),
   ];
@@ -113,7 +113,7 @@ export async function createLocation(data: LocationData) {
 
 /** Update an existing location */
 export async function updateLocation(id: string, data: Partial<LocationData>) {
-  const updateData: Record<string, any> = {
+  const updateData: Record<string, unknown> = {
     updatedAt: sql`CURRENT_TIMESTAMP`,
   };
 

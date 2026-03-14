@@ -33,8 +33,8 @@ export async function getAllCollections(): Promise<Collection[] | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { collections: Collection[] } = await response.json();
-        return data.collections;
+        const json: { success: boolean; data: { collections: Collection[] } } = await response.json();
+        return json.data.collections;
       } catch (error) {
         console.error("Error fetching all collections:", error);
         return null;
@@ -70,14 +70,14 @@ export async function getCollectionById(
           throw new Error(`API error: ${response.status}`);
         }
 
-        const responseData: CollectionApiResponse = await response.json();
+        const json: { success: boolean; data: CollectionApiResponse } = await response.json();
 
-        if (responseData && responseData.collection) {
+        if (json.data && json.data.collection) {
           return {
-            ...responseData.collection,
-            categories: responseData.categories,
-            products: responseData.products,
-            featuredProduct: responseData.featuredProduct,
+            ...json.data.collection,
+            categories: json.data.categories,
+            products: json.data.products,
+            featuredProduct: json.data.featuredProduct,
           };
         }
 

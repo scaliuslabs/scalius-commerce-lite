@@ -7,6 +7,7 @@ import { sql, eq, and, or, like, asc, desc, count, inArray, isNull } from "drizz
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
 import { NotFoundError, ConflictError } from "../../utils/api-error";
 
+import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 const createAttributeSchema = z.object({
@@ -77,7 +78,7 @@ app.openapi(listRoute, async (c) => {
         const page = query.page;
         const limit = query.limit;
         const search = query.search || "";
-        const sortField = (query.sort || "name") as any;
+        const sortField = (query.sort || "name") as string;
         const sortOrder = (query.order || "asc") as "asc" | "desc";
         const showTrashed = query.trashed === "true";
 
@@ -122,7 +123,7 @@ app.openapi(listRoute, async (c) => {
             .limit(limit)
             .offset(offset);
 
-        const attributeIds = attributes.map((attr: any) => attr.id);
+        const attributeIds = attributes.map((attr) => attr.id);
         const valueCounts =
             attributeIds.length > 0
                 ? await db
@@ -137,15 +138,15 @@ app.openapi(listRoute, async (c) => {
                 : [];
 
         const valueCountMap = new Map(
-            valueCounts.map((item: any) => [item.attributeId, item.valueCount]),
+            valueCounts.map((item) => [item.attributeId, item.valueCount]),
         );
 
-        const data = attributes.map((attr: any) => ({
+        const data = attributes.map((attr) => ({
             ...attr,
             valueCount: valueCountMap.get(attr.id) || 0
         }));
 
-        return c.json({
+        return ok(c, {
             data,
             pagination: {
                 page,
@@ -153,7 +154,7 @@ app.openapi(listRoute, async (c) => {
                 total,
                 totalPages: Math.ceil(total / limit)
             }
-        }, 200);
+        });
     } catch (error) {
         console.error("Error fetching attributes:", error);
         return c.json({ error: "Failed to fetch attributes" }, 500);
@@ -207,9 +208,9 @@ app.openapi(createAttributeRoute, async (c) => {
             })
             .returning();
 
-        return c.json({ data: insertedAttribute }, 201);
-    } catch (error: any) {
-        if (error.name === "ConflictError") throw error;
+        return created(c, { data: insertedAttribute });
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === "ConflictError") throw error;
         console.error("Error creating attribute:", error);
         return c.json({ error: "Failed to create attribute" }, 500);
     }
@@ -265,9 +266,9 @@ app.openapi(updateAttributeRoute, async (c) => {
 
         if (!updatedAttribute) throw new NotFoundError("Attribute not found");
 
-        return c.json({ data: updatedAttribute }, 200);
-    } catch (error: any) {
-        if (error.name === "NotFoundError" || error.name === "ConflictError") throw error;
+        return ok(c, { data: updatedAttribute });
+    } catch (error: unknown) {
+        if (error instanceof Error && (error.name === "NotFoundError" || error.name === "ConflictError")) throw error;
         console.error(`Error updating attribute ${id}:`, error);
         return c.json({ error: "Failed to update attribute" }, 500);
     }
@@ -304,7 +305,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
             .limit(5);
 
         if (usage.length > 0) {
-            const productNames = usage.map((p: any) => p.productName).join(", ");
+            const productNames = usage.map((p) => p.productName).join(", ");
             const errorMessage = `Cannot delete. Attribute is used by ${usage.length}${usage.length < 5 ? "" : "+"} product(s), including: ${productNames}.`;
             return c.json({ error: "Attribute in use", message: errorMessage }, 409);
         }
@@ -314,7 +315,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(eq(productAttributes.id, id));
 
-        return new Response(null, { status: 204 }) as any;
+        return noContent(c);
     } catch (error) {
         console.error(`Error deleting attribute ${id}:`, error);
         return c.json({ error: "Failed to delete attribute" }, 500);
@@ -345,7 +346,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
             .delete(productAttributes)
             .where(eq(productAttributes.id, id));
 
-        return new Response(null, { status: 204 }) as any;
+        return noContent(c);
     } catch (error) {
         console.error(`Error permanently deleting attribute ${id}:`, error);
         return c.json({ error: "Failed to permanently delete attribute" }, 500);
@@ -381,7 +382,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
                 .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
                 .where(inArray(productAttributes.id, ids));
         }
-        return new Response(null, { status: 204 }) as any;
+        return noContent(c);
     } catch (error) {
         console.error("Error bulk deleting attributes:", error);
         return c.json({ error: "Failed to bulk delete attributes" }, 500);
@@ -411,7 +412,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
             .update(productAttributes)
             .set({ deletedAt: null })
             .where(inArray(productAttributes.id, ids));
-        return new Response(null, { status: 204 }) as any;
+        return noContent(c);
     } catch (error) {
         console.error("Error bulk restoring attributes:", error);
         return c.json({ error: "Failed to bulk restore attributes" }, 500);
@@ -474,7 +475,7 @@ app.openapi(listValuesRoute, async (c) => {
             )
             .all();
 
-        const valueMap = new Map<string, any>();
+        const valueMap = new Map<string, { value: string; productCount: number; createdAt: number; isPreset: boolean; sampleProducts: string[] }>();
 
         for (const row of allRows) {
             const existing = valueMap.get(row.value) || {
@@ -530,16 +531,16 @@ app.openapi(listValuesRoute, async (c) => {
         const offset = (page - 1) * limit;
         const paginatedValues = allValues.slice(offset, offset + limit);
 
-        return c.json({
+        return ok(c, {
             attributeId,
             attributeName: attribute.name,
             values: paginatedValues,
             totalValues: allValues.length,
             page,
             totalPages: Math.ceil(allValues.length / limit)
-        }, 200);
-    } catch (error: any) {
-        if (error.name === "NotFoundError") throw error;
+        });
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === "NotFoundError") throw error;
         console.error("Error fetching attribute values:", error);
         return c.json({ error: "Failed to fetch attribute values" }, 500);
     }
@@ -585,9 +586,9 @@ app.openapi(addValueRoute, async (c) => {
                 .where(eq(productAttributes.id, attributeId));
         }
 
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
-        if (error.name === "NotFoundError") throw error;
+        return ok(c, { success: true });
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === "NotFoundError") throw error;
         return c.json({ error: "Failed" }, 500);
     }
 });
@@ -644,10 +645,10 @@ app.openapi(updateValueRoute, async (c) => {
             }
         }
 
-        return c.json({
+        return ok(c, {
             success: true,
             message: `Value "${oldValue}" renamed to "${newValue}"`
-        }, 200);
+        });
     } catch (error) {
         console.error("Error updating attribute value:", error);
         return c.json({ error: "Failed to update attribute value" }, 500);
@@ -703,10 +704,10 @@ app.openapi(deleteValueRoute, async (c) => {
             }
         }
 
-        return c.json({
+        return ok(c, {
             success: true,
             message: `Value "${value}" deleted from all products`
-        }, 200);
+        });
     } catch (error) {
         console.error("Error deleting attribute value:", error);
         return c.json({ error: "Failed to delete attribute value" }, 500);

@@ -173,16 +173,16 @@ export async function search(
 
     // Format pages
     const formattedPages = (searchPages ? pagesResult : []).filter(
-      (p: any) => p.id !== null
-    ).map((page: any) => ({
+      (p) => p.id !== null
+    ).map((page) => ({
       ...page,
       type: "page" as const,
     })) as PageSearchResult[];
 
     // Format categories
     const formattedCategories = (searchCategories ? categoriesResult : []).filter(
-      (c: any) => c.id !== null
-    ).map((category: any) => ({
+      (c) => c.id !== null
+    ).map((category) => ({
       ...category,
       type: "category" as const,
     })) as CategorySearchResult[];

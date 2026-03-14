@@ -30,8 +30,8 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { page: Page; success: boolean } = await response.json();
-        return data.success ? data.page : null;
+        const json: { success: boolean; data: { page: Page } } = await response.json();
+        return json.success ? json.data.page : null;
       } catch (error) {
         console.error(`Error fetching page by slug "${slug}":`, error);
         return null;
@@ -83,13 +83,15 @@ export async function getAllPages(
           throw new Error(`API error: ${response.status}`);
         }
 
-        const result = (await response.json()) as {
-          pages: Page[];
-          pagination: PaginatedResponse<any>["pagination"];
+        const json = (await response.json()) as {
           success: boolean;
+          data: {
+            pages: Page[];
+            pagination: PaginatedResponse<any>["pagination"];
+          };
         };
-        if (result.success) {
-          return { data: result.pages, pagination: result.pagination };
+        if (json.success) {
+          return { data: json.data.pages, pagination: json.data.pagination };
         }
         return null;
       } catch (error) {

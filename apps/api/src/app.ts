@@ -136,7 +136,7 @@ app.use("*", async (c, next) => {
             details: error.details,
           },
         },
-        error.status as any,
+        error.status as 400 | 401 | 403 | 404 | 409 | 422 | 500,
       );
     }
 
@@ -212,7 +212,7 @@ if (process.env.NODE_ENV === "development") {
 app.get("/health", async (c) => {
   try {
     const { getCacheStats, getCacheType } = await import("./utils/kv-cache");
-    const kv: KVNamespace | undefined = (c.env as any)?.CACHE;
+    const kv: KVNamespace | undefined = c.env?.CACHE;
     const cacheStats = await getCacheStats(kv);
 
     return c.json({

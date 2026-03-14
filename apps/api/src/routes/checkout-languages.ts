@@ -5,6 +5,7 @@ import { eq, and, isNull, or, like, asc, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ConflictError } from "../utils/api-error";
 
+import { ok, created, noContent } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const defaultLanguageData = {
@@ -109,7 +110,7 @@ app.openapi(getActiveRoute, async (c) => {
       showAreaField: true
     };
 
-    return c.json({
+    return ok(c, {
       language: {
         id: "fallback",
         name: "English (Fallback)",
@@ -119,7 +120,7 @@ app.openapi(getActiveRoute, async (c) => {
         isActive: true,
         isDefault: true
       }
-    }, 200);
+    });
   }
 
   const parsedLanguage = {
@@ -128,7 +129,7 @@ app.openapi(getActiveRoute, async (c) => {
     fieldVisibility: JSON.parse(language.fieldVisibility)
   };
 
-  return c.json({ language: parsedLanguage }, 200);
+  return ok(c, { language: parsedLanguage });
 });
 
 // GET /checkout-languages — list all checkout languages
@@ -202,7 +203,7 @@ app.openapi(listRoute, async (c) => {
     .get();
 
   const total = countResult?.count || 0;
-  return c.json({
+  return ok(c, {
     data: results,
     pagination: {
       page,
@@ -212,7 +213,7 @@ app.openapi(listRoute, async (c) => {
       hasNextPage: page < Math.ceil(total / limit),
       hasPrevPage: page > 1
     }
-  }, 200);
+  });
 });
 
 // POST /checkout-languages — create a new checkout language
@@ -272,7 +273,7 @@ app.openapi(createRoute2, async (c) => {
     updatedAt: sql`(cast(strftime('%s','now') as int))`
   }).returning();
 
-  return c.json({ data: insertedLanguage }, 201);
+  return created(c, { data: insertedLanguage });
 });
 
 // GET /checkout-languages/:id — get checkout language by ID
@@ -302,7 +303,7 @@ app.openapi(getByIdRoute, async (c) => {
   const { id } = c.req.valid("param");
   const language = await db.select().from(checkoutLanguages).where(eq(checkoutLanguages.id, id)).get();
   if (!language) throw new NotFoundError("Not found");
-  return c.json(language, 200);
+  return ok(c, language);
 });
 
 // PUT /checkout-languages/:id — update a checkout language
@@ -356,7 +357,7 @@ app.openapi(updateRoute, async (c) => {
     await db.update(checkoutLanguages).set({ isDefault: false }).where(eq(checkoutLanguages.isDefault, true));
   }
 
-  const updateData: any = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
+  const updateData: Record<string, unknown> = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
   if (data.name !== undefined) updateData.name = data.name;
   if (data.code !== undefined) updateData.code = data.code;
   if (data.languageData !== undefined) updateData.languageData = JSON.stringify(data.languageData);
@@ -365,7 +366,7 @@ app.openapi(updateRoute, async (c) => {
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
   const [updated] = await db.update(checkoutLanguages).set(updateData).where(eq(checkoutLanguages.id, id)).returning();
-  return c.json({ data: updated }, 200);
+  return ok(c, { data: updated });
 });
 
 // PATCH /checkout-languages/:id — soft delete a checkout language
@@ -390,7 +391,7 @@ app.openapi(softDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: sql`(cast(strftime('%s','now') as int))` }).where(eq(checkoutLanguages.id, id));
-  return c.json({ success: true as const }, 200);
+  return ok(c, { success: true as const });
 });
 
 // DELETE /checkout-languages/:id — hard delete a checkout language
@@ -415,7 +416,7 @@ app.openapi(hardDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.delete(checkoutLanguages).where(eq(checkoutLanguages.id, id));
-  return c.body(null, 204);
+  return noContent(c);
 });
 
 // POST /checkout-languages/:id/restore — restore a soft-deleted checkout language
@@ -440,7 +441,7 @@ app.openapi(restoreRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: null }).where(eq(checkoutLanguages.id, id));
-  return c.json({ success: true as const }, 200);
+  return ok(c, { success: true as const });
 });
 
 export { app as checkoutLanguageRoutes };

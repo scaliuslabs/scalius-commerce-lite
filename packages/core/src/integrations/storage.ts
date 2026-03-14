@@ -134,8 +134,8 @@ export async function uploadFile(
   let fileBuffer: ArrayBuffer;
   try {
     fileBuffer = await file.arrayBuffer();
-  } catch (err: any) {
-    throw new Error(`Failed to read file: ${err.message || "Unknown error"}`);
+  } catch (err: unknown) {
+    throw new Error(`Failed to read file: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 
   // Upload with timeout
@@ -159,8 +159,8 @@ export async function uploadFile(
 
   try {
     await Promise.race([uploadPromise, timeoutPromise]);
-  } catch (err: any) {
-    let userMessage = err.message || "Upload failed";
+  } catch (err: unknown) {
+    let userMessage = err instanceof Error ? err.message : "Upload failed";
     if (userMessage.includes("timeout"))
       userMessage = "Upload timeout – file may be too large or connection is slow";
     if (userMessage.includes("NetworkingError"))
@@ -192,8 +192,8 @@ export async function deleteFile(
   try {
     await r2.delete(key);
     console.log(`[R2] Deleted: ${key}`);
-  } catch (err: any) {
-    throw new Error(`Failed to delete file: ${err.message || "Unknown error"}`);
+  } catch (err: unknown) {
+    throw new Error(`Failed to delete file: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
 

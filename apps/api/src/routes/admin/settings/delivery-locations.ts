@@ -4,6 +4,7 @@ import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
 import { createLocation, getLocationById } from "@scalius/core/modules/delivery/locations";
 import { NotFoundError } from "../../../utils/api-error";
 
+import { ok, created } from "../../../utils/api-response";
 const app = new OpenAPIHono();
 
 const locationSchema = z.object({
@@ -85,7 +86,7 @@ app.openapi(listRoute, async (c) => {
             displayName: `${location.name}`
         }));
 
-        return c.json({
+        return ok(c, {
             data: formattedLocations,
             pagination: {
                 total: totalCount,
@@ -93,10 +94,10 @@ app.openapi(listRoute, async (c) => {
                 limit,
                 totalPages: Math.ceil(totalCount / limit)
             }
-        }, 200);
-    } catch (error: any) {
+        });
+    } catch (error: unknown) {
         console.error("Error fetching delivery locations:", error);
-        return c.json({ error: error.message || "Failed to fetch delivery locations" }, 500);
+        return c.json({ error: error instanceof Error ? error.message : "Failed to fetch delivery locations" }, 500);
     }
 });
 
@@ -115,10 +116,10 @@ app.openapi(createLocationRoute, async (c) => {
     try {
         const data = c.req.valid("json");
         const newLocation = await createLocation(data);
-        return c.json({ data: newLocation }, 201);
-    } catch (error: any) {
+        return created(c, { data: newLocation });
+    } catch (error: unknown) {
         console.error("Error creating delivery location:", error);
-        return c.json({ error: error.message || "Failed to create delivery location" }, 500);
+        return c.json({ error: error instanceof Error ? error.message : "Failed to create delivery location" }, 500);
     }
 });
 
@@ -136,10 +137,10 @@ app.openapi(deleteAllRoute, async (c) => {
     try {
         const db = c.get("db");
         await db.delete(deliveryLocations);
-        return c.json({ success: true, message: "All delivery locations have been permanently deleted." }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true, message: "All delivery locations have been permanently deleted." });
+    } catch (error: unknown) {
         console.error("Error cleaning all delivery locations:", error);
-        return c.json({ error: error.message || "Failed to clean all delivery locations" }, 500);
+        return c.json({ error: error instanceof Error ? error.message : "Failed to clean all delivery locations" }, 500);
     }
 });
 
@@ -167,10 +168,10 @@ app.openapi(bulkDeleteRoute, async (c) => {
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(inArray(deliveryLocations.id, ids), isNull(deliveryLocations.deletedAt)));
 
-        return c.json({ success: true, message: `${ids.length} locations deleted successfully.` }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true, message: `${ids.length} locations deleted successfully.` });
+    } catch (error: unknown) {
         console.error("Error bulk deleting delivery locations:", error);
-        return c.json({ error: error.message || "Failed to bulk delete delivery locations" }, 500);
+        return c.json({ error: error instanceof Error ? error.message : "Failed to bulk delete delivery locations" }, 500);
     }
 });
 
@@ -192,11 +193,11 @@ app.openapi(getByIdRoute, async (c) => {
         const { id } = c.req.valid("param");
         const location = await getLocationById(id);
         if (!location) throw new NotFoundError("Location not found");
-        return c.json(location, 200);
-    } catch (error: any) {
-        if (error.name === "NotFoundError") throw error;
+        return ok(c, location);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === "NotFoundError") throw error;
         console.error("Error fetching delivery location:", error);
-        return c.json({ error: error.message || "Failed to fetch delivery location" }, 500);
+        return c.json({ error: error instanceof Error ? error.message : "Failed to fetch delivery location" }, 500);
     }
 });
 
@@ -220,7 +221,7 @@ app.openapi(updateLocationRoute, async (c) => {
         const { id } = c.req.valid("param");
         const parsedData = c.req.valid("json");
 
-        const updateData: any = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
+        const updateData: Record<string, unknown> = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
         if (parsedData.name !== undefined) updateData.name = parsedData.name;
         if (parsedData.parentId !== undefined) updateData.parentId = parsedData.parentId;
         if (parsedData.externalIds !== undefined) updateData.externalIds = JSON.stringify(parsedData.externalIds);
@@ -236,15 +237,15 @@ app.openapi(updateLocationRoute, async (c) => {
 
         if (!updatedLocation) throw new NotFoundError("Location not found");
 
-        return c.json({
+        return ok(c, {
             ...updatedLocation,
             externalIds: updatedLocation.externalIds ? JSON.parse(updatedLocation.externalIds) : {},
             metadata: updatedLocation.metadata ? JSON.parse(updatedLocation.metadata) : {}
-        }, 200);
-    } catch (error: any) {
-        if (error.name === "NotFoundError") throw error;
+        });
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === "NotFoundError") throw error;
         console.error("Error updating location:", error);
-        return c.json({ error: error.message || "Failed to update location" }, 500);
+        return c.json({ error: error instanceof Error ? error.message : "Failed to update location" }, 500);
     }
 });
 
@@ -269,10 +270,10 @@ app.openapi(deleteLocationRoute, async (c) => {
             .update(deliveryLocations)
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)));
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true });
+    } catch (error: unknown) {
         console.error("Error deleting location:", error);
-        return c.json({ error: error.message || "Failed to delete location" }, 500);
+        return c.json({ error: error instanceof Error ? error.message : "Failed to delete location" }, 500);
     }
 });
 

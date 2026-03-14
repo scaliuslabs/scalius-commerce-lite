@@ -213,7 +213,7 @@ export async function deleteCacheByPattern(
 
         for (const k of result.keys) keysToDelete.push(k.name);
 
-        cursor = result.list_complete ? undefined : (result as any).cursor;
+        cursor = result.list_complete ? undefined : result.cursor;
       } while (cursor);
 
       if (keysToDelete.length > 0) {

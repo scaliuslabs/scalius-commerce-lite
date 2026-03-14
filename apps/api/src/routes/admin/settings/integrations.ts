@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 
+import { ok } from "../../../utils/api-response";
 const app = new OpenAPIHono();
 const MASKED_VALUE = "••••••••••••";
 
@@ -29,7 +30,7 @@ app.openapi(getOpenRouterRoute, async (c) => {
             .get();
 
         const maskedApiKey = result?.value ? MASKED_VALUE : "";
-        return c.json({ apiKey: maskedApiKey }, 200);
+        return ok(c, { apiKey: maskedApiKey });
     } catch (error) {
         return c.json({ message: "Error fetching API key" }, 500);
     }
@@ -47,7 +48,7 @@ app.openapi(saveOpenRouterRoute, async (c) => {
     try {
         const { apiKey } = await c.req.json();
         if (typeof apiKey !== "string") return c.json({ message: "Invalid API key" }, 400);
-        if (apiKey === MASKED_VALUE) return c.json({ message: "API key unchanged" }, 200);
+        if (apiKey === MASKED_VALUE) return ok(c, { message: "API key unchanged" });
 
         await db
             .insert(settings)
@@ -63,7 +64,7 @@ app.openapi(saveOpenRouterRoute, async (c) => {
                 set: { value: apiKey }
             });
 
-        return c.json({ message: "API key saved successfully" }, 200);
+        return ok(c, { message: "API key saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving API key" }, 500);
     }
@@ -88,10 +89,10 @@ app.openapi(getEmailRoute, async (c) => {
             db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "email_sender"), eq(settings.category, "email"))).get(),
         ]);
 
-        return c.json({
+        return ok(c, {
             apiKey: apiKeyRow?.value ? MASKED_VALUE : "",
             sender: senderRow?.value || ""
-        }, 200);
+        });
     } catch (error) {
         return c.json({ message: "Error fetching email settings" }, 500);
     }
@@ -108,7 +109,7 @@ const saveEmailRoute = createRoute({
 app.openapi(saveEmailRoute, async (c) => {
     try {
         const { apiKey, sender } = await c.req.json();
-        const updates: Promise<any>[] = [];
+        const updates: Promise<unknown>[] = [];
 
         if (typeof apiKey === "string" && apiKey !== MASKED_VALUE) {
             updates.push(
@@ -141,7 +142,7 @@ app.openapi(saveEmailRoute, async (c) => {
         }
 
         await Promise.all(updates);
-        return c.json({ message: "Email settings saved successfully" }, 200);
+        return ok(c, { message: "Email settings saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving email settings" }, 500);
     }
@@ -166,7 +167,7 @@ app.openapi(getFirebaseRoute, async (c) => {
             .from(settings)
             .where(eq(settings.category, "firebase"));
 
-        const config: any = { serviceAccount: "", publicConfig: {} };
+        const config: { serviceAccount: string; publicConfig: Record<string, unknown> } = { serviceAccount: "", publicConfig: {} };
 
         results.forEach((row) => {
             if (row.key === "service_account") {
@@ -180,7 +181,7 @@ app.openapi(getFirebaseRoute, async (c) => {
             }
         });
 
-        return c.json(config, 200);
+        return ok(c, config);
     } catch (error) {
         return c.json({ error: "Internal Server Error" }, 500);
     }
@@ -229,7 +230,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
         }
 
         layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);
-        return c.json({ message: "Settings saved successfully" }, 200);
+        return ok(c, { message: "Settings saved successfully" });
     } catch (error) {
         return c.json({ error: "Internal Server Error" }, 500);
     }

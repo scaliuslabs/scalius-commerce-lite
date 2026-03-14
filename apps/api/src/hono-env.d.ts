@@ -7,6 +7,20 @@ import type { Database } from "@scalius/database/client";
 declare module "hono" {
   interface ContextVariableMap {
     db: Database;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      role?: string;
+      isSuperAdmin?: boolean;
+      twoFactorEnabled?: boolean;
+      [key: string]: unknown;
+    };
+    session: {
+      id: string;
+      [key: string]: unknown;
+    };
+    env: Env;
   }
 }
 
@@ -26,10 +40,10 @@ declare global {
     EMAIL?: SendEmail;
 
     // Cloudflare Queue bindings
-    PAYMENT_EVENTS_QUEUE: any;
-    ORDER_NOTIFICATIONS_QUEUE: any;
-    AUTH_OTP_QUEUE: any;
-    ORDER_INGEST_QUEUE: any;
+    PAYMENT_EVENTS_QUEUE: Queue;
+    ORDER_NOTIFICATIONS_QUEUE: Queue;
+    AUTH_OTP_QUEUE: Queue;
+    ORDER_INGEST_QUEUE: Queue;
 
     // Secrets
     BETTER_AUTH_SECRET: string;

@@ -4,6 +4,7 @@ import { shippingMethods as shippingMethodsTable } from "@scalius/database/schem
 import { eq, isNull, asc, and } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware
@@ -74,7 +75,7 @@ app.openapi(listShippingMethodsRoute, async (c) => {
       null
   }));
 
-  return c.json({ shippingMethods: formattedMethods }, 200);
+  return ok(c, { shippingMethods: formattedMethods });
 });
 
 export { app as shippingMethodRoutes };
