@@ -53,7 +53,8 @@ export async function search(
       throw new Error(`API error: ${response.status}`);
     }
 
-    return (await response.json()) as SearchResults;
+    const json: { success: boolean; data: SearchResults } = await response.json();
+    return json.data as SearchResults;
   } catch (error) {
     console.error(`Error performing search for query "${query}":`, error);
     return null;

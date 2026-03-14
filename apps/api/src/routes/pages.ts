@@ -5,6 +5,7 @@ import { sql, isNull, eq, and, SQL } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for pages routes
 const app = new OpenAPIHono();
 
@@ -126,7 +127,7 @@ app.openapi(listPagesRoute, async (c) => {
     .limit(limit)
     .offset(offset);
 
-  return c.json({
+  return ok(c, {
     pages: pagesData,
     pagination: {
       page,
@@ -135,7 +136,7 @@ app.openapi(listPagesRoute, async (c) => {
       totalPages
     },
     success: true as const
-  }, 200);
+  });
 });
 
 // GET /pages/slug/:slug — get page by slug
@@ -202,10 +203,10 @@ app.openapi(getPageBySlugRoute, async (c) => {
     throw new NotFoundError("Page not found");
   }
 
-  return c.json({
+  return ok(c, {
     page,
     success: true as const
-  }, 200);
+  });
 });
 
 // GET /pages/:id — get page by ID
@@ -268,10 +269,10 @@ app.openapi(getPageByIdRoute, async (c) => {
     throw new NotFoundError("Page not found");
   }
 
-  return c.json({
+  return ok(c, {
     page,
     success: true as const
-  }, 200);
+  });
 });
 
 // Export the pages routes

@@ -8,6 +8,7 @@ import { createAuth } from "@scalius/core/auth";
 import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
 import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
+import { ok, created } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // Generate a secure random password
@@ -60,7 +61,7 @@ app.openapi(listUsersRoute, async (c) => {
             .where(eq(user.role, "admin"));
 
         const usersWithRoles = await Promise.all(
-            adminUsers.map(async (adminUser: any) => {
+            adminUsers.map(async (adminUser) => {
                 const userRoleData = await db
                     .select({
                         id: roles.id,
@@ -80,8 +81,8 @@ app.openapi(listUsersRoute, async (c) => {
                     .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
                     .where(eq(userPermissions.userId, adminUser.id));
 
-                const grants = overrides.filter((o: any) => o.granted).map((o: any) => o.permissionName);
-                const denials = overrides.filter((o: any) => !o.granted).map((o: any) => o.permissionName);
+                const grants = overrides.filter((o) => o.granted).map((o) => o.permissionName);
+                const denials = overrides.filter((o) => !o.granted).map((o) => o.permissionName);
 
                 return {
                     ...adminUser,
@@ -91,8 +92,8 @@ app.openapi(listUsersRoute, async (c) => {
             })
         );
 
-        return c.json({ success: true, users: usersWithRoles }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true, users: usersWithRoles });
+    } catch (error: unknown) {
         console.error("Get admin users error:", error);
         return c.json({ error: "Server error", message: "Failed to fetch admin users" }, 500);
     }
@@ -167,14 +168,14 @@ app.openapi(createUserRoute, async (c) => {
             console.log(`IMPORTANT: Temp password for ${email}: ${tempPassword}`);
         }
 
-        return c.json({
+        return created(c, {
             success: true,
             message: "Admin user created successfully. An invitation email has been sent.",
             user: { id: signUpResult.user.id, name, email }
-        }, 201);
-    } catch (error: any) {
+        });
+    } catch (error: unknown) {
         console.error("Create admin user error:", error);
-        return c.json({ error: "Server error", message: error.message || "Failed to create admin user" }, 500);
+        return c.json({ error: "Server error", message: error instanceof Error ? error.message : "Failed to create admin user" }, 500);
     }
 });
 
@@ -214,8 +215,8 @@ app.openapi(deleteUserRoute, async (c) => {
 
         await db.delete(user).where(eq(user.id, userId));
 
-        return c.json({ success: true, message: "Admin user deleted successfully" }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true, message: "Admin user deleted successfully" });
+    } catch (error: unknown) {
         console.error("Delete admin user error:", error);
         return c.json({ error: "Server error", message: "Failed to delete admin user" }, 500);
     }
@@ -256,10 +257,10 @@ app.openapi(changePasswordRoute, async (c) => {
 
         if (!result) return c.json({ error: "Failed to change password", message: "Unable to change password. Please check your current password." }, 400);
 
-        return c.json({ success: true, message: "Password changed successfully" }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true, message: "Password changed successfully" });
+    } catch (error: unknown) {
         console.error("Change password error:", error);
-        if (error.message?.includes("password") || error.message?.includes("incorrect")) {
+        if (error instanceof Error && (error.message?.includes("password") || error.message?.includes("incorrect"))) {
             return c.json({ error: "Invalid password", message: "Current password is incorrect" }, 400);
         }
         return c.json({ error: "Server error", message: "Failed to change password. Please try again." }, 500);
@@ -302,8 +303,8 @@ app.openapi(updateProfileRoute, async (c) => {
             .where(eq(user.id, sessionUser.id))
             .get();
 
-        return c.json({ success: true, user: updatedUser }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true, user: updatedUser });
+    } catch (error: unknown) {
         console.error("Error updating profile:", error);
         return c.json({ error: "Failed to update profile" }, 500);
     }
@@ -336,13 +337,13 @@ app.openapi(get2faInfoRoute, async (c) => {
 
         if (!userData) return c.json({ success: false, message: "User not found" }, 404);
 
-        return c.json({
+        return ok(c, {
             success: true,
             method: userData.twoFactorMethod || "email",
             twoFactorEnabled: userData.twoFactorEnabled,
             email: userData.email
-        }, 200);
-    } catch (error: any) {
+        });
+    } catch (error: unknown) {
         return c.json({ success: false, message: "Internal server error" }, 500);
     }
 });
@@ -369,9 +370,9 @@ app.openapi(mark2faVerifiedRoute, async (c) => {
 
         await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
 
-        return c.json({ success: true, message: "Session marked as 2FA verified" }, 200);
-    } catch (error: any) {
-        return c.json({ error: "Internal error", message: error.message || "Failed to update session" }, 500);
+        return ok(c, { success: true, message: "Session marked as 2FA verified" });
+    } catch (error: unknown) {
+        return c.json({ error: "Internal error", message: error instanceof Error ? error.message : "Failed to update session" }, 500);
     }
 });
 
@@ -396,8 +397,8 @@ app.openapi(update2faMethodRoute, async (c) => {
 
         await db.update(user).set({ twoFactorMethod: method }).where(eq(user.id, sessionUser.id));
 
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true });
+    } catch (error: unknown) {
         return c.json({ success: false, message: "Internal server error" }, 500);
     }
 });
@@ -444,20 +445,20 @@ app.openapi(verify2faRoute, async (c) => {
             const sessionByToken = await db.select({ id: sessionTable.id }).from(sessionTable).where(eq(sessionTable.token, sessionToken)).get();
             if (sessionByToken) {
                 await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, sessionByToken.id));
-                return c.json({ success: true, message: "Two-factor authentication verified" }, 200);
+                return ok(c, { success: true, message: "Two-factor authentication verified" });
             }
         }
 
         const session = c.get("session");
         if (session) {
             await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
-            return c.json({ success: true, message: "Two-factor authentication verified" }, 200);
+            return ok(c, { success: true, message: "Two-factor authentication verified" });
         }
 
         return c.json({ error: "No session", message: "Could not find session to update" }, 401);
-    } catch (error: any) {
-        if (error.message?.includes("Invalid")) return c.json({ error: "Invalid code", message: "The verification code is invalid or expired" }, 400);
-        return c.json({ error: "Verification failed", message: error.message || "Failed to verify code" }, 500);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message?.includes("Invalid")) return c.json({ error: "Invalid code", message: "The verification code is invalid or expired" }, 400);
+        return c.json({ error: "Verification failed", message: error instanceof Error ? error.message : "Failed to verify code" }, 500);
     }
 });
 
@@ -512,9 +513,9 @@ setupApp.openapi(setupRoute, async (c) => {
         const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
         await autoSeedRbacIfNeeded(db);
 
-        return c.json({ success: true, message: "Admin account created successfully", userId: signUpResult.user.id }, 201);
-    } catch (error: any) {
-        return c.json({ error: "Server error", message: error.message || "Failed to create admin account" }, 500);
+        return created(c, { success: true, message: "Admin account created successfully", userId: signUpResult.user.id });
+    } catch (error: unknown) {
+        return c.json({ error: "Server error", message: error instanceof Error ? error.message : "Failed to create admin account" }, 500);
     }
 });
 

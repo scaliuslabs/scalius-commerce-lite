@@ -81,7 +81,7 @@ interface CapiPayload {
  * @returns The user data with required fields hashed.
  */
 async function prepareUserData(
-  userData: Record<string, any>,
+  userData: Record<string, unknown>,
 ): Promise<UserData> {
   const prepared: UserData = {};
 
@@ -136,7 +136,7 @@ async function prepareUserData(
 
 export async function sendCapiEvent(
   db: Database,
-  event: Omit<ServerEvent, "user_data"> & { user_data: Record<string, any> },
+  event: Omit<ServerEvent, "user_data"> & { user_data: Record<string, unknown> },
 ) {
   const settings = await MetaService.getCapiSettings(db);
   if (!settings || !settings.isEnabled || !settings.pixelId || !settings.accessToken) {
@@ -196,7 +196,7 @@ export async function sendCapiEvent(
     }, LOG_RETENTION_HOURS);
     console.log(`Successfully sent '${event.event_name}' event to Meta CAPI.`);
     return { success: true, response: responseData };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(
       `Failed to send '${event.event_name}' event to Meta CAPI:`,
       error,
@@ -204,12 +204,12 @@ export async function sendCapiEvent(
     await MetaService.logCapiEvent(db, {
       ...logPayload,
       status: "failed",
-      errorMessage: error.message,
-      responsePayload: error.response
+      errorMessage: error instanceof Error ? error.message : String(error),
+      responsePayload: (error as { response?: Response }).response
         ? JSON.stringify(await error.response.json())
         : "",
     }, LOG_RETENTION_HOURS);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 

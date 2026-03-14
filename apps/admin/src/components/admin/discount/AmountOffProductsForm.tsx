@@ -697,7 +697,7 @@ export function AmountOffProductsForm({
                           onSelect={(date) =>
                             field.onChange(date || new Date())
                           } // Ensure date is always set
-                          initialFocus
+                          autoFocus
                         />
                       </PopoverContent>
                     </Popover>
@@ -745,7 +745,7 @@ export function AmountOffProductsForm({
                                 : undefined
                             }
                             onSelect={(date) => field.onChange(date)} // Allows clearing the date
-                            initialFocus
+                            autoFocus
                             disabled={(date) => {
                               // Disable dates before the start date (if start date is valid)
                               return startDate && !isNaN(startDate.getTime())

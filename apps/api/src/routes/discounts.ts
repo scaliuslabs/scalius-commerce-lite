@@ -1,3 +1,4 @@
+import type { Database } from "@scalius/database/client";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import {
@@ -14,6 +15,7 @@ import {
 import { eq, sql, and, isNull, count, inArray } from "drizzle-orm";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Schema for validating discount code
@@ -35,7 +37,7 @@ const cartItemSchema = z.object({
 
 // Helper function to expand collections to product IDs
 async function expandCollectionsToProductIds(
-  db: any,
+  db: Database,
   collectionIds: string[],
 ): Promise<Set<string>> {
   const productIds = new Set<string>();
@@ -99,7 +101,7 @@ async function expandCollectionsToProductIds(
         )
         .all();
 
-      productsFromCategories.forEach((p: any) => productIds.add(p.id));
+      productsFromCategories.forEach((p) => productIds.add(p.id));
     }
   } catch (error) {
     console.error("Error expanding collections to product IDs:", error);
@@ -110,10 +112,10 @@ async function expandCollectionsToProductIds(
 
 // Helper function to check if a discount is valid
 export async function isDiscountValid(
-  db: any,
+  db: Database,
   code: string,
   total?: number,
-  cartItems: any[] = [],
+  cartItems: Array<{ id: string; price: number; quantity: number; variantId?: string }> = [],
   customerPhone?: string,
   currencySymbol: string = "\u09F3",
 ) {
@@ -249,7 +251,7 @@ export async function isDiscountValid(
       .from(discountProducts)
       .where(eq(discountProducts.discountId, discount.id))
       .all();
-    discountProductsResult.forEach((dp: any) =>
+    discountProductsResult.forEach((dp) =>
       applicableProductIds.add(dp.productId),
     );
 
@@ -262,7 +264,7 @@ export async function isDiscountValid(
 
     if (discountCollectionsResult.length > 0) {
       const collectionIds = discountCollectionsResult.map(
-        (dc: any) => dc.collectionId,
+        (dc) => dc.collectionId,
       );
       const productIdsFromCollections = await expandCollectionsToProductIds(
         db,
@@ -302,7 +304,7 @@ export async function isDiscountValid(
 
 // Calculate the discount amount for a validated discount
 export function calculateDiscountAmount(
-  db: any,
+  db: Database,
   discount: {
     id: string;
     type: string;
@@ -310,7 +312,7 @@ export function calculateDiscountAmount(
     discountValue: number;
   },
   total: number,
-  cartItems: any[],
+  cartItems: Array<{ id: string; price: number; quantity: number; variantId?: string }>,
   shippingCost: number = 0,
 ): number {
   if (discount.type === DiscountType.FREE_SHIPPING) {
@@ -376,7 +378,7 @@ const _applicableProductCache = new Map<string, Set<string>>();
 
 // Populate the cache with applicable product IDs for a discount
 async function _tryPopulateApplicableProductCache(
-  db: any,
+  db: Database,
   discountId: string,
 ): Promise<void> {
   try {
@@ -388,7 +390,7 @@ async function _tryPopulateApplicableProductCache(
       .where(eq(discountProducts.discountId, discountId))
       .all();
 
-    discountProductsResult.forEach((dp: any) =>
+    discountProductsResult.forEach((dp) =>
       applicableProductIds.add(dp.productId),
     );
 
@@ -400,7 +402,7 @@ async function _tryPopulateApplicableProductCache(
 
     if (discountCollectionsResult.length > 0) {
       const collectionIds = discountCollectionsResult.map(
-        (dc: any) => dc.collectionId,
+        (dc) => dc.collectionId,
       );
       const productIdsFromCollections = await expandCollectionsToProductIds(
         db,
@@ -445,18 +447,18 @@ app.openapi(validateDiscountRoute, async (c) => {
   const { code, total, items, shippingCost, customerPhone } = params;
 
   // Parse cart items if provided
-  let cartItems: any[] = [];
+  let cartItems: Array<{ id: string; price: number; quantity: number; variantId?: string }> = [];
   if (items) {
     try {
       const parsed = JSON.parse(items);
       const itemsArray = Array.isArray(parsed) ? parsed : Object.values(parsed);
-      cartItems = itemsArray.map((item: any) => {
+      cartItems = itemsArray.map((item: unknown) => {
         return cartItemSchema.parse(item);
       });
     } catch (error) {
       const message =
         error instanceof z.ZodError
-          ? `Invalid cart items: ${error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
+          ? `Invalid cart items: ${error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
           : "Invalid cart items format";
       return c.json({ valid: false as const, error: message }, 400);
     }
@@ -505,14 +507,14 @@ app.openapi(validateDiscountRoute, async (c) => {
       }
     };
 
-    return c.json({
+    return ok(c, {
       valid: true,
       discount: enhancedDiscount,
       discountAmount: parseFloat(discountAmount.toFixed(2))
-    }, 200);
+    });
   }
 
-  return c.json(validationResult, 200);
+  return ok(c, validationResult);
 });
 
 export { app as discountRoutes };

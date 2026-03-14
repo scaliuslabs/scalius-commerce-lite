@@ -117,7 +117,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
         const data = await response.json();
         const stores = data.data?.data || [];
         const storeExists = stores.some(
-          (store: any) => store.store_id?.toString() === this.config.storeId,
+          (store: Record<string, unknown>) => (store as { store_id?: { toString(): string } }).store_id?.toString() === this.config.storeId,
         );
 
         if (!storeExists) {

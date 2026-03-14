@@ -7,6 +7,7 @@ import { getKv, deleteCacheByPattern } from "../../../utils/kv-cache";
 import { upsertSetting } from "@scalius/core/modules/payments/gateway-settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 
+import { ok } from "../../../utils/api-response";
 const app = new OpenAPIHono();
 
 // ─────────────────────────────────────────
@@ -31,11 +32,11 @@ app.openapi(getCurrencyRoute, async (c) => {
 
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
-        return c.json({
+        return ok(c, {
             currencyCode: map["currency_code"] ?? "BDT",
             currencySymbol: map["currency_symbol"] ?? "\u09F3",
             usdExchangeRate: map["usd_exchange_rate"] ?? "1"
-        }, 200);
+        });
     } catch (error) {
         console.error("Error fetching currency settings:", error);
         return c.json({ message: "Error fetching currency settings" }, 500);
@@ -52,7 +53,7 @@ const saveCurrencyRoute = createRoute({
 
 app.openapi(saveCurrencyRoute, async (c) => {
     try {
-        const body = (await c.req.json()) as any;
+        const body = (await c.req.json()) as Record<string, unknown>;
         const ops: Promise<void>[] = [];
 
         if (typeof body.currencyCode === "string" && body.currencyCode.trim()) {
@@ -72,7 +73,7 @@ app.openapi(saveCurrencyRoute, async (c) => {
         const kv = getKv();
         await kv?.delete("gw:currency");
 
-        return c.json({ message: "Currency settings saved successfully" }, 200);
+        return ok(c, { message: "Currency settings saved successfully" });
     } catch (error) {
         console.error("Error saving currency settings:", error);
         return c.json({ message: "Error saving currency settings" }, 500);
@@ -88,7 +89,7 @@ const socialLinkSchema = z.object({
     url: z.string(),
     iconUrl: z.string().optional()
 });
-const navigationItemSchema: z.ZodType<any> = z.object({
+const navigationItemSchema: z.ZodType<unknown> = z.object({
     id: z.string(),
     title: z.string(),
     href: z.string().optional(),
@@ -148,8 +149,8 @@ app.openapi(saveHeaderRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             });
         }
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true });
+    } catch (error: unknown) {
         return c.json({ error: "Failed to save header configuration" }, 500);
     }
 });
@@ -204,8 +205,8 @@ app.openapi(saveFooterRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             });
         }
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true });
+    } catch (error: unknown) {
         return c.json({ error: "Failed to save footer configuration" }, 500);
     }
 });
@@ -231,7 +232,7 @@ app.openapi(getThemeRoute, async (c) => {
             .get();
 
         const colors = row?.value ? JSON.parse(row.value) : {};
-        return c.json({ colors }, 200);
+        return ok(c, { colors });
     } catch (error) {
         return c.json({ message: "Error fetching theme settings" }, 500);
     }
@@ -247,7 +248,7 @@ const saveThemeRoute = createRoute({
 
 app.openapi(saveThemeRoute, async (c) => {
     try {
-        const body = (await c.req.json()) as any;
+        const body = (await c.req.json()) as Record<string, unknown>;
         if (!body.colors || typeof body.colors !== "object") return c.json({ message: "Invalid colors payload" }, 400);
 
         await upsertSetting(db, "theme", "storefront_colors", JSON.stringify(body.colors));
@@ -255,7 +256,7 @@ app.openapi(saveThemeRoute, async (c) => {
         if (kv) {
             await deleteCacheByPattern("api:storefront:layout:*", kv);
         }
-        return c.json({ message: "Theme settings saved successfully" }, 200);
+        return ok(c, { message: "Theme settings saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving theme settings" }, 500);
     }
@@ -285,14 +286,14 @@ app.openapi(getSeoRoute, async (c) => {
             .from(siteSettings)
             .limit(1);
 
-        return c.json({
+        return ok(c, {
             siteTitle: row?.siteTitle || "",
             homepageTitle: row?.homepageTitle || "",
             homepageMetaDescription: row?.homepageMetaDescription || "",
             robotsTxt: row?.robotsTxt || ""
-        }, 200);
+        });
     } catch (error) {
-        return c.json({ siteTitle: "", homepageTitle: "", homepageMetaDescription: "", robotsTxt: "" }, 200);
+        return ok(c, { siteTitle: "", homepageTitle: "", homepageMetaDescription: "", robotsTxt: "" });
     }
 });
 
@@ -334,7 +335,7 @@ app.openapi(saveSeoRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             });
         }
-        return c.json({ success: true, message: "SEO settings saved successfully" }, 200);
+        return ok(c, { success: true, message: "SEO settings saved successfully" });
     } catch (error) {
         return c.json({ error: "Failed to save SEO configuration" }, 500);
     }
@@ -355,9 +356,9 @@ const getStorefrontUrlRoute = createRoute({
 app.openapi(getStorefrontUrlRoute, async (c) => {
     try {
         const [row] = await db.select({ storefrontUrl: siteSettings.storefrontUrl }).from(siteSettings).limit(1);
-        return c.json({ storefrontUrl: row?.storefrontUrl || "/" }, 200);
+        return ok(c, { storefrontUrl: row?.storefrontUrl || "/" });
     } catch (error) {
-        return c.json({ storefrontUrl: "/" }, 200);
+        return ok(c, { storefrontUrl: "/" });
     }
 });
 
@@ -391,7 +392,7 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
             });
         }
         layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
-        return c.json({ success: true, message: "Storefront URL saved successfully" }, 200);
+        return ok(c, { success: true, message: "Storefront URL saved successfully" });
     } catch (error) {
         return c.json({ error: "Failed to save storefront URL" }, 500);
     }

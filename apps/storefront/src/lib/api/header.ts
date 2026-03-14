@@ -20,11 +20,11 @@ export async function getHeaderData(): Promise<HeaderData | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: { header: HeaderData; success: boolean } =
+        const json: { success: boolean; data: { header: HeaderData } } =
           await response.json();
 
-        if (data.success && data.header) {
-          return data.header;
+        if (json.success && json.data.header) {
+          return json.data.header;
         }
         return null;
       } catch (error) {

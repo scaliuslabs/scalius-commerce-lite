@@ -3,6 +3,7 @@ import { db } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { getKv } from "../../../utils/kv-cache";
+import { ok } from "../../../utils/api-response";
 import {
     upsertSetting,
     getActivePaymentMethods,
@@ -43,7 +44,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
         const sslSettings = await getSSLCommerzSettings(db);
         const polarSettings = await getPolarSettings(db);
 
-        return c.json({
+        return ok(c, {
             ...config,
             gatewayStatus: {
                 stripe: { configured: !!stripeSettings, enabled: stripeSettings?.enabled ?? false },
@@ -51,7 +52,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
                 polar: { configured: !!polarSettings, enabled: polarSettings?.enabled ?? false },
                 cod: { configured: true, enabled: true }
             }
-        }, 200);
+        });
     } catch (error) {
         return c.json({ error: "Failed to fetch payment methods" }, 500);
     }
@@ -82,8 +83,8 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         const kv = getKv();
         await invalidatePaymentMethodsCache(kv);
 
-        return c.json({ success: true, message: "Payment methods updated" }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true, message: "Payment methods updated" });
+    } catch (error: unknown) {
         if (error instanceof z.ZodError) return c.json({ error: "Invalid request data", details: error.issues }, 400);
         return c.json({ error: "Failed to save payment methods" }, 500);
     }
@@ -106,12 +107,12 @@ app.openapi(getStripeRoute, async (c) => {
         const rows = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "stripe")).all();
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
-        return c.json({
+        return ok(c, {
             secretKey: map.secret_key ? MASKED : "",
             publishableKey: map.publishable_key ?? "",
             webhookSecret: map.webhook_secret ? MASKED : "",
             enabled: map.enabled !== "false"
-        }, 200);
+        });
     } catch (error) {
         return c.json({ message: "Error fetching Stripe settings" }, 500);
     }
@@ -127,7 +128,7 @@ const saveStripeRoute = createRoute({
 
 app.openapi(saveStripeRoute, async (c) => {
     try {
-        const body = (await c.req.json()) as any;
+        const body = (await c.req.json()) as Record<string, unknown>;
         const ops: Promise<void>[] = [];
 
         if (typeof body.secretKey === "string" && body.secretKey !== MASKED && body.secretKey.trim()) ops.push(upsertSetting(db, "stripe", "secret_key", body.secretKey.trim()));
@@ -140,7 +141,7 @@ app.openapi(saveStripeRoute, async (c) => {
         const kv = getKv();
         await Promise.all([invalidateStripeCache(kv), invalidatePaymentMethodsCache(kv)]);
 
-        return c.json({ message: "Stripe settings saved successfully" }, 200);
+        return ok(c, { message: "Stripe settings saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving Stripe settings" }, 500);
     }
@@ -163,12 +164,12 @@ app.openapi(getSSLCommerzRoute, async (c) => {
         const rows = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "sslcommerz")).all();
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
-        return c.json({
+        return ok(c, {
             storeId: map.store_id ?? "",
             storePassword: map.store_password ? MASKED : "",
             sandbox: map.sandbox !== "false",
             enabled: map.enabled !== "false"
-        }, 200);
+        });
     } catch (error) {
         return c.json({ message: "Error fetching SSLCommerz settings" }, 500);
     }
@@ -184,7 +185,7 @@ const saveSSLCommerzRoute = createRoute({
 
 app.openapi(saveSSLCommerzRoute, async (c) => {
     try {
-        const body = (await c.req.json()) as any;
+        const body = (await c.req.json()) as Record<string, unknown>;
         const ops: Promise<void>[] = [];
 
         if (typeof body.storeId === "string" && body.storeId.trim()) ops.push(upsertSetting(db, "sslcommerz", "store_id", body.storeId.trim()));
@@ -197,7 +198,7 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         const kv = getKv();
         await Promise.all([invalidateSSLCommerzCache(kv), invalidatePaymentMethodsCache(kv)]);
 
-        return c.json({ message: "SSLCommerz settings saved successfully" }, 200);
+        return ok(c, { message: "SSLCommerz settings saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving SSLCommerz settings" }, 500);
     }
@@ -220,13 +221,13 @@ app.openapi(getPolarRoute, async (c) => {
         const rows = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "polar")).all();
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
-        return c.json({
+        return ok(c, {
             accessToken: map.access_token ? MASKED : "",
             webhookSecret: map.webhook_secret ? MASKED : "",
             productId: map.product_id ?? "",
             sandbox: map.sandbox !== "false",
             enabled: map.enabled !== "false"
-        }, 200);
+        });
     } catch (error) {
         return c.json({ message: "Error fetching Polar settings" }, 500);
     }
@@ -242,7 +243,7 @@ const savePolarRoute = createRoute({
 
 app.openapi(savePolarRoute, async (c) => {
     try {
-        const body = (await c.req.json()) as any;
+        const body = (await c.req.json()) as Record<string, unknown>;
         const ops: Promise<void>[] = [];
 
         if (typeof body.accessToken === "string" && body.accessToken !== MASKED && body.accessToken.trim()) ops.push(upsertSetting(db, "polar", "access_token", body.accessToken.trim()));
@@ -256,7 +257,7 @@ app.openapi(savePolarRoute, async (c) => {
         const kv = getKv();
         await Promise.all([invalidatePolarCache(kv), invalidatePaymentMethodsCache(kv)]);
 
-        return c.json({ message: "Polar settings saved successfully" }, 200);
+        return ok(c, { message: "Polar settings saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving Polar settings" }, 500);
     }

@@ -51,7 +51,8 @@ export async function validateDiscount(
       return errorData as DiscountValidationResponse;
     }
 
-    return (await response.json()) as DiscountValidationResponse;
+    const json: { success: boolean; data: DiscountValidationResponse } = await response.json();
+    return json.data as DiscountValidationResponse;
   } catch (error) {
     console.error(`Error validating discount code "${code}":`, error);
     return {

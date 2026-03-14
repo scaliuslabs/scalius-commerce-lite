@@ -123,7 +123,7 @@ export async function processPaymentConfirmed(
 
     // 2. Update order totals and payment status
     const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
-    const orderUpdates: any = {
+    const orderUpdates: Record<string, unknown> = {
       status: newStatus,
       paidAmount: newPaidAmount,
       balanceDue: newBalanceDue,

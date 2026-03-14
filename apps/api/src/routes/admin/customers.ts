@@ -16,6 +16,7 @@ import {
 } from "@scalius/core/modules/customers";
 import { NotFoundError } from "../../utils/api-error";
 
+import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // ── List Customers ──
@@ -48,10 +49,10 @@ app.openapi(listRoute, async (c) => {
         limit: q.limit,
         search: q.search || "",
         showTrashed: q.trashed === "true",
-        sort: (q.sort as any) || "updatedAt",
-        order: (q.order as any) || "desc"
+        sort: (q.sort || "updatedAt") as string,
+        order: (q.order || "desc") as string
     });
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ── Create Customer ──
@@ -74,9 +75,10 @@ app.openapi(createCustomerRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await createCustomer(db, data);
-        return c.json(result, 201);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 400);
+        return created(c, result);
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
     }
 });
 
@@ -108,7 +110,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { customerIds, permanent } = c.req.valid("json");
     await bulkDeleteCustomers(db, customerIds, permanent);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Get Customer By ID ──
@@ -131,7 +133,7 @@ app.openapi(getByIdRoute, async (c) => {
     const { id } = c.req.valid("param");
     const customer = await getCustomerById(db, id);
     if (!customer) throw new NotFoundError("Customer not found");
-    return c.json(customer, 200);
+    return ok(c, customer);
 });
 
 // ── Update Customer ──
@@ -155,9 +157,10 @@ app.openapi(updateCustomerRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         await updateCustomer(db, id, c.req.valid("json"));
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 400);
+        return ok(c, { success: true });
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
     }
 });
 
@@ -180,7 +183,7 @@ app.openapi(deleteCustomerRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteCustomer(db, id);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Permanent Delete Customer ──
@@ -202,7 +205,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await permanentDeleteCustomer(db, id);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Restore Customer ──
@@ -224,7 +227,7 @@ app.openapi(restoreCustomerRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreCustomer(db, id);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 export { app as adminCustomerRoutes };

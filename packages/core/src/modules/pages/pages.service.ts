@@ -2,10 +2,11 @@
 // All DB queries and business logic for the CMS pages domain.
 
 import { pages } from "@scalius/database/schema";
-import { sql, asc, desc, isNull, isNotNull, and, inArray, eq } from "drizzle-orm";
+import { sql, asc, desc, isNull, isNotNull, and, inArray, eq, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Schema
@@ -37,7 +38,7 @@ export type UpdatePageInput = z.infer<typeof updatePageSchema>;
 // ─────────────────────────────────────────
 
 export async function listPages(
-    db: any,
+    db: Database,
     options: {
         page?: number;
         limit?: number;
@@ -56,7 +57,7 @@ export async function listPages(
         order = "desc",
     } = options;
 
-    const conditions: any[] = [];
+    const conditions: (SQL | undefined)[] = [];
     if (search) {
         const cond = ftsMatch("pages_fts", "pages", search);
         if (cond) conditions.push(cond);
@@ -99,11 +100,11 @@ export async function listPages(
     };
 }
 
-export async function getPageById(db: any, id: string) {
+export async function getPageById(db: Database, id: string) {
     return db.select().from(pages).where(eq(pages.id, id)).get() ?? null;
 }
 
-export async function getPageBySlug(db: any, slug: string) {
+export async function getPageBySlug(db: Database, slug: string) {
     return db
         .select()
         .from(pages)
@@ -115,7 +116,7 @@ export async function getPageBySlug(db: any, slug: string) {
 // Mutations
 // ─────────────────────────────────────────
 
-export async function createPage(db: any, data: CreatePageInput): Promise<{ id: string }> {
+export async function createPage(db: Database, data: CreatePageInput): Promise<{ id: string }> {
     const existing = await db
         .select({ id: pages.id })
         .from(pages)
@@ -144,7 +145,7 @@ export async function createPage(db: any, data: CreatePageInput): Promise<{ id: 
     return { id: pageId };
 }
 
-export async function updatePage(db: any, id: string, data: UpdatePageInput): Promise<void> {
+export async function updatePage(db: Database, id: string, data: UpdatePageInput): Promise<void> {
     const existing = await getPageById(db, id);
     if (!existing) throw Object.assign(new Error("Page not found"), { statusCode: 404 });
 
@@ -160,11 +161,11 @@ export async function updatePage(db: any, id: string, data: UpdatePageInput): Pr
     await db.update(pages).set({ ...data, updatedAt: sql`unixepoch()` }).where(eq(pages.id, id));
 }
 
-export async function deletePage(db: any, id: string): Promise<void> {
+export async function deletePage(db: Database, id: string): Promise<void> {
     await db.update(pages).set({ deletedAt: sql`unixepoch()` }).where(eq(pages.id, id));
 }
 
-export async function bulkDeletePages(db: any, ids: string[], permanent = false): Promise<void> {
+export async function bulkDeletePages(db: Database, ids: string[], permanent = false): Promise<void> {
     if (permanent) {
         await db.delete(pages).where(inArray(pages.id, ids));
     } else {
@@ -172,14 +173,14 @@ export async function bulkDeletePages(db: any, ids: string[], permanent = false)
     }
 }
 
-export async function bulkPublishPages(db: any, ids: string[]): Promise<void> {
+export async function bulkPublishPages(db: Database, ids: string[]): Promise<void> {
     await db.update(pages).set({ isPublished: true, updatedAt: sql`unixepoch()` }).where(inArray(pages.id, ids));
 }
 
-export async function bulkUnpublishPages(db: any, ids: string[]): Promise<void> {
+export async function bulkUnpublishPages(db: Database, ids: string[]): Promise<void> {
     await db.update(pages).set({ isPublished: false, updatedAt: sql`unixepoch()` }).where(inArray(pages.id, ids));
 }
 
-export async function restorePages(db: any, ids: string[]): Promise<void> {
+export async function restorePages(db: Database, ids: string[]): Promise<void> {
     await db.update(pages).set({ deletedAt: null }).where(inArray(pages.id, ids));
 }

@@ -5,6 +5,7 @@
 import { siteSettings, settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
+import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Types
@@ -31,7 +32,7 @@ const DEFAULT_CURRENCY: CurrencyConfig = {
  * Use this instead of the old shared/storefront-url getStorefrontPath().
  */
 export async function getStorefrontPath(
-    db: any,
+    db: Database,
     path: string,
     kv?: KVNamespace | null,
 ): Promise<string> {
@@ -43,7 +44,7 @@ export async function getStorefrontPath(
  * Returns the storefront base URL from DB, with optional KV cache.
  */
 export async function getStorefrontBaseUrl(
-    db: any,
+    db: Database,
     kv?: KVNamespace | null,
 ): Promise<string> {
     if (kv) {
@@ -82,7 +83,7 @@ export async function getStorefrontBaseUrl(
  * This is the canonical implementation; shared/currency.ts is now a thin re-export.
  */
 export async function getCurrencyConfig(
-    db: any,
+    db: Database,
     kv?: KVNamespace | null,
 ): Promise<CurrencyConfig> {
     if (kv) {
@@ -99,7 +100,7 @@ export async function getCurrencyConfig(
             .where(eq(settings.category, "currency"))
             .all();
 
-        const map = Object.fromEntries(rows.map((r: any) => [r.key, r.value]));
+        const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
         const config: CurrencyConfig = {
             code: map.currency_code ?? DEFAULT_CURRENCY.code,
             symbol: map.currency_symbol ?? DEFAULT_CURRENCY.symbol,
@@ -127,7 +128,7 @@ export async function getCurrencyConfig(
 /**
  * Returns the full siteSettings row (contains headerConfig, footerConfig, storefrontUrl, etc.)
  */
-export async function getSiteSettings(db: any) {
+export async function getSiteSettings(db: Database) {
     const [row] = await db
         .select()
         .from(siteSettings)

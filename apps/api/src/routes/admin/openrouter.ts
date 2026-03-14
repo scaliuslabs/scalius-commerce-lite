@@ -4,6 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
+import { ok } from "../../utils/api-response";
 import {
     OPENROUTER_BASE_URL,
     OPENROUTER_HEADERS,
@@ -36,7 +37,7 @@ app.openapi(listModelsRoute, async (c) => {
 
         const data = await response.json();
 
-        const processedModels = (data.data || []).map((model: any) => ({
+        const processedModels = (data.data || []).map((model: Record<string, unknown>) => ({
             id: model.id,
             name: model.name,
             description: model.description,
@@ -50,8 +51,8 @@ app.openapi(listModelsRoute, async (c) => {
             outputModalities: model.architecture?.output_modalities || ['text']
         }));
 
-        return c.json({ models: processedModels }, 200);
-    } catch (error: any) {
+        return ok(c, { models: processedModels });
+    } catch (error: unknown) {
         console.error("Error fetching OpenRouter models:", error);
         return c.json({ message: "Error fetching models" }, 500);
     }
@@ -90,13 +91,13 @@ app.openapi(generateRoute, async (c) => {
             return c.json({ message: "Model is required." }, 400);
         }
 
-        let finalMessages: any[];
+        let finalMessages: Array<{ role: string; content: unknown }>;
 
         if (messages && Array.isArray(messages)) {
             finalMessages = messages;
         } else if (prompt) {
             if (images && Array.isArray(images) && images.length > 0) {
-                const content: any[] = [
+                const content: Array<{ type: string; text?: string }> = [
                     { type: "text", text: prompt },
                     ...images
                 ];
@@ -152,7 +153,7 @@ app.openapi(generateRoute, async (c) => {
                 }
 
                 console.error("OpenRouter API Error:", errorBody);
-                return c.json({ message: errorMessage, status: response.status }, response.status as any);
+                return c.json({ message: errorMessage, status: response.status }, response.status as 400 | 401 | 403 | 404 | 500 | 502 | 503);
             }
 
             if (stream) {
@@ -162,7 +163,7 @@ app.openapi(generateRoute, async (c) => {
                         "Connection": "keep-alive",
                         "Cache-Control": "no-cache"
                     }
-                }) as any;
+                });
             } else {
                 const data = await response.json();
 
@@ -174,20 +175,20 @@ app.openapi(generateRoute, async (c) => {
                     console.log(`[OpenRouter] ${model} | ${requestDuration}ms`);
                 }
 
-                return c.json(data, 200);
+                return ok(c, data);
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             clearTimeout(timeoutId);
-            if (error.name === 'AbortError') {
+            if (error instanceof Error && error.name === 'AbortError') {
                 return c.json({ message: ERROR_MESSAGES.timeoutError }, 408);
             }
             throw error;
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in generate endpoint:", error);
         return c.json({
             message: ERROR_MESSAGES.networkError,
-            details: error.message
+            details: error instanceof Error ? error.message : String(error)
         }, 500);
     }
 });
@@ -276,7 +277,7 @@ app.openapi(generateStagedRoute, async (c) => {
                 }
 
                 console.error("OpenRouter API Error:", errorBody);
-                return c.json({ message: errorMessage, details: errorBody }, response.status as any);
+                return c.json({ message: errorMessage, details: errorBody }, response.status as 400 | 401 | 403 | 404 | 500 | 502 | 503);
             }
 
             const data = await response.json();
@@ -291,24 +292,24 @@ app.openapi(generateStagedRoute, async (c) => {
                 console.log(`[Staged] ${model} | ${stageInfo} | ${requestDuration}ms`);
             }
 
-            return c.json({
+            return ok(c, {
                 ...data,
                 stage,
                 sectionIndex,
                 totalSections
-            }, 200);
-        } catch (error: any) {
+            });
+        } catch (error: unknown) {
             clearTimeout(timeoutId);
-            if (error.name === 'AbortError') {
+            if (error instanceof Error && error.name === 'AbortError') {
                 return c.json({ message: ERROR_MESSAGES.timeoutError }, 408);
             }
             throw error;
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in staged generation endpoint:", error);
         return c.json({
             message: ERROR_MESSAGES.networkError,
-            details: error.message
+            details: error instanceof Error ? error.message : String(error)
         }, 500);
     }
 });

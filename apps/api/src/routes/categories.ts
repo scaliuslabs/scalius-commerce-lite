@@ -12,6 +12,7 @@ import { ftsMatch } from "@scalius/core/search";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for category routes
 const app = new OpenAPIHono();
 
@@ -96,7 +97,7 @@ app.openapi(listCategoriesRoute, async (c) => {
       null
   }));
 
-  return c.json({ categories: formattedCategories }, 200);
+  return ok(c, { categories: formattedCategories });
 });
 
 // GET /categories/:slug — get category by slug
@@ -146,12 +147,12 @@ app.openapi(getCategoryBySlugRoute, async (c) => {
   }
 
   // Format the response
-  return c.json({
+  return ok(c, {
     category: {
       ...category,
       createdAt: unixToDate(category.createdAt)?.toISOString() || null
     }
-  }, 200);
+  });
 });
 
 // GET /categories/:slug/products — get products in a category
@@ -427,7 +428,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
 
   const totalCount = await countQuery.get();
 
-  return c.json({
+  return ok(c, {
     category,
     products: productsWithImages,
     pagination: {
@@ -445,7 +446,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       hasDiscount,
       sort
     }
-  }, 200);
+  });
 });
 
 // Export the category routes

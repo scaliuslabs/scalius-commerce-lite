@@ -6,6 +6,7 @@ import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../../utils/api-error";
 
+import { ok, created } from "../../../utils/api-response";
 const app = new OpenAPIHono();
 
 const deliveryService = new DeliveryService();
@@ -68,9 +69,9 @@ app.openapi(listRoute, async (c) => {
             credentials: maskCredentialsForClient(provider.credentials)
         }));
 
-        return c.json(maskedProviders, 200);
-    } catch (error: any) {
-        return c.json({ error: error.message || "Failed to fetch providers" }, 500);
+        return ok(c, maskedProviders);
+    } catch (error: unknown) {
+        return c.json({ error: error instanceof Error ? error.message : "Failed to fetch providers" }, 500);
     }
 });
 
@@ -105,9 +106,9 @@ app.openapi(createProviderRoute, async (c) => {
             credentials: maskCredentialsForClient(savedProvider.credentials)
         };
 
-        return c.json(maskedResponse, 201);
-    } catch (error: any) {
-        return c.json({ error: error.message || "Failed to create provider" }, 500);
+        return created(c, maskedResponse);
+    } catch (error: unknown) {
+        return c.json({ error: error instanceof Error ? error.message : "Failed to create provider" }, 500);
     }
 });
 
@@ -143,7 +144,7 @@ app.openapi(updateProviderRoute, async (c) => {
                 ...savedProvider,
                 credentials: maskCredentialsForClient(savedProvider.credentials)
             };
-            return c.json(maskedResponse, 201);
+            return created(c, maskedResponse);
         }
 
         const unmaskedCreds = unmaskedCredentials(provider.credentials, existingProvider.credentials);
@@ -162,9 +163,9 @@ app.openapi(updateProviderRoute, async (c) => {
             credentials: maskCredentialsForClient(savedProvider.credentials)
         };
 
-        return c.json(maskedResponse, 200);
-    } catch (error: any) {
-        return c.json({ error: error.message || "Failed to update provider" }, 500);
+        return ok(c, maskedResponse);
+    } catch (error: unknown) {
+        return c.json({ error: error instanceof Error ? error.message : "Failed to update provider" }, 500);
     }
 });
 
@@ -202,18 +203,18 @@ app.openapi(createTestRoute, async (c) => {
             const providerInstance = createProvider(mockProvider);
             const result = await providerInstance.testConnection();
 
-            return c.json({
+            return ok(c, {
                 ...result,
                 provider: { type, name, credentials: "...", config: "..." }
-            }, 200);
-        } catch (testError: any) {
-            return c.json({
+            });
+        } catch (testError: unknown) {
+            return ok(c, {
                 success: false,
-                message: testError.message || "Failed to test provider connection"
-            }, 200);
+                message: testError instanceof Error ? testError.message : "Failed to test provider connection"
+            });
         }
-    } catch (error: any) {
-        return c.json({ error: error.message || "Internal server error" }, 500);
+    } catch (error: unknown) {
+        return c.json({ error: error instanceof Error ? error.message : "Internal server error" }, 500);
     }
 });
 
@@ -235,10 +236,10 @@ app.openapi(getProviderRoute, async (c) => {
         const { id } = c.req.valid("param");
         const provider = await deliveryService.getProvider(id);
         if (!provider) throw new NotFoundError("Provider not found");
-        return c.json(provider, 200);
-    } catch (error: any) {
-        if (error.name === "NotFoundError") throw error;
-        return c.json({ error: error.message || "Failed to get provider" }, 500);
+        return ok(c, provider);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === "NotFoundError") throw error;
+        return c.json({ error: error instanceof Error ? error.message : "Failed to get provider" }, 500);
     }
 });
 
@@ -264,16 +265,16 @@ app.openapi(testExistingRoute, async (c) => {
         try {
             const providerInstance = createProvider(provider);
             const result = await providerInstance.testConnection();
-            return c.json(result, 200);
-        } catch (testError: any) {
-            return c.json({
+            return ok(c, result);
+        } catch (testError: unknown) {
+            return ok(c, {
                 success: false,
-                message: testError.message || "Failed to test provider connection"
-            }, 200);
+                message: testError instanceof Error ? testError.message : "Failed to test provider connection"
+            });
         }
-    } catch (error: any) {
-        if (error.name === "NotFoundError") throw error;
-        return c.json({ error: error.message || "Internal server error" }, 500);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === "NotFoundError") throw error;
+        return c.json({ error: error instanceof Error ? error.message : "Internal server error" }, 500);
     }
 });
 
@@ -294,9 +295,9 @@ app.openapi(deleteProviderRoute, async (c) => {
     try {
         const { id } = c.req.valid("param");
         await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
-        return c.json({ error: error.message || "Failed to delete provider" }, 500);
+        return ok(c, { success: true });
+    } catch (error: unknown) {
+        return c.json({ error: error instanceof Error ? error.message : "Failed to delete provider" }, 500);
     }
 });
 

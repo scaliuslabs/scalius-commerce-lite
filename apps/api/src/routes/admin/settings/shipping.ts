@@ -4,6 +4,7 @@ import { sql, eq, and, or, isNull, like, asc, desc } from "drizzle-orm";
 import { shippingMethods } from "@scalius/database/schema";
 import { NotFoundError, ConflictError } from "../../../utils/api-error";
 
+import { ok, created, noContent } from "../../../utils/api-response";
 const app = new OpenAPIHono();
 
 const createShippingMethodSchema = z.object({
@@ -49,7 +50,7 @@ app.openapi(listRoute, async (c) => {
         const page = query.page;
         const limit = query.limit;
         const search = query.search || "";
-        const sortField = (query.sort || "sortOrder") as any;
+        const sortField = (query.sort || "sortOrder") as string;
         const sortOrder = (query.order || "asc") as "asc" | "desc";
         const showTrashed = query.trashed === "true";
 
@@ -95,7 +96,7 @@ app.openapi(listRoute, async (c) => {
         const total = countResult?.count || 0;
         const totalPages = Math.ceil(total / limit);
 
-        return c.json({
+        return ok(c, {
             data: results,
             pagination: {
                 page,
@@ -105,7 +106,7 @@ app.openapi(listRoute, async (c) => {
                 hasNextPage: page < totalPages,
                 hasPrevPage: page > 1
             }
-        }, 200);
+        });
     } catch (error) {
         console.error("Error fetching shipping methods:", error);
         return c.json({ error: "Failed to fetch shipping methods" }, 500);
@@ -157,10 +158,10 @@ app.openapi(createRoute_, async (c) => {
             })
             .returning();
 
-        return c.json({ data: insertedMethod }, 201);
-    } catch (error: any) {
+        return created(c, { data: insertedMethod });
+    } catch (error: unknown) {
         console.error("Error creating shipping method:", error);
-        if (error.message && error.message.includes("UNIQUE constraint failed")) {
+        if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
             return c.json({ error: "A shipping method with this name already exists." }, 409);
         }
         return c.json({ error: "Failed to create shipping method" }, 500);
@@ -192,7 +193,7 @@ app.openapi(getByIdRoute, async (c) => {
             .get();
 
         if (!method) return c.json({ error: "Shipping method not found" }, 404);
-        return c.json({ data: method }, 200);
+        return ok(c, { data: method });
     } catch (error) {
         console.error(`Error fetching shipping method ${id}:`, error);
         return c.json({ error: "Failed to fetch shipping method" }, 500);
@@ -259,10 +260,10 @@ app.openapi(updateRoute, async (c) => {
             return c.json({ error: "Shipping method not found or no changes made" }, 404);
         }
 
-        return c.json({ data: updatedMethod }, 200);
-    } catch (error: any) {
+        return ok(c, { data: updatedMethod });
+    } catch (error: unknown) {
         console.error(`Error updating shipping method ${id}:`, error);
-        if (error.message && error.message.includes("UNIQUE constraint failed")) {
+        if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
             return c.json({ error: "A shipping method with this name already exists." }, 409);
         }
         return c.json({ error: "Failed to update shipping method" }, 500);
@@ -302,7 +303,7 @@ app.openapi(deleteRoute, async (c) => {
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(eq(shippingMethods.id, id));
 
-        return new Response(null, { status: 204 }) as any;
+        return noContent(c);
     } catch (error) {
         console.error(`Error deleting shipping method ${id}:`, error);
         return c.json({ error: "Failed to delete shipping method" }, 500);
@@ -353,7 +354,7 @@ app.openapi(restoreRoute, async (c) => {
             })
             .where(eq(shippingMethods.id, id));
 
-        return c.json({ message: "Shipping method restored successfully" }, 200);
+        return ok(c, { message: "Shipping method restored successfully" });
     } catch (error) {
         console.error(`Error restoring shipping method ${id}:`, error);
         return c.json({ error: "Failed to restore shipping method" }, 500);
@@ -390,7 +391,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
 
         await db.delete(shippingMethods).where(eq(shippingMethods.id, id));
 
-        return new Response(null, { status: 204 }) as any;
+        return noContent(c);
     } catch (error) {
         console.error(`Error permanently deleting shipping method ${id}:`, error);
         return c.json({ error: "Failed to permanently delete shipping method" }, 500);

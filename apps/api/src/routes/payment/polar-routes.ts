@@ -11,6 +11,7 @@ import { getKv } from "../../utils/kv-cache";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError } from "../../utils/api-error";
 
+import { ok } from "../../utils/api-response";
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── POST /session ───────────────────────────────────────────────────────────
@@ -160,11 +161,11 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
             });
     }
 
-    return c.json({
+    return ok(c, {
         success: true,
         gatewayUrl: result.checkoutUrl,
         checkoutId: result.checkoutId
-    }, 200);
+    });
 });
 
 // ─── GET /success ────────────────────────────────────────────────────────────
@@ -173,7 +174,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 polarPaymentRoutes.get("/success", async (c) => {
     const orderId = c.req.query("order_id");
 
-    const envObj = c.env as any;
+    const envObj = c.env;
     const storefrontUrl = envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "";
 
     if (orderId && storefrontUrl) {
@@ -188,7 +189,7 @@ polarPaymentRoutes.get("/success", async (c) => {
 polarPaymentRoutes.get("/cancel", async (c) => {
     const orderId = c.req.query("order_id");
 
-    const envObj = c.env as any;
+    const envObj = c.env;
     const storefrontUrl = envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "";
 
     if (storefrontUrl) {

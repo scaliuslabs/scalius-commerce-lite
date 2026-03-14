@@ -6,7 +6,8 @@ import { deliveryShipments } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 
-const app = new OpenAPIHono<{ Bindings: any }>();
+import { ok } from "../../utils/api-response";
+const app = new OpenAPIHono<{ Bindings: Env }>();
 const deliveryService = new DeliveryService();
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
@@ -32,7 +33,7 @@ app.openapi(getShipmentRoute, async (c) => {
     if (!shipment) {
         throw new NotFoundError("Shipment not found");
     }
-    return c.json(shipment, 200);
+    return ok(c, shipment);
 });
 
 // ─── DELETE /:id ─────────────────────────────────────────────────────────────
@@ -60,7 +61,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
     }
 
     await deliveryService.deleteShipment(shipmentId);
-    return c.json({ success: true, message: "Shipment deleted successfully" }, 200);
+    return ok(c, { success: true, message: "Shipment deleted successfully" });
 });
 
 // ─── POST /:id/check-status ─────────────────────────────────────────────────
@@ -113,7 +114,7 @@ app.openapi(checkStatusRoute, async (c) => {
             result.status,
         );
 
-        return c.json({
+        return ok(c, {
             success: true,
             message: `Shipment status updated from ${previousStatus} to ${result.status}`,
             data: {
@@ -122,10 +123,10 @@ app.openapi(checkStatusRoute, async (c) => {
                 orderStatusUpdate: orderStatusUpdate || "No change needed",
                 lastChecked: now.toISOString()
             }
-        }, 200);
+        });
     }
 
-    return c.json({
+    return ok(c, {
         success: true,
         message: "Shipment status checked successfully",
         data: {
@@ -133,7 +134,7 @@ app.openapi(checkStatusRoute, async (c) => {
             statusChanged: false,
             lastChecked: now.toISOString()
         }
-    }, 200);
+    });
 });
 
 export { app as adminShipmentRoutes };

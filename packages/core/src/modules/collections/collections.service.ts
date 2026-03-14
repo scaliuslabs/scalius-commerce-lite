@@ -2,16 +2,17 @@
 // All DB queries and business logic for the collections domain.
 
 import { collections } from "@scalius/database/schema";
-import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max } from "drizzle-orm";
+import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput } from "./collections.schema";
+import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Admin queries
 // ─────────────────────────────────────────
 
 export async function listCollections(
-    db: any,
+    db: Database,
     options: {
         page?: number;
         limit?: number;
@@ -30,7 +31,7 @@ export async function listCollections(
         order = "asc",
     } = options;
 
-    const whereConditions: any[] = [];
+    const whereConditions: (SQL | undefined)[] = [];
     if (showTrashed) {
         whereConditions.push(isNotNull(collections.deletedAt));
     } else {
@@ -47,7 +48,7 @@ export async function listCollections(
         .select({ count: sql`count(*)` })
         .from(collections)
         .where(whereClause)
-        .then((rows: any[]) => Number(rows[0]?.count || 0));
+        .then((rows: { count: unknown }[]) => Number(rows[0]?.count || 0));
 
     const sortColumn = (() => {
         switch (sort) {
@@ -78,13 +79,13 @@ export async function listCollections(
     };
 }
 
-export async function getCollectionById(db: any, id: string) {
+export async function getCollectionById(db: Database, id: string) {
     return db
         .select()
         .from(collections)
         .where(and(eq(collections.id, id), isNull(collections.deletedAt)))
         .limit(1)
-        .then((rows: any[]) => rows[0] ?? null);
+        .then((rows: (typeof collections.$inferSelect)[]) => rows[0] ?? null);
 }
 
 // ─────────────────────────────────────────
@@ -92,14 +93,14 @@ export async function getCollectionById(db: any, id: string) {
 // ─────────────────────────────────────────
 
 export async function createCollection(
-    db: any,
+    db: Database,
     data: CreateCollectionInput,
 ) {
     const maxSortOrder = await db
         .select({ max: max(collections.sortOrder) })
         .from(collections)
         .where(isNull(collections.deletedAt))
-        .then((result: any[]) => (result[0]?.max ?? -1) + 1);
+        .then((result: { max: number | null }[]) => (result[0]?.max ?? -1) + 1);
 
     return db
         .insert(collections)
@@ -116,11 +117,11 @@ export async function createCollection(
 }
 
 export async function updateCollection(
-    db: any,
+    db: Database,
     id: string,
     data: UpdateCollectionInput,
 ) {
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Partial<typeof collections.$inferInsert> & { updatedAt: Date } = { updatedAt: new Date() };
     if (data.name !== undefined) updateData.name = data.name;
     if (data.type !== undefined) updateData.type = data.type;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
@@ -134,7 +135,7 @@ export async function updateCollection(
         .get();
 }
 
-export async function deleteCollection(db: any, id: string): Promise<void> {
+export async function deleteCollection(db: Database, id: string): Promise<void> {
     const existing = await getCollectionById(db, id);
     if (!existing) throw Object.assign(new Error("Collection not found"), { statusCode: 404 });
 
@@ -145,7 +146,7 @@ export async function deleteCollection(db: any, id: string): Promise<void> {
 }
 
 export async function bulkDeleteCollections(
-    db: any,
+    db: Database,
     ids: string[],
     permanent = false,
 ): Promise<void> {
@@ -159,21 +160,21 @@ export async function bulkDeleteCollections(
     }
 }
 
-export async function bulkActivateCollections(db: any, ids: string[]): Promise<void> {
+export async function bulkActivateCollections(db: Database, ids: string[]): Promise<void> {
     await db
         .update(collections)
         .set({ isActive: true, updatedAt: new Date() })
         .where(inArray(collections.id, ids));
 }
 
-export async function bulkDeactivateCollections(db: any, ids: string[]): Promise<void> {
+export async function bulkDeactivateCollections(db: Database, ids: string[]): Promise<void> {
     await db
         .update(collections)
         .set({ isActive: false, updatedAt: new Date() })
         .where(inArray(collections.id, ids));
 }
 
-export async function restoreCollections(db: any, ids: string[]): Promise<void> {
+export async function restoreCollections(db: Database, ids: string[]): Promise<void> {
     await db
         .update(collections)
         .set({ deletedAt: null, updatedAt: new Date() })
@@ -181,7 +182,7 @@ export async function restoreCollections(db: any, ids: string[]): Promise<void> 
 }
 
 export async function reorderCollections(
-    db: any,
+    db: Database,
     items: { id: string; sortOrder: number }[],
 ): Promise<void> {
     for (const item of items) {

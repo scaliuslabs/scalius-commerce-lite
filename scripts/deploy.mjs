@@ -45,6 +45,23 @@ function run(cmd, label, cwd = root) {
   execSync(cmd, { cwd, stdio: "inherit" });
 }
 
+// ── Run a shell command with retries for transient Cloudflare API errors
+function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      run(cmd, attempt > 1 ? `${label} (attempt ${attempt}/${maxRetries})` : label, cwd);
+      return;
+    } catch (err) {
+      if (attempt === maxRetries) {
+        throw err;
+      }
+      const delaySec = attempt * 5;
+      console.log(`\n⚠ ${label} failed (attempt ${attempt}/${maxRetries}). Retrying in ${delaySec}s...`);
+      execSync(`sleep ${delaySec}`);
+    }
+  }
+}
+
 // ── Main
 (async () => {
   let config;
@@ -71,14 +88,14 @@ function run(cmd, label, cwd = root) {
   if (migrateOnly) {
     console.log(`\n🗄  Applying D1 migrations → "${dbName}" (${target})\n`);
     try {
-      run(
+      runWithRetry(
         `pnpm exec wrangler d1 migrations apply ${dbName} --${target}${persistFlag}`,
         `Apply migrations → ${dbName} (${target})`,
         apiDir
       );
       console.log("\n✓ Migrations applied.");
     } catch {
-      console.error("\n✗ Migration failed. See error above.");
+      console.error("\n✗ Migration failed after retries. See errors above.");
       process.exit(1);
     }
     return;
@@ -92,20 +109,20 @@ function run(cmd, label, cwd = root) {
     run("pnpm build", "Build all workspaces");
 
     // 2. Apply all pending D1 migrations (no-op if schema is up to date)
-    run(
+    runWithRetry(
       `pnpm exec wrangler d1 migrations apply ${dbName} --remote`,
       `Apply D1 migrations → ${dbName}`,
       apiDir
     );
 
     // 3. Deploy all three workers
-    run("pnpm exec wrangler deploy", "Deploy API Worker", apiDir);
-    run("pnpm exec wrangler deploy", "Deploy Admin Worker", resolve(root, "apps", "admin"));
-    run("pnpm exec wrangler deploy", "Deploy Storefront Worker", resolve(root, "apps", "storefront"));
+    runWithRetry("pnpm exec wrangler deploy", "Deploy API Worker", apiDir);
+    runWithRetry("pnpm exec wrangler deploy", "Deploy Admin Worker", resolve(root, "apps", "admin"));
+    runWithRetry("pnpm exec wrangler deploy", "Deploy Storefront Worker", resolve(root, "apps", "storefront"));
 
     console.log("\n✓ Deploy complete (API + Admin + Storefront).");
   } catch {
-    console.error("\n✗ Deploy failed. See error above.");
+    console.error("\n✗ Deploy failed after retries. See errors above.");
     process.exit(1);
   }
 })();

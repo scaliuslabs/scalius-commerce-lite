@@ -18,6 +18,7 @@ import {
 } from "@scalius/core/modules/collections";
 import { NotFoundError } from "../../utils/api-error";
 
+import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // ── List Collections ──
@@ -50,10 +51,10 @@ app.openapi(listRoute, async (c) => {
         limit: q.limit,
         search: q.search || "",
         showTrashed: q.trashed === "true",
-        sort: (q.sort as any) || "sortOrder",
-        order: (q.order as any) || "asc"
+        sort: (q.sort || "sortOrder") as string,
+        order: (q.order || "asc") as string
     });
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ── Create Collection ──
@@ -75,7 +76,7 @@ app.openapi(createCollectionRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const collection = await createCollection(db, data);
-    return c.json(collection, 201);
+    return created(c, collection);
 });
 
 // ── Bulk Delete Collections ──
@@ -106,7 +107,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { collectionIds, permanent } = c.req.valid("json");
     await bulkDeleteCollections(db, collectionIds, permanent);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Bulk Activate Collections ──
@@ -128,7 +129,7 @@ app.openapi(bulkActivateRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await bulkActivateCollections(db, ids);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Bulk Deactivate Collections ──
@@ -150,7 +151,7 @@ app.openapi(bulkDeactivateRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await bulkDeactivateCollections(db, ids);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Bulk Restore Collections ──
@@ -172,7 +173,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await restoreCollections(db, ids);
-    return c.body(null, 204);
+    return noContent(c);
 });
 
 // ── Reorder Collections ──
@@ -202,7 +203,7 @@ app.openapi(reorderRoute, async (c) => {
     const db = c.get("db");
     const { items } = c.req.valid("json");
     await reorderCollections(db, items);
-    return c.json({ success: true }, 200);
+    return ok(c, { success: true });
 });
 
 // ── Get Collection By ID ──
@@ -225,7 +226,7 @@ app.openapi(getByIdRoute, async (c) => {
     const { id } = c.req.valid("param");
     const collection = await getCollectionById(db, id);
     if (!collection) throw new NotFoundError("Collection not found");
-    return c.json(collection, 200);
+    return ok(c, collection);
 });
 
 // ── Update Collection ──
@@ -248,7 +249,7 @@ app.openapi(updateCollectionRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const result = await updateCollection(db, id, c.req.valid("json"));
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ── Delete Collection ──
@@ -271,9 +272,10 @@ app.openapi(deleteCollectionRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         await deleteCollection(db, id);
-        return c.body(null, 204);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 400);
+        return noContent(c);
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
     }
 });
 
@@ -297,9 +299,10 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         await bulkDeleteCollections(db, [id], true);
-        return c.body(null, 204);
-    } catch (error: any) {
-        return c.json({ error: error.message }, error.statusCode || 400);
+        return noContent(c);
+    } catch (error: unknown) {
+        const err = error as { message?: string; statusCode?: number };
+        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
     }
 });
 

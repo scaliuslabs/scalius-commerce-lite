@@ -5,6 +5,7 @@ import { widgets, collections, WidgetPlacementRule } from "@scalius/database/sch
 import { isNull, asc, and, sql, inArray, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Schema
@@ -57,7 +58,7 @@ export type UpdateWidgetInput = z.infer<typeof updateWidgetSchema>;
 // Queries
 // ─────────────────────────────────────────
 
-export async function listWidgets(db: any) {
+export async function listWidgets(db: Database) {
     const allWidgets = await db
         .select({
             id: widgets.id,
@@ -92,7 +93,7 @@ export async function listWidgets(db: any) {
     return { widgets: allWidgets, availableCollections };
 }
 
-export async function getWidgetById(db: any, id: string) {
+export async function getWidgetById(db: Database, id: string) {
     return db
         .select()
         .from(widgets)
@@ -104,7 +105,7 @@ export async function getWidgetById(db: any, id: string) {
 // Mutations
 // ─────────────────────────────────────────
 
-export async function createWidget(db: any, data: CreateWidgetInput) {
+export async function createWidget(db: Database, data: CreateWidgetInput) {
     return db
         .insert(widgets)
         .values({
@@ -123,11 +124,11 @@ export async function createWidget(db: any, data: CreateWidgetInput) {
         .get();
 }
 
-export async function updateWidget(db: any, id: string, data: UpdateWidgetInput) {
+export async function updateWidget(db: Database, id: string, data: UpdateWidgetInput) {
     const existing = await getWidgetById(db, id);
     if (!existing) throw Object.assign(new Error("Widget not found"), { statusCode: 404 });
 
-    const updateData: any = { updatedAt: sql`unixepoch()` };
+    const updateData: Record<string, unknown> = { updatedAt: sql`unixepoch()` };
     if (data.name !== undefined) updateData.name = data.name;
     if (data.htmlContent !== undefined) updateData.htmlContent = data.htmlContent;
     if (data.cssContent !== undefined) updateData.cssContent = data.cssContent;
@@ -141,14 +142,14 @@ export async function updateWidget(db: any, id: string, data: UpdateWidgetInput)
     return db.update(widgets).set(updateData).where(eq(widgets.id, id)).returning().get();
 }
 
-export async function deleteWidget(db: any, id: string): Promise<void> {
+export async function deleteWidget(db: Database, id: string): Promise<void> {
     await db
         .update(widgets)
         .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
         .where(eq(widgets.id, id));
 }
 
-export async function bulkDeleteWidgets(db: any, ids: string[], permanent = false): Promise<void> {
+export async function bulkDeleteWidgets(db: Database, ids: string[], permanent = false): Promise<void> {
     if (permanent) {
         await db.delete(widgets).where(inArray(widgets.id, ids));
     } else {
@@ -159,14 +160,14 @@ export async function bulkDeleteWidgets(db: any, ids: string[], permanent = fals
     }
 }
 
-export async function bulkActivateWidgets(db: any, ids: string[]): Promise<void> {
+export async function bulkActivateWidgets(db: Database, ids: string[]): Promise<void> {
     await db.update(widgets).set({ isActive: true }).where(inArray(widgets.id, ids));
 }
 
-export async function bulkDeactivateWidgets(db: any, ids: string[]): Promise<void> {
+export async function bulkDeactivateWidgets(db: Database, ids: string[]): Promise<void> {
     await db.update(widgets).set({ isActive: false }).where(inArray(widgets.id, ids));
 }
 
-export async function restoreWidgets(db: any, ids: string[]): Promise<void> {
+export async function restoreWidgets(db: Database, ids: string[]): Promise<void> {
     await db.update(widgets).set({ deletedAt: null }).where(inArray(widgets.id, ids));
 }

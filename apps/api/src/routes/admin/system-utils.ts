@@ -7,6 +7,7 @@ import { sql, inArray, desc, asc, and, count, eq } from "drizzle-orm";
 import { abandonedCheckouts, orders, OrderStatus, adminFcmTokens } from "@scalius/database/schema";
 import { ftsMatch } from "@scalius/core/search";
 
+import { ok, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // --- Abandoned Checkouts ---
@@ -76,15 +77,15 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
             }
 
             await db.delete(orders).where(
-                inArray(orders.id, incompleteOrders.map((o: any) => o.id))
+                inArray(orders.id, incompleteOrders.map((o) => o.id))
             );
         }
 
         const candidatesForDeletion = await db.select().from(abandonedCheckouts).where(sql`${abandonedCheckouts.updatedAt} <= ${oneHourAgoTimestamp}`);
 
         const emptyCheckoutIds = candidatesForDeletion
-            .filter((c: any) => isCheckoutEmpty({ checkoutData: c.checkoutData, customerPhone: c.customerPhone }))
-            .map((c: any) => c.id);
+            .filter((c) => isCheckoutEmpty({ checkoutData: c.checkoutData, customerPhone: c.customerPhone }))
+            .map((c) => c.id);
 
         if (emptyCheckoutIds.length > 0) {
             await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, emptyCheckoutIds));
@@ -95,7 +96,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
         const page = query.page;
         const limit = query.limit;
         const search = query.search || "";
-        const sort = (query.sort || "updatedAt") as any;
+        const sort = (query.sort || "updatedAt") as string;
         const orderStr = query.order || "desc";
         const offset = (page - 1) * limit;
 
@@ -116,7 +117,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
         const totalResult = await db.select({ total: count() }).from(abandonedCheckouts).where(combinedWhere);
         const total = totalResult[0].total;
 
-        return c.json({
+        return ok(c, {
             data: results,
             pagination: {
                 page,
@@ -124,11 +125,11 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
                 total,
                 totalPages: Math.ceil(total / limit)
             }
-        }, 200);
+        });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching abandoned checkouts:", error);
-        return c.json({ error: "Failed to fetch data", message: error.message }, 500);
+        return c.json({ error: "Failed to fetch data", message: error instanceof Error ? error.message : String(error) }, 500);
     }
 });
 
@@ -156,7 +157,7 @@ app.openapi(bulkDeleteCheckoutsRoute, async (c) => {
     try {
         const { ids } = c.req.valid("json");
         await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, ids));
-        return new Response(null, { status: 204 }) as any;
+        return noContent(c);
     } catch (error) {
         console.error("Error bulk deleting checkouts:", error);
         return c.json({ error: "Failed to bulk delete checkouts" }, 500);
@@ -183,7 +184,7 @@ app.openapi(deleteCheckoutsRoute, async (c) => {
     try {
         const { ids } = c.req.valid("json");
         await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, ids));
-        return new Response(null, { status: 204 }) as any;
+        return noContent(c);
     } catch (error) {
         console.error("Error bulk deleting checkouts:", error);
         return c.json({ error: "Failed to bulk delete checkouts" }, 500);
@@ -246,7 +247,7 @@ app.openapi(registerFcmTokenRoute, async (c) => {
                 }
             });
 
-        return c.json({ message: "FCM token registered successfully" }, 200);
+        return ok(c, { message: "FCM token registered successfully" });
     } catch (error) {
         console.error("Error saving FCM token:", error);
         return c.json({ error: "Failed to save FCM token" }, 500);
@@ -299,10 +300,10 @@ app.openapi(cleanupFcmTokensRoute, async (c) => {
                 sql`${adminFcmTokens.lastUsed} < ${thirtyDaysAgo} OR ${adminFcmTokens.lastUsed} IS NULL`
             );
 
-        return c.json({
+        return ok(c, {
             message: "Token cleanup completed successfully.",
             cleanedCount: invalidTokens.length
-        }, 200);
+        });
     } catch (error) {
         console.error("Error cleaning up FCM tokens:", error);
         return c.json({ error: "Internal server error during cleanup." }, 500);

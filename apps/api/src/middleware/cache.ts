@@ -1,5 +1,5 @@
 // src/server/middleware/cache.ts
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { getCache, setCache, getCacheType } from "../utils/kv-cache";
 
 // Default TTL in seconds (1 hour)
@@ -22,7 +22,7 @@ export interface CacheOptions {
   methods?: string[];
   varyByQuery?: boolean;
   varyByAuth?: boolean;
-  cacheCondition?: (c: any) => boolean;
+  cacheCondition?: (c: Context) => boolean;
   /** Override Cache-Control. Default ensures browser revalidation for consistency with KV invalidation. */
   cacheControl?: string;
 }
@@ -49,7 +49,7 @@ export const cacheMiddleware = (
     if (cacheCondition && !cacheCondition(c)) return next();
 
     // KV namespace from Cloudflare Workers env binding
-    const kv: KVNamespace | undefined = (c.env as any)?.CACHE;
+    const kv: KVNamespace | undefined = c.env?.CACHE;
 
     // Build cache key
     let cacheKey = `${keyPrefix}${c.req.path}`;

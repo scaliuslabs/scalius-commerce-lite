@@ -173,7 +173,7 @@ export class FraudCheckerService {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error((errorData as any).error || `HTTP ${response.status}`);
+                throw new Error((errorData as { error?: string }).error || `HTTP ${response.status}`);
             }
 
             const data = await response.json();

@@ -54,11 +54,11 @@ app.openapi(getPromptRoute, async (c) => {
             "Content-Type": "text/plain",
             "Cache-Control": "public, max-age=300"
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching system prompt:", error);
         return c.json({
             error: "Failed to fetch system prompt",
-            message: error.message || "Unknown error occurred"
+            message: error instanceof Error ? error.message : "Unknown error occurred"
         }, 500);
     }
 });

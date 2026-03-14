@@ -21,8 +21,8 @@ export type OrderIngestQueueMessage = {
     type: "order.ingest";
     checkoutToken: string;
     existingCustomer: { id: string } | null;
-    orderData: any;
-    items: any[];
+    orderData: Record<string, unknown>;
+    items: Record<string, unknown>[];
     discountUsage: { discountId: string; amountDiscounted: number } | null;
     requestUrl: string;
 };
@@ -82,7 +82,8 @@ export async function handleOrderIngestBatch(
     if (batch.messages.length === 0) return;
     console.log(`[Queue] Processing ORDER_INGEST_QUEUE batch of ${batch.messages.length} messages`);
 
-    const writeBatch: any[] = [];
+    // Drizzle D1 batch() requires specific tuple types
+    const writeBatch: unknown[] = [];
     const reservationEntries: { variantId: string; quantity: number; pool: "regular" | "preorder" | "backorder" }[] = [];
     const orderIdsForReservation: string[] = [];
 
@@ -98,8 +99,8 @@ export async function handleOrderIngestBatch(
 
             // Accumulate inventory reservation entries for this order
             const orderReservationEntries = payload.items
-                .filter((item: any) => item.variantId !== null)
-                .map((item: any) => ({
+                .filter((item) => item.variantId !== null)
+                .map((item) => ({
                     variantId: item.variantId as string,
                     quantity: item.quantity,
                     pool: payload.orderData.inventoryPool as "regular" | "preorder" | "backorder",
@@ -179,7 +180,7 @@ export async function handleOrderIngestBatch(
             if (payload.items.length > 0) {
                 writeBatch.push(
                     db.insert(orderItems).values(
-                        payload.items.map((item: any) => ({
+                        payload.items.map((item) => ({
                             id: "item_" + nanoid(),
                             orderId: payload.orderData.id,
                             productId: item.productId,

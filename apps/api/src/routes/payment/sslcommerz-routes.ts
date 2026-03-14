@@ -9,6 +9,7 @@ import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-se
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError } from "../../utils/api-error";
 
+import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── POST /session ───────────────────────────────────────────────────────────
@@ -155,18 +156,18 @@ app.openapi(createSessionRoute, async (c) => {
     }).onConflictDoNothing();
   }
 
-  return c.json({
+  return ok(c, {
     success: true,
     gatewayUrl: result.gatewayUrl,
     sessionKey: result.sessionKey
-  }, 200);
+  });
 });
 
 // ─── Redirect handlers ──────────────────────────────────────────────────────
 // SSLCommerz POSTs to these callback URLs. Also handle GET for edge cases.
 // These are NOT OpenAPI routes — external callbacks, not client-consumed APIs.
 
-async function extractTranId(c: any): Promise<string> {
+async function extractTranId(c: { req: { method: string; parseBody: () => Promise<Record<string, unknown>>; query: (key: string) => string | undefined } }): Promise<string> {
   if (c.req.method === "POST") {
     try {
       const body = await c.req.parseBody();
@@ -176,7 +177,7 @@ async function extractTranId(c: any): Promise<string> {
   return c.req.query("tran_id") ?? "";
 }
 
-function getStorefrontUrl(c: any): string {
+function getStorefrontUrl(c: { env?: { STOREFRONT_URL?: string }; req: { url: string } }): string {
   const envUrl = c.env?.STOREFRONT_URL;
   if (envUrl) return envUrl.replace(/\/+$/, "");
   return new URL(c.req.url).origin;

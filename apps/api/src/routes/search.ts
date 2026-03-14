@@ -3,6 +3,7 @@ import { search } from "@scalius/core/search";
 import { cacheMiddleware } from "../middleware/cache";
 import { rateLimit } from "@scalius/shared/rate-limit";
 
+import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for search routes
 const app = new OpenAPIHono();
 
@@ -93,13 +94,13 @@ app.openapi(searchRoute, async (c) => {
 
   // If no query, return empty results
   if (!query.trim()) {
-    return c.json({
+    return ok(c, {
       products: [],
       pages: [],
       categories: [],
       success: true as const,
       query: ""
-    }, 200);
+    });
   }
 
   // Set up timeout for search (5 seconds)
@@ -121,14 +122,14 @@ app.openapi(searchRoute, async (c) => {
   const results = await Promise.race([searchPromise, timeoutPromise]);
 
   // Return results
-  return c.json({
+  return ok(c, {
     products: results.products || [],
     pages: results.pages || [],
     categories: results.categories || [],
     success: true as const,
     query,
     timestamp: new Date().toISOString()
-  }, 200);
+  });
 });
 
 // Export the search routes

@@ -13,16 +13,8 @@ import { orderPayments, paymentPlans, deliveryShipments, orderItems, products, p
 import { eq, and } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 
-const app = new OpenAPIHono<{
-    Variables: {
-        db: any;
-        user: any;
-        session: any;
-    };
-    Bindings: {
-        CACHE: KVNamespace;
-    };
-}>();
+import { ok, created, noContent } from "../../utils/api-response";
+const app = new OpenAPIHono();
 
 // ─── GET / (List) ────────────────────────────────────────────────────────────
 
@@ -57,12 +49,12 @@ app.openapi(listOrdersRoute, async (c) => {
         search: query.search || "",
         status: query.status || undefined,
         showTrashed: query.trashed === "true",
-        sort: query.sort as any,
+        sort: query.sort as string,
         order: query.order as "asc" | "desc",
         startDate: query.startDate ? new Date(query.startDate) : undefined,
         endDate: query.endDate ? new Date(query.endDate) : undefined
     });
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ─── POST / (Create) ────────────────────────────────────────────────────────
@@ -83,7 +75,7 @@ const createOrderRoute = createRoute({
 app.openapi(createOrderRoute, async (c) => {
     const data = c.req.valid("json");
     const result = await OrdersService.createOrder(data);
-    return c.json(result, 201);
+    return created(c, result);
 });
 
 // ─── POST /bulk-delete ───────────────────────────────────────────────────────
@@ -104,7 +96,7 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const data = c.req.valid("json");
     await OrdersService.bulkDeleteOrders(data.orderIds, data.permanent);
-    return new Response(null, { status: 204 }) as any;
+    return noContent(c);
 });
 
 // ─── POST /bulk-ship ─────────────────────────────────────────────────────────
@@ -126,12 +118,12 @@ app.openapi(bulkShipRoute, async (c) => {
     const data = c.req.valid("json");
     const results = await OrdersService.bulkShipOrders(data.orderIds, data.providerId, data.options);
     const successCount = results.filter((r) => r.success).length;
-    return c.json({
+    return ok(c, {
         totalProcessed: results.length,
         successCount,
         failureCount: results.length - successCount,
         results
-    }, 200);
+    });
 });
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
@@ -154,7 +146,7 @@ app.openapi(getOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const result = await OrdersService.getOrderDetails(orderId);
     if (!result) throw new NotFoundError("Order not found");
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ─── PUT /:id ────────────────────────────────────────────────────────────────
@@ -177,7 +169,7 @@ app.openapi(updateOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.updateOrder(orderId, data);
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ─── DELETE /:id ─────────────────────────────────────────────────────────────
@@ -198,7 +190,7 @@ const deleteOrderRoute = createRoute({
 app.openapi(deleteOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     await OrdersService.deleteOrder(orderId);
-    return new Response(null, { status: 204 }) as any;
+    return noContent(c);
 });
 
 // ─── POST /:id/restore ──────────────────────────────────────────────────────
@@ -219,7 +211,7 @@ const restoreOrderRoute = createRoute({
 app.openapi(restoreOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     await OrdersService.restoreOrder(orderId);
-    return new Response(null, { status: 204 }) as any;
+    return noContent(c);
 });
 
 // ─── DELETE /:id/permanent ───────────────────────────────────────────────────
@@ -240,7 +232,7 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     await OrdersService.permanentlyDeleteOrder(orderId);
-    return new Response(null, { status: 204 }) as any;
+    return noContent(c);
 });
 
 // ─── GET /:id/cod ────────────────────────────────────────────────────────────
@@ -261,7 +253,7 @@ const getCodRoute = createRoute({
 app.openapi(getCodRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const tracking = await c.get("db").select().from(require("@scalius/database/schema").codTracking).where(require("drizzle-orm").eq(require("@scalius/database/schema").codTracking.orderId, orderId)).get();
-    return c.json({ tracking: tracking ?? null }, 200);
+    return ok(c, { tracking: tracking ?? null });
 });
 
 // ─── POST /:id/cod ───────────────────────────────────────────────────────────
@@ -293,7 +285,7 @@ app.openapi(postCodRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.processCodAction(orderId, data);
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ─── GET /:id/fulfill ────────────────────────────────────────────────────────
@@ -314,7 +306,7 @@ const getFulfillRoute = createRoute({
 app.openapi(getFulfillRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const shipments = await OrdersService.getOrderShipments(orderId);
-    return c.json({ shipments }, 200);
+    return ok(c, { shipments });
 });
 
 // ─── POST /:id/fulfill ──────────────────────────────────────────────────────
@@ -347,7 +339,7 @@ app.openapi(postFulfillRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.createFulfillmentShipment(orderId, data);
-    return c.json(result, 201);
+    return created(c, result);
 });
 
 // ─── PUT /:id/status ─────────────────────────────────────────────────────────
@@ -370,7 +362,7 @@ app.openapi(updateStatusRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.updateOrderStatus(orderId, data.status);
-    return c.json(result, 200);
+    return ok(c, result);
 });
 
 // ─── GET /:id/items ──────────────────────────────────────────────────────────
@@ -390,7 +382,7 @@ const getItemsRoute = createRoute({
 
 app.openapi(getItemsRoute, async (c) => {
     const orderId = c.req.valid("param").id;
-    const db = c.get("db") as any;
+    const db = c.get("db");
 
     const items = await db
         .select({
@@ -416,7 +408,7 @@ app.openapi(getItemsRoute, async (c) => {
             ),
         );
 
-    return c.json(items, 200);
+    return ok(c, items);
 });
 
 // ─── GET /:id/payments ───────────────────────────────────────────────────────
@@ -436,14 +428,14 @@ const getPaymentsRoute = createRoute({
 
 app.openapi(getPaymentsRoute, async (c) => {
     const orderId = c.req.valid("param").id;
-    const db = c.get("db") as any;
+    const db = c.get("db");
 
     const [payments, plan] = await Promise.all([
         db.select().from(orderPayments).where(eq(orderPayments.orderId, orderId)).all(),
         db.select().from(paymentPlans).where(eq(paymentPlans.orderId, orderId)).get()
     ]);
 
-    return c.json({ payments, plan: plan ?? null }, 200);
+    return ok(c, { payments, plan: plan ?? null });
 });
 
 // ─── GET /:id/shipments ──────────────────────────────────────────────────────
@@ -477,7 +469,7 @@ app.openapi(getShipmentsRoute, async (c) => {
         })
     );
 
-    return c.json(enhancedShipments, 200);
+    return ok(c, enhancedShipments);
 });
 
 // ─── POST /:id/shipments ─────────────────────────────────────────────────────
@@ -505,7 +497,7 @@ const createShipmentRoute = createRoute({
 app.openapi(createShipmentRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const db = c.get("db") as any;
+    const db = c.get("db");
     const deliveryService = new DeliveryService();
 
     const shipmentResult = await deliveryService.createShipment(orderId, data.providerId, data.options);
@@ -531,7 +523,7 @@ app.openapi(createShipmentRoute, async (c) => {
         lastChecked: now.toISOString()
     };
 
-    return c.json(enhancedShipment, 201);
+    return created(c, enhancedShipment);
 });
 
 // ─── GET /:id/shipments/:shipmentId ──────────────────────────────────────────
@@ -558,7 +550,7 @@ app.openapi(getShipmentRoute, async (c) => {
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
 
-    return c.json(shipment, 200);
+    return ok(c, shipment);
 });
 
 // ─── DELETE /:id/shipments/:shipmentId ───────────────────────────────────────
@@ -586,7 +578,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
     if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
 
     await deliveryService.deleteShipment(shipmentId);
-    return c.json({ success: true }, 200);
+    return ok(c, { success: true });
 });
 
 // ─── POST /:id/shipments/{shipmentId}/status ──────────────────────────────────
@@ -614,7 +606,7 @@ app.openapi(checkShipmentStatusRoute, async (c) => {
     if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
 
     const updatedShipment = await deliveryService.checkShipmentStatus(shipmentId);
-    return c.json(updatedShipment, 200);
+    return ok(c, updatedShipment);
 });
 
 // ─── POST /:id/shipments/{shipmentId}/refresh ─────────────────────────────────
@@ -637,7 +629,7 @@ const refreshShipmentRoute = createRoute({
 app.openapi(refreshShipmentRoute, async (c) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
     const deliveryService = new DeliveryService();
-    const db = c.get("db") as any;
+    const db = c.get("db");
 
     const shipment = await deliveryService.getShipment(shipmentId);
     if (!shipment) throw new NotFoundError("Shipment not found");
@@ -646,8 +638,8 @@ app.openapi(refreshShipmentRoute, async (c) => {
     const previousStatus = shipment.status;
     try {
         await deliveryService.checkShipmentStatus(shipmentId);
-    } catch (e: any) {
-        return c.json({ error: "Failed to refresh shipment status", message: e.message }, 400);
+    } catch (e: unknown) {
+        return c.json({ error: "Failed to refresh shipment status", message: e instanceof Error ? e.message : String(e) }, 400);
     }
 
     const now = new Date();
@@ -669,14 +661,14 @@ app.openapi(refreshShipmentRoute, async (c) => {
         }
     }
 
-    return c.json({
+    return ok(c, {
         ...updatedShipment,
         providerName: provider?.name || updatedShipment.providerType,
         providerType: updatedShipment.providerType,
         lastChecked: now.toISOString(),
         statusChanged,
         orderStatusUpdate
-    }, 200);
+    });
 });
 
 // ─── POST /:id/return ────────────────────────────────────────────────────────
@@ -698,7 +690,7 @@ const returnOrderRoute = createRoute({
 app.openapi(returnOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const db = c.get("db") as any;
+    const db = c.get("db");
     const envCache = c.env?.CACHE;
     const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false });
     return c.json(result, result.success ? 200 : 400);
@@ -733,7 +725,7 @@ const refundOrderRoute = createRoute({
 app.openapi(refundOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const db = c.get("db") as any;
+    const db = c.get("db");
     const envCache = c.env?.CACHE;
     const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway });
     return c.json(result, result.success ? 200 : 400);

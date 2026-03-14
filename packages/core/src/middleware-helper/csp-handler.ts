@@ -44,7 +44,7 @@ function getEssentialDomains(): string[] {
   ]);
 }
 
-async function parseCspAllowedDomains(env?: any): Promise<string[]> {
+async function parseCspAllowedDomains(env?: Record<string, unknown>): Promise<string[]> {
   let cspAllowed = env?.CSP_ALLOWED || process.env.CSP_ALLOWED || "";
   try {
     if (env?.CACHE) {
@@ -81,7 +81,7 @@ async function parseCspAllowedDomains(env?: any): Promise<string[]> {
  * Collect all platform-owned URLs from env so they are automatically CSP-allowed.
  * Handles both https (production) and http (local dev) schemes.
  */
-function getPlatformDomains(env?: any): string[] {
+function getPlatformDomains(env?: Record<string, unknown>): string[] {
   const urls: string[] = [];
   const envKeys = [
     "CDN_DOMAIN_URL",
@@ -118,7 +118,7 @@ function getPlatformDomains(env?: any): string[] {
   return urls;
 }
 
-async function getCombinedDomains(env?: any): Promise<string[]> {
+async function getCombinedDomains(env?: Record<string, unknown>): Promise<string[]> {
   const essentialDomains = getEssentialDomains();
   const platformDomains = getPlatformDomains(env);
   const customDomains = await parseCspAllowedDomains(env);
@@ -133,7 +133,7 @@ async function getCombinedDomains(env?: any): Promise<string[]> {
  * @param env Cloudflare runtime environment variables.
  * @returns The Response object with CSP headers applied.
  */
-export async function setPageCspHeader(response: Response, env?: any): Promise<Response> {
+export async function setPageCspHeader(response: Response, env?: Record<string, unknown>): Promise<Response> {
   const allowedDomains = await getCombinedDomains(env);
   // Use PUBLIC_API_BASE_URL environment variable - no hardcoded fallbacks
   const currentOrigin = (env?.PUBLIC_API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "").trim();

@@ -48,7 +48,8 @@ export async function getCheckoutConfig(): Promise<CheckoutConfig> {
           false,
         );
         if (!res.ok) throw new Error(`Status ${res.status}`);
-        return (await res.json()) as CheckoutConfig;
+        const json: { success: boolean; data: CheckoutConfig } = await res.json();
+        return json.data as CheckoutConfig;
       } catch (err) {
         console.error("[checkout] Failed to fetch gateway config:", err);
         return null;

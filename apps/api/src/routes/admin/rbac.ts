@@ -17,6 +17,7 @@ import {
 } from "@scalius/core/auth/rbac/helpers";
 import { PERMISSIONS, getPermissionsByCategory } from "@scalius/core/auth/rbac/permissions";
 
+import { ok, created } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 // -- Validation Schemas --
@@ -77,7 +78,7 @@ app.openapi(listRolesRoute, async (c) => {
         }
 
         const rolesWithPermissions = await getAllRolesWithPermissions(db);
-        return c.json({ roles: rolesWithPermissions }, 200);
+        return ok(c, { roles: rolesWithPermissions });
     } catch (error) {
         console.error("Error fetching roles:", error);
         return c.json({ error: "Internal server error" }, 500);
@@ -147,7 +148,7 @@ app.openapi(createRoleRoute, async (c) => {
 
         clearAllPermissionCache();
 
-        return c.json({
+        return created(c, {
             success: true,
             role: {
                 id: roleId,
@@ -157,8 +158,8 @@ app.openapi(createRoleRoute, async (c) => {
                 isSystem: false,
                 permissions: data.permissions
             }
-        }, 201);
-    } catch (error: any) {
+        });
+    } catch (error: unknown) {
         console.error("Error creating role:", error);
         return c.json({ error: "Internal server error" }, 500);
     }
@@ -202,12 +203,12 @@ app.openapi(getRoleRoute, async (c) => {
 
         const perms = await getRolePermissions(db, roleId);
 
-        return c.json({
+        return ok(c, {
             role: {
                 ...role[0],
                 permissions: perms
             }
-        }, 200);
+        });
     } catch (error) {
         console.error("Error fetching role:", error);
         return c.json({ error: "Internal server error" }, 500);
@@ -292,14 +293,14 @@ app.openapi(updateRoleRoute, async (c) => {
         const updatedRole = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
         const updatedPerms = await getRolePermissions(db, roleId);
 
-        return c.json({
+        return ok(c, {
             success: true,
             role: {
                 ...updatedRole[0],
                 permissions: updatedPerms
             }
-        }, 200);
-    } catch (error: any) {
+        });
+    } catch (error: unknown) {
         console.error("Error updating role:", error);
         return c.json({ error: "Internal server error" }, 500);
     }
@@ -360,7 +361,7 @@ app.openapi(deleteRoleRoute, async (c) => {
 
         clearAllPermissionCache();
 
-        return c.json({ success: true }, 200);
+        return ok(c, { success: true });
     } catch (error) {
         console.error("Error deleting role:", error);
         return c.json({ error: "Internal server error" }, 500);
@@ -426,8 +427,8 @@ app.openapi(assignRoleRoute, async (c) => {
 
         await assignRoleToUser(db, data.userId, data.roleId, sessionUser.id);
 
-        return c.json({ success: true }, 201);
-    } catch (error: any) {
+        return created(c, { success: true });
+    } catch (error: unknown) {
         console.error("Error assigning role:", error);
         return c.json({ error: "Internal server error" }, 500);
     }
@@ -477,8 +478,8 @@ app.openapi(removeRoleRoute, async (c) => {
 
         await removeRoleFromUser(db, data.userId, data.roleId);
 
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true });
+    } catch (error: unknown) {
         console.error("Error removing role:", error);
         return c.json({ error: "Internal server error" }, 500);
     }
@@ -528,15 +529,15 @@ app.openapi(setOverrideRoute, async (c) => {
 
         try {
             await setUserPermissionOverride(db, data.userId, data.permission, data.granted, sessionUser.id);
-        } catch (error: any) {
-            if (error.message?.includes("not found")) {
+        } catch (error: unknown) {
+            if (error instanceof Error && error.message?.includes("not found")) {
                 return c.json({ error: "Permission not found" }, 404);
             }
             throw error;
         }
 
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true });
+    } catch (error: unknown) {
         console.error("Error setting permission override:", error);
         return c.json({ error: "Internal server error" }, 500);
     }
@@ -586,8 +587,8 @@ app.openapi(removeOverrideRoute, async (c) => {
 
         await removeUserPermissionOverride(db, data.userId, data.permission);
 
-        return c.json({ success: true }, 200);
-    } catch (error: any) {
+        return ok(c, { success: true });
+    } catch (error: unknown) {
         console.error("Error removing permission override:", error);
         return c.json({ error: "Internal server error" }, 500);
     }
@@ -622,10 +623,10 @@ app.openapi(listPermissionsRoute, async (c) => {
         const allPermissions = await db.select().from(permissions);
         const groupedPermissions = getPermissionsByCategory();
 
-        return c.json({
+        return ok(c, {
             permissions: allPermissions,
             grouped: groupedPermissions
-        }, 200);
+        });
     } catch (error) {
         console.error("Error fetching permissions:", error);
         return c.json({ error: "Internal server error" }, 500);
@@ -657,13 +658,13 @@ app.openapi(myPermissionsRoute, async (c) => {
             return c.json({ error: "User not found" }, 404);
         }
 
-        return c.json({
+        return ok(c, {
             userId: context.userId,
             isSuperAdmin: context.isSuperAdmin,
             roles: context.roles,
             permissions: Array.from(context.effectivePermissions),
             overrides: context.overrides
-        }, 200);
+        });
     } catch (error) {
         console.error("Error fetching user permissions:", error);
         return c.json({ error: "Internal server error" }, 500);

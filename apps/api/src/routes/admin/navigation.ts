@@ -4,6 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { NavigationService } from "@scalius/core/modules/navigation";
 
+import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
 const listItemsRoute = createRoute({
@@ -19,7 +20,7 @@ const listItemsRoute = createRoute({
 app.openapi(listItemsRoute, async (c) => {
     const db = c.get("db");
     const items = await NavigationService.getNavigationItems(db);
-    return c.json({ items }, 200);
+    return ok(c, { items });
 });
 
 export { app as adminNavigationRoutes };

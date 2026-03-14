@@ -173,7 +173,7 @@ export function DateRangePickerWithPresets({
           <div className="p-0">
             <div className="p-2">
               <Calendar
-                initialFocus
+                autoFocus
                 mode="range"
                 defaultMonth={tempDate?.from}
                 selected={tempDate}

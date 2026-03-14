@@ -3,10 +3,11 @@
 // Used by both admin Hono routes and storefront Hono routes.
 
 import { categories, products, collections } from "@scalius/database/schema";
-import { sql, and, isNull, isNotNull, eq, desc, asc, inArray } from "drizzle-orm";
+import { sql, and, isNull, isNotNull, eq, desc, asc, inArray, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import type { CreateCategoryInput, UpdateCategoryInput } from "./categories.schema";
+import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -17,7 +18,7 @@ import type { CreateCategoryInput, UpdateCategoryInput } from "./categories.sche
  * Includes a product count per category.
  */
 export async function listCategories(
-    db: any,
+    db: Database,
     options: {
         page?: number;
         limit?: number;
@@ -36,7 +37,7 @@ export async function listCategories(
         order = "desc",
     } = options;
 
-    const whereConditions: any[] = [];
+    const whereConditions: (SQL | undefined)[] = [];
 
     if (showTrashed) {
         whereConditions.push(isNotNull(categories.deletedAt));
@@ -100,10 +101,10 @@ export async function listCategories(
     ]);
 
     const countMap = new Map(
-        productCounts.map(({ categoryId, count }: any) => [categoryId, Number(count)]),
+        productCounts.map(({ categoryId, count }: { categoryId: string | null; count: number }) => [categoryId, Number(count)]),
     );
 
-    const formattedCategories = results.map((category: any) => ({
+    const formattedCategories = results.map((category) => ({
         ...category,
         createdAt: category.createdAt ? new Date(category.createdAt * 1000).toISOString() : null,
         updatedAt: category.updatedAt ? new Date(category.updatedAt * 1000).toISOString() : null,
@@ -125,7 +126,7 @@ export async function listCategories(
 /**
  * Returns a list of all active categories for the public storefront.
  */
-export async function listPublicCategories(db: any) {
+export async function listPublicCategories(db: Database) {
     const categoriesList = await db
         .select({
             id: categories.id,
@@ -142,7 +143,7 @@ export async function listPublicCategories(db: any) {
         .orderBy(categories.name)
         .all();
 
-    return categoriesList.map((c: any) => ({
+    return categoriesList.map((c) => ({
         ...c,
         createdAt: c.createdAt ? new Date(c.createdAt * 1000).toISOString() : null,
     }));
@@ -151,7 +152,7 @@ export async function listPublicCategories(db: any) {
 /**
  * Returns a single category by slug (public storefront).
  */
-export async function getCategoryBySlug(db: any, slug: string) {
+export async function getCategoryBySlug(db: Database, slug: string) {
     return db
         .select({
             id: categories.id,
@@ -171,7 +172,7 @@ export async function getCategoryBySlug(db: any, slug: string) {
 /**
  * Returns a single category by ID.
  */
-export async function getCategoryById(db: any, id: string) {
+export async function getCategoryById(db: Database, id: string) {
     return db
         .select({
             id: categories.id,
@@ -197,7 +198,7 @@ export async function getCategoryById(db: any, id: string) {
  * Creates a new category. Throws if the slug is already in use.
  */
 export async function createCategory(
-    db: any,
+    db: Database,
     data: CreateCategoryInput,
 ): Promise<{ id: string }> {
     const existing = await db
@@ -232,7 +233,7 @@ export async function createCategory(
  * Updates a category. Throws if not found, or if slug is taken by another category.
  */
 export async function updateCategory(
-    db: any,
+    db: Database,
     id: string,
     data: UpdateCategoryInput,
 ): Promise<void> {
@@ -271,7 +272,7 @@ export async function updateCategory(
 /**
  * Soft-deletes a category. Throws if products are still assigned to it.
  */
-export async function deleteCategory(db: any, id: string): Promise<void> {
+export async function deleteCategory(db: Database, id: string): Promise<void> {
     const referencedProducts = await db
         .select({ id: products.id, name: products.name })
         .from(products)
@@ -288,7 +289,7 @@ export async function deleteCategory(db: any, id: string): Promise<void> {
             {
                 statusCode: 400,
                 suggestion: "Please delete the products permanently or move them to another category first.",
-                affectedProducts: referencedProducts.map((p: any) => ({ id: p.id, name: p.name })),
+                affectedProducts: referencedProducts.map((p) => ({ id: p.id, name: p.name })),
             },
         );
     }
@@ -304,7 +305,7 @@ export async function deleteCategory(db: any, id: string): Promise<void> {
  * Permanent delete also cleans up collection configs.
  */
 export async function bulkDeleteCategories(
-    db: any,
+    db: Database,
     categoryIds: string[],
     permanent = false,
 ): Promise<void> {
@@ -316,7 +317,7 @@ export async function bulkDeleteCategories(
         .all();
 
     if (referencedProducts.length > 0) {
-        const categoryCount = new Set(referencedProducts.map((p: any) => p.categoryId)).size;
+        const categoryCount = new Set(referencedProducts.map((p) => p.categoryId)).size;
         const productCount = referencedProducts.length;
         throw Object.assign(
             new Error(
@@ -325,7 +326,7 @@ export async function bulkDeleteCategories(
             {
                 statusCode: 400,
                 suggestion: "Please delete the products permanently or move them to another category first.",
-                affectedProducts: referencedProducts.map((p: any) => ({ id: p.id, name: p.name })),
+                affectedProducts: referencedProducts.map((p) => ({ id: p.id, name: p.name })),
             },
         );
     }
@@ -366,7 +367,7 @@ export async function bulkDeleteCategories(
 /**
  * Restores soft-deleted categories.
  */
-export async function restoreCategories(db: any, categoryIds: string[]): Promise<void> {
+export async function restoreCategories(db: Database, categoryIds: string[]): Promise<void> {
     await db
         .update(categories)
         .set({ deletedAt: null })
@@ -376,6 +377,6 @@ export async function restoreCategories(db: any, categoryIds: string[]): Promise
 /**
  * Permanently deletes a single category.
  */
-export async function permanentlyDeleteCategory(db: any, id: string): Promise<void> {
+export async function permanentlyDeleteCategory(db: Database, id: string): Promise<void> {
     await db.delete(categories).where(eq(categories.id, id));
 }

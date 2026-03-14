@@ -20,11 +20,11 @@ export async function getFooterData(): Promise<FooterData | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const json: { footer: FooterData; success: boolean } =
+        const json: { success: boolean; data: { data: FooterData } } =
           await response.json();
 
-        if (json.success && json.footer) {
-          return json.footer;
+        if (json.success && json.data.data) {
+          return json.data.data;
         }
         return null;
       } catch (error) {

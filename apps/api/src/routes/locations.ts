@@ -5,6 +5,7 @@ import { eq, and, isNull, asc } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { ValidationError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware - locations change infrequently
@@ -19,7 +20,7 @@ app.use(
 );
 
 // Helper function to format location data
-const formatLocation = (location: any) => ({
+const formatLocation = (location: { id: string; name: string; type: string; parentId: string | null; isActive: boolean; sortOrder: number }) => ({
   id: location.id,
   name: location.name,
   type: location.type,
@@ -58,7 +59,7 @@ app.openapi(listCitiesRoute, async (c) => {
     )
     .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
 
-  return c.json({ success: true as const, data: cities.map(formatLocation) }, 200);
+  return ok(c, { success: true as const, data: cities.map(formatLocation) });
 });
 
 // GET /locations/zones — get all active zones for a given city
@@ -102,7 +103,7 @@ app.openapi(listZonesRoute, async (c) => {
     )
     .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
 
-  return c.json({ success: true as const, data: zones.map(formatLocation) }, 200);
+  return ok(c, { success: true as const, data: zones.map(formatLocation) });
 });
 
 // GET /locations/areas — get all active areas for a given zone
@@ -146,7 +147,7 @@ app.openapi(listAreasRoute, async (c) => {
     )
     .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
 
-  return c.json({ success: true as const, data: areas.map(formatLocation) }, 200);
+  return ok(c, { success: true as const, data: areas.map(formatLocation) });
 });
 
 export { app as locationRoutes };

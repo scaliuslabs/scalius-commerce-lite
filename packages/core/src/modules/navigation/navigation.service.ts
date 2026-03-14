@@ -1,9 +1,10 @@
 // src/modules/navigation/navigation.service.ts
 import { categories, pages } from "@scalius/database/schema";
 import { isNull, sql } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 
 export const NavigationService = {
-    async getNavigationItems(db: any) {
+    async getNavigationItems(db: Database) {
         const categoriesData = await db
             .select({
                 id: categories.id,
@@ -15,7 +16,7 @@ export const NavigationService = {
             .where(isNull(categories.deletedAt))
             .orderBy(categories.name);
 
-        const categoryItems = categoriesData.map((cat: any) => ({
+        const categoryItems = categoriesData.map((cat) => ({
             id: cat.id,
             name: cat.name,
             slug: cat.slug,
@@ -35,7 +36,7 @@ export const NavigationService = {
             .where(sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = true`)
             .orderBy(pages.title);
 
-        const pageItems = pagesData.map((page: any) => ({
+        const pageItems = pagesData.map((page) => ({
             id: page.id,
             name: page.title,
             slug: page.slug,

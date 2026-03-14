@@ -137,23 +137,23 @@ export async function getHomepageData(db: Database) {
     const [seoResults, heroResults, widgetResults, collectionResults] = batchResults;
 
     // Process SEO
-    const seoSettings = (seoResults as any[])[0] || {
+    const seoSettings = (seoResults as Record<string, unknown>[])[0] || {
         siteTitle: "Scalius Commerce",
         homepageTitle: "Welcome to Scalius Commerce",
         homepageMetaDescription: "Your one-stop shop for everything amazing.",
     };
 
     // Process Hero
-    const desktopSlider = (heroResults as any[]).find((s: any) => s.type === "desktop");
-    const mobileSlider = (heroResults as any[]).find((s: any) => s.type === "mobile");
-    const formatSlider = (slider: any) => {
+    const desktopSlider = (heroResults as { type: string }[]).find((s) => s.type === "desktop");
+    const mobileSlider = (heroResults as { type: string }[]).find((s) => s.type === "mobile");
+    const formatSlider = (slider: Record<string, unknown> | undefined) => {
         if (!slider) return null;
         return { id: slider.id, type: slider.type, images: JSON.parse(slider.images || "[]") };
     };
     const hero = { desktop: formatSlider(desktopSlider), mobile: formatSlider(mobileSlider) };
 
     // Process Widgets
-    const formattedWidgets = (widgetResults as any[]).map((widget: any) => ({
+    const formattedWidgets = (widgetResults as Record<string, unknown>[]).map((widget) => ({
         id: widget.id,
         name: widget.name,
         htmlContent: widget.htmlContent,
@@ -166,7 +166,7 @@ export async function getHomepageData(db: Database) {
     }));
 
     // === BATCH 2: Products for collections ===
-    const parsedCollections = (collectionResults as any[]).map((col: any) => ({
+    const parsedCollections = (collectionResults as Record<string, unknown>[]).map((col) => ({
         ...col,
         parsedConfig: JSON.parse(col.config || "{}"),
     }));
@@ -209,12 +209,12 @@ export async function getHomepageData(db: Database) {
     ]);
 
     // Build lookup maps
-    const specificProductsById = new Map<string, any>();
-    const categoryProductsByCategoryId = new Map<string, any[]>();
-    const categoryMetadataById = new Map<string, any>();
-    const featuredProductsById = new Map<string, any>();
+    const specificProductsById = new Map<string, Record<string, unknown>>();
+    const categoryProductsByCategoryId = new Map<string, Record<string, unknown>[]>();
+    const categoryMetadataById = new Map<string, Record<string, unknown>>();
+    const featuredProductsById = new Map<string, Record<string, unknown>>();
 
-    for (const prod of productBatchResults[0] as any[]) {
+    for (const prod of productBatchResults[0] as Record<string, unknown>[]) {
         if (prod.id && prod.id !== null) {
             specificProductsById.set(prod.id, {
                 ...prod,
@@ -222,7 +222,7 @@ export async function getHomepageData(db: Database) {
             });
         }
     }
-    for (const prod of productBatchResults[1] as any[]) {
+    for (const prod of productBatchResults[1] as Record<string, unknown>[]) {
         if (prod.categoryId) {
             if (!categoryProductsByCategoryId.has(prod.categoryId)) categoryProductsByCategoryId.set(prod.categoryId, []);
             categoryProductsByCategoryId.get(prod.categoryId)!.push({
@@ -231,10 +231,10 @@ export async function getHomepageData(db: Database) {
             });
         }
     }
-    for (const cat of productBatchResults[2] as any[]) {
+    for (const cat of productBatchResults[2] as Record<string, unknown>[]) {
         if (cat.id && cat.id !== null) categoryMetadataById.set(cat.id, cat);
     }
-    for (const prod of productBatchResults[3] as any[]) {
+    for (const prod of productBatchResults[3] as Record<string, unknown>[]) {
         if (prod.id && prod.id !== null) {
             featuredProductsById.set(prod.id, {
                 ...prod,
@@ -245,21 +245,21 @@ export async function getHomepageData(db: Database) {
 
     // Build final collections array
     const formattedCollections = parsedCollections
-        .map((col: any) => {
+        .map((col) => {
             const cfg = col.parsedConfig;
             const productIds: string[] = Array.isArray(cfg.productIds) ? cfg.productIds : [];
             const categoryIds: string[] = Array.isArray(cfg.categoryIds) ? cfg.categoryIds : [];
             const maxProducts = Math.min(Math.max(cfg.maxProducts || 8, 1), 24);
 
-            let collectionProducts: any[] = [];
-            let collectionCategories: any[] = [];
-            let featuredProduct: any = null;
+            let collectionProducts: Record<string, unknown>[] = [];
+            let collectionCategories: Record<string, unknown>[] = [];
+            let featuredProduct: Record<string, unknown> | null = null;
 
             if (productIds.length > 0) {
                 collectionProducts = productIds.map((id) => specificProductsById.get(id)).filter(Boolean).slice(0, maxProducts);
                 collectionCategories = [];
             } else if (categoryIds.length > 0) {
-                const categoryProducts: any[] = [];
+                const categoryProducts: Record<string, unknown>[] = [];
                 for (const catId of categoryIds) {
                     categoryProducts.push(...(categoryProductsByCategoryId.get(catId) || []));
                 }
@@ -329,7 +329,7 @@ export async function getLayoutData(db: Database) {
     const [analyticsResults, settingsResults, categoriesData, pagesData, currencyResults, themeResults] = batchResults;
 
     // Process Analytics
-    const processedAnalytics = (analyticsResults as any[]).map((script: Analytics) => {
+    const processedAnalytics = (analyticsResults as Analytics[]).map((script: Analytics) => {
         let processedConfig = script.config;
         if (shouldUsePartytown(script)) processedConfig = processAnalyticsScript(script);
         return {
@@ -346,8 +346,8 @@ export async function getLayoutData(db: Database) {
     });
 
     // Process Header + Navigation
-    const siteSettingsData = (settingsResults as any[])[0] as any;
-    let headerData: any;
+    const siteSettingsData = (settingsResults as Record<string, unknown>[])[0] as Record<string, string | null> | undefined;
+    let headerData: Record<string, unknown>;
     let navigationData: NestedNavigationItem[] = [];
 
     if (siteSettingsData?.headerConfig) {
@@ -378,19 +378,19 @@ export async function getLayoutData(db: Database) {
         } else {
             // Generate default navigation from categories + pages
             navigationData = [{ id: "home", title: "Home", href: "/" }];
-            if ((categoriesData as any[]).length > 0) {
+            if ((categoriesData as unknown[]).length > 0) {
                 navigationData.push({
                     id: "categories",
                     title: "Categories",
                     href: "#",
-                    subMenu: (categoriesData as any[]).map((cat: any) => ({
+                    subMenu: (categoriesData as { id: string; name: string; slug: string }[]).map((cat) => ({
                         id: `cat_${cat.id}`,
                         title: cat.name,
                         href: `/categories/${cat.slug}`,
                     })),
                 });
             }
-            (pagesData as any[]).forEach((page: any) => {
+            (pagesData as { id: string; title: string; slug: string }[]).forEach((page) => {
                 navigationData.push({ id: `page_${page.id}`, title: page.title, href: `/${page.slug}` });
             });
         }
@@ -405,13 +405,13 @@ export async function getLayoutData(db: Database) {
     }
 
     // Process Footer
-    let footerData: any;
+    let footerData: Record<string, unknown>;
     if (siteSettingsData?.footerConfig) {
         const footerConfig = JSON.parse(siteSettingsData.footerConfig);
 
         let footerSocialLinks: SocialLink[] = [];
         if (Array.isArray(footerConfig.social)) {
-            footerSocialLinks = footerConfig.social.map((link: any) => ({
+            footerSocialLinks = footerConfig.social.map((link: Record<string, unknown>) => ({
                 id: link.id || nanoid(),
                 label: link.label || link.platform || "",
                 url: link.url || "",
@@ -419,7 +419,7 @@ export async function getLayoutData(db: Database) {
             }));
         }
 
-        const normalizedMenus = (footerConfig.menus || []).map((menu: any) => ({
+        const normalizedMenus = (footerConfig.menus || []).map((menu: Record<string, unknown>) => ({
             id: menu.id || nanoid(),
             title: menu.title || "",
             links: menu.links || [],
@@ -447,7 +447,7 @@ export async function getLayoutData(db: Database) {
     }
 
     // Process Currency
-    const currencyMap = Object.fromEntries((currencyResults as any[]).map((r: any) => [r.key, r.value]));
+    const currencyMap = Object.fromEntries((currencyResults as { key: string; value: string }[]).map((r) => [r.key, r.value]));
     const currencyData = {
         code: currencyMap.currency_code ?? "BDT",
         symbol: currencyMap.currency_symbol ?? "৳",
@@ -456,7 +456,7 @@ export async function getLayoutData(db: Database) {
 
     // Process Theme
     let themeColors: Record<string, string> = {};
-    const themeRow = (themeResults as any[])[0];
+    const themeRow = (themeResults as { value?: string }[])[0];
     if (themeRow?.value) {
         try { themeColors = JSON.parse(themeRow.value); } catch { /* ignore corrupt JSON */ }
     }

@@ -5,6 +5,7 @@ import { eq, or, and, isNull } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for hero routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -132,25 +133,25 @@ app.openapi(listSlidersRoute, async (c) => {
 
   // If specific type was requested, return only that slider
   if (requestedType === "desktop") {
-    return c.json({
+    return ok(c, {
       slider: formatSlider(desktopSlider),
       images: desktopImages
-    }, 200);
+    });
   } else if (requestedType === "mobile") {
-    return c.json({
+    return ok(c, {
       slider: formatSlider(mobileSlider),
       images: mobileImages
-    }, 200);
+    });
   }
 
   // Return both sliders with the appropriate images for the device type
-  return c.json({
+  return ok(c, {
     desktop: formatSlider(desktopSlider),
     mobile: formatSlider(mobileSlider),
     images:
       isMobile && mobileImages.length > 0 ? mobileImages : desktopImages,
     isMobile
-  }, 200);
+  });
 });
 
 // GET /hero/sliders/:id — get hero slider by ID
@@ -223,7 +224,7 @@ app.openapi(getSliderByIdRoute, async (c) => {
   }
 
   // Format the response
-  return c.json({
+  return ok(c, {
     slider: {
       id: slider.id,
       type: slider.type,
@@ -232,7 +233,7 @@ app.openapi(getSliderByIdRoute, async (c) => {
       createdAt,
       updatedAt
     }
-  }, 200);
+  });
 });
 
 // Export the hero routes

@@ -20,13 +20,20 @@
     "db:migrate:remote": "turbo db:migrate:remote --filter=@scalius/api",
     "db:studio": "drizzle-kit studio --config packages/database/drizzle.config.ts",
     "generate:sdk": "turbo generate --filter=@scalius/api-client",
+    "lint": "turbo lint",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@scalius/tsconfig": "workspace:*",
     "drizzle-kit": "^0.31.9",
+    "eslint": "^10.0.3",
+    "eslint-plugin-astro": "^1.6.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^17.4.0",
     "turbo": "^2.8.17",
+    "typescript-eslint": "^8.57.0",
     "vitest": "^4.1.0"
   },
   "packageManager": "pnpm@10.26.1",

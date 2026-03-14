@@ -6,7 +6,7 @@ export interface ShipmentResult {
     externalId?: string;
     trackingId?: string;
     status?: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   };
 }
 
@@ -14,7 +14,7 @@ export interface ShipmentStatus {
   status: string;
   rawStatus: string;
   updatedAt: Date;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 // Pathao specific interfaces

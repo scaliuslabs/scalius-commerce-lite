@@ -314,7 +314,7 @@ async function processQueueMessage(
     }
 
     default: {
-      console.warn(`[Queue] Unknown message type:`, (payload as any).type);
+      console.warn(`[Queue] Unknown message type:`, (payload as Record<string, unknown>).type);
     }
   }
 }

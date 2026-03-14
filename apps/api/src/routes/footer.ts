@@ -4,6 +4,7 @@ import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
+import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for footer routes
 const app = new OpenAPIHono();
 
@@ -36,7 +37,7 @@ interface FooterData {
   menus: Array<{
     id: string;
     title: string;
-    links: Array<any>;
+    links: Array<{ id?: string; title: string; href?: string }>;
   }>;
   social: SocialLink[];
   description: string;
@@ -100,10 +101,10 @@ app.openapi(getFooterRoute, async (c) => {
     description: footerConfig.description || ""
   };
 
-  return c.json({
+  return ok(c, {
     data: footerData,
     success: true as const
-  }, 200);
+  });
 });
 
 // Export the footer routes

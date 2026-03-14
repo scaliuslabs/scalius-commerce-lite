@@ -2,9 +2,11 @@ import { productVariants, products, inventoryMovements, productLowStockAlerts } 
 import { eq, sql, and, isNull, desc, or, like } from "drizzle-orm";
 import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
+import type { Database } from "@scalius/database/client";
+import type { SQL } from "drizzle-orm";
 
 export const InventoryService = {
-    async getInventoryOverview(db: any, params: {
+    async getInventoryOverview(db: Database, params: {
         section: string;
         search: string;
         status: string;
@@ -16,7 +18,7 @@ export const InventoryService = {
         const offset = (page - 1) * limit;
 
         if (section === "variants") {
-            const conditions: any[] = [isNull(productVariants.deletedAt)];
+            const conditions: (SQL | undefined)[] = [isNull(productVariants.deletedAt)];
 
             if (status === "low") {
                 conditions.push(sql`(${productVariants.stock} - ${productVariants.reservedStock}) > 0 AND (${productVariants.stock} - ${productVariants.reservedStock}) <= COALESCE(${productVariants.lowStockThreshold}, 5)`);
@@ -164,12 +166,10 @@ export const InventoryService = {
             return { alerts };
         }
 
-        const err = new Error("Invalid section parameter");
-        (err as any).statusCode = 400;
-        throw err;
+        throw Object.assign(new Error("Invalid section parameter"), { statusCode: 400 });
     },
 
-    async adjustInventory(db: any, variantId: string, payload: {
+    async adjustInventory(db: Database, variantId: string, payload: {
         delta: number;
         reason: string;
         notes?: string;
@@ -189,9 +189,7 @@ export const InventoryService = {
             .get();
 
         if (!variant) {
-            const err = new Error("Variant not found");
-            (err as any).statusCode = 404;
-            throw err;
+            throw Object.assign(new Error("Variant not found"), { statusCode: 404 });
         }
 
         const previousStock = pool === "preorderStock" ? variant.preorderStock : variant.stock;

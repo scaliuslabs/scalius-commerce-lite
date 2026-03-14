@@ -51,8 +51,8 @@ export class DeliveryService {
     name: string;
     type: string;
     isActive: boolean;
-    credentials: any;
-    config: any;
+    credentials: Record<string, unknown> | string;
+    config: Record<string, unknown> | string;
   }) {
     const providerId = provider.id || nanoid();
     const now = new Date();

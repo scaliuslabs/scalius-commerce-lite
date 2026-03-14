@@ -109,7 +109,7 @@ export function withPermission(
 ): APIRoute {
   return async (context: APIContext) => {
     const { getDb } = await import("@scalius/database/client");
-    const db = getDb((context.locals as any).cfContext?.env);
+    const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
     const userId = context.locals.user?.id;
 
     const error = await checkPermissionForApi(db, userId, permission);
@@ -136,7 +136,7 @@ export function withAnyPermission(
 ): APIRoute {
   return async (context: APIContext) => {
     const { getDb } = await import("@scalius/database/client");
-    const db = getDb((context.locals as any).cfContext?.env);
+    const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
     const userId = context.locals.user?.id;
 
     const error = await checkAnyPermissionForApi(db, userId, permissions);
@@ -163,7 +163,7 @@ export function withAllPermissions(
 ): APIRoute {
   return async (context: APIContext) => {
     const { getDb } = await import("@scalius/database/client");
-    const db = getDb((context.locals as any).cfContext?.env);
+    const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
     const userId = context.locals.user?.id;
 
     const error = await checkAllPermissionsForApi(db, userId, permissions);
@@ -184,7 +184,7 @@ export function withAllPermissions(
 export function withSuperAdmin(handler: APIRoute): APIRoute {
   return async (context: APIContext) => {
     const { getDb } = await import("@scalius/database/client");
-    const db = getDb((context.locals as any).cfContext?.env);
+    const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
     const userId = context.locals.user?.id;
 
     if (!userId) {

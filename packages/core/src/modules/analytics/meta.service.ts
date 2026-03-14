@@ -89,11 +89,11 @@ export class MetaService {
                 success: true,
                 message: `Log cleanup completed. Retention period: ${retentionHours} hours.`,
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error during manual Meta CAPI log cleanup:", error);
             return {
                 success: false,
-                message: `Log cleanup failed: ${error.message}`,
+                message: `Log cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
             };
         }
     }
