@@ -28,7 +28,11 @@ interface SearchResponse {
   products: SearchResultItem[];
   categories: SearchResultItem[];
   pages: SearchResultItem[];
+}
+
+interface ApiResponse {
   success: boolean;
+  data: SearchResponse;
 }
 
 export default function CommandPalette() {
@@ -109,7 +113,7 @@ export default function CommandPalette() {
 
     const timer = setTimeout(async () => {
       try {
-        const apiBaseUrl = import.meta.env.PUBLIC_API_URL || "/api/v1";
+        const apiBaseUrl = (typeof window !== "undefined" && (window as any).__API_BASE_URL__) || "/api/v1";
         const params = new URLSearchParams({
           q: query,
           limit: "8",
@@ -120,10 +124,10 @@ export default function CommandPalette() {
         const res = await fetch(`${apiBaseUrl}/search?${params}`);
         if (!res.ok) throw new Error("Search failed");
 
-        const data = (await res.json()) as SearchResponse;
+        const json = (await res.json()) as ApiResponse;
 
-        if (data.success) {
-          setResults(data);
+        if (json.success && json.data) {
+          setResults(json.data);
           setSelectedIndex(0);
           setHasSearched(true);
         }
