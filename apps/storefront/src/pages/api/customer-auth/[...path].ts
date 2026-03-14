@@ -50,7 +50,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
     fetcher = env.BACKEND_API.fetch.bind(env.BACKEND_API);
   } else {
     // Local dev: HTTP to API worker
-    const apiBase = (env?.PUBLIC_API_BASE_URL as string) || "http://localhost:8787";
+    const apiBase = env?.PUBLIC_API_BASE_URL as string;
+    if (!apiBase) throw new Error("PUBLIC_API_BASE_URL not configured");
     targetUrl = `${apiBase}${apiPath}`;
   }
 

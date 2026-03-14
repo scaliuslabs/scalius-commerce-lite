@@ -38,7 +38,8 @@ export const POST: APIRoute = async ({ request }) => {
       targetUrl = `http://api.internal${BACKEND_LOGOUT_PATH}`;
       fetcher = env.BACKEND_API.fetch.bind(env.BACKEND_API);
     } else {
-      const apiBase = (env?.PUBLIC_API_BASE_URL as string) || "http://localhost:8787";
+      const apiBase = env?.PUBLIC_API_BASE_URL as string;
+      if (!apiBase) throw new Error("PUBLIC_API_BASE_URL not configured");
       targetUrl = `${apiBase}${BACKEND_LOGOUT_PATH}`;
     }
 

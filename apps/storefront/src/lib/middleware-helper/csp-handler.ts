@@ -16,7 +16,7 @@ const EMPTY_CSP_DATA = { cspAllowedDomains: "" };
 async function parseAdditionalDomains(env?: any): Promise<string[]> {
   let additionalDomains = (env?.CSP_ALLOWED || process.env.CSP_ALLOWED)?.trim() || "";
   try {
-    const apiUrl = (env?.PUBLIC_API_BASE_URL || import.meta.env.PUBLIC_API_BASE_URL || "")?.trim();
+    const apiUrl = (env?.PUBLIC_API_BASE_URL || "")?.trim();
     if (apiUrl) {
       const cachedData = await withEdgeCache(
         "global_security_settings",

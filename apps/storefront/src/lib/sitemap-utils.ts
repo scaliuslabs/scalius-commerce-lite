@@ -120,7 +120,7 @@ export function generateSitemapIndex(sitemaps: SitemapIndexEntry[], baseUrl?: st
  * Gets the base URL from environment
  */
 export function getBaseUrl(): string {
-  const url = getRuntimeStorefrontUrl() || import.meta.env.STOREFRONT_URL;
+  const url = getRuntimeStorefrontUrl();
   if (!url) {
     throw new Error('STOREFRONT_URL environment variable is not set');
   }
