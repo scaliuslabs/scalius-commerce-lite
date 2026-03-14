@@ -87,38 +87,124 @@ export async function verifyDeliveryWebhook(
     ? JSON.parse(provider.config)
     : {};
 
-  // --- Strategy 1: HMAC-SHA256 signature verification ---
-  const webhookSecret = credentials.webhookSecret as string | undefined;
+  // --- Strategy 1: Provider-specific signature/token verification ---
+  const webhookSecret = (credentials.webhookSecret ?? credentials.secretKey) as string | undefined;
+
   if (webhookSecret) {
-    const signatureHeader = request.headers.get("X-Webhook-Signature");
-    if (!signatureHeader) {
-      console.warn(`[webhook-auth] [${providerType}] Missing X-Webhook-Signature header`);
-      return {
-        verified: false,
-        credentials,
-        config,
-        reason: "Missing X-Webhook-Signature header",
-      };
+    switch (providerType) {
+      // Pathao sends the merchant-configured secret as X-PATHAO-Signature header
+      case "pathao": {
+        const pathaoSig = request.headers.get("X-PATHAO-Signature");
+        if (!pathaoSig) {
+          console.warn(`[webhook-auth] [pathao] Missing X-PATHAO-Signature header`);
+          return {
+            verified: false,
+            credentials,
+            config,
+            reason: "Missing X-PATHAO-Signature header",
+          };
+        }
+
+        if (!timingSafeEqual(pathaoSig, webhookSecret)) {
+          console.warn(`[webhook-auth] [pathao] Invalid X-PATHAO-Signature`);
+          return {
+            verified: false,
+            credentials,
+            config,
+            reason: "Invalid X-PATHAO-Signature",
+          };
+        }
+
+        return { verified: true, credentials, config };
+      }
+
+      // Steadfast sends Authorization: Bearer {token} header
+      case "steadfast": {
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          console.warn(`[webhook-auth] [steadfast] Missing or invalid Authorization header`);
+          return {
+            verified: false,
+            credentials,
+            config,
+            reason: "Missing Authorization Bearer token",
+          };
+        }
+
+        const token = authHeader.slice(7); // strip "Bearer "
+        if (!timingSafeEqual(token, webhookSecret)) {
+          console.warn(`[webhook-auth] [steadfast] Invalid Bearer token`);
+          return {
+            verified: false,
+            credentials,
+            config,
+            reason: "Invalid Bearer token",
+          };
+        }
+
+        return { verified: true, credentials, config };
+      }
+
+      // RedX sends auth token as a query parameter in the callback URL
+      case "redx": {
+        const url = new URL(request.url);
+        const queryToken = url.searchParams.get("token");
+        if (!queryToken) {
+          console.warn(`[webhook-auth] [redx] Missing token query parameter`);
+          return {
+            verified: false,
+            credentials,
+            config,
+            reason: "Missing token query parameter",
+          };
+        }
+
+        if (!timingSafeEqual(queryToken, webhookSecret)) {
+          console.warn(`[webhook-auth] [redx] Invalid token query parameter`);
+          return {
+            verified: false,
+            credentials,
+            config,
+            reason: "Invalid token query parameter",
+          };
+        }
+
+        return { verified: true, credentials, config };
+      }
+
+      // Generic fallback: HMAC-SHA256 via X-Webhook-Signature header
+      default: {
+        const signatureHeader = request.headers.get("X-Webhook-Signature");
+        if (!signatureHeader) {
+          console.warn(`[webhook-auth] [${providerType}] Missing X-Webhook-Signature header`);
+          return {
+            verified: false,
+            credentials,
+            config,
+            reason: "Missing X-Webhook-Signature header",
+          };
+        }
+
+        const expectedSignature = await hmacSha256Hex(webhookSecret, rawBody);
+
+        // Support both raw hex and "sha256=<hex>" prefix formats
+        const normalizedHeader = signatureHeader.startsWith("sha256=")
+          ? signatureHeader.slice(7)
+          : signatureHeader;
+
+        if (!timingSafeEqual(normalizedHeader, expectedSignature)) {
+          console.warn(`[webhook-auth] [${providerType}] Invalid webhook signature`);
+          return {
+            verified: false,
+            credentials,
+            config,
+            reason: "Invalid webhook signature",
+          };
+        }
+
+        return { verified: true, credentials, config };
+      }
     }
-
-    const expectedSignature = await hmacSha256Hex(webhookSecret, rawBody);
-
-    // Support both raw hex and "sha256=<hex>" prefix formats
-    const normalizedHeader = signatureHeader.startsWith("sha256=")
-      ? signatureHeader.slice(7)
-      : signatureHeader;
-
-    if (!timingSafeEqual(normalizedHeader, expectedSignature)) {
-      console.warn(`[webhook-auth] [${providerType}] Invalid webhook signature`);
-      return {
-        verified: false,
-        credentials,
-        config,
-        reason: "Invalid webhook signature",
-      };
-    }
-
-    return { verified: true, credentials, config };
   }
 
   // --- Strategy 2: IP allowlist fallback ---

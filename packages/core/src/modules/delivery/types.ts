@@ -100,6 +100,49 @@ export interface SteadfastConfig {
   defaultCodAmount: number;
 }
 
+// RedX specific interfaces
+export interface RedXCreateParcelResponse {
+  tracking_id: string;
+}
+
+export interface RedXParcelInfoResponse {
+  parcel: {
+    tracking_id: string;
+    customer_address: string;
+    delivery_area: string;
+    delivery_area_id: number;
+    charge: number;
+    customer_name: string;
+    customer_phone: string;
+    cash_collection_amount: number;
+    parcel_weight: number;
+    merchant_invoice_id: string;
+    status: string;
+    instruction: string;
+    created_at: string;
+    delivery_type: string;
+    value: string;
+    pickup_location: {
+      id: number;
+      name: string;
+      address: string;
+      area_name: string;
+      area_id: number;
+    };
+  };
+}
+
+export interface RedXCredentials {
+  apiToken: string;
+  webhookSecret?: string;
+}
+
+export interface RedXConfig {
+  sandbox: boolean;
+  pickupStoreId: number;
+  defaultParcelWeight: number;
+}
+
 // Provider-agnostic shipment options
 export interface ShipmentOptions {
   deliveryType?: number;

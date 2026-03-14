@@ -1,5 +1,6 @@
 import { PathaoProvider } from "./providers/pathao";
 import { SteadfastProvider } from "./providers/steadfast";
+import { RedXProvider } from "./providers/redx";
 import type { DeliveryProviderRecord, DeliveryProviderType } from "@scalius/database/schema";
 import type { DeliveryProviderInterface } from "./provider";
 import type {
@@ -7,6 +8,8 @@ import type {
   PathaoConfig,
   SteadfastCredentials,
   SteadfastConfig,
+  RedXCredentials,
+  RedXConfig,
 } from "./types";
 
 /**
@@ -65,6 +68,14 @@ export function createProvider(
         return new SteadfastProvider(
           credentials as SteadfastCredentials,
           config as SteadfastConfig,
+        );
+      case "redx":
+        console.log(
+          `Creating RedX provider (sandbox: ${(config as RedXConfig).sandbox})`,
+        );
+        return new RedXProvider(
+          credentials as RedXCredentials,
+          config as RedXConfig,
         );
       default:
         throw new Error(`Unsupported provider type: ${provider.type}`);
