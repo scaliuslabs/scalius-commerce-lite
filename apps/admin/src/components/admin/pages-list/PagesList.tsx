@@ -9,8 +9,9 @@ import {
   PageTable,
   PagePagination,
   PageDeleteDialog,
-  BulkActionDialog,
 } from "./components";
+import { BulkActionDialog } from "@/components/admin/shared/BulkActionDialog";
+import type { BulkActionConfig } from "@/components/admin/shared/BulkActionDialog";
 import type { BulkAction } from "./types";
 
 interface PagesListProps {
@@ -128,12 +129,46 @@ export function PagesList({ showTrashed = false }: PagesListProps) {
       />
 
       <BulkActionDialog
-        bulkAction={bulkAction}
-        setBulkAction={setBulkAction}
-        selectedIds={selectedIds}
-        isBulkActionLoading={isBulkActionLoading}
-        showTrashed={showTrashed}
-        onPerformBulkAction={performBulkAction}
+        open={bulkAction !== null}
+        onOpenChange={(open) => { if (!open) setBulkAction(null); }}
+        currentAction={bulkAction}
+        selectedCount={selectedIds.size}
+        actionConfigs={{
+          trash: {
+            title: "Move pages to trash?",
+            description: `${selectedIds.size} page(s) will be moved to trash and can be restored later.`,
+            confirmLabel: "Move to Trash",
+            variant: "destructive",
+          },
+          delete: {
+            title: "Permanently delete pages?",
+            description: `This action cannot be undone. ${selectedIds.size} page(s) will be permanently deleted.`,
+            confirmLabel: "Delete Permanently",
+            variant: "destructive",
+          },
+          restore: {
+            title: "Restore pages?",
+            description: `${selectedIds.size} page(s) will be restored from trash.`,
+            confirmLabel: "Restore",
+          },
+          publish: {
+            title: "Publish pages?",
+            description: `${selectedIds.size} page(s) will be published and visible to the public.`,
+            confirmLabel: "Publish",
+          },
+          unpublish: {
+            title: "Unpublish pages?",
+            description: `${selectedIds.size} page(s) will be unpublished and hidden from the public.`,
+            confirmLabel: "Unpublish",
+          },
+        } satisfies Record<string, BulkActionConfig>}
+        onConfirm={() => {
+          if (bulkAction) {
+            performBulkAction(bulkAction);
+            setBulkAction(null);
+          }
+        }}
+        isLoading={isBulkActionLoading}
       />
     </div>
   );

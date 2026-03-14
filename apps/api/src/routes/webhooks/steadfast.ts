@@ -8,14 +8,31 @@ import { getDb } from "@scalius/database/client";
 import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper";
 import { ShipmentTracker } from "@scalius/core/modules/delivery/tracking";
 import { recordWebhookEvent } from "@scalius/core/modules/payments/process-payment";
+import { verifyDeliveryWebhook } from "../../middleware/webhook-auth";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.post("/", async (c) => {
     const db = getDb(c.env);
 
+    // Read raw body for signature verification (must be done before .json())
+    const rawBody = await c.req.text();
+
+    // --- Webhook signature / IP verification ---
+    const verification = await verifyDeliveryWebhook(
+        c.env,
+        "steadfast",
+        c.req.raw,
+        rawBody,
+    );
+
+    if (!verification.verified) {
+        console.warn(`[steadfast-webhook] Rejected: ${verification.reason}`);
+        return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
     try {
-        const payload = await c.req.json() as {
+        const payload = JSON.parse(rawBody) as {
             consignment_id?: number;
             tracking_code?: string;
             status?: string;
@@ -91,7 +108,7 @@ app.post("/", async (c) => {
         return c.json({ success: true, status: normalizedStatus });
     } catch (error) {
         console.error("[steadfast-webhook] Error:", error);
-        return c.json({ success: true, message: "Error processing, will retry" });
+        return c.json({ success: false, error: "Internal processing error" }, 500);
     }
 });
 

@@ -3,6 +3,7 @@
 
 import { db } from "@scalius/database/client";
 import type { Database } from "@scalius/database/client";
+import { roundPrice, addPrices, subtractPrice } from "@scalius/shared/price-utils";
 import {
     orders,
     orderItems,
@@ -469,10 +470,10 @@ export async function getOrderDetails(
  */
 export async function createOrder(data: CreateOrderInput): Promise<{ id: string }> {
     // Calculate total amount
-    const totalAmount =
-        data.items.reduce((sum, item) => sum + item.price * item.quantity, 0) +
-        data.shippingCharge -
-        (data.discountAmount || 0);
+    const totalAmount = subtractPrice(
+        addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
+        data.discountAmount || 0,
+    );
 
     // Resolve location names (read-only, safe outside transaction)
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
@@ -748,7 +749,10 @@ export async function updateOrder(id: string, data: UpdateOrderData): Promise<{ 
         }
     }
 
-    const totalAmount = data.items.reduce((sum: number, item) => sum + item.price * item.quantity, 0) + data.shippingCharge - (data.discountAmount || 0);
+    const totalAmount = subtractPrice(
+        addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
+        data.discountAmount || 0,
+    );
     let customerId = existingOrder.customerId;
 
     if (data.customerPhone !== existingOrder.customerPhone) {
@@ -1281,7 +1285,7 @@ export async function createStorefrontOrder(
         }
     }
 
-    const totalAmount = serverItemTotal + verifiedShippingCharge - verifiedDiscountAmount;
+    const totalAmount = subtractPrice(addPrices(serverItemTotal, verifiedShippingCharge), verifiedDiscountAmount);
 
     // ------------------------------------------------------------------
     // PARTIAL PAYMENT SECURITY CHECK

@@ -136,11 +136,3 @@ export interface AttributeDeleteDialogProps {
   onConfirm: () => void;
 }
 
-export interface BulkActionDialogProps {
-  open: boolean;
-  bulkAction: BulkAction;
-  selectedCount: number;
-  isActionLoading: boolean;
-  onOpenChange: () => void;
-  onConfirm: () => void;
-}

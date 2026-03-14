@@ -4,6 +4,9 @@ import { settings, siteSettings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
+import { getKv } from "../../../utils/kv-cache";
+import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
+
 import { ok } from "../../../utils/api-response";
 const app = new OpenAPIHono();
 const MASKED = "••••••••••••";
@@ -82,6 +85,7 @@ app.openapi(saveAuthRoute, async (c) => {
             .set(updates)
             .where(eq(siteSettings.id, existingSettings.id));
 
+        await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "Auth settings saved successfully" });
     } catch (error) {
         return c.json({ message: "Error saving auth settings" }, 500);

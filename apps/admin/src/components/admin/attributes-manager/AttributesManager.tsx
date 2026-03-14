@@ -12,10 +12,11 @@ import {
   AttributePagination,
   AttributeCreateDialog,
   AttributeDeleteDialog,
-  BulkActionDialog,
   AttributeValuesViewer,
   AttributeValueEditor,
 } from "./components";
+import { BulkActionDialog } from "@/components/admin/shared/BulkActionDialog";
+import type { BulkActionConfig } from "@/components/admin/shared/BulkActionDialog";
 import type {
   AttributesManagerProps,
   SortField,
@@ -199,11 +200,29 @@ export function AttributesManager({
       {/* Bulk Action Confirmation Dialog */}
       <BulkActionDialog
         open={!!bulkAction}
-        bulkAction={bulkAction}
-        selectedCount={selectedIds.size}
-        isActionLoading={isBulkActionLoading}
         onOpenChange={() => setBulkAction(null)}
+        currentAction={bulkAction}
+        selectedCount={selectedIds.size}
+        actionConfigs={{
+          trash: {
+            title: "Move Attributes to Trash?",
+            description: `Are you sure you want to move ${selectedIds.size} selected attributes to trash? You can restore them later.`,
+            confirmLabel: "Move to Trash",
+          },
+          restore: {
+            title: "Restore Attributes?",
+            description: `Are you sure you want to restore ${selectedIds.size} selected attributes?`,
+            confirmLabel: "Restore",
+          },
+          delete: {
+            title: "Delete Attributes Permanently?",
+            description: `Are you sure you want to permanently delete ${selectedIds.size} selected attributes? This action cannot be undone.`,
+            confirmLabel: "Delete Permanently",
+            variant: "destructive",
+          },
+        } satisfies Record<string, BulkActionConfig>}
         onConfirm={() => handleBulkAction(bulkAction)}
+        isLoading={isBulkActionLoading}
       />
 
       {/* Create Attribute Dialog */}

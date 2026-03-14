@@ -16,6 +16,7 @@ import { eq, sql, and, isNull, count, inArray } from "drizzle-orm";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 
 import { ok } from "../utils/api-response";
+import { roundPrice } from "@scalius/shared/price-utils";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Schema for validating discount code
@@ -321,21 +322,21 @@ export function calculateDiscountAmount(
 
   if (discount.type === DiscountType.AMOUNT_OFF_ORDER) {
     if (discount.valueType === DiscountValueType.PERCENTAGE) {
-      const subTotal = total - shippingCost;
-      const calculatedDiscount = (subTotal * discount.discountValue) / 100;
+      const subTotal = roundPrice(total - shippingCost);
+      const calculatedDiscount = roundPrice((subTotal * discount.discountValue) / 100);
       return Math.min(subTotal, calculatedDiscount);
     } else if (discount.valueType === DiscountValueType.FIXED_AMOUNT) {
-      const subTotal = total - shippingCost;
+      const subTotal = roundPrice(total - shippingCost);
       return Math.min(subTotal, discount.discountValue);
     }
   }
 
   if (discount.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
-    const subTotal = total - shippingCost;
+    const subTotal = roundPrice(total - shippingCost);
 
     if (!cartItems || cartItems.length === 0) {
       if (discount.valueType === DiscountValueType.PERCENTAGE) {
-        const calculatedDiscount = (subTotal * discount.discountValue) / 100;
+        const calculatedDiscount = roundPrice((subTotal * discount.discountValue) / 100);
         return Math.min(subTotal, calculatedDiscount);
       } else if (discount.valueType === DiscountValueType.FIXED_AMOUNT) {
         return Math.min(subTotal, discount.discountValue);
@@ -356,6 +357,7 @@ export function calculateDiscountAmount(
         applicableProductsTotal += item.price * item.quantity;
       }
     }
+    applicableProductsTotal = roundPrice(applicableProductsTotal);
 
     if (applicableProductsTotal === 0 || applicableProductIds.size === 0) {
       applicableProductsTotal = subTotal;
@@ -363,7 +365,7 @@ export function calculateDiscountAmount(
 
     if (discount.valueType === DiscountValueType.PERCENTAGE) {
       const calculatedDiscount =
-        (applicableProductsTotal * discount.discountValue) / 100;
+        roundPrice((applicableProductsTotal * discount.discountValue) / 100);
       return Math.min(applicableProductsTotal, calculatedDiscount);
     } else if (discount.valueType === DiscountValueType.FIXED_AMOUNT) {
       return Math.min(applicableProductsTotal, discount.discountValue);
@@ -510,7 +512,7 @@ app.openapi(validateDiscountRoute, async (c) => {
     return ok(c, {
       valid: true,
       discount: enhancedDiscount,
-      discountAmount: parseFloat(discountAmount.toFixed(2))
+      discountAmount: roundPrice(discountAmount)
     });
   }
 
