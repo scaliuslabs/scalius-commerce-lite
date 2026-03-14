@@ -135,7 +135,6 @@ app.openapi(listPagesRoute, async (c) => {
       total,
       totalPages
     },
-    success: true as const
   });
 });
 
@@ -205,7 +204,6 @@ app.openapi(getPageBySlugRoute, async (c) => {
 
   return ok(c, {
     page,
-    success: true as const
   });
 });
 
@@ -271,7 +269,6 @@ app.openapi(getPageByIdRoute, async (c) => {
 
   return ok(c, {
     page,
-    success: true as const
   });
 });
 

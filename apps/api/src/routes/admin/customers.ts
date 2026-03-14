@@ -157,7 +157,7 @@ app.openapi(updateCustomerRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         await updateCustomer(db, id, c.req.valid("json"));
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
         return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);

@@ -61,7 +61,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
     }
 
     await deliveryService.deleteShipment(shipmentId);
-    return ok(c, { success: true, message: "Shipment deleted successfully" });
+    return ok(c, { message: "Shipment deleted successfully" });
 });
 
 // ─── POST /:id/check-status ─────────────────────────────────────────────────
@@ -115,7 +115,6 @@ app.openapi(checkStatusRoute, async (c) => {
         );
 
         return ok(c, {
-            success: true,
             message: `Shipment status updated from ${previousStatus} to ${result.status}`,
             data: {
                 ...result,
@@ -127,7 +126,6 @@ app.openapi(checkStatusRoute, async (c) => {
     }
 
     return ok(c, {
-        success: true,
         message: "Shipment status checked successfully",
         data: {
             ...result,

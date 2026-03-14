@@ -157,7 +157,6 @@ app.openapi(createSessionRoute, async (c) => {
   }
 
   return ok(c, {
-    success: true,
     gatewayUrl: result.gatewayUrl,
     sessionKey: result.sessionKey
   });

@@ -149,7 +149,6 @@ app.openapi(createRoleRoute, async (c) => {
         clearAllPermissionCache();
 
         return created(c, {
-            success: true,
             role: {
                 id: roleId,
                 name: data.name,
@@ -294,7 +293,6 @@ app.openapi(updateRoleRoute, async (c) => {
         const updatedPerms = await getRolePermissions(db, roleId);
 
         return ok(c, {
-            success: true,
             role: {
                 ...updatedRole[0],
                 permissions: updatedPerms
@@ -361,7 +359,7 @@ app.openapi(deleteRoleRoute, async (c) => {
 
         clearAllPermissionCache();
 
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error) {
         console.error("Error deleting role:", error);
         return c.json({ error: "Internal server error" }, 500);
@@ -427,7 +425,7 @@ app.openapi(assignRoleRoute, async (c) => {
 
         await assignRoleToUser(db, data.userId, data.roleId, sessionUser.id);
 
-        return created(c, { success: true });
+        return created(c, {});
     } catch (error: unknown) {
         console.error("Error assigning role:", error);
         return c.json({ error: "Internal server error" }, 500);
@@ -478,7 +476,7 @@ app.openapi(removeRoleRoute, async (c) => {
 
         await removeRoleFromUser(db, data.userId, data.roleId);
 
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         console.error("Error removing role:", error);
         return c.json({ error: "Internal server error" }, 500);
@@ -536,7 +534,7 @@ app.openapi(setOverrideRoute, async (c) => {
             throw error;
         }
 
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         console.error("Error setting permission override:", error);
         return c.json({ error: "Internal server error" }, 500);
@@ -587,7 +585,7 @@ app.openapi(removeOverrideRoute, async (c) => {
 
         await removeUserPermissionOverride(db, data.userId, data.permission);
 
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         console.error("Error removing permission override:", error);
         return c.json({ error: "Internal server error" }, 500);

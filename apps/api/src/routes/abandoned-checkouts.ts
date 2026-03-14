@@ -64,7 +64,7 @@ app.openapi(saveAbandonedCheckoutRoute, async (c) => {
     });
   }
 
-  return ok(c, { success: true, message: "Abandoned checkout saved." });
+  return ok(c, { message: "Abandoned checkout saved." });
 });
 
 // ─── POST /cleanup ───────────────────────────────────────────────────────────
@@ -102,7 +102,6 @@ app.openapi(cleanupRoute, async (c) => {
     .where(eq(abandonedCheckouts.checkoutId, checkoutId));
 
   return ok(c, {
-    success: true,
     message: `Abandoned checkout record ${checkoutId} deleted.`
   });
 });

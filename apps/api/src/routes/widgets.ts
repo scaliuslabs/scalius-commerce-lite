@@ -112,7 +112,6 @@ app.openapi(getWidgetByIdRoute, async (c) => {
   };
 
   return ok(c, {
-    success: true as const,
     widget: formattedWidget
   });
 });

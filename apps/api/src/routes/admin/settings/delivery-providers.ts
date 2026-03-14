@@ -295,7 +295,7 @@ app.openapi(deleteProviderRoute, async (c) => {
     try {
         const { id } = c.req.valid("param");
         await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         return c.json({ error: error instanceof Error ? error.message : "Failed to delete provider" }, 500);
     }

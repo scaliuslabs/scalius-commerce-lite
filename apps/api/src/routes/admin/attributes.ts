@@ -586,7 +586,7 @@ app.openapi(addValueRoute, async (c) => {
                 .where(eq(productAttributes.id, attributeId));
         }
 
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
         return c.json({ error: "Failed" }, 500);
@@ -646,7 +646,6 @@ app.openapi(updateValueRoute, async (c) => {
         }
 
         return ok(c, {
-            success: true,
             message: `Value "${oldValue}" renamed to "${newValue}"`
         });
     } catch (error) {
@@ -705,7 +704,6 @@ app.openapi(deleteValueRoute, async (c) => {
         }
 
         return ok(c, {
-            success: true,
             message: `Value "${value}" deleted from all products`
         });
     } catch (error) {

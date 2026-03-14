@@ -92,7 +92,7 @@ app.openapi(listUsersRoute, async (c) => {
             })
         );
 
-        return ok(c, { success: true, users: usersWithRoles });
+        return ok(c, { users: usersWithRoles });
     } catch (error: unknown) {
         console.error("Get admin users error:", error);
         return c.json({ error: "Server error", message: "Failed to fetch admin users" }, 500);
@@ -169,7 +169,6 @@ app.openapi(createUserRoute, async (c) => {
         }
 
         return created(c, {
-            success: true,
             message: "Admin user created successfully. An invitation email has been sent.",
             user: { id: signUpResult.user.id, name, email }
         });
@@ -215,7 +214,7 @@ app.openapi(deleteUserRoute, async (c) => {
 
         await db.delete(user).where(eq(user.id, userId));
 
-        return ok(c, { success: true, message: "Admin user deleted successfully" });
+        return ok(c, { message: "Admin user deleted successfully" });
     } catch (error: unknown) {
         console.error("Delete admin user error:", error);
         return c.json({ error: "Server error", message: "Failed to delete admin user" }, 500);
@@ -257,7 +256,7 @@ app.openapi(changePasswordRoute, async (c) => {
 
         if (!result) return c.json({ error: "Failed to change password", message: "Unable to change password. Please check your current password." }, 400);
 
-        return ok(c, { success: true, message: "Password changed successfully" });
+        return ok(c, { message: "Password changed successfully" });
     } catch (error: unknown) {
         console.error("Change password error:", error);
         if (error instanceof Error && (error.message?.includes("password") || error.message?.includes("incorrect"))) {
@@ -303,7 +302,7 @@ app.openapi(updateProfileRoute, async (c) => {
             .where(eq(user.id, sessionUser.id))
             .get();
 
-        return ok(c, { success: true, user: updatedUser });
+        return ok(c, { user: updatedUser });
     } catch (error: unknown) {
         console.error("Error updating profile:", error);
         return c.json({ error: "Failed to update profile" }, 500);
@@ -338,7 +337,6 @@ app.openapi(get2faInfoRoute, async (c) => {
         if (!userData) return c.json({ success: false, message: "User not found" }, 404);
 
         return ok(c, {
-            success: true,
             method: userData.twoFactorMethod || "email",
             twoFactorEnabled: userData.twoFactorEnabled,
             email: userData.email
@@ -370,7 +368,7 @@ app.openapi(mark2faVerifiedRoute, async (c) => {
 
         await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
 
-        return ok(c, { success: true, message: "Session marked as 2FA verified" });
+        return ok(c, { message: "Session marked as 2FA verified" });
     } catch (error: unknown) {
         return c.json({ error: "Internal error", message: error instanceof Error ? error.message : "Failed to update session" }, 500);
     }
@@ -397,7 +395,7 @@ app.openapi(update2faMethodRoute, async (c) => {
 
         await db.update(user).set({ twoFactorMethod: method }).where(eq(user.id, sessionUser.id));
 
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         return c.json({ success: false, message: "Internal server error" }, 500);
     }
@@ -445,14 +443,14 @@ app.openapi(verify2faRoute, async (c) => {
             const sessionByToken = await db.select({ id: sessionTable.id }).from(sessionTable).where(eq(sessionTable.token, sessionToken)).get();
             if (sessionByToken) {
                 await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, sessionByToken.id));
-                return ok(c, { success: true, message: "Two-factor authentication verified" });
+                return ok(c, { message: "Two-factor authentication verified" });
             }
         }
 
         const session = c.get("session");
         if (session) {
             await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
-            return ok(c, { success: true, message: "Two-factor authentication verified" });
+            return ok(c, { message: "Two-factor authentication verified" });
         }
 
         return c.json({ error: "No session", message: "Could not find session to update" }, 401);
@@ -513,7 +511,7 @@ setupApp.openapi(setupRoute, async (c) => {
         const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
         await autoSeedRbacIfNeeded(db);
 
-        return created(c, { success: true, message: "Admin account created successfully", userId: signUpResult.user.id });
+        return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
     } catch (error: unknown) {
         return c.json({ error: "Server error", message: error instanceof Error ? error.message : "Failed to create admin account" }, 500);
     }

@@ -75,7 +75,7 @@ app.openapi(listProductsRoute, async (c) => {
   const attributeFilters = await getAttributeFilters(db, queryParams, params);
 
   const result = await getStorefrontProducts(db, { ...params, attributeFilters });
-  return ok(c, { success: true as const, ...result });
+  return ok(c, result);
 });
 
 // GET /api/storefront/products/search
@@ -101,7 +101,7 @@ app.openapi(searchProductsRoute, async (c) => {
   const db = c.get("db");
   const { search, page, limit } = c.req.valid("query");
   const result = await searchStorefrontProducts(db, { search, page, limit });
-  return ok(c, { success: true as const, ...result });
+  return ok(c, result);
 });
 
 // GET /api/storefront/products/:slug
@@ -133,7 +133,7 @@ app.openapi(getProductBySlugRoute, async (c) => {
   const { slug } = c.req.valid("param");
   const result = await getStorefrontProductBySlug(db, slug);
   if (!result) throw new NotFoundError("Product not found");
-  return ok(c, { success: true as const, ...result });
+  return ok(c, result);
 });
 
 /** Extracts attribute-based filters from raw query params by checking known attribute slugs. */

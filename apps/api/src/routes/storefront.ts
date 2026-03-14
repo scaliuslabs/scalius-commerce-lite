@@ -35,7 +35,7 @@ app.use(
 app.openapi(homepageRoute, async (c) => {
   const db = c.get("db");
   const data = await getHomepageData(db);
-  return ok(c, { success: true as const, data });
+  return ok(c, data);
 });
 
 // GET /storefront/layout — consolidated layout data
@@ -62,7 +62,7 @@ app.use(
 app.openapi(layoutRoute, async (c) => {
   const db = c.get("db");
   const data = await getLayoutData(db);
-  return ok(c, { success: true as const, data });
+  return ok(c, data);
 });
 
 // GET /storefront/csp — returns merchant-configured CSP allowed domains
@@ -93,7 +93,7 @@ app.openapi(cspRoute, async (c) => {
     .from(settings)
     .where(and(eq(settings.key, "csp_allowed_domains"), eq(settings.category, "security")))
     .get();
-  return ok(c, { success: true as const, cspAllowedDomains: row?.value || "" });
+  return ok(c, { cspAllowedDomains: row?.value || "" });
 });
 
 export { app as storefrontRoutes };

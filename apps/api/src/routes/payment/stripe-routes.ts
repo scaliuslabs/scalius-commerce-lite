@@ -139,7 +139,6 @@ app.openapi(createIntentRoute, async (c) => {
   }
 
   return ok(c, {
-    success: true,
     clientSecret: result.clientSecret,
     paymentIntentId: result.paymentIntentId,
     publishableKey: stripe.publishableKey,

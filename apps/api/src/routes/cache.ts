@@ -31,7 +31,7 @@ const getStatsRoute = createRoute({
 
 app.openapi(getStatsRoute, async (c) => {
   const stats = await getCacheStats(kv(c));
-  return ok(c, { success: true, stats });
+  return ok(c, { stats });
 });
 
 // ─── GET /groups ─────────────────────────────────────────────────────────────
@@ -48,7 +48,6 @@ const getGroupsRoute = createRoute({
 
 app.openapi(getGroupsRoute, async (c) => {
   return ok(c, {
-    success: true,
     groups: INVALIDATION_GROUPS,
     pathMapping: ADMIN_PATH_TO_GROUPS
   });
@@ -80,7 +79,7 @@ app.openapi(getLastClearedRoute, async (c) => {
     );
   }
 
-  return ok(c, { success: true, timestamps });
+  return ok(c, { timestamps });
 });
 
 // ─── POST /clear ─────────────────────────────────────────────────────────────
@@ -111,7 +110,7 @@ app.openapi(clearAllRoute, async (c) => {
     );
   }
 
-  return ok(c, { success: true, message: "All cache cleared successfully" });
+  return ok(c, { message: "All cache cleared successfully" });
 });
 
 // ─── POST /clear-group ───────────────────────────────────────────────────────
@@ -185,7 +184,6 @@ app.openapi(clearGroupRoute, async (c) => {
   }
 
   return ok(c, {
-    success: true,
     message: `Cache cleared for groups: ${validGroups.join(", ")}`,
     groups: validGroups,
     bumpedHtml: bumpVersion

@@ -59,7 +59,7 @@ app.openapi(listCitiesRoute, async (c) => {
     )
     .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
 
-  return ok(c, { success: true as const, data: cities.map(formatLocation) });
+  return ok(c, cities.map(formatLocation));
 });
 
 // GET /locations/zones — get all active zones for a given city
@@ -103,7 +103,7 @@ app.openapi(listZonesRoute, async (c) => {
     )
     .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
 
-  return ok(c, { success: true as const, data: zones.map(formatLocation) });
+  return ok(c, zones.map(formatLocation));
 });
 
 // GET /locations/areas — get all active areas for a given zone
@@ -147,7 +147,7 @@ app.openapi(listAreasRoute, async (c) => {
     )
     .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
 
-  return ok(c, { success: true as const, data: areas.map(formatLocation) });
+  return ok(c, areas.map(formatLocation));
 });
 
 export { app as locationRoutes };

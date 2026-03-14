@@ -110,7 +110,7 @@ app.openapi(acknowledgeAlertRoute, async (c) => {
     const db = c.get("db");
     const { variantId } = c.req.valid("json");
     await acknowledgeLowStockAlert(db, variantId);
-    return ok(c, { success: true });
+    return ok(c, {});
 });
 
 // ── Adjust Inventory ──
