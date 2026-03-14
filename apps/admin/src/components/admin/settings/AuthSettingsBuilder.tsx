@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
     Select,
     SelectContent,
@@ -28,10 +27,6 @@ export default function AuthSettingsBuilder() {
     const [saving, setSaving] = useState(false);
 
     const [authVerificationMethod, setAuthVerificationMethod] = useState<string>("email");
-    const [guestCheckoutEnabled, setGuestCheckoutEnabled] = useState(true);
-    const [checkoutMode, setCheckoutMode] = useState<string>("all");
-    const [partialPaymentEnabled, setPartialPaymentEnabled] = useState(false);
-    const [partialPaymentAmount, setPartialPaymentAmount] = useState<number>(0);
 
     const [whatsappAccessToken, setWhatsappAccessToken] = useState("");
     const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState("");
@@ -49,13 +44,9 @@ export default function AuthSettingsBuilder() {
             if (res.ok) {
                 const data = await res.json();
                 setAuthVerificationMethod(data.authVerificationMethod || "email");
-                setGuestCheckoutEnabled(data.guestCheckoutEnabled !== false);
                 setWhatsappAccessToken(data.whatsappAccessToken || "");
                 setWhatsappPhoneNumberId(data.whatsappPhoneNumberId || "");
                 setWhatsappTemplateName(data.whatsappTemplateName || "auth_otp");
-                setCheckoutMode(data.checkoutMode || "all");
-                setPartialPaymentEnabled(data.partialPaymentEnabled || false);
-                setPartialPaymentAmount(data.partialPaymentAmount || 0);
                 setAccessTokenConfigured(!!data.whatsappAccessToken);
             }
         } catch {
@@ -75,13 +66,9 @@ export default function AuthSettingsBuilder() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     authVerificationMethod,
-                    guestCheckoutEnabled,
                     whatsappAccessToken,
                     whatsappPhoneNumberId,
                     whatsappTemplateName,
-                    checkoutMode,
-                    partialPaymentEnabled,
-                    partialPaymentAmount,
                 }),
             });
 
@@ -111,27 +98,13 @@ export default function AuthSettingsBuilder() {
         <div className="space-y-5 max-w-2xl">
             <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Global Access Rules</CardTitle>
+                    <CardTitle className="text-base">Account Verification</CardTitle>
                     <CardDescription>
-                        Control account requirements during the storefront checkout flow.
+                        Configure how customers verify their identity when creating an account or logging in.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                            <Label>Guest Checkout</Label>
-                            <p className="text-xs text-muted-foreground">
-                                When enabled, customers can checkout without logging in (subject to the Checkout Mode allowed below).
-                            </p>
-                        </div>
-                        <Switch
-                            checked={guestCheckoutEnabled}
-                            onCheckedChange={setGuestCheckoutEnabled}
-                        />
-                    </div>
-
-
-                    <div className="space-y-1.5 pt-4 border-t border-border">
+                    <div className="space-y-1.5">
                         <Label>Account Verification Method</Label>
                         <p className="text-xs text-muted-foreground mb-1.5">
                             How customers verify their identity when creating an account or logging in.
@@ -150,59 +123,6 @@ export default function AuthSettingsBuilder() {
                                 <SelectItem value="sms_otp">SMS OTP (Coming Soon)</SelectItem>
                             </SelectContent>
                         </Select>
-                    </div>
-
-                    <div className="space-y-1.5 pt-4 border-t border-border">
-                        <Label>Checkout Mode</Label>
-                        <p className="text-xs text-muted-foreground mb-1.5">
-                            Determine which payment flows and methods are available to customers at checkout.
-                        </p>
-                        <Select
-                            value={checkoutMode}
-                            onValueChange={(val) => setCheckoutMode(val)}
-                        >
-                            <SelectTrigger className="w-full max-w-xs">
-                                <SelectValue placeholder="Select checkout mode" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Standard (All Methods Available)</SelectItem>
-                                <SelectItem value="guest_cod_only">Fast COD Only (Direct from Cart)</SelectItem>
-                                <SelectItem value="gateways_only">Online Gateways Only (No COD)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-4 pt-4 border-t border-border">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <Label>Partial Payment / Advance Deposit</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Require customers to pay a specific amount upfront to confirm their order. Useful for COD orders.
-                                </p>
-                            </div>
-                            <Switch
-                                checked={partialPaymentEnabled}
-                                onCheckedChange={setPartialPaymentEnabled}
-                            />
-                        </div>
-
-                        {partialPaymentEnabled && (
-                            <div className="space-y-1.5 pl-4 border-l-2 border-primary/20">
-                                <Label htmlFor="partial-payment-amount">Advance Amount Required</Label>
-                                <Input
-                                    id="partial-payment-amount"
-                                    type="number"
-                                    min="0"
-                                    className="max-w-xs"
-                                    placeholder="e.g. 200"
-                                    value={partialPaymentAmount}
-                                    onChange={(e) => setPartialPaymentAmount(Number(e.target.value))}
-                                />
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Customers must pay this flat amount via an online gateway to successfully place an order.
-                                </p>
-                            </div>
-                        )}
                     </div>
                 </CardContent>
             </Card>
