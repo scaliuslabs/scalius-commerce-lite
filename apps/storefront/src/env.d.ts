@@ -4,13 +4,12 @@
 /// <reference types="astro/client" />
 
 // Vite / Astro build-time environment variables (import.meta.env).
-// Runtime secrets (KV, service bindings...) come through Cloudflare Workers bindings.
+// ONLY PUBLIC_ prefixed vars belong here — they are baked into the JS bundle at build time.
+// Secrets (API_TOKEN, JWT_SECRET, PURGE_TOKEN) must NEVER be here — they come from
+// Cloudflare Workers runtime bindings (env.* via wrangler secret put or .dev.vars).
 interface ImportMetaEnv {
   readonly PUBLIC_API_URL: string;
   readonly PUBLIC_API_BASE_URL: string;
-  readonly API_TOKEN: string;
-  readonly JWT_SECRET: string;
-  readonly PURGE_TOKEN: string;
 }
 
 interface ImportMeta {
