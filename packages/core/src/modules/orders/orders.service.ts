@@ -615,7 +615,32 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
     return { id: order.id };
 }
 
-export async function updateOrder(id: string, data: Record<string, unknown>): Promise<{ id: string }> {
+interface UpdateOrderItem {
+    productId: string;
+    variantId: string | null;
+    quantity: number;
+    price: number;
+}
+
+interface UpdateOrderData {
+    customerName: string;
+    customerPhone: string;
+    customerEmail: string | null;
+    shippingAddress: string;
+    city: string;
+    zone: string;
+    area: string | null;
+    cityName?: string;
+    zoneName?: string;
+    areaName?: string;
+    notes: string | null;
+    items: UpdateOrderItem[];
+    shippingCharge: number;
+    discountAmount: number;
+    status: string;
+}
+
+export async function updateOrder(id: string, data: UpdateOrderData): Promise<{ id: string }> {
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
     const locationMap = new Map<string, string>();
     if (locationIds.length > 0) {
@@ -673,7 +698,7 @@ export async function updateOrder(id: string, data: Record<string, unknown>): Pr
         for (const existingItem of existingItems) {
             if (existingItem.variantId) {
                 const matchingNewItem = data.items.find(
-                    (item: Record<string, unknown>) => item.variantId === existingItem.variantId && item.quantity === existingItem.quantity
+                    (item) => item.variantId === existingItem.variantId && item.quantity === existingItem.quantity
                 );
                 if (!matchingNewItem) {
                     await db.update(productVariants)
@@ -701,7 +726,7 @@ export async function updateOrder(id: string, data: Record<string, unknown>): Pr
         }
     }
 
-    const totalAmount = data.items.reduce((sum: number, item: Record<string, unknown>) => sum + (item.price as number) * (item.quantity as number), 0) + data.shippingCharge - (data.discountAmount || 0);
+    const totalAmount = data.items.reduce((sum: number, item) => sum + item.price * item.quantity, 0) + data.shippingCharge - (data.discountAmount || 0);
     let customerId = existingOrder.customerId;
 
     if (data.customerPhone !== existingOrder.customerPhone) {
@@ -757,7 +782,7 @@ export async function updateOrder(id: string, data: Record<string, unknown>): Pr
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
 
     if (data.items.length > 0) {
-        await db.insert(orderItems).values(data.items.map((item: Record<string, unknown>) => ({
+        await db.insert(orderItems).values(data.items.map((item) => ({
             id: "item_" + nanoid(),
             orderId: order.id,
             productId: item.productId,
@@ -857,21 +882,24 @@ export async function bulkShipOrders(orderIds: string[], providerId: string, opt
 
 export async function processCodAction(orderId: string, body: Record<string, unknown>) {
     switch (body.action) {
-        case "collected":
-            const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy, collectedAmount: body.collectedAmount, receiptUrl: body.receiptUrl });
-            if (!colResult.success) throw new ValidationError(colResult.error);
+        case "collected": {
+            const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy as string, collectedAmount: body.collectedAmount as number, receiptUrl: body.receiptUrl as string | undefined });
+            if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
             await db.update(orders).set({ status: OrderStatus.DELIVERED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
             return { success: true, message: "COD collection recorded" };
-        case "failed":
-            const failResult = await recordCODFailure(db, { orderId, reason: body.reason, notes: body.notes });
-            if (!failResult.success) throw new ValidationError(failResult.error);
+        }
+        case "failed": {
+            const failResult = await recordCODFailure(db, { orderId, reason: body.reason as "other" | "not_home" | "refused" | "no_cash" | "wrong_address", notes: body.notes as string | undefined });
+            if (!failResult.success) throw new ValidationError(failResult.error || "COD failure recording failed");
             return { success: true, message: "COD failure recorded" };
-        case "returned":
+        }
+        case "returned": {
             const retResult = await markCODReturned(db, orderId);
-            if (!retResult.success) throw new ValidationError(retResult.error);
+            if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
             await applyInventoryForStatusChange(db, orderId, OrderStatus.RETURNED);
             await db.update(orders).set({ status: OrderStatus.RETURNED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
             return { success: true, message: "Order marked as returned" };
+        }
         default:
             throw new ValidationError("Invalid action");
     }
@@ -889,28 +917,28 @@ export async function createFulfillmentShipment(orderId: string, body: Record<st
     }
 
     const allItems = await db.select({ id: orderItems.id, fulfillmentStatus: orderItems.fulfillmentStatus }).from(orderItems).where(eq(orderItems.orderId, orderId)).all();
-    const shipmentItemIds = body.itemIds ?? allItems.map((i) => i.id);
+    const shipmentItemIds = (body.itemIds as string[] | undefined) ?? allItems.map((i) => i.id);
 
-    const alreadyFulfilled = allItems.filter((i) => shipmentItemIds.includes(i.id) && (i.fulfillmentStatus === ItemFulfillmentStatus.SHIPPED || i.fulfillmentStatus === ItemFulfillmentStatus.DELIVERED));
+    const alreadyFulfilled = allItems.filter((i) => (shipmentItemIds as string[]).includes(i.id) && (i.fulfillmentStatus === ItemFulfillmentStatus.SHIPPED || i.fulfillmentStatus === ItemFulfillmentStatus.DELIVERED));
     if (alreadyFulfilled.length > 0) throw new ConflictError(`Items already shipped: ${alreadyFulfilled.map((i) => i.id).join(", ")}`);
 
     const shipmentId = `shp_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     const now = new Date();
     const unfulfilledItemIds = allItems.filter((i) => i.fulfillmentStatus === ItemFulfillmentStatus.PENDING || i.fulfillmentStatus === ItemFulfillmentStatus.PICKED || i.fulfillmentStatus === ItemFulfillmentStatus.PACKED).map((i) => i.id);
-    const isFinalShipment = body.isFinalShipment ?? (shipmentItemIds.every((sid: string) => unfulfilledItemIds.includes(sid)) && unfulfilledItemIds.every((uid) => shipmentItemIds.includes(uid)));
+    const isFinalShipment = (body.isFinalShipment as boolean | undefined) ?? ((shipmentItemIds as string[]).every((sid: string) => unfulfilledItemIds.includes(sid)) && unfulfilledItemIds.every((uid) => (shipmentItemIds as string[]).includes(uid)));
 
     const newFulfillmentStatus = isFinalShipment ? FulfillmentStatus.COMPLETE : FulfillmentStatus.PARTIAL;
     // Drizzle D1 batch() requires specific tuple types
     const writes: unknown[] = [];
 
     writes.push(db.insert(deliveryShipments).values({
-        id: shipmentId, orderId, trackingId: body.trackingId ?? null, trackingUrl: body.trackingUrl ?? null,
-        courierName: body.courierName ?? null, status: "processing", note: body.note ?? null,
-        shipmentItems: JSON.stringify(shipmentItemIds), shipmentAmount: body.shipmentAmount ?? null, isFinalShipment,
+        id: shipmentId, orderId, trackingId: (body.trackingId as string | undefined) ?? null, trackingUrl: (body.trackingUrl as string | undefined) ?? null,
+        courierName: (body.courierName as string | undefined) ?? null, status: "processing", note: (body.note as string | undefined) ?? null,
+        shipmentItems: JSON.stringify(shipmentItemIds), shipmentAmount: (body.shipmentAmount as number | undefined) ?? null, isFinalShipment,
         createdAt: now, updatedAt: now,
     }));
 
-    for (const itemId of shipmentItemIds) {
+    for (const itemId of shipmentItemIds as string[]) {
         writes.push(db.update(orderItems).set({ fulfillmentStatus: ItemFulfillmentStatus.SHIPPED }).where(eq(orderItems.id, itemId)));
     }
 
@@ -1107,11 +1135,13 @@ export async function createStorefrontOrder(
     }
 
     // Execute Read Batch
-    const readResults = await storefrontDb.batch(readBatch as [unknown, unknown, unknown, unknown, unknown, unknown, unknown]);
+    const readResults = await storefrontDb.batch(readBatch as any);
 
     // Unpack Results
-    const variants = variantIds.length > 0 ? (readResults[0] as unknown[]) : [];
-    const locationResults = locationIds.length > 0 ? (readResults[1] as unknown[]) : [];
+    interface VariantRow { id: string; productId: string; stock: number; price: number; discountPercentage: number | null; discountType: string | null; discountAmount: number | null; }
+    interface LocationRow { id: string; name: string; }
+    const variants = variantIds.length > 0 ? (readResults[0] as VariantRow[]) : [] as VariantRow[];
+    const locationResults = locationIds.length > 0 ? (readResults[1] as LocationRow[]) : [] as LocationRow[];
 
     const customerList = readResults[2] as { id: string; totalOrders: number; totalSpent: number }[];
     const existingCustomer = customerList.length > 0 ? customerList[0] : undefined;
@@ -1131,11 +1161,11 @@ export async function createStorefrontOrder(
         : [];
     const productMap = new Map(productList.map((p) => [p.id, p]));
 
-    const settingsList = readResults[5] as unknown[];
-    const settings = settingsList.length > 0 ? settingsList[0] : null;
+    const settingsList = readResults[5] as Record<string, unknown>[];
+    const settings = settingsList.length > 0 ? settingsList[0] as Record<string, unknown> : null;
 
-    const shippingMethodList = readResults[6] as unknown[];
-    const shippingMethod = shippingMethodList.length > 0 ? shippingMethodList[0] : null;
+    const shippingMethodList = readResults[6] as Record<string, unknown>[];
+    const shippingMethod = shippingMethodList.length > 0 ? shippingMethodList[0] as Record<string, unknown> : null;
 
     // Validation (Pre-Check)
     const variantMap = new Map(variants.map((v) => [v.id, v]));
@@ -1160,13 +1190,13 @@ export async function createStorefrontOrder(
         let unitPrice: number;
 
         if (item.variantId) {
-            const variant = variantMap.get(item.variantId) as Record<string, unknown>;
+            const variant = variantMap.get(item.variantId)!;
             unitPrice = variant.price;
 
-            if (variant.discountType === "percentage" && variant.discountPercentage > 0) {
-                unitPrice = unitPrice * (1 - variant.discountPercentage / 100);
-            } else if (variant.discountType === "flat" && variant.discountAmount > 0) {
-                unitPrice = Math.max(0, unitPrice - variant.discountAmount);
+            if (variant.discountType === "percentage" && (variant.discountPercentage ?? 0) > 0) {
+                unitPrice = unitPrice * (1 - (variant.discountPercentage ?? 0) / 100);
+            } else if (variant.discountType === "flat" && (variant.discountAmount ?? 0) > 0) {
+                unitPrice = Math.max(0, unitPrice - (variant.discountAmount ?? 0));
             }
         } else {
             const product = productMap.get(item.productId)!;
@@ -1185,7 +1215,7 @@ export async function createStorefrontOrder(
     serverItemTotal = Math.round(serverItemTotal * 100) / 100;
 
     // Determine exact shipping charge
-    let verifiedShippingCharge = shippingMethod ? shippingMethod.fee : (data.shippingCharge || 0);
+    let verifiedShippingCharge = shippingMethod ? (shippingMethod.fee as number) : (data.shippingCharge || 0);
 
     const hasFreeDeliveryProduct = data.items.some((item) => {
         const product = productMap.get(item.productId);
@@ -1208,10 +1238,11 @@ export async function createStorefrontOrder(
             data.customerPhone,
         );
 
-        if (validationResponse && validationResponse.valid && validationResponse.discount) {
+        const validResult = validationResponse as Record<string, unknown> | null;
+        if (validResult && validResult.valid && validResult.discount) {
             verifiedDiscountAmount = calculateDiscountAmount(
                 storefrontDb,
-                validationResponse.discount,
+                validResult.discount,
                 serverItemTotal + verifiedShippingCharge,
                 data.items,
                 verifiedShippingCharge,
@@ -1227,13 +1258,13 @@ export async function createStorefrontOrder(
     // PARTIAL PAYMENT SECURITY CHECK
     // ------------------------------------------------------------------
     const { PaymentMethod: PaymentMethodEnum, PaymentStatus: PaymentStatusEnum, OrderStatus: OrderStatusEnum, FulfillmentStatus: FulfillmentStatusEnum } = await import("@scalius/database/schema");
-    const isPartialEnabled = settings?.partialPaymentEnabled ?? false;
+    const isPartialEnabled = (settings?.partialPaymentEnabled as boolean) ?? false;
     if (isPartialEnabled && data.paymentMethod === PaymentMethodEnum.COD) {
         throw new ValidationError("Advance deposit is required. COD cannot be selected for the full amount directly.");
     }
 
     // Process Location Data
-    const locationMap = new Map(locationResults.map((l) => [l.id, l.name]));
+    const locationMap = new Map(locationResults.map((l: LocationRow) => [l.id, l.name]));
     const cityName = locationMap.get(data.city) || data.cityName || null;
     const zoneName = locationMap.get(data.zone) || data.zoneName || null;
     const areaName = locationMap.get(data.area || "") || data.areaName || null;

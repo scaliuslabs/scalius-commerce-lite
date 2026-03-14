@@ -185,8 +185,8 @@ export class DeliveryService {
           trackingId: shipmentResult.data.trackingId,
           status: shipmentResult.data.status || "pending",
           rawStatus:
-            shipmentResult.data.metadata?.order_status ||
-            shipmentResult.data.metadata?.status ||
+            (shipmentResult.data.metadata?.order_status as string) ||
+            (shipmentResult.data.metadata?.status as string) ||
             "pending",
           metadata: JSON.stringify(shipmentResult.data.metadata || {}),
           createdAt: now,

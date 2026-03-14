@@ -323,7 +323,7 @@ export function getRetryDelay(attempt: number): number {
  * Check if status code is retryable
  */
 export function isRetryableStatus(status: number): boolean {
-  return GENERATION_CONFIG.retry.retryableStatuses.includes(status as number);
+  return (GENERATION_CONFIG.retry.retryableStatuses as readonly number[]).includes(status);
 }
 
 /**

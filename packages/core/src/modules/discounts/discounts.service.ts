@@ -153,7 +153,7 @@ export const DiscountService = {
         const existingCode = await db
             .select({ id: discounts.id })
             .from(discounts)
-            .where(and(eq(discounts.code, data.code), isNull(discounts.deletedAt)))
+            .where(and(eq(discounts.code, data.code as string), isNull(discounts.deletedAt)))
             .get();
 
         if (existingCode) {
@@ -161,38 +161,41 @@ export const DiscountService = {
         }
 
         const discountId = "disc_" + nanoid();
-        const productsToInsert: { id: string; discountId: string; productId: string; applicationType: string }[] = [];
-        const collectionsToInsert: { id: string; discountId: string; collectionId: string; applicationType: string }[] = [];
+        const productsToInsert: { id: string; discountId: string; productId: string; applicationType: "get" }[] = [];
+        const collectionsToInsert: { id: string; discountId: string; collectionId: string; applicationType: "get" }[] = [];
 
         if (data.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
-            (data.appliesToProducts || []).forEach((productId: string) =>
+            ((data.appliesToProducts || []) as string[]).forEach((productId: string) =>
                 productsToInsert.push({ id: "dp_" + nanoid(), discountId, productId, applicationType: "get" })
             );
-            (data.appliesToCollections || []).forEach((collectionId: string) =>
+            ((data.appliesToCollections || []) as string[]).forEach((collectionId: string) =>
                 collectionsToInsert.push({ id: "dc_" + nanoid(), discountId, collectionId, applicationType: "get" })
             );
         }
+
+        const startDate = data.startDate as Date;
+        const endDate = data.endDate as Date | null;
 
         // Drizzle D1 batch() requires specific tuple types
         const batchOps: unknown[] = [
             db.insert(discounts).values({
                 id: discountId,
-                code: data.code,
-                type: data.type,
-                valueType: data.valueType,
-                discountValue: data.discountValue,
-                minPurchaseAmount: data.minPurchaseAmount,
-                minQuantity: data.minQuantity,
-                maxUsesPerOrder: data.maxUsesPerOrder,
-                maxUses: data.maxUses,
-                limitOnePerCustomer: data.limitOnePerCustomer,
-                combineWithProductDiscounts: data.combineWithProductDiscounts,
-                combineWithOrderDiscounts: data.combineWithOrderDiscounts,
-                combineWithShippingDiscounts: data.combineWithShippingDiscounts,
-                customerSegment: data.customerSegment,
-                startDate: sql`unixepoch(${data.startDate.toISOString()})`,
-                endDate: data.endDate ? sql`unixepoch(${data.endDate.toISOString()})` : null,
-                isActive: data.isActive,
+                code: data.code as string,
+                type: data.type as typeof discounts.$inferInsert.type,
+                valueType: data.valueType as typeof discounts.$inferInsert.valueType,
+                discountValue: data.discountValue as number,
+                minPurchaseAmount: data.minPurchaseAmount as number | undefined,
+                minQuantity: data.minQuantity as number | undefined,
+                maxUsesPerOrder: data.maxUsesPerOrder as number | undefined,
+                maxUses: data.maxUses as number | undefined,
+                limitOnePerCustomer: data.limitOnePerCustomer as boolean | undefined,
+                combineWithProductDiscounts: data.combineWithProductDiscounts as boolean | undefined,
+                combineWithOrderDiscounts: data.combineWithOrderDiscounts as boolean | undefined,
+                combineWithShippingDiscounts: data.combineWithShippingDiscounts as boolean | undefined,
+                customerSegment: data.customerSegment as string | undefined,
+                startDate: sql`unixepoch(${startDate.toISOString()})`,
+                endDate: endDate ? sql`unixepoch(${endDate.toISOString()})` : null,
+                isActive: data.isActive as boolean,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
             }),
@@ -214,7 +217,7 @@ export const DiscountService = {
         const existingCode = await db
             .select({ id: discounts.id })
             .from(discounts)
-            .where(and(eq(discounts.code, data.code), sql`${discounts.id} != ${id}`, isNull(discounts.deletedAt)))
+            .where(and(eq(discounts.code, data.code as string), sql`${discounts.id} != ${id}`, isNull(discounts.deletedAt)))
             .get();
 
         if (existingCode) {
@@ -223,26 +226,26 @@ export const DiscountService = {
 
         const currentTimestamp = Math.floor(Date.now() / 1000);
         let startDateTimestamp: number;
-        if (data.startDate instanceof Date && !isNaN(data.startDate.getTime())) {
-            startDateTimestamp = Math.floor(data.startDate.getTime() / 1000);
+        if (data.startDate instanceof Date && !isNaN((data.startDate as Date).getTime())) {
+            startDateTimestamp = Math.floor((data.startDate as Date).getTime() / 1000);
         } else {
             const dt = await db.select({ startDate: discounts.startDate }).from(discounts).where(eq(discounts.id, id)).get();
             startDateTimestamp = typeof dt?.startDate === "number" ? dt.startDate : currentTimestamp;
         }
 
         let endDateTimestamp: number | null = null;
-        if (data.endDate && data.endDate instanceof Date && !isNaN(data.endDate.getTime())) {
-            endDateTimestamp = Math.floor(data.endDate.getTime() / 1000);
+        if (data.endDate && data.endDate instanceof Date && !isNaN((data.endDate as Date).getTime())) {
+            endDateTimestamp = Math.floor((data.endDate as Date).getTime() / 1000);
         }
 
-        const productsToInsert: { id: string; discountId: string; productId: string; applicationType: string }[] = [];
-        const collectionsToInsert: { id: string; discountId: string; collectionId: string; applicationType: string }[] = [];
+        const productsToInsert: { id: string; discountId: string; productId: string; applicationType: "get" }[] = [];
+        const collectionsToInsert: { id: string; discountId: string; collectionId: string; applicationType: "get" }[] = [];
 
         if (data.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
-            (data.appliesToProducts || []).forEach((productId: string) =>
+            ((data.appliesToProducts || []) as string[]).forEach((productId: string) =>
                 productsToInsert.push({ id: "dp_" + nanoid(), discountId: id, productId, applicationType: "get" })
             );
-            (data.appliesToCollections || []).forEach((collectionId: string) =>
+            ((data.appliesToCollections || []) as string[]).forEach((collectionId: string) =>
                 collectionsToInsert.push({ id: "dc_" + nanoid(), discountId: id, collectionId, applicationType: "get" })
             );
         }
@@ -250,22 +253,22 @@ export const DiscountService = {
         // Drizzle D1 batch() requires specific tuple types
         const batchOps: unknown[] = [
             db.update(discounts).set({
-                code: data.code,
-                type: data.type,
-                valueType: data.valueType,
-                discountValue: data.discountValue,
-                minPurchaseAmount: data.minPurchaseAmount,
-                minQuantity: data.minQuantity,
-                maxUsesPerOrder: data.maxUsesPerOrder,
-                maxUses: data.maxUses,
-                limitOnePerCustomer: data.limitOnePerCustomer,
-                combineWithProductDiscounts: data.combineWithProductDiscounts,
-                combineWithOrderDiscounts: data.combineWithOrderDiscounts,
-                combineWithShippingDiscounts: data.combineWithShippingDiscounts,
-                customerSegment: data.customerSegment,
+                code: data.code as string,
+                type: data.type as typeof discounts.$inferInsert.type,
+                valueType: data.valueType as typeof discounts.$inferInsert.valueType,
+                discountValue: data.discountValue as number,
+                minPurchaseAmount: data.minPurchaseAmount as number | undefined,
+                minQuantity: data.minQuantity as number | undefined,
+                maxUsesPerOrder: data.maxUsesPerOrder as number | undefined,
+                maxUses: data.maxUses as number | undefined,
+                limitOnePerCustomer: data.limitOnePerCustomer as boolean | undefined,
+                combineWithProductDiscounts: data.combineWithProductDiscounts as boolean | undefined,
+                combineWithOrderDiscounts: data.combineWithOrderDiscounts as boolean | undefined,
+                combineWithShippingDiscounts: data.combineWithShippingDiscounts as boolean | undefined,
+                customerSegment: data.customerSegment as string | undefined,
                 startDate: sql`${startDateTimestamp}`,
                 endDate: endDateTimestamp !== null ? sql`${endDateTimestamp}` : null,
-                isActive: data.isActive,
+                isActive: data.isActive as boolean,
                 updatedAt: sql`${currentTimestamp}`,
             }).where(eq(discounts.id, id)),
             db.delete(discountProducts).where(eq(discountProducts.discountId, id)),

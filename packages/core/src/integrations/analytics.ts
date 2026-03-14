@@ -4,13 +4,12 @@
  * with Partytown for Facebook Pixel and Google Analytics 4.
  */
 
-// Augment the Window interface for TypeScript to recognize dataLayer and fbq
-declare global {
-  interface Window {
-    dataLayer: unknown[];
-    fbq: (...args: unknown[]) => void;
-  }
-}
+// Declare window for environments where the DOM lib is not available (e.g. Cloudflare Workers).
+// This file contains client-side analytics code that will only run in the browser.
+declare const window: {
+  dataLayer: unknown[];
+  fbq: (...args: unknown[]) => void;
+} & Record<string, unknown>;
 
 import type { Analytics as AnalyticsConfig } from "@scalius/database/schema";
 

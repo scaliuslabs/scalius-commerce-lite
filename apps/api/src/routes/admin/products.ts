@@ -51,8 +51,8 @@ app.openapi(listRoute, async (c) => {
         search: query.search || undefined,
         categoryId: query.category || undefined,
         showTrashed: query.trashed === "true",
-        sort: (query.sort || "updatedAt") as string,
-        order: (query.order || "desc") as "asc" | "desc"
+        sort: query.sort as "name" | "price" | "category" | "createdAt" | "updatedAt" | undefined,
+        order: query.order as "asc" | "desc" | undefined
     });
     return ok(c, result);
 });

@@ -35,21 +35,30 @@ app.openapi(listModelsRoute, async (c) => {
             throw new Error("Failed to fetch models from OpenRouter");
         }
 
-        const data = await response.json();
+        const data = await response.json() as { data?: Array<Record<string, unknown>> };
 
-        const processedModels = (data.data || []).map((model: Record<string, unknown>) => ({
-            id: model.id,
-            name: model.name,
-            description: model.description,
-            context_length: model.context_length,
-            pricing: model.pricing,
-            supportsVision: model.architecture?.input_modalities?.includes('image') || false,
-            supportsAudio: model.architecture?.input_modalities?.includes('audio') || false,
-            supportsImageGeneration: model.architecture?.output_modalities?.includes('image') || false,
-            modality: model.architecture?.modality || 'text->text',
-            inputModalities: model.architecture?.input_modalities || ['text'],
-            outputModalities: model.architecture?.output_modalities || ['text']
-        }));
+        interface ModelArchitecture {
+            input_modalities?: string[];
+            output_modalities?: string[];
+            modality?: string;
+        }
+
+        const processedModels = (data.data || []).map((model: Record<string, unknown>) => {
+            const architecture = model.architecture as ModelArchitecture | undefined;
+            return {
+                id: model.id,
+                name: model.name,
+                description: model.description,
+                context_length: model.context_length,
+                pricing: model.pricing,
+                supportsVision: architecture?.input_modalities?.includes('image') || false,
+                supportsAudio: architecture?.input_modalities?.includes('audio') || false,
+                supportsImageGeneration: architecture?.output_modalities?.includes('image') || false,
+                modality: architecture?.modality || 'text->text',
+                inputModalities: architecture?.input_modalities || ['text'],
+                outputModalities: architecture?.output_modalities || ['text']
+            };
+        });
 
         return ok(c, { models: processedModels });
     } catch (error: unknown) {
@@ -165,11 +174,13 @@ app.openapi(generateRoute, async (c) => {
                     }
                 });
             } else {
-                const data = await response.json();
+                const data = await response.json() as Record<string, unknown> & {
+                    usage?: { total_tokens?: number; prompt_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } };
+                };
 
                 if (data.usage) {
                     const cached = data.usage.prompt_tokens_details?.cached_tokens || 0;
-                    const cacheRate = cached ? Math.round((cached / data.usage.prompt_tokens) * 100) : 0;
+                    const cacheRate = cached && data.usage.prompt_tokens ? Math.round((cached / data.usage.prompt_tokens) * 100) : 0;
                     console.log(`[OpenRouter] ${model} | ${requestDuration}ms | Tokens: ${data.usage.total_tokens} | Cache: ${cacheRate}%`);
                 } else {
                     console.log(`[OpenRouter] ${model} | ${requestDuration}ms`);
@@ -280,11 +291,13 @@ app.openapi(generateStagedRoute, async (c) => {
                 return c.json({ message: errorMessage, details: errorBody }, response.status as 400 | 401 | 403 | 404 | 500 | 502 | 503);
             }
 
-            const data = await response.json();
+            const data = await response.json() as Record<string, unknown> & {
+                usage?: { total_tokens?: number; prompt_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } };
+            };
 
             if (data.usage) {
                 const cached = data.usage.prompt_tokens_details?.cached_tokens || 0;
-                const cacheRate = cached ? Math.round((cached / data.usage.prompt_tokens) * 100) : 0;
+                const cacheRate = cached && data.usage.prompt_tokens ? Math.round((cached / data.usage.prompt_tokens) * 100) : 0;
                 const stageInfo = sectionIndex !== undefined ? `Section ${sectionIndex + 1}/${totalSections}` : stage;
                 console.log(`[Staged] ${model} | ${stageInfo} | ${requestDuration}ms | Tokens: ${data.usage.total_tokens} | Cache: ${cacheRate}%`);
             } else {

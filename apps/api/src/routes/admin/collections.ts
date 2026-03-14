@@ -16,7 +16,7 @@ import {
     createCollectionSchema,
     updateCollectionSchema
 } from "@scalius/core/modules/collections";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ApiError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
@@ -51,8 +51,8 @@ app.openapi(listRoute, async (c) => {
         limit: q.limit,
         search: q.search || "",
         showTrashed: q.trashed === "true",
-        sort: (q.sort || "sortOrder") as string,
-        order: (q.order || "asc") as string
+        sort: q.sort as "name" | "type" | "isActive" | "updatedAt" | "sortOrder" | undefined,
+        order: q.order as "asc" | "desc" | undefined
     });
     return ok(c, result);
 });
@@ -275,7 +275,7 @@ app.openapi(deleteCollectionRoute, async (c) => {
         return noContent(c);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 
@@ -302,7 +302,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
         return noContent(c);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
-        return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
+        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
 });
 

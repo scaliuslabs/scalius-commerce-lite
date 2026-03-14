@@ -489,7 +489,7 @@ const setupRoute = createRoute({
 setupApp.openapi(setupRoute, async (c) => {
     try {
         const db = c.get("db");
-        const env = c.env;
+        const env = c.env as Env;
         const auth = createAuth(env);
 
         const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));

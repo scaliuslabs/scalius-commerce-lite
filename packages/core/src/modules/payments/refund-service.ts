@@ -227,8 +227,8 @@ export async function processReturn(
         throw new NotFoundError(`Order ${params.orderId} not found`);
     }
 
-    const returnableStatuses = [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.SHIPPED];
-    if (!returnableStatuses.includes(order.status as string)) {
+    const returnableStatuses: string[] = [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.SHIPPED];
+    if (!returnableStatuses.includes(order.status)) {
         throw new ValidationError(
             `Cannot return an order in '${order.status}' status. Order must be delivered, completed, or shipped.`
         );

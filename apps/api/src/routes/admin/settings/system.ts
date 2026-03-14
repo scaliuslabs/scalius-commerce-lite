@@ -57,15 +57,23 @@ app.openapi(saveAuthRoute, async (c) => {
 
         const updates: Partial<typeof siteSettings.$inferInsert> = {};
 
-        if (body.authVerificationMethod) updates.authVerificationMethod = body.authVerificationMethod;
-        if (body.guestCheckoutEnabled !== undefined) updates.guestCheckoutEnabled = body.guestCheckoutEnabled;
-        if (body.whatsappPhoneNumberId !== undefined) updates.whatsappPhoneNumberId = body.whatsappPhoneNumberId;
-        if (body.whatsappTemplateName !== undefined) updates.whatsappTemplateName = body.whatsappTemplateName;
-        if (body.checkoutMode !== undefined) updates.checkoutMode = body.checkoutMode;
-        if (body.partialPaymentEnabled !== undefined) updates.partialPaymentEnabled = body.partialPaymentEnabled;
-        if (body.partialPaymentAmount !== undefined) updates.partialPaymentAmount = body.partialPaymentAmount;
+        if (body.authVerificationMethod && typeof body.authVerificationMethod === "string") {
+            updates.authVerificationMethod = body.authVerificationMethod as "email" | "phone" | "both" | "whatsapp_otp" | "sms_otp";
+        }
+        if (typeof body.guestCheckoutEnabled === "boolean") updates.guestCheckoutEnabled = body.guestCheckoutEnabled;
+        if (typeof body.whatsappPhoneNumberId === "string" || body.whatsappPhoneNumberId === null) {
+            updates.whatsappPhoneNumberId = body.whatsappPhoneNumberId as string | null;
+        }
+        if (typeof body.whatsappTemplateName === "string" || body.whatsappTemplateName === null) {
+            updates.whatsappTemplateName = body.whatsappTemplateName as string | null;
+        }
+        if (body.checkoutMode && typeof body.checkoutMode === "string") {
+            updates.checkoutMode = body.checkoutMode as "guest_cod_only" | "gateways_only" | "all";
+        }
+        if (typeof body.partialPaymentEnabled === "boolean") updates.partialPaymentEnabled = body.partialPaymentEnabled;
+        if (typeof body.partialPaymentAmount === "number") updates.partialPaymentAmount = body.partialPaymentAmount;
 
-        if (body.whatsappAccessToken && body.whatsappAccessToken !== MASKED) {
+        if (typeof body.whatsappAccessToken === "string" && body.whatsappAccessToken !== MASKED) {
             updates.whatsappAccessToken = body.whatsappAccessToken;
         }
 
@@ -133,7 +141,7 @@ app.openapi(saveSecurityRoute, async (c) => {
                     set: { value: cspAllowedDomains, updatedAt: new Date() }
                 });
 
-            const env = c.env;
+            const env = c.env as Env | undefined;
             if (env?.CACHE) {
                 c.executionCtx.waitUntil(env.CACHE.put("security:csp_allowed_domains", cspAllowedDomains));
             }

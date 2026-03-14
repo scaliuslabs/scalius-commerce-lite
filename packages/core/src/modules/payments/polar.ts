@@ -116,7 +116,7 @@ export async function createPolarRefund(
         const refund = await client.refunds.create({
             orderId: params.polarOrderId,
             amount: params.amount,
-            reason: params.reason as string,
+            reason: params.reason as "fraudulent" | "customer_request" | "duplicate" | "other" | "service_disruption" | "satisfaction_guarantee" | "dispute_prevention",
             comment: params.comment,
         });
 

@@ -261,12 +261,19 @@ app.openapi(createOrderRoute, async (c) => {
   const requestUrl = c.req.url;
 
   try {
+    type CartItem = { id: string; price: number; quantity: number; variantId?: string };
     const result = await createStorefrontOrder(
       db,
       data,
       requestUrl,
-      isDiscountValid,
-      calculateDiscountAmount,
+      (db, code, total, items, customerPhone) => isDiscountValid(db, code, total, items as CartItem[], customerPhone),
+      (db, discount, total, items, shippingCost) => calculateDiscountAmount(
+        db,
+        discount as { id: string; type: string; valueType: string; discountValue: number },
+        total,
+        items as CartItem[],
+        shippingCost,
+      ),
     );
 
     // Dispatch to Cloudflare Queue

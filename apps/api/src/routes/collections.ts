@@ -157,7 +157,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
   // Initialize response data
   let resolvedProducts: unknown[] = [];
   let resolvedCategories: unknown[] = [];
-  let featuredProduct: unknown = null;
+  let featuredProduct: Record<string, unknown> | null = null;
 
   // PRODUCT SELECTION LOGIC
   // Priority: productIds > categoryIds

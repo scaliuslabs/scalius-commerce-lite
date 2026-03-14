@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ValidationError, ForbiddenError } from "../utils/api-error";
 
 async function getAllowedDomainsAsync(c: { env: Env; req: { url: string } }): Promise<string[]> {
-  let cspAllowed = c.env?.CSP_ALLOWED || "";
+  let cspAllowed: string = typeof c.env?.CSP_ALLOWED === "string" ? c.env.CSP_ALLOWED : "";
   try {
     if (c.env?.CACHE) {
       const cached = await c.env.CACHE.get("security:csp_allowed_domains");
@@ -37,7 +37,7 @@ async function getAllowedDomainsAsync(c: { env: Env; req: { url: string } }): Pr
   return domains;
 }
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Handle CORS preflight requests
 app.options("/", async (_c) => {

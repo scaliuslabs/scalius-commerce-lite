@@ -79,7 +79,7 @@ app.openapi(getNavigationRoute, async (c) => {
 
     if (headerConfig && headerConfig.navigation) {
       navigationConfig = {
-        ...navigationConfig,
+        ...(navigationConfig ?? {}),
         header: headerConfig.navigation
       };
     }
@@ -92,7 +92,7 @@ app.openapi(getNavigationRoute, async (c) => {
 
     if (footerConfig && footerConfig.menus) {
       navigationConfig = {
-        ...navigationConfig,
+        ...(navigationConfig ?? {}),
         footer: footerConfig.menus
       };
     }

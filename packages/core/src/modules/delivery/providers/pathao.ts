@@ -63,7 +63,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as Record<string, unknown>;
         throw new Error(
           `Failed to get access token: ${errorData.message || response.statusText
           }`,
@@ -114,8 +114,9 @@ export class PathaoProvider implements DeliveryProviderInterface {
           };
         }
 
-        const data = await response.json();
-        const stores = data.data?.data || [];
+        const data = await response.json() as Record<string, unknown>;
+        const dataInner = data.data as Record<string, unknown> | undefined;
+        const stores = (dataInner?.data || []) as Record<string, unknown>[];
         const storeExists = stores.some(
           (store: Record<string, unknown>) => (store as { store_id?: { toString(): string } }).store_id?.toString() === this.config.storeId,
         );

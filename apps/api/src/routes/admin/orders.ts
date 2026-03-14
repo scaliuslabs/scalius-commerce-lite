@@ -14,7 +14,7 @@ import { eq, and } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── GET / (List) ────────────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ app.openapi(listOrdersRoute, async (c) => {
         search: query.search || "",
         status: query.status || undefined,
         showTrashed: query.trashed === "true",
-        sort: query.sort as string,
+        sort: query.sort,
         order: query.order as "asc" | "desc",
         startDate: query.startDate ? new Date(query.startDate) : undefined,
         endDate: query.endDate ? new Date(query.endDate) : undefined
@@ -168,7 +168,11 @@ const updateOrderRoute = createRoute({
 app.openapi(updateOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const result = await OrdersService.updateOrder(orderId, data);
+    const result = await OrdersService.updateOrder(orderId, {
+        ...data,
+        areaName: data.areaName ?? undefined,
+        discountAmount: data.discountAmount ?? 0,
+    });
     return ok(c, result);
 });
 
