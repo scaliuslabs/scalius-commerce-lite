@@ -58,13 +58,11 @@ app.openapi(getSeoSettingsRoute, async (c) => {
       homepageTitle: "Welcome to Scalius Commerce",
       homepageMetaDescription: "Your one-stop shop for everything amazing.",
       robotsTxt: "User-agent: *\nAllow: /",
-      success: true as const
     });
   }
 
   return ok(c, {
     ...settings,
-    success: true as const
   });
 });
 

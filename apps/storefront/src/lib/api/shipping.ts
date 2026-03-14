@@ -21,8 +21,8 @@ export async function getCities(): Promise<LocationData[] | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const json: { success: boolean; data: { data: LocationData[] } } = await response.json();
-        return json.data.data;
+        const json: { success: boolean; data: LocationData[] } = await response.json();
+        return json.data;
       } catch (error) {
         console.error("Error fetching cities:", error);
         return null;
@@ -55,8 +55,8 @@ export async function getZones(cityId: string): Promise<LocationData[] | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const json: { success: boolean; data: { data: LocationData[] } } = await response.json();
-        return json.data.data;
+        const json: { success: boolean; data: LocationData[] } = await response.json();
+        return json.data;
       } catch (error) {
         console.error(`Error fetching zones for city "${cityId}":`, error);
         return null;
@@ -89,8 +89,8 @@ export async function getAreas(zoneId: string): Promise<LocationData[] | null> {
           throw new Error(`API error: ${response.status}`);
         }
 
-        const json: { success: boolean; data: { data: LocationData[] } } = await response.json();
-        return json.data.data;
+        const json: { success: boolean; data: LocationData[] } = await response.json();
+        return json.data;
       } catch (error) {
         console.error(`Error fetching areas for zone "${zoneId}":`, error);
         return null;

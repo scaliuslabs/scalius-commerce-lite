@@ -247,7 +247,7 @@ app.openapi(restoreDiscountRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await DiscountService.restore(db, [id]);
-    return ok(c, { success: true });
+    return ok(c, {});
 });
 
 export { app as adminDiscountRoutes };

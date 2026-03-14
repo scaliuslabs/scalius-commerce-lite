@@ -391,7 +391,7 @@ app.openapi(softDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: sql`(cast(strftime('%s','now') as int))` }).where(eq(checkoutLanguages.id, id));
-  return ok(c, { success: true as const });
+  return ok(c, {});
 });
 
 // DELETE /checkout-languages/:id — hard delete a checkout language
@@ -441,7 +441,7 @@ app.openapi(restoreRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: null }).where(eq(checkoutLanguages.id, id));
-  return ok(c, { success: true as const });
+  return ok(c, {});
 });
 
 export { app as checkoutLanguageRoutes };

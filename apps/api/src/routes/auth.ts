@@ -72,7 +72,6 @@ app.openapi(getTokenRoute, async (c) => {
   });
 
   return ok(c, {
-    success: true,
     data: { token }
   });
 });
@@ -127,7 +126,6 @@ const getMeRoute = createRoute({
 app.openapi(getMeRoute, (c) => {
   const user = c.get("user");
   return ok(c, {
-    success: true,
     data: { user }
   });
 });
@@ -160,7 +158,6 @@ app.openapi(revokeRoute, async (c) => {
   await revokeToken(token);
 
   return ok(c, {
-    success: true,
     message: "Token revoked successfully"
   });
 });
@@ -186,7 +183,6 @@ app.openapi(tokenStatsRoute, (c) => {
   }
 
   return ok(c, {
-    success: true,
     data: getTokenStats()
   });
 });

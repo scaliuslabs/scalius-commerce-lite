@@ -41,7 +41,7 @@ app.openapi(listRoute, async (c) => {
     try {
         const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
         const parsedData = data.map((slider) => ({ ...slider, images: JSON.parse(slider.images) }));
-        return ok(c, { success: true, data: parsedData });
+        return ok(c, parsedData);
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
@@ -77,7 +77,7 @@ app.openapi(createSliderRoute, async (c) => {
             updatedAt: sql`CURRENT_TIMESTAMP`
         }).returning();
 
-        return created(c, { success: true, data: { ...slider, images: JSON.parse(slider.images) } });
+        return created(c, { ...slider, images: JSON.parse(slider.images) });
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
@@ -102,7 +102,7 @@ app.openapi(getByIdRoute, async (c) => {
         const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
 
         if (!slider) return c.json({ success: false, error: "Slider not found" }, 404);
-        return ok(c, { success: true, data: { ...slider, images: JSON.parse(slider.images) } });
+        return ok(c, { ...slider, images: JSON.parse(slider.images) });
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
@@ -139,7 +139,7 @@ app.openapi(updateSliderRoute, async (c) => {
             .returning();
 
         if (!slider) return c.json({ success: false, error: "Slider not found" }, 404);
-        return ok(c, { success: true, data: { ...slider, images: JSON.parse(slider.images) } });
+        return ok(c, { ...slider, images: JSON.parse(slider.images) });
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }
@@ -167,7 +167,7 @@ app.openapi(deleteSliderRoute, async (c) => {
             .returning();
 
         if (!slider) return c.json({ success: false, error: "Slider not found" }, 404);
-        return ok(c, { success: true, data: { ...slider, images: JSON.parse(slider.images) } });
+        return ok(c, { ...slider, images: JSON.parse(slider.images) });
     } catch (error) {
         return c.json({ success: false, error: "Internal Server Error" }, 500);
     }

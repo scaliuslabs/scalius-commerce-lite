@@ -149,7 +149,7 @@ app.openapi(saveHeaderRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             });
         }
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         return c.json({ error: "Failed to save header configuration" }, 500);
     }
@@ -205,7 +205,7 @@ app.openapi(saveFooterRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             });
         }
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         return c.json({ error: "Failed to save footer configuration" }, 500);
     }
@@ -335,7 +335,7 @@ app.openapi(saveSeoRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             });
         }
-        return ok(c, { success: true, message: "SEO settings saved successfully" });
+        return ok(c, { message: "SEO settings saved successfully" });
     } catch (error) {
         return c.json({ error: "Failed to save SEO configuration" }, 500);
     }
@@ -392,7 +392,7 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
             });
         }
         layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
-        return ok(c, { success: true, message: "Storefront URL saved successfully" });
+        return ok(c, { message: "Storefront URL saved successfully" });
     } catch (error) {
         return c.json({ error: "Failed to save storefront URL" }, 500);
     }

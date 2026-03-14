@@ -134,7 +134,7 @@ app.openapi(deleteProviderRoute, async (c) => {
     try {
         const { id } = c.req.valid("param");
         await fraudCheckerService.deleteProvider(id);
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         return c.json({ error: "Internal server error" }, 500);
     }

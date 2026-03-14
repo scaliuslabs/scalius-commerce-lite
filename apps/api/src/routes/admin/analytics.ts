@@ -98,7 +98,7 @@ app.openapi(updateScriptRoute, async (c) => {
 
     const updated = await AnalyticsService.updateScript(db, id, data);
     if (!updated) throw new NotFoundError("Analytics script not found");
-    return ok(c, { success: true, script: updated });
+    return ok(c, { script: updated });
 });
 
 // ── Delete Analytics Script ──
@@ -121,7 +121,7 @@ app.openapi(deleteScriptRoute, async (c) => {
     const { id } = c.req.valid("param");
     const deleted = await AnalyticsService.deleteScript(db, id);
     if (!deleted) throw new NotFoundError("Analytics script not found");
-    return ok(c, { success: true, message: "Analytics script deleted", deletedScript: deleted });
+    return ok(c, { message: "Analytics script deleted", deletedScript: deleted });
 });
 
 // ── Toggle Analytics Script ──
@@ -147,7 +147,6 @@ app.openapi(toggleScriptRoute, async (c) => {
     const toggled = await AnalyticsService.toggleScript(db, id, data.isActive);
     if (!toggled) throw new NotFoundError("Analytics script not found");
     return ok(c, {
-        success: true,
         message: `Analytics script ${data.isActive ? "activated" : "deactivated"}`,
         script: toggled
     });

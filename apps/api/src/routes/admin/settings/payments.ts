@@ -83,7 +83,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         const kv = getKv();
         await invalidatePaymentMethodsCache(kv);
 
-        return ok(c, { success: true, message: "Payment methods updated" });
+        return ok(c, { message: "Payment methods updated" });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) return c.json({ error: "Invalid request data", details: error.issues }, 400);
         return c.json({ error: "Failed to save payment methods" }, 500);

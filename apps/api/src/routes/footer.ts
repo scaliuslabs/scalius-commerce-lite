@@ -101,10 +101,7 @@ app.openapi(getFooterRoute, async (c) => {
     description: footerConfig.description || ""
   };
 
-  return ok(c, {
-    data: footerData,
-    success: true as const
-  });
+  return ok(c, footerData);
 });
 
 // Export the footer routes

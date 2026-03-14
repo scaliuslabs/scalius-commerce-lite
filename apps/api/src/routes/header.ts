@@ -103,10 +103,7 @@ app.openapi(getHeaderRoute, async (c) => {
     }
   };
 
-  return ok(c, {
-    header: headerData,
-    success: true as const
-  });
+  return ok(c, { header: headerData });
 });
 
 // Export the header routes

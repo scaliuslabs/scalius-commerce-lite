@@ -148,7 +148,7 @@ app.openapi(moveRoute, async (c) => {
     const db = c.get("db");
     const { fileIds, folderId } = c.req.valid("json");
     await MediaService.moveFiles(db, fileIds, folderId || null);
-    return ok(c, { success: true, message: `Moved ${fileIds.length} file(s)` });
+    return ok(c, { message: `Moved ${fileIds.length} file(s)` });
 });
 
 // ── Delete File ──

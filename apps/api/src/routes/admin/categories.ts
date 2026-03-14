@@ -169,7 +169,7 @@ app.openapi(updateCategoryRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         await updateCategory(db, id, data);
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number; suggestion?: string; affectedProducts?: unknown };
         return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);
@@ -244,7 +244,7 @@ app.openapi(restoreCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreCategories(db, [id]);
-    return ok(c, { success: true });
+    return ok(c, {});
 });
 
 export { app as adminCategoryRoutes };

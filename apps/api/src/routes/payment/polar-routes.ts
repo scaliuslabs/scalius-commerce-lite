@@ -162,7 +162,6 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     }
 
     return ok(c, {
-        success: true,
         gatewayUrl: result.checkoutUrl,
         checkoutId: result.checkoutId
     });

@@ -128,7 +128,6 @@ app.openapi(postEventRoute, async (c) => {
   }
 
   return ok(c, {
-    success: true,
     message: "Event received and is being processed.",
     eventId: eventId
   });

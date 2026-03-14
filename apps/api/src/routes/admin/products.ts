@@ -137,7 +137,7 @@ app.openapi(updateProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         await ProductsService.updateProduct(db, id, data);
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         if (error instanceof Error) {
             if (error.message === "Product not found") throw new NotFoundError(error.message);
@@ -188,7 +188,7 @@ app.openapi(restoreProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await ProductsService.restoreProduct(db, id);
-    return ok(c, { success: true });
+    return ok(c, {});
 });
 
 // ── Permanent Delete Product ──
@@ -352,7 +352,7 @@ app.openapi(bulkCreateVariantsRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const variants = await ProductsService.bulkCreateVariants(db, id, data.variants);
-        return created(c, { success: true, variants, count: variants.length });
+        return created(c, { variants, count: variants.length });
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
         throw error;
@@ -405,7 +405,7 @@ app.openapi(bulkUpdateVariantsRoute, async (c) => {
     const data = c.req.valid("json");
     if (data.updates.length === 0) throw new ValidationError("No updates provided");
     await ProductsService.bulkUpdateVariants(db, id, data.updates);
-    return ok(c, { success: true });
+    return ok(c, {});
 });
 
 // ── Duplicate Variant ──
@@ -478,7 +478,7 @@ app.openapi(updateVariantSortOrderRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     await ProductsService.updateVariantSortOrder(db, id, data);
-    return ok(c, { success: true, message: "Sort order updated successfully" });
+    return ok(c, { message: "Sort order updated successfully" });
 });
 
 export { app as adminProductsRoutes };

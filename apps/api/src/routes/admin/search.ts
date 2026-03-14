@@ -44,7 +44,6 @@ app.openapi(searchRoute, async (c) => {
                 products: [],
                 pages: [],
                 categories: [],
-                success: true,
                 query: ""
             });
         }
@@ -66,7 +65,6 @@ app.openapi(searchRoute, async (c) => {
 
         return ok(c, {
             ...results,
-            success: true,
             query: q,
             timestamp: new Date().toISOString()
         });
@@ -92,7 +90,7 @@ const reindexRoute = createRoute({
 });
 
 app.openapi(reindexRoute, async (c) => {
-    return ok(c, { success: true, message: "Reindex initiated" });
+    return ok(c, { message: "Reindex initiated" });
 });
 
 export { app as adminSearchRoutes };

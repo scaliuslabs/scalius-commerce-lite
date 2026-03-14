@@ -156,10 +156,7 @@ app.openapi(getNavigationRoute, async (c) => {
     throw new NotFoundError("Navigation configuration not found");
   }
 
-  return ok(c, {
-    navigation: navigationConfig,
-    success: true as const
-  });
+  return ok(c, { navigation: navigationConfig });
 });
 
 // GET /navigation/:id — get navigation menu items by ID
@@ -245,10 +242,7 @@ app.openapi(getNavigationByIdRoute, async (c) => {
     throw new NotFoundError(`Navigation menu with ID '${id}' not found`);
   }
 
-  return ok(c, {
-    menu,
-    success: true as const
-  });
+  return ok(c, { menu });
 });
 
 // Export the navigation routes

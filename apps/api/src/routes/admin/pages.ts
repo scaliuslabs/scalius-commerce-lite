@@ -220,7 +220,7 @@ app.openapi(updatePageRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         await updatePage(db, id, c.req.valid("json"));
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
         return c.json({ error: err.message || "Unknown error" }, err.statusCode || 400);

@@ -578,7 +578,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
     if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
 
     await deliveryService.deleteShipment(shipmentId);
-    return ok(c, { success: true });
+    return ok(c, {});
 });
 
 // ─── POST /:id/shipments/{shipmentId}/status ──────────────────────────────────

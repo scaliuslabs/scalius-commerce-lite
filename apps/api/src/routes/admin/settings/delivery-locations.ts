@@ -137,7 +137,7 @@ app.openapi(deleteAllRoute, async (c) => {
     try {
         const db = c.get("db");
         await db.delete(deliveryLocations);
-        return ok(c, { success: true, message: "All delivery locations have been permanently deleted." });
+        return ok(c, { message: "All delivery locations have been permanently deleted." });
     } catch (error: unknown) {
         console.error("Error cleaning all delivery locations:", error);
         return c.json({ error: error instanceof Error ? error.message : "Failed to clean all delivery locations" }, 500);
@@ -168,7 +168,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(inArray(deliveryLocations.id, ids), isNull(deliveryLocations.deletedAt)));
 
-        return ok(c, { success: true, message: `${ids.length} locations deleted successfully.` });
+        return ok(c, { message: `${ids.length} locations deleted successfully.` });
     } catch (error: unknown) {
         console.error("Error bulk deleting delivery locations:", error);
         return c.json({ error: error instanceof Error ? error.message : "Failed to bulk delete delivery locations" }, 500);
@@ -270,7 +270,7 @@ app.openapi(deleteLocationRoute, async (c) => {
             .update(deliveryLocations)
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)));
-        return ok(c, { success: true });
+        return ok(c, {});
     } catch (error: unknown) {
         console.error("Error deleting location:", error);
         return c.json({ error: error instanceof Error ? error.message : "Failed to delete location" }, 500);

@@ -203,7 +203,7 @@ app.openapi(reorderRoute, async (c) => {
     const db = c.get("db");
     const { items } = c.req.valid("json");
     await reorderCollections(db, items);
-    return ok(c, { success: true });
+    return ok(c, {});
 });
 
 // ── Get Collection By ID ──

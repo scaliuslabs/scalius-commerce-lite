@@ -98,7 +98,6 @@ app.openapi(searchRoute, async (c) => {
       products: [],
       pages: [],
       categories: [],
-      success: true as const,
       query: ""
     });
   }
@@ -126,7 +125,6 @@ app.openapi(searchRoute, async (c) => {
     products: results.products || [],
     pages: results.pages || [],
     categories: results.categories || [],
-    success: true as const,
     query,
     timestamp: new Date().toISOString()
   });

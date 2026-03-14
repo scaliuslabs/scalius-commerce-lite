@@ -151,7 +151,6 @@ app.openapi(verifyOtpRoute, async (c) => {
   c.header("Set-Cookie", `cs_auth=1; Max-Age=${SESSION_TTL_SECONDS}; Path=/${domainAttr}; SameSite=${sameSite}; Secure`, { append: true });
 
   return c.json({
-    success: true,
     customer: result.customer,
     isNewUser: result.isNewUser
   }, 200);
@@ -293,7 +292,6 @@ app.openapi(updateProfileRoute, async (c) => {
   const result = await updateCustomerProfile(db, kv, session, token, updates);
 
   return c.json({
-    success: true,
     customer: {
       email: result.session.email,
       name: result.session.name,
@@ -449,7 +447,6 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
   }));
 
   return c.json({
-    success: true,
     orders: formattedOrders,
     customer: customerProfile
   }, 200);
