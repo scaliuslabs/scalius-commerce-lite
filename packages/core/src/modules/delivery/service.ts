@@ -5,6 +5,7 @@ import { createProvider } from "./factory";
 import type { ShipmentOptions, ShipmentResult } from "./types";
 import { eq, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { NotFoundError, ValidationError, ServiceUnavailableError } from "@scalius/core/errors";
 
 /**
  * Service for managing delivery providers and shipments
@@ -116,7 +117,7 @@ export class DeliveryService {
   async testProvider(id: string) {
     const provider = await this.getProvider(id);
     if (!provider) {
-      throw new Error(`Provider with ID ${id} not found`);
+      throw new NotFoundError(`Provider with ID ${id} not found`);
     }
 
     try {
@@ -253,16 +254,16 @@ export class DeliveryService {
       .where(eq(deliveryShipments.id, shipmentId));
 
     if (!shipment) {
-      throw new Error(`Shipment with ID ${shipmentId} not found`);
+      throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
     }
 
     // Get provider
     if (!shipment.providerId) {
-      throw new Error(`Shipment ${shipmentId} has no provider (manual shipment)`);
+      throw new ValidationError(`Shipment ${shipmentId} has no provider (manual shipment)`);
     }
     const provider = await this.getProvider(shipment.providerId);
     if (!provider) {
-      throw new Error(`Provider with ID ${shipment.providerId} not found`);
+      throw new NotFoundError(`Provider with ID ${shipment.providerId} not found`);
     }
 
     try {
@@ -298,7 +299,7 @@ export class DeliveryService {
       console.error(
         `Error checking shipment status: ${error instanceof Error ? error.message : String(error)}`,
       );
-      throw new Error(
+      throw new ServiceUnavailableError(
         `Failed to check shipment status: ${error instanceof Error ? error.message : String(error)}`,
       );
     }

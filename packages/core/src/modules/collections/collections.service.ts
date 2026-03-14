@@ -6,6 +6,7 @@ import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQ
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput } from "./collections.schema";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError } from "@scalius/core/errors";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -137,7 +138,7 @@ export async function updateCollection(
 
 export async function deleteCollection(db: Database, id: string): Promise<void> {
     const existing = await getCollectionById(db, id);
-    if (!existing) throw Object.assign(new Error("Collection not found"), { statusCode: 404 });
+    if (!existing) throw new NotFoundError("Collection not found");
 
     await db
         .update(collections)

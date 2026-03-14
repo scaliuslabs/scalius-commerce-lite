@@ -4,6 +4,7 @@ import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
 import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
 
 export const InventoryService = {
     async getInventoryOverview(db: Database, params: {
@@ -166,7 +167,7 @@ export const InventoryService = {
             return { alerts };
         }
 
-        throw Object.assign(new Error("Invalid section parameter"), { statusCode: 400 });
+        throw new ValidationError("Invalid section parameter");
     },
 
     async adjustInventory(db: Database, variantId: string, payload: {
@@ -189,7 +190,7 @@ export const InventoryService = {
             .get();
 
         if (!variant) {
-            throw Object.assign(new Error("Variant not found"), { statusCode: 404 });
+            throw new NotFoundError("Variant not found");
         }
 
         const previousStock = pool === "preorderStock" ? variant.preorderStock : variant.stock;

@@ -1,9 +1,9 @@
-// src/lib/payment/sslcommerz.ts
+// src/modules/payments/sslcommerz.ts
 // SSLCommerz payment gateway integration via REST API.
 // No official CF Workers SDK — uses native fetch.
 //
 // Payment flow:
-//   1. Merchant calls initSession() → SSLCommerz returns gatewayUrl
+//   1. Merchant calls initSession() -> SSLCommerz returns gatewayUrl
 //   2. Customer is redirected to gatewayUrl to complete payment
 //   3. SSLCommerz POSTs IPN to our webhook URL
 //   4. We MUST validate via validateIPN() before trusting any IPN payload
@@ -13,6 +13,16 @@ import type {
   SSLCommerzSessionResult,
   SSLCommerzValidationResult,
 } from "./types";
+import type { SSLCommerzSettings } from "./gateway-settings";
+import type {
+  PaymentProvider,
+  CreatePaymentParams,
+  CreatePaymentResult,
+  RefundParams,
+  RefundResult,
+  WebhookPayload,
+} from "./provider";
+import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 
 /** SSLCommerz API base URLs */
 const SANDBOX_BASE = "https://sandbox.sslcommerz.com";
@@ -314,6 +324,126 @@ export async function querySSLCommerzRefundStatus(
       bankTranId: "",
       tranId: "",
       error: message,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PaymentProvider implementation
+// ---------------------------------------------------------------------------
+
+/**
+ * SSLCommerz PaymentProvider implementation.
+ * Wraps the existing SSLCommerz functions behind the unified PaymentProvider interface.
+ */
+export class SSLCommerzProvider implements PaymentProvider {
+  readonly type = "sslcommerz" as const;
+  readonly name = "SSLCommerz";
+
+  constructor(private readonly settings: SSLCommerzSettings) {}
+
+  async createPayment(params: CreatePaymentParams): Promise<CreatePaymentResult> {
+    if (!params.successUrl || !params.failUrl || !params.cancelUrl || !params.ipnUrl) {
+      throw new ValidationError("SSLCommerz requires successUrl, failUrl, cancelUrl, and ipnUrl");
+    }
+    if (!params.customerName || !params.customerPhone) {
+      throw new ValidationError("SSLCommerz requires customerName and customerPhone");
+    }
+
+    const result = await initSSLCommerzSession(
+      this.settings.storeId,
+      this.settings.storePassword,
+      this.settings.sandbox,
+      {
+        orderId: params.orderId,
+        totalAmount: params.amount,
+        currency: params.currency,
+        successUrl: params.successUrl,
+        failUrl: params.failUrl,
+        cancelUrl: params.cancelUrl,
+        ipnUrl: params.ipnUrl,
+        customerName: params.customerName,
+        customerPhone: params.customerPhone,
+        customerEmail: params.customerEmail,
+        customerAddress: params.customerAddress,
+        customerCity: params.customerCity,
+        paymentType: params.paymentType,
+        productName: params.productName,
+        numItems: params.numItems,
+      },
+    );
+
+    if (!result.success) {
+      throw new ServiceUnavailableError(result.error ?? "Failed to initiate SSLCommerz session");
+    }
+
+    return {
+      transactionId: result.sessionKey,
+      redirectUrl: result.gatewayUrl,
+    };
+  }
+
+  async createRefund(params: RefundParams): Promise<RefundResult> {
+    if (!params.transactionId) {
+      throw new ValidationError("SSLCommerz bank_tran_id is required for refunds");
+    }
+
+    const refundTranId = `REF-${params.transactionId}-${Date.now()}`;
+    const result = await initiateSSLCommerzRefund(
+      this.settings.storeId,
+      this.settings.storePassword,
+      this.settings.sandbox,
+      {
+        bankTranId: params.transactionId,
+        refundAmount: params.amount ?? 0,
+        refundRemarks: params.reason ?? "Refund requested",
+        refundTranId,
+      },
+    );
+
+    if (!result.success) {
+      throw new ServiceUnavailableError(result.error ?? "Failed to initiate SSLCommerz refund");
+    }
+
+    return { refundId: result.refundRefId ?? refundTranId };
+  }
+
+  async verifyWebhook(rawBody: string, _headers: Record<string, string>): Promise<WebhookPayload> {
+    // SSLCommerz does not sign webhooks — IPN validation is done via
+    // server-to-server API call using the val_id from the IPN payload.
+    // Parse the IPN body and validate via the validation API.
+    let ipnData: Record<string, string>;
+    try {
+      const searchParams = new URLSearchParams(rawBody);
+      ipnData = Object.fromEntries(searchParams.entries());
+    } catch {
+      throw new ValidationError("Invalid SSLCommerz IPN payload");
+    }
+
+    const valId = ipnData.val_id;
+    if (!valId) {
+      throw new ValidationError("SSLCommerz IPN payload missing val_id");
+    }
+
+    const validation = await validateSSLCommerzIPN(
+      this.settings.storeId,
+      this.settings.storePassword,
+      this.settings.sandbox,
+      valId,
+    );
+
+    if (!validation) {
+      throw new ServiceUnavailableError("Failed to validate SSLCommerz IPN — network error");
+    }
+
+    const isValid = validation.status === "VALID" || validation.status === "VALIDATED";
+    if (!isValid) {
+      throw new ValidationError(`SSLCommerz IPN validation failed: ${validation.status}`);
+    }
+
+    return {
+      eventType: `payment.${validation.status.toLowerCase()}`,
+      data: validation as unknown as Record<string, unknown>,
     };
   }
 }

@@ -1,4 +1,4 @@
-// src/lib/payment/cod.ts
+// src/modules/payments/cod.ts
 // Cash on Delivery (COD) tracking and management.
 // No external gateway — tracks delivery attempts and cash collection in DB.
 
@@ -11,7 +11,15 @@ import type {
   RecordCODCollectionParams,
   RecordCODFailureParams,
 } from "./types";
+import type {
+  PaymentProvider,
+  CreatePaymentParams,
+  CreatePaymentResult,
+  RefundParams,
+  RefundResult,
+} from "./provider";
 import { getCurrencyConfig } from "../settings/settings.service";
+import { NotFoundError } from "@scalius/core/errors";
 
 /**
  * Create a COD tracking record when a COD order is placed.
@@ -48,7 +56,7 @@ export async function recordCODCollection(
       .get();
 
     if (!order) {
-      return { success: false, error: `Order ${params.orderId} not found` };
+      throw new NotFoundError(`Order ${params.orderId} not found`);
     }
 
     const now = new Date();
@@ -100,6 +108,8 @@ export async function recordCODCollection(
 
     return { success: true };
   } catch (err) {
+    // Re-throw typed errors so the API layer can handle them
+    if (err instanceof NotFoundError) throw err;
     const message = err instanceof Error ? err.message : "Failed to record COD collection";
     return { success: false, error: message };
   }
@@ -154,4 +164,43 @@ export async function markCODReturned(
     const message = err instanceof Error ? err.message : "Failed to mark COD as returned";
     return { success: false, error: message };
   }
+}
+
+// ---------------------------------------------------------------------------
+// PaymentProvider implementation
+// ---------------------------------------------------------------------------
+
+/**
+ * COD PaymentProvider implementation.
+ *
+ * COD is fundamentally different from online gateways — there's no external
+ * payment session to create and no webhooks. The "payment" is the physical
+ * cash collection that happens at delivery time. This provider creates a
+ * COD tracking record when `createPayment` is called, and COD "refunds"
+ * are just status markers (no gateway API call).
+ */
+export class CODProvider implements PaymentProvider {
+  readonly type = "cod" as const;
+  readonly name = "Cash on Delivery";
+
+  constructor(private readonly db: Database) {}
+
+  async createPayment(params: CreatePaymentParams): Promise<CreatePaymentResult> {
+    await initCODTracking(this.db, { orderId: params.orderId });
+
+    return {
+      transactionId: `COD-${params.orderId}`,
+      // No clientSecret or redirectUrl — COD requires no online payment action
+    };
+  }
+
+  async createRefund(_params: RefundParams): Promise<RefundResult> {
+    // COD "refund" is a status update only — no external gateway call.
+    // The actual cash refund is handled operationally (manual process).
+    return {
+      refundId: `COD-REFUND-${Date.now()}`,
+    };
+  }
+
+  // COD has no webhooks — verifyWebhook is intentionally not implemented
 }

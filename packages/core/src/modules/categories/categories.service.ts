@@ -8,6 +8,7 @@ import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import type { CreateCategoryInput, UpdateCategoryInput } from "./categories.schema";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -208,7 +209,7 @@ export async function createCategory(
         .get();
 
     if (existing) {
-        throw new Error("A category with this slug already exists");
+        throw new ConflictError("A category with this slug already exists");
     }
 
     const categoryId = "cat_" + nanoid();
@@ -243,7 +244,7 @@ export async function updateCategory(
         .where(eq(categories.id, id))
         .get();
 
-    if (!existing) throw new Error("Category not found");
+    if (!existing) throw new NotFoundError("Category not found");
 
     const slugConflict = await db
         .select({ id: categories.id })
@@ -252,7 +253,7 @@ export async function updateCategory(
         .get();
 
     if (slugConflict && slugConflict.id !== id) {
-        throw new Error("A category with this slug already exists");
+        throw new ConflictError("A category with this slug already exists");
     }
 
     await db
@@ -282,12 +283,9 @@ export async function deleteCategory(db: Database, id: string): Promise<void> {
 
     if (referencedProducts.length > 0) {
         const count = referencedProducts.length;
-        throw Object.assign(
-            new Error(
-                `Cannot delete category because ${count} product${count === 1 ? "" : "s"} ${count === 1 ? "is" : "are"} still assigned to it.`,
-            ),
+        throw new ValidationError(
+            `Cannot delete category because ${count} product${count === 1 ? "" : "s"} ${count === 1 ? "is" : "are"} still assigned to it.`,
             {
-                statusCode: 400,
                 suggestion: "Please delete the products permanently or move them to another category first.",
                 affectedProducts: referencedProducts.map((p) => ({ id: p.id, name: p.name })),
             },
@@ -319,12 +317,9 @@ export async function bulkDeleteCategories(
     if (referencedProducts.length > 0) {
         const categoryCount = new Set(referencedProducts.map((p) => p.categoryId)).size;
         const productCount = referencedProducts.length;
-        throw Object.assign(
-            new Error(
-                `Cannot delete ${categoryCount === 1 ? "category" : "categories"} because ${productCount} product${productCount === 1 ? "" : "s"} ${productCount === 1 ? "is" : "are"} still assigned to ${categoryCount === 1 ? "it" : "them"}.`,
-            ),
+        throw new ValidationError(
+            `Cannot delete ${categoryCount === 1 ? "category" : "categories"} because ${productCount} product${productCount === 1 ? "" : "s"} ${productCount === 1 ? "is" : "are"} still assigned to ${categoryCount === 1 ? "it" : "them"}.`,
             {
-                statusCode: 400,
                 suggestion: "Please delete the products permanently or move them to another category first.",
                 affectedProducts: referencedProducts.map((p) => ({ id: p.id, name: p.name })),
             },

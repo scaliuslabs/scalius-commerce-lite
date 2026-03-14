@@ -1,4 +1,4 @@
-// src/lib/payment/gateway-settings.ts
+// src/modules/payments/gateway-settings.ts
 // Reads payment gateway credentials from the `settings` DB table.
 // Results are cached in KV for 5 minutes to avoid a DB hit on every request.
 //

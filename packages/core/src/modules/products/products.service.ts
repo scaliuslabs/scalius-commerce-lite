@@ -20,6 +20,7 @@ import type { Product, ProductVariant, ProductImage } from "@scalius/database/sc
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
@@ -471,7 +472,7 @@ export async function createProduct(db: DrizzleD1Database<typeof schema>, data: 
         .get();
 
     if (existingProduct) {
-        throw new Error("A product with this slug already exists");
+        throw new ConflictError("A product with this slug already exists");
     }
 
     const productId = "prod_" + nanoid();
@@ -558,7 +559,7 @@ export async function updateProduct(db: DrizzleD1Database<typeof schema>, id: st
         .get();
 
     if (!existingProduct) {
-        throw new Error("Product not found");
+        throw new NotFoundError("Product not found");
     }
 
     const existingSlug = await db
@@ -574,7 +575,7 @@ export async function updateProduct(db: DrizzleD1Database<typeof schema>, id: st
         .get();
 
     if (existingSlug) {
-        throw new Error("A product with this slug already exists");
+        throw new ConflictError("A product with this slug already exists");
     }
 
     const attributeValuesToInsert = (data.attributes ?? [])
@@ -681,7 +682,7 @@ export async function permanentDeleteProduct(db: DrizzleD1Database<typeof schema
         .where(eq(orderItems.productId, id));
 
     if (orderCheck.count > 0) {
-        throw new Error("Cannot delete product. It is part of one or more existing orders.");
+        throw new ConflictError("Cannot delete product. It is part of one or more existing orders.");
     }
 
     const [discountCheck] = await db
@@ -690,7 +691,7 @@ export async function permanentDeleteProduct(db: DrizzleD1Database<typeof schema
         .where(eq(discountProducts.productId, id));
 
     if (discountCheck.count > 0) {
-        throw new Error("Cannot delete product. It is linked to one or more discounts.");
+        throw new ConflictError("Cannot delete product. It is linked to one or more discounts.");
     }
 
     await db.batch([
@@ -1164,7 +1165,7 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
 }
 
 export async function bulkDeleteProducts(db: DrizzleD1Database<typeof schema>, productIds: string[], permanent: boolean = false) {
-    if (productIds.length === 0) throw new Error("No product IDs provided");
+    if (productIds.length === 0) throw new ValidationError("No product IDs provided");
 
     if (permanent) {
         const [orderCheck] = await db
@@ -1173,7 +1174,7 @@ export async function bulkDeleteProducts(db: DrizzleD1Database<typeof schema>, p
             .where(inArray(orderItems.productId, productIds));
 
         if (orderCheck.count > 0) {
-            throw new Error("Cannot delete products. One or more products are part of existing orders.");
+            throw new ConflictError("Cannot delete products. One or more products are part of existing orders.");
         }
 
         const [discountCheck] = await db
@@ -1182,7 +1183,7 @@ export async function bulkDeleteProducts(db: DrizzleD1Database<typeof schema>, p
             .where(inArray(discountProducts.productId, productIds));
 
         if (discountCheck.count > 0) {
-            throw new Error("Cannot delete products. One or more products are linked to discounts.");
+            throw new ConflictError("Cannot delete products. One or more products are linked to discounts.");
         }
 
         await db.batch([
@@ -1242,7 +1243,7 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
         .get();
 
     if (existingVariant) {
-        throw new Error("A variant with this SKU already exists");
+        throw new ConflictError("A variant with this SKU already exists");
     }
 
     const [variant] = await db
@@ -1275,7 +1276,7 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
         .get();
 
     if (!existingVariant) {
-        throw new Error("Variant not found");
+        throw new NotFoundError("Variant not found");
     }
 
     const existingSkuVariant = await db
@@ -1285,7 +1286,7 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
         .get();
 
     if (existingSkuVariant) {
-        throw new Error("A variant with this SKU already exists");
+        throw new ConflictError("A variant with this SKU already exists");
     }
 
     const [variant] = await db
@@ -1316,7 +1317,7 @@ export async function deleteVariant(db: DrizzleD1Database<typeof schema>, produc
         .get();
 
     if (!existingVariant) {
-        throw new Error("Variant not found");
+        throw new NotFoundError("Variant not found");
     }
 
     await db.delete(productVariants).where(eq(productVariants.id, variantId));
@@ -1330,7 +1331,7 @@ export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, pro
         .limit(1);
 
     if (!existingVariant) {
-        throw new Error("Variant not found");
+        throw new NotFoundError("Variant not found");
     }
 
     let newSku = `${existingVariant.sku}-COPY`;
@@ -1376,7 +1377,7 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
     const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
 
     if (duplicateSkus.length > 0) {
-        throw new Error(`Duplicate SKUs found in request: ${duplicateSkus.join(", ")}`);
+        throw new ValidationError(`Duplicate SKUs found in request: ${duplicateSkus.join(", ")}`);
     }
 
     const existingVariants: Array<{ sku: string }> = await db
@@ -1386,7 +1387,7 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
         .all();
 
     if (existingVariants.length > 0) {
-        throw new Error(`One or more SKUs already exist: ${existingVariants.map((v) => v.sku).join(", ")}`);
+        throw new ConflictError(`One or more SKUs already exist: ${existingVariants.map((v) => v.sku).join(", ")}`);
     }
 
     const variantsToCreate = variants.map((variant) => ({
@@ -1420,7 +1421,7 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
 }
 
 export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, productId: string, variantIds: string[]) {
-    if (variantIds.length === 0) throw new Error("No variant IDs provided");
+    if (variantIds.length === 0) throw new ValidationError("No variant IDs provided");
 
     await db
         .delete(productVariants)

@@ -50,3 +50,6 @@ export const createDiscountSchema = z.object({
 export const updateDiscountSchema = createDiscountSchema.extend({
     id: z.string(),
 });
+
+export type CreateDiscountInput = z.infer<typeof createDiscountSchema>;
+export type UpdateDiscountInput = z.infer<typeof updateDiscountSchema>;

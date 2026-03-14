@@ -30,6 +30,7 @@ import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "./orders.validation";
+import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 
 // ─────────────────────────────────────────
 // Types
@@ -645,7 +646,7 @@ export async function updateOrder(id: string, data: Record<string, unknown>): Pr
         .where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`)
         .get();
 
-    if (!existingOrder) throw new Error("Order not found");
+    if (!existingOrder) throw new NotFoundError("Order not found");
 
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
@@ -664,7 +665,7 @@ export async function updateOrder(id: string, data: Record<string, unknown>): Pr
             const reserveResult = await reserveMultiple(db, newEntries, id);
             if (!reserveResult.success) {
                 if (oldEntries.length > 0) await reserveMultiple(db, oldEntries, id);
-                throw new Error(reserveResult.error ?? "Insufficient stock for updated items");
+                throw new ValidationError(reserveResult.error ?? "Insufficient stock for updated items");
             }
         }
     } else if (existingOrder.inventoryAction === "deducted") {
@@ -688,9 +689,9 @@ export async function updateOrder(id: string, data: Record<string, unknown>): Pr
 
                 if (quantityDiff !== 0) {
                     const variant = await db.select().from(productVariants).where(and(eq(productVariants.id, item.variantId), isNull(productVariants.deletedAt))).get();
-                    if (!variant) throw new Error(`Variant ${item.variantId} not found`);
+                    if (!variant) throw new NotFoundError(`Variant ${item.variantId} not found`);
                     if (variant.stock < quantityDiff) {
-                        throw new Error(`Insufficient stock for variant ${item.variantId}. Available: ${variant.stock}, Additional Requested: ${quantityDiff}`);
+                        throw new ValidationError(`Insufficient stock for variant ${item.variantId}. Available: ${variant.stock}, Additional Requested: ${quantityDiff}`);
                     }
                     await db.update(productVariants)
                         .set({ stock: variant.stock - quantityDiff, updatedAt: sql`unixepoch()` })
@@ -791,7 +792,7 @@ async function updateCustomerStatsService(customerId: string) {
 
 export async function deleteOrder(id: string) {
     const orderToDelete = await db.select({ id: orders.id, inventoryAction: orders.inventoryAction }).from(orders).where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`).get();
-    if (!orderToDelete) throw new Error("Order not found");
+    if (!orderToDelete) throw new NotFoundError("Order not found");
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
     }
@@ -858,21 +859,21 @@ export async function processCodAction(orderId: string, body: Record<string, unk
     switch (body.action) {
         case "collected":
             const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy, collectedAmount: body.collectedAmount, receiptUrl: body.receiptUrl });
-            if (!colResult.success) throw new Error(colResult.error);
+            if (!colResult.success) throw new ValidationError(colResult.error);
             await db.update(orders).set({ status: OrderStatus.DELIVERED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
             return { success: true, message: "COD collection recorded" };
         case "failed":
             const failResult = await recordCODFailure(db, { orderId, reason: body.reason, notes: body.notes });
-            if (!failResult.success) throw new Error(failResult.error);
+            if (!failResult.success) throw new ValidationError(failResult.error);
             return { success: true, message: "COD failure recorded" };
         case "returned":
             const retResult = await markCODReturned(db, orderId);
-            if (!retResult.success) throw new Error(retResult.error);
+            if (!retResult.success) throw new ValidationError(retResult.error);
             await applyInventoryForStatusChange(db, orderId, OrderStatus.RETURNED);
             await db.update(orders).set({ status: OrderStatus.RETURNED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
             return { success: true, message: "Order marked as returned" };
         default:
-            throw new Error("Invalid action");
+            throw new ValidationError("Invalid action");
     }
 }
 
@@ -882,16 +883,16 @@ export async function getOrderShipments(orderId: string) {
 
 export async function createFulfillmentShipment(orderId: string, body: Record<string, unknown>) {
     const order = await db.select({ id: orders.id, status: orders.status, fulfillmentStatus: orders.fulfillmentStatus }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order) throw new Error("Order not found");
+    if (!order) throw new NotFoundError("Order not found");
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
-        throw new Error("Cannot fulfill a cancelled/returned order");
+        throw new ValidationError("Cannot fulfill a cancelled/returned order");
     }
 
     const allItems = await db.select({ id: orderItems.id, fulfillmentStatus: orderItems.fulfillmentStatus }).from(orderItems).where(eq(orderItems.orderId, orderId)).all();
     const shipmentItemIds = body.itemIds ?? allItems.map((i) => i.id);
 
     const alreadyFulfilled = allItems.filter((i) => shipmentItemIds.includes(i.id) && (i.fulfillmentStatus === ItemFulfillmentStatus.SHIPPED || i.fulfillmentStatus === ItemFulfillmentStatus.DELIVERED));
-    if (alreadyFulfilled.length > 0) throw new Error(`Items already shipped: ${alreadyFulfilled.map((i) => i.id).join(", ")}`);
+    if (alreadyFulfilled.length > 0) throw new ConflictError(`Items already shipped: ${alreadyFulfilled.map((i) => i.id).join(", ")}`);
 
     const shipmentId = `shp_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     const now = new Date();
@@ -1142,12 +1143,12 @@ export async function createStorefrontOrder(
         if (item.variantId) {
             const variant = variantMap.get(item.variantId);
             if (!variant) {
-                throw new Error(`VALIDATION_ERROR:Variant ${item.variantId} not found.`);
+                throw new NotFoundError(`Variant ${item.variantId} not found.`);
             }
         }
         const product = productMap.get(item.productId);
         if (!product) {
-            throw new Error(`VALIDATION_ERROR:Product ${item.productId} not found or is inactive.`);
+            throw new NotFoundError(`Product ${item.productId} not found or is inactive.`);
         }
     }
 
@@ -1216,7 +1217,7 @@ export async function createStorefrontOrder(
                 verifiedShippingCharge,
             );
         } else {
-            throw new Error(`VALIDATION_ERROR:Discount code ${data.discountCode} is invalid or expired.`);
+            throw new ValidationError(`Discount code ${data.discountCode} is invalid or expired.`);
         }
     }
 
@@ -1228,7 +1229,7 @@ export async function createStorefrontOrder(
     const { PaymentMethod: PaymentMethodEnum, PaymentStatus: PaymentStatusEnum, OrderStatus: OrderStatusEnum, FulfillmentStatus: FulfillmentStatusEnum } = await import("@scalius/database/schema");
     const isPartialEnabled = settings?.partialPaymentEnabled ?? false;
     if (isPartialEnabled && data.paymentMethod === PaymentMethodEnum.COD) {
-        throw new Error("VALIDATION_ERROR:Advance deposit is required. COD cannot be selected for the full amount directly.");
+        throw new ValidationError("Advance deposit is required. COD cannot be selected for the full amount directly.");
     }
 
     // Process Location Data
@@ -1301,13 +1302,13 @@ export async function createStorefrontOrder(
 
 export async function updateOrderStatus(orderId: string, status: string) {
     const existingOrder = await db.select({ status: orders.status, inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!existingOrder) throw new Error("Order not found");
+    if (!existingOrder) throw new NotFoundError("Order not found");
     if (existingOrder.status === status) return { message: "Status unchanged" };
 
     const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
     const result = await db.update(orders).set({ status, inventoryAction: newInventoryAction, updatedAt: sql`unixepoch()` })
         .where(and(eq(orders.id, orderId), eq(orders.status, existingOrder.status))).returning({ id: orders.id });
 
-    if (result.length === 0) throw new Error("Order status was changed by another request. Please reload and try again.");
+    if (result.length === 0) throw new ConflictError("Order status was changed by another request. Please reload and try again.");
     return { message: "Order status updated successfully" };
 }

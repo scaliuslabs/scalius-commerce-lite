@@ -10,6 +10,7 @@ import { sql, desc, asc, isNull, and, isNotNull, eq, count, sum, inArray } from 
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError, ConflictError } from "@scalius/core/errors";
 
 export const DiscountService = {
     async list(db: Database, options: { page: number; limit: number; search: string; showTrashed: boolean; sort: string; order: "asc" | "desc" }) {
@@ -156,7 +157,7 @@ export const DiscountService = {
             .get();
 
         if (existingCode) {
-            throw Object.assign(new Error("A discount with this code already exists"), { statusCode: 400 });
+            throw new ConflictError("A discount with this code already exists");
         }
 
         const discountId = "disc_" + nanoid();
@@ -207,7 +208,7 @@ export const DiscountService = {
     async update(db: Database, id: string, data: Record<string, unknown>) {
         const existingDiscount = await db.select({ id: discounts.id }).from(discounts).where(eq(discounts.id, id)).get();
         if (!existingDiscount) {
-            throw Object.assign(new Error("Discount not found"), { statusCode: 404 });
+            throw new NotFoundError("Discount not found");
         }
 
         const existingCode = await db
@@ -217,7 +218,7 @@ export const DiscountService = {
             .get();
 
         if (existingCode) {
-            throw Object.assign(new Error("A discount with this code already exists"), { statusCode: 400 });
+            throw new ConflictError("A discount with this code already exists");
         }
 
         const currentTimestamp = Math.floor(Date.now() / 1000);

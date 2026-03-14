@@ -1,4 +1,4 @@
-// src/lib/payment/refund-service.ts
+// src/modules/payments/refund-service.ts
 // Gateway-agnostic refund orchestrator.
 // Determines the correct payment gateway from the order's payment records
 // and dispatches the refund to either Stripe or SSLCommerz.
@@ -11,6 +11,7 @@ import { createPolarRefund } from "./polar";
 import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "./gateway-settings";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 
 export interface RefundRequest {
     orderId: string;
@@ -58,15 +59,15 @@ export async function processRefund(
         .get();
 
     if (!order) {
-        return { success: false, gateway: "unknown", amount: 0, isFullRefund: false, error: "Order not found" };
+        throw new NotFoundError(`Order ${params.orderId} not found`);
     }
 
     if (order.paymentStatus === PaymentStatus.UNPAID || order.paymentStatus === PaymentStatus.FAILED) {
-        return { success: false, gateway: "unknown", amount: 0, isFullRefund: false, error: "Order has no payments to refund" };
+        throw new ValidationError("Order has no payments to refund");
     }
 
     if (order.paymentStatus === PaymentStatus.REFUNDED) {
-        return { success: false, gateway: "unknown", amount: 0, isFullRefund: false, error: "Order is already fully refunded" };
+        throw new ConflictError("Order is already fully refunded");
     }
 
     // 2. Find the latest successful payment
@@ -78,7 +79,7 @@ export async function processRefund(
         .get();
 
     if (!payment) {
-        return { success: false, gateway: "unknown", amount: 0, isFullRefund: false, error: "No payment record found" };
+        throw new NotFoundError("No payment record found for this order");
     }
 
     const gateway = params.gateway ?? payment.paymentMethod;
@@ -90,12 +91,12 @@ export async function processRefund(
 
     if (gateway === "stripe") {
         if (!payment.stripeChargeId) {
-            return { success: false, gateway, amount: refundAmount, isFullRefund, error: "No Stripe charge ID found on payment record" };
+            throw new ValidationError("No Stripe charge ID found on payment record");
         }
 
         const stripe = await getStripeSettings(db, kv);
         if (!stripe) {
-            return { success: false, gateway, amount: refundAmount, isFullRefund, error: "Stripe is not configured" };
+            throw new ServiceUnavailableError("Stripe is not configured");
         }
 
         const result = await stripeRefund(
@@ -113,12 +114,12 @@ export async function processRefund(
         refundId = result.refundId;
     } else if (gateway === "sslcommerz") {
         if (!payment.sslcommerzBankTranId) {
-            return { success: false, gateway, amount: refundAmount, isFullRefund, error: "No SSLCommerz bank_tran_id found on payment record" };
+            throw new ValidationError("No SSLCommerz bank_tran_id found on payment record");
         }
 
         const ssl = await getSSLCommerzSettings(db, kv);
         if (!ssl) {
-            return { success: false, gateway, amount: refundAmount, isFullRefund, error: "SSLCommerz is not configured" };
+            throw new ServiceUnavailableError("SSLCommerz is not configured");
         }
 
         const refundTranId = `REF-${params.orderId}-${Date.now()}`;
@@ -140,12 +141,12 @@ export async function processRefund(
         refundId = result.refundRefId ?? refundTranId;
     } else if (gateway === "polar") {
         if (!payment.polarCheckoutId) {
-            return { success: false, gateway, amount: refundAmount, isFullRefund, error: "No Polar order ID found on payment record" };
+            throw new ValidationError("No Polar order ID found on payment record");
         }
 
         const polar = await getPolarSettings(db, kv);
         if (!polar) {
-            return { success: false, gateway, amount: refundAmount, isFullRefund, error: "Polar is not configured" };
+            throw new ServiceUnavailableError("Polar is not configured");
         }
 
         const result = await createPolarRefund(
@@ -167,7 +168,7 @@ export async function processRefund(
         // COD "refund" is just a status update — no gateway API call needed
         refundId = `COD-REFUND-${Date.now()}`;
     } else {
-        return { success: false, gateway, amount: refundAmount, isFullRefund, error: `Unsupported gateway: ${gateway}` };
+        throw new ValidationError(`Unsupported payment gateway: ${gateway}`);
     }
 
     // 4. Update order payment status
@@ -223,15 +224,14 @@ export async function processReturn(
         .get();
 
     if (!order) {
-        return { success: false, error: "Order not found" };
+        throw new NotFoundError(`Order ${params.orderId} not found`);
     }
 
     const returnableStatuses = [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.SHIPPED];
     if (!returnableStatuses.includes(order.status as string)) {
-        return {
-            success: false,
-            error: `Cannot return an order in '${order.status}' status. Order must be delivered, completed, or shipped.`,
-        };
+        throw new ValidationError(
+            `Cannot return an order in '${order.status}' status. Order must be delivered, completed, or shipped.`
+        );
     }
 
     // Always restore inventory on return (idempotent — safe to call multiple times)
