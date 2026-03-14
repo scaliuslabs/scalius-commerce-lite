@@ -12,7 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Info, ChevronDown} from "lucide-react";
-import { MediaManager } from "../MediaManager";
+import { MediaManager } from "../media-manager";
 import { DraggableImageGallery } from "../DraggableImageGallery";
 import { cn } from "@scalius/shared/utils";
 import type { ProductFormValues } from "./types";

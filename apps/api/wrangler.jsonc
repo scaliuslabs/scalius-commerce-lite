@@ -91,6 +91,9 @@
       }
     ]
   },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
   "vars": {
     "PUBLIC_API_BASE_URL": "https://api.scalius.com",
     "BETTER_AUTH_URL": "https://dashboard.scalius.com",

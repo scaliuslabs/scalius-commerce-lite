@@ -1360,11 +1360,29 @@ export async function createStorefrontOrder(
     };
 }
 
-export async function updateOrderStatus(orderId: string, status: string) {
+// Statuses that warrant a customer notification email
+const NOTIFICATION_STATUSES: Record<string, "order_shipped" | "order_delivered"> = {
+    shipped: "order_shipped",
+    delivered: "order_delivered",
+};
+export interface StatusUpdateResult {
+    message: string;
+    /** Present when the new status warrants a customer notification. */
+    notification?: {
+        orderId: string;
+        customerEmail?: string;
+        customerName: string;
+        notificationType: "order_shipped" | "order_delivered";
+    };
+}
+
+export async function updateOrderStatus(orderId: string, status: string): Promise<StatusUpdateResult> {
     const existingOrder = await db.select({
         status: orders.status,
         inventoryAction: orders.inventoryAction,
         version: orders.version,
+        customerName: orders.customerName,
+        customerEmail: orders.customerEmail,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (existingOrder.status === status) return { message: "Status unchanged" };
@@ -1372,12 +1390,12 @@ export async function updateOrderStatus(orderId: string, status: string) {
     // Validate the status transition before applying any side effects
     validateTransition("order", existingOrder.status, status);
 
-    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
-
-    // Optimistic locking: only update if the version hasn't changed since we read it
+    // Optimistic locking: CAS update FIRST — only proceed with side effects
+    // if we win the version check. This prevents the race condition where two
+    // concurrent callers (e.g. admin + webhook) both apply inventory before
+    // either detects the conflict.
     const result = await db.update(orders).set({
         status,
-        inventoryAction: newInventoryAction,
         version: existingOrder.version + 1,
         updatedAt: sql`unixepoch()`,
     }).where(and(
@@ -1388,5 +1406,25 @@ export async function updateOrderStatus(orderId: string, status: string) {
     if (result.length === 0) {
         throw new ConflictError("Order was modified by another request. Please reload and try again.");
     }
-    return { message: "Order status updated successfully" };
+
+    // CAS succeeded — we own this transition. Now apply inventory side effects.
+    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
+
+    // Persist the new inventory action (version was already bumped above)
+    await db.update(orders).set({
+        inventoryAction: newInventoryAction,
+    }).where(eq(orders.id, orderId));
+
+    // Build notification payload if the new status warrants one
+    const notificationType = NOTIFICATION_STATUSES[status];
+    const notification = notificationType
+        ? {
+            orderId,
+            customerEmail: existingOrder.customerEmail ?? undefined,
+            customerName: existingOrder.customerName,
+            notificationType,
+        }
+        : undefined;
+
+    return { message: "Order status updated successfully", notification };
 }

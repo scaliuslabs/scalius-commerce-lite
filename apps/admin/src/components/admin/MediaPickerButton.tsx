@@ -1,4 +1,4 @@
-import { MediaManager } from "./MediaManager";
+import { MediaManager } from "./media-manager";
 
 interface MediaFile {
   id: string;

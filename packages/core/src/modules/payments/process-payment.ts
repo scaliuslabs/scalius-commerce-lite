@@ -18,6 +18,7 @@ import { releaseMultiple } from "../inventory/release";
 import type { ProcessPaymentParams, PaymentGateway } from "./types";
 import { getCurrencyConfig } from "../settings/settings.service";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import { validateTransition } from "../orders/order-state-machine";
 
 /**
  * Process a confirmed payment event.
@@ -36,31 +37,9 @@ export async function processPaymentConfirmed(
   params: ProcessPaymentParams
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Fetch the order
-    const order = await db
-      .select({
-        id: orders.id,
-        totalAmount: orders.totalAmount,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
-        paymentStatus: orders.paymentStatus,
-        status: orders.status,
-        inventoryPool: orders.inventoryPool,
-      })
-      .from(orders)
-      .where(eq(orders.id, params.orderId))
-      .get();
-
-    if (!order) {
-      return { success: false, error: `Order ${params.orderId} not found` };
-    }
-
-    // Guard: already fully paid
-    if (order.paymentStatus === PaymentStatus.PAID) {
-      return { success: true }; // Idempotent — already processed
-    }
-
-    // Check for duplicate payment record (Stripe retry protection)
+    // ── 0. Duplicate payment check FIRST (before any mutations) ──
+    // If two identical webhooks arrive concurrently, this gate prevents
+    // both from proceeding to inventory/status changes.
     if (params.stripePaymentIntentId) {
       const existing = await db
         .select({ id: orderPayments.id })
@@ -86,6 +65,30 @@ export async function processPaymentConfirmed(
       if (existing) return { success: true };
     }
 
+    // ── 1. Fetch the order ──
+    const order = await db
+      .select({
+        id: orders.id,
+        totalAmount: orders.totalAmount,
+        paidAmount: orders.paidAmount,
+        balanceDue: orders.balanceDue,
+        paymentStatus: orders.paymentStatus,
+        status: orders.status,
+        inventoryPool: orders.inventoryPool,
+      })
+      .from(orders)
+      .where(eq(orders.id, params.orderId))
+      .get();
+
+    if (!order) {
+      return { success: false, error: `Order ${params.orderId} not found` };
+    }
+
+    // Guard: already fully paid
+    if (order.paymentStatus === PaymentStatus.PAID) {
+      return { success: true }; // Idempotent — already processed
+    }
+
     const now = new Date();
     const newPaidAmount = (order.paidAmount ?? 0) + params.amount;
     const newBalanceDue = Math.max(0, order.totalAmount - newPaidAmount);
@@ -93,15 +96,24 @@ export async function processPaymentConfirmed(
 
     console.log(`[process-payment] Order ${params.orderId}: amount=${params.amount}, totalAmount=${order.totalAmount}, paidAmount=${order.paidAmount}, newPaidAmount=${newPaidAmount}, newBalanceDue=${newBalanceDue}, isFullyPaid=${isFullyPaid}`);
 
-    // Determine new payment status
+    // Determine new statuses
     const newPaymentStatus = isFullyPaid
       ? PaymentStatus.PAID
       : PaymentStatus.PARTIAL;
+    const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
+
+    // ── 2. Validate state transitions before any writes ──
+    validateTransition("order", order.status, newStatus);
+    validateTransition("payment", order.paymentStatus, newPaymentStatus);
 
     // Fetch currency config
     const currencyConfig = await getCurrencyConfig(db);
 
-    // 1. Record this payment transaction
+    // ── 3. Record payment + update order + apply inventory ──
+    // These must all succeed together. If inventory transition fails,
+    // we must NOT leave the order marked as paid with stock not deducted.
+
+    // 3a. Record this payment transaction
     await db.insert(orderPayments).values({
       id: crypto.randomUUID(),
       orderId: params.orderId,
@@ -121,27 +133,24 @@ export async function processPaymentConfirmed(
       updatedAt: now,
     });
 
-    // 2. Update order totals and payment status
-    const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
-    const orderUpdates: Record<string, unknown> = {
-      status: newStatus,
-      paidAmount: newPaidAmount,
-      balanceDue: newBalanceDue,
-      paymentStatus: newPaymentStatus,
-      updatedAt: sql`unixepoch()`,
-    };
-
+    // 3b. Update order totals and payment status
     await db
       .update(orders)
-      .set(orderUpdates)
+      .set({
+        status: newStatus,
+        paidAmount: newPaidAmount,
+        balanceDue: newBalanceDue,
+        paymentStatus: newPaymentStatus,
+        updatedAt: sql`unixepoch()`,
+      })
       .where(eq(orders.id, params.orderId));
 
-    // 3. Apply central inventory transitions (e.g. reserving -> deducted because status is now active)
-    await applyInventoryForStatusChange(db, params.orderId, newStatus).catch((err) =>
-      console.error(`[process-payment] Failed to apply inventory transition for ${params.orderId}:`, err)
-    );
+    // 3c. Apply central inventory transitions (e.g. reserved -> deducted)
+    // No .catch() — if inventory fails, the error propagates so the caller
+    // knows the order is in an inconsistent state and can retry.
+    await applyInventoryForStatusChange(db, params.orderId, newStatus);
 
-    // 4. Update payment plan if this is a deposit or balance payment
+    // ── 4. Update payment plan if applicable ──
     if (params.paymentType === "deposit") {
       await db
         .update(paymentPlans)
