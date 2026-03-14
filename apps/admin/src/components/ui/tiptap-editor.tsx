@@ -45,7 +45,7 @@ import { Input } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "./tooltip";
 import { Switch } from "./switch";
-import { MediaManager } from "@/components/admin/MediaManager";
+import { MediaManager } from "@/components/admin/media-manager";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 
 interface TiptapEditorProps {

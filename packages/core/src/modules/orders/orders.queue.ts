@@ -11,7 +11,7 @@
 import { sql, eq } from "drizzle-orm";
 import { orders, orderItems, customers, customerHistory, discountUsage } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
-import { reserveMultiple, releaseMultiple } from "../inventory";
+import { reserveStockBatch, releaseMultiple } from "../inventory";
 import { initCODTracking } from "../payments/cod";
 import type { getDb } from "@scalius/database/client";
 
@@ -245,18 +245,36 @@ export async function handleOrderIngestBatch(
     // ── Phase 2: Inventory reservations ─────────────────────────────────────
 
     if (reservationEntries.length > 0) {
-        console.log(`[Queue] Running reserveMultiple for ${reservationEntries.length} entries`);
-        const reserveResult = await reserveMultiple(db, reservationEntries, orderIdsForReservation[0] || "batch");
-        if (!reserveResult.success) {
-            console.error("[Queue] Batched reservation failed:", reserveResult.results);
-            // Hard fail the entire batch — Cloudflare will retry
-            for (const msg of batch.messages) {
-                await setCheckoutStatus(env, msg.body.checkoutToken, "failed", "Insufficient stock preventing batch ingestion.");
-                msg.retry({ delaySeconds: 15 });
-            }
-            return;
+        console.log(`[Queue] Running reserveStockBatch for ${reservationEntries.length} entries`);
+        // Group entries by pool for the batch call. All entries in a single
+        // order share the same pool, but across a batch we may have mixed
+        // pools. reserveStockBatch takes a single pool, so group and call
+        // once per pool.
+        const byPool = new Map<"regular" | "preorder" | "backorder", typeof reservationEntries>();
+        for (const entry of reservationEntries) {
+            const pool = entry.pool;
+            if (!byPool.has(pool)) byPool.set(pool, []);
+            byPool.get(pool)!.push(entry);
         }
-        console.log(`[Queue] reserveMultiple completed successfully`);
+
+        for (const [pool, entries] of byPool) {
+            const batchItems = entries.map((e) => ({
+                variantId: e.variantId,
+                quantity: e.quantity,
+                orderId: orderIdsForReservation[0] || "batch",
+            }));
+            const reserveResult = await reserveStockBatch(db, batchItems, pool);
+            if (!reserveResult.success) {
+                console.error(`[Queue] reserveStockBatch failed for pool ${pool}:`, reserveResult.results);
+                // Hard fail the entire batch — Cloudflare will retry
+                for (const msg of batch.messages) {
+                    await setCheckoutStatus(env, msg.body.checkoutToken, "failed", "Insufficient stock preventing batch ingestion.");
+                    msg.retry({ delaySeconds: 15 });
+                }
+                return;
+            }
+        }
+        console.log(`[Queue] reserveStockBatch completed successfully`);
     }
 
     // ── Phase 3: Atomic DB write ─────────────────────────────────────────────

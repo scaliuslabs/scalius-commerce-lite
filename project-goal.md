@@ -144,6 +144,11 @@ All routes MUST use `ok()`, `created()`, `noContent()` from `api-response.ts`. Z
 - [x] Implement order status state machine (`order-state-machine.ts`) with `canTransitionTo()` validation
 - [x] Define valid transitions as const maps for order status, payment status, fulfillment status
 - [x] Add optimistic locking to order updates (`version` column, CAS on update, ConflictError on mismatch)
+- [ ] **CRITICAL**: Enforce state machine in `processPaymentConfirmed()` — currently bypasses validation
+- [ ] **CRITICAL**: Fix race condition in `updateOrderStatus()` — inventory deducted BEFORE version check
+- [ ] **CRITICAL**: Wire `reserveStockBatch()` into `orders.queue.ts` (replaces sequential `reserveMultiple()`)
+- [ ] **CRITICAL**: Wire `releaseExpiredReservations()` into scheduled worker handler (currently orphaned)
+- [ ] Add notification queue messages on order status changes (shipped, delivered, etc.)
 - [ ] Handle partial payment edge case: if customer pays 50% then comes back days later, verify inventory still reserved
 - [ ] Add idempotency keys to all order mutations (prevent duplicate orders from retry)
 
@@ -159,12 +164,15 @@ All routes MUST use `ok()`, `created()`, `noContent()` from `api-response.ts`. Z
 
 ### 3.3 Payment System
 
+- [ ] **CRITICAL**: Fix `processPaymentConfirmed()` idempotency — duplicate check happens AFTER inventory release (must move before)
 - [ ] Add webhook retry logic: queue unprocessed webhooks, exponential backoff (3 retries)
 - [ ] Standardize idempotency across ALL gateways (Stripe, SSLCommerz, Polar, COD, future gateways)
 - [ ] Fix refund double-processing: check existing refund record before processing (prevent inventory over-release)
 - [ ] Handle partial payment + fulfillment timing (don't start fulfillment until fully paid, or explicitly support split-ship)
 - [ ] Add COD idempotency (prevent double-recording of cash collection)
 - [ ] Add payment timeout handling (what happens if customer abandons Stripe checkout after intent created?)
+- [ ] Add chargeback status to PaymentStatus enum (DISPUTED, CHARGEBACK)
+- [ ] Handle Stripe `charge.dispute.created` webhook event
 
 ### 3.4 Discount System
 

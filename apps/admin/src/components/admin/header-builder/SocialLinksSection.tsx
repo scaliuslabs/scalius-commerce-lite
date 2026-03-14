@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MediaManager } from "../MediaManager";
+import { MediaManager } from "../media-manager";
 import { Plus, Trash2, GripVertical, Link2, ImageIcon, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import {

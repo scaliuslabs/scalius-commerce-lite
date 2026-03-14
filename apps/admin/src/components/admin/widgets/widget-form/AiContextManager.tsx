@@ -16,7 +16,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { MediaManager } from "../../MediaManager";
+import { MediaManager } from "../../media-manager";
 import { ImageIcon, Package, Tags, X, Check, Loader2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useAiContext } from "./useAiContext";

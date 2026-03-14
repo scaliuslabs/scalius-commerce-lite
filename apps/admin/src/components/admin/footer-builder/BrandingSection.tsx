@@ -1,7 +1,7 @@
 // src/components/admin/footer-builder/BrandingSection.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MediaManager } from "../MediaManager";
+import { MediaManager } from "../media-manager";
 import { Trash2 } from "lucide-react";
 import type { LogoConfig, MediaFile } from "./types";
 

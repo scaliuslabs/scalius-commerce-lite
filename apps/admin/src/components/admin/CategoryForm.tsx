@@ -27,7 +27,7 @@ import {
   X,
   ExternalLink,
 } from "lucide-react";
-import { MediaManager } from "./MediaManager";
+import { MediaManager } from "./media-manager";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";

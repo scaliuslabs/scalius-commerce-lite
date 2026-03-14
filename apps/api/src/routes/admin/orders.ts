@@ -366,7 +366,23 @@ app.openapi(updateStatusRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.updateOrderStatus(orderId, data.status);
-    return ok(c, result);
+
+    // Queue customer notification if the status change warrants one
+    if (result.notification && c.env.ORDER_NOTIFICATIONS_QUEUE) {
+        try {
+            await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
+                type: "order.notification",
+                orderId: result.notification.orderId,
+                customerEmail: result.notification.customerEmail,
+                customerName: result.notification.customerName,
+                notificationType: result.notification.notificationType,
+            });
+        } catch (err) {
+            console.error(`[orders] Failed to enqueue notification for ${orderId}:`, err);
+        }
+    }
+
+    return ok(c, { message: result.message });
 });
 
 // ─── GET /:id/items ──────────────────────────────────────────────────────────

@@ -44,7 +44,7 @@ import {
   ShieldPlus,
 } from "lucide-react";
 import { toast } from "sonner";
-import { MediaManager, type MediaFile } from "./MediaManager";
+import { MediaManager, type MediaFile } from "./media-manager";
 import { RolesManagement } from "./RolesManagement";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";

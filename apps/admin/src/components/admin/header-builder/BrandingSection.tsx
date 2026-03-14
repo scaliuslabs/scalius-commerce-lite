@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { MediaManager } from "../MediaManager";
+import { MediaManager } from "../media-manager";
 import { Trash2, AlertCircle } from "lucide-react";
 import type { LogoConfig, FaviconConfig, MediaFile } from "./types";
 
