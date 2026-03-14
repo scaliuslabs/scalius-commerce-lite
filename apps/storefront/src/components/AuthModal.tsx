@@ -19,7 +19,8 @@ async function fetchCheckoutConfigClient(): Promise<CheckoutConfig | null> {
     const apiBase = (window as any).__API_BASE_URL__ || "/api/v1";
     const res = await fetch(`${apiBase}/checkout/config`);
     if (!res.ok) return null;
-    return (await res.json()) as CheckoutConfig;
+    const json = await res.json() as { success: boolean; data: CheckoutConfig };
+    return json.data;
   } catch {
     return null;
   }
