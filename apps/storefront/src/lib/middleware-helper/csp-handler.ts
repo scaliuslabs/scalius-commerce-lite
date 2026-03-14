@@ -145,8 +145,11 @@ async function getConnectSrcDirectives(env?: any): Promise<string[]> {
   ];
 
   if (apiUrl) {
-    const cleanApiUrl = apiUrl.replace(/^https?:\/\//, "");
-    directives.push(`https://${cleanApiUrl}`, `https://*.${cleanApiUrl}`);
+    // Preserve original protocol — local dev uses http://, production uses https://
+    directives.push(apiUrl);
+    const host = apiUrl.replace(/^https?:\/\//, "");
+    // Wildcard for subdomains (always https in production)
+    directives.push(`https://*.${host}`);
   }
 
   return directives;
