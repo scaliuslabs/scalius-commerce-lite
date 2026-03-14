@@ -19,6 +19,7 @@ import type { ProcessPaymentParams, PaymentGateway } from "./types";
 import { getCurrencyConfig } from "../settings/settings.service";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { validateTransition } from "../orders/order-state-machine";
+import { roundPrice, pricesEqual } from "@scalius/shared/price-utils";
 
 /**
  * Process a confirmed payment event.
@@ -90,9 +91,9 @@ export async function processPaymentConfirmed(
     }
 
     const now = new Date();
-    const newPaidAmount = (order.paidAmount ?? 0) + params.amount;
-    const newBalanceDue = Math.max(0, order.totalAmount - newPaidAmount);
-    const isFullyPaid = newBalanceDue <= 0.01; // Allow tiny float drift
+    const newPaidAmount = roundPrice((order.paidAmount ?? 0) + params.amount);
+    const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
+    const isFullyPaid = pricesEqual(newBalanceDue, 0); // Allow tiny float drift
 
     console.log(`[process-payment] Order ${params.orderId}: amount=${params.amount}, totalAmount=${order.totalAmount}, paidAmount=${order.paidAmount}, newPaidAmount=${newPaidAmount}, newBalanceDue=${newBalanceDue}, isFullyPaid=${isFullyPaid}`);
 

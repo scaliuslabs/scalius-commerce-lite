@@ -16,8 +16,9 @@ import {
   CollectionTable,
   CollectionPagination,
   CollectionDeleteDialog,
-  BulkActionDialog,
 } from "./components";
+import { BulkActionDialog } from "@/components/admin/shared/BulkActionDialog";
+import type { BulkActionConfig } from "@/components/admin/shared/BulkActionDialog";
 import type {
   CollectionsManagerProps,
   SortField,
@@ -206,11 +207,39 @@ export function CollectionsList({
       {/* Bulk Action Confirmation Dialog */}
       <BulkActionDialog
         open={!!bulkAction}
-        bulkAction={bulkAction}
-        selectedCount={selectedIds.size}
-        isActionLoading={isBulkActionLoading}
         onOpenChange={() => setBulkAction(null)}
+        currentAction={bulkAction}
+        selectedCount={selectedIds.size}
+        actionConfigs={{
+          activate: {
+            title: "Activate Collections?",
+            description: `Are you sure you want to activate ${selectedIds.size} selected collections?`,
+            confirmLabel: "Activate",
+          },
+          deactivate: {
+            title: "Deactivate Collections?",
+            description: `Are you sure you want to deactivate ${selectedIds.size} selected collections?`,
+            confirmLabel: "Deactivate",
+          },
+          trash: {
+            title: "Move Collections to Trash?",
+            description: `Are you sure you want to move ${selectedIds.size} selected collections to trash? You can restore them later.`,
+            confirmLabel: "Move to Trash",
+          },
+          restore: {
+            title: "Restore Collections?",
+            description: `Are you sure you want to restore ${selectedIds.size} selected collections?`,
+            confirmLabel: "Restore",
+          },
+          delete: {
+            title: "Delete Collections Permanently?",
+            description: `Are you sure you want to permanently delete ${selectedIds.size} selected collections? This action cannot be undone.`,
+            confirmLabel: "Delete Permanently",
+            variant: "destructive",
+          },
+        } satisfies Record<string, BulkActionConfig>}
         onConfirm={() => handleBulkAction(bulkAction)}
+        isLoading={isBulkActionLoading}
       />
     </div>
   );

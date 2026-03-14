@@ -5,4 +5,3 @@ export { PageRow } from "./PageRow";
 export { PageTable } from "./PageTable";
 export { PagePagination } from "./PagePagination";
 export { PageDeleteDialog } from "./PageDeleteDialog";
-export { BulkActionDialog } from "./BulkActionDialog";

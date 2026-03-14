@@ -89,15 +89,6 @@ export interface WidgetDeleteDialogProps {
   onConfirm: () => void;
 }
 
-export interface BulkActionDialogProps {
-  open: boolean;
-  bulkAction: BulkAction | null;
-  selectedCount: number;
-  isActionLoading: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
-}
-
 export interface WidgetStatisticsProps {
   total: number;
   activeCount: number;

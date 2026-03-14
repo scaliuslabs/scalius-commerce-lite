@@ -3,6 +3,7 @@
 // Prevents data corruption by validating invariants at the service layer.
 
 import { ValidationError } from "@scalius/core/errors";
+import { roundPrice } from "@scalius/shared/price-utils";
 
 /**
  * Validate that stock value is non-negative.
@@ -105,7 +106,7 @@ export function calculateFinalPrice(
         `discountPercentage must be between 0 and 100, got ${pct}`
       );
     }
-    finalPrice = price * (1 - pct / 100);
+    finalPrice = roundPrice(price * (1 - pct / 100));
   } else if (discountType === "flat") {
     const amount = discountAmount ?? 0;
     if (amount < 0) {
@@ -113,13 +114,10 @@ export function calculateFinalPrice(
         `discountAmount must be >= 0, got ${amount}`
       );
     }
-    finalPrice = price - amount;
+    finalPrice = roundPrice(price - amount);
   } else {
     return price;
   }
-
-  // Round to 2 decimal places to avoid floating-point drift
-  finalPrice = Math.round(finalPrice * 100) / 100;
 
   if (finalPrice < 0) {
     throw new ValidationError(

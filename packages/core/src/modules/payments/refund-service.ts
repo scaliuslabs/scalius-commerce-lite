@@ -12,6 +12,7 @@ import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "./ga
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
+import { roundPrice } from "@scalius/shared/price-utils";
 
 export interface RefundRequest {
     orderId: string;
@@ -172,7 +173,7 @@ export async function processRefund(
     }
 
     // 4. Update order payment status
-    const newPaidAmount = Math.max(0, (order.paidAmount ?? 0) - refundAmount);
+    const newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - refundAmount));
     await db
         .update(orders)
         .set({

@@ -21,8 +21,9 @@ import {
   WidgetToolbar,
   WidgetTable,
   WidgetDeleteDialog,
-  BulkActionDialog,
 } from "./components";
+import { BulkActionDialog } from "@/components/admin/shared/BulkActionDialog";
+import type { BulkActionConfig } from "@/components/admin/shared/BulkActionDialog";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 import type {
   WidgetsManagerProps,
@@ -257,11 +258,39 @@ export function WidgetsList({
       {/* Bulk Action Confirmation Dialog */}
       <BulkActionDialog
         open={!!bulkAction}
-        bulkAction={bulkAction}
-        selectedCount={selectedIds.size}
-        isActionLoading={isBulkActionLoading}
         onOpenChange={() => setBulkAction(null)}
+        currentAction={bulkAction}
+        selectedCount={selectedIds.size}
+        actionConfigs={{
+          trash: {
+            title: "Move Widgets to Trash?",
+            description: `Are you sure you want to move ${selectedIds.size} widget(s) to trash? You can restore them later.`,
+            confirmLabel: "Move to Trash",
+          },
+          delete: {
+            title: "Delete Widgets Permanently?",
+            description: `Are you sure you want to permanently delete ${selectedIds.size} widget(s)? This action cannot be undone.`,
+            confirmLabel: "Delete Permanently",
+            variant: "destructive",
+          },
+          restore: {
+            title: "Restore Widgets?",
+            description: `Are you sure you want to restore ${selectedIds.size} widget(s)?`,
+            confirmLabel: "Restore",
+          },
+          activate: {
+            title: "Activate Widgets?",
+            description: `Are you sure you want to activate ${selectedIds.size} widget(s)?`,
+            confirmLabel: "Activate",
+          },
+          deactivate: {
+            title: "Deactivate Widgets?",
+            description: `Are you sure you want to deactivate ${selectedIds.size} widget(s)?`,
+            confirmLabel: "Deactivate",
+          },
+        } satisfies Record<string, BulkActionConfig>}
         onConfirm={() => handleBulkAction(bulkAction)}
+        isLoading={isBulkActionLoading}
       />
 
       {/* Settings Dialog */}

@@ -5,6 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getKv, deleteCacheByPattern } from "../../../utils/kv-cache";
 import { upsertSetting } from "@scalius/core/modules/payments/gateway-settings";
+import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 
 import { ok } from "../../../utils/api-response";
@@ -149,6 +150,7 @@ app.openapi(saveHeaderRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             });
         }
+        await invalidateSiteSettingsCache(getKv());
         return ok(c, {});
     } catch (error: unknown) {
         return c.json({ error: "Failed to save header configuration" }, 500);
@@ -205,6 +207,7 @@ app.openapi(saveFooterRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             });
         }
+        await invalidateSiteSettingsCache(getKv());
         return ok(c, {});
     } catch (error: unknown) {
         return c.json({ error: "Failed to save footer configuration" }, 500);
@@ -335,6 +338,7 @@ app.openapi(saveSeoRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             });
         }
+        await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "SEO settings saved successfully" });
     } catch (error) {
         return c.json({ error: "Failed to save SEO configuration" }, 500);
@@ -392,6 +396,7 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
             });
         }
         layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
+        await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "Storefront URL saved successfully" });
     } catch (error) {
         return c.json({ error: "Failed to save storefront URL" }, 500);

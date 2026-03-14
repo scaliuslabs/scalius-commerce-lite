@@ -5,4 +5,3 @@ export { CollectionToolbar } from "./CollectionToolbar";
 export { CollectionTable } from "./CollectionTable";
 export { CollectionPagination } from "./CollectionPagination";
 export { CollectionDeleteDialog } from "./CollectionDeleteDialog";
-export { BulkActionDialog } from "./BulkActionDialog";

@@ -13,6 +13,7 @@ import {
   type LocationData,
   deleteAbandonedCheckout,
 } from "@/lib/api";
+import { roundPrice, addPrices } from "@scalius/shared/price-utils";
 
 export async function getCities(): Promise<LocationData[]> {
   try {
@@ -148,13 +149,13 @@ export async function processOrder(formData: FormData) {
             if (variant.discountType === "flat" && variant.discountAmount) {
               finalPrice = Math.max(
                 0,
-                Math.round(variantPrice - variant.discountAmount),
+                roundPrice(variantPrice - variant.discountAmount),
               );
             } else if (
               variant.discountType === "percentage" &&
               variant.discountPercentage
             ) {
-              finalPrice = Math.round(
+              finalPrice = roundPrice(
                 variantPrice * (1 - variant.discountPercentage / 100),
               );
             }
@@ -163,13 +164,13 @@ export async function processOrder(formData: FormData) {
             if (product.discountType === "flat" && product.discountAmount) {
               finalPrice = Math.max(
                 0,
-                Math.round(variantPrice - product.discountAmount),
+                roundPrice(variantPrice - product.discountAmount),
               );
             } else if (
               product.discountType === "percentage" &&
               product.discountPercentage
             ) {
-              finalPrice = Math.round(
+              finalPrice = roundPrice(
                 variantPrice * (1 - product.discountPercentage / 100),
               );
             } else {
@@ -194,7 +195,7 @@ export async function processOrder(formData: FormData) {
         );
       }
 
-      subtotal += finalPrice * item.quantity;
+      subtotal += roundPrice(finalPrice * item.quantity);
       processedItems.push({
         productId: product.id,
         variantId: variantId,
@@ -202,6 +203,8 @@ export async function processOrder(formData: FormData) {
         price: finalPrice,
       });
     }
+
+    subtotal = roundPrice(subtotal);
 
     // Check if any product in the order qualifies for free delivery.
     // This must match the client-side logic so the order total is consistent

@@ -125,13 +125,46 @@ export async function getCurrencyConfig(
 // Site Settings (header, footer, theme, etc.)
 // ─────────────────────────────────────────
 
+const SITE_SETTINGS_CACHE_KEY = "gw:site_settings";
+
 /**
  * Returns the full siteSettings row (contains headerConfig, footerConfig, storefrontUrl, etc.)
+ * With optional KV cache (5-minute TTL).
  */
-export async function getSiteSettings(db: Database) {
+export async function getSiteSettings(
+    db: Database,
+    kv?: KVNamespace | null,
+) {
+    if (kv) {
+        try {
+            const cached = await kv.get(SITE_SETTINGS_CACHE_KEY);
+            if (cached) return JSON.parse(cached);
+        } catch { }
+    }
+
     const [row] = await db
         .select()
         .from(siteSettings)
         .limit(1);
-    return row ?? null;
+
+    const result = row ?? null;
+
+    if (kv && result) {
+        try {
+            await kv.put(SITE_SETTINGS_CACHE_KEY, JSON.stringify(result), { expirationTtl: 300 });
+        } catch { }
+    }
+
+    return result;
+}
+
+/**
+ * Invalidate the site settings KV cache.
+ * Call after any admin update to the siteSettings table.
+ */
+export async function invalidateSiteSettingsCache(kv?: KVNamespace | null): Promise<void> {
+    if (!kv) return;
+    try {
+        await kv.delete(SITE_SETTINGS_CACHE_KEY);
+    } catch { }
 }
