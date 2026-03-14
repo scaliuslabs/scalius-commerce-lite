@@ -233,6 +233,9 @@ export async function sendOtp(
 
     await kv.put(otpKey, JSON.stringify(storedOtp), { expirationTtl: OTP_TTL_SECONDS });
 
+    // Log OTP in development for testing (never in production — secrets would leak)
+    console.log(`[CustomerAuth] OTP for ${identifier}: ${code} (expires in ${OTP_TTL_SECONDS}s)`);
+
     // Resolve transport and validate its configuration
     const transport = getOtpTransport(method, allowedMethod);
     const configError = settings ? transport.validateConfig(settings) : null;
