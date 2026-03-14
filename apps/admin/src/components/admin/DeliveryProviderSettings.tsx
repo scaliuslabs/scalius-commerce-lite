@@ -46,7 +46,61 @@ import {
   Save,
   X,
   Truck,
+  Package,
 } from "lucide-react";
+
+// Provider visual config: icon, color scheme, and description
+const PROVIDER_VISUAL: Record<
+  string,
+  {
+    icon: typeof Truck;
+    bgClass: string;
+    iconClass: string;
+    badgeClass: string;
+    description: string;
+  }
+> = {
+  pathao: {
+    icon: Truck,
+    bgClass: "bg-orange-100 dark:bg-orange-950/40",
+    iconClass: "text-orange-600 dark:text-orange-400",
+    badgeClass: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400 border-orange-200 dark:border-orange-900",
+    description: "Ride-sharing & delivery platform",
+  },
+  steadfast: {
+    icon: Package,
+    bgClass: "bg-blue-100 dark:bg-blue-950/40",
+    iconClass: "text-blue-600 dark:text-blue-400",
+    badgeClass: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border-blue-200 dark:border-blue-900",
+    description: "Courier & logistics service",
+  },
+};
+
+function ProviderIcon({
+  type,
+  size = "md",
+}: {
+  type: string;
+  size?: "sm" | "md" | "lg";
+}) {
+  const visual = PROVIDER_VISUAL[type] || PROVIDER_VISUAL.pathao;
+  const Icon = visual.icon;
+  const sizeClasses = {
+    sm: "p-1.5 rounded-md",
+    md: "p-2 rounded-lg",
+    lg: "p-3 rounded-xl",
+  };
+  const iconSizes = {
+    sm: "h-3.5 w-3.5",
+    md: "h-5 w-5",
+    lg: "h-7 w-7",
+  };
+  return (
+    <div className={`flex-shrink-0 ${visual.bgClass} ${sizeClasses[size]}`}>
+      <Icon className={`${iconSizes[size]} ${visual.iconClass}`} />
+    </div>
+  );
+}
 
 // Provider type options
 const PROVIDER_TYPES: { value: DeliveryProviderType; label: string }[] = [
@@ -381,49 +435,88 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {/* Provider List Sidebar */}
-      <Card className="md:col-span-1">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Providers</CardTitle>
-          <Button size="sm" onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add
-          </Button>
-        </CardHeader>
-        <CardContent className="p-0">
-          {providers.length === 0 ? (
-            <div className="px-6 pb-6 text-sm text-muted-foreground">
-              No providers configured yet.
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {providers.map((provider) => (
-                <button
-                  key={provider.id}
-                  type="button"
-                  onClick={() => handleSelect(provider)}
-                  className={`w-full text-left px-4 py-3 transition-colors hover:bg-muted/50 ${selectedProvider?.id === provider.id
-                    ? "bg-muted/60 border-l-2 border-l-primary"
-                    : "border-l-2 border-l-transparent"
-                    }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">{provider.name}</span>
-                    <Badge
-                      variant={provider.isActive ? "default" : "secondary"}
-                      className="text-[10px] px-1.5 py-0"
-                    >
-                      {provider.isActive ? "Active" : "Inactive"}
-                    </Badge>
+      <div className="md:col-span-1 space-y-4">
+        <Card>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Providers</CardTitle>
+            <Button size="sm" onClick={handleCreate}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            {providers.length === 0 ? (
+              <div className="px-6 pb-6 text-sm text-muted-foreground">
+                No providers configured yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {providers.map((provider) => (
+                  <button
+                    key={provider.id}
+                    type="button"
+                    onClick={() => handleSelect(provider)}
+                    className={`w-full text-left px-4 py-3 transition-colors hover:bg-muted/50 ${selectedProvider?.id === provider.id
+                      ? "bg-muted/60 border-l-2 border-l-primary"
+                      : "border-l-2 border-l-transparent"
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <ProviderIcon type={provider.type} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-sm truncate">
+                            {provider.name}
+                          </span>
+                          <Badge
+                            variant={provider.isActive ? "default" : "secondary"}
+                            className="text-[10px] px-1.5 py-0 flex-shrink-0"
+                          >
+                            {provider.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] px-1.5 py-0 font-normal capitalize ${PROVIDER_VISUAL[provider.type]?.badgeClass || ""}`}
+                          >
+                            {provider.type}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Supported Providers */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Supported Providers
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2.5 pt-0">
+            {PROVIDER_TYPES.map((pt) => {
+              const visual = PROVIDER_VISUAL[pt.value];
+              return (
+                <div key={pt.value} className="flex items-center gap-2.5">
+                  <ProviderIcon type={pt.value} size="sm" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-tight">{pt.label}</p>
+                    <p className="text-[11px] text-muted-foreground leading-tight">
+                      {visual?.description}
+                    </p>
                   </div>
-                  <span className="text-xs text-muted-foreground capitalize">
-                    {provider.type}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Provider Detail Panel */}
       <Card className="md:col-span-2">
@@ -437,15 +530,18 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
         ) : (
           <>
             <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle className="text-base">
-                  {isCreating ? "New Provider" : "Provider Details"}
-                </CardTitle>
-                <CardDescription>
-                  {isCreating
-                    ? "Configure a new delivery integration"
-                    : formData.name}
-                </CardDescription>
+              <div className="flex items-center gap-3">
+                <ProviderIcon type={formData.type} size="md" />
+                <div>
+                  <CardTitle className="text-base">
+                    {isCreating ? "New Provider" : formData.name || "Provider Details"}
+                  </CardTitle>
+                  <CardDescription>
+                    {isCreating
+                      ? "Configure a new delivery integration"
+                      : PROVIDER_VISUAL[formData.type]?.description || formData.type}
+                  </CardDescription>
+                </div>
               </div>
               {!isEditing && selectedProvider && (
                 <div className="flex items-center gap-2">
@@ -532,7 +628,9 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                         <SelectContent>
                           {PROVIDER_TYPES.map((type) => (
                             <SelectItem key={type.value} value={type.value}>
-                              {type.label}
+                              <span className="flex items-center gap-2">
+                                {type.label}
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>
