@@ -1,0 +1,237 @@
+import type { DeliveryProviderType, Order } from "@scalius/database/schema";
+import type {
+  RedXCredentials,
+  RedXConfig,
+  ShipmentResult,
+  ShipmentStatus,
+  ShipmentOptions,
+  RedXCreateParcelResponse,
+  RedXParcelInfoResponse,
+} from "../types";
+import type { DeliveryProviderInterface } from "../provider";
+import { mapProviderStatus } from "../status-mapper";
+
+const REDX_BASE_URLS = {
+  sandbox: "https://sandbox.redx.com.bd/v1.0.0-beta",
+  production: "https://openapi.redx.com.bd/v1.0.0-beta",
+} as const;
+
+/**
+ * Implementation of the RedX delivery provider
+ */
+export class RedXProvider implements DeliveryProviderInterface {
+  private credentials: RedXCredentials;
+  private config: RedXConfig;
+  private baseUrl: string;
+
+  constructor(credentials: RedXCredentials, config: RedXConfig) {
+    this.credentials = credentials;
+    this.config = config;
+    this.baseUrl = config.sandbox
+      ? REDX_BASE_URLS.sandbox
+      : REDX_BASE_URLS.production;
+  }
+
+  getName(): string {
+    return "RedX";
+  }
+
+  getType(): DeliveryProviderType {
+    return "redx";
+  }
+
+  /**
+   * Get request headers for RedX API calls
+   */
+  private getHeaders(): HeadersInit {
+    return {
+      "API-ACCESS-TOKEN": `Bearer ${this.credentials.apiToken.trim()}`,
+      "Content-Type": "application/json",
+    };
+  }
+
+  /**
+   * Test the provider credentials and connection
+   */
+  async testConnection(): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/pickup/stores`, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        return {
+          success: false,
+          message: `Connection failed: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`,
+        };
+      }
+
+      const data = await response.json() as { pickup_stores?: unknown[] };
+
+      if (this.config.pickupStoreId) {
+        const stores = (data.pickup_stores || []) as { id?: number }[];
+        const storeExists = stores.some(
+          (store) => store.id === this.config.pickupStoreId,
+        );
+        if (!storeExists) {
+          return {
+            success: false,
+            message: `Pickup Store ID ${this.config.pickupStoreId} not found in your account.`,
+          };
+        }
+      }
+
+      return { success: true, message: "Connection successful" };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Connection failed: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  /**
+   * Create a shipment for an order
+   */
+  async createShipment(
+    order: Order,
+    options?: ShipmentOptions,
+  ): Promise<ShipmentResult> {
+    try {
+      const amountToCollect =
+        options?.codAmount !== undefined
+          ? options.codAmount
+          : (order.balanceDue ?? (order.totalAmount - (order.paidAmount || 0)));
+
+      // Build full address from available parts
+      const addressParts = [
+        order.shippingAddress,
+        order.areaName,
+        order.zoneName,
+        order.cityName,
+      ].filter(Boolean);
+      const fullAddress = addressParts.join(", ");
+
+      const payload: Record<string, unknown> = {
+        customer_name: order.customerName,
+        customer_phone: order.customerPhone,
+        delivery_area: order.areaName || order.zoneName || order.cityName || "",
+        delivery_area_id: order.area ? parseInt(order.area) : 0,
+        customer_address: fullAddress,
+        merchant_invoice_id: order.id,
+        cash_collection_amount: amountToCollect,
+        parcel_weight: options?.itemWeight || this.config.defaultParcelWeight || 500,
+        instruction: options?.note || order.notes || "",
+        value: amountToCollect,
+        pickup_store_id: this.config.pickupStoreId,
+      };
+
+      const response = await fetch(`${this.baseUrl}/parcel`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      let responseData: RedXCreateParcelResponse;
+      try {
+        const responseText = await response.text();
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (jsonError) {
+          let errorMessage = "Invalid JSON response";
+          if (responseText.includes("<!DOCTYPE html>") || responseText.includes("<html")) {
+            const titleMatch = responseText.match(/<title>(.*?)<\/title>/);
+            if (titleMatch && titleMatch[1]) {
+              errorMessage = `HTML Server Error: ${titleMatch[1]}`;
+            }
+          }
+          console.error(`[RedXAPI] Shipment failed. Error:`, responseText);
+          return {
+            success: false,
+            message: errorMessage,
+          };
+        }
+      } catch (parseError) {
+        return {
+          success: false,
+          message: `Failed to parse API response: ${response.statusText}`,
+        };
+      }
+
+      if (response.ok && responseData.tracking_id) {
+        const mappedStatus = mapProviderStatus(this.getType(), "pickup-pending");
+
+        return {
+          success: true,
+          message: "Parcel created successfully",
+          data: {
+            externalId: responseData.tracking_id,
+            trackingId: responseData.tracking_id,
+            status: mappedStatus,
+            metadata: responseData as unknown as Record<string, unknown>,
+          },
+        };
+      } else {
+        return {
+          success: false,
+          message: `API Error: ${(responseData as unknown as Record<string, string>).message || "Unknown error"}`,
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `Failed to create shipment: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  /**
+   * Check the status of a shipment by tracking ID
+   */
+  async checkShipmentStatus(externalId: string): Promise<ShipmentStatus> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/parcel/info/${externalId}`,
+        {
+          method: "GET",
+          headers: this.getHeaders(),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to check status: ${response.statusText}`,
+        );
+      }
+
+      const responseData: RedXParcelInfoResponse = await response.json();
+
+      if (!responseData.parcel) {
+        throw new Error("Invalid response: missing parcel data");
+      }
+
+      const mappedStatus = mapProviderStatus(
+        this.getType(),
+        responseData.parcel.status,
+      );
+
+      return {
+        status: mappedStatus,
+        rawStatus: responseData.parcel.status,
+        updatedAt: new Date(),
+        metadata: responseData.parcel as unknown as Record<string, unknown>,
+      };
+    } catch (error) {
+      return {
+        status: "unknown",
+        rawStatus: "error",
+        updatedAt: new Date(),
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      };
+    }
+  }
+}

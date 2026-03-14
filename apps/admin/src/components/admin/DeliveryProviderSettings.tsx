@@ -47,6 +47,10 @@ import {
   X,
   Truck,
   Package,
+  Copy,
+  Check,
+  Webhook,
+  Info,
 } from "lucide-react";
 
 // Provider visual config: icon, color scheme, and description
@@ -73,6 +77,13 @@ const PROVIDER_VISUAL: Record<
     iconClass: "text-blue-600 dark:text-blue-400",
     badgeClass: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border-blue-200 dark:border-blue-900",
     description: "Courier & logistics service",
+  },
+  redx: {
+    icon: Truck,
+    bgClass: "bg-red-100 dark:bg-red-950/40",
+    iconClass: "text-red-600 dark:text-red-400",
+    badgeClass: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400 border-red-200 dark:border-red-900",
+    description: "Bangladesh courier service",
   },
 };
 
@@ -106,6 +117,7 @@ function ProviderIcon({
 const PROVIDER_TYPES: { value: DeliveryProviderType; label: string }[] = [
   { value: "pathao", label: "Pathao" },
   { value: "steadfast", label: "Steadfast" },
+  { value: "redx", label: "RedX" },
 ];
 
 // Default credentials structure per provider type
@@ -116,11 +128,17 @@ const DEFAULT_CREDENTIALS = {
     clientSecret: "",
     username: "",
     password: "",
+    webhookSecret: "",
   },
   steadfast: {
     baseUrl: "https://portal.steadfast.com.bd/api/v1",
     apiKey: "",
     secretKey: "",
+    webhookSecret: "",
+  },
+  redx: {
+    apiToken: "",
+    webhookSecret: "",
   },
 };
 const DEFAULT_CONFIG = {
@@ -132,6 +150,11 @@ const DEFAULT_CONFIG = {
   },
   steadfast: {
     defaultCodAmount: 0,
+  },
+  redx: {
+    sandbox: true,
+    pickupStoreId: 0,
+    defaultParcelWeight: 500,
   },
 };
 
@@ -222,6 +245,7 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTestingCredentials, setIsTestingCredentials] = useState(false);
+  const [copiedWebhookUrl, setCopiedWebhookUrl] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<
@@ -426,6 +450,23 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
       return JSON.parse(jsonString);
     } catch {
       return fallback;
+    }
+  };
+
+  const getWebhookUrl = (providerType: string) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}/api/v1/webhooks/${providerType}`;
+  };
+
+  const handleCopyWebhookUrl = async () => {
+    const url = getWebhookUrl(formData.type);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedWebhookUrl(true);
+      toast.success("Webhook URL copied to clipboard");
+      setTimeout(() => setCopiedWebhookUrl(false), 2000);
+    } catch {
+      toast.error("Failed to copy URL");
     }
   };
 
@@ -764,6 +805,23 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                     </div>
                   </div>
                 )}
+
+                {formData.type === "redx" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label>API Access Token (JWT)</Label>
+                      <Input
+                        type="password"
+                        value={creds.apiToken || ""}
+                        onChange={(e) =>
+                          handleCredentialChange("apiToken", e.target.value)
+                        }
+                        disabled={!isEditing}
+                        placeholder="Your RedX JWT access token"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Configuration Section */}
@@ -876,6 +934,156 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                     </div>
                   </div>
                 )}
+
+                {formData.type === "redx" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between sm:col-span-2">
+                      <div className="space-y-0.5">
+                        <Label>Sandbox Mode</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Enable to use RedX sandbox environment for testing
+                        </p>
+                      </div>
+                      <Switch
+                        checked={conf.sandbox ?? true}
+                        onCheckedChange={(checked) =>
+                          handleConfigChange("sandbox", checked)
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Pickup Store ID</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={conf.pickupStoreId || 0}
+                        onChange={(e) =>
+                          handleConfigChange(
+                            "pickupStoreId",
+                            Number(e.target.value)
+                          )
+                        }
+                        disabled={!isEditing}
+                        placeholder="Default pickup store ID"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Default Parcel Weight (grams)</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={conf.defaultParcelWeight || 500}
+                        onChange={(e) =>
+                          handleConfigChange(
+                            "defaultParcelWeight",
+                            Number(e.target.value)
+                          )
+                        }
+                        disabled={!isEditing}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Webhook Configuration */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Webhook className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                    Webhook Configuration
+                  </h4>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Webhook URL (read-only with copy) */}
+                  <div className="space-y-1.5">
+                    <Label>Webhook Callback URL</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={getWebhookUrl(formData.type)}
+                        readOnly
+                        className="font-mono text-sm bg-muted/50"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="flex-shrink-0"
+                        onClick={handleCopyWebhookUrl}
+                      >
+                        {copiedWebhookUrl ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Paste this URL into your {formData.type === "pathao" ? "Pathao" : formData.type === "steadfast" ? "Steadfast" : "RedX"} dashboard webhook settings.
+                      {formData.type === "redx" && " RedX requires adding ?token=YOUR_SECRET to the URL."}
+                    </p>
+                  </div>
+
+                  {/* Webhook Secret */}
+                  <div className="space-y-1.5">
+                    <Label>
+                      {formData.type === "pathao" ? "Webhook Secret" : formData.type === "redx" ? "Webhook Token" : "Webhook Auth Token"}
+                    </Label>
+                    <Input
+                      type="password"
+                      value={creds.webhookSecret || ""}
+                      onChange={(e) =>
+                        handleCredentialChange("webhookSecret", e.target.value)
+                      }
+                      disabled={!isEditing}
+                      placeholder={
+                        formData.type === "pathao"
+                          ? "Secret for X-PATHAO-Signature verification"
+                          : formData.type === "redx"
+                          ? "Token included as ?token= query parameter"
+                          : "Bearer token for Authorization header verification"
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {formData.type === "pathao"
+                        ? "This secret is sent by Pathao in the X-PATHAO-Signature header to verify webhook authenticity."
+                        : formData.type === "redx"
+                        ? "RedX includes this token as a query parameter (?token=xxx) in the callback URL for verification."
+                        : "This token is sent by Steadfast as a Bearer token in the Authorization header."}
+                    </p>
+                  </div>
+
+                  {/* Setup Instructions */}
+                  <div className="rounded-md border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 p-3">
+                    <div className="flex gap-2">
+                      <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-blue-900 dark:text-blue-200">
+                        {formData.type === "pathao" ? (
+                          <p>
+                            Go to your <strong>Pathao Merchant Dashboard</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Webhook</strong>.
+                            Paste the webhook URL above and enter your webhook secret. Pathao will send status updates
+                            for orders including pickup, in-transit, delivered, and return events.
+                          </p>
+                        ) : formData.type === "redx" ? (
+                          <p>
+                            Go to your <strong>RedX Dashboard</strong> and configure the <strong>Callback URL</strong>.
+                            Append your webhook token as a query parameter: <code>?token=YOUR_SECRET</code>.
+                            RedX will send parcel status updates including ready-for-delivery, delivery-in-progress,
+                            delivered, and returned events.
+                          </p>
+                        ) : (
+                          <p>
+                            Go to your <strong>Steadfast Dashboard</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Webhook</strong>.
+                            Set the <strong>Callback URL</strong> to the URL above and enter the <strong>Auth Token</strong>.
+                            Steadfast will send delivery status and tracking updates to this endpoint.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Action Bar */}
@@ -930,6 +1138,18 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                             <li><strong className="text-foreground">Locations Mapping (CRITICAL):</strong> Pathao requires precise numeric IDs for City, Zone, and Area. If you do not configure these in the <a href="/admin/settings/delivery-locations" className="text-primary hover:underline">Delivery Locations</a> page (in the <em>External IDs</em> JSON field mapping such as <code>{`{"pathao": 123}`}</code>), shipments will fail to create.</li>
                           </ul>
                           <p>Common IDs: Dhaka City (1), Chittagong City (2). Please refer to Pathao API docs for your specific zone and area IDs.</p>
+                        </div>
+                      ) : formData.type === "redx" ? (
+                        <div className="space-y-4">
+                          <p><strong className="text-foreground">RedX Courier Integration</strong></p>
+                          <p>To use RedX, provide your API Access Token (JWT) obtained from the RedX dashboard.</p>
+                          <ul className="list-disc pl-5 space-y-2">
+                            <li><strong className="text-foreground">API Token:</strong> Obtain your JWT access token from the RedX merchant dashboard.</li>
+                            <li><strong className="text-foreground">Sandbox Mode:</strong> Enable sandbox mode to test with <code>sandbox.redx.com.bd</code>. Disable for production to use <code>openapi.redx.com.bd</code>.</li>
+                            <li><strong className="text-foreground">Pickup Store ID:</strong> Create a pickup store via the RedX dashboard and enter its ID here. This is the default pickup location for parcels.</li>
+                            <li><strong className="text-foreground">Parcel Weight:</strong> Default parcel weight in grams (e.g. 500 for 500g).</li>
+                            <li><strong className="text-foreground">Webhooks:</strong> RedX sends status updates via POST to your callback URL with the token as a query parameter (<code>?token=xxx</code>).</li>
+                          </ul>
                         </div>
                       ) : (
                         <div className="space-y-4">

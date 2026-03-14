@@ -366,6 +366,36 @@ Design a universal provider pattern used consistently across ALL provider types:
 
 ---
 
+## Phase 10: Admin Orders & Delivery Completeness
+
+> Goal: Admin orders pages cover every operational workflow. Delivery providers match actual API specs. New providers are plug-and-play.
+
+### 10.1 Delivery Provider Fixes
+- [ ] Fix Pathao webhook: return 202 + `X-Pathao-Merchant-Webhook-Integration-Secret` header
+- [ ] Fix Pathao webhook: parse `event` field instead of `order_status_slug`
+- [ ] Fix Pathao webhook: check `X-PATHAO-Signature` header (not `X-Webhook-Signature`)
+- [ ] Fix Steadfast webhook: check `Authorization: Bearer` header (not HMAC)
+- [ ] Fix Steadfast webhook: parse `notification_type` field
+- [ ] Fix status-mapper.ts: explicit event→status map (no brittle `includes()`)
+- [ ] Add webhook URL display + secret config to admin delivery settings UI
+- [ ] Implement RedX delivery provider (provider, webhook, status mapping, admin UI)
+
+### 10.2 Admin Order List Missing Features
+- [ ] Bulk status change (can bulk ship but not bulk change status)
+- [ ] CSV export full results (currently only exports current page)
+- [ ] Fraud check indicator on order detail page (currently only in list view)
+
+### 10.3 Admin Order Detail Missing Features
+- [ ] **Order timeline/audit log** — show status changes with timestamps and who made the change
+- [ ] **Print invoice/packing slip** — essential for fulfillment workflow
+- [ ] **Manual payment recording** — admin can see payments but can't record offline payments
+- [ ] **Order notes editor** — currently read-only, need edit + add capability
+- [ ] **Duplicate order button** — quick order recreation
+- [ ] Manual tracking number entry (currently auto-synced from provider only)
+- [ ] Delivery status auto-sync (currently manual refresh only)
+
+---
+
 ## Decision Log
 
 | Date | Decision | Rationale |

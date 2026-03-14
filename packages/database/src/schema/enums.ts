@@ -65,6 +65,7 @@ export type ItemFulfillmentStatusType = (typeof ItemFulfillmentStatus)[keyof typ
 export const DeliveryProvider = {
     PATHAO: "pathao",
     STEADFAST: "steadfast",
+    REDX: "redx",
 } as const;
 
 export type DeliveryProviderType = (typeof DeliveryProvider)[keyof typeof DeliveryProvider];
