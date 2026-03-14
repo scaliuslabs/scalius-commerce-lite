@@ -25,16 +25,12 @@ export async function createStripeIntent(orderId: string, amount: number, curren
   });
 
   if (!res.ok) {
-    const err = await res.json() as any;
+    const err = await res.json() as { error?: string };
     throw new Error(err.error || "Failed to create payment intent");
   }
 
-  const data = await res.json() as any;
-  return {
-    clientSecret: data.clientSecret,
-    paymentIntentId: data.paymentIntentId,
-    publishableKey: data.publishableKey,
-  };
+  const json = await res.json() as { success: boolean; data: StripeIntentResult };
+  return json.data;
 }
 
 /**
@@ -68,10 +64,10 @@ export async function initSSLCommerzPayment(
   });
 
   if (!res.ok) {
-    const err = await res.json() as any;
+    const err = await res.json() as { error?: string };
     throw new Error(err.error || "Failed to initialize payment");
   }
 
-  const data = await res.json() as any;
-  return { gatewayUrl: data.gatewayUrl, sessionKey: data.sessionKey };
+  const json = await res.json() as { success: boolean; data: SSLCommerzSessionResult };
+  return json.data;
 }

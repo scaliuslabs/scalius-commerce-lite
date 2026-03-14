@@ -15,7 +15,7 @@ export const GET: APIRoute = async ({ locals }) => {
 
   // Append sitemap reference
   const env = cfEnv as unknown as Env;
-  const storefrontUrl = (env?.STOREFRONT_URL as string) || import.meta.env.STOREFRONT_URL || '';
+  const storefrontUrl = (env?.STOREFRONT_URL as string) || '';
   const sitemapUrl = storefrontUrl
     ? `${storefrontUrl.replace(/\/$/, '')}/sitemap.xml`
     : '/sitemap.xml';

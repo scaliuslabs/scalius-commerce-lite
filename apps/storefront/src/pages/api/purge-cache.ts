@@ -72,7 +72,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
   const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
 
   const env = cfEnv as unknown as Env;
-  const secretToken = (env.PURGE_TOKEN as string) || import.meta.env.PURGE_TOKEN;
+  const secretToken = env.PURGE_TOKEN as string;
   const kv = env.CACHE_CONTROL;
 
   if (!secretToken) {
@@ -144,7 +144,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
 
 export const POST: APIRoute = async ({ request, url, locals }) => {
   const env = cfEnv as unknown as Env;
-  const secretToken = (env.PURGE_TOKEN as string) || import.meta.env.PURGE_TOKEN;
+  const secretToken = env.PURGE_TOKEN as string;
   const kv = env.CACHE_CONTROL;
 
   if (!secretToken) {
