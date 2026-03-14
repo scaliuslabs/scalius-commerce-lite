@@ -10,7 +10,7 @@ Turborepo monorepo: Astro SSR admin dashboard + Astro SSR storefront + standalon
 apps/
   admin/          # @scalius/admin — Astro 6 SSR admin dashboard (Cloudflare Worker)
   api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
-  storefront/     # @scalius/storefront — Astro 5 SSR customer-facing store (Cloudflare Worker)
+  storefront/     # @scalius/storefront — Astro 6 SSR customer-facing store (Cloudflare Worker)
 packages/
   api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec
   core/           # @scalius/core — Domain modules, auth, integrations, search
@@ -43,7 +43,7 @@ packages/
 
 - **Admin (`apps/admin/`)**: Astro 6 SSR + React 19 admin dashboard. Owns pages, components, layouts, styles, hooks, middleware. Communicates with API via service binding (`env.API`).
 - **API (`apps/api/`)**: Standalone Hono worker. Owns all API routes, queue consumer, OpenAPI spec. Exports `WorkerEntrypoint` with HTTP fetch + queue handler.
-- **Storefront (`apps/storefront/`)**: Astro 5 SSR + React 19 customer-facing store. Owns product pages, cart, checkout, search. Communicates with API via service binding (`env.BACKEND_API`). Has its own L1 (in-memory) + L2 (Cloudflare Cache API + KV versioning) caching layer.
+- **Storefront (`apps/storefront/`)**: Astro 6 SSR + React 19 customer-facing store. Owns product pages, cart, checkout, search. Communicates with API via service binding (`env.BACKEND_API`). Has its own L1 (in-memory) + L2 (Cloudflare Cache API + KV versioning) caching layer. Imports `@scalius/shared` and `@scalius/api-client`.
 
 ### Packages (JIT — no build step, consumed directly by bundler)
 
@@ -55,7 +55,7 @@ packages/
 
 ## Tech Stack
 
-- Astro 6 (admin) + Astro 5 (storefront) — SSR, Cloudflare adapter
+- Astro 6 (admin + storefront) — SSR, Cloudflare adapter
 - Vite 7 + React 19
 - Hono (API framework with OpenAPI/Swagger)
 - Cloudflare D1 (SQLite) + Drizzle ORM + FTS5 full-text search
@@ -153,6 +153,20 @@ api.scalius.com        → scalius-api (API Worker)
 storefront.scalius.com → scalius-storefront (Storefront Worker)
 cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 ```
+
+## Dev Server Notes
+
+- Dev commands (`pnpm dev`, `pnpm dev:all`) use `scripts/dev.sh` wrapper
+- The wrapper auto-kills stale processes from previous runs on startup
+- Apps start with staggered delays to prevent Vite inspector port conflicts
+- If ports are stuck: `lsof -ti :8787,:4321,:4322 | xargs kill -9`
+
+## Known Backlog
+
+- **SDK needs regeneration**: `packages/api-client/openapi.json` has 60 paths from an old spec. Live API has 221 paths. Run `pnpm generate:sdk` after starting API to update.
+- **Response helpers unused**: `apps/api/src/utils/api-response.ts` exports `ok()`, `paginated()`, `created()`, `noContent()` but routes still use raw `c.json()`. Future work: standardize all 573 response calls.
+- **Major version upgrades pending**: TipTap 2->3, Firebase 11->12, Recharts 2->3, react-day-picker 8->9, @hookform/resolvers 3->5
+- **ESLint not configured**: `.prettierrc.mjs` exists for formatting but no ESLint setup yet.
 
 ## Agent Team Guidelines
 
