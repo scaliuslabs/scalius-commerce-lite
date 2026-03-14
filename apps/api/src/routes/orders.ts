@@ -31,7 +31,7 @@ const unixToDate = (timestamp: number | null): Date | null => {
 app.use(
   "/:id",
   cacheMiddleware({
-    ttl: 2592000,
+    ttl: 300,
     methods: ["GET"],
     varyByQuery: false,
     varyByAuth: true
@@ -164,7 +164,7 @@ app.openapi(getOrderStatusRoute, async (c) => {
   const statusStr = await c.env.CACHE.get(kvKey);
 
   if (!statusStr) {
-    return c.json({ status: "processing", message: "Order is waiting in queue." }, 202);
+    return c.json({ success: true, data: { status: "processing", message: "Order is waiting in queue." } }, 202);
   }
 
   const statusData = JSON.parse(statusStr);
@@ -302,43 +302,15 @@ app.openapi(createOrderRoute, async (c) => {
     );
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("VALIDATION_ERROR:")) {
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: "VALIDATION_ERROR",
-            message: error.message.replace("VALIDATION_ERROR:", "")
-          }
-        },
-        400,
-      );
+      throw new ValidationError(error.message.replace("VALIDATION_ERROR:", ""));
     }
 
     if (error instanceof Error && error.message.startsWith("INSUFFICIENT_STOCK:")) {
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: "INSUFFICIENT_STOCK",
-            message: error.message.replace("INSUFFICIENT_STOCK:", "")
-          }
-        },
-        400,
-      );
+      throw new ValidationError(error.message.replace("INSUFFICIENT_STOCK:", ""));
     }
 
     if (error instanceof z.ZodError) {
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid input data",
-            details: error.issues
-          }
-        },
-        400,
-      );
+      throw new ValidationError("Invalid input data", error.issues);
     }
 
     // Re-throw for global error handler

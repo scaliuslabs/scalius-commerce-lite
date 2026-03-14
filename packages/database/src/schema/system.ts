@@ -3,7 +3,7 @@
 // shippingMethods, checkoutLanguages.
 
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, real, unique } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 
 export const settings = sqliteTable(
@@ -82,7 +82,9 @@ export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(sql`(cast(strftime('%s','now') as int))`),
-});
+}, (table) => [
+    index("admin_fcm_tokens_user_id_idx").on(table.userId),
+]);
 
 export const shippingMethods = sqliteTable("shipping_methods", {
     id: text("id").primaryKey(),
@@ -98,7 +100,9 @@ export const shippingMethods = sqliteTable("shipping_methods", {
         .notNull()
         .default(sql`(cast(strftime('%s','now') as int))`),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+    index("shipping_methods_deleted_at_idx").on(table.deletedAt),
+]);
 
 export const checkoutLanguages = sqliteTable("checkout_languages", {
     id: text("id").primaryKey(),

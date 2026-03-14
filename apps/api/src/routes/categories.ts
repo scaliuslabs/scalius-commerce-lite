@@ -20,7 +20,7 @@ const app = new OpenAPIHono();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 3600000,
+    ttl: 3600,
     keyPrefix: "api:categories:",
     varyByQuery: true,
     methods: ["GET"]

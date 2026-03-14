@@ -28,7 +28,8 @@ import {
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { customers, orders, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
 import { eq, sql, desc } from "drizzle-orm";
-import { UnauthorizedError } from "../utils/api-error";
+import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError } from "../utils/api-error";
+import { ok } from "../utils/api-response";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -74,10 +75,13 @@ app.openapi(sendOtpRoute, async (c) => {
 
   if (!result.success) {
     const status = result.httpStatus || 400;
-    if (result.retryAfter) {
-      return c.json({ error: result.error, retryAfter: result.retryAfter }, status as 400 | 401 | 403 | 404 | 429 | 500);
+    if (status === 429) {
+      throw new RateLimitError(result.error || "Too many requests");
     }
-    return c.json({ error: result.error }, status as 400 | 401 | 403 | 404 | 429 | 500);
+    if (status === 403) {
+      throw new ForbiddenError(result.error || "Method disabled");
+    }
+    throw new ValidationError(result.error || "Invalid input");
   }
 
   // Dispatch OTP delivery to queue
@@ -85,7 +89,7 @@ app.openapi(sendOtpRoute, async (c) => {
     await c.env.AUTH_OTP_QUEUE.send(result.queuePayload);
   }
 
-  return c.json({ success: true, message: result.message }, 200);
+  return ok(c, { message: result.message });
 });
 
 // ─── POST /verify-otp ────────────────────────────────────────────────────────
@@ -138,11 +142,13 @@ app.openapi(verifyOtpRoute, async (c) => {
 
   if (!result.success) {
     const status = result.httpStatus || 400;
-    const payload: { error: string | undefined; attemptsLeft?: number } = { error: result.error };
-    if (result.attemptsLeft !== undefined) {
-      payload.attemptsLeft = result.attemptsLeft;
+    if (status === 429) {
+      throw new RateLimitError(result.error || "Too many attempts");
     }
-    return c.json(payload, status as 400 | 401 | 403 | 404 | 429 | 500);
+    throw new ValidationError(
+      result.error || "Invalid code",
+      result.attemptsLeft !== undefined ? { attemptsLeft: result.attemptsLeft } : undefined
+    );
   }
 
   // Set cookies
@@ -150,10 +156,10 @@ app.openapi(verifyOtpRoute, async (c) => {
   c.header("Set-Cookie", buildSetCookieHeader(result.session!.token, SESSION_TTL_SECONDS, domainAttr, sameSite));
   c.header("Set-Cookie", `cs_auth=1; Max-Age=${SESSION_TTL_SECONDS}; Path=/${domainAttr}; SameSite=${sameSite}; Secure`, { append: true });
 
-  return c.json({
+  return ok(c, {
     customer: result.customer,
     isNewUser: result.isNewUser
-  }, 200);
+  });
 });
 
 // ─── GET /me ─────────────────────────────────────────────────────────────────
@@ -173,17 +179,17 @@ app.openapi(getMeRoute, async (c) => {
   const token = getSessionCookie(cookieHeader);
 
   if (!token) {
-    return c.json({ authenticated: false }, 200);
+    return ok(c, { authenticated: false });
   }
 
   const kv = c.env.CACHE;
   const session = await getCustomerBySession(kv, token);
 
   if (!session) {
-    return c.json({ authenticated: false }, 200);
+    return ok(c, { authenticated: false });
   }
 
-  return c.json({
+  return ok(c, {
     authenticated: true,
     customer: {
       email: session.email,
@@ -191,7 +197,7 @@ app.openapi(getMeRoute, async (c) => {
       phone: session.phone,
       customerId: session.customerId
     }
-  }, 200);
+  });
 });
 
 // ─── POST /logout ────────────────────────────────────────────────────────────
@@ -230,7 +236,7 @@ app.openapi(logoutRoute, async (c) => {
     console.error("[CustomerAuth] KV session delete failed:", error);
   }
 
-  return c.json({ success: true }, 200);
+  return ok(c, { message: "Logged out successfully" });
 });
 
 // ─── PUT /profile ────────────────────────────────────────────────────────────
@@ -291,7 +297,7 @@ app.openapi(updateProfileRoute, async (c) => {
   const db = c.get("db");
   const result = await updateCustomerProfile(db, kv, session, token, updates);
 
-  return c.json({
+  return ok(c, {
     customer: {
       email: result.session.email,
       name: result.session.name,
@@ -300,7 +306,7 @@ app.openapi(updateProfileRoute, async (c) => {
       cityName: updates.cityName,
       zoneName: updates.zoneName
     }
-  }, 200);
+  });
 });
 
 // ─── GET /orders ──────────────────────────────────────────────────────────────
@@ -374,7 +380,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
 
   // Match orders EXCLUSIVELY by customerId
   if (!session.customerId) {
-    return c.json({ success: true, orders: [], customer: customerProfile }, 200);
+    return ok(c, { orders: [], customer: customerProfile });
   }
 
   const whereClause = eq(orders.customerId, session.customerId);
@@ -446,10 +452,10 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
     items: itemsByOrder.get(order.id) || []
   }));
 
-  return c.json({
+  return ok(c, {
     orders: formattedOrders,
     customer: customerProfile
-  }, 200);
+  });
 });
 
 export { app as customerAuthRoutes };

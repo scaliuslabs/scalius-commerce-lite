@@ -4,6 +4,8 @@
 import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { products, productVariants } from "./products";
+import { orders } from "./orders";
 
 /**
  * Audit log for all stock movements.
@@ -12,8 +14,10 @@ import type { InferSelectModel } from "drizzle-orm";
  */
 export const inventoryMovements = sqliteTable("inventory_movements", {
     id: text("id").primaryKey(),
-    variantId: text("variant_id").notNull(),
-    orderId: text("order_id"),
+    variantId: text("variant_id")
+        .notNull()
+        .references(() => productVariants.id, { onDelete: "set null" }),
+    orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
     type: text("type").notNull(),
     quantity: integer("quantity").notNull(),
     previousStock: integer("previous_stock").notNull(),
@@ -31,8 +35,13 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
 
 export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {
     id: text("id").primaryKey(),
-    variantId: text("variant_id").notNull().unique(),
-    productId: text("product_id").notNull(),
+    variantId: text("variant_id")
+        .notNull()
+        .unique()
+        .references(() => productVariants.id, { onDelete: "cascade" }),
+    productId: text("product_id")
+        .notNull()
+        .references(() => products.id, { onDelete: "cascade" }),
     currentQty: integer("current_qty").notNull(),
     threshold: integer("threshold").notNull(),
     alertStatus: text("alert_status").notNull().default("active"),

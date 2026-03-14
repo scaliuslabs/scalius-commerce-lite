@@ -3,7 +3,7 @@
 // discountUsage, metaConversionsSettings, metaConversionsLogs.
 
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { products } from "./products";
 import { collections } from "./products";
@@ -13,7 +13,7 @@ import { DiscountType, DiscountValueType } from "./enums";
 
 export const discounts = sqliteTable("discounts", {
     id: text("id").primaryKey(),
-    code: text("code").notNull(),
+    code: text("code").notNull(), // indexed below
     type: text("type", {
         enum: [
             DiscountType.AMOUNT_OFF_PRODUCTS,
@@ -48,7 +48,10 @@ export const discounts = sqliteTable("discounts", {
         .notNull()
         .default(sql`CURRENT_TIMESTAMP`),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+    index("discounts_code_idx").on(table.code),
+    index("discounts_deleted_at_idx").on(table.deletedAt),
+]);
 
 export const discountProducts = sqliteTable("discount_products", {
     id: text("id").primaryKey(),
@@ -57,7 +60,7 @@ export const discountProducts = sqliteTable("discount_products", {
         .references(() => discounts.id, { onDelete: "cascade" }),
     productId: text("product_id")
         .notNull()
-        .references(() => products.id),
+        .references(() => products.id, { onDelete: "cascade" }),
     applicationType: text("application_type", { enum: ["get"] }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
@@ -71,7 +74,7 @@ export const discountCollections = sqliteTable("discount_collections", {
         .references(() => discounts.id, { onDelete: "cascade" }),
     collectionId: text("collection_id")
         .notNull()
-        .references(() => collections.id),
+        .references(() => collections.id, { onDelete: "cascade" }),
     applicationType: text("application_type", { enum: ["get"] }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
@@ -91,7 +94,9 @@ export const discountUsage = sqliteTable("discount_usage", {
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [
+    index("discount_usage_discount_customer_idx").on(table.discountId, table.customerId),
+]);
 
 export const metaConversionsSettings = sqliteTable("meta_conversions_settings", {
     id: text("id").primaryKey(),

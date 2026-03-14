@@ -143,11 +143,7 @@ app.openapi(revokeRoute, async (c) => {
   const authHeader = c.req.header("Authorization") || null;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return c.json({
-      success: false,
-      error: "Invalid token",
-      message: "No valid token provided"
-    }, 400);
+    throw new UnauthorizedError("No valid token provided");
   }
 
   const token = authHeader.substring(7);
@@ -178,9 +174,7 @@ app.openapi(tokenStatsRoute, (c) => {
     throw new ForbiddenError("You do not have permission to access this resource");
   }
 
-  return ok(c, {
-    data: getTokenStats()
-  });
+  return ok(c, getTokenStats());
 });
 
 export default app;

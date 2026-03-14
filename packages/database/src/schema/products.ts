@@ -13,7 +13,9 @@ export const products = sqliteTable(
         name: text("name").notNull(),
         description: text("description"),
         price: real("price").notNull(),
-        categoryId: text("category_id").notNull(),
+        categoryId: text("category_id")
+            .notNull()
+            .references(() => categories.id, { onDelete: "set null" }),
         slug: text("slug").notNull(),
         metaTitle: text("meta_title"),
         metaDescription: text("meta_description"),
@@ -34,12 +36,15 @@ export const products = sqliteTable(
         index("products_slug_idx").on(table.slug),
         index("products_category_id_idx").on(table.categoryId),
         index("products_active_idx").on(table.isActive, table.deletedAt),
+        index("products_deleted_at_idx").on(table.deletedAt),
     ],
 );
 
 export const productImages = sqliteTable("product_images", {
     id: text("id").primaryKey(),
-    productId: text("product_id").notNull(),
+    productId: text("product_id")
+        .notNull()
+        .references(() => products.id, { onDelete: "cascade" }),
     url: text("url").notNull(),
     alt: text("alt"),
     isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
@@ -54,7 +59,9 @@ export const productImages = sqliteTable("product_images", {
 
 export const productVariants = sqliteTable("product_variants", {
     id: text("id").primaryKey(),
-    productId: text("product_id").notNull(),
+    productId: text("product_id")
+        .notNull()
+        .references(() => products.id, { onDelete: "cascade" }),
     size: text("size"),
     color: text("color"),
     weight: real("weight"),
@@ -105,7 +112,10 @@ export const categories = sqliteTable(
             .default(sql`CURRENT_TIMESTAMP`),
         deletedAt: integer("deleted_at", { mode: "timestamp" }),
     },
-    (table) => [index("categories_slug_idx").on(table.slug)],
+    (table) => [
+        index("categories_slug_idx").on(table.slug),
+        index("categories_deleted_at_idx").on(table.deletedAt),
+    ],
 );
 
 export const collections = sqliteTable("collections", {
@@ -122,7 +132,9 @@ export const collections = sqliteTable("collections", {
         .notNull()
         .default(sql`CURRENT_TIMESTAMP`),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+    index("collections_deleted_at_idx").on(table.deletedAt),
+]);
 
 export const productAttributes = sqliteTable("product_attributes", {
     id: text("id").primaryKey(),
@@ -154,7 +166,10 @@ export const productAttributeValues = sqliteTable(
             .notNull()
             .default(sql`CURRENT_TIMESTAMP`),
     },
-    (table) => [unique().on(table.productId, table.attributeId)],
+    (table) => [
+        unique().on(table.productId, table.attributeId),
+        index("product_attribute_values_product_id_idx").on(table.productId),
+    ],
 );
 
 export const productRichContent = sqliteTable("product_rich_content", {
@@ -171,7 +186,9 @@ export const productRichContent = sqliteTable("product_rich_content", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [
+    index("product_rich_content_product_id_idx").on(table.productId),
+]);
 
 export const mediaFolders = sqliteTable("media_folders", {
     id: text("id").primaryKey(),
@@ -192,7 +209,7 @@ export const media = sqliteTable("media", {
     url: text("url").notNull(),
     size: integer("size").notNull(),
     mimeType: text("mime_type").notNull(),
-    folderId: text("folder_id"),
+    folderId: text("folder_id").references(() => mediaFolders.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(sql`CURRENT_TIMESTAMP`),

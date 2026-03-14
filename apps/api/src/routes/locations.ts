@@ -12,7 +12,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 600000, // 10 minutes
+    ttl: 600, // 10 minutes
     keyPrefix: "api:locations:",
     varyByQuery: true,
     methods: ["GET"]

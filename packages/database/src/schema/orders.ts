@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, unique, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { customers } from "./customers";
+import { products, productVariants } from "./products";
 import {
     OrderStatus,
     PaymentMethod,
@@ -41,6 +42,7 @@ export const orders = sqliteTable("orders", {
     inventoryPool: text("inventory_pool").notNull().default(InventoryPool.REGULAR),
     inventoryAction: text("inventory_action").notNull().default("none"),
     expectedDelivery: text("expected_delivery"),
+    version: integer("version").notNull().default(1),
     customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
@@ -61,8 +63,10 @@ export const orderItems = sqliteTable("order_items", {
     orderId: text("order_id")
         .notNull()
         .references(() => orders.id, { onDelete: "cascade" }),
-    productId: text("product_id").notNull(),
-    variantId: text("variant_id"),
+    productId: text("product_id")
+        .notNull()
+        .references(() => products.id, { onDelete: "set null" }),
+    variantId: text("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
     quantity: integer("quantity").notNull(),
     price: real("price").notNull(),
     productName: text("product_name"),

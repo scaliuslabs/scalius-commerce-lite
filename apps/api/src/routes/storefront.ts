@@ -29,7 +29,7 @@ const homepageRoute = createRoute({
 
 app.use(
   "/homepage",
-  cacheMiddleware({ ttl: 3600000, keyPrefix: "api:storefront:homepage:", varyByQuery: false, methods: ["GET"] }),
+  cacheMiddleware({ ttl: 3600, keyPrefix: "api:storefront:homepage:", varyByQuery: false, methods: ["GET"] }),
 );
 
 app.openapi(homepageRoute, async (c) => {
@@ -56,7 +56,7 @@ const layoutRoute = createRoute({
 
 app.use(
   "/layout",
-  cacheMiddleware({ ttl: 3600000, keyPrefix: "api:storefront:layout:", varyByQuery: false, methods: ["GET"] }),
+  cacheMiddleware({ ttl: 3600, keyPrefix: "api:storefront:layout:", varyByQuery: false, methods: ["GET"] }),
 );
 
 app.openapi(layoutRoute, async (c) => {
@@ -83,7 +83,7 @@ const cspRoute = createRoute({
 
 app.use(
   "/csp",
-  cacheMiddleware({ ttl: 3600000, keyPrefix: "api:storefront:csp:", varyByQuery: false, methods: ["GET"] }),
+  cacheMiddleware({ ttl: 3600, keyPrefix: "api:storefront:csp:", varyByQuery: false, methods: ["GET"] }),
 );
 
 app.openapi(cspRoute, async (c) => {
