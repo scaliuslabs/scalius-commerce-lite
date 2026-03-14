@@ -42,6 +42,14 @@ export type {
   ProcessPaymentParams,
 } from "./types";
 
+// --- Gateway registry ---
+export {
+  registerGateway,
+  getRegisteredGateways,
+  getGatewayMeta,
+} from "./gateway-registry";
+export type { GatewayMeta } from "./gateway-registry";
+
 // --- Gateway settings ---
 export {
   getStripeSettings,

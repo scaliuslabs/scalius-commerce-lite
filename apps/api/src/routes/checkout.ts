@@ -2,7 +2,9 @@
 // Public endpoint for storefront checkout configuration.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
+import { getRegisteredGateways } from "@scalius/core/modules/payments/gateway-registry";
+// Side-effect import: registers all gateway metadata in the registry
+import "@scalius/core/modules/payments/gateway-settings";
 import { getDb } from "@scalius/database/client";
 import { siteSettings, settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
@@ -38,10 +40,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
     const db = getDb(c.env);
     const kv: KVNamespace | undefined = c.env.CACHE;
 
-    const [stripeSettings, sslSettings, polarSettings, siteSettingsRow, currencyRows] = await Promise.all([
-      getStripeSettings(db, kv).catch(() => null),
-      getSSLCommerzSettings(db, kv).catch(() => null),
-      getPolarSettings(db, kv).catch(() => null),
+    const [siteSettingsRow, currencyRows] = await Promise.all([
       db.select({
         guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
         authVerificationMethod: siteSettings.authVerificationMethod,
@@ -59,48 +58,29 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
     const currencyMap = Object.fromEntries(currencyRows.map((r) => [r.key, r.value]));
     const localCurrencyCode = (currencyMap.currency_code ?? "bdt").toLowerCase();
 
-    const gateways: Array<{
-      id: string;
-      name: string;
-      publishableKey?: string;
-      currencies: string[];
-      sandbox?: boolean;
-    }> = [];
-
     const checkoutMode = siteSettingsRow?.checkoutMode ?? "all";
 
-    if (stripeSettings?.enabled && stripeSettings.publishableKey && checkoutMode !== "guest_cod_only") {
-      gateways.push({
-        id: "stripe",
-        name: "Card Payment",
-        publishableKey: stripeSettings.publishableKey,
-        currencies: [localCurrencyCode, "usd", "eur", "gbp"]
-      });
-    }
+    // Dynamically resolve enabled gateways from the registry
+    const registeredGateways = getRegisteredGateways();
+    const gatewaySettingsPromises = registeredGateways.map((gw) =>
+      gw.getSettings(db, kv).catch(() => null)
+    );
+    const settingsResults = await Promise.all(gatewaySettingsPromises);
 
-    if (sslSettings?.enabled && checkoutMode !== "guest_cod_only") {
-      gateways.push({
-        id: "sslcommerz",
-        name: "Online Payment",
-        currencies: [localCurrencyCode],
-        sandbox: sslSettings.sandbox
-      });
-    }
+    const gateways: Array<Record<string, unknown>> = [];
 
-    if (polarSettings?.enabled && checkoutMode !== "guest_cod_only") {
-      gateways.push({
-        id: "polar",
-        name: "Polar",
-        currencies: [localCurrencyCode, "usd"],
-        sandbox: polarSettings.sandbox
-      });
-    }
+    for (let i = 0; i < registeredGateways.length; i++) {
+      const gw = registeredGateways[i];
+      const gwSettings = settingsResults[i];
+      if (!gwSettings?.enabled) continue;
+      if (gw.id === "cod" && checkoutMode === "gateways_only") continue;
+      if (gw.id !== "cod" && checkoutMode === "guest_cod_only") continue;
 
-    if (checkoutMode !== "gateways_only") {
       gateways.push({
-        id: "cod",
-        name: "Cash on Delivery",
-        currencies: [localCurrencyCode]
+        id: gw.id,
+        name: gw.name,
+        currencies: gw.getCurrencies?.(localCurrencyCode) || [localCurrencyCode],
+        ...(gw.getPublicConfig?.(gwSettings as Record<string, unknown>) || {}),
       });
     }
 

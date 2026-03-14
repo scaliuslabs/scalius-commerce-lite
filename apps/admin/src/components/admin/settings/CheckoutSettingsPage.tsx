@@ -2,6 +2,9 @@ import { useState, lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { Loader2 } from "lucide-react";
 
+const CheckoutFlowSettings = lazy(() =>
+    import("./CheckoutFlowSettings")
+);
 const PaymentGatewaysManager = lazy(() =>
     import("./PaymentGatewaysManager")
 );
@@ -30,6 +33,7 @@ function TabSpinner() {
 }
 
 const tabs = [
+    { value: "checkout-flow", label: "Checkout Flow" },
     { value: "payment", label: "Payment Gateways" },
     { value: "languages", label: "Languages" },
     { value: "shipping", label: "Shipping Methods" },
@@ -37,9 +41,9 @@ const tabs = [
 ] as const;
 
 export default function CheckoutSettingsPage() {
-    const [activeTab, setActiveTab] = useState("payment");
+    const [activeTab, setActiveTab] = useState("checkout-flow");
     const [mountedTabs, setMountedTabs] = useState<Set<string>>(
-        () => new Set(["payment"])
+        () => new Set(["checkout-flow"])
     );
 
     const handleTabChange = (value: string) => {
@@ -59,7 +63,7 @@ export default function CheckoutSettingsPage() {
                     Checkout Settings
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                    Payment gateways, checkout languages, shipping methods, and delivery
+                    Checkout flow, payment gateways, languages, shipping methods, and delivery
                     locations.
                 </p>
             </div>
@@ -82,6 +86,14 @@ export default function CheckoutSettingsPage() {
                 </TabsList>
 
                 <div className="mt-6">
+                    <TabsContent value="checkout-flow" className="mt-0">
+                        {mountedTabs.has("checkout-flow") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <CheckoutFlowSettings />
+                            </Suspense>
+                        )}
+                    </TabsContent>
+
                     <TabsContent value="payment" className="mt-0">
                         {mountedTabs.has("payment") && (
                             <Suspense fallback={<TabSpinner />}>

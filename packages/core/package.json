@@ -11,6 +11,7 @@
     "./auth/rbac": "./src/auth/rbac/index.ts",
     "./auth/rbac/*": "./src/auth/rbac/*.ts",
     "./integrations/*": "./src/integrations/*.ts",
+    "./integrations/email/*": "./src/integrations/email/*.ts",
     "./integrations/firebase/*": "./src/integrations/firebase/*.ts",
     "./integrations/meta/*": "./src/integrations/meta/*.ts",
     "./search": "./src/search/index.ts",

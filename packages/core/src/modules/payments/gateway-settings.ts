@@ -7,6 +7,7 @@
 import { eq } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import { registerGateway } from "./gateway-registry";
 
 const CACHE_TTL = 300; // 5 minutes
 
@@ -299,3 +300,57 @@ export async function getActivePaymentMethods(
 export async function invalidatePaymentMethodsCache(kv?: KVNamespace): Promise<void> {
   await kv?.delete(PAYMENT_METHODS_CACHE_KEY);
 }
+
+// ---------------------------------------------------------------------------
+// Gateway Registry — register each gateway's metadata
+// ---------------------------------------------------------------------------
+
+registerGateway({
+  id: "stripe",
+  name: "Card Payment",
+  settingsCategory: STRIPE_CATEGORY,
+  getSettings: async (db, kv) => {
+    const s = await getStripeSettings(db, kv);
+    return s ? { ...s, enabled: s.enabled } : null;
+  },
+  getPublicConfig: (s) => ({
+    publishableKey: s.publishableKey,
+  }),
+  getCurrencies: (localCurrency) => [localCurrency, "usd", "eur", "gbp"],
+});
+
+registerGateway({
+  id: "sslcommerz",
+  name: "Online Payment",
+  settingsCategory: SSL_CATEGORY,
+  getSettings: async (db, kv) => {
+    const s = await getSSLCommerzSettings(db, kv);
+    return s ? { ...s, enabled: s.enabled } : null;
+  },
+  getPublicConfig: (s) => ({
+    sandbox: s.sandbox,
+  }),
+  getCurrencies: (localCurrency) => [localCurrency],
+});
+
+registerGateway({
+  id: "polar",
+  name: "Polar",
+  settingsCategory: POLAR_CATEGORY,
+  getSettings: async (db, kv) => {
+    const s = await getPolarSettings(db, kv);
+    return s ? { ...s, enabled: s.enabled } : null;
+  },
+  getPublicConfig: (s) => ({
+    sandbox: s.sandbox,
+  }),
+  getCurrencies: (localCurrency) => [localCurrency, "usd"],
+});
+
+registerGateway({
+  id: "cod",
+  name: "Cash on Delivery",
+  settingsCategory: "cod",
+  getSettings: async () => ({ enabled: true }),
+  getCurrencies: (localCurrency) => [localCurrency],
+});

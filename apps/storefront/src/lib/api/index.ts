@@ -35,4 +35,4 @@ export * from "./types";
 
 export * from "./customer-auth";
 export * from "./checkout";
-export * from "./payment";
+
