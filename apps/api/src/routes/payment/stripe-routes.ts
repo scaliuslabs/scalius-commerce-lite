@@ -7,7 +7,7 @@ import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@scalius/datab
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
 import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
-import { NotFoundError, ValidationError } from "../../utils/api-error";
+import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -47,13 +47,10 @@ app.openapi(createIntentRoute, async (c) => {
   const stripe = await getStripeSettings(db, c.env.CACHE);
 
   if (!stripe) {
-    return c.json({
-      success: false,
-      error: "Stripe is not configured. Please set credentials in the admin dashboard."
-    }, 503);
+    throw new ServiceUnavailableError("Stripe is not configured. Please set credentials in the admin dashboard.");
   }
   if (!stripe.enabled) {
-    return c.json({ success: false, error: "Stripe gateway is disabled." }, 503);
+    throw new ServiceUnavailableError("Stripe gateway is disabled.");
   }
 
   const body = c.req.valid("json");
@@ -81,25 +78,25 @@ app.openapi(createIntentRoute, async (c) => {
   }
 
   if (order.paymentStatus === PaymentStatus.PAID) {
-    return c.json({ success: false, error: "Order is already fully paid" }, 400);
+    throw new ValidationError("Order is already fully paid");
   }
   if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
-    return c.json({ success: false, error: "Cannot pay a cancelled/returned order" }, 400);
+    throw new ValidationError("Cannot pay a cancelled/returned order");
   }
 
   // Determine the amount to charge
   let chargeAmount: number;
   if (body.paymentType === "deposit") {
     if (!body.depositAmount) {
-      return c.json({ success: false, error: "depositAmount required for deposit payment" }, 400);
+      throw new ValidationError("depositAmount required for deposit payment");
     }
     if (body.depositAmount >= order.totalAmount) {
-      return c.json({ success: false, error: "Deposit amount must be less than order total" }, 400);
+      throw new ValidationError("Deposit amount must be less than order total");
     }
     chargeAmount = body.depositAmount;
   } else if (body.paymentType === "balance") {
     chargeAmount = order.balanceDue ?? (order.totalAmount - (order.paidAmount ?? 0));
-    if (chargeAmount <= 0) return c.json({ success: false, error: "No balance due" }, 400);
+    if (chargeAmount <= 0) throw new ValidationError("No balance due");
   } else {
     chargeAmount = order.totalAmount;
   }
@@ -115,7 +112,7 @@ app.openapi(createIntentRoute, async (c) => {
   });
 
   if (!result.success) {
-    return c.json({ success: false, error: result.error }, 500);
+    throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create payment intent");
   }
 
   // Save PaymentIntent ID to order

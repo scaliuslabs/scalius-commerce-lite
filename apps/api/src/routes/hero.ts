@@ -13,7 +13,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 3600000,
+    ttl: 3600,
     keyPrefix: "api:hero:",
     varyByQuery: false,
     methods: ["GET"]

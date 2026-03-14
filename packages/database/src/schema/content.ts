@@ -30,7 +30,10 @@ export const pages = sqliteTable(
             .default(sql`CURRENT_TIMESTAMP`),
         deletedAt: integer("deleted_at", { mode: "timestamp" }),
     },
-    (table) => [index("pages_slug_idx").on(table.slug)],
+    (table) => [
+        index("pages_slug_idx").on(table.slug),
+        index("pages_deleted_at_idx").on(table.deletedAt),
+    ],
 );
 
 export const widgets = sqliteTable(
@@ -67,6 +70,7 @@ export const widgets = sqliteTable(
     },
     (table) => [
         index("widgets_target_idx").on(table.displayTarget, table.isActive, table.deletedAt),
+        index("widgets_deleted_at_idx").on(table.deletedAt),
     ],
 );
 
@@ -81,7 +85,9 @@ export const widgetHistory = sqliteTable("widget_history", {
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(sql`(cast(strftime('%s','now') as int))`),
-});
+}, (table) => [
+    index("widget_history_widget_id_idx").on(table.widgetId),
+]);
 
 export const heroSections = sqliteTable("hero_sections", {
     id: text("id").primaryKey(),

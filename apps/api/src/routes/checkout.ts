@@ -28,7 +28,7 @@ const getCheckoutConfigRoute = createRoute({
 app.use(
   "/config",
   cacheMiddleware({
-    ttl: 60000,
+    ttl: 60,
     keyPrefix: "api:checkout:config:",
     varyByQuery: false,
     methods: ["GET"]

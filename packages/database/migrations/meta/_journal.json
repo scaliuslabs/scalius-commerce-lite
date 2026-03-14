@@ -134,6 +134,20 @@
       "when": 1772501344803,
       "tag": "0018_add-polar-checkout-id",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1773792000000,
+      "tag": "0019_add-fk-indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1773792001000,
+      "tag": "0020_add-order-version",
+      "breakpoints": true
     }
   ]
 }

@@ -9,7 +9,7 @@ import { getPolarSettings } from "@scalius/core/modules/payments/gateway-setting
 import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
 import { getKv } from "../../utils/kv-cache";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
@@ -60,7 +60,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     // Get Polar credentials from DB
     const polarSettings = await getPolarSettings(db, kv);
     if (!polarSettings || !polarSettings.enabled) {
-        return c.json({ error: "Polar is not configured or disabled" }, 503);
+        throw new ServiceUnavailableError("Polar is not configured or disabled");
     }
 
     // Validate the order exists
@@ -120,10 +120,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     });
 
     if (!result.success || !result.checkoutUrl) {
-        return c.json(
-            { error: result.error || "Failed to create Polar checkout" },
-            500
-        );
+        throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create Polar checkout");
     }
 
     // Save the Polar checkout ID to the order

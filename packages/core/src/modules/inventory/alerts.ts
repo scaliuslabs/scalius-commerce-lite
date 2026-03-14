@@ -7,16 +7,41 @@ import { productVariants, productLowStockAlerts } from "@scalius/database/schema
 import type { Database } from "@scalius/database/client";
 
 /**
+ * Result of a low-stock check, for observability.
+ */
+export interface LowStockAlertResult {
+  /** Whether stock is currently below threshold */
+  isLow: boolean;
+  /** Whether a NEW alert was created (first time below threshold) */
+  alertCreated: boolean;
+  /** Whether a previously resolved alert was re-activated */
+  alertReactivated: boolean;
+  /** Whether an existing alert was resolved (stock replenished) */
+  alertResolved: boolean;
+  /** Current available stock (stock - reservedStock) */
+  availableStock: number;
+  /** The threshold that triggered/resolved the alert */
+  threshold: number;
+  /** The variant ID checked */
+  variantId: string;
+  /** The product ID (for notification routing) */
+  productId: string;
+}
+
+/**
  * Check if a variant's available stock has dropped below its threshold.
  * Creates or updates a low-stock alert record accordingly.
  * Resolves existing alerts when stock is replenished above threshold.
+ *
+ * Returns a result indicating what happened, so callers (e.g. payment
+ * processing) can trigger notifications when a new alert is created.
  *
  * Available stock = stock - reservedStock
  */
 export async function checkAndAlertLowStock(
   db: Database,
   variantId: string
-): Promise<void> {
+): Promise<LowStockAlertResult | null> {
   const variant = await db
     .select({
       id: productVariants.id,
@@ -31,11 +56,22 @@ export async function checkAndAlertLowStock(
 
   if (!variant || variant.lowStockThreshold === null || variant.lowStockThreshold <= 0) {
     // No threshold configured — nothing to do
-    return;
+    return null;
   }
 
   const available = variant.stock - variant.reservedStock;
   const isLow = available <= variant.lowStockThreshold;
+
+  const result: LowStockAlertResult = {
+    isLow,
+    alertCreated: false,
+    alertReactivated: false,
+    alertResolved: false,
+    availableStock: available,
+    threshold: variant.lowStockThreshold,
+    variantId,
+    productId: variant.productId,
+  };
 
   // Find existing alert for this variant
   const existingAlert = await db
@@ -63,6 +99,7 @@ export async function checkAndAlertLowStock(
         createdAt: now,
         updatedAt: now,
       });
+      result.alertCreated = true;
     } else if (existingAlert.alertStatus === "resolved") {
       // Re-activate a previously resolved alert
       await db
@@ -77,6 +114,7 @@ export async function checkAndAlertLowStock(
           updatedAt: sql`unixepoch()`,
         })
         .where(eq(productLowStockAlerts.variantId, variantId));
+      result.alertReactivated = true;
     } else {
       // Already active or acknowledged — just update currentQty
       await db
@@ -98,7 +136,10 @@ export async function checkAndAlertLowStock(
         updatedAt: sql`unixepoch()`,
       })
       .where(eq(productLowStockAlerts.variantId, variantId));
+    result.alertResolved = true;
   }
+
+  return result;
 }
 
 /**

@@ -31,6 +31,7 @@ import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "./orders.validation";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { validateTransition } from "./order-state-machine";
 
 // ─────────────────────────────────────────
 // Types
@@ -473,7 +474,7 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
         data.shippingCharge -
         (data.discountAmount || 0);
 
-    // Resolve location names
+    // Resolve location names (read-only, safe outside transaction)
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
     const locationMap = new Map<string, string>();
     if (locationIds.length > 0) {
@@ -491,7 +492,7 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
     const zoneName = data.zoneName || (data.zone ? locationMap.get(data.zone) || data.zone : "");
     const areaName = data.areaName || (data.area ? locationMap.get(data.area) || null : null);
 
-    // Get or create customer
+    // Get or create customer (read outside batch, writes inside)
     const existingCustomer = await db
         .select()
         .from(customers)
@@ -500,11 +501,32 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
 
     let customerId = existingCustomer?.id;
 
+    // Pre-compute customer stats if existing customer
+    let customerStats: { totalOrders: number; totalSpent: number; lastOrderAt: Date | null } | null = null;
+    if (existingCustomer) {
+        const customerOrders = await db
+            .select({ totalAmount: orders.totalAmount, createdAt: orders.createdAt })
+            .from(orders)
+            .where(eq(orders.customerId, existingCustomer.id));
+
+        const allOrders = [
+            ...customerOrders,
+            { totalAmount, createdAt: Math.floor(Date.now() / 1000) },
+        ];
+        customerStats = calculateCustomerStats(allOrders);
+    }
+
+    // ── Atomic batch: customer + order + items ──────────────────────────
+    // D1 batch() executes all statements in a single atomic operation.
+    // If any statement fails, none are committed.
+    const orderId = generateOrderId();
+    const writeBatch: unknown[] = [];
+
     if (!existingCustomer) {
-        const [newCustomer] = await db
-            .insert(customers)
-            .values({
-                id: "cust_" + nanoid(),
+        customerId = "cust_" + nanoid();
+        writeBatch.push(
+            db.insert(customers).values({
+                id: customerId,
                 name: data.customerName,
                 phone: data.customerPhone,
                 email: data.customerEmail,
@@ -517,64 +539,53 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
                 lastOrderAt: sql`unixepoch()`,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
-            })
-            .returning();
-
-        customerId = newCustomer.id;
-
-        await db.insert(customerHistory).values({
-            id: "hist_" + nanoid(),
-            customerId,
-            name: data.customerName,
-            email: data.customerEmail,
-            phone: data.customerPhone,
-            address: data.shippingAddress,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
-            changeType: "created",
-            createdAt: sql`unixepoch()`,
-        });
+            }),
+        );
+        writeBatch.push(
+            db.insert(customerHistory).values({
+                id: "hist_" + nanoid(),
+                customerId: customerId!,
+                name: data.customerName,
+                email: data.customerEmail,
+                phone: data.customerPhone,
+                address: data.shippingAddress,
+                city: data.city,
+                zone: data.zone,
+                area: data.area,
+                changeType: "created",
+                createdAt: sql`unixepoch()`,
+            }),
+        );
     } else {
-        const customerOrders = await db
-            .select({ totalAmount: orders.totalAmount, createdAt: orders.createdAt })
-            .from(orders)
-            .where(eq(orders.customerId, existingCustomer.id));
-
-        const allOrders = [
-            ...customerOrders,
-            { totalAmount, createdAt: Math.floor(Date.now() / 1000) },
-        ];
-        const stats = calculateCustomerStats(allOrders);
-
-        await db.update(customers)
-            .set({
-                totalOrders: stats.totalOrders,
-                totalSpent: stats.totalSpent,
-                lastOrderAt: stats.lastOrderAt ? sql`${Math.floor(stats.lastOrderAt.getTime() / 1000)}` : null,
+        writeBatch.push(
+            db.update(customers).set({
+                totalOrders: customerStats!.totalOrders,
+                totalSpent: customerStats!.totalSpent,
+                lastOrderAt: customerStats!.lastOrderAt ? sql`${Math.floor(customerStats!.lastOrderAt.getTime() / 1000)}` : null,
                 updatedAt: sql`unixepoch()`,
-            })
-            .where(eq(customers.id, existingCustomer.id));
-
-        await db.insert(customerHistory).values({
-            id: "hist_" + nanoid(),
-            customerId: existingCustomer.id,
-            name: data.customerName,
-            email: data.customerEmail,
-            phone: data.customerPhone,
-            address: data.shippingAddress,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
-            changeType: "updated",
-            createdAt: sql`unixepoch()`,
-        });
+            }).where(eq(customers.id, existingCustomer.id)),
+        );
+        writeBatch.push(
+            db.insert(customerHistory).values({
+                id: "hist_" + nanoid(),
+                customerId: existingCustomer.id,
+                name: data.customerName,
+                email: data.customerEmail,
+                phone: data.customerPhone,
+                address: data.shippingAddress,
+                city: data.city,
+                zone: data.zone,
+                area: data.area,
+                changeType: "updated",
+                createdAt: sql`unixepoch()`,
+            }),
+        );
     }
 
-    // Create order
-    const [order] = await db.insert(orders)
-        .values({
-            id: generateOrderId(),
+    // Order row
+    writeBatch.push(
+        db.insert(orders).values({
+            id: orderId,
             customerName: data.customerName,
             customerPhone: data.customerPhone,
             customerEmail: data.customerEmail,
@@ -592,27 +603,32 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
             status: "pending",
             customerId,
             inventoryAction: "deducted",
+            version: 1,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
-        })
-        .returning();
+        }),
+    );
 
-    // Create order items
+    // Order items
     if (data.items.length > 0) {
-        await db.insert(orderItems).values(
-            data.items.map((item) => ({
-                id: generateOrderId(),
-                orderId: order.id,
-                productId: item.productId,
-                variantId: item.variantId,
-                quantity: item.quantity,
-                price: item.price,
-                createdAt: sql`unixepoch()`,
-            })),
+        writeBatch.push(
+            db.insert(orderItems).values(
+                data.items.map((item) => ({
+                    id: generateOrderId(),
+                    orderId,
+                    productId: item.productId,
+                    variantId: item.variantId,
+                    quantity: item.quantity,
+                    price: item.price,
+                    createdAt: sql`unixepoch()`,
+                })),
+            ),
         );
     }
 
-    return { id: order.id };
+    await db.batch(writeBatch as any);
+
+    return { id: orderId };
 }
 
 interface UpdateOrderItem {
@@ -666,12 +682,18 @@ export async function updateOrder(id: string, data: UpdateOrderData): Promise<{ 
             status: orders.status,
             inventoryAction: orders.inventoryAction,
             inventoryPool: orders.inventoryPool,
+            version: orders.version,
         })
         .from(orders)
         .where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`)
         .get();
 
     if (!existingOrder) throw new NotFoundError("Order not found");
+
+    // Validate status transition if status is changing
+    if (data.status !== existingOrder.status) {
+        validateTransition("order", existingOrder.status, data.status);
+    }
 
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
@@ -758,7 +780,8 @@ export async function updateOrder(id: string, data: UpdateOrderData): Promise<{ 
         newInventoryAction = await applyInventoryForStatusChange(db, id, data.status);
     }
 
-    const [order] = await db.update(orders).set({
+    // Optimistic locking: only update if the version hasn't changed since we read it
+    const updateResult = await db.update(orders).set({
         customerName: data.customerName,
         customerPhone: data.customerPhone,
         customerEmail: data.customerEmail,
@@ -776,8 +799,14 @@ export async function updateOrder(id: string, data: UpdateOrderData): Promise<{ 
         status: data.status,
         inventoryAction: newInventoryAction,
         customerId,
+        version: existingOrder.version + 1,
         updatedAt: sql`unixepoch()`,
-    }).where(eq(orders.id, id)).returning();
+    }).where(and(eq(orders.id, id), eq(orders.version, existingOrder.version))).returning();
+
+    if (updateResult.length === 0) {
+        throw new ConflictError("Order was modified by another request. Please reload and try again.");
+    }
+    const [order] = updateResult;
 
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
 
@@ -1332,14 +1361,32 @@ export async function createStorefrontOrder(
 }
 
 export async function updateOrderStatus(orderId: string, status: string) {
-    const existingOrder = await db.select({ status: orders.status, inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, orderId)).get();
+    const existingOrder = await db.select({
+        status: orders.status,
+        inventoryAction: orders.inventoryAction,
+        version: orders.version,
+    }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (existingOrder.status === status) return { message: "Status unchanged" };
 
-    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
-    const result = await db.update(orders).set({ status, inventoryAction: newInventoryAction, updatedAt: sql`unixepoch()` })
-        .where(and(eq(orders.id, orderId), eq(orders.status, existingOrder.status))).returning({ id: orders.id });
+    // Validate the status transition before applying any side effects
+    validateTransition("order", existingOrder.status, status);
 
-    if (result.length === 0) throw new ConflictError("Order status was changed by another request. Please reload and try again.");
+    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
+
+    // Optimistic locking: only update if the version hasn't changed since we read it
+    const result = await db.update(orders).set({
+        status,
+        inventoryAction: newInventoryAction,
+        version: existingOrder.version + 1,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
+        eq(orders.id, orderId),
+        eq(orders.version, existingOrder.version),
+    )).returning({ id: orders.id });
+
+    if (result.length === 0) {
+        throw new ConflictError("Order was modified by another request. Please reload and try again.");
+    }
     return { message: "Order status updated successfully" };
 }

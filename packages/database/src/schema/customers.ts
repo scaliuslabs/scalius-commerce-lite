@@ -2,7 +2,7 @@
 // Customer domain tables: customers, customerHistory.
 
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 
 export const customers = sqliteTable("customers", {
@@ -27,7 +27,9 @@ export const customers = sqliteTable("customers", {
         .notNull()
         .default(sql`CURRENT_TIMESTAMP`),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+    index("customers_email_idx").on(table.email),
+]);
 
 export const customerHistory = sqliteTable("customer_history", {
     id: text("id").primaryKey(),
@@ -48,7 +50,9 @@ export const customerHistory = sqliteTable("customer_history", {
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [
+    index("customer_history_customer_id_idx").on(table.customerId),
+]);
 
 export type Customer = InferSelectModel<typeof customers>;
 export type CustomerHistory = InferSelectModel<typeof customerHistory>;

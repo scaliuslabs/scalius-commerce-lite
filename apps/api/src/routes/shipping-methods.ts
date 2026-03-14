@@ -11,7 +11,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 300000, // 5 minutes
+    ttl: 300, // 5 minutes
     keyPrefix: "api:shipping-methods:",
     varyByQuery: false,
     methods: ["GET"]

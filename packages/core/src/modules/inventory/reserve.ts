@@ -204,6 +204,290 @@ export async function reserveMultiple(
   return { success: true, results };
 }
 
+/**
+ * Atomically reserve stock for multiple variants using D1 batch.
+ *
+ * Unlike `reserveMultiple` (which reserves sequentially and rolls back on
+ * failure), this function:
+ *   1. Reads all variant states upfront
+ *   2. Validates ALL stock availability before writing anything
+ *   3. Batches all CAS updates into a single `db.batch()` call (atomic in D1)
+ *   4. Verifies all CAS updates succeeded; batch-rolls-back on any conflict
+ *
+ * This prevents orphaned reservations: either ALL variants are reserved or NONE are.
+ *
+ * Retries the entire batch up to MAX_RETRIES times on CAS conflict.
+ */
+export async function reserveStockBatch(
+  db: Database,
+  items: { variantId: string; quantity: number; orderId?: string }[],
+  pool: "regular" | "preorder" | "backorder" = "regular"
+): Promise<{ success: boolean; results: StockOperationResult[]; error?: string }> {
+  if (items.length === 0) {
+    return { success: true, results: [] };
+  }
+
+  // Deduplicate: if the same variantId appears multiple times, merge quantities
+  const merged = new Map<string, { variantId: string; quantity: number; orderId?: string }>();
+  for (const item of items) {
+    const existing = merged.get(item.variantId);
+    if (existing) {
+      existing.quantity += item.quantity;
+    } else {
+      merged.set(item.variantId, { ...item });
+    }
+  }
+  const entries = Array.from(merged.values());
+
+  // Use the first item's orderId as the batch orderId (all items should share it)
+  const orderId = items[0].orderId;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // Phase 1: Read all variant states
+    const variants = new Map<string, {
+      id: string;
+      stock: number;
+      reservedStock: number;
+      preorderStock: number;
+      allowPreorder: boolean;
+      allowBackorder: boolean;
+      backorderLimit: number;
+      version: number;
+    }>();
+
+    for (const entry of entries) {
+      const variant = await db
+        .select({
+          id: productVariants.id,
+          stock: productVariants.stock,
+          reservedStock: productVariants.reservedStock,
+          preorderStock: productVariants.preorderStock,
+          allowPreorder: productVariants.allowPreorder,
+          allowBackorder: productVariants.allowBackorder,
+          backorderLimit: productVariants.backorderLimit,
+          version: productVariants.version,
+        })
+        .from(productVariants)
+        .where(eq(productVariants.id, entry.variantId))
+        .get();
+
+      if (!variant) {
+        return {
+          success: false,
+          results: [{
+            success: false,
+            variantId: entry.variantId,
+            previousStock: 0,
+            newStock: 0,
+            error: `Variant ${entry.variantId} not found`,
+          }],
+          error: `Variant ${entry.variantId} not found`,
+        };
+      }
+      variants.set(entry.variantId, variant);
+    }
+
+    // Phase 2: Validate ALL stock availability before writing anything
+    const validationErrors: StockOperationResult[] = [];
+    for (const entry of entries) {
+      const variant = variants.get(entry.variantId)!;
+      const error = validateStockAvailability(variant, entry.quantity, pool);
+      if (error) {
+        validationErrors.push({
+          success: false,
+          variantId: entry.variantId,
+          previousStock: pool === "preorder" ? variant.preorderStock : variant.stock,
+          newStock: pool === "preorder" ? variant.preorderStock : variant.stock,
+          error,
+        });
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return {
+        success: false,
+        results: validationErrors,
+        error: validationErrors[0].error,
+      };
+    }
+
+    // Phase 3: Build all CAS update queries
+    const updateQueries = entries.map((entry) => {
+      const variant = variants.get(entry.variantId)!;
+      const updateSet =
+        pool === "preorder"
+          ? {
+              preorderStock: sql`${productVariants.preorderStock} - ${entry.quantity}`,
+              reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
+              version: sql`${productVariants.version} + 1`,
+              updatedAt: sql`unixepoch()`,
+            }
+          : {
+              reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
+              version: sql`${productVariants.version} + 1`,
+              updatedAt: sql`unixepoch()`,
+            };
+
+      return db
+        .update(productVariants)
+        .set(updateSet)
+        .where(
+          and(
+            eq(productVariants.id, entry.variantId),
+            eq(productVariants.version, variant.version)
+          )
+        )
+        .returning({ id: productVariants.id });
+    });
+
+    // Phase 4: Execute all updates atomically via D1 batch
+    let batchResults: { id: string }[][];
+    try {
+      batchResults = await db.batch(updateQueries as any) as any;
+    } catch (err) {
+      console.error("[inventory/reserve] Batch execution failed:", err);
+      return {
+        success: false,
+        results: entries.map((e) => ({
+          success: false,
+          variantId: e.variantId,
+          previousStock: 0,
+          newStock: 0,
+          error: "Batch execution failed",
+        })),
+        error: "Batch execution failed",
+      };
+    }
+
+    // Phase 5: Verify all CAS updates succeeded
+    const failedIndices: number[] = [];
+    for (let i = 0; i < batchResults.length; i++) {
+      if (!batchResults[i] || batchResults[i].length === 0) {
+        failedIndices.push(i);
+      }
+    }
+
+    if (failedIndices.length > 0) {
+      // CAS conflict on some variants — roll back all successful ones
+      const rollbackQueries = entries
+        .filter((_, i) => !failedIndices.includes(i))
+        .map((entry) => {
+          return db
+            .update(productVariants)
+            .set({
+              reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${entry.quantity})`,
+              ...(pool === "preorder"
+                ? { preorderStock: sql`${productVariants.preorderStock} + ${entry.quantity}` }
+                : {}),
+              version: sql`${productVariants.version} + 1`,
+              updatedAt: sql`unixepoch()`,
+            })
+            .where(eq(productVariants.id, entry.variantId));
+        });
+
+      if (rollbackQueries.length > 0) {
+        try {
+          await db.batch(rollbackQueries as any);
+        } catch (rollbackErr) {
+          console.error("[inventory/reserve] Batch rollback failed:", rollbackErr);
+        }
+      }
+
+      // Retry if we haven't exhausted attempts
+      if (attempt < MAX_RETRIES - 1) {
+        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+        continue;
+      }
+
+      return {
+        success: false,
+        results: entries.map((e, i) => ({
+          success: !failedIndices.includes(i),
+          variantId: e.variantId,
+          previousStock: 0,
+          newStock: 0,
+          error: failedIndices.includes(i)
+            ? `CAS conflict for variant ${e.variantId}`
+            : undefined,
+        })),
+        error: `Failed to reserve stock batch after ${MAX_RETRIES} retries due to concurrent modifications`,
+      };
+    }
+
+    // Phase 6: All succeeded — record movements (best-effort, non-blocking)
+    const results: StockOperationResult[] = [];
+    for (const entry of entries) {
+      const variant = variants.get(entry.variantId)!;
+      const previousStock = pool === "preorder" ? variant.preorderStock : variant.stock;
+      const newStock = pool === "preorder"
+        ? variant.preorderStock - entry.quantity
+        : variant.stock;
+
+      results.push({ success: true, variantId: entry.variantId, previousStock, newStock });
+
+      await recordMovement(db, {
+        variantId: entry.variantId,
+        orderId,
+        type: pool === "preorder" ? "preorder_reserved" : "reserved",
+        quantity: entry.quantity,
+        previousStock,
+        newStock,
+        notes: `Reserved ${entry.quantity} units (batch)${orderId ? ` for order ${orderId}` : ""}`,
+      });
+    }
+
+    return { success: true, results };
+  }
+
+  // Should not reach here, but satisfy TypeScript
+  return {
+    success: false,
+    results: [],
+    error: `Failed to reserve stock batch after ${MAX_RETRIES} retries`,
+  };
+}
+
+/**
+ * Validate stock availability for a single variant.
+ * Returns an error string if insufficient, or null if OK.
+ */
+function validateStockAvailability(
+  variant: {
+    id: string;
+    stock: number;
+    reservedStock: number;
+    preorderStock: number;
+    allowPreorder: boolean;
+    allowBackorder: boolean;
+    backorderLimit: number;
+  },
+  quantity: number,
+  pool: "regular" | "preorder" | "backorder"
+): string | null {
+  if (pool === "preorder") {
+    if (!variant.allowPreorder) {
+      return `Pre-order not allowed for variant ${variant.id}`;
+    }
+    if (variant.preorderStock < quantity) {
+      return `Insufficient pre-order stock for variant ${variant.id}. Available: ${variant.preorderStock}, Requested: ${quantity}`;
+    }
+  } else if (pool === "backorder") {
+    if (!variant.allowBackorder) {
+      return `Backorder not allowed for variant ${variant.id}`;
+    }
+    if (variant.backorderLimit > 0 && variant.reservedStock + quantity > variant.backorderLimit) {
+      return `Backorder limit exceeded for variant ${variant.id}`;
+    }
+  } else {
+    const available = variant.stock - variant.reservedStock;
+    if (available < quantity) {
+      return `Insufficient stock for variant ${variant.id}. Available: ${available}, Requested: ${quantity}`;
+    }
+  }
+  return null;
+}
+
 // Internal helper to avoid circular import with release module
 async function releaseReservationInternal(
   db: Database,

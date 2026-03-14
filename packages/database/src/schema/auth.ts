@@ -2,7 +2,7 @@
 // Better Auth tables: user, session, account, verification, twoFactor.
 
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 
 export const user = sqliteTable("user", {
@@ -47,7 +47,9 @@ export const session = sqliteTable("session", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(sql`(cast(strftime('%s','now') as int))`),
-});
+}, (table) => [
+    index("session_user_id_idx").on(table.userId),
+]);
 
 export const account = sqliteTable("account", {
     id: text("id").primaryKey(),
@@ -69,7 +71,9 @@ export const account = sqliteTable("account", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(sql`(cast(strftime('%s','now') as int))`),
-});
+}, (table) => [
+    index("account_user_id_idx").on(table.userId),
+]);
 
 export const verification = sqliteTable("verification", {
     id: text("id").primaryKey(),
@@ -82,7 +86,9 @@ export const verification = sqliteTable("verification", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(sql`(cast(strftime('%s','now') as int))`),
-});
+}, (table) => [
+    index("verification_identifier_idx").on(table.identifier),
+]);
 
 export const twoFactor = sqliteTable("two_factor", {
     id: text("id").primaryKey(),

@@ -27,6 +27,9 @@ astro-docs/
 .env.*.local
 .dev.vars
 
+# private test suite (core team only)
+tests/
+
 # macOS-specific files
 .DS_Store
 

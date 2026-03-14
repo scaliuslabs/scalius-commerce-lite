@@ -2,7 +2,7 @@
 // Delivery domain tables: deliveryLocations, deliveryProviders, deliveryShipments.
 
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { orders } from "./orders";
 
@@ -10,7 +10,7 @@ export const deliveryLocations = sqliteTable("delivery_locations", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     type: text("type", { enum: ["city", "zone", "area"] }).notNull(),
-    parentId: text("parent_id"),
+    parentId: text("parent_id").references((): any => deliveryLocations.id, { onDelete: "set null" }),
     externalIds: text("external_ids").notNull(),
     metadata: text("metadata").notNull(),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
@@ -44,7 +44,7 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     orderId: text("order_id")
         .notNull()
         .references(() => orders.id, { onDelete: "cascade" }),
-    providerId: text("provider_id").references(() => deliveryProviders.id),
+    providerId: text("provider_id").references(() => deliveryProviders.id, { onDelete: "set null" }),
     providerType: text("provider_type").notNull().default("manual"),
     externalId: text("external_id"),
     trackingId: text("tracking_id"),
@@ -64,7 +64,9 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [
+    index("delivery_shipments_provider_status_idx").on(table.providerId, table.status),
+]);
 
 export type DeliveryLocation = InferSelectModel<typeof deliveryLocations>;
 /** Row type for the delivery_providers table (the const enum is DeliveryProvider from enums.ts) */
