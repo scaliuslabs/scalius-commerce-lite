@@ -14,16 +14,18 @@ export const POST: APIRoute = async ({ request }) => {
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json() as Record<string, unknown>;
+    const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: unknown };
 
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: (data.error as string) || "Payment initialization failed" }), {
+      const errMsg = typeof json.error === "string" ? json.error : (json.error as Record<string, unknown>)?.message || "Payment initialization failed";
+      return new Response(JSON.stringify({ error: errMsg }), {
         status: res.status,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify(data), {
+    // Unwrap { success, data } envelope — checkout page reads fields directly
+    return new Response(JSON.stringify(json.data || json), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

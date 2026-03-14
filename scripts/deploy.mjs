@@ -105,17 +105,20 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
   console.log("=".repeat(60));
 
   try {
-    // 1. Build: all workspaces via Turbo
+    // 1. Typecheck first — catches type mismatches esbuild ignores
+    run("pnpm typecheck", "Typecheck all workspaces");
+
+    // 2. Build: all workspaces via Turbo
     run("pnpm build", "Build all workspaces");
 
-    // 2. Apply all pending D1 migrations (no-op if schema is up to date)
+    // 3. Apply all pending D1 migrations (no-op if schema is up to date)
     runWithRetry(
       `pnpm exec wrangler d1 migrations apply ${dbName} --remote`,
       `Apply D1 migrations → ${dbName}`,
       apiDir
     );
 
-    // 3. Deploy all three workers
+    // 4. Deploy all three workers
     runWithRetry("pnpm exec wrangler deploy", "Deploy API Worker", apiDir);
     runWithRetry("pnpm exec wrangler deploy", "Deploy Admin Worker", resolve(root, "apps", "admin"));
     runWithRetry("pnpm exec wrangler deploy", "Deploy Storefront Worker", resolve(root, "apps", "storefront"));

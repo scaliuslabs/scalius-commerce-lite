@@ -88,9 +88,8 @@ async function getJwtToken(): Promise<string | null> {
         return null;
       }
 
-      // FIX: Define the expected shape of the JSON response
-      const data: { data: { token: string } } = await response.json();
-      jwtToken = data.data.token;
+      const json: { success: boolean; data: { token: string } } = await response.json();
+      jwtToken = json.data.token;
 
       if (jwtToken) {
         const payload = JSON.parse(atob(jwtToken.split(".")[1]));

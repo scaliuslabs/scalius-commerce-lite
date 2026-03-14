@@ -21,18 +21,20 @@ export const POST: APIRoute = async ({ request }) => {
             true,  // requiresAuth
         );
 
-        const data = await res.json() as Record<string, unknown>;
+        const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: unknown };
 
         if (!res.ok) {
-            console.error("[checkout/polar-session] Backend error:", res.status, JSON.stringify(data));
-            return new Response(JSON.stringify({ error: (data.error as string) || "Payment session creation failed" }), {
+            const errMsg = typeof json.error === "string" ? json.error : (json.error as Record<string, unknown>)?.message || "Payment session creation failed";
+            console.error("[checkout/polar-session] Backend error:", res.status, errMsg);
+            return new Response(JSON.stringify({ error: errMsg }), {
                 status: res.status,
                 headers: { "Content-Type": "application/json" },
             });
         }
 
-        console.log("[checkout/polar-session] Session created, gatewayUrl present:", !!data.gatewayUrl);
-        return new Response(JSON.stringify(data), {
+        const unwrapped = json.data || json;
+        console.log("[checkout/polar-session] Session created, gatewayUrl present:", !!(unwrapped as Record<string, unknown>).gatewayUrl);
+        return new Response(JSON.stringify(unwrapped), {
             status: 200,
             headers: { "Content-Type": "application/json" },
         });

@@ -70,7 +70,11 @@ packages/
 - **Thin HTTP layer**: `apps/api/src/routes/**` handles validation and auth, then delegates to `@scalius/core` services
 - **API routes use OpenAPIHono**: All routes in `apps/api/src/routes/` use `createRoute()` from `@hono/zod-openapi`. OpenAPI spec is auto-generated at `/api/v1/openapi.json`.
 - **Standardized API errors**: Use `ApiError` classes from `apps/api/src/utils/api-error.ts` (ValidationError, NotFoundError, etc.)
-- **Standardized API responses**: Use helpers from `apps/api/src/utils/api-response.ts` (ok, created, paginated, noContent)
+- **Standardized API responses**: Use helpers from `apps/api/src/utils/api-response.ts` (ok, created, noContent)
+- **Response envelope contract**: ALL success responses return `{ success: true, data: T }`. The `T` passed to `ok(c, T)` must be the FINAL payload — never include redundant `success: true` or `data:` wrapping inside `T`. Storefront consumers read `json.data` to get `T`. The admin proxy unwraps this to `{ success: true, ...T }` for backward compat (only works when `T` is an object, not an array).
+- **202 Accepted responses**: Must ALSO include `success: true` at top level (storefront checks it). Use `c.json({ success: true, data: {...} }, 202)` — not `ok()` (which forces 200).
+- **Storefront proxy endpoints** (`apps/storefront/src/pages/api/checkout/*.ts`): Must unwrap `.data` before returning to browser — the checkout page reads top-level fields.
+- **Never use `import.meta.env` for secrets**: Secrets (`API_TOKEN`, `JWT_SECRET`, `PURGE_TOKEN`) come ONLY from Cloudflare runtime (`env.*` via `wrangler secret put`). Build-time `import.meta.env` bakes `.dev.vars` values into production bundles.
 - **JIT packages**: No build step for packages — wrangler/esbuild bundles directly from TypeScript source
 - **Two env files per app**: `.dev.vars` (Cloudflare runtime bindings) and `.env.development` (Vite/Astro build-time vars)
 - **Service bindings**: Admin uses `env.API`, storefront uses `env.BACKEND_API` — both point to the API worker

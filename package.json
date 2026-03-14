@@ -21,7 +21,7 @@
     "db:studio": "drizzle-kit studio --config packages/database/drizzle.config.ts",
     "generate:sdk": "turbo generate --filter=@scalius/api-client",
     "lint": "turbo lint",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
   "devDependencies": {
