@@ -1,63 +1,40 @@
 # Security Policy
 
-Thank you for helping keep Scalius Commerce Lite and our community safe. We take security seriously and appreciate the community's efforts in identifying and remediating vulnerabilities.
-
-## Supported Versions
-
-Please verify that you are testing against the latest version of the codebase.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.x     | :white_check_mark: |
-| < 1.0   | :x:                |
+We take security seriously. Thank you for helping keep Scalius Commerce Lite safe.
 
 ## Reporting a Vulnerability
 
-**Please do not open a public GitHub issue for security vulnerabilities.** Publicly disclosing a security bug can put the entire community at risk before a fix is available.
+**Do not open a public GitHub issue for security vulnerabilities.**
 
-If you have discovered a security vulnerability in Scalius Commerce Lite, please report it via email to:
+Report vulnerabilities via email: **security@scalius.com**
 
-**security@scalius.com**
-
-### What to Include
-To help us triage and resolve the issue quickly, please include:
-1.  **Description:** A clear description of the vulnerability.
-2.  **Steps to Reproduce:** Detailed steps or a proof-of-concept (PoC) script.
-3.  **Impact:** The potential security impact (e.g., data leak, auth bypass, XSS).
-4.  **Affected Components:** (e.g., Admin API, Storefront Hono API, Database Schema).
+Include:
+1. Description of the vulnerability
+2. Steps to reproduce or proof-of-concept
+3. Potential impact (data leak, auth bypass, XSS, etc.)
+4. Affected component (Admin dashboard, API worker, Storefront, Database)
 
 ## Response Timeline
 
-We are committed to resolving security issues promptly. Here is what you can expect:
-
-*   **Acknowledgment:** We will acknowledge receipt of your report within **48 hours**.
-*   **Assessment:** We will confirm the validity of the issue and determine its severity within **5 business days**.
-*   **Resolution:** We will work to provide a patch or workaround as soon as possible.
-*   **Notification:** We will notify you when the fix is released.
+- **Acknowledgment**: Within 48 hours
+- **Assessment**: Within 5 business days
+- **Resolution**: As soon as possible
 
 ## Scope
 
 ### In Scope
-*   Authentication and Authorization bypasses (issues with our implementation of Better Auth / JWTs).
-*   SQL Injection (issues within our Drizzle ORM usage).
-*   Cross-Site Scripting (XSS) in the Admin Dashboard or Storefront.
-*   Insecure Direct Object References (IDOR) in API endpoints.
-*   Sensitive data exposure (PII, API keys).
+- Authentication/authorization bypasses (Better Auth, JWT, RBAC)
+- SQL injection (Drizzle ORM / D1 queries)
+- Cross-site scripting (XSS) in admin dashboard or storefront
+- Insecure direct object references (IDOR) in API endpoints
+- Sensitive data exposure (PII, API keys, session tokens)
+- CSP bypass or misconfiguration
 
 ### Out of Scope
-*   Vulnerabilities in third-party providers (e.g., Cloudflare, OpenRouter, Firebase) unless caused by our misconfiguration.
-*   Social engineering or phishing attacks.
-*   Denial of Service (DoS) attacks.
-*   Spam or automated operational noise.
+- Vulnerabilities in third-party services (Cloudflare, Firebase, Stripe) unless caused by our misconfiguration
+- Social engineering or phishing
+- Denial of Service (DoS)
 
 ## Safe Harbor
 
-If you conduct security research and disclose vulnerabilities to us in accordance with this policy, we consider your research to be:
-*   **Authorized** concerning any applicable anti-hacking laws.
-*   **Non-infringing** regarding any applicable anti-circumvention laws.
-
-We will not pursue legal action against you for research that adheres to this policy.
-
----
-
-*This policy is subject to change. Please check this file for the latest version.*
+Security research conducted in accordance with this policy is considered authorized and non-infringing. We will not pursue legal action against researchers who follow this policy.
