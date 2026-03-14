@@ -289,6 +289,7 @@ app.openapi(createOrderRoute, async (c) => {
 
     return c.json(
       {
+        success: true,
         data: {
           checkoutToken: result.checkoutToken,
           orderId: result.orderId,

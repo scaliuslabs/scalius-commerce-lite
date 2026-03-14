@@ -71,9 +71,7 @@ app.openapi(getTokenRoute, async (c) => {
     role: "system"
   });
 
-  return ok(c, {
-    data: { token }
-  });
+  return ok(c, { token });
 });
 
 // ─── GET /firebase-config ────────────────────────────────────────────────────
@@ -125,9 +123,7 @@ const getMeRoute = createRoute({
 
 app.openapi(getMeRoute, (c) => {
   const user = c.get("user");
-  return ok(c, {
-    data: { user }
-  });
+  return ok(c, { user });
 });
 
 // ─── POST /revoke ────────────────────────────────────────────────────────────

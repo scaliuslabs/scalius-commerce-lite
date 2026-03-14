@@ -52,7 +52,10 @@ export async function createOrder(
         const statusRes = await fetchWithRetry(createApiUrl(`/orders/status/${checkoutToken}`), {}, 2, 5000, true);
 
         if (statusRes.ok) {
-          const statusData = await statusRes.json() as Record<string, any>;
+          const statusJson = await statusRes.json() as Record<string, any>;
+          // Status endpoint uses ok() wrapper: { success: true, data: { status, orderId } }
+          // But 202 responses use raw c.json(): { status: "processing" }
+          const statusData: Record<string, any> = statusJson.data ?? statusJson;
           if (statusData.status === "completed") {
             return { success: true, orderId: statusData.orderId || initialOrderId };
           } else if (statusData.status === "failed") {
