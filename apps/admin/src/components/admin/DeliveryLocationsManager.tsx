@@ -160,7 +160,7 @@ export function DeliveryLocationsManager() {
     const checkExistingImport = async () => {
       try {
         const res = await fetch(
-          "/api/v1/admin/settings/locations/import-pathao/status",
+          "/api/v1/admin/settings/delivery-locations/import-pathao/status",
         );
         if (!res.ok) return;
         const json = await res.json();
@@ -183,7 +183,7 @@ export function DeliveryLocationsManager() {
     try {
       while (!importAbortRef.current) {
         const res = await fetch(
-          "/api/v1/admin/settings/locations/import-pathao",
+          "/api/v1/admin/settings/delivery-locations/import-pathao",
           { method: "POST" },
         );
         if (!res.ok) {
@@ -231,7 +231,7 @@ export function DeliveryLocationsManager() {
 
   const resetImport = async () => {
     try {
-      await fetch("/api/v1/admin/settings/locations/import-pathao", {
+      await fetch("/api/v1/admin/settings/delivery-locations/import-pathao", {
         method: "DELETE",
       });
       importAbortRef.current = true;
