@@ -8,6 +8,7 @@ import type {
   BulkGeneratedVariant,
 } from "../types";
 import { generateSku } from "./skuGenerator";
+import { generateEAN13 } from "@scalius/shared/barcode-utils";
 
 /**
  * Filter variants based on search and filter criteria
@@ -184,6 +185,8 @@ function createVariantFromOptions(
     discountPercentage:
       options.discountType === "percentage" ? options.discountValue : null,
     discountAmount: options.discountType === "flat" ? options.discountValue : null,
+    barcode: options.generateBarcodes ? generateEAN13() : null,
+    barcodeType: options.generateBarcodes ? "ean13" : null,
   };
 }
 

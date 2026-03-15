@@ -70,6 +70,7 @@ export interface BulkVariantOptions {
   skuTemplate: string;
   discountType: "percentage" | "flat";
   discountValue: number | null;
+  generateBarcodes: boolean;
 }
 
 export interface BulkGeneratedVariant {
@@ -82,6 +83,8 @@ export interface BulkGeneratedVariant {
   discountType: "percentage" | "flat";
   discountPercentage: number | null;
   discountAmount: number | null;
+  barcode: string | null;
+  barcodeType: string | null;
 }
 
 // --- Template Types ---

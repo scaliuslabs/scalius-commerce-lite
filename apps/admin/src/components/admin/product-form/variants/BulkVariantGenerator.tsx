@@ -30,7 +30,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Sparkles, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Sparkles, X, Barcode } from "lucide-react";
 import { SkuTemplateConfig } from "./SkuTemplateConfig";
 import { generateVariantCombinations } from "./utils/variantHelpers";
 import type {
@@ -69,6 +70,7 @@ export function BulkVariantGenerator({
     "percentage",
   );
   const [discountValue, setDiscountValue] = useState<number | null>(null);
+  const [generateBarcodes, setGenerateBarcodes] = useState(true);
 
   // Generate preview
   const previewVariants = useMemo(() => {
@@ -81,6 +83,7 @@ export function BulkVariantGenerator({
       skuTemplate,
       discountType,
       discountValue,
+      generateBarcodes,
     };
     return generateVariantCombinations(options, productSlug);
   }, [
@@ -92,6 +95,7 @@ export function BulkVariantGenerator({
     skuTemplate,
     discountType,
     discountValue,
+    generateBarcodes,
     productSlug,
   ]);
 
@@ -562,6 +566,23 @@ export function BulkVariantGenerator({
                 productSlug={productSlug}
               />
             </div>
+
+            <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-lg border">
+              <Checkbox
+                id="generate-barcodes"
+                checked={generateBarcodes}
+                onCheckedChange={(checked) => setGenerateBarcodes(!!checked)}
+              />
+              <div>
+                <label htmlFor="generate-barcodes" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                  <Barcode className="h-4 w-4" />
+                  Auto-generate EAN-13 barcodes
+                </label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Each variant gets a unique barcode for scanning and label printing
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Right Column - Preview */}
@@ -583,6 +604,7 @@ export function BulkVariantGenerator({
                 <TableHeader className="bg-muted/50 sticky top-0">
                   <TableRow className="hover:bg-muted/50">
                     <TableHead className="font-semibold">SKU</TableHead>
+                    {generateBarcodes && <TableHead className="font-semibold">Barcode</TableHead>}
                     <TableHead className="font-semibold">Size</TableHead>
                     <TableHead className="font-semibold">Color</TableHead>
                     <TableHead className="text-right font-semibold">
@@ -596,7 +618,7 @@ export function BulkVariantGenerator({
                 <TableBody>
                   {previewVariants.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-32 text-center">
+                      <TableCell colSpan={generateBarcodes ? 6 : 5} className="h-32 text-center">
                         <div className="text-muted-foreground">
                           <p className="text-sm">
                             Add sizes and/or colors to preview variants
@@ -630,6 +652,11 @@ export function BulkVariantGenerator({
                               </Badge>
                             )}
                           </TableCell>
+                          {generateBarcodes && (
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {variant.barcode || "—"}
+                            </TableCell>
+                          )}
                           <TableCell className="text-sm">
                             {variant.size || "—"}
                           </TableCell>
