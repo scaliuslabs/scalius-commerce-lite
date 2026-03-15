@@ -4,6 +4,7 @@ import { DeliveryProviderSettings } from "@/components/admin/DeliveryProviderSet
 import { getDeliveryProvidersData } from "@/loaders/admin/settings";
 
 const providers = await getDeliveryProvidersData();
+const apiBaseUrl = Astro.locals.apiBaseUrl || "";
 ---
 
 <AdminLayout title="Delivery Provider Settings">
@@ -15,6 +16,6 @@ const providers = await getDeliveryProvidersData();
       </p>
     </div>
 
-    <DeliveryProviderSettings client:idle providers={providers} />
+    <DeliveryProviderSettings client:idle providers={providers} apiBaseUrl={apiBaseUrl} />
   </div>
 </AdminLayout>
