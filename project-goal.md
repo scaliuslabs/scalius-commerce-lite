@@ -371,14 +371,19 @@ Design a universal provider pattern used consistently across ALL provider types:
 > Goal: Admin orders pages cover every operational workflow. Delivery providers match actual API specs. New providers are plug-and-play.
 
 ### 10.1 Delivery Provider Fixes
-- [ ] Fix Pathao webhook: return 202 + `X-Pathao-Merchant-Webhook-Integration-Secret` header
-- [ ] Fix Pathao webhook: parse `event` field instead of `order_status_slug`
-- [ ] Fix Pathao webhook: check `X-PATHAO-Signature` header (not `X-Webhook-Signature`)
-- [ ] Fix Steadfast webhook: check `Authorization: Bearer` header (not HMAC)
-- [ ] Fix Steadfast webhook: parse `notification_type` field
-- [ ] Fix status-mapper.ts: explicit event→status map (no brittle `includes()`)
-- [ ] Add webhook URL display + secret config to admin delivery settings UI
-- [ ] Implement RedX delivery provider (provider, webhook, status mapping, admin UI)
+- [x] Fix Pathao webhook: return 202 + `X-Pathao-Merchant-Webhook-Integration-Secret` header
+- [x] Fix Pathao webhook: parse `event` field instead of `order_status_slug`
+- [x] Fix Pathao webhook: check `X-PATHAO-Signature` header (not `X-Webhook-Signature`)
+- [x] Fix Pathao webhook: handle `webhook_integration` test event
+- [x] Fix Pathao status mapper: handle both webhook events AND API refresh statuses
+- [x] Fix Steadfast webhook: check `Authorization: Bearer` header (not HMAC)
+- [x] Fix Steadfast webhook: parse `notification_type` field
+- [x] Fix status-mapper.ts: explicit event→status map (no brittle `includes()`)
+- [x] Add webhook URL display + secret config to admin delivery settings UI
+- [x] Auto-generate webhook secret (crypto-secure, copyable, rollable)
+- [x] Webhook URL uses runtime env (not build-time import.meta.env)
+- [x] Pathao location import (chunked, resumable, idempotent)
+- [ ] ~~Implement RedX delivery provider~~ — deferred (area ID mapping too complex)
 
 ### 10.2 Admin Order List Missing Features
 - [ ] Bulk status change (can bulk ship but not bulk change status)
@@ -396,6 +401,69 @@ Design a universal provider pattern used consistently across ALL provider types:
 
 ---
 
+## Phase 11: Barcode & Inventory Management
+
+> Goal: Complete barcode system for physical inventory operations — generate, scan, adjust, print.
+
+### 11.1 Barcode Data Layer
+- [x] Barcode + barcodeType fields on productVariants (schema + migration)
+- [x] Barcode lookup API endpoint (`GET /admin/products/lookup-barcode?barcode=X`)
+- [x] Barcode-aware search (8-13 digit queries match by barcode)
+- [x] Barcode in admin variant form (edit, display)
+- [x] Auto-generate EAN-13 with valid check digit (200-299 prefix, no GS1 registration)
+- [x] Bulk variant generator supports auto-barcode generation
+
+### 11.2 Barcode Label Printing
+- [x] Pure Code 128B SVG barcode generator (zero dependencies)
+- [x] Print label button on variant rows
+- [x] Print layout: product name + SKU + scannable barcode image + number
+
+### 11.3 Inventory Scanner System
+- [ ] Scanner page at `/admin/inventory/scanner`
+- [ ] USB/Bluetooth scanner support (auto-focus text input, Enter = scan)
+- [ ] Camera scanning via BarcodeDetector API (Chrome/Edge)
+- [ ] Stock adjustment API: `POST /stock-adjust` (+/-) and `POST /stock-set` (absolute)
+- [ ] Inventory movement recording for every adjustment
+- [ ] Bulk receive mode (auto +1 per scan, summary at end)
+- [ ] Sound feedback (beep success, buzz error)
+- [ ] Scanner navigation link in admin sidebar
+
+---
+
+## Path to 100% Confidence
+
+> Items remaining before the platform is production-grade for thousands of merchants.
+
+### Critical (Must have)
+- [ ] Write core tests: order lifecycle, payment processing, inventory (private test suite)
+- [ ] Order timeline/audit log table + UI
+- [ ] Print invoice/packing slip from order detail
+- [ ] Email delivery logging (track sent/failed/bounced)
+- [ ] Verify Code128 SVG barcodes scan with real hardware
+
+### High Priority
+- [ ] Split products.service.ts (1600 lines) into CRUD + storefront + bulk modules
+- [ ] Split orders.service.ts (1400 lines) into CRUD + fulfillment + status modules
+- [ ] Editable order notes on order detail page
+- [ ] Manual payment recording from admin
+- [ ] Discount usage limit race condition fix (atomic increment)
+
+### Medium Priority
+- [ ] Bulk order status change
+- [ ] CSV export all filtered results (not just current page)
+- [ ] Admin `any` type audit (251 usages)
+- [ ] Phone validation locale-configurable
+- [ ] Currency default configurable
+- [ ] Permission query optimization (3 queries → 1 JOIN)
+
+### Architecture (for scale)
+- [ ] Update CLAUDE.md with all finalized patterns
+- [ ] Contributor guides (payment gateway, delivery provider, API endpoint)
+- [ ] CI/CD pipeline: typecheck + lint + test on every PR
+- [ ] Regenerate SDK after API surface stabilizes
+
+---
+
 ## Decision Log
 
 | Date | Decision | Rationale |
@@ -404,3 +472,6 @@ Design a universal provider pattern used consistently across ALL provider types:
 | 2026-03-15 | Tests are private (gitignored) | Only core team (2-3 people) maintains tests. Not pushed to public repo. |
 | 2026-03-15 | Fix database first, then API, then business logic | FK constraints and indexes are prerequisite for reliable business logic. |
 | 2026-03-15 | Provider architecture before adding new gateways | Design the interface once, then all new providers implement it consistently. |
+| 2026-03-16 | RedX deferred | Area ID mapping requires location sync system that's too complex for current phase. |
+| 2026-03-16 | Single-tenant by design | Each merchant deploys on their own Cloudflare account. No multi-tenancy needed. |
+| 2026-03-16 | Barcode system uses EAN-13 200-299 prefix | No GS1 registration needed for internal use. Merchants with existing barcodes enter them manually. |
