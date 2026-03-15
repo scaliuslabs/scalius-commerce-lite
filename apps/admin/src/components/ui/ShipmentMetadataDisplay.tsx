@@ -1,109 +1,121 @@
 import React from "react";
-import { Card, CardContent } from "./card";
 
 interface ShipmentMetadataDisplayProps {
   metadata: any;
   className?: string;
 }
 
+// Fields to show prominently (in order)
+const DISPLAY_FIELDS: Record<string, string> = {
+  consignmentId: "Consignment ID",
+  consignment_id: "Consignment ID",
+  trackingId: "Tracking ID",
+  tracking_id: "Tracking ID",
+  tracking_code: "Tracking Code",
+  merchantOrderId: "Merchant Order ID",
+  merchant_order_id: "Merchant Order ID",
+  deliveryFee: "Delivery Fee",
+  delivery_fee: "Delivery Fee",
+  collectedAmount: "Collected Amount",
+  collected_amount: "Collected Amount",
+  codAmount: "COD Amount",
+  cod_amount: "COD Amount",
+  lastReason: "Reason",
+  reason: "Reason",
+  trackingMessage: "Tracking Message",
+  tracking_message: "Tracking Message",
+  courierName: "Courier",
+  providerType: "Provider",
+};
+
+// Fields to hide (internal/noisy)
+const HIDDEN_FIELDS = new Set([
+  "lastWebhookPayload",
+  "lastWebhookAt",
+  "rawStatus",
+  "id",
+  "created_at",
+  "updated_at",
+  "metadata",
+]);
+
 /**
- * Component to display shipment metadata in a structured way
+ * Component to display shipment metadata in a clean, structured way.
+ * Hides raw webhook payloads and internal fields, shows only useful info.
  */
 export function ShipmentMetadataDisplay({
   metadata,
   className = "",
 }: ShipmentMetadataDisplayProps) {
-  let parsedMetadata = metadata;
+  let parsed = metadata;
 
-  // Parse metadata if it's a string
   if (typeof metadata === "string") {
     try {
-      parsedMetadata = JSON.parse(metadata);
-    } catch (error) {
-      console.error("Error parsing shipment metadata:", error);
+      parsed = JSON.parse(metadata);
+    } catch {
       return (
-        <Card className={`${className}`}>
-          <CardContent className="p-3">
-            <p className="text-sm text-muted-foreground">
-              Error parsing metadata: {String(error)}
-            </p>
-          </CardContent>
-        </Card>
+        <p className={`text-xs text-muted-foreground ${className}`}>
+          Unable to parse metadata
+        </p>
       );
     }
   }
 
-  // If metadata is null or undefined
-  if (!parsedMetadata) {
-    return (
-      <Card className={`${className}`}>
-        <CardContent className="p-3">
-          <p className="text-sm text-muted-foreground">No metadata available</p>
-        </CardContent>
-      </Card>
-    );
+  if (!parsed || typeof parsed !== "object") {
+    return null;
   }
 
-  // Function to render metadata values
-  const renderValue = (value: any): React.ReactNode => {
-    if (value === null || value === undefined) {
-      return <span className="text-muted-foreground italic">None</span>;
-    }
+  // Collect displayable entries
+  const entries: Array<{ label: string; value: string }> = [];
 
-    if (typeof value === "object") {
-      return (
-        <div className="text-sm">
-          {Object.entries(value).map(([subKey, subValue]) => (
-            <div key={subKey} className="pl-2 border-l-2 border-muted my-1">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  {formatKey(subKey)}:
-                </span>
-                <span>{renderValue(subValue)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    }
+  for (const [key, value] of Object.entries(parsed)) {
+    if (HIDDEN_FIELDS.has(key)) continue;
+    if (value === null || value === undefined || value === "") continue;
+    if (typeof value === "object") continue; // skip nested objects
 
-    if (typeof value === "boolean") {
-      return value ? "Yes" : "No";
-    }
+    const label = DISPLAY_FIELDS[key] || formatKey(key);
+    entries.push({ label, value: String(value) });
+  }
 
-    return String(value);
-  };
+  // Deduplicate by label (e.g., both consignmentId and consignment_id)
+  const seen = new Set<string>();
+  const unique = entries.filter((e) => {
+    if (seen.has(e.label)) return false;
+    seen.add(e.label);
+    return true;
+  });
 
-  // Format key for display
-  const formatKey = (key: string): string => {
-    return key
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (char) => char.toUpperCase());
-  };
+  if (unique.length === 0) {
+    return null;
+  }
 
-  // Filter out less important metadata fields
-  const importantKeys = Object.entries(parsedMetadata).filter(
-    ([key]) => !["id", "created_at", "updated_at"].includes(key),
-  );
+  // Show last webhook time if available
+  const lastWebhookAt = parsed.lastWebhookAt;
 
   return (
-    <Card className={`${className}`}>
-      <CardContent className="p-3 space-y-2">
-        <div className="text-sm space-y-1.5">
-          {importantKeys.length > 0 ? (
-            importantKeys.map(([key, value]) => (
-              <div key={key} className="flex justify-between">
-                <span className="text-muted-foreground">{formatKey(key)}:</span>
-                <span>{renderValue(value)}</span>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No metadata available
-            </p>
-          )}
+    <div className={`text-sm space-y-1 ${className}`}>
+      {unique.map(({ label, value }) => (
+        <div key={label} className="flex justify-between gap-4">
+          <span className="text-muted-foreground text-xs">{label}</span>
+          <span className="text-xs font-medium text-right">{value}</span>
         </div>
-      </CardContent>
-    </Card>
+      ))}
+      {lastWebhookAt && (
+        <div className="flex justify-between gap-4 pt-1 border-t">
+          <span className="text-muted-foreground text-xs">Last Update</span>
+          <span className="text-xs text-muted-foreground">
+            {new Date(lastWebhookAt).toLocaleString()}
+          </span>
+        </div>
+      )}
+    </div>
   );
+}
+
+function formatKey(key: string): string {
+  return key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
 }
