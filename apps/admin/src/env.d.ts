@@ -70,6 +70,7 @@ declare namespace App {
     session: BetterAuthSession | null;
     permissions: Set<string>;
     cfContext: ExecutionContext;
+    apiBaseUrl: string;
   }
 }
 

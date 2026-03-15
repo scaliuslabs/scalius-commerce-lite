@@ -160,6 +160,7 @@ const DEFAULT_CONFIG = {
 
 interface DeliveryProviderSettingsProps {
   providers: DeliveryProviderRecord[];
+  apiBaseUrl?: string;
 }
 
 // API helpers (replaces the old window.deliveryProviderActions inline script)
@@ -234,6 +235,7 @@ async function apiTestCredentials(
 
 const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
   providers: initialProviders,
+  apiBaseUrl = "",
 }) => {
   const [providers, setProviders] =
     useState<DeliveryProviderRecord[]>(initialProviders);
@@ -456,14 +458,13 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
 
   const getWebhookUrl = (providerType: string) => {
     // Webhook URL must point to the PUBLIC API worker, not the admin dashboard.
-    // Priority: PUBLIC_API_BASE_URL env var > derive from admin origin
-    const apiBase =
-      (typeof window !== "undefined" && (window as any).__PUBLIC_API_BASE_URL__) ||
-      import.meta.env.PUBLIC_API_BASE_URL ||
+    // apiBaseUrl is passed from server-side (runtime Cloudflare env.PUBLIC_API_BASE_URL).
+    // Fallback: derive from admin origin for dev (dashboard. → api., :4321 → :8787).
+    const base = apiBaseUrl ||
       (typeof window !== "undefined"
         ? window.location.origin.replace("dashboard.", "api.").replace(":4321", ":8787")
         : "");
-    return `${apiBase}/api/v1/webhooks/${providerType}`;
+    return `${base}/api/v1/webhooks/${providerType}`;
   };
 
   const generateWebhookSecret = () => {

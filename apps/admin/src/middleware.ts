@@ -155,6 +155,7 @@ const authMiddleware = defineMiddleware(async (context, next) => {
 
   context.locals.session = session;
   context.locals.user = sessionUser;
+  context.locals.apiBaseUrl = (env as any)?.PUBLIC_API_BASE_URL || "";
 
   if (sessionUser) {
     try {
