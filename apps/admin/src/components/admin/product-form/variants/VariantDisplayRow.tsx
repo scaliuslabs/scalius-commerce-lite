@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { Pencil, Trash2, Copy, MoreHorizontal } from "lucide-react";
+import { Pencil, Trash2, Copy, MoreHorizontal, Printer } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,7 @@ import {
 } from "./utils/variantHelpers";
 import { useCurrency } from "@/hooks/useCurrency";
 import { cn } from "@scalius/shared/utils";
+import { generateBarcodeSvg } from "@scalius/shared/barcode-svg";
 
 interface VariantDisplayRowProps {
   variant: ProductVariant;
@@ -30,6 +31,46 @@ interface VariantDisplayRowProps {
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   isAnyRowEditing: boolean;
+  productName?: string;
+}
+
+function printBarcodeLabel(variant: ProductVariant, productName: string) {
+  const svg = generateBarcodeSvg(variant.barcode!, {
+    moduleWidth: 2,
+    height: 80,
+    quietZone: 10,
+    showText: true,
+    fontSize: 16,
+  });
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<title>Barcode Label</title>
+<style>
+  @page { size: 62mm 29mm; margin: 0; }
+  body { margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: system-ui, sans-serif; }
+  .label { text-align: center; padding: 8px; }
+  .product-name { font-size: 11px; font-weight: 600; margin-bottom: 2px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sku { font-size: 9px; color: #666; margin-bottom: 4px; font-family: monospace; }
+  .barcode svg { max-width: 200px; height: auto; }
+</style>
+</head>
+<body>
+<div class="label">
+  <div class="product-name">${productName.replace(/</g, "&lt;")}</div>
+  <div class="sku">${variant.sku.replace(/</g, "&lt;")}</div>
+  <div class="barcode">${svg}</div>
+</div>
+<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script>
+</body>
+</html>`;
+
+  const printWindow = window.open("", "_blank", "width=400,height=300");
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
 }
 
 export function VariantDisplayRow({
@@ -40,6 +81,7 @@ export function VariantDisplayRow({
   onDelete,
   onDuplicate,
   isAnyRowEditing,
+  productName = "",
 }: VariantDisplayRowProps) {
   const { symbol } = useCurrency();
   const availableStock = variant.stock - variant.reservedStock;
@@ -74,18 +116,26 @@ export function VariantDisplayRow({
             </Badge>
           )}
         </div>
-      </TableCell>
-
-      <TableCell className="py-2">
-        {variant.barcode ? (
-          <div>
-            <span className="font-mono text-xs text-foreground">{variant.barcode}</span>
+        {variant.barcode && (
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-[10px] text-muted-foreground font-mono">{variant.barcode}</span>
             {variant.barcodeType && (
-              <span className="text-[10px] text-muted-foreground ml-1 uppercase">{variant.barcodeType}</span>
+              <span className="text-[10px] text-muted-foreground uppercase">({variant.barcodeType})</span>
             )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Print barcode label"
+              onClick={(e) => {
+                e.stopPropagation();
+                printBarcodeLabel(variant, productName);
+              }}
+            >
+              <Printer className="h-2.5 w-2.5" />
+            </Button>
           </div>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
         )}
       </TableCell>
 
@@ -157,6 +207,12 @@ export function VariantDisplayRow({
               <Copy className="mr-2 h-3.5 w-3.5" />
               Duplicate
             </DropdownMenuItem>
+            {variant.barcode && (
+              <DropdownMenuItem onClick={() => printBarcodeLabel(variant, productName)}>
+                <Printer className="mr-2 h-3.5 w-3.5" />
+                Print Label
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onDelete(variant.id)}

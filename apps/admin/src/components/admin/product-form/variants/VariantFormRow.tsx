@@ -13,9 +13,10 @@ import {
 } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { Loader2, X, Save } from "lucide-react";
+import { Loader2, X, Save, Sparkles } from "lucide-react";
 import { variantFormSchema, type VariantFormValues, type ProductVariant } from "./types";
 import { useCurrency } from "@/hooks/useCurrency";
+import { generateEAN13 } from "@scalius/shared/barcode-utils";
 
 interface VariantFormRowProps {
   initialData?: ProductVariant;
@@ -65,67 +66,79 @@ export function VariantFormRow({
         <TableCell className="p-2"></TableCell>
 
         <TableCell className="p-2 align-top">
-          <FormField
-            control={form.control}
-            name="sku"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <Input
-                    placeholder="SKU-123"
-                    {...field}
-                    className="h-9 font-mono"
-                    autoFocus={!isEditMode}
-                  />
-                </FormControl>
-                <FormMessage className="text-xs px-1" />
-              </FormItem>
-            )}
-          />
-        </TableCell>
-
-        <TableCell className="p-2 align-top">
-          <div className="flex gap-1">
+          <div className="space-y-1.5">
             <FormField
               control={form.control}
-              name="barcode"
+              name="sku"
               render={({ field }) => (
-                <FormItem className="flex-1">
+                <FormItem>
                   <FormControl>
                     <Input
-                      placeholder="Barcode"
+                      placeholder="SKU-123"
                       {...field}
-                      value={field.value ?? ""}
-                      className="h-9 font-mono text-xs"
+                      className="h-9 font-mono"
+                      autoFocus={!isEditMode}
                     />
                   </FormControl>
                   <FormMessage className="text-xs px-1" />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="barcodeType"
-              render={({ field }) => (
-                <FormItem className="w-24">
-                  <FormControl>
-                    <Select onValueChange={(v) => field.onChange(v || null)} value={field.value ?? ""}>
-                      <SelectTrigger className="h-9 text-xs">
-                        <SelectValue placeholder="Type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ean13">EAN-13</SelectItem>
-                        <SelectItem value="upc">UPC</SelectItem>
-                        <SelectItem value="isbn">ISBN</SelectItem>
-                        <SelectItem value="gtin">GTIN</SelectItem>
-                        <SelectItem value="custom">Custom</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage className="text-xs px-1" />
-                </FormItem>
-              )}
-            />
+            <div className="flex gap-1 items-start">
+              <FormField
+                control={form.control}
+                name="barcode"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormControl>
+                      <Input
+                        placeholder="Barcode"
+                        {...field}
+                        value={field.value ?? ""}
+                        className="h-7 font-mono text-xs"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs px-1" />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="barcodeType"
+                render={({ field }) => (
+                  <FormItem className="w-[88px]">
+                    <FormControl>
+                      <Select onValueChange={(v) => field.onChange(v || null)} value={field.value ?? ""}>
+                        <SelectTrigger className="h-7 text-[11px]">
+                          <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ean13">EAN-13</SelectItem>
+                          <SelectItem value="upc">UPC</SelectItem>
+                          <SelectItem value="isbn">ISBN</SelectItem>
+                          <SelectItem value="gtin">GTIN</SelectItem>
+                          <SelectItem value="custom">Custom</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage className="text-xs px-1" />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                title="Generate EAN-13 barcode"
+                onClick={() => {
+                  form.setValue("barcode", generateEAN13());
+                  form.setValue("barcodeType", "ean13");
+                }}
+              >
+                <Sparkles className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
         </TableCell>
 
