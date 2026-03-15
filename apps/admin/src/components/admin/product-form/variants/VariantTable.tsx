@@ -79,6 +79,7 @@ export function VariantTable({
                 />
               </TableHead>
               <TableHead className="min-w-[120px] py-2 text-xs font-medium">SKU</TableHead>
+              <TableHead className="min-w-[120px] py-2 text-xs font-medium">Barcode</TableHead>
               <TableHead className="min-w-[70px] py-2 text-xs font-medium">Size</TableHead>
               <TableHead className="min-w-[70px] py-2 text-xs font-medium">Color</TableHead>
               <TableHead className="min-w-[80px] py-2 text-xs font-medium">Weight</TableHead>
@@ -93,7 +94,7 @@ export function VariantTable({
           <TableBody>
             {variants.length === 0 && !isAdding && (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center">
+                <TableCell colSpan={11} className="h-24 text-center">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <p className="text-sm">No variants yet</p>
                     <Button

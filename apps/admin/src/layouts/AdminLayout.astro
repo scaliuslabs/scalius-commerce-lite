@@ -85,15 +85,23 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Prepare user data for UserMenu component
-const userData = {
-  id: user!.id,
-  name: user!.name,
-  email: user!.email,
-  image: user!.image,
-  role: user!.role,
-  twoFactorEnabled: user!.twoFactorEnabled,
-  isSuperAdmin: (user as any)!.isSuperAdmin ?? false, 
+// Prepare user data for UserMenu component (safe defaults when session expired)
+const userData = user ? {
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  image: user.image,
+  role: user.role,
+  twoFactorEnabled: user.twoFactorEnabled,
+  isSuperAdmin: (user as any).isSuperAdmin ?? false,
+} : {
+  id: "",
+  name: "",
+  email: "",
+  image: null as string | null,
+  role: "",
+  twoFactorEnabled: false,
+  isSuperAdmin: false,
 };
 
 // Get user permissions from middleware
@@ -563,12 +571,18 @@ const navSections: NavSection[] = allNavSections
       }
     </script>
 
-    <script is:inline define:vars={{ userId: user?.id ?? "", permissions: permissionsArray, isSuperAdmin: userData.isSuperAdmin }}>
+    <script is:inline define:vars={{ userId: user?.id ?? "", permissions: permissionsArray, isSuperAdmin: userData?.isSuperAdmin ?? false }}>
       // Store user info in window for the module script to access
-      if (userId) window.__USER_ID__ = userId;
-      // Store permissions for React components
-      window.__USER_PERMISSIONS__ = permissions;
-      window.__IS_SUPER_ADMIN__ = isSuperAdmin;
+      try {
+        if (userId) window.__USER_ID__ = userId;
+        // Store permissions for React components
+        window.__USER_PERMISSIONS__ = permissions || [];
+        window.__IS_SUPER_ADMIN__ = isSuperAdmin || false;
+      } catch (_e) {
+        // Safe defaults if user session expired
+        window.__USER_PERMISSIONS__ = [];
+        window.__IS_SUPER_ADMIN__ = false;
+      }
     </script>
 
     <script>

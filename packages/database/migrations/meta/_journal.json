@@ -148,6 +148,13 @@
       "when": 1773792001000,
       "tag": "0020_add-order-version",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1773878400000,
+      "tag": "0021_add-variant-barcode",
+      "breakpoints": true
     }
   ]
 }

@@ -40,6 +40,8 @@ export function VariantFormRow({
       color: "",
       weight: null,
       sku: "",
+      barcode: null,
+      barcodeType: null,
       price: 0,
       stock: 0,
       discountType: "percentage",
@@ -80,6 +82,51 @@ export function VariantFormRow({
               </FormItem>
             )}
           />
+        </TableCell>
+
+        <TableCell className="p-2 align-top">
+          <div className="flex gap-1">
+            <FormField
+              control={form.control}
+              name="barcode"
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormControl>
+                    <Input
+                      placeholder="Barcode"
+                      {...field}
+                      value={field.value ?? ""}
+                      className="h-9 font-mono text-xs"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-xs px-1" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="barcodeType"
+              render={({ field }) => (
+                <FormItem className="w-24">
+                  <FormControl>
+                    <Select onValueChange={(v) => field.onChange(v || null)} value={field.value ?? ""}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ean13">EAN-13</SelectItem>
+                        <SelectItem value="upc">UPC</SelectItem>
+                        <SelectItem value="isbn">ISBN</SelectItem>
+                        <SelectItem value="gtin">GTIN</SelectItem>
+                        <SelectItem value="custom">Custom</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage className="text-xs px-1" />
+                </FormItem>
+              )}
+            />
+          </div>
         </TableCell>
 
         <TableCell className="p-2 align-top">

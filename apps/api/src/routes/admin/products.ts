@@ -19,6 +19,34 @@ const bulkDeleteSchema = z.object({
     permanent: z.boolean().default(false)
 });
 
+// ── Barcode Lookup ──
+
+const barcodeLookupRoute = createRoute({
+    method: "get",
+    path: "/lookup-barcode",
+    tags: ["Admin - Products"],
+    summary: "Look up a product variant by barcode",
+    request: {
+        query: z.object({
+            barcode: z.string().min(1).openapi({ description: "Barcode value to search for" }),
+        }),
+    },
+    responses: {
+        200: { description: "Variant found" },
+        404: { description: "No variant found with this barcode" },
+    },
+});
+
+app.openapi(barcodeLookupRoute, async (c) => {
+    const db = c.get("db");
+    const { barcode } = c.req.valid("query");
+    const result = await ProductsService.lookupByBarcode(db, barcode);
+    if (!result) {
+        throw new NotFoundError("No variant found with this barcode");
+    }
+    return ok(c, result);
+});
+
 // ── List Products ──
 
 const listRoute = createRoute({
