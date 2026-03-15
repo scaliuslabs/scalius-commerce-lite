@@ -209,7 +209,7 @@ export function DeliveryLocationsManager() {
           break;
         }
 
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 50));
       }
     } catch (err: any) {
       toast.error(err.message || "Import failed");
