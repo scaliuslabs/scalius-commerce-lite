@@ -129,6 +129,8 @@ export function VariantImportExport({
                 parsedDiscountType === "percentage" ? discountValue : null,
               discountAmount:
                 parsedDiscountType === "flat" ? discountValue : null,
+              barcode: null,
+              barcodeType: null,
             });
           }
 
