@@ -246,6 +246,7 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTestingCredentials, setIsTestingCredentials] = useState(false);
   const [copiedWebhookUrl, setCopiedWebhookUrl] = useState(false);
+  const [copiedSecret, setCopiedSecret] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<
@@ -454,8 +455,28 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
   };
 
   const getWebhookUrl = (providerType: string) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/api/v1/webhooks/${providerType}`;
+    // Webhook URL must point to the PUBLIC API worker, not the admin dashboard.
+    // Priority: PUBLIC_API_BASE_URL env var > derive from admin origin
+    const apiBase =
+      (typeof window !== "undefined" && (window as any).__PUBLIC_API_BASE_URL__) ||
+      import.meta.env.PUBLIC_API_BASE_URL ||
+      (typeof window !== "undefined"
+        ? window.location.origin.replace("dashboard.", "api.").replace(":4321", ":8787")
+        : "");
+    return `${apiBase}/api/v1/webhooks/${providerType}`;
+  };
+
+  const generateWebhookSecret = () => {
+    // Generate a cryptographically secure random secret
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
+  };
+
+  const handleGenerateSecret = () => {
+    const newSecret = generateWebhookSecret();
+    handleCredentialChange("webhookSecret", newSecret);
+    toast.success("New webhook secret generated. Save to apply, then copy and paste into your provider dashboard.");
   };
 
   const handleCopyWebhookUrl = async () => {
@@ -467,6 +488,22 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
       setTimeout(() => setCopiedWebhookUrl(false), 2000);
     } catch {
       toast.error("Failed to copy URL");
+    }
+  };
+
+  const handleCopySecret = async () => {
+    const secret = creds.webhookSecret;
+    if (!secret) {
+      toast.error("Generate a secret first");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(secret);
+      setCopiedSecret(true);
+      toast.success("Webhook secret copied to clipboard");
+      setTimeout(() => setCopiedSecret(false), 2000);
+    } catch {
+      toast.error("Failed to copy secret");
     }
   };
 
@@ -1026,32 +1063,53 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                     </p>
                   </div>
 
-                  {/* Webhook Secret */}
+                  {/* Webhook Secret — auto-generated, copy to provider dashboard */}
                   <div className="space-y-1.5">
                     <Label>
                       {formData.type === "pathao" ? "Webhook Secret" : formData.type === "redx" ? "Webhook Token" : "Webhook Auth Token"}
                     </Label>
-                    <Input
-                      type="password"
-                      value={creds.webhookSecret || ""}
-                      onChange={(e) =>
-                        handleCredentialChange("webhookSecret", e.target.value)
-                      }
-                      disabled={!isEditing}
-                      placeholder={
-                        formData.type === "pathao"
-                          ? "Secret for X-PATHAO-Signature verification"
-                          : formData.type === "redx"
-                          ? "Token included as ?token= query parameter"
-                          : "Bearer token for Authorization header verification"
-                      }
-                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={creds.webhookSecret || ""}
+                        readOnly
+                        className="font-mono text-xs bg-muted/50"
+                        placeholder="Click 'Generate' to create a secret"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="flex-shrink-0"
+                        onClick={handleCopySecret}
+                        disabled={!creds.webhookSecret}
+                        title="Copy secret"
+                      >
+                        {copiedSecret ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-shrink-0"
+                        onClick={handleGenerateSecret}
+                        disabled={!isEditing}
+                        title={creds.webhookSecret ? "Regenerate secret (old one stops working)" : "Generate secret"}
+                      >
+                        {creds.webhookSecret ? "Roll" : "Generate"}
+                      </Button>
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      {formData.type === "pathao"
-                        ? "This secret is sent by Pathao in the X-PATHAO-Signature header to verify webhook authenticity."
-                        : formData.type === "redx"
-                        ? "RedX includes this token as a query parameter (?token=xxx) in the callback URL for verification."
-                        : "This token is sent by Steadfast as a Bearer token in the Authorization header."}
+                      {creds.webhookSecret
+                        ? <>Copy this secret and paste it into your{" "}
+                          {formData.type === "pathao" ? "Pathao" : formData.type === "steadfast" ? "Steadfast" : "RedX"}{" "}
+                          dashboard webhook settings.{" "}
+                          {formData.type === "redx" && "For RedX, append ?token=THIS_SECRET to the webhook URL."}
+                          Click &ldquo;Roll&rdquo; to regenerate (invalidates the old secret).</>
+                        : "Generate a secret, save, then copy and paste it into your provider's dashboard."}
                     </p>
                   </div>
 
