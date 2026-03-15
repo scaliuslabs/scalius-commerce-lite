@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for inventory.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { InventoryService, adjustInventorySchema } from "@scalius/core/modules/inventory";
+import { InventoryService, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku } from "@scalius/core/modules/inventory";
 import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
@@ -136,6 +136,110 @@ app.openapi(adjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await InventoryService.adjustInventory(db, variantId, payload, user?.id);
+        return ok(c, result);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
+        throw error;
+    }
+});
+
+// ── Scanner: Barcode/SKU Lookup ──
+
+const scannerLookupRoute = createRoute({
+    method: "get",
+    path: "/scanner/lookup",
+    tags: ["Admin - Inventory"],
+    summary: "Look up a product variant by barcode or SKU (scanner workflow)",
+    request: {
+        query: z.object({
+            code: z.string().min(1).openapi({ description: "Barcode or SKU value to search for" }),
+        }),
+    },
+    responses: {
+        200: { description: "Variant found with product details and image" },
+        404: { description: "No variant found with this barcode or SKU" },
+    },
+});
+
+app.openapi(scannerLookupRoute, async (c) => {
+    const db = c.get("db");
+    const { code } = c.req.valid("query");
+    const result = await lookupByBarcodeOrSku(db, code);
+    if (!result) {
+        throw new NotFoundError("No variant found with this barcode or SKU");
+    }
+    return ok(c, result);
+});
+
+// ── Scanner: Stock Adjust (relative) ──
+
+const stockAdjustRoute = createRoute({
+    method: "post",
+    path: "/stock-adjust",
+    tags: ["Admin - Inventory"],
+    summary: "Adjust stock by a relative amount (+/-)",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        variantId: z.string().openapi({ description: "Variant ID" }),
+                        adjustment: z.number().openapi({ description: "Stock adjustment (positive=add, negative=remove)" }),
+                        reason: z.string().optional().openapi({ description: "Reason for adjustment" }),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: { description: "Stock adjusted" },
+    },
+});
+
+app.openapi(stockAdjustRoute, async (c) => {
+    const db = c.get("db");
+    const { variantId, adjustment, reason } = c.req.valid("json");
+    const user = c.get("user");
+    try {
+        const result = await adjustStock(db, variantId, adjustment, reason, user?.id);
+        return ok(c, result);
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
+        throw error;
+    }
+});
+
+// ── Scanner: Stock Set (absolute) ──
+
+const stockSetRoute = createRoute({
+    method: "post",
+    path: "/stock-set",
+    tags: ["Admin - Inventory"],
+    summary: "Set stock to an absolute value (stocktaking)",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        variantId: z.string().openapi({ description: "Variant ID" }),
+                        newStock: z.number().min(0).openapi({ description: "New absolute stock value" }),
+                        reason: z.string().optional().openapi({ description: "Reason for stocktake" }),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: { description: "Stock set" },
+    },
+});
+
+app.openapi(stockSetRoute, async (c) => {
+    const db = c.get("db");
+    const { variantId, newStock, reason } = c.req.valid("json");
+    const user = c.get("user");
+    try {
+        const result = await setStock(db, variantId, newStock, reason, user?.id);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
