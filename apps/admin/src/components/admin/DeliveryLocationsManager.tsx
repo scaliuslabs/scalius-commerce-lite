@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
@@ -11,6 +11,12 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Truck,
+  Download,
+  CheckCircle2,
+  AlertCircle,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import {
   Table,
@@ -45,6 +51,7 @@ import { Label } from "../ui/label";
 import { Badge } from "../ui/badge";
 import { Switch } from "../ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
+import { Progress } from "../ui/progress";
 import { toast } from "sonner";
 import { Checkbox } from "../ui/checkbox";
 
@@ -59,6 +66,21 @@ interface Location {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface PathaoImportProgress {
+  status: "importing" | "complete" | "error";
+  phase: "cities" | "zones" | "areas" | "done";
+  progress: { current: number; total: number; label: string };
+  stats: {
+    citiesCreated: number;
+    citiesUpdated: number;
+    zonesCreated: number;
+    zonesUpdated: number;
+    areasCreated: number;
+    areasUpdated: number;
+  };
+  error?: string;
 }
 
 export function DeliveryLocationsManager() {
@@ -106,6 +128,127 @@ export function DeliveryLocationsManager() {
 
   // State for clean all confirmation dialog
   const [isCleanAllDialogOpen, setIsCleanAllDialogOpen] = useState(false);
+
+  // Pathao import state
+  const [hasPathaoProvider, setHasPathaoProvider] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<PathaoImportProgress | null>(null);
+  const importAbortRef = useRef(false);
+
+  // Check if Pathao provider is configured and active
+  useEffect(() => {
+    const checkPathaoProvider = async () => {
+      try {
+        const res = await fetch("/api/v1/admin/settings/delivery-providers");
+        if (!res.ok) return;
+        const json = await res.json();
+        const providers = Array.isArray(json) ? json : (json.data ?? []);
+        const hasActive = providers.some(
+          (p: any) => p.type === "pathao" && p.isActive,
+        );
+        setHasPathaoProvider(hasActive);
+      } catch {
+        // Silently fail — button just won't show
+      }
+    };
+    checkPathaoProvider();
+  }, []);
+
+  // On mount, check if an import is already in progress
+  useEffect(() => {
+    const checkExistingImport = async () => {
+      try {
+        const res = await fetch(
+          "/api/v1/admin/settings/locations/import-pathao/status",
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        const data = json.data || json;
+        if (data.status === "importing") {
+          setImportProgress(data);
+          setImporting(true);
+          resumeImport();
+        }
+      } catch {
+        // No in-progress import
+      }
+    };
+    checkExistingImport();
+  }, []);
+
+  const resumeImport = useCallback(async () => {
+    importAbortRef.current = false;
+    setImporting(true);
+    try {
+      while (!importAbortRef.current) {
+        const res = await fetch(
+          "/api/v1/admin/settings/locations/import-pathao",
+          { method: "POST" },
+        );
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || "Import request failed");
+        }
+        const json = await res.json();
+        const data: PathaoImportProgress = json.data || json;
+        setImportProgress(data);
+
+        if (data.status === "complete") {
+          toast.success(
+            `Import complete! Created ${data.stats.citiesCreated} cities, ${data.stats.zonesCreated} zones, ${data.stats.areasCreated} areas.` +
+              (data.stats.citiesUpdated + data.stats.zonesUpdated + data.stats.areasUpdated > 0
+                ? ` Updated ${data.stats.citiesUpdated} cities, ${data.stats.zonesUpdated} zones, ${data.stats.areasUpdated} areas.`
+                : ""),
+          );
+          loadLocations(1, pagination.limit);
+          break;
+        }
+        if (data.status === "error") {
+          toast.error(data.error || "Import failed");
+          break;
+        }
+
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Import failed");
+      setImportProgress((prev) =>
+        prev
+          ? { ...prev, status: "error", error: err.message }
+          : null,
+      );
+    } finally {
+      setImporting(false);
+    }
+  }, []);
+
+  const startImport = () => {
+    setShowImportConfirm(false);
+    setImportProgress(null);
+    resumeImport();
+  };
+
+  const resetImport = async () => {
+    try {
+      await fetch("/api/v1/admin/settings/locations/import-pathao", {
+        method: "DELETE",
+      });
+      importAbortRef.current = true;
+      setImportProgress(null);
+      setImporting(false);
+      toast.success("Import progress reset. You can start a fresh import.");
+    } catch {
+      toast.error("Failed to reset import");
+    }
+  };
+
+  const retryImport = async () => {
+    await resetImport();
+    // Small delay so state settles
+    await new Promise((r) => setTimeout(r, 200));
+    resumeImport();
+  };
 
   // Load locations on initial render and when the tab changes
   useEffect(() => {
@@ -457,6 +600,126 @@ export function DeliveryLocationsManager() {
 
   return (
     <div className="space-y-6">
+      {/* Pathao Import Progress Banner */}
+      {importProgress && (importing || importProgress.status === "complete" || importProgress.status === "error") && (
+        <Card className="border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20">
+          <CardContent className="py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="flex-shrink-0 rounded-lg bg-orange-100 p-2 dark:bg-orange-950/40">
+                  <Truck className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium text-sm">
+                      {importProgress.status === "complete"
+                        ? "Pathao Import Complete"
+                        : importProgress.status === "error"
+                          ? "Pathao Import Failed"
+                          : "Importing from Pathao..."}
+                    </span>
+                    {importProgress.status === "importing" && (
+                      <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-800">
+                        {importProgress.phase}
+                      </Badge>
+                    )}
+                    {importProgress.status === "complete" && (
+                      <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    )}
+                    {importProgress.status === "error" && (
+                      <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    )}
+                  </div>
+
+                  {importProgress.status === "importing" && (
+                    <>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        {importProgress.progress.label}
+                      </p>
+                      <Progress
+                        value={
+                          importProgress.progress.total > 0
+                            ? (importProgress.progress.current / importProgress.progress.total) * 100
+                            : 0
+                        }
+                        className="h-2 mb-2"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {importProgress.progress.current} / {importProgress.progress.total}
+                      </p>
+                    </>
+                  )}
+
+                  {importProgress.status === "error" && importProgress.error && (
+                    <p className="text-xs text-red-600 dark:text-red-400 mb-2">
+                      {importProgress.error}
+                    </p>
+                  )}
+
+                  {/* Stats row */}
+                  {(importProgress.stats.citiesCreated > 0 ||
+                    importProgress.stats.zonesCreated > 0 ||
+                    importProgress.stats.areasCreated > 0 ||
+                    importProgress.stats.citiesUpdated > 0 ||
+                    importProgress.stats.zonesUpdated > 0 ||
+                    importProgress.stats.areasUpdated > 0) && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
+                      {(importProgress.stats.citiesCreated > 0 || importProgress.stats.citiesUpdated > 0) && (
+                        <span>
+                          Cities: {importProgress.stats.citiesCreated} created
+                          {importProgress.stats.citiesUpdated > 0 && `, ${importProgress.stats.citiesUpdated} updated`}
+                        </span>
+                      )}
+                      {(importProgress.stats.zonesCreated > 0 || importProgress.stats.zonesUpdated > 0) && (
+                        <span>
+                          Zones: {importProgress.stats.zonesCreated} created
+                          {importProgress.stats.zonesUpdated > 0 && `, ${importProgress.stats.zonesUpdated} updated`}
+                        </span>
+                      )}
+                      {(importProgress.stats.areasCreated > 0 || importProgress.stats.areasUpdated > 0) && (
+                        <span>
+                          Areas: {importProgress.stats.areasCreated} created
+                          {importProgress.stats.areasUpdated > 0 && `, ${importProgress.stats.areasUpdated} updated`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {importProgress.status === "error" && (
+                  <Button size="sm" variant="outline" onClick={retryImport}>
+                    <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                    Retry
+                  </Button>
+                )}
+                {importProgress.status === "complete" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setImportProgress(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+                {(importProgress.status === "complete" || importProgress.status === "error") && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs text-muted-foreground"
+                    onClick={resetImport}
+                  >
+                    <RotateCcw className="mr-1.5 h-3 w-3" />
+                    Reset & Re-import
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs
         defaultValue="city"
         value={activeTab}
@@ -474,6 +737,22 @@ export function DeliveryLocationsManager() {
           </TabsList>
 
           <div className="flex items-center gap-2">
+            {hasPathaoProvider && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowImportConfirm(true)}
+                disabled={importing}
+                className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-950/30 dark:hover:text-orange-300"
+              >
+                {importing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                {importing ? "Importing..." : "Import from Pathao"}
+              </Button>
+            )}
 
             <Button variant="outline" size="sm" onClick={handleCleanAll}>
               <Trash2 className="mr-2 h-4 w-4" />
@@ -799,6 +1078,42 @@ export function DeliveryLocationsManager() {
               onClick={confirmCleanAll}
             >
               Yes, Delete All Data
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pathao Import Confirmation Dialog */}
+      <Dialog open={showImportConfirm} onOpenChange={setShowImportConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="rounded-lg bg-orange-100 p-1.5 dark:bg-orange-950/40">
+                <Truck className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              </div>
+              Import from Pathao
+            </DialogTitle>
+            <DialogDescription>
+              This will import all cities, zones, and areas from Pathao. Existing
+              locations with matching Pathao IDs will be updated, not duplicated.
+              This may take a few minutes depending on the number of locations.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowImportConfirm(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={startImport}
+              className="bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-700 dark:hover:bg-orange-600"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Start Import
             </Button>
           </DialogFooter>
         </DialogContent>
