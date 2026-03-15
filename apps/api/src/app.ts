@@ -27,7 +27,6 @@ import { sslcommerzWebhookRoutes } from "./routes/webhooks/sslcommerz";
 import { polarWebhookRoutes } from "./routes/webhooks/polar";
 import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
 import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
-import { redxWebhookRoutes } from "./routes/webhooks/redx";
 import { authMiddleware } from "./middleware/auth";
 import { discountRoutes } from "./routes/discounts";
 import { widgetRoutes } from "./routes/widgets";
@@ -251,7 +250,6 @@ app.route("/webhooks/sslcommerz", sslcommerzWebhookRoutes);
 app.route("/webhooks/polar", polarWebhookRoutes);
 app.route("/webhooks/pathao", pathaoWebhookRoutes);
 app.route("/webhooks/steadfast", steadfastWebhookRoutes);
-app.route("/webhooks/redx", redxWebhookRoutes);
 
 // Apply auth middleware ONLY to paths needing protection
 app.use("/cache/*", adminAuthMiddleware);

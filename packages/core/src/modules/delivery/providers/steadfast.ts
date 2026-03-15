@@ -207,7 +207,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
   async checkShipmentStatus(externalId: string): Promise<ShipmentStatus> {
     try {
       const response = await fetch(
-        `${this.credentials.baseUrl}/status_by_cid/${externalId}`,
+        `${this.credentials.baseUrl.replace(/\/$/, "")}/status_by_cid/${externalId}`,
         {
           method: "GET",
           headers: this.getHeaders(),

@@ -78,13 +78,6 @@ const PROVIDER_VISUAL: Record<
     badgeClass: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border-blue-200 dark:border-blue-900",
     description: "Courier & logistics service",
   },
-  redx: {
-    icon: Truck,
-    bgClass: "bg-red-100 dark:bg-red-950/40",
-    iconClass: "text-red-600 dark:text-red-400",
-    badgeClass: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400 border-red-200 dark:border-red-900",
-    description: "Bangladesh courier service",
-  },
 };
 
 function ProviderIcon({
@@ -117,7 +110,6 @@ function ProviderIcon({
 const PROVIDER_TYPES: { value: DeliveryProviderType; label: string }[] = [
   { value: "pathao", label: "Pathao" },
   { value: "steadfast", label: "Steadfast" },
-  { value: "redx", label: "RedX" },
 ];
 
 // Default credentials structure per provider type
@@ -136,10 +128,6 @@ const DEFAULT_CREDENTIALS = {
     secretKey: "",
     webhookSecret: "",
   },
-  redx: {
-    apiToken: "",
-    webhookSecret: "",
-  },
 };
 const DEFAULT_CONFIG = {
   pathao: {
@@ -150,11 +138,6 @@ const DEFAULT_CONFIG = {
   },
   steadfast: {
     defaultCodAmount: 0,
-  },
-  redx: {
-    sandbox: true,
-    pickupStoreId: 0,
-    defaultParcelWeight: 500,
   },
 };
 
@@ -844,22 +827,6 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                   </div>
                 )}
 
-                {formData.type === "redx" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <Label>API Access Token (JWT)</Label>
-                      <Input
-                        type="password"
-                        value={creds.apiToken || ""}
-                        onChange={(e) =>
-                          handleCredentialChange("apiToken", e.target.value)
-                        }
-                        disabled={!isEditing}
-                        placeholder="Your RedX JWT access token"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Configuration Section */}
@@ -973,56 +940,6 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                   </div>
                 )}
 
-                {formData.type === "redx" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex items-center justify-between sm:col-span-2">
-                      <div className="space-y-0.5">
-                        <Label>Sandbox Mode</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Enable to use RedX sandbox environment for testing
-                        </p>
-                      </div>
-                      <Switch
-                        checked={conf.sandbox ?? true}
-                        onCheckedChange={(checked) =>
-                          handleConfigChange("sandbox", checked)
-                        }
-                        disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Pickup Store ID</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={conf.pickupStoreId || 0}
-                        onChange={(e) =>
-                          handleConfigChange(
-                            "pickupStoreId",
-                            Number(e.target.value)
-                          )
-                        }
-                        disabled={!isEditing}
-                        placeholder="Default pickup store ID"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Default Parcel Weight (grams)</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={conf.defaultParcelWeight || 500}
-                        onChange={(e) =>
-                          handleConfigChange(
-                            "defaultParcelWeight",
-                            Number(e.target.value)
-                          )
-                        }
-                        disabled={!isEditing}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Webhook Configuration */}
@@ -1059,15 +976,14 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Paste this URL into your {formData.type === "pathao" ? "Pathao" : formData.type === "steadfast" ? "Steadfast" : "RedX"} dashboard webhook settings.
-                      {formData.type === "redx" && " RedX requires adding ?token=YOUR_SECRET to the URL."}
+                      Paste this URL into your {formData.type === "pathao" ? "Pathao" : "Steadfast"} dashboard webhook settings.
                     </p>
                   </div>
 
                   {/* Webhook Secret — auto-generated, copy to provider dashboard */}
                   <div className="space-y-1.5">
                     <Label>
-                      {formData.type === "pathao" ? "Webhook Secret" : formData.type === "redx" ? "Webhook Token" : "Webhook Auth Token"}
+                      {formData.type === "pathao" ? "Webhook Secret" : "Webhook Auth Token"}
                     </Label>
                     <div className="flex items-center gap-2">
                       <Input
@@ -1106,9 +1022,8 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                     <p className="text-xs text-muted-foreground">
                       {creds.webhookSecret
                         ? <>Copy this secret and paste it into your{" "}
-                          {formData.type === "pathao" ? "Pathao" : formData.type === "steadfast" ? "Steadfast" : "RedX"}{" "}
+                          {formData.type === "pathao" ? "Pathao" : "Steadfast"}{" "}
                           dashboard webhook settings.{" "}
-                          {formData.type === "redx" && "For RedX, append ?token=THIS_SECRET to the webhook URL."}
                           Click &ldquo;Roll&rdquo; to regenerate (invalidates the old secret).</>
                         : "Generate a secret, save, then copy and paste it into your provider's dashboard."}
                     </p>
@@ -1124,13 +1039,6 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                             Go to your <strong>Pathao Merchant Dashboard</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Webhook</strong>.
                             Paste the webhook URL above and enter your webhook secret. Pathao will send status updates
                             for orders including pickup, in-transit, delivered, and return events.
-                          </p>
-                        ) : formData.type === "redx" ? (
-                          <p>
-                            Go to your <strong>RedX Dashboard</strong> and configure the <strong>Callback URL</strong>.
-                            Append your webhook token as a query parameter: <code>?token=YOUR_SECRET</code>.
-                            RedX will send parcel status updates including ready-for-delivery, delivery-in-progress,
-                            delivered, and returned events.
                           </p>
                         ) : (
                           <p>
@@ -1197,18 +1105,6 @@ const DeliveryProviderSettings: FC<DeliveryProviderSettingsProps> = ({
                             <li><strong className="text-foreground">Locations Mapping (CRITICAL):</strong> Pathao requires precise numeric IDs for City, Zone, and Area. If you do not configure these in the <a href="/admin/settings/delivery-locations" className="text-primary hover:underline">Delivery Locations</a> page (in the <em>External IDs</em> JSON field mapping such as <code>{`{"pathao": 123}`}</code>), shipments will fail to create.</li>
                           </ul>
                           <p>Common IDs: Dhaka City (1), Chittagong City (2). Please refer to Pathao API docs for your specific zone and area IDs.</p>
-                        </div>
-                      ) : formData.type === "redx" ? (
-                        <div className="space-y-4">
-                          <p><strong className="text-foreground">RedX Courier Integration</strong></p>
-                          <p>To use RedX, provide your API Access Token (JWT) obtained from the RedX dashboard.</p>
-                          <ul className="list-disc pl-5 space-y-2">
-                            <li><strong className="text-foreground">API Token:</strong> Obtain your JWT access token from the RedX merchant dashboard.</li>
-                            <li><strong className="text-foreground">Sandbox Mode:</strong> Enable sandbox mode to test with <code>sandbox.redx.com.bd</code>. Disable for production to use <code>openapi.redx.com.bd</code>.</li>
-                            <li><strong className="text-foreground">Pickup Store ID:</strong> Create a pickup store via the RedX dashboard and enter its ID here. This is the default pickup location for parcels.</li>
-                            <li><strong className="text-foreground">Parcel Weight:</strong> Default parcel weight in grams (e.g. 500 for 500g).</li>
-                            <li><strong className="text-foreground">Webhooks:</strong> RedX sends status updates via POST to your callback URL with the token as a query parameter (<code>?token=xxx</code>).</li>
-                          </ul>
                         </div>
                       ) : (
                         <div className="space-y-4">

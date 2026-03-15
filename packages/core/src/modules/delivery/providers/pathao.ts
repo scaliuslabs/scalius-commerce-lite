@@ -159,7 +159,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       if (!order.city || !order.zone) {
         return {
           success: false,
-          message: `Missing required location information: ${!order.city ? "city" : ""} ${!order.zone ? "zone" : ""}`,
+          message: `Missing required location information: ${[!order.city && "city", !order.zone && "zone"].filter(Boolean).join(", ")}`,
         };
       }
 
@@ -176,7 +176,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
         console.error(`[PathaoProvider] Missing external location mappings. City: ${order.city} -> ${externalLocationIds.city}, Zone: ${order.zone} -> ${externalLocationIds.zone}, Area: ${order.area} -> ${externalLocationIds.area}`);
         return {
           success: false,
-          message: `Pathao requires precisely mapped numeric location IDs. Missing mapping for: ${!externalLocationIds.city ? "city" : ""} ${!externalLocationIds.zone ? "zone" : ""}. Please configure these in the Admin Dashboard locations view.`,
+          message: `Pathao requires precisely mapped numeric location IDs. Missing mapping for: ${[!externalLocationIds.city && "city", !externalLocationIds.zone && "zone"].filter(Boolean).join(", ")}. Please configure these in the Delivery Locations settings.`,
         };
       }
 
@@ -266,7 +266,19 @@ export class PathaoProvider implements DeliveryProviderInterface {
         },
       );
 
-      const responseData: PathaoStatusResponse = await response.json();
+      let responseData: PathaoStatusResponse;
+      const responseText = await response.text();
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        // Handle HTML error pages from Pathao
+        let errorMessage = `Pathao API returned non-JSON (status ${response.status})`;
+        if (responseText.includes("<html") || responseText.includes("<!DOCTYPE")) {
+          const titleMatch = responseText.match(/<title>(.*?)<\/title>/);
+          if (titleMatch?.[1]) errorMessage = `Pathao server error: ${titleMatch[1]}`;
+        }
+        throw new Error(errorMessage);
+      }
 
       if (!response.ok || responseData.code !== 200) {
         throw new Error(
