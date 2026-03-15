@@ -54,7 +54,8 @@ export function BulkShipDialog({
             throw new Error("Failed to fetch providers");
           }
 
-          const data = await response.json();
+          const json = await response.json();
+          const data = Array.isArray(json) ? json : (json.data ?? []);
           const activeProviders = data.filter((p: Provider) => p.isActive);
           setProviders(activeProviders);
         } catch (error) {

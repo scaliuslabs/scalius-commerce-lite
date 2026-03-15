@@ -28,7 +28,8 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
           throw new Error("Failed to fetch providers");
         }
 
-        const data = await response.json();
+        const json = await response.json();
+        const data = Array.isArray(json) ? json : (json.data ?? []);
         // Only show active providers
         const activeProviders = data.filter(
           (p: DeliveryProviderRecord) => p.isActive,
