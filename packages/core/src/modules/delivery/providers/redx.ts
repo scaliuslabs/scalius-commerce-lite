@@ -114,31 +114,50 @@ export class RedXProvider implements DeliveryProviderInterface {
       ].filter(Boolean);
       const fullAddress = addressParts.join(", ");
 
-      // RedX requires specific types per their API docs:
-      // cash_collection_amount: string, parcel_weight: string, delivery_area_id: integer
+      // RedX Create Parcel API — field types from docs + sample request:
+      // delivery_area_id: integer (RedX area ID, NOT our internal ID)
+      // cash_collection_amount: string
+      // parcel_weight: number (in grams)
+      // value: number (declared value for compensation)
+      // pickup_store_id: number (optional)
+      //
+      // IMPORTANT: delivery_area_id must be a RedX area ID from their /areas endpoint.
+      // Our internal order.area may not match. If we can't resolve it, we omit it
+      // and let RedX auto-detect from the address.
       const weight = options?.itemWeight || this.config.defaultParcelWeight || 500;
+
+      // Try to parse area as RedX area ID; if it's our internal UUID, skip it
+      const areaId = order.area ? parseInt(order.area, 10) : undefined;
+      const hasValidAreaId = areaId && !isNaN(areaId) && areaId > 0;
+
       const payload: Record<string, unknown> = {
-        customer_name: order.customerName,
+        customer_name: order.customerName || "Customer",
         customer_phone: order.customerPhone,
-        delivery_area: order.areaName || order.zoneName || order.cityName || "N/A",
-        delivery_area_id: order.area ? parseInt(order.area, 10) : undefined,
-        customer_address: fullAddress || "N/A",
+        delivery_area: order.areaName || order.zoneName || order.cityName || "Dhaka",
+        customer_address: fullAddress || order.shippingAddress || "N/A",
         merchant_invoice_id: String(order.id),
-        cash_collection_amount: String(amountToCollect),
-        parcel_weight: String(weight),
-        instruction: options?.note || order.notes || "",
-        value: amountToCollect,
+        cash_collection_amount: String(Math.round(amountToCollect)),
+        parcel_weight: weight,
+        value: Math.round(amountToCollect),
       };
 
-      // Only include pickup_store_id if configured (it's optional per RedX docs)
+      // Only include delivery_area_id if it's a valid RedX area ID (integer > 0)
+      if (hasValidAreaId) {
+        payload.delivery_area_id = areaId;
+      }
+
+      // Only include pickup_store_id if configured
       if (this.config.pickupStoreId) {
         payload.pickup_store_id = Number(this.config.pickupStoreId);
       }
 
-      // Remove undefined values to avoid validation errors
-      for (const key of Object.keys(payload)) {
-        if (payload[key] === undefined) delete payload[key];
+      // Include instruction if present
+      const instruction = options?.note || order.notes;
+      if (instruction) {
+        payload.instruction = instruction;
       }
+
+      console.log(`[RedX] Creating parcel with payload:`, JSON.stringify(payload));
 
       const response = await fetch(`${this.baseUrl}/parcel`, {
         method: "POST",
@@ -186,9 +205,13 @@ export class RedXProvider implements DeliveryProviderInterface {
           },
         };
       } else {
+        // Log full error response for debugging
+        console.error(`[RedX] Create parcel failed. Status: ${response.status}, Response:`, JSON.stringify(responseData));
+        const errorMsg = (responseData as any)?.message || (responseData as any)?.error || "Unknown error";
+        const errorDetails = (responseData as any)?.errors ? JSON.stringify((responseData as any).errors) : "";
         return {
           success: false,
-          message: `API Error: ${(responseData as unknown as Record<string, string>).message || "Unknown error"}`,
+          message: `API Error: ${errorMsg}${errorDetails ? ` — Details: ${errorDetails}` : ""}`,
         };
       }
     } catch (error) {
