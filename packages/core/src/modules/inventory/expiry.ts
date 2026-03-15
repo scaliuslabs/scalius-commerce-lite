@@ -2,7 +2,7 @@
 // Reservation timeout logic: releases orphaned/expired reservations.
 // Designed to be called from a queue consumer or cron trigger.
 
-import { eq, and, sql, lt, notExists } from "drizzle-orm";
+import { eq, and, sql, lt } from "drizzle-orm";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { recordMovement } from "./movements";
@@ -80,32 +80,20 @@ export async function releaseExpiredReservations(
         lt(inventoryMovements.createdAt, new Date(cutoffSeconds * 1000)),
         sql`${inventoryMovements.orderId} IS NOT NULL`,
         // No corresponding deduction for this order
-        notExists(
-          db
-            .select({ id: inventoryMovements.id })
-            .from(sql`${inventoryMovements} AS im2`)
-            .where(
-              and(
-                sql`im2.order_id = ${inventoryMovements.orderId}`,
-                sql`im2.variant_id = ${inventoryMovements.variantId}`,
-                sql`im2.type IN ('deducted', 'preorder_deducted')`
-              )
-            )
-        ),
+        sql`NOT EXISTS (
+          SELECT 1 FROM inventory_movements AS im2
+          WHERE im2.order_id = ${inventoryMovements}.order_id
+            AND im2.variant_id = ${inventoryMovements}.variant_id
+            AND im2.type IN ('deducted', 'preorder_deducted')
+        )`,
         // No corresponding release for this order (prevents double-release)
-        notExists(
-          db
-            .select({ id: inventoryMovements.id })
-            .from(sql`${inventoryMovements} AS im3`)
-            .where(
-              and(
-                sql`im3.order_id = ${inventoryMovements.orderId}`,
-                sql`im3.variant_id = ${inventoryMovements.variantId}`,
-                sql`im3.type = 'released'`,
-                sql`im3.notes LIKE '%expired reservation%'`
-              )
-            )
-        )
+        sql`NOT EXISTS (
+          SELECT 1 FROM inventory_movements AS im3
+          WHERE im3.order_id = ${inventoryMovements}.order_id
+            AND im3.variant_id = ${inventoryMovements}.variant_id
+            AND im3.type = 'released'
+            AND im3.notes LIKE '%expired reservation%'
+        )`
       )
     )
     .groupBy(inventoryMovements.variantId, inventoryMovements.orderId)
