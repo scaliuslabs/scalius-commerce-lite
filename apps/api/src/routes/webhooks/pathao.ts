@@ -55,8 +55,19 @@ app.post("/", async (c) => {
         const consignmentId = payload.consignment_id;
         const event = payload.event;
 
-        if (!consignmentId || !event) {
-            return c.json({ success: false, error: "Missing consignment_id or event" }, 400);
+        if (!event) {
+            return c.json({ success: false, error: "Missing event field" }, 400);
+        }
+
+        // Handle Pathao's webhook integration test.
+        // Pathao sends { event: "webhook_integration" } to verify the endpoint.
+        // Must return 202 + the secret header to pass verification.
+        if (event === "webhook_integration") {
+            return c.json(
+                { success: true, message: "Webhook integration verified" },
+                202,
+                { "X-Pathao-Merchant-Webhook-Integration-Secret": merchantSecret },
+            );
         }
 
         // Ignore store-level events — they don't map to shipments
@@ -66,6 +77,10 @@ app.post("/", async (c) => {
                 202,
                 { "X-Pathao-Merchant-Webhook-Integration-Secret": merchantSecret },
             );
+        }
+
+        if (!consignmentId) {
+            return c.json({ success: false, error: "Missing consignment_id" }, 400);
         }
 
         const shipment = await db
