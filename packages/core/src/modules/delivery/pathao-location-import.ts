@@ -431,13 +431,14 @@ export async function processPathaoImportChunk(
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
+    const failedPhase = progress.status as string;
     progress.status = "error";
     progress.error = errorMsg;
     await saveProgress(kv, progress);
 
     return {
-      status: "error",
-      phase: progress.status === "cities" ? "cities" : progress.status === "zones" ? "zones" : "areas",
+      status: "error" as const,
+      phase: (failedPhase === "cities" ? "cities" : failedPhase === "zones" ? "zones" : "areas") as "cities" | "zones" | "areas",
       progress: { current: 0, total: 0, label: `Error: ${errorMsg}` },
       stats: progress.stats,
       error: errorMsg,
