@@ -76,6 +76,19 @@ export function VariantDisplayRow({
         </div>
       </TableCell>
 
+      <TableCell className="py-2">
+        {variant.barcode ? (
+          <div>
+            <span className="font-mono text-xs text-foreground">{variant.barcode}</span>
+            {variant.barcodeType && (
+              <span className="text-[10px] text-muted-foreground ml-1 uppercase">{variant.barcodeType}</span>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+      </TableCell>
+
       <TableCell className="py-2 text-xs text-muted-foreground">{variant.size || "—"}</TableCell>
 
       <TableCell className="py-2 text-xs text-muted-foreground">{variant.color || "—"}</TableCell>

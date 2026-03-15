@@ -13,6 +13,8 @@ export interface ProductVariant {
   price: number;
   stock: number;
   reservedStock: number;
+  barcode: string | null;
+  barcodeType: "ean13" | "upc" | "isbn" | "gtin" | "custom" | null;
   discountType: "percentage" | "flat";
   discountPercentage: number | null;
   discountAmount: number | null;
@@ -34,6 +36,8 @@ export const variantFormSchema = z.object({
     .min(0, "Weight cannot be negative.")
     .nullable(),
   sku: z.string().min(1, "SKU is required."),
+  barcode: z.string().max(50, "Barcode must be 50 characters or less.").optional().nullable(),
+  barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).optional().nullable(),
   price: z.coerce
     .number({ message: "Price is required." })
     .min(0, "Price cannot be negative."),
@@ -104,6 +108,8 @@ export interface CsvVariantRow {
   size?: string;
   color?: string;
   weight?: number;
+  barcode?: string;
+  barcodeType?: "ean13" | "upc" | "isbn" | "gtin" | "custom";
   price: number;
   stock: number;
   discountType?: "percentage" | "flat";

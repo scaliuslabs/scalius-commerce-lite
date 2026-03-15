@@ -260,6 +260,8 @@ export function duplicateVariant(
     price: variant.price,
     stock: variant.stock,
     reservedStock: 0,
+    barcode: variant.barcode,
+    barcodeType: variant.barcodeType,
     discountType: variant.discountType,
     discountPercentage: variant.discountPercentage,
     discountAmount: variant.discountAmount,

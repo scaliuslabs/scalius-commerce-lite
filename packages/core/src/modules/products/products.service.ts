@@ -33,6 +33,8 @@ export const createVariantSchema = z.object({
     sku: z.string().min(3, "SKU must be at least 3 characters"),
     price: z.number().min(0, "Price must be greater than or equal to 0"),
     stock: z.number().min(0, "Stock must be greater than or equal to 0"),
+    barcode: z.string().max(50).optional().nullable(),
+    barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).optional().nullable(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullable().optional(),
     discountAmount: z.number().min(0).nullable().optional(),
@@ -57,6 +59,8 @@ export const bulkVariantSchema = z.object({
     sku: z.string().min(3, "SKU must be at least 3 characters"),
     price: z.number().min(0, "Price must be greater than or equal to 0"),
     stock: z.number().min(0, "Stock must be greater than or equal to 0"),
+    barcode: z.string().max(50).optional().nullable(),
+    barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).optional().nullable(),
     discountType: z.enum(["percentage", "flat"]),
     discountPercentage: z.number().min(0).max(100).nullable(),
     discountAmount: z.number().min(0).nullable(),
@@ -80,6 +84,8 @@ export const bulkUpdateVariantsSchema = z.object({
             sku: z.string().optional(),
             price: z.number().min(0).optional(),
             stock: z.number().min(0).optional(),
+            barcode: z.string().max(50).nullable().optional(),
+            barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).nullable().optional(),
         })
     ),
 });
@@ -152,12 +158,25 @@ export async function getProducts(db: DrizzleD1Database<typeof schema>, options:
 
     let rankExpression = undefined;
     if (search) {
+        // Check if search looks like a barcode (all digits, 8-13 chars)
+        const isBarcodeSearch = /^\d{8,13}$/.test(search.trim());
+
         const sanitized = sanitizeFtsQuery(search);
         if (sanitized) {
-            whereConditions.push(
-                sql`(${sql.raw("products")}.rowid IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ${sanitized}) OR EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${sql.raw("product_variants")}.rowid IN (SELECT rowid FROM product_variants_fts WHERE product_variants_fts MATCH ${sanitized})))`,
-            );
+            const ftsCondition = sql`(${sql.raw("products")}.rowid IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ${sanitized}) OR EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${sql.raw("product_variants")}.rowid IN (SELECT rowid FROM product_variants_fts WHERE product_variants_fts MATCH ${sanitized})))`;
+
+            if (isBarcodeSearch) {
+                // Also match by exact barcode value
+                const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.barcode} = ${search.trim()} AND ${productVariants.deletedAt} IS NULL)`;
+                whereConditions.push(sql`(${ftsCondition} OR ${barcodeCondition})`);
+            } else {
+                whereConditions.push(ftsCondition);
+            }
             rankExpression = sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitized}), 0) ASC`;
+        } else if (isBarcodeSearch) {
+            // FTS sanitized to nothing but it's a barcode — search by barcode only
+            const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.barcode} = ${search.trim()} AND ${productVariants.deletedAt} IS NULL)`;
+            whereConditions.push(barcodeCondition);
         }
     }
 
@@ -1019,6 +1038,8 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
             price: productVariants.price,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
+            barcode: productVariants.barcode,
+            barcodeType: productVariants.barcodeType,
             discountType: productVariants.discountType,
             discountPercentage: productVariants.discountPercentage,
             discountAmount: productVariants.discountAmount,
@@ -1030,7 +1051,7 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
         }).from(productVariants)
             .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
             .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt)
-            .all().then((res: Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null }>) => ({ type: "variants", data: res })),
+            .all().then((res: Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null }>) => ({ type: "variants", data: res })),
 
         db.select({
             id: productRichContent.id,
@@ -1112,7 +1133,7 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
 
     const hasVariants = variants.length > 0;
 
-    interface VariantResult { id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
+    interface VariantResult { id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
     interface ImageResult { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number; }
     const typedVariants = variants as VariantResult[];
     const typedImages = images as ImageResult[];
@@ -1205,6 +1226,70 @@ export async function bulkDeleteProducts(db: DrizzleD1Database<typeof schema>, p
 }
 
 // ─────────────────────────────────────────
+// Barcode lookup
+// ─────────────────────────────────────────
+
+/**
+ * Looks up a product variant by barcode value.
+ * Returns the variant with its parent product details, or null if not found.
+ * Used by barcode scanners in the admin interface.
+ */
+export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barcode: string) {
+    const variant = await db
+        .select({
+            variantId: productVariants.id,
+            variantSku: productVariants.sku,
+            variantSize: productVariants.size,
+            variantColor: productVariants.color,
+            variantWeight: productVariants.weight,
+            variantPrice: productVariants.price,
+            variantStock: productVariants.stock,
+            variantReservedStock: productVariants.reservedStock,
+            variantBarcode: productVariants.barcode,
+            variantBarcodeType: productVariants.barcodeType,
+            productId: products.id,
+            productName: products.name,
+            productSlug: products.slug,
+            productPrice: products.price,
+            productIsActive: products.isActive,
+        })
+        .from(productVariants)
+        .innerJoin(products, eq(productVariants.productId, products.id))
+        .where(
+            and(
+                eq(productVariants.barcode, barcode),
+                isNull(productVariants.deletedAt),
+                isNull(products.deletedAt),
+            ),
+        )
+        .get();
+
+    if (!variant) return null;
+
+    return {
+        variant: {
+            id: variant.variantId,
+            sku: variant.variantSku,
+            size: variant.variantSize,
+            color: variant.variantColor,
+            weight: variant.variantWeight,
+            price: variant.variantPrice,
+            stock: variant.variantStock,
+            reservedStock: variant.variantReservedStock,
+            barcode: variant.variantBarcode,
+            barcodeType: variant.variantBarcodeType,
+        },
+        product: {
+            id: variant.productId,
+            name: variant.productName,
+            slug: variant.productSlug,
+            price: variant.productPrice,
+            isActive: variant.productIsActive,
+        },
+    };
+}
+
+// ─────────────────────────────────────────
 // Variant specific mutations
 // ─────────────────────────────────────────
 
@@ -1219,6 +1304,8 @@ export async function getProductVariants(db: DrizzleD1Database<typeof schema>, p
             price: productVariants.price,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
+            barcode: productVariants.barcode,
+            barcodeType: productVariants.barcodeType,
             discountType: productVariants.discountType,
             discountPercentage: productVariants.discountPercentage,
             discountAmount: productVariants.discountAmount,
@@ -1233,7 +1320,7 @@ export async function getProductVariants(db: DrizzleD1Database<typeof schema>, p
         )
         .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt);
 
-    return variants.map((variant: { id: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: string; updatedAt: string }) => ({
+    return variants.map((variant: { id: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: string; updatedAt: string }) => ({
         ...variant,
         createdAt: new Date(variant.createdAt),
         updatedAt: new Date(variant.updatedAt),
@@ -1262,6 +1349,8 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
             sku: data.sku,
             price: data.price,
             stock: data.stock,
+            barcode: data.barcode || null,
+            barcodeType: data.barcodeType || null,
             discountType: data.discountType || "percentage",
             discountPercentage: data.discountPercentage || null,
             discountAmount: data.discountAmount || null,
@@ -1303,6 +1392,8 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
             sku: data.sku,
             price: data.price,
             stock: data.stock,
+            barcode: data.barcode || null,
+            barcodeType: data.barcodeType || null,
             discountType: data.discountType || "percentage",
             discountPercentage: data.discountPercentage || null,
             discountAmount: data.discountAmount || null,
@@ -1366,6 +1457,8 @@ export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, pro
             sku: newSku,
             price: existingVariant.price,
             stock: existingVariant.stock,
+            barcode: existingVariant.barcode,
+            barcodeType: existingVariant.barcodeType,
             discountType: existingVariant.discountType,
             discountPercentage: existingVariant.discountPercentage,
             discountAmount: existingVariant.discountAmount,
@@ -1404,6 +1497,8 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
         sku: variant.sku,
         price: variant.price,
         stock: variant.stock,
+        barcode: variant.barcode || null,
+        barcodeType: variant.barcodeType || null,
         discountType: variant.discountType,
         discountPercentage: variant.discountPercentage,
         discountAmount: variant.discountAmount,

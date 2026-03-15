@@ -80,6 +80,8 @@ export const productVariants = sqliteTable("product_variants", {
     discountPercentage: real("discount_percentage").default(0),
     discountType: text("discount_type", { enum: ["percentage", "flat"] }).default("percentage"),
     discountAmount: real("discount_amount").default(0),
+    barcode: text("barcode"),
+    barcodeType: text("barcode_type", { enum: ["ean13", "upc", "isbn", "gtin", "custom"] }),
     colorSortOrder: integer("color_sort_order").default(0),
     sizeSortOrder: integer("size_sort_order").default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
@@ -92,6 +94,7 @@ export const productVariants = sqliteTable("product_variants", {
 }, (table) => [
     index("product_variants_product_id_idx").on(table.productId),
     index("product_variants_sku_idx").on(table.sku),
+    index("product_variants_barcode_idx").on(table.barcode),
 ]);
 
 export const categories = sqliteTable(
