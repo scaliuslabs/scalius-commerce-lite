@@ -418,15 +418,25 @@ Design a universal provider pattern used consistently across ALL provider types:
 - [x] Print label button on variant rows
 - [x] Print layout: product name + SKU + scannable barcode image + number
 
-### 11.3 Inventory Scanner System
-- [ ] Scanner page at `/admin/inventory/scanner`
-- [ ] USB/Bluetooth scanner support (auto-focus text input, Enter = scan)
-- [ ] Camera scanning via BarcodeDetector API (Chrome/Edge)
-- [ ] Stock adjustment API: `POST /stock-adjust` (+/-) and `POST /stock-set` (absolute)
-- [ ] Inventory movement recording for every adjustment
-- [ ] Bulk receive mode (auto +1 per scan, summary at end)
-- [ ] Sound feedback (beep success, buzz error)
-- [ ] Scanner navigation link in admin sidebar
+### 11.3 Stock Adjustment Backend (DONE)
+- [x] `adjustStock()` — relative adjustment (+/-) with movement recording
+- [x] `setStock()` — absolute stock setting for stocktaking
+- [x] `lookupByBarcodeOrSku()` — enhanced lookup with product image
+- [x] API endpoints: `POST /stock-adjust`, `POST /stock-set`, `GET /scanner/lookup`
+
+### 11.4 Mobile Scanner App (standalone — rebuild in fresh session)
+Architecture: standalone page at `/scanner?token=XXX` outside AdminLayout.
+
+- [ ] QR-token auth system: admin generates token (KV, 6h TTL, one-time-claim)
+- [ ] QR code generator button in admin products page
+- [ ] Standalone `/scanner` page (no AdminLayout, mobile-first, full-screen)
+- [ ] Camera scanning via getUserMedia + BarcodeDetector (or JS fallback library)
+- [ ] USB/Bluetooth scanner input (auto-focus, Enter = scan)
+- [ ] Product display: name, image, variant, stock levels
+- [ ] Quick adjust: +1/-1, set stock, reason field
+- [ ] Receiving mode: auto +1 per scan, running totals, summary
+- [ ] Audio feedback (beep/buzz via Web Audio API)
+- [ ] Session management: 6-hour expiry, auto-logout, re-auth flow
 
 ---
 
