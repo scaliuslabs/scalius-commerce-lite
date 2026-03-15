@@ -42,12 +42,14 @@ import type {
 interface VariantManagerProps {
   productId: string;
   productSlug?: string;
+  productName?: string;
   variants: ProductVariant[];
 }
 
 export function VariantManager({
   productId,
   productSlug,
+  productName,
   variants,
 }: VariantManagerProps) {
   const { symbol } = useCurrency();
@@ -428,6 +430,7 @@ export function VariantManager({
             isBulkEditing={isBulkEditing}
             draftUpdates={draftBulkUpdates}
             onBulkEditChange={handleBulkEditChange}
+            productName={productName}
           />
 
           {/* Variant count footer */}
