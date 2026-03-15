@@ -40,10 +40,15 @@ export function mapProviderStatus(
 }
 
 // ---------------------------------------------------------------------------
-// Pathao: explicit event-name-to-status mapping
-// The `event` field values come directly from the Pathao webhook spec.
+// Pathao: handles BOTH webhook event names AND API order_status values.
+//
+// Webhook events use format: "order.pickup-cancelled"
+// API checkShipmentStatus returns: "Pickup Cancel", "Pickup_Cancelled", "Pending", etc.
+//
+// We normalize both to a single lookup.
 // ---------------------------------------------------------------------------
-const PATHAO_EVENT_MAP: Record<string, ShipmentStatusCode> = {
+const PATHAO_STATUS_MAP: Record<string, ShipmentStatusCode> = {
+  // --- Webhook event format (from Pathao webhook spec) ---
   "order.created": ShipmentStatusCode.PENDING,
   "order.updated": ShipmentStatusCode.PENDING,
   "order.pickup-requested": ShipmentStatusCode.PENDING,
@@ -60,17 +65,48 @@ const PATHAO_EVENT_MAP: Record<string, ShipmentStatusCode> = {
   "order.returned": ShipmentStatusCode.RETURNED,
   "order.delivery-failed": ShipmentStatusCode.DELIVERY_FAILED,
   "order.on-hold": ShipmentStatusCode.ON_HOLD,
-  "order.paid": ShipmentStatusCode.DELIVERED, // payment settled
+  "order.paid": ShipmentStatusCode.DELIVERED,
   "order.paid-return": ShipmentStatusCode.RETURNED,
   "order.exchanged": ShipmentStatusCode.DELIVERED,
-  // Store events are intentionally omitted — handled in the webhook route
+
+  // --- API order_status format (from checkShipmentStatus / order info endpoint) ---
+  // Pathao returns human-readable strings like "Pickup Cancel", "Pending", etc.
+  // We normalize to lowercase with spaces→underscores for matching.
+  "pending": ShipmentStatusCode.PENDING,
+  "pickup_requested": ShipmentStatusCode.PENDING,
+  "assigned_for_pickup": ShipmentStatusCode.PICKUP_ASSIGNED,
+  "picked": ShipmentStatusCode.PICKED_UP,
+  "pickup": ShipmentStatusCode.PICKED_UP,
+  "pickup_failed": ShipmentStatusCode.PICKUP_FAILED,
+  "pickup_cancel": ShipmentStatusCode.CANCELLED,
+  "pickup_cancelled": ShipmentStatusCode.CANCELLED,
+  "at_the_sorting_hub": ShipmentStatusCode.IN_TRANSIT,
+  "in_transit": ShipmentStatusCode.IN_TRANSIT,
+  "received_at_last_mile_hub": ShipmentStatusCode.IN_TRANSIT,
+  "assigned_for_delivery": ShipmentStatusCode.OUT_FOR_DELIVERY,
+  "delivered": ShipmentStatusCode.DELIVERED,
+  "partial_delivery": ShipmentStatusCode.PARTIAL_DELIVERED,
+  "partial_delivered": ShipmentStatusCode.PARTIAL_DELIVERED,
+  "return": ShipmentStatusCode.RETURNED,
+  "returned": ShipmentStatusCode.RETURNED,
+  "delivery_failed": ShipmentStatusCode.DELIVERY_FAILED,
+  "on_hold": ShipmentStatusCode.ON_HOLD,
+  "payment_invoice": ShipmentStatusCode.DELIVERED,
+  "paid_return": ShipmentStatusCode.RETURNED,
+  "exchange": ShipmentStatusCode.DELIVERED,
 };
 
-function mapPathaoStatus(event: string): string {
-  const mapped = PATHAO_EVENT_MAP[event];
+function mapPathaoStatus(rawStatus: string): string {
+  // First try exact match (handles webhook events like "order.delivered")
+  const exact = PATHAO_STATUS_MAP[rawStatus];
+  if (exact) return exact;
+
+  // Normalize: "Pickup Cancel" → "pickup_cancel", "Pickup_Cancelled" → "pickup_cancelled"
+  const normalized = rawStatus.toLowerCase().replace(/\s+/g, "_");
+  const mapped = PATHAO_STATUS_MAP[normalized];
   if (mapped) return mapped;
 
-  console.warn(`[status-mapper] Unmapped Pathao event: "${event}" - defaulting to ${ShipmentStatusCode.UNKNOWN}`);
+  console.warn(`[status-mapper] Unmapped Pathao status: "${rawStatus}" (normalized: "${normalized}") - defaulting to ${ShipmentStatusCode.UNKNOWN}`);
   return ShipmentStatusCode.UNKNOWN;
 }
 

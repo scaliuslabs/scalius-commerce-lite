@@ -114,19 +114,31 @@ export class RedXProvider implements DeliveryProviderInterface {
       ].filter(Boolean);
       const fullAddress = addressParts.join(", ");
 
+      // RedX requires specific types per their API docs:
+      // cash_collection_amount: string, parcel_weight: string, delivery_area_id: integer
+      const weight = options?.itemWeight || this.config.defaultParcelWeight || 500;
       const payload: Record<string, unknown> = {
         customer_name: order.customerName,
         customer_phone: order.customerPhone,
-        delivery_area: order.areaName || order.zoneName || order.cityName || "",
-        delivery_area_id: order.area ? parseInt(order.area) : 0,
-        customer_address: fullAddress,
-        merchant_invoice_id: order.id,
-        cash_collection_amount: amountToCollect,
-        parcel_weight: options?.itemWeight || this.config.defaultParcelWeight || 500,
+        delivery_area: order.areaName || order.zoneName || order.cityName || "N/A",
+        delivery_area_id: order.area ? parseInt(order.area, 10) : undefined,
+        customer_address: fullAddress || "N/A",
+        merchant_invoice_id: String(order.id),
+        cash_collection_amount: String(amountToCollect),
+        parcel_weight: String(weight),
         instruction: options?.note || order.notes || "",
         value: amountToCollect,
-        pickup_store_id: this.config.pickupStoreId,
       };
+
+      // Only include pickup_store_id if configured (it's optional per RedX docs)
+      if (this.config.pickupStoreId) {
+        payload.pickup_store_id = Number(this.config.pickupStoreId);
+      }
+
+      // Remove undefined values to avoid validation errors
+      for (const key of Object.keys(payload)) {
+        if (payload[key] === undefined) delete payload[key];
+      }
 
       const response = await fetch(`${this.baseUrl}/parcel`, {
         method: "POST",
