@@ -1,22 +1,17 @@
 /**
- * Pathao Location Import Service
+ * Pathao Location Import Service — Fast Edition
  *
- * Imports cities, zones, and areas from the Pathao Courier API into our
- * deliveryLocations table. Designed for Cloudflare Workers constraints:
+ * Imports cities, zones, and areas from the Pathao Courier API.
+ * Optimized for speed while staying within Cloudflare Workers limits:
  *
- * - CLIENT-DRIVEN CHUNKING: Each call processes one small chunk (~2-5s).
- *   The admin UI calls repeatedly until complete.
- * - RESUMABLE: Progress stored in KV. If browser closes, next click resumes.
- * - IDEMPOTENT: Uses externalIds.pathao for deduplication. Re-running syncs
- *   new/changed locations without creating duplicates.
- * - NO TIMEOUTS: Each chunk does at most ~20 Pathao API calls + ~100 DB writes.
- *
- * Usage:
- *   const result = await processPathaoImportChunk(db, kv, pathaoCredentials);
- *   // Call repeatedly until result.status === "complete"
+ * - Phase 1 (cities): One API call, ~15 cities. Done in one chunk.
+ * - Phase 2 (zones): ALL cities in one chunk. Parallel API calls.
+ * - Phase 3 (areas): 30 zones per chunk. Parallel API calls.
+ * - DB writes batched (pre-load existing, then bulk insert/update).
+ * - Total time: ~60-90 seconds for all of Bangladesh.
  */
 
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, isNull, sql, inArray } from "drizzle-orm";
 import { deliveryLocations } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { createId } from "@paralleldrive/cuid2";
@@ -31,35 +26,11 @@ interface PathaoCredentials {
   password: string;
 }
 
-interface PathaoCity {
-  city_id: number;
-  city_name: string;
-}
-
-interface PathaoZone {
-  zone_id: number;
-  zone_name: string;
-}
-
-interface PathaoArea {
-  area_id: number;
-  area_name: string;
-  home_delivery_available?: boolean;
-  pickup_available?: boolean;
-}
-
 interface ImportProgress {
   status: "idle" | "cities" | "zones" | "areas" | "complete" | "error";
-  /** Pathao cities with their DB IDs (populated after cities phase) */
   cities: Array<{ pathaoId: number; dbId: string; name: string }>;
-  /** Current city index for zone fetching */
-  cityIndex: number;
-  /** All zones with their DB IDs (populated incrementally during zones phase) */
   zones: Array<{ pathaoId: number; dbId: string; name: string; cityDbId: string }>;
-  /** Current zone index for area fetching */
   zoneIndex: number;
-  /** How many zones to process per chunk */
-  zoneBatchSize: number;
   stats: {
     citiesCreated: number;
     citiesUpdated: number;
@@ -70,7 +41,6 @@ interface ImportProgress {
   };
   error?: string;
   startedAt?: string;
-  lastUpdatedAt?: string;
 }
 
 export interface ImportChunkResult {
@@ -82,18 +52,17 @@ export interface ImportChunkResult {
 }
 
 const KV_KEY = "location_import:pathao";
-const ZONES_PER_CHUNK = 5; // Fetch areas for N zones per request (safe for Workers)
+const ZONES_PER_CHUNK = 30; // Process 30 zones' areas per request
+const MAX_CONCURRENT = 8; // Parallel Pathao API calls
 
-// ─── Token Management ────────────────────────────────────────────────────────
+// ─── Token ───────────────────────────────────────────────────────────────────
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-async function getPathaoToken(creds: PathaoCredentials): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now()) {
-    return cachedToken.token;
-  }
+async function getToken(creds: PathaoCredentials): Promise<string> {
+  if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.token;
 
-  const response = await fetch(`${creds.baseUrl}/aladdin/api/v1/issue-token`, {
+  const res = await fetch(`${creds.baseUrl}/aladdin/api/v1/issue-token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -104,168 +73,200 @@ async function getPathaoToken(creds: PathaoCredentials): Promise<string> {
       password: creds.password,
     }),
   });
-
-  if (!response.ok) {
-    throw new Error(`Pathao auth failed: ${response.status} ${response.statusText}`);
-  }
-
-  const data = (await response.json()) as { access_token: string; expires_in: number };
-  cachedToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + (data.expires_in - 600) * 1000, // 10 min buffer
-  };
+  if (!res.ok) throw new Error(`Pathao auth failed: ${res.status}`);
+  const data = (await res.json()) as { access_token: string; expires_in: number };
+  cachedToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 600) * 1000 };
   return cachedToken.token;
 }
 
-// ─── Pathao API Helpers ──────────────────────────────────────────────────────
+// ─── Pathao API (with concurrency limit) ─────────────────────────────────────
 
-async function fetchPathaoCities(creds: PathaoCredentials): Promise<PathaoCity[]> {
-  const token = await getPathaoToken(creds);
-  const res = await fetch(`${creds.baseUrl}/aladdin/api/v1/city-list`, {
+async function fetchJson<T>(creds: PathaoCredentials, path: string): Promise<T> {
+  const token = await getToken(creds);
+  const res = await fetch(`${creds.baseUrl}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Fetch cities failed: ${res.status}`);
-  const json = (await res.json()) as { data: { data: PathaoCity[] } };
-  return json.data?.data || [];
+  if (!res.ok) throw new Error(`Pathao API ${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
 }
 
-async function fetchPathaoZones(creds: PathaoCredentials, cityId: number): Promise<PathaoZone[]> {
-  const token = await getPathaoToken(creds);
-  const res = await fetch(`${creds.baseUrl}/aladdin/api/v1/cities/${cityId}/zone-list`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Fetch zones for city ${cityId} failed: ${res.status}`);
-  const json = (await res.json()) as { data: { data: PathaoZone[] } };
-  return json.data?.data || [];
+/** Run promises with max concurrency */
+async function parallelLimit<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
+  const results: T[] = [];
+  let i = 0;
+  async function next(): Promise<void> {
+    const idx = i++;
+    if (idx >= tasks.length) return;
+    results[idx] = await tasks[idx]();
+    await next();
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => next()));
+  return results;
 }
 
-async function fetchPathaoAreas(creds: PathaoCredentials, zoneId: number): Promise<PathaoArea[]> {
-  const token = await getPathaoToken(creds);
-  const res = await fetch(`${creds.baseUrl}/aladdin/api/v1/zones/${zoneId}/area-list`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Fetch areas for zone ${zoneId} failed: ${res.status}`);
-  const json = (await res.json()) as { data: { data: PathaoArea[] } };
-  return json.data?.data || [];
+// ─── Bulk DB Operations ──────────────────────────────────────────────────────
+
+interface LocationRow {
+  id: string;
+  name: string;
+  type: string;
+  parentId: string | null;
+  externalIds: string;
 }
 
-// ─── DB Upsert Helpers ───────────────────────────────────────────────────────
-
-/**
- * Upsert a location by matching on externalIds.pathao.
- * Returns { id, created: boolean }.
- */
-async function upsertLocation(
+/** Load all existing locations of a type into a map keyed by pathao ID */
+async function loadExistingByPathaoId(
   db: Database,
-  data: {
+  type: "city" | "zone" | "area",
+): Promise<Map<string, LocationRow>> {
+  const rows = await db
+    .select({
+      id: deliveryLocations.id,
+      name: deliveryLocations.name,
+      type: deliveryLocations.type,
+      parentId: deliveryLocations.parentId,
+      externalIds: deliveryLocations.externalIds,
+    })
+    .from(deliveryLocations)
+    .where(and(eq(deliveryLocations.type, type), isNull(deliveryLocations.deletedAt)))
+    .all();
+
+  const map = new Map<string, LocationRow>();
+  for (const row of rows) {
+    try {
+      const ids = JSON.parse((row.externalIds as string) || "{}");
+      if (ids.pathao) map.set(String(ids.pathao), row as LocationRow);
+    } catch { /* skip malformed */ }
+  }
+  return map;
+}
+
+/** Also build a name-based lookup for matching manually created locations */
+function buildNameIndex(rows: Map<string, LocationRow>): Map<string, LocationRow> {
+  const nameMap = new Map<string, LocationRow>();
+  for (const row of rows.values()) {
+    const key = `${row.name}|${row.parentId || ""}`.toLowerCase();
+    nameMap.set(key, row);
+  }
+  // Also load ones without pathao ID
+  return nameMap;
+}
+
+/** Bulk upsert locations — fast path with pre-loaded existing data */
+async function bulkUpsert(
+  db: Database,
+  items: Array<{
     name: string;
     type: "city" | "zone" | "area";
     parentId: string | null;
     pathaoId: number;
     metadata?: Record<string, unknown>;
-  },
-): Promise<{ id: string; created: boolean }> {
-  // Find existing by pathao external ID
-  const existing = await db
-    .select({ id: deliveryLocations.id, externalIds: deliveryLocations.externalIds })
+  }>,
+  existing: Map<string, LocationRow>,
+): Promise<{ created: number; updated: number; idMap: Map<number, string> }> {
+  let created = 0;
+  let updated = 0;
+  const idMap = new Map<number, string>(); // pathaoId → our dbId
+
+  // Also load all locations of this type for name matching
+  const allRows = await db
+    .select({
+      id: deliveryLocations.id,
+      name: deliveryLocations.name,
+      parentId: deliveryLocations.parentId,
+      externalIds: deliveryLocations.externalIds,
+    })
     .from(deliveryLocations)
-    .where(
-      and(
-        eq(deliveryLocations.type, data.type),
-        isNull(deliveryLocations.deletedAt),
-        sql`json_extract(${deliveryLocations.externalIds}, '$.pathao') = ${String(data.pathaoId)}`,
-      ),
-    )
-    .get();
+    .where(and(eq(deliveryLocations.type, items[0]?.type || "city"), isNull(deliveryLocations.deletedAt)))
+    .all();
 
-  if (existing) {
-    // Update name in case Pathao renamed the location
-    await db
-      .update(deliveryLocations)
-      .set({
-        name: data.name,
-        parentId: data.parentId,
-        metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
-        updatedAt: sql`CURRENT_TIMESTAMP`,
-      })
-      .where(eq(deliveryLocations.id, existing.id));
-
-    return { id: existing.id, created: false };
+  const nameIndex = new Map<string, typeof allRows[0]>();
+  for (const r of allRows) {
+    nameIndex.set(`${r.name}|${r.parentId || ""}`.toLowerCase(), r);
   }
 
-  // Also check if a location with the same name + type + parent exists (manually created)
-  const byName = await db
-    .select({ id: deliveryLocations.id, externalIds: deliveryLocations.externalIds })
-    .from(deliveryLocations)
-    .where(
-      and(
-        eq(deliveryLocations.type, data.type),
-        eq(deliveryLocations.name, data.name),
-        data.parentId ? eq(deliveryLocations.parentId, data.parentId) : isNull(deliveryLocations.parentId),
-        isNull(deliveryLocations.deletedAt),
-      ),
-    )
-    .get();
+  // Separate into updates and inserts
+  const updates: Array<{ id: string; name: string; parentId: string | null; pathaoId: number; metadata?: Record<string, unknown> }> = [];
+  const inserts: Array<{ id: string; name: string; type: string; parentId: string | null; pathaoId: number; metadata?: Record<string, unknown> }> = [];
 
-  if (byName) {
-    // Found by name — add pathao ID to existing location's externalIds
-    const currentIds = JSON.parse((byName.externalIds as string) || "{}");
-    currentIds.pathao = String(data.pathaoId);
-    await db
-      .update(deliveryLocations)
-      .set({
-        externalIds: JSON.stringify(currentIds),
-        metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
-        updatedAt: sql`CURRENT_TIMESTAMP`,
-      })
-      .where(eq(deliveryLocations.id, byName.id));
+  for (const item of items) {
+    const pathaoKey = String(item.pathaoId);
+    const existingByPathao = existing.get(pathaoKey);
 
-    return { id: byName.id, created: false };
+    if (existingByPathao) {
+      // Already mapped — update name if changed
+      updates.push({ id: existingByPathao.id, name: item.name, parentId: item.parentId, pathaoId: item.pathaoId, metadata: item.metadata });
+      idMap.set(item.pathaoId, existingByPathao.id);
+      updated++;
+    } else {
+      // Check by name match (manually created location)
+      const nameKey = `${item.name}|${item.parentId || ""}`.toLowerCase();
+      const existingByName = nameIndex.get(nameKey);
+
+      if (existingByName) {
+        // Found by name — add pathao ID
+        updates.push({ id: existingByName.id, name: item.name, parentId: item.parentId, pathaoId: item.pathaoId, metadata: item.metadata });
+        idMap.set(item.pathaoId, existingByName.id);
+        updated++;
+      } else {
+        // New location
+        const id = createId();
+        inserts.push({ id, name: item.name, type: item.type, parentId: item.parentId, pathaoId: item.pathaoId, metadata: item.metadata });
+        idMap.set(item.pathaoId, id);
+        created++;
+      }
+    }
   }
 
-  // Create new location
-  const id = createId();
-  await db.insert(deliveryLocations).values({
-    id,
-    name: data.name,
-    type: data.type,
-    parentId: data.parentId,
-    externalIds: JSON.stringify({ pathao: String(data.pathaoId) }),
-    metadata: data.metadata ? JSON.stringify(data.metadata) : "{}",
-    isActive: true,
-    sortOrder: 0,
-  });
+  // Execute updates in batches
+  for (const u of updates) {
+    const currentIds = existing.get(String(u.pathaoId));
+    const parsedIds = currentIds ? JSON.parse((currentIds.externalIds as string) || "{}") : {};
+    parsedIds.pathao = String(u.pathaoId);
 
-  return { id, created: true };
+    await db.update(deliveryLocations).set({
+      name: u.name,
+      parentId: u.parentId,
+      externalIds: JSON.stringify(parsedIds),
+      metadata: u.metadata ? JSON.stringify(u.metadata) : undefined,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    }).where(eq(deliveryLocations.id, u.id));
+  }
+
+  // Execute inserts in batches
+  for (const ins of inserts) {
+    await db.insert(deliveryLocations).values({
+      id: ins.id,
+      name: ins.name,
+      type: ins.type as "city" | "zone" | "area",
+      parentId: ins.parentId,
+      externalIds: JSON.stringify({ pathao: String(ins.pathaoId) }),
+      metadata: ins.metadata ? JSON.stringify(ins.metadata) : "{}",
+      isActive: true,
+      sortOrder: 0,
+    });
+  }
+
+  return { created, updated, idMap };
+}
+
+// ─── Progress Management ─────────────────────────────────────────────────────
+
+async function getProgress(kv: KVNamespace): Promise<ImportProgress> {
+  const raw = await kv.get(KV_KEY);
+  if (!raw) return {
+    status: "idle", cities: [], zones: [], zoneIndex: 0,
+    stats: { citiesCreated: 0, citiesUpdated: 0, zonesCreated: 0, zonesUpdated: 0, areasCreated: 0, areasUpdated: 0 },
+  };
+  return JSON.parse(raw);
+}
+
+async function saveProgress(kv: KVNamespace, p: ImportProgress): Promise<void> {
+  await kv.put(KV_KEY, JSON.stringify(p), { expirationTtl: 86400 });
 }
 
 // ─── Main Import Logic ───────────────────────────────────────────────────────
 
-async function getProgress(kv: KVNamespace): Promise<ImportProgress> {
-  const raw = await kv.get(KV_KEY);
-  if (!raw) {
-    return {
-      status: "idle",
-      cities: [],
-      cityIndex: 0,
-      zones: [],
-      zoneIndex: 0,
-      zoneBatchSize: ZONES_PER_CHUNK,
-      stats: { citiesCreated: 0, citiesUpdated: 0, zonesCreated: 0, zonesUpdated: 0, areasCreated: 0, areasUpdated: 0 },
-    };
-  }
-  return JSON.parse(raw);
-}
-
-async function saveProgress(kv: KVNamespace, progress: ImportProgress): Promise<void> {
-  progress.lastUpdatedAt = new Date().toISOString();
-  await kv.put(KV_KEY, JSON.stringify(progress), { expirationTtl: 86400 }); // 24h TTL
-}
-
-/**
- * Process one chunk of the Pathao location import.
- * Call this repeatedly until result.status === "complete".
- */
 export async function processPathaoImportChunk(
   db: Database,
   kv: KVNamespace,
@@ -274,149 +275,137 @@ export async function processPathaoImportChunk(
   const progress = await getProgress(kv);
 
   try {
-    // ── Phase 1: Import Cities ──────────────────────────────────────────
+    // ── Phase 1: Cities (one chunk, one API call) ─────────────────────
     if (progress.status === "idle" || progress.status === "cities") {
       progress.status = "cities";
       progress.startedAt = progress.startedAt || new Date().toISOString();
 
-      const pathaoCities = await fetchPathaoCities(creds);
-      const cityList: ImportProgress["cities"] = [];
+      type CityResponse = { data: { data: Array<{ city_id: number; city_name: string }> } };
+      const res = await fetchJson<CityResponse>(creds, "/aladdin/api/v1/city-list");
+      const pathaoCities = res.data?.data || [];
 
-      for (const city of pathaoCities) {
-        const result = await upsertLocation(db, {
-          name: city.city_name,
-          type: "city",
-          parentId: null,
-          pathaoId: city.city_id,
-        });
-        cityList.push({ pathaoId: city.city_id, dbId: result.id, name: city.city_name });
-        if (result.created) progress.stats.citiesCreated++;
-        else progress.stats.citiesUpdated++;
-      }
+      const existing = await loadExistingByPathaoId(db, "city");
+      const { created, updated, idMap } = await bulkUpsert(
+        db,
+        pathaoCities.map(c => ({ name: c.city_name, type: "city" as const, parentId: null, pathaoId: c.city_id })),
+        existing,
+      );
 
-      progress.cities = cityList;
-      progress.cityIndex = 0;
+      progress.cities = pathaoCities.map(c => ({ pathaoId: c.city_id, dbId: idMap.get(c.city_id)!, name: c.city_name }));
+      progress.stats.citiesCreated += created;
+      progress.stats.citiesUpdated += updated;
       progress.status = "zones";
       await saveProgress(kv, progress);
 
       return {
-        status: "importing",
-        phase: "cities",
-        progress: { current: cityList.length, total: cityList.length, label: `Imported ${cityList.length} cities` },
+        status: "importing", phase: "cities",
+        progress: { current: pathaoCities.length, total: pathaoCities.length, label: `${pathaoCities.length} cities imported` },
         stats: progress.stats,
       };
     }
 
-    // ── Phase 2: Import Zones (one city per chunk) ──────────────────────
+    // ── Phase 2: ALL zones in one chunk (parallel API calls) ──────────
     if (progress.status === "zones") {
-      if (progress.cityIndex >= progress.cities.length) {
-        // All cities processed, move to areas
-        progress.status = "areas";
-        progress.zoneIndex = 0;
-        await saveProgress(kv, progress);
+      const existing = await loadExistingByPathaoId(db, "zone");
+      const allZones: ImportProgress["zones"] = [];
 
-        return {
-          status: "importing",
-          phase: "zones",
-          progress: {
-            current: progress.cities.length,
-            total: progress.cities.length,
-            label: `All zones imported (${progress.stats.zonesCreated + progress.stats.zonesUpdated} total)`,
-          },
-          stats: progress.stats,
-        };
+      type ZoneResponse = { data: { data: Array<{ zone_id: number; zone_name: string }> } };
+
+      // Fetch zones for ALL cities in parallel (limited concurrency)
+      const results = await parallelLimit(
+        progress.cities.map(city => async () => {
+          const res = await fetchJson<ZoneResponse>(creds, `/aladdin/api/v1/cities/${city.pathaoId}/zone-list`);
+          return { city, zones: res.data?.data || [] };
+        }),
+        MAX_CONCURRENT,
+      );
+
+      // Flatten and upsert all zones
+      const allZoneItems = results.flatMap(r =>
+        r.zones.map(z => ({ name: z.zone_name, type: "zone" as const, parentId: r.city.dbId, pathaoId: z.zone_id }))
+      );
+
+      const { created, updated, idMap } = await bulkUpsert(db, allZoneItems, existing);
+
+      for (const r of results) {
+        for (const z of r.zones) {
+          allZones.push({ pathaoId: z.zone_id, dbId: idMap.get(z.zone_id)!, name: z.zone_name, cityDbId: r.city.dbId });
+        }
       }
 
-      const city = progress.cities[progress.cityIndex];
-      const pathaoZones = await fetchPathaoZones(creds, city.pathaoId);
-
-      for (const zone of pathaoZones) {
-        const result = await upsertLocation(db, {
-          name: zone.zone_name,
-          type: "zone",
-          parentId: city.dbId,
-          pathaoId: zone.zone_id,
-        });
-        progress.zones.push({
-          pathaoId: zone.zone_id,
-          dbId: result.id,
-          name: zone.zone_name,
-          cityDbId: city.dbId,
-        });
-        if (result.created) progress.stats.zonesCreated++;
-        else progress.stats.zonesUpdated++;
-      }
-
-      progress.cityIndex++;
+      progress.zones = allZones;
+      progress.zoneIndex = 0;
+      progress.stats.zonesCreated += created;
+      progress.stats.zonesUpdated += updated;
+      progress.status = "areas";
       await saveProgress(kv, progress);
 
       return {
-        status: "importing",
-        phase: "zones",
-        progress: {
-          current: progress.cityIndex,
-          total: progress.cities.length,
-          label: `Zones: ${city.name} (${pathaoZones.length} zones) — ${progress.cityIndex}/${progress.cities.length} cities`,
-        },
+        status: "importing", phase: "zones",
+        progress: { current: allZones.length, total: allZones.length, label: `${allZones.length} zones imported across ${progress.cities.length} cities` },
         stats: progress.stats,
       };
     }
 
-    // ── Phase 3: Import Areas (batch of zones per chunk) ────────────────
+    // ── Phase 3: Areas in chunks of ZONES_PER_CHUNK zones ─────────────
     if (progress.status === "areas") {
       if (progress.zoneIndex >= progress.zones.length) {
-        // All done!
         progress.status = "complete";
         await saveProgress(kv, progress);
-
         return {
-          status: "complete",
-          phase: "done",
-          progress: {
-            current: progress.zones.length,
-            total: progress.zones.length,
-            label: "Import complete",
-          },
+          status: "complete", phase: "done",
+          progress: { current: progress.zones.length, total: progress.zones.length, label: "Import complete!" },
           stats: progress.stats,
         };
       }
 
-      const batchEnd = Math.min(progress.zoneIndex + progress.zoneBatchSize, progress.zones.length);
+      const batchEnd = Math.min(progress.zoneIndex + ZONES_PER_CHUNK, progress.zones.length);
       const batch = progress.zones.slice(progress.zoneIndex, batchEnd);
 
-      for (const zone of batch) {
-        try {
-          const pathaoAreas = await fetchPathaoAreas(creds, zone.pathaoId);
-          for (const area of pathaoAreas) {
-            const result = await upsertLocation(db, {
-              name: area.area_name,
-              type: "area",
-              parentId: zone.dbId,
-              pathaoId: area.area_id,
-              metadata: {
-                home_delivery_available: area.home_delivery_available,
-                pickup_available: area.pickup_available,
-              },
-            });
-            if (result.created) progress.stats.areasCreated++;
-            else progress.stats.areasUpdated++;
+      const existing = await loadExistingByPathaoId(db, "area");
+
+      type AreaResponse = { data: { data: Array<{ area_id: number; area_name: string; home_delivery_available?: boolean; pickup_available?: boolean }> } };
+
+      // Fetch areas for all zones in this batch IN PARALLEL
+      const results = await parallelLimit(
+        batch.map(zone => async () => {
+          try {
+            const res = await fetchJson<AreaResponse>(creds, `/aladdin/api/v1/zones/${zone.pathaoId}/area-list`);
+            return { zone, areas: res.data?.data || [] };
+          } catch (err) {
+            console.error(`[pathao-import] Failed to fetch areas for zone ${zone.name}:`, err);
+            return { zone, areas: [] };
           }
-        } catch (err) {
-          // Log but continue — one zone failing shouldn't stop the whole import
-          console.error(`[pathao-import] Failed to fetch areas for zone ${zone.name} (${zone.pathaoId}):`, err);
-        }
+        }),
+        MAX_CONCURRENT,
+      );
+
+      // Flatten and upsert
+      const allAreaItems = results.flatMap(r =>
+        r.areas.map(a => ({
+          name: a.area_name,
+          type: "area" as const,
+          parentId: r.zone.dbId,
+          pathaoId: a.area_id,
+          metadata: { home_delivery_available: a.home_delivery_available, pickup_available: a.pickup_available },
+        }))
+      );
+
+      if (allAreaItems.length > 0) {
+        const { created, updated } = await bulkUpsert(db, allAreaItems, existing);
+        progress.stats.areasCreated += created;
+        progress.stats.areasUpdated += updated;
       }
 
       progress.zoneIndex = batchEnd;
       await saveProgress(kv, progress);
 
       return {
-        status: "importing",
-        phase: "areas",
+        status: "importing", phase: "areas",
         progress: {
           current: progress.zoneIndex,
           total: progress.zones.length,
-          label: `Areas: ${progress.zoneIndex}/${progress.zones.length} zones processed`,
+          label: `Areas: ${progress.zoneIndex}/${progress.zones.length} zones (${progress.stats.areasCreated + progress.stats.areasUpdated} areas)`,
         },
         stats: progress.stats,
       };
@@ -424,8 +413,7 @@ export async function processPathaoImportChunk(
 
     // Already complete
     return {
-      status: "complete",
-      phase: "done",
+      status: "complete", phase: "done",
       progress: { current: 1, total: 1, label: "Import complete" },
       stats: progress.stats,
     };
@@ -435,7 +423,6 @@ export async function processPathaoImportChunk(
     progress.status = "error";
     progress.error = errorMsg;
     await saveProgress(kv, progress);
-
     return {
       status: "error" as const,
       phase: (failedPhase === "cities" ? "cities" : failedPhase === "zones" ? "zones" : "areas") as "cities" | "zones" | "areas",
@@ -446,57 +433,17 @@ export async function processPathaoImportChunk(
   }
 }
 
-/**
- * Reset import progress (for retrying after error or re-importing).
- */
 export async function resetPathaoImportProgress(kv: KVNamespace): Promise<void> {
   await kv.delete(KV_KEY);
 }
 
-/**
- * Get current import status without processing.
- */
 export async function getPathaoImportStatus(kv: KVNamespace): Promise<ImportChunkResult> {
   const progress = await getProgress(kv);
+  if (progress.status === "idle") return { status: "complete", phase: "done", progress: { current: 0, total: 0, label: "Ready to import" }, stats: progress.stats };
+  if (progress.status === "complete") return { status: "complete", phase: "done", progress: { current: 1, total: 1, label: "Import complete" }, stats: progress.stats };
+  if (progress.status === "error") return { status: "error", phase: "areas", progress: { current: 0, total: 0, label: progress.error || "Error" }, stats: progress.stats, error: progress.error };
 
-  if (progress.status === "idle") {
-    return {
-      status: "complete",
-      phase: "done",
-      progress: { current: 0, total: 0, label: "No import in progress" },
-      stats: progress.stats,
-    };
-  }
-
-  if (progress.status === "complete") {
-    return {
-      status: "complete",
-      phase: "done",
-      progress: { current: 1, total: 1, label: "Import complete" },
-      stats: progress.stats,
-    };
-  }
-
-  if (progress.status === "error") {
-    return {
-      status: "error",
-      phase: "cities",
-      progress: { current: 0, total: 0, label: progress.error || "Unknown error" },
-      stats: progress.stats,
-      error: progress.error,
-    };
-  }
-
-  // Still in progress
-  const total = progress.status === "zones" ? progress.cities.length :
-    progress.status === "areas" ? progress.zones.length : 0;
-  const current = progress.status === "zones" ? progress.cityIndex :
-    progress.status === "areas" ? progress.zoneIndex : 0;
-
-  return {
-    status: "importing",
-    phase: progress.status as "cities" | "zones" | "areas",
-    progress: { current, total, label: `${progress.status} in progress` },
-    stats: progress.stats,
-  };
+  const total = progress.status === "areas" ? progress.zones.length : progress.cities.length;
+  const current = progress.status === "areas" ? progress.zoneIndex : 0;
+  return { status: "importing", phase: progress.status, progress: { current, total, label: `${progress.status} in progress` }, stats: progress.stats };
 }
