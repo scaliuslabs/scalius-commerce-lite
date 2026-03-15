@@ -277,4 +277,74 @@ app.openapi(deleteLocationRoute, async (c) => {
     }
 });
 
+// ── Pathao Location Import ──────────────────────────────────────────────────
+
+import {
+    processPathaoImportChunk,
+    resetPathaoImportProgress,
+    getPathaoImportStatus,
+} from "@scalius/core/modules/delivery/pathao-location-import";
+import { deliveryProviders } from "@scalius/database/schema";
+
+/**
+ * POST /import-pathao — Process one chunk of Pathao location import.
+ * Call repeatedly until status === "complete".
+ * Admin UI drives the loop with a progress bar.
+ */
+app.post("/import-pathao", async (c) => {
+    const db = c.get("db");
+    const kv = (c.env as any)?.CACHE as KVNamespace | undefined;
+
+    if (!kv) {
+        return c.json({ error: "KV namespace not available" }, 500);
+    }
+
+    // Find active Pathao provider to get credentials
+    const provider = await db
+        .select()
+        .from(deliveryProviders)
+        .where(and(eq(deliveryProviders.type, "pathao"), eq(deliveryProviders.isActive, true)))
+        .get();
+
+    if (!provider) {
+        return c.json({ error: "No active Pathao provider configured. Add one in Delivery Provider settings first." }, 400);
+    }
+
+    let creds: { baseUrl: string; clientId: string; clientSecret: string; username: string; password: string };
+    try {
+        creds = JSON.parse(provider.credentials);
+    } catch {
+        return c.json({ error: "Invalid Pathao credentials. Check your provider settings." }, 400);
+    }
+
+    if (!creds.baseUrl || !creds.clientId || !creds.clientSecret || !creds.username || !creds.password) {
+        return c.json({ error: "Incomplete Pathao credentials. Ensure baseUrl, clientId, clientSecret, username, and password are configured." }, 400);
+    }
+
+    const result = await processPathaoImportChunk(db, kv, creds);
+    return ok(c, result);
+});
+
+/**
+ * GET /import-pathao/status — Check current import progress without processing.
+ */
+app.get("/import-pathao/status", async (c) => {
+    const kv = (c.env as any)?.CACHE as KVNamespace | undefined;
+    if (!kv) return c.json({ error: "KV not available" }, 500);
+
+    const status = await getPathaoImportStatus(kv);
+    return ok(c, status);
+});
+
+/**
+ * DELETE /import-pathao — Reset import progress (for retrying or re-importing).
+ */
+app.delete("/import-pathao", async (c) => {
+    const kv = (c.env as any)?.CACHE as KVNamespace | undefined;
+    if (!kv) return c.json({ error: "KV not available" }, 500);
+
+    await resetPathaoImportProgress(kv);
+    return ok(c, { message: "Import progress reset. You can start a fresh import." });
+});
+
 export { app as adminLocationRoutes };
