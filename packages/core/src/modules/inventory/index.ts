@@ -19,3 +19,5 @@ export {
 export type { StockOperationResult, ReservationEntry } from "./types";
 export * from "./inventory.service";
 export * from "./inventory.schema";
+export { adjustStock, setStock, lookupByBarcodeOrSku } from "./stock-adjustment";
+export type { StockAdjustResult, StockSetResult } from "./stock-adjustment";
