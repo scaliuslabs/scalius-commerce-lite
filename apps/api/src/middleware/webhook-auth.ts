@@ -120,8 +120,9 @@ export async function verifyDeliveryWebhook(
 
       // Steadfast sends Authorization: Bearer {token} header
       case "steadfast": {
-        const authHeader = request.headers.get("Authorization");
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        const authHeader = request.headers.get("Authorization") || "";
+        // Case-insensitive check for "Bearer " prefix (defensive)
+        if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
           console.warn(`[webhook-auth] [steadfast] Missing or invalid Authorization header`);
           return {
             verified: false,
@@ -131,7 +132,7 @@ export async function verifyDeliveryWebhook(
           };
         }
 
-        const token = authHeader.slice(7); // strip "Bearer "
+        const token = authHeader.slice(7).trim(); // strip "Bearer " (case-insensitive)
         if (!timingSafeEqual(token, webhookSecret)) {
           console.warn(`[webhook-auth] [steadfast] Invalid Bearer token`);
           return {
@@ -139,33 +140,6 @@ export async function verifyDeliveryWebhook(
             credentials,
             config,
             reason: "Invalid Bearer token",
-          };
-        }
-
-        return { verified: true, credentials, config };
-      }
-
-      // RedX sends auth token as a query parameter in the callback URL
-      case "redx": {
-        const url = new URL(request.url);
-        const queryToken = url.searchParams.get("token");
-        if (!queryToken) {
-          console.warn(`[webhook-auth] [redx] Missing token query parameter`);
-          return {
-            verified: false,
-            credentials,
-            config,
-            reason: "Missing token query parameter",
-          };
-        }
-
-        if (!timingSafeEqual(queryToken, webhookSecret)) {
-          console.warn(`[webhook-auth] [redx] Invalid token query parameter`);
-          return {
-            verified: false,
-            credentials,
-            config,
-            reason: "Invalid token query parameter",
           };
         }
 

@@ -32,8 +32,6 @@ export function mapProviderStatus(
       return mapPathaoStatus(status);
     case "steadfast":
       return mapSteadfastStatus(status);
-    case "redx":
-      return mapRedXStatus(status);
     default:
       return ShipmentStatusCode.UNKNOWN;
   }
@@ -137,26 +135,3 @@ function mapSteadfastStatus(status: string): string {
   return ShipmentStatusCode.UNKNOWN;
 }
 
-// ---------------------------------------------------------------------------
-// RedX: explicit status-to-status mapping
-// The `status` field values come directly from the RedX webhook spec.
-// ---------------------------------------------------------------------------
-const REDX_STATUS_MAP: Record<string, ShipmentStatusCode> = {
-  "pickup-pending": ShipmentStatusCode.PENDING,
-  "ready-for-delivery": ShipmentStatusCode.PICKED_UP,
-  "delivery-in-progress": ShipmentStatusCode.IN_TRANSIT,
-  "delivered": ShipmentStatusCode.DELIVERED,
-  "agent-hold": ShipmentStatusCode.ON_HOLD,
-  "agent-returning": ShipmentStatusCode.IN_TRANSIT,
-  "returned": ShipmentStatusCode.RETURNED,
-  "agent-area-change": ShipmentStatusCode.IN_TRANSIT,
-  "cancelled": ShipmentStatusCode.CANCELLED,
-};
-
-function mapRedXStatus(status: string): string {
-  const mapped = REDX_STATUS_MAP[status.toLowerCase()];
-  if (mapped) return mapped;
-
-  console.warn(`[status-mapper] Unmapped RedX status: "${status}" - defaulting to ${ShipmentStatusCode.UNKNOWN}`);
-  return ShipmentStatusCode.UNKNOWN;
-}
