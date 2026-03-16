@@ -44,7 +44,7 @@ apps/admin/src/middleware/
 - Each module under 100 lines
 - No shared mutable state between modules (communicate via `context.locals`)
 - `admin-detection.ts` owns the memory + KV cache for `hasAdminUsers` (currently lines 49-96)
-- Auth module handles CF env detection (currently lines 104-120) since DB init is needed for session extraction
+- `auth.ts` handles CF env detection and DB/KV/storage init (currently lines 104-120) — these stay together because Better Auth `getSession()` requires DB binding initialized first
 
 **Verification:** `pnpm typecheck` passes, admin login/logout/RBAC flows work.
 
@@ -130,7 +130,19 @@ async function apiPut<T>(path: string, body: unknown): Promise<T>
 async function apiDelete(path: string): Promise<void>
 ```
 
-Both handle the admin proxy envelope (`{ success, ...T }` from the proxy, or `{ success, data: T }` if calling API directly).
+Both handle the admin proxy envelope. The admin proxy at `pages/api/v1/[...path].ts` transforms `{ success, data: T }` → `{ success, ...T }` for backward compatibility. So:
+
+```typescript
+// Admin proxy response (what useApi/apiGet receives):
+// { success: true, products: [...], pagination: {...} }
+// apiGet returns: { products: [...], pagination: {...} }  (strips success flag)
+
+// Direct API response (if calling API without proxy):
+// { success: true, data: { products: [...], pagination: {...} } }
+// apiGet returns: { products: [...], pagination: {...} }  (unwraps data)
+```
+
+Both `useApi` and `apiGet` normalize to the same shape regardless of source.
 
 **Constraints:**
 - `useApi` is client-side only (React hook)
@@ -172,7 +184,7 @@ interface PageSectionProps {
 
 **Solution:**
 - Add `"noUncheckedIndexedAccess": true` to `packages/tsconfig/base.json`
-- Change ESLint `@typescript-eslint/no-explicit-any` from `off` to `warn`
+- Change ESLint `@typescript-eslint/no-explicit-any` from `off` to `warn` (ESLint is already configured at root `eslint.config.js` — verify with `pnpm lint` before changing rules)
 - Fix resulting type errors (mostly adding `?` checks after array indexing)
 - Expected scope: 150-250 new type errors across the monorepo, concentrated in array-heavy list components (CategoryList, ProductList, OrderList, etc.)
 - Fix packages first (shared, database, core) to unblock apps
@@ -288,7 +300,7 @@ Also migrate `pages/firebase-messaging-sw.js.ts` from direct DB access to fetch 
 | 5 | Missing Zod on POST | High | `api/routes/admin/settings/site.ts:58` | Add `currencySettingsSchema` with Zod validation |
 | 6 | Missing Zod on POST | High | `api/routes/admin/settings/delivery-providers.ts:90` | Add `deliveryProviderSchema` with Zod validation |
 | 7 | No rate limit on setup | Medium | `api/routes/admin/auth-management.ts:490` | Add KV rate limit: 5 req/IP/hour |
-| 8 | Wrong response format | Medium | `api/routes/admin/ai-prompts.ts:53` | Change `c.text()` to `ok(c, { prompt })` |
+| 8 | Wrong response format | Medium | `api/routes/admin/ai-prompts.ts:53` | Change `c.text()` to `ok(c, { prompt })` — verify admin consumer expects JSON envelope, not raw text |
 | 9 | Global DB in routes | Medium | `api/routes/admin/settings/site.ts:29`, `system.ts:2`, `integrations.ts:2` | Replace `import { db }` with `c.get("db")` |
 
 ### 2.4 API Gap Filling
@@ -339,7 +351,7 @@ All new endpoints follow existing patterns: `createRoute()` + Zod schemas + `ok(
 { history: { id: string, htmlContent: string, cssContent: string, reason: string, createdAt: string }[] }
 ```
 
-Implementers should cross-reference the current loader return shapes in `apps/admin/src/loaders/admin/*.ts` to ensure exact compatibility.
+All response shapes above show the final `data` payload after admin proxy unwrapping. Loaders call `apiGet()` which returns the parsed data directly (not the `{ success, data }` envelope). Implementers should cross-reference the current loader return shapes in `apps/admin/src/loaders/admin/*.ts` to ensure exact compatibility.
 
 ---
 
