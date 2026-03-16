@@ -4,6 +4,14 @@
 **Status:** Draft
 **Predecessor:** [2026-03-16-codebase-hardening-design.md](./2026-03-16-codebase-hardening-design.md) (33 commits, all critical/high bugs fixed, API standardized)
 
+## Prerequisites
+
+This spec targets the `mono-repo` branch after the hardening session (33 commits, 2026-03-16). The hardening session fixed backend bugs, standardized API responses, and split core service files — but did NOT refactor the admin app. Verified on current branch:
+- All 9 admin loaders still import `@scalius/database` and `@scalius/core` directly
+- `middleware.ts` is still a single 352-line file
+- All oversized components (CategoryList 1,441, ProductList 1,386, etc.) are at original sizes
+- SideBar.astro is still 984 lines
+
 ## Goal
 
 Prepare the codebase for rapid feature development at scale. A separate team will soon build a new admin SPA communicating purely through the API. Hundreds of features will be added across admin, storefront, and API. The codebase must be architecturally clean enough that this velocity doesn't create chaos.
@@ -166,7 +174,9 @@ interface PageSectionProps {
 - Add `"noUncheckedIndexedAccess": true` to `packages/tsconfig/base.json`
 - Change ESLint `@typescript-eslint/no-explicit-any` from `off` to `warn`
 - Fix resulting type errors (mostly adding `?` checks after array indexing)
-- Expected scope: ~50-100 new type errors across the monorepo, concentrated in array access patterns
+- Expected scope: 150-250 new type errors across the monorepo, concentrated in array-heavy list components (CategoryList, ProductList, OrderList, etc.)
+- Fix packages first (shared, database, core) to unblock apps
+- Risk mitigation: Parallel teams can fix different workspaces simultaneously
 
 **Constraints:**
 - Fix errors in packages first (shared, database, core), then apps
@@ -307,6 +317,30 @@ DELETE /admin/navigation/{id}           — Delete navigation config
 
 All new endpoints follow existing patterns: `createRoute()` + Zod schemas + `ok()`/`created()`/`noContent()` response helpers.
 
+**Response shapes** (match what current loaders return, so admin pages need zero changes):
+
+```typescript
+// GET /admin/products/stats
+{ totalProducts: number, activeProducts: number, productsWithImages: number, categoriesCount: number }
+
+// GET /admin/customers/{id}/history
+{ customer: Customer, history: CustomerHistory[], orders: Order[] }
+
+// GET /admin/categories/form-options
+{ categories: { id: string, name: string }[] }
+
+// GET /admin/collections/form-options
+{ categories: { id: string, name: string }[], products: { id: string, name: string, price: number }[] }
+
+// GET /admin/orders/{id}/form-data
+{ order: Order, products: ProductWithVariants[] }
+
+// GET /admin/widgets/{id}/history
+{ history: { id: string, htmlContent: string, cssContent: string, reason: string, createdAt: string }[] }
+```
+
+Implementers should cross-reference the current loader return shapes in `apps/admin/src/loaders/admin/*.ts` to ensure exact compatibility.
+
 ---
 
 ## Phase 3: Refinement
@@ -391,7 +425,7 @@ Replace `Object.assign(new Error(), {statusCode})` with proper `ApiError` subcla
 
 ### 3.5 Test Infrastructure
 
-Set up in private `tests/` directory (gitignored):
+Set up in private `tests/` directory (gitignored per project convention — only core team maintains tests):
 
 ```
 tests/
@@ -438,20 +472,27 @@ Generate migration: `pnpm db:generate` → produces migration 0025.
 
 ## Execution Order
 
-Within each phase, items can be parallelized by independent agents:
-
 ### Phase 1 (Foundation) — Parallel Groups
+
+All of Phase 1 must complete before Phase 2 starts (Phase 2 depends on shared hooks from 1.4 and extracted scripts from 1.7).
+
 - **Group A:** Middleware splitting (1.1) + TypeScript strictness (1.6)
 - **Group B:** AdminLayout splitting (1.2) + SideBar splitting (1.3)
 - **Group C:** Shared hooks (1.4) + Error boundaries (1.5) + Inline script extraction (1.7)
 
-### Phase 2 (Migration) — Sequential
-1. Fill API gaps (2.4) — must exist before loaders can migrate
-2. Loader migration (2.1) + bundle cleanup (2.2)
-3. Security fixes (2.3)
+### Phase 2 (Migration) — Sequential Within Phase
+
+Phase 2 starts only after Phase 1 is complete.
+
+1. Fill API gaps (2.4) — **BLOCKS** 2.1 and 2.2; new endpoints must exist before loaders can call them
+2. Loader migration (2.1) + bundle cleanup (2.2) — depends on 2.4
+3. Security fixes (2.3) — can overlap with 2.2
 
 ### Phase 3 (Refinement) — Parallel Groups
-- **Group D:** Component splitting (3.1) — parallelizable by domain
+
+Phase 3 starts only after Phase 2 is complete.
+
+- **Group D:** Component splitting (3.1) — parallelizable by domain (products, orders, customers, settings, etc.)
 - **Group E:** Type safety (3.2) + Pattern cleanup (3.4)
 - **Group F:** Performance (3.3)
 - **Group G:** Test infrastructure (3.5) + Database indexes (3.6)
