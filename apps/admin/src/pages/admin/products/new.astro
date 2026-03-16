@@ -21,34 +21,6 @@ const defaultValues = {
   slug: "",
   images: [],
 };
-
-// Define the submit handler function
-const handleSubmit = `async function(values) {
-  try {
-    const response = await fetch("/api/v1/admin/products", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(values),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to create product");
-    }
-
-    const data = await response.json();
-    const destination = \`/admin/products/\${data.id}/edit\`;
-    if (typeof window.navigateToProductEdit !== "function") {
-      throw new Error("Product navigation helper is unavailable");
-    }
-
-    await window.navigateToProductEdit(destination);
-  } catch (error) {
-    console.error("Error creating product:", error);
-    alert("Failed to create product. Please try again.");
-  }
-}`;
 ---
 
 <AdminLayout title="New Product">
@@ -63,22 +35,6 @@ const handleSubmit = `async function(values) {
 </AdminLayout>
 
 <script>
-  type ProductNavigationWindow = Window & {
-    __productEditNavigate?: (url: string) => Promise<void>;
-    navigateToProductEdit?: (url: string) => Promise<void>;
-  };
-
-  const navigationWindow = window as ProductNavigationWindow;
-
-  navigationWindow.__productEditNavigate ??= async (url: string) => {
-    const { navigateTo } = await import("@/lib/client/navigate");
-    await navigateTo(url);
-  };
-
-  navigationWindow.navigateToProductEdit = navigationWindow.__productEditNavigate;
-</script>
-
-<script is:inline define:vars={{ handleSubmit }}>
-  // Convert the string function to an actual function
-  window.handleProductSubmit = eval(`(${handleSubmit})`);
+  import { initProductNewPage } from "@/lib/client/product-actions";
+  initProductNewPage();
 </script>
