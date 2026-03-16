@@ -167,31 +167,31 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 
 ## Recent Changes
 
-- **Database**: 14 foreign keys, 20 indexes, 3 migrations (0019-0021)
-- **API**: response standardization, cache TTL fixes
-- **Orders**: state machine (`order-state-machine.ts`), `db.batch()` transactions, optimistic locking (version column), notification return from `updateOrderStatus()`
-- **Inventory**: `reserveStockBatch()`, validation helpers, `releaseExpiredReservations()` cron, `adjustStock()`/`setStock()`, `lookupByBarcodeOrSku()`
-- **Payments**: idempotent `processPaymentConfirmed()` (duplicate check first), state machine enforcement
-- **Delivery**: Pathao/Steadfast webhook handlers rewritten, `pathao-location-import.ts`
-- **Providers**: universal registry architecture (payments gateway-registry, delivery factory, fraud-checker registry)
-- **Admin**: component deduplication (shared `BulkActionDialog`), webhook config UI, barcode variant form
-- **Shared**: price-utils, barcode-utils, barcode-svg
-- **Products**: barcode/barcodeType on variants, `lookupByBarcode()`, barcode-aware search
+- **Codebase Hardening** (15 commits): Full spec at `docs/superpowers/specs/2026-03-16-codebase-hardening-design.md`
+- **Payments**: atomic `processPaymentConfirmed()` via `db.batch()`, COD idempotency, refund amount validation, SSLCommerz redirect validation
+- **Orders**: queue batch orderId bug fixed (per-item tracking), CANCELLED is terminal (no reactivation), order-notifications DLQ added
+- **Inventory**: `stockVersion` column (separate from `version`) for stock-specific CAS, discount usage race condition narrowed
+- **Delivery**: KV-based webhook replay protection (Pathao/Steadfast), insert-first shipment creation, AES-GCM credential encryption, unified provider interface
+- **Customers**: phone normalization (E.164 format), OTP logging removed, stale discount applicability cache removed
+- **API Standardization**: ALL routes use `ok()`/`created()`/`ApiError` (242 conversions), `CACHE_TTLS` constants, `paginated()` removed
+- **Schema**: timestamp defaults standardized (`UNIX_NOW` constant), 8 FK indexes added, singleton constraints on `siteSettings`/`metaConversionsSettings`, collections enum `"manual"`/`"dynamic"`, `permissions.updatedAt` added
+- **Admin Proxy**: unwraps `{ success, data: T }` → `{ success, ...T }` for admin components, flattens error objects to strings
+- **Database**: 6 migrations total (0019-0024)
 
 ## Known Backlog
 
-- **SDK needs regeneration**: `packages/api-client/openapi.json` has 60 paths from an old spec. Live API has 221 paths. Run `pnpm generate:sdk` after starting API to update.
-- **Response helpers unused**: `apps/api/src/utils/api-response.ts` exports `ok()`, `paginated()`, `created()`, `noContent()` but routes still use raw `c.json()`. Future work: standardize all 573 response calls.
+- **SDK needs regeneration**: `packages/api-client/openapi.json` has 60 paths from an old spec. Live API has 221+ paths. Run `pnpm generate:sdk` after starting API to update. Deferred until API surface stabilizes.
 - **Major version upgrades pending**: TipTap 2->3, Firebase 11->12, Recharts 2->3, react-day-picker 8->9, @hookform/resolvers 3->5
 - **ESLint not configured**: `.prettierrc.mjs` exists for formatting but no ESLint setup yet.
+- **In-memory state**: Rate limiter and layout cache use in-memory Maps (reset on Worker isolate restart). Acceptable for single-tenant but needs KV migration for scale.
 
 ## Known Limitations / TODO
 
-- **Scanner app**: needs rebuild as standalone `/scanner` route with QR-token auth
-- **SDK regeneration**: blocked until API routes stabilize
+- **Scanner app**: needs rebuild as standalone `/scanner` route with QR-token auth (backend complete, frontend removed)
 - **Large service files**: `products.service.ts` (~1600 lines) and `orders.service.ts` (~1400 lines) need splitting
-- **Type safety**: 251 `any` type usages remain across the codebase
-- **Test coverage**: zero test coverage
+- **Type safety**: ~250 `any` type usages remain across the admin app
+- **Test coverage**: zero test coverage (private test suite planned, gitignored)
+- **Permission query**: `getUserPermissions()` uses 3 queries — could be 1 JOIN
 
 ## Agent Team Guidelines
 
@@ -199,7 +199,7 @@ When working as part of an agent team on this codebase:
 
 - **Avoid file conflicts**: coordinate so each teammate owns different files/modules
 - **Domain boundaries**: `packages/core/src/modules/` is organized by domain — each teammate should own a complete domain when possible
-- **Test changes**: run `pnpm build` to verify all workers build correctly
+- **Test changes**: run `pnpm typecheck` (NOT just `pnpm build` — esbuild strips types without checking them)
 - **Don't touch env files**: `.dev.vars` and `.env.development` contain secrets
 - **Schema changes need migrations**: after modifying `packages/database/src/schema/`, run `pnpm db:generate`
 - **Package changes**: when adding imports from a new package, ensure it's listed in the consuming workspace's `package.json`
