@@ -188,10 +188,8 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 ## Known Limitations / TODO
 
 - **Scanner app**: needs rebuild as standalone `/scanner` route with QR-token auth (backend complete, frontend removed)
-- **Large service files**: `products.service.ts` (~1600 lines) and `orders.service.ts` (~1400 lines) need splitting
 - **Type safety**: ~250 `any` type usages remain across the admin app
 - **Test coverage**: zero test coverage (private test suite planned, gitignored)
-- **Permission query**: `getUserPermissions()` uses 3 queries — could be 1 JOIN
 
 ## Agent Team Guidelines
 
