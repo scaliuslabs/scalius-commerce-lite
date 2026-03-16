@@ -9,7 +9,7 @@ import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
 import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
 import { ok, created } from "../../utils/api-response";
-import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
+import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, RateLimitError } from "../../utils/api-error";
 const app = new OpenAPIHono();
 
 // Generate a secure random password
@@ -542,6 +542,20 @@ setupApp.openapi(setupRoute, async (c) => {
     try {
         const db = c.get("db");
         const env = c.env as Env;
+
+        // KV-based rate limiting: 5 requests per IP per hour
+        const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
+        const rateLimitKey = `setup_rate:${ip}`;
+        const kv = env.CACHE as KVNamespace | undefined;
+        if (kv) {
+            const raw = await kv.get(rateLimitKey);
+            const attempts = raw ? parseInt(raw, 10) : 0;
+            if (attempts >= 5) {
+                throw new RateLimitError("Too many setup attempts. Try again later.", 3600);
+            }
+            await kv.put(rateLimitKey, String(attempts + 1), { expirationTtl: 3600 });
+        }
+
         const auth = createAuth(env);
 
         const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));

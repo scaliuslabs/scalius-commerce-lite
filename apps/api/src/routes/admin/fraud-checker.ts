@@ -39,11 +39,21 @@ app.openapi(listRoute, async (c) => {
 
 // ── Create Provider ──
 
+const createProviderSchema = z.object({
+    name: z.string().min(1),
+    apiUrl: z.string().min(1),
+    apiKey: z.string().min(1),
+    isActive: z.boolean().optional().default(true),
+});
+
 const createProviderRoute = createRoute({
     method: "post",
     path: "/",
     tags: ["Admin - Fraud Checker"],
     summary: "Create a fraud checker provider",
+    request: {
+        body: { content: { "application/json": { schema: createProviderSchema } } }
+    },
     responses: {
         201: { description: "Provider created"  }
     }
@@ -51,11 +61,7 @@ const createProviderRoute = createRoute({
 
 app.openapi(createProviderRoute, async (c) => {
     try {
-        const provider = await c.req.json();
-
-        if (!provider.name || !provider.apiUrl || !provider.apiKey) {
-            throw new ValidationError("Missing required fields: name, apiUrl, apiKey");
-        }
+        const provider = c.req.valid("json");
 
         const savedProvider = await fraudCheckerService.saveProvider(provider);
 
@@ -72,11 +78,22 @@ app.openapi(createProviderRoute, async (c) => {
 
 // ── Update Provider ──
 
+const updateProviderSchema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    apiUrl: z.string().min(1),
+    apiKey: z.string().min(1),
+    isActive: z.boolean().default(true),
+});
+
 const updateProviderRoute = createRoute({
     method: "put",
     path: "/",
     tags: ["Admin - Fraud Checker"],
     summary: "Update a fraud checker provider",
+    request: {
+        body: { content: { "application/json": { schema: updateProviderSchema } } }
+    },
     responses: {
         200: { description: "Provider updated"  }
     }
@@ -84,20 +101,17 @@ const updateProviderRoute = createRoute({
 
 app.openapi(updateProviderRoute, async (c) => {
     try {
-        const provider = await c.req.json();
+        const validated = c.req.valid("json");
+        let apiKey = validated.apiKey;
 
-        if (!provider.id || !provider.name || !provider.apiUrl || !provider.apiKey) {
-            throw new ValidationError("Missing required fields: id, name, apiUrl, apiKey");
-        }
-
-        if (provider.apiKey === MASKED_VALUE) {
-            const existingProvider = await fraudCheckerService.getProvider(provider.id);
+        if (apiKey === MASKED_VALUE) {
+            const existingProvider = await fraudCheckerService.getProvider(validated.id);
             if (existingProvider?.apiKey) {
-                provider.apiKey = existingProvider.apiKey;
+                apiKey = existingProvider.apiKey;
             }
         }
 
-        const savedProvider = await fraudCheckerService.saveProvider(provider);
+        const savedProvider = await fraudCheckerService.saveProvider({ ...validated, apiKey });
 
         const maskedResponse = {
             ...savedProvider,
