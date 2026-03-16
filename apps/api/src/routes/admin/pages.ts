@@ -176,6 +176,30 @@ app.openapi(bulkRestoreRoute, async (c) => {
     return noContent(c);
 });
 
+// ── Restore Page ──
+
+const restoreRoute = createRoute({
+    method: "post",
+    path: "/{id}/restore",
+    tags: ["Admin - Pages"],
+    summary: "Restore a soft-deleted page",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: { description: "Page restored" }
+    }
+});
+
+app.openapi(restoreRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const page = await getPageById(db, id);
+    if (!page) throw new NotFoundError("Page not found");
+    await restorePages(db, [id]);
+    return ok(c, { message: "Page restored" });
+});
+
 // ── Get Page By ID ──
 
 const getByIdRoute = createRoute({

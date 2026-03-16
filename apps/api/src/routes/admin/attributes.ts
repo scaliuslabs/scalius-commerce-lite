@@ -419,6 +419,47 @@ app.openapi(bulkRestoreRoute, async (c) => {
     }
 });
 
+// ── Restore Attribute ──
+
+const restoreRoute = createRoute({
+    method: "post",
+    path: "/{id}/restore",
+    tags: ["Admin - Attributes"],
+    summary: "Restore a soft-deleted product attribute",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: { description: "Attribute restored" }
+    }
+});
+
+app.openapi(restoreRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+
+    try {
+        const attribute = await db
+            .select()
+            .from(productAttributes)
+            .where(eq(productAttributes.id, id))
+            .get();
+
+        if (!attribute) throw new NotFoundError("Attribute not found");
+
+        await db
+            .update(productAttributes)
+            .set({ deletedAt: null })
+            .where(eq(productAttributes.id, id));
+
+        return ok(c, { message: "Attribute restored" });
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === "NotFoundError") throw error;
+        console.error(`Error restoring attribute ${id}:`, error);
+        throw error;
+    }
+});
+
 // ── List Attribute Values ──
 
 const listValuesRoute = createRoute({
