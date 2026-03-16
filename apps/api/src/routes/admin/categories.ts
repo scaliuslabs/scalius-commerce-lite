@@ -16,8 +16,31 @@ import {
     createCategorySchema,
     updateCategorySchema
 } from "@scalius/core/modules/categories";
+import { categories } from "@scalius/database/schema";
+import { isNull } from "drizzle-orm";
 
 const app = new OpenAPIHono();
+
+// ── Form Options (lightweight for dropdowns) ──
+
+const formOptionsRoute = createRoute({
+    method: "get",
+    path: "/form-options",
+    tags: ["Admin - Categories"],
+    summary: "Get active categories for form dropdowns",
+    responses: {
+        200: { description: "Category options" }
+    }
+});
+
+app.openapi(formOptionsRoute, async (c) => {
+    const db = c.get("db");
+    const result = await db
+        .select({ id: categories.id, name: categories.name })
+        .from(categories)
+        .where(isNull(categories.deletedAt));
+    return ok(c, { categories: result });
+});
 
 // ── List Categories ──
 

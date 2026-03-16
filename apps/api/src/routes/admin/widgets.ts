@@ -15,6 +15,8 @@ import {
     createWidgetSchema,
     updateWidgetSchema
 } from "@scalius/core/modules/widgets";
+import { widgetHistory, widgets } from "@scalius/database/schema";
+import { eq, and, sql } from "drizzle-orm";
 import { NotFoundError, ApiError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -289,6 +291,118 @@ app.openapi(toggleStatusRoute, async (c) => {
     if (!widget) throw new NotFoundError("Widget not found");
     const result = await updateWidget(db, id, { isActive: !widget.isActive });
     return ok(c, result);
+});
+
+// ── Get Widget History ──
+
+const getHistoryRoute = createRoute({
+    method: "get",
+    path: "/{id}/history",
+    tags: ["Admin - Widgets"],
+    summary: "List all history entries for a widget",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: { description: "Widget history entries" },
+        404: { description: "Widget not found" }
+    }
+});
+
+app.openapi(getHistoryRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const widget = await getWidgetById(db, id);
+    if (!widget) throw new NotFoundError("Widget not found");
+
+    const history = await db
+        .select()
+        .from(widgetHistory)
+        .where(eq(widgetHistory.widgetId, id))
+        .orderBy(sql`${widgetHistory.createdAt} DESC`);
+
+    return ok(c, history);
+});
+
+// ── Restore Widget History Version ──
+
+const restoreHistoryRoute = createRoute({
+    method: "post",
+    path: "/{id}/history/restore",
+    tags: ["Admin - Widgets"],
+    summary: "Restore a widget to a previous history version",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({ historyId: z.string() })
+                }
+            }
+        }
+    },
+    responses: {
+        200: { description: "Widget restored from history" },
+        404: { description: "Widget or history entry not found" }
+    }
+});
+
+app.openapi(restoreHistoryRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const { historyId } = c.req.valid("json");
+
+    const widget = await getWidgetById(db, id);
+    if (!widget) throw new NotFoundError("Widget not found");
+
+    const [historyEntry] = await db
+        .select()
+        .from(widgetHistory)
+        .where(and(eq(widgetHistory.id, historyId), eq(widgetHistory.widgetId, id)));
+
+    if (!historyEntry) throw new NotFoundError("History entry not found");
+
+    await db
+        .update(widgets)
+        .set({
+            htmlContent: historyEntry.htmlContent,
+            cssContent: historyEntry.cssContent,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(widgets.id, id));
+
+    return ok(c, { message: "Widget restored from history" });
+});
+
+// ── Delete Widget History Entry ──
+
+const deleteHistoryRoute = createRoute({
+    method: "delete",
+    path: "/{id}/history/{versionId}",
+    tags: ["Admin - Widgets"],
+    summary: "Delete a widget history entry",
+    request: {
+        params: z.object({ id: z.string(), versionId: z.string() }),
+    },
+    responses: {
+        204: { description: "History entry deleted" },
+        404: { description: "History entry not found" }
+    }
+});
+
+app.openapi(deleteHistoryRoute, async (c) => {
+    const db = c.get("db");
+    const { id, versionId } = c.req.valid("param");
+
+    const [historyEntry] = await db
+        .select()
+        .from(widgetHistory)
+        .where(and(eq(widgetHistory.id, versionId), eq(widgetHistory.widgetId, id)));
+
+    if (!historyEntry) throw new NotFoundError("History entry not found");
+
+    await db.delete(widgetHistory).where(eq(widgetHistory.id, versionId));
+    return noContent(c);
 });
 
 export { app as adminWidgetRoutes };
