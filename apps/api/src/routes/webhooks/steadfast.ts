@@ -46,6 +46,14 @@ app.post("/", async (c) => {
 
         const notificationType = payload.notification_type;
 
+        // Idempotency: deduplicate webhook events via KV
+        const consignmentIdRaw = String(payload.consignment_id ?? "");
+        const kvKey = `delivery_wh:steadfast:${consignmentIdRaw}_${notificationType || "unknown"}`;
+        const existing = await c.env.CACHE.get(kvKey);
+        if (existing) {
+            return c.json({ status: "success", message: "Webhook received successfully.", deduplicated: true });
+        }
+
         // Only process delivery_status notifications; acknowledge tracking_update without processing
         if (notificationType === "tracking_update") {
             // Store tracking update in metadata if we can find the shipment, but don't change status
@@ -69,7 +77,8 @@ app.post("/", async (c) => {
             }
 
             if (shipment) {
-                const existingMeta = JSON.parse(shipment.metadata ?? "{}");
+                let existingMeta: Record<string, unknown> = {};
+                try { existingMeta = JSON.parse(shipment.metadata ?? "{}"); } catch { /* invalid JSON */ }
                 await db
                     .update(deliveryShipments)
                     .set({
@@ -82,6 +91,9 @@ app.post("/", async (c) => {
                     })
                     .where(eq(deliveryShipments.id, shipment.id));
             }
+
+            // Mark event as processed in KV (24h TTL)
+            await c.env.CACHE.put(kvKey, JSON.stringify({ processedAt: Date.now() }), { expirationTtl: 86400 });
 
             return c.json({ status: "success", message: "Webhook received successfully." });
         }
@@ -124,7 +136,8 @@ app.post("/", async (c) => {
         const previousStatus = shipment.status;
 
         // Build updated metadata with all Steadfast-specific fields
-        const existingMeta = JSON.parse(shipment.metadata ?? "{}");
+        let existingMeta: Record<string, unknown> = {};
+        try { existingMeta = JSON.parse(shipment.metadata ?? "{}"); } catch { /* invalid JSON */ }
         const updatedMeta: Record<string, unknown> = {
             ...existingMeta,
             lastWebhookPayload: payload,
@@ -163,6 +176,9 @@ app.post("/", async (c) => {
             "processed",
             { consignmentId, invoice, rawStatus, normalizedStatus, previousStatus }
         );
+
+        // Mark event as processed in KV (24h TTL)
+        await c.env.CACHE.put(kvKey, JSON.stringify({ processedAt: Date.now() }), { expirationTtl: 86400 });
 
         // Steadfast expects HTTP 200 with this exact response shape
         return c.json({ status: "success", message: "Webhook received successfully." });

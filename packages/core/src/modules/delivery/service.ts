@@ -133,6 +133,11 @@ export class DeliveryService {
 
   /**
    * Create shipment for an order
+   *
+   * Uses insert-first pattern: a "creating" record is written before calling
+   * the provider API, then updated with the result.  This guarantees a DB
+   * record exists even when the provider succeeds but the subsequent DB
+   * write fails (e.g. due to a worker timeout).
    */
   async createShipment(
     orderId: string,
@@ -161,47 +166,79 @@ export class DeliveryService {
       };
     }
 
-    try {
-      // Create provider instance
-      const providerInstance = createProvider(provider);
+    // 1. Insert a "creating" placeholder shipment FIRST
+    const shipmentId = nanoid();
+    const now = new Date();
 
-      // Create shipment
+    await db.insert(deliveryShipments).values({
+      id: shipmentId,
+      orderId,
+      providerId,
+      providerType: provider.type,
+      status: "creating",
+      rawStatus: "creating",
+      metadata: JSON.stringify({ initiatedAt: now.toISOString() }),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    try {
+      // 2. Call provider API
+      const providerInstance = createProvider(provider);
       const shipmentResult = await providerInstance.createShipment(
         order,
         options,
       );
 
-      // If successful, save the shipment to our database
       if (shipmentResult.success && shipmentResult.data) {
-        const shipmentId = nanoid();
-        const now = new Date();
+        // 3. On success: update the record with external tracking info
+        await db
+          .update(deliveryShipments)
+          .set({
+            externalId: shipmentResult.data.externalId,
+            trackingId: shipmentResult.data.trackingId,
+            status: shipmentResult.data.status || "pending",
+            rawStatus:
+              (shipmentResult.data.metadata?.order_status as string) ||
+              (shipmentResult.data.metadata?.status as string) ||
+              "pending",
+            metadata: JSON.stringify(shipmentResult.data.metadata || {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(deliveryShipments.id, shipmentId));
 
-        await db.insert(deliveryShipments).values({
-          id: shipmentId,
-          orderId,
-          providerId,
-          providerType: provider.type,
-          externalId: shipmentResult.data.externalId,
-          trackingId: shipmentResult.data.trackingId,
-          status: shipmentResult.data.status || "pending",
-          rawStatus:
-            (shipmentResult.data.metadata?.order_status as string) ||
-            (shipmentResult.data.metadata?.status as string) ||
-            "pending",
-          metadata: JSON.stringify(shipmentResult.data.metadata || {}),
-          createdAt: now,
-          updatedAt: now,
-        });
-
-        // Return the result with shipment ID
         return shipmentResult;
       }
 
+      // 4. Provider returned a non-success response
+      await db
+        .update(deliveryShipments)
+        .set({
+          status: "failed",
+          rawStatus: "provider_rejected",
+          metadata: JSON.stringify({ error: shipmentResult.message }),
+          updatedAt: new Date(),
+        })
+        .where(eq(deliveryShipments.id, shipmentId));
+
       return shipmentResult;
     } catch (error) {
+      // 5. Exception during provider call — mark record as failed
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      await db
+        .update(deliveryShipments)
+        .set({
+          status: "failed",
+          rawStatus: "exception",
+          metadata: JSON.stringify({ error: errorMsg }),
+          updatedAt: new Date(),
+        })
+        .where(eq(deliveryShipments.id, shipmentId));
+
       return {
         success: false,
-        message: `Failed to create shipment: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to create shipment: ${errorMsg}`,
       };
     }
   }

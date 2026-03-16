@@ -83,6 +83,14 @@ app.post("/", async (c) => {
             return c.json({ success: false, error: "Missing consignment_id" }, 400);
         }
 
+        // Idempotency: deduplicate webhook events via KV
+        const eventId = `${consignmentId}_${event}`;
+        const kvKey = `delivery_wh:pathao:${eventId}`;
+        const existing = await c.env.CACHE.get(kvKey);
+        if (existing) {
+            return c.json({ received: true, deduplicated: true });
+        }
+
         const shipment = await db
             .select()
             .from(deliveryShipments)
@@ -103,7 +111,8 @@ app.post("/", async (c) => {
         const previousStatus = shipment.status;
 
         // Build updated metadata, including COD collected_amount when present
-        const existingMeta = JSON.parse(shipment.metadata ?? "{}");
+        let existingMeta: Record<string, unknown> = {};
+        try { existingMeta = JSON.parse(shipment.metadata ?? "{}"); } catch { /* invalid JSON */ }
         const updatedMeta: Record<string, unknown> = {
             ...existingMeta,
             lastWebhookPayload: payload,
@@ -144,6 +153,9 @@ app.post("/", async (c) => {
             "processed",
             { consignmentId, event, normalizedStatus, previousStatus }
         );
+
+        // Mark event as processed in KV (24h TTL)
+        await c.env.CACHE.put(kvKey, JSON.stringify({ processedAt: Date.now() }), { expirationTtl: 86400 });
 
         // Pathao requires HTTP 202 and the merchant secret header
         return c.json(
