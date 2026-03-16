@@ -171,13 +171,18 @@ polarPaymentRoutes.get("/success", async (c) => {
     const orderId = c.req.query("order_id");
 
     const envObj = c.env;
-    const storefrontUrl = envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "";
+    const storefrontUrl = (envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
 
-    if (orderId && storefrontUrl) {
-        return c.redirect(`${storefrontUrl}/order-success?orderId=${orderId}&payment=polar`);
+    if (storefrontUrl) {
+        if (orderId) {
+            const db: Database = c.get("db");
+            const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
+            if (!order) return c.redirect(`${storefrontUrl}/checkout?error=invalid_order`);
+        }
+        return c.redirect(`${storefrontUrl}/order-success?orderId=${orderId ?? ""}&payment=polar`);
     }
 
-    return c.json({ success: true, message: "Payment received", orderId });
+    return c.redirect("/");
 });
 
 // ─── GET /cancel ─────────────────────────────────────────────────────────────
@@ -186,11 +191,11 @@ polarPaymentRoutes.get("/cancel", async (c) => {
     const orderId = c.req.query("order_id");
 
     const envObj = c.env;
-    const storefrontUrl = envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "";
+    const storefrontUrl = (envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
 
     if (storefrontUrl) {
         return c.redirect(`${storefrontUrl}/checkout?error=payment_cancelled&payment=polar`);
     }
 
-    return c.json({ success: false, message: "Payment cancelled", orderId });
+    return c.redirect("/");
 });

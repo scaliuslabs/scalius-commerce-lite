@@ -182,36 +182,66 @@ function getStorefrontUrl(c: { env?: { STOREFRONT_URL?: string }; req: { url: st
 app.post("/success", async (c) => {
   const tran_id = await extractTranId(c);
   const storefront = getStorefrontUrl(c);
+  if (tran_id) {
+    const db = c.get("db");
+    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, tran_id)).get();
+    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
+  }
   return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(tran_id)}&payment=sslcommerz`);
 });
 
 app.get("/success", async (c) => {
   const tran_id = c.req.query("tran_id") ?? "";
   const storefront = getStorefrontUrl(c);
+  if (tran_id) {
+    const db = c.get("db");
+    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, tran_id)).get();
+    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
+  }
   return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(tran_id)}&payment=sslcommerz`);
 });
 
 app.post("/fail", async (c) => {
   const tran_id = await extractTranId(c);
   const storefront = getStorefrontUrl(c);
+  if (tran_id) {
+    const db = c.get("db");
+    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, tran_id)).get();
+    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
+  }
   return c.redirect(`${storefront}/cart?error=payment_failed&orderId=${encodeURIComponent(tran_id)}`);
 });
 
 app.get("/fail", async (c) => {
   const tran_id = c.req.query("tran_id") ?? "";
   const storefront = getStorefrontUrl(c);
+  if (tran_id) {
+    const db = c.get("db");
+    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, tran_id)).get();
+    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
+  }
   return c.redirect(`${storefront}/cart?error=payment_failed&orderId=${encodeURIComponent(tran_id)}`);
 });
 
 app.post("/cancel", async (c) => {
   const tran_id = await extractTranId(c);
   const storefront = getStorefrontUrl(c);
+  if (tran_id) {
+    const db = c.get("db");
+    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, tran_id)).get();
+    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
+  }
   return c.redirect(`${storefront}/cart?error=payment_cancelled&orderId=${encodeURIComponent(tran_id)}`);
 });
 
 app.get("/cancel", async (c) => {
   const tran_id = c.req.query("tran_id") ?? "";
   const storefront = getStorefrontUrl(c);
+  if (tran_id) {
+    const db = c.get("db");
+    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, tran_id)).get();
+    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
+  }
   return c.redirect(`${storefront}/cart?error=payment_cancelled&orderId=${encodeURIComponent(tran_id)}`);
 });
 
