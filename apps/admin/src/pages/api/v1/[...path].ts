@@ -13,19 +13,62 @@ import { env as cfEnv } from "cloudflare:workers";
 export const prerender = false;
 
 /**
- * Pass through the standard API envelope as-is.
- * Admin components consume { success, data } directly.
+ * Unwrap the standardized API response envelope for admin components.
+ *
+ * API returns: { success: true, data: T }
+ * Admin expects: { success: true, ...T } (when T is an object)
+ *
+ * For arrays or non-object data, pass through as-is.
  */
-async function passthroughResponse(response: Response): Promise<Response> {
-  // Clone headers so we can strip content-length (body may differ after re-reading)
+async function unwrapStandardizedResponse(response: Response): Promise<Response> {
+  // Clone headers so we can strip content-length (body may differ after re-serialization)
   const headers = new Headers(response.headers);
   headers.delete("content-length");
 
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+
+  try {
+    const body = await response.json() as Record<string, unknown>;
+
+    // Only unwrap if body has our standard envelope shape
+    if (
+      body &&
+      typeof body === "object" &&
+      "data" in body &&
+      body.data !== null &&
+      typeof body.data === "object" &&
+      !Array.isArray(body.data)
+    ) {
+      // Flatten: { success: true, data: { orders: [...] } } → { success: true, orders: [...] }
+      const unwrapped = { success: body.success, ...(body.data as Record<string, unknown>) };
+      return new Response(JSON.stringify(unwrapped), {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    }
+
+    // Pass through as-is for non-standard shapes, arrays, errors, etc.
+    return new Response(JSON.stringify(body), {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  } catch {
+    // If JSON parsing fails, pass through raw response
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
 }
 
 export const ALL: APIRoute = async (ctx) => {
@@ -66,5 +109,5 @@ export const ALL: APIRoute = async (ctx) => {
     });
   }
 
-  return passthroughResponse(response);
+  return unwrapStandardizedResponse(response);
 };
