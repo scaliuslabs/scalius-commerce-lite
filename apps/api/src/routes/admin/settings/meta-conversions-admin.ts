@@ -58,17 +58,19 @@ app.openapi(saveSettingsRoute, async (c) => {
             accessToken = existingSettings.accessToken;
         }
 
-        let result;
+        let resultArr;
         if (existingSettings) {
-            [result] = await db.update(metaConversionsSettings)
+            resultArr = await db.update(metaConversionsSettings)
                 .set({ pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, updatedAt: sql`(cast(strftime('%s','now') as int))` })
                 .where(eq(metaConversionsSettings.id, "singleton")).returning();
         } else {
-            [result] = await db.insert(metaConversionsSettings)
+            resultArr = await db.insert(metaConversionsSettings)
                 .values({ id: "singleton", pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, createdAt: sql`(cast(strftime('%s','now') as int))`, updatedAt: sql`(cast(strftime('%s','now') as int))` })
                 .returning();
         }
+        const result = resultArr[0];
 
+        if (!result) throw new Error("Failed to save settings");
         const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
         return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
     } catch (error) {

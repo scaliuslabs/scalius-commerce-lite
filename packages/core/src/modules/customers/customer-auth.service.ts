@@ -101,7 +101,7 @@ export function generateOtpCode(): string {
 export function getSessionCookie(cookieHeader: string | null): string | null {
     if (!cookieHeader) return null;
     const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`));
-    return match ? match[1] : null;
+    return match ? (match[1] ?? null) : null;
 }
 
 export function getRootDomainAttr(url?: string): string {

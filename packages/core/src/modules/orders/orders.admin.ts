@@ -117,7 +117,7 @@ export async function getOrders(options: {
         whereConditions.push(sql`${orders.createdAt} <= ${endTs}`);
     }
 
-    const [{ count }] = await db
+    const countArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(orders)
         .where(
@@ -125,6 +125,7 @@ export async function getOrders(options: {
                 ? sql`${sql.join(whereConditions, sql` AND `)}`
                 : undefined,
         );
+    const count = countArr[0]?.count ?? 0;
 
     const results = await db
         .select({
@@ -703,7 +704,7 @@ export async function updateOrder(id: string, data: UpdateOrderData): Promise<{ 
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
             }).returning();
-            customerId = newCustomer.id;
+            if (newCustomer) customerId = newCustomer.id;
         }
     }
 
@@ -738,7 +739,10 @@ export async function updateOrder(id: string, data: UpdateOrderData): Promise<{ 
     if (updateResult.length === 0) {
         throw new ConflictError("Order was modified by another request. Please reload and try again.");
     }
-    const [order] = updateResult;
+    const order = updateResult[0];
+    if (!order) {
+        throw new ConflictError("Order update failed unexpectedly.");
+    }
 
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
 

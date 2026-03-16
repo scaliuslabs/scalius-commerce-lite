@@ -156,7 +156,7 @@ async function getAttributeFilters(
   const validSlugs = new Set(allAttributes.map((a) => a.slug));
   return potentialAttributeKeys
     .filter((k) => validSlugs.has(k) && queryParams[k])
-    .map((k) => ({ slug: k, value: queryParams[k] }));
+    .map((k) => ({ slug: k, value: queryParams[k] ?? "" }));
 }
 
 export { app as productRoutes };

@@ -27,7 +27,8 @@ export const MediaService = {
         }
 
         const whereClause = sql.join(conditions, sql` AND `);
-        const [{ count }] = await dbOp.select({ count: sql<number>`count(*)` }).from(media).where(whereClause);
+        const countArr = await dbOp.select({ count: sql<number>`count(*)` }).from(media).where(whereClause);
+        const count = countArr[0]?.count ?? 0;
 
         const files = await dbOp
             .select()
@@ -68,6 +69,7 @@ export const MediaService = {
             for (let i = 0; i < batch.length; i++) {
                 const file = batch[i];
                 const fileIndex = batchStart + i;
+                if (!file) continue;
 
                 try {
                     if (!file.name || file.name.trim() === "") {
@@ -86,7 +88,7 @@ export const MediaService = {
 
                     const uploadResult = await uploadFile(file);
 
-                    const [mediaFile] = await dbOp.insert(media).values({
+                    const mediaFileArr = await dbOp.insert(media).values({
                         id: "media_" + nanoid(),
                         filename: uploadResult.filename,
                         url: uploadResult.url,
@@ -97,14 +99,17 @@ export const MediaService = {
                         updatedAt: now,
                     }).returning();
 
-                    uploadedFiles.push({
-                        id: mediaFile.id,
-                        url: mediaFile.url,
-                        filename: mediaFile.filename,
-                        size: mediaFile.size,
-                        mimeType: mediaFile.mimeType,
-                        createdAt: now,
-                    });
+                    const mediaFile = mediaFileArr[0];
+                    if (mediaFile) {
+                        uploadedFiles.push({
+                            id: mediaFile.id,
+                            url: mediaFile.url,
+                            filename: mediaFile.filename,
+                            size: mediaFile.size,
+                            mimeType: mediaFile.mimeType,
+                            createdAt: now,
+                        });
+                    }
                 } catch (fileError: unknown) {
                     let errorMessage = fileError instanceof Error ? fileError.message : "Upload failed for unknown reason";
                     if (errorMessage.includes("Deserialization error")) {

@@ -95,11 +95,12 @@ export async function listCategories(
         .where(and(isNull(products.deletedAt), eq(products.isActive, true)))
         .groupBy(products.categoryId);
 
-    const [[{ count }], results, productCounts] = await db.batch([
+    const [countArr, results, productCounts] = await db.batch([
         countQuery,
         resultsQuery,
         countsQuery,
     ]);
+    const count = countArr[0]?.count ?? 0;
 
     const countMap = new Map(
         productCounts.map(({ categoryId, count }: { categoryId: string | null; count: number }) => [categoryId, Number(count)]),

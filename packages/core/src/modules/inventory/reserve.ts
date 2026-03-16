@@ -240,7 +240,7 @@ export async function reserveStockBatch(
   const entries = Array.from(merged.values());
 
   // Use the first item's orderId as the batch orderId (all items should share it)
-  const orderId = items[0].orderId;
+  const orderId = items[0]?.orderId;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     // Phase 1: Read all variant states
@@ -307,7 +307,7 @@ export async function reserveStockBatch(
       return {
         success: false,
         results: validationErrors,
-        error: validationErrors[0].error,
+        error: validationErrors[0]?.error,
       };
     }
 
@@ -362,7 +362,8 @@ export async function reserveStockBatch(
     // Phase 5: Verify all CAS updates succeeded
     const failedIndices: number[] = [];
     for (let i = 0; i < batchResults.length; i++) {
-      if (!batchResults[i] || batchResults[i].length === 0) {
+      const batchResult = batchResults[i];
+      if (!batchResult || batchResult.length === 0) {
         failedIndices.push(i);
       }
     }

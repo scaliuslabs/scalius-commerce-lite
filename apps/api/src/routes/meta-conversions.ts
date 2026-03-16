@@ -111,7 +111,7 @@ app.openapi(postEventRoute, async (c) => {
       ...body.userData,
       client_ip_address:
         body.userData.client_ip_address ||
-        c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
+        c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
         c.req.header("x-real-ip"),
       client_user_agent:
         body.userData.client_user_agent || c.req.header("user-agent")

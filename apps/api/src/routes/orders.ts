@@ -88,6 +88,7 @@ app.openapi(getOrderRoute, async (c) => {
     throw new NotFoundError("Order not found");
   }
   const order = orderResult[0];
+  if (!order) throw new NotFoundError("Order not found");
 
   const items = await db
     .select({

@@ -97,6 +97,7 @@ export async function getUserPermissions(
   }
 
   const userData = userResult[0];
+  if (!userData) return new Set();
 
   // Super admin has all permissions
   if (userData.isSuperAdmin) {
@@ -192,7 +193,7 @@ export async function checkPermissionDetailed(
     return { allowed: false, reason: "no_permission" };
   }
 
-  if (userResult[0].isSuperAdmin) {
+  if (userResult[0]?.isSuperAdmin) {
     return { allowed: true, reason: "super_admin" };
   }
 
@@ -203,7 +204,7 @@ export async function checkPermissionDetailed(
     .where(eq(permissions.name, permission))
     .limit(1);
 
-  if (permResult.length === 0) {
+  if (permResult.length === 0 || !permResult[0]) {
     return { allowed: false, reason: "no_permission" };
   }
 
@@ -220,7 +221,7 @@ export async function checkPermissionDetailed(
     )
     .limit(1);
 
-  if (override.length > 0) {
+  if (override.length > 0 && override[0]) {
     if (override[0].granted) {
       return { allowed: true, reason: "user_grant" };
     } else {
@@ -271,6 +272,7 @@ export async function getUserPermissionContext(
   }
 
   const userData = userResult[0];
+  if (!userData) return null;
 
   // Get assigned roles
   const userRoleData = await db
@@ -332,7 +334,7 @@ export async function isSuperAdmin(
     .where(eq(user.id, userId))
     .limit(1);
 
-  return result.length > 0 && result[0].isSuperAdmin === true;
+  return result.length > 0 && result[0]?.isSuperAdmin === true;
 }
 
 /**
@@ -439,7 +441,10 @@ export async function setUserPermissionOverride(
     throw new Error(`Permission "${permissionName}" not found`);
   }
 
-  const permissionId = permResult[0].id;
+  const permissionId = permResult[0]?.id;
+  if (!permissionId) {
+    throw new Error(`Permission "${permissionName}" not found`);
+  }
 
   // Check if override already exists
   const existing = await db
@@ -453,7 +458,7 @@ export async function setUserPermissionOverride(
     )
     .limit(1);
 
-  if (existing.length > 0) {
+  if (existing.length > 0 && existing[0]) {
     // Update existing override
     await db
       .update(userPermissions)
@@ -496,12 +501,15 @@ export async function removeUserPermissionOverride(
     return; // Permission doesn't exist, nothing to remove
   }
 
+  const permId = permResult[0]?.id;
+  if (!permId) return;
+
   await db
     .delete(userPermissions)
     .where(
       and(
         eq(userPermissions.userId, userId),
-        eq(userPermissions.permissionId, permResult[0].id)
+        eq(userPermissions.permissionId, permId)
       )
     );
 
@@ -528,7 +536,7 @@ export async function hasAdminAccess(
     return false;
   }
 
-  if (userResult[0].isSuperAdmin) {
+  if (userResult[0]?.isSuperAdmin) {
     return true;
   }
 

@@ -97,7 +97,8 @@ async function parallelLimit<T>(tasks: (() => Promise<T>)[], limit: number): Pro
   async function next(): Promise<void> {
     const idx = i++;
     if (idx >= tasks.length) return;
-    results[idx] = await tasks[idx]();
+    const task = tasks[idx];
+    if (task) results[idx] = await task();
     await next();
   }
   await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => next()));

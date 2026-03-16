@@ -116,7 +116,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
         ).limit(limit).offset(offset);
 
         const totalResult = await db.select({ total: count() }).from(abandonedCheckouts).where(combinedWhere);
-        const total = totalResult[0].total;
+        const total = totalResult[0]?.total ?? 0;
 
         return ok(c, {
             data: results,

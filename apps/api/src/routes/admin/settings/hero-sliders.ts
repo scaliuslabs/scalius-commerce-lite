@@ -68,7 +68,7 @@ app.openapi(createSliderRoute, async (c) => {
         }
 
         const sliderId = "slider_" + nanoid();
-        const [slider] = await db.insert(heroSliders).values({
+        const sliderArr = await db.insert(heroSliders).values({
             id: sliderId,
             type: data.type,
             images: JSON.stringify(data.images),
@@ -76,6 +76,8 @@ app.openapi(createSliderRoute, async (c) => {
             createdAt: sql`CURRENT_TIMESTAMP`,
             updatedAt: sql`CURRENT_TIMESTAMP`
         }).returning();
+        const slider = sliderArr[0];
+        if (!slider) throw new Error("Failed to create slider");
 
         return created(c, { ...slider, images: JSON.parse(slider.images) });
     } catch (error) {

@@ -283,7 +283,7 @@ export async function getActivePaymentMethods(
 
   const config: PaymentMethodsConfig = {
     enabledMethods: validMethods,
-    defaultMethod: validMethods.includes(defaultMethod) ? defaultMethod : validMethods[0],
+    defaultMethod: validMethods.includes(defaultMethod) ? defaultMethod : (validMethods[0] ?? "cod"),
   };
 
   // Cache

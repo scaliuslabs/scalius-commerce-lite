@@ -92,11 +92,13 @@ export const DiscountService = {
 
             productsResult.forEach((dp) => {
                 if (!relatedProducts[dp.discountId]) relatedProducts[dp.discountId] = { buy: [], get: [] };
-                relatedProducts[dp.discountId][dp.applicationType as 'buy' | 'get'].push(dp.productId);
+                const prodEntry = relatedProducts[dp.discountId];
+                if (prodEntry) prodEntry[dp.applicationType as 'buy' | 'get'].push(dp.productId);
             });
             collectionsResult.forEach((dc) => {
                 if (!relatedCollections[dc.discountId]) relatedCollections[dc.discountId] = { buy: [], get: [] };
-                relatedCollections[dc.discountId][dc.applicationType as 'buy' | 'get'].push(dc.collectionId);
+                const collEntry = relatedCollections[dc.discountId];
+                if (collEntry) collEntry[dc.applicationType as 'buy' | 'get'].push(dc.collectionId);
             });
         }
 

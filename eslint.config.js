@@ -45,7 +45,7 @@ export default tseslint.config(
   {
     files: ["**/*.ts", "**/*.tsx", "**/*.astro"],
     rules: {
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         {

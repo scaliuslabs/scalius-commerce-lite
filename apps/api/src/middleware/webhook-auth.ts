@@ -44,7 +44,7 @@ function timingSafeEqual(a: string, b: string): boolean {
   const bufB = encoder.encode(b);
   let result = 0;
   for (let i = 0; i < bufA.length; i++) {
-    result |= bufA[i] ^ bufB[i];
+    result |= (bufA[i] ?? 0) ^ (bufB[i] ?? 0);
   }
   return result === 0;
 }
