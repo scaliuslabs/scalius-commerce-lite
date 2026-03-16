@@ -1,22 +1,23 @@
 # Inventory
 
-Stock management with reservation-based concurrency control. Handles stock reservations at checkout, deductions on payment, and releases on cancellation.
+Stock management with reservation-based concurrency control, batch operations, validation, and expiry.
 
-## Exports
+## Files
 
-- `reserveStock()` / `reserveMultiple()` — reserve stock for an order (optimistic locking via version column)
-- `deductStock()` / `deductMultiple()` — permanently deduct reserved stock
-- `releaseReservation()` / `releaseMultiple()` — release reserved stock back to available
-- `recordMovement()` — log inventory movement audit trail
-- `checkAndAlertLowStock()` — create low-stock alerts when thresholds are crossed
-- `InventoryService.getInventoryOverview()` — paginated view of variants, movements, or alerts
-- `InventoryService.adjustInventory()` — manual stock adjustment with audit logging
+- `index.ts` -- barrel exports
+- `reserve.ts` -- `reserveStock()`, `reserveMultiple()`, `reserveStockBatch()`
+- `deduct.ts` -- `deductStock()`, `deductMultiple()`
+- `release.ts` -- `releaseReservation()`, `releaseMultiple()`
+- `expiry.ts` -- `releaseExpiredReservations()` (cron), `ExpiryResult`
+- `validation.ts` -- `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()`
+- `stock-adjustment.ts` -- `adjustStock()`, `setStock()`, `lookupByBarcodeOrSku()`
+- `movements.ts` -- `recordMovement()` audit trail
+- `alerts.ts` -- `checkAndAlertLowStock()`, `LowStockAlertResult`
+- `inventory.service.ts` -- `InventoryService` (getInventoryOverview, adjustInventory)
+- `inventory.schema.ts` -- Zod validation schemas
+- `inventory-transitions.ts` -- inventory state transition helpers
+- `types.ts` -- `StockOperationResult`, `ReservationEntry`
 
 ## Dependencies
 
-- `@scalius/database` — `productVariants`, `products`, `inventoryMovements`, `productLowStockAlerts` tables
-
-## API Routes
-
-- `GET /api/v1/admin/inventory` — inventory overview (variants/movements/alerts)
-- `POST /api/v1/admin/inventory/:variantId/adjust` — manual stock adjustment
+- `@scalius/database` -- `productVariants`, `products`, `inventoryMovements`, `productLowStockAlerts`

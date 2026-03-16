@@ -1,23 +1,12 @@
 # Widgets
 
-Custom HTML/CSS widgets displayed on the homepage, positioned relative to collections or at fixed locations.
+Custom HTML/CSS widgets on the homepage, positioned relative to collections or at fixed locations.
 
-## Exports
+## Files
 
-- `listWidgets()` — all active widgets with available collections for placement reference
-- `getWidgetById()` — single widget lookup
-- `createWidget()` / `updateWidget()` / `deleteWidget()` — admin mutations
-- `bulkDeleteWidgets()` / `bulkActivateWidgets()` / `bulkDeactivateWidgets()` / `restoreWidgets()` — bulk ops
-- `createWidgetSchema` / `updateWidgetSchema` — Zod validation with placement rule constraints
-- `CreateWidgetInput` / `UpdateWidgetInput` — TypeScript types
+- `index.ts` -- barrel exports
+- `widgets.service.ts` -- `listWidgets()`, `getWidgetById()`, `createWidget()`, `updateWidget()`, `deleteWidget()`, `bulkDeleteWidgets()`, `bulkActivateWidgets()`, `bulkDeactivateWidgets()`, `restoreWidgets()`
 
 ## Dependencies
 
-- `@scalius/database` — `widgets`, `collections` tables
-
-## API Routes
-
-- `GET /api/v1/widgets` — list widgets (admin)
-- `POST /api/v1/widgets` — create widget
-- `PUT /api/v1/widgets/:id` — update widget
-- `DELETE /api/v1/widgets/:id` — soft-delete widget
+- `@scalius/database` -- `widgets`, `collections`

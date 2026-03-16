@@ -1,24 +1,14 @@
 # Media
 
-File upload, storage, and folder management for product images and other media assets. Uploads to Cloudflare R2.
+File upload/storage/folder management for product images and assets via Cloudflare R2.
 
-## Exports
+## Files
 
-- `MediaService.listFiles()` — paginated file listing with search and folder filtering
-- `MediaService.uploadFiles()` — batch file upload to R2 with size/count validation
-- `MediaService.updateFile()` / `MediaService.deleteFile()` — file mutations
-- `MediaService.moveFiles()` — bulk move files between folders
-- `MediaService.listFolders()` / `MediaService.createFolder()` / `MediaService.deleteFolder()` — folder CRUD
-- `mediaSchema` — Zod validation schemas
+- `index.ts` -- barrel exports
+- `media.service.ts` -- `MediaService` (listFiles, uploadFiles, updateFile, deleteFile, moveFiles, listFolders, createFolder, deleteFolder)
+- `media.schema.ts` -- Zod validation schemas
 
 ## Dependencies
 
-- `@scalius/database` — `media`, `mediaFolders` tables
-- `@scalius/core/integrations/storage` — R2 upload/delete helpers
-
-## API Routes
-
-- `GET /api/v1/media` — list media files
-- `POST /api/v1/media` — upload files
-- `DELETE /api/v1/media/:id` — delete a file
-- `GET /api/v1/media/folders` — list folders
+- `@scalius/database` -- `media`, `mediaFolders`
+- `@scalius/core/integrations/storage` -- R2 upload/delete helpers
