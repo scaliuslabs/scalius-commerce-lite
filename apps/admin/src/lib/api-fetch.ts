@@ -1,106 +1,171 @@
 /**
  * SSR-side API fetching for Astro pages.
  *
- * All requests go through the admin proxy at /api/v1/admin/ which
- * transforms API responses from { success: true, data: T } to
- * { success: true, ...T }. These helpers strip the `success` flag
- * and return the remaining fields as T.
+ * Calls the API worker directly:
+ * - Production: via Cloudflare Service Binding (env.API) — zero latency
+ * - Local dev: via HTTP to localhost:8787
+ *
+ * Handles the standard API envelope { success: true, data: T },
+ * unwrapping to return T directly.
  */
 
-const PROXY_BASE = "/api/v1/admin";
+import { env as cfEnv } from "cloudflare:workers";
 
-interface ProxyResponse {
+const API_PATH_PREFIX = "/api/v1/admin";
+
+/**
+ * Per-request headers storage.
+ * Set by middleware before page rendering so loaders can forward auth cookies.
+ */
+let _requestHeaders: Headers | undefined;
+
+/** Called by middleware to store the current request's headers. */
+export function setRequestHeaders(headers: Headers): void {
+  _requestHeaders = headers;
+}
+
+/** Get stored request headers (for forwarding auth cookies to API). */
+function getForwardHeaders(): HeadersInit {
+  if (!_requestHeaders) return {};
+  // Forward cookie and authorization headers for auth
+  const forwarded: Record<string, string> = {};
+  const cookie = _requestHeaders.get("cookie");
+  if (cookie) forwarded["cookie"] = cookie;
+  const auth = _requestHeaders.get("authorization");
+  if (auth) forwarded["authorization"] = auth;
+  return forwarded;
+}
+
+interface ApiEnvelope {
   success: boolean;
-  error?: string;
-  errorCode?: string;
+  data?: unknown;
+  error?: { code?: string; message?: string } | string;
   [key: string]: unknown;
 }
 
 /**
- * Strip the `success` flag from a proxy response and return the rest as T.
- * Throws on non-OK status or success: false.
+ * Resolve the CF env for service binding or fallback URL.
+ */
+function getEnv(): Record<string, unknown> | undefined {
+  try {
+    const e = cfEnv as unknown as Record<string, unknown>;
+    return e?.API || e?.PUBLIC_API_BASE_URL || e?.ASSETS ? e : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Parse API response envelope. The API returns { success, data: T }.
+ * Returns T directly. Throws on error.
  */
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = `API error: ${response.status} ${response.statusText}`;
     try {
-      const body = (await response.json()) as ProxyResponse;
-      if (body.error) {
-        message = String(body.error);
-      }
+      const body = (await response.json()) as ApiEnvelope;
+      const err = body.error;
+      if (typeof err === "string") message = err;
+      else if (err && typeof err === "object" && "message" in err)
+        message = err.message ?? message;
     } catch {
-      // Use default message if JSON parsing fails
+      // Use default message
     }
     throw new Error(message);
   }
 
-  // 204 No Content — nothing to parse
-  if (response.status === 204) {
-    return undefined as T;
-  }
+  if (response.status === 204) return undefined as T;
 
-  const body = (await response.json()) as ProxyResponse;
-
+  const body = (await response.json()) as ApiEnvelope;
   if (body.success === false) {
-    throw new Error(body.error ?? "Unknown API error");
+    const err = body.error;
+    const msg =
+      typeof err === "string"
+        ? err
+        : err && typeof err === "object" && "message" in err
+          ? (err.message ?? "Unknown API error")
+          : "Unknown API error";
+    throw new Error(msg);
   }
 
-  // Strip `success` and return the rest as T
-  const { success: _, ...data } = body;
-  return data as T;
+  // API returns { success, data: T } — return data
+  // Some endpoints return data at top level (non-standard), handle both
+  if (body.data !== undefined) return body.data as T;
+
+  // Fallback: strip success and return the rest
+  const { success: _, ...rest } = body;
+  return rest as T;
 }
 
 /**
- * Build a full URL from a path and optional query params.
- * The path should NOT include the /api/v1/admin prefix.
+ * Build URL path with query params.
  */
-function buildUrl(path: string, params?: Record<string, string>): string {
+function buildPath(path: string, params?: Record<string, string>): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${PROXY_BASE}${normalizedPath}`;
-
-  if (!params || Object.keys(params).length === 0) {
-    return url;
-  }
-
-  const searchParams = new URLSearchParams(params);
-  return `${url}?${searchParams.toString()}`;
+  const fullPath = `${API_PATH_PREFIX}${normalizedPath}`;
+  if (!params || Object.keys(params).length === 0) return fullPath;
+  const sp = new URLSearchParams(params);
+  return `${fullPath}?${sp.toString()}`;
 }
 
-/** GET request through the admin proxy. */
+/**
+ * Execute a fetch against the API worker.
+ * Uses service binding in production, HTTP in dev.
+ */
+async function apiFetch(
+  method: string,
+  path: string,
+  options?: { params?: Record<string, string>; body?: unknown },
+): Promise<Response> {
+  const pathAndQuery = buildPath(path, options?.params);
+  const env = getEnv();
+
+  const forwardHeaders = getForwardHeaders();
+  const fetchOptions: RequestInit = {
+    method,
+    headers: {
+      ...forwardHeaders,
+      ...(options?.body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: options?.body ? JSON.stringify(options.body) : undefined,
+  };
+
+  // Production: service binding
+  if (env && (env as any).API) {
+    const target = new URL(pathAndQuery, "http://api.internal").toString();
+    return (env as any).API.fetch(target, fetchOptions);
+  }
+
+  // Local dev: HTTP to API worker
+  const apiBase =
+    (env as any)?.PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+  const target = new URL(pathAndQuery, apiBase).toString();
+  return fetch(target, fetchOptions);
+}
+
+/** GET request to the API worker. */
 export async function apiGet<T>(
   path: string,
   params?: Record<string, string>,
 ): Promise<T> {
-  const url = buildUrl(path, params);
-  const response = await fetch(url);
+  const response = await apiFetch("GET", path, { params });
   return handleResponse<T>(response);
 }
 
-/** POST request through the admin proxy. */
+/** POST request to the API worker. */
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const url = buildUrl(path);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const response = await apiFetch("POST", path, { body });
   return handleResponse<T>(response);
 }
 
-/** PUT request through the admin proxy. */
+/** PUT request to the API worker. */
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  const url = buildUrl(path);
-  const response = await fetch(url, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const response = await apiFetch("PUT", path, { body });
   return handleResponse<T>(response);
 }
 
-/** DELETE request through the admin proxy. */
+/** DELETE request to the API worker. */
 export async function apiDelete(path: string): Promise<void> {
-  const url = buildUrl(path);
-  const response = await fetch(url, { method: "DELETE" });
+  const response = await apiFetch("DELETE", path);
   await handleResponse<void>(response);
 }
