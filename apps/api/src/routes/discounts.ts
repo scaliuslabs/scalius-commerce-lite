@@ -142,11 +142,6 @@ export async function isDiscountValid(
     return { valid: false, error: "Invalid discount code" };
   }
 
-  // For product-specific discounts, pre-populate the cache
-  if (discount.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
-    await _tryPopulateApplicableProductCache(db, discount.id);
-  }
-
   // Check if minimum purchase amount is met
   if (
     discount.minPurchaseAmount &&
@@ -304,7 +299,7 @@ export async function isDiscountValid(
 }
 
 // Calculate the discount amount for a validated discount
-export function calculateDiscountAmount(
+export async function calculateDiscountAmount(
   db: Database,
   discount: {
     id: string;
@@ -315,7 +310,7 @@ export function calculateDiscountAmount(
   total: number,
   cartItems: Array<{ id: string; price: number; quantity: number; variantId?: string }>,
   shippingCost: number = 0,
-): number {
+): Promise<number> {
   if (discount.type === DiscountType.FREE_SHIPPING) {
     return shippingCost;
   }
@@ -344,12 +339,34 @@ export function calculateDiscountAmount(
       return 0;
     }
 
-    if (!_applicableProductCache.has(discount.id)) {
-      _tryPopulateApplicableProductCache(db, discount.id);
-    }
+    // Query applicable product IDs directly from DB (no cache)
+    const applicableProductIds = new Set<string>();
 
-    const applicableProductIds =
-      _applicableProductCache.get(discount.id) || new Set<string>();
+    const discountProductsResult = await db
+      .select({ productId: discountProducts.productId })
+      .from(discountProducts)
+      .where(eq(discountProducts.discountId, discount.id))
+      .all();
+    discountProductsResult.forEach((dp) =>
+      applicableProductIds.add(dp.productId),
+    );
+
+    const discountCollectionsResult = await db
+      .select({ collectionId: discountCollections.collectionId })
+      .from(discountCollections)
+      .where(eq(discountCollections.discountId, discount.id))
+      .all();
+
+    if (discountCollectionsResult.length > 0) {
+      const collectionIds = discountCollectionsResult.map(
+        (dc) => dc.collectionId,
+      );
+      const productIdsFromCollections = await expandCollectionsToProductIds(
+        db,
+        collectionIds,
+      );
+      productIdsFromCollections.forEach((id) => applicableProductIds.add(id));
+    }
 
     let applicableProductsTotal = 0;
     for (const item of cartItems) {
@@ -373,51 +390,6 @@ export function calculateDiscountAmount(
   }
 
   return 0;
-}
-
-// Cache for applicable product IDs by discount ID
-const _applicableProductCache = new Map<string, Set<string>>();
-
-// Populate the cache with applicable product IDs for a discount
-async function _tryPopulateApplicableProductCache(
-  db: Database,
-  discountId: string,
-): Promise<void> {
-  try {
-    const applicableProductIds = new Set<string>();
-
-    const discountProductsResult = await db
-      .select({ productId: discountProducts.productId })
-      .from(discountProducts)
-      .where(eq(discountProducts.discountId, discountId))
-      .all();
-
-    discountProductsResult.forEach((dp) =>
-      applicableProductIds.add(dp.productId),
-    );
-
-    const discountCollectionsResult = await db
-      .select({ collectionId: discountCollections.collectionId })
-      .from(discountCollections)
-      .where(eq(discountCollections.discountId, discountId))
-      .all();
-
-    if (discountCollectionsResult.length > 0) {
-      const collectionIds = discountCollectionsResult.map(
-        (dc) => dc.collectionId,
-      );
-      const productIdsFromCollections = await expandCollectionsToProductIds(
-        db,
-        collectionIds,
-      );
-      productIdsFromCollections.forEach((id) => applicableProductIds.add(id));
-    }
-
-    _applicableProductCache.set(discountId, applicableProductIds);
-  } catch (error) {
-    console.error("Error populating applicable product cache:", error);
-    _applicableProductCache.set(discountId, new Set<string>());
-  }
 }
 
 // GET /discounts/validate — validate a discount code
@@ -481,7 +453,7 @@ app.openapi(validateDiscountRoute, async (c) => {
 
   // If valid, calculate the discount amount
   if (validationResult.valid && validationResult.discount) {
-    const discountAmount = calculateDiscountAmount(
+    const discountAmount = await calculateDiscountAmount(
       db,
       validationResult.discount,
       total || 0,

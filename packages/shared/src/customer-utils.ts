@@ -38,6 +38,28 @@ export function standardizePhoneNumber(phone: string): string {
 }
 
 /**
+ * Normalize a phone number to E.164 storage format.
+ * Strips spaces, dashes, and parentheses. Prepends country code if missing.
+ * Default country code: +880 (Bangladesh).
+ *
+ * Use this for DB storage. The existing standardizePhoneNumber() remains
+ * for display purposes (local format).
+ */
+export function normalizePhone(
+  phone: string,
+  countryCode: string = "+880",
+): string {
+  let cleaned = phone.replace(/[\s\-()]/g, "");
+  if (cleaned.startsWith("0")) {
+    cleaned = countryCode + cleaned.slice(1);
+  }
+  if (!cleaned.startsWith("+")) {
+    cleaned = "+" + cleaned;
+  }
+  return cleaned;
+}
+
+/**
  * Updates customer stats based on an order
  */
 export function calculateCustomerStats(
