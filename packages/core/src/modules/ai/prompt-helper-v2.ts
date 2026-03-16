@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 /**
  * Prompt Helper V2 - Structured Messages with Caching Support
  *

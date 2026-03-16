@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import {
   getMessaging,
@@ -174,7 +176,7 @@ function setupForegroundMessageListener() {
     const link = payload.data?.link;
 
     const audio = new Audio("/alert.mp3");
-    audio.play().catch((e) => console.warn("Error playing sound:", e.message));
+    audio.play().catch((e: Error) => console.warn("Error playing sound:", e.message));
 
     showCustomFCMToast(title, body, link);
   });

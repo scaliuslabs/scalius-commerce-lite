@@ -1,8 +1,19 @@
 // src/lib/rbac/api-protection.ts
 // Higher-order function and utilities for protecting API routes with permissions
 
-import type { APIRoute, APIContext } from "astro";
 import type { Database } from "@scalius/database/client";
+
+/** Generic request context compatible with Astro's APIContext */
+interface GenericAPIContext {
+  locals: Record<string, any>;
+  request: Request;
+  url: URL;
+  params: Record<string, string | undefined>;
+  [key: string]: any;
+}
+
+/** Generic API route handler compatible with Astro's APIRoute */
+type GenericAPIRoute = (context: GenericAPIContext) => Response | Promise<Response>;
 import { hasPermission, hasAnyPermission, hasAllPermissions, isSuperAdmin } from "./helpers";
 import type { PermissionName } from "./types";
 
@@ -105,9 +116,9 @@ export async function checkAllPermissionsForApi(
  */
 export function withPermission(
   permission: PermissionName | string,
-  handler: APIRoute
-): APIRoute {
-  return async (context: APIContext) => {
+  handler: GenericAPIRoute
+): GenericAPIRoute {
+  return async (context: GenericAPIContext) => {
     const { getDb } = await import("@scalius/database/client");
     const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
     const userId = context.locals.user?.id;
@@ -132,9 +143,9 @@ export function withPermission(
  */
 export function withAnyPermission(
   permissions: (PermissionName | string)[],
-  handler: APIRoute
-): APIRoute {
-  return async (context: APIContext) => {
+  handler: GenericAPIRoute
+): GenericAPIRoute {
+  return async (context: GenericAPIContext) => {
     const { getDb } = await import("@scalius/database/client");
     const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
     const userId = context.locals.user?.id;
@@ -159,9 +170,9 @@ export function withAnyPermission(
  */
 export function withAllPermissions(
   permissions: (PermissionName | string)[],
-  handler: APIRoute
-): APIRoute {
-  return async (context: APIContext) => {
+  handler: GenericAPIRoute
+): GenericAPIRoute {
+  return async (context: GenericAPIContext) => {
     const { getDb } = await import("@scalius/database/client");
     const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
     const userId = context.locals.user?.id;
@@ -181,8 +192,8 @@ export function withAllPermissions(
  *   // Handler code - only runs if user is super admin
  * });
  */
-export function withSuperAdmin(handler: APIRoute): APIRoute {
-  return async (context: APIContext) => {
+export function withSuperAdmin(handler: GenericAPIRoute): GenericAPIRoute {
+  return async (context: GenericAPIContext) => {
     const { getDb } = await import("@scalius/database/client");
     const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
     const userId = context.locals.user?.id;
