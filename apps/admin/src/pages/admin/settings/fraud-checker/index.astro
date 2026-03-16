@@ -16,69 +16,6 @@ const providers = dbProviders.map(provider => ({
   apiKey: provider.apiKey ? MASKED_VALUE : "",
 }));
 
-const clientActions = `
-  window.fraudCheckerActions = {
-    async saveProvider(provider) {
-      try {
-        const method = provider.id ? 'PUT' : 'POST';
-        const response = await fetch('/api/v1/admin/fraud-checker', {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(provider)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to save provider");
-        }
-        
-        return response.json();
-      } catch (error) {
-        console.error('Error in saveProvider:', error);
-        throw error;
-      }
-    },
-    
-    async deleteProvider(id) {
-      try {
-        const response = await fetch(\`/api/v1/admin/settings/fraud-checker/\${id}\`, {
-          method: 'DELETE'
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to delete provider");
-        }
-        
-        return true;
-      } catch (error) {
-        console.error('Error in deleteProvider:', error);
-        throw error;
-      }
-    },
-    
-    async testProvider(id) {
-      try {
-        const response = await fetch(\`/api/v1/admin/settings/fraud-checker/\${id}/test\`, {
-          method: 'POST'
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(e => ({ error: 'Failed to parse error response' }));
-          return { 
-            success: false, 
-            message: errorData.error || "Failed to test provider connection" 
-          };
-        }
-        
-        return response.json();
-      } catch (error) {
-        console.error('Error in testProvider:', error);
-        return { success: false, message: error.message || "Failed to test provider" };
-      }
-    }
-  };
-`;
 ---
 
 <AdminLayout title="Fraud Checker Settings">
@@ -95,5 +32,8 @@ const clientActions = `
     <FraudCheckerSettings client:idle providers={providers} />
   </div>
 
-  <script is:inline set:html={clientActions} />
+  <script>
+    import { initFraudCheckerActions } from "@/lib/client/fraud-checker-actions";
+    initFraudCheckerActions();
+  </script>
 </AdminLayout>
