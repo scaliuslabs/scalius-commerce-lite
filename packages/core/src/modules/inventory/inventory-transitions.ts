@@ -30,6 +30,67 @@ const STOCK_DEDUCT_STATUSES = new Set(["shipped"]);
 export type InventoryAction = "none" | "reserved" | "deducted" | "restored";
 
 /**
+ * Build inventory SQL statements for a status change WITHOUT executing them.
+ * Used by callers that need to include inventory in a larger db.batch().
+ *
+ * The CAS-based stock operations (deductOrderStock / releaseOrderReservations)
+ * still execute internally — they have their own multi-row update logic.
+ * What we batch with callers is only the inventoryAction flag update on the order.
+ *
+ * Returns empty statements array if no inventory action is needed.
+ */
+export async function buildInventoryStatements(
+    db: Database,
+    orderId: string,
+    newStatus: string,
+): Promise<{ statements: any[]; newAction: InventoryAction }> {
+    const order = await db
+        .select({
+            id: orders.id,
+            status: orders.status,
+            inventoryAction: orders.inventoryAction,
+            inventoryPool: orders.inventoryPool,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .get();
+
+    if (!order) return { statements: [], newAction: "none" };
+
+    const currentAction = order.inventoryAction as InventoryAction;
+    const needsRestore = STOCK_RESTORE_STATUSES.has(newStatus);
+    const needsDeduct = STOCK_DEDUCT_STATUSES.has(newStatus);
+
+    if (needsRestore && currentAction === "reserved") {
+        // Release reservations — uses its own DB calls (CAS-based)
+        await releaseOrderReservations(db, orderId, order.inventoryPool);
+        return {
+            statements: [
+                db.update(orders)
+                    .set({ inventoryAction: "restored", updatedAt: sql`unixepoch()` })
+                    .where(eq(orders.id, orderId)),
+            ],
+            newAction: "restored",
+        };
+    }
+
+    if (needsDeduct && currentAction === "reserved") {
+        // Permanently deduct stock — uses its own DB calls (CAS-based)
+        await deductOrderStock(db, orderId, order.inventoryPool);
+        return {
+            statements: [
+                db.update(orders)
+                    .set({ inventoryAction: "deducted", updatedAt: sql`unixepoch()` })
+                    .where(eq(orders.id, orderId)),
+            ],
+            newAction: "deducted",
+        };
+    }
+
+    return { statements: [], newAction: currentAction };
+}
+
+/**
  * Apply the correct inventory adjustment when an order's status changes.
  *
  * This function is IDEMPOTENT: calling it multiple times with the same
@@ -43,60 +104,11 @@ export async function applyInventoryForStatusChange(
     orderId: string,
     newStatus: string,
 ): Promise<InventoryAction> {
-    // 1. Read current order state
-    const order = await db
-        .select({
-            id: orders.id,
-            status: orders.status,
-            inventoryAction: orders.inventoryAction,
-            inventoryPool: orders.inventoryPool,
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId))
-        .get();
-
-    if (!order) return "none";
-
-    const currentAction = order.inventoryAction as InventoryAction;
-    const needsRestore = STOCK_RESTORE_STATUSES.has(newStatus);
-    const needsDeduct = STOCK_DEDUCT_STATUSES.has(newStatus);
-
-    // 2. Determine the correct transition
-    if (needsRestore) {
-        // Transitioning to a "dead" status → restore inventory if applicable
-        if (currentAction === "reserved") {
-            // Release reservations (reservedStock--)
-            await releaseOrderReservations(db, orderId, order.inventoryPool);
-            await updateInventoryAction(db, orderId, "restored");
-            return "restored";
-        }
-
-        if (currentAction === "deducted") {
-            // Stock was already permanently deducted (order was shipped).
-            // Do NOT auto-restore — admin must manually adjust inventory
-            // after physically confirming stock is returned to warehouse.
-            return "deducted";
-        }
-
-        // currentAction is "none" or "restored" → no-op (nothing to undo)
-        return currentAction;
+    const { statements, newAction } = await buildInventoryStatements(db, orderId, newStatus);
+    if (statements.length > 0) {
+        await db.batch(statements as any);
     }
-
-    if (needsDeduct) {
-        // Transitioning to an active/confirmed status
-        if (currentAction === "reserved") {
-            // Permanently deduct stock using the reservations
-            await deductOrderStock(db, orderId, order.inventoryPool);
-            await updateInventoryAction(db, orderId, "deducted");
-            return "deducted";
-        }
-    }
-
-    // Transitioning AWAY from a "dead" status back to an active one
-    // (e.g. cancelled → pending). We do NOT re-deduct stock here.
-    // The admin must explicitly manage stock if they reactivate an order.
-    // This prevents accidental double-deductions.
-    return currentAction;
+    return newAction;
 }
 
 /**
@@ -173,22 +185,4 @@ async function releaseOrderReservations(
     if (entries.length > 0) {
         await releaseMultiple(db, entries, orderId);
     }
-}
-
-
-/**
- * Update the inventoryAction field on an order.
- */
-async function updateInventoryAction(
-    db: Database,
-    orderId: string,
-    action: InventoryAction,
-): Promise<void> {
-    await db
-        .update(orders)
-        .set({
-            inventoryAction: action,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(orders.id, orderId));
 }
