@@ -1,99 +1,44 @@
 ---
-// src/layouts/AdminLayout.astro
-import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { UserMenu } from "@/components/auth/UserMenu";
-import {
-  LayoutDashboard,
-  ShoppingCart,
-  FolderTree,
-  ListTree,
-  Layers3,
-  Images,
-  FileText,
-  Blocks,
-  Menu,
-  Settings,
-  SlidersHorizontal,
-  Truck,
-  Database,
-  ShoppingBag,
-  BadgePercent,
-  BarChart3,
-  Users,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ShieldCheck,
-  Clock3,
-  Bell,
-  UserCog,
-  CreditCard,
-  Warehouse,
-  Palette,
-  ScanBarcode,
-} from "lucide-react";
-
+// src/layouts/AdminLayout.astro — Orchestrator
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ClientRouter } from "astro:transitions";
 import "../styles/global.css";
-import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
-import { CacheNukeButton } from "@/components/admin/CacheNukeButton";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button.tsx";
 import SideBar from "@/components/admin/adminLayout/SideBar.astro";
 import { generateAdminBreadcrumbs } from "@/lib/adminBreadCrumb";
 import favicon from "@/assets/favicon.png";
-import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { getFilteredNavSections } from "./components/AdminNav";
+import ThemeInit from "./components/ThemeInit.astro";
+import AdminHeader from "./components/AdminHeader.astro";
+import AdminSpinner from "./components/AdminSpinner.astro";
+import UserContext from "./components/UserContext.astro";
+import FirebaseInit from "./components/FirebaseInit.astro";
 
 interface Props {
   title: string;
 }
 
 const { title } = Astro.props;
-
-// Get current path
 const currentPath = Astro.url.pathname;
 
-// Get user and session from middleware
+// Auth gate
 const user = Astro.locals.user;
 const session = Astro.locals.session;
-
-// Redirect to login if not authenticated
 if (!user || !session) {
   return Astro.redirect("/auth/login");
 }
-// Generate breadcrumb items using helper function
+
+// Breadcrumbs
 const breadcrumbItems = generateAdminBreadcrumbs(currentPath);
 
-// Define nav item types for type safety
-interface NavSubItem {
-  name: string;
-  href: string;
-  icon?: any;
-  requiredPermission?: string;
-  anyOfPermissions?: string[];
-}
-interface NavItem {
-  name: string;
-  href: string;
-  icon: any;
-  subItems?: NavSubItem[];
-  requiredPermission?: string;
-  anyOfPermissions?: string[];
-}
-interface NavSection {
-  label: string;
-  items: NavItem[];
-}
-
-// Prepare user data for UserMenu component (safe defaults when session expired)
+// User data (safe defaults when session expired)
 const userData = user ? {
   id: user.id,
   name: user.name,
   email: user.email,
-  image: user.image,
-  role: user.role,
-  twoFactorEnabled: user.twoFactorEnabled,
+  image: user.image ?? null,
+  role: user.role ?? "",
+  twoFactorEnabled: user.twoFactorEnabled ?? false,
   isSuperAdmin: (user as any).isSuperAdmin ?? false,
 } : {
   id: "",
@@ -105,151 +50,10 @@ const userData = user ? {
   isSuperAdmin: false,
 };
 
-// Get user permissions from middleware
+// Permissions + nav filtering
 const permissions = Astro.locals.permissions;
 const permissionsArray = permissions ? Array.from(permissions) : [];
-
-// Permission check helper for nav item filtering
-const userIsSuperAdmin = userData.isSuperAdmin;
-
-function hasNavPermission(item: NavItem | NavSubItem): boolean {
-  if (userIsSuperAdmin) return true;
-  if (!item.requiredPermission && !item.anyOfPermissions) return true;
-  if (item.requiredPermission) {
-    return permissions ? permissions.has(item.requiredPermission) : false;
-  }
-  if (item.anyOfPermissions) {
-    return permissions ? item.anyOfPermissions.some((p: string) => permissions.has(p)) : false;
-  }
-  return true;
-}
-
-const allNavSections: NavSection[] = [
-  {
-    label: "Commerce",
-    items: [
-      { name: "Dashboard", href: "/admin", icon: LayoutDashboard, requiredPermission: PERMISSIONS.DASHBOARD_VIEW },
-      { name: "Products", href: "/admin/products", icon: ShoppingCart, requiredPermission: PERMISSIONS.PRODUCTS_VIEW },
-      { name: "Inventory", href: "/admin/inventory", icon: Warehouse, requiredPermission: PERMISSIONS.PRODUCTS_VIEW },
-      { name: "Categories", href: "/admin/categories", icon: FolderTree, requiredPermission: PERMISSIONS.CATEGORIES_VIEW },
-      { name: "Attributes", href: "/admin/attributes", icon: ListTree, requiredPermission: PERMISSIONS.ATTRIBUTES_VIEW },
-      { name: "Collections", href: "/admin/collections", icon: Layers3, requiredPermission: PERMISSIONS.COLLECTIONS_VIEW },
-      { name: "Media", href: "/admin/media", icon: Images, requiredPermission: PERMISSIONS.MEDIA_VIEW },
-      { name: "Pages", href: "/admin/pages", icon: FileText, requiredPermission: PERMISSIONS.PAGES_VIEW },
-      { name: "Widgets", href: "/admin/widgets", icon: Blocks, requiredPermission: PERMISSIONS.WIDGETS_VIEW },
-    ],
-  },
-  {
-    label: "Sales",
-    items: [
-      { name: "Orders", href: "/admin/orders", icon: ShoppingBag, requiredPermission: PERMISSIONS.ORDERS_VIEW },
-      {
-        name: "Incomplete Orders",
-        href: "/admin/abandoned-checkouts",
-        icon: Clock3,
-        requiredPermission: PERMISSIONS.ORDERS_VIEW,
-      },
-      { name: "Discounts", href: "/admin/discounts", icon: BadgePercent, requiredPermission: PERMISSIONS.DISCOUNTS_VIEW },
-      { name: "Analytics", href: "/admin/analytics", icon: BarChart3, requiredPermission: PERMISSIONS.ANALYTICS_VIEW },
-      { name: "Customers", href: "/admin/customers", icon: Users, requiredPermission: PERMISSIONS.CUSTOMERS_VIEW },
-    ],
-  },
-  {
-    label: "Settings",
-    items: [
-      {
-        name: "Settings",
-        href: "/admin/settings",
-        icon: Settings,
-        // No permission on parent - it's a dropdown toggle, not a page link.
-        // Visibility is determined by whether any sub-items are visible.
-        // Account sub-item is always visible, so Settings always shows.
-        subItems: [
-          {
-            name: "General",
-            href: "/admin/settings",
-            icon: SlidersHorizontal,
-            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Theme",
-            href: "/admin/settings/theme",
-            icon: Palette,
-            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Account",
-            href: "/admin/settings/account",
-            icon: UserCog,
-            // Account is always accessible - no permission required (own account management)
-          },
-          {
-            name: "Notifications",
-            href: "/admin/settings/notifications",
-            icon: Bell,
-            requiredPermission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
-          },
-          {
-            name: "Hero Sliders",
-            href: "/admin/settings/hero-sliders",
-            icon: Images,
-            requiredPermission: PERMISSIONS.SETTINGS_HEADER_EDIT,
-          },
-          {
-            name: "Checkout",
-            href: "/admin/settings/checkout",
-            icon: CreditCard,
-            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Delivery Providers",
-            href: "/admin/settings/delivery-providers",
-            icon: Truck,
-            requiredPermission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
-          },
-          {
-            name: "Fraud Checker",
-            href: "/admin/settings/fraud-checker",
-            icon: ShieldCheck,
-            requiredPermission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
-          },
-          {
-            name: "Meta Conversions",
-            href: "/admin/settings/meta-conversion",
-            icon: BarChart3,
-            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Cache Settings",
-            href: "/admin/settings/cache",
-            icon: Database,
-            requiredPermission: PERMISSIONS.SETTINGS_CACHE_VIEW,
-          },
-        ],
-      },
-    ],
-  },
-];
-
-// Filter nav sections based on user permissions
-// Super admins see everything; other users only see items they have permission for
-const navSections: NavSection[] = allNavSections
-  .map((section) => ({
-    ...section,
-    items: section.items
-      .filter((item) => hasNavPermission(item))
-      .map((item) => {
-        if (item.subItems) {
-          return {
-            ...item,
-            subItems: item.subItems.filter((subItem) => hasNavPermission(subItem)),
-          };
-        }
-        return item;
-      })
-      .filter((item) => !item.subItems || item.subItems.length > 0),
-  }))
-  .filter((section) => section.items.length > 0);
+const navSections = getFilteredNavSections(permissions, userData.isSuperAdmin);
 ---
 
 <html lang="en" class="antialiased">
@@ -257,26 +61,7 @@ const navSections: NavSection[] = allNavSections
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <ClientRouter />
-    <script is:inline>
-      (function() {
-        function applyTheme() {
-          var theme = "light";
-          try { theme = localStorage.getItem("theme") || "light"; } catch(e) {}
-          if (theme === "dark") {
-            document.documentElement.classList.add("dark");
-          } else {
-            document.documentElement.classList.remove("dark");
-          }
-          document.documentElement.style.colorScheme = theme;
-        }
-        
-        // Execute immediately on initial load
-        applyTheme();
-        
-        // Ensure theme persists across Astro View Transitions
-        document.addEventListener("astro:after-swap", applyTheme);
-      })();
-    </script>
+    <ThemeInit />
     <link rel="icon" type="image/png" href={favicon.src} />
     <meta name="generator" content={Astro.generator} />
     <title>{title} - Scalius Admin</title>
@@ -290,46 +75,7 @@ const navSections: NavSection[] = allNavSections
 
       <!-- Main content -->
       <div class="flex-1 flex flex-col min-h-screen">
-        <!-- Header -->
-        <header
-          class="h-14 border-b border-border px-4 flex items-center justify-between sticky top-0 z-30 backdrop-blur-sm bg-background/95 transition-colors duration-200"
-        >
-          <div class="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              id="sidebar-toggle"
-              aria-label="Toggle sidebar"
-              className="md:hidden h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              <Menu className="w-5! h-5!" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              id="sidebar-collapse"
-              aria-label="Collapse sidebar"
-              className="hidden md:flex h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              <PanelLeftClose className="w-6! h-6! sidebar-icon-expanded" />
-              <PanelLeftOpen
-                className="w-6! h-6!  sidebar-icon-collapsed hidden"
-              />
-            </Button>
-
-            <Breadcrumb items={breadcrumbItems} client:idle />
-          </div>
-          <TooltipProvider client:idle>
-            <div class="flex items-center">
-              <CacheNukeButton client:idle />
-              <div class="h-5 w-px bg-border mx-2.5"></div>
-              <DarkModeToggle client:idle />
-              <div class="h-5 w-px bg-border mx-2.5"></div>
-              <UserMenu user={userData} client:idle />
-            </div>
-          </TooltipProvider>
-        </header>
+        <AdminHeader user={userData} breadcrumbItems={breadcrumbItems} />
 
         <main
           class="flex-1 p-6 transition-colors duration-200 relative bg-gray-50 dark:bg-[#0a0a0a]"
@@ -337,14 +83,7 @@ const navSections: NavSection[] = allNavSections
           transition:name="admin-main-content"
           transition:animate="none"
         >
-          <!-- Premium Cloudflare-style Spinner -->
-          <div id="admin-nav-spinner-overlay" aria-hidden="true">
-            <div class="sticky-spinner-wrapper">
-              <svg class="cf-spinner" viewBox="0 0 50 50">
-                <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
-              </svg>
-            </div>
-          </div>
+          <AdminSpinner />
 
           <div class="max-w-7xl mx-auto min-h-[50vh]">
             <slot />
@@ -356,185 +95,12 @@ const navSections: NavSection[] = allNavSections
     <ShadcnToaster client:idle />
     <SonnerToaster richColors closeButton client:idle />
 
-    <style is:inline>
-      #admin-nav-spinner-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: oklch(var(--background) / 0.5);
-        backdrop-filter: blur(3px);
-        z-index: 50;
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-        transition: opacity 200ms ease, visibility 200ms ease;
-      }
-
-      .sticky-spinner-wrapper {
-        position: sticky;
-        top: calc(50vh - 24px);
-        transform: translateY(-50%);
-        width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        pointer-events: none;
-        z-index: 51;
-      }
-
-      /* Show the loading UI quickly */
-      html.admin-nav-pending #admin-nav-spinner-overlay,
-      html.admin-nav-loading #admin-nav-spinner-overlay {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-        transition: opacity 150ms ease, visibility 0s;
-      }
-
-      html.admin-nav-loaded #admin-nav-spinner-overlay {
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 150ms ease, visibility 0s linear 150ms;
-      }
-
-      .cf-spinner {
-        animation: cf-rotate 2s linear infinite;
-        width: 48px;
-        height: 48px;
-        filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1));
-      }
-      
-      .cf-spinner .path {
-        stroke: #2563eb; /* Tailwind blue-600 for a consistent premium blue */
-        stroke-linecap: round;
-        animation: cf-dash 1.5s ease-in-out infinite;
-      }
-      
-      @keyframes cf-rotate {
-        100% { transform: rotate(360deg); }
-      }
-      
-      @keyframes cf-dash {
-        0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
-        50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
-        100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
-      }
-
-      html.admin-nav-pending body,
-      html.admin-nav-loading body {
-        cursor: progress;
-      }
-
-      html.admin-nav-pending #main-content,
-      html.admin-nav-loading #main-content {
-        pointer-events: none; /* Physically prevents double clicks */
-      }
-    </style>
-
     <script>
-      import { navigateTo } from "@/lib/client/navigate";
+      import { initNavProgress } from "@/lib/client/nav-progress";
 
-      (() => {
-        type AdminNavWindow = Window & {
-          __adminNavProgressBound__?: boolean;
-          __adminPendingDestination__?: string | null;
-        };
+      initNavProgress();
 
-        const navWindow = window as AdminNavWindow;
-
-        if (navWindow.__adminNavProgressBound__) return;
-        navWindow.__adminNavProgressBound__ = true;
-
-        const root = document.documentElement;
-        let resetTimer: number | undefined;
-        let navStartAt = 0;
-        const MIN_LOADER_VISIBLE_MS = 150;
-
-        const clearPendingState = () => {
-          navWindow.__adminPendingDestination__ = null;
-          root.classList.remove("admin-nav-pending");
-        };
-
-        const startLoading = () => {
-          if (resetTimer) window.clearTimeout(resetTimer);
-          navStartAt = Date.now();
-          root.classList.remove("admin-nav-loaded");
-          root.classList.add("admin-nav-pending");
-          root.classList.add("admin-nav-loading");
-        };
-
-        const stopLoading = () => {
-          const finalize = () => {
-            clearPendingState();
-            if (!root.classList.contains("admin-nav-loading")) return;
-            root.classList.add("admin-nav-loaded");
-            resetTimer = window.setTimeout(() => {
-              root.classList.remove("admin-nav-loading", "admin-nav-loaded", "admin-nav-pending");
-            }, 450);
-          };
-
-          const elapsed = navStartAt ? Date.now() - navStartAt : MIN_LOADER_VISIBLE_MS;
-          const remaining = Math.max(0, MIN_LOADER_VISIBLE_MS - elapsed);
-          if (remaining > 0) {
-            window.setTimeout(finalize, remaining);
-            return;
-          }
-          finalize();
-        };
-
-        const getInternalAdminDestination = (anchor: HTMLAnchorElement): string | null => {
-          const href = anchor.getAttribute("href");
-          if (!href || href.startsWith("#")) return null;
-          if (anchor.target && anchor.target !== "_self") return null;
-          if (anchor.hasAttribute("download") || anchor.hasAttribute("data-astro-reload")) return null;
-
-          const destination = new URL(anchor.href, window.location.href);
-          if (destination.origin !== window.location.origin) return null;
-          if (!destination.pathname.startsWith("/admin")) return null;
-
-          const isSamePathAndSearch =
-            destination.pathname === window.location.pathname &&
-            destination.search === window.location.search;
-
-          if (isSamePathAndSearch && destination.hash) return null;
-          if (destination.href === window.location.href) return null;
-
-          return destination.href;
-        };
-
-        const handleInternalAdminLinkClick = (event: MouseEvent) => {
-          if (event.defaultPrevented) return;
-          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-
-          const target = event.target as Element | null;
-          const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
-          if (!anchor) return;
-
-          const destination = getInternalAdminDestination(anchor);
-          if (!destination) return;
-
-          if (navWindow.__adminPendingDestination__ === destination) {
-            event.preventDefault();
-            return;
-          }
-
-          navWindow.__adminPendingDestination__ = destination;
-          root.classList.remove("admin-nav-loaded");
-          root.classList.add("admin-nav-pending");
-          event.preventDefault();
-          void navigateTo(destination);
-        };
-
-        document.addEventListener("astro:before-preparation", startLoading);
-        document.addEventListener("astro:after-swap", stopLoading);
-        document.addEventListener("astro:page-load", stopLoading);
-        document.addEventListener("click", handleInternalAdminLinkClick);
-      })();
-    </script>
-
-    <script>
+      // Sidebar controls — kept inline (small, DOM-coupled)
       function bindSidebarControl(
         button: HTMLElement | null,
         boundKey: "sidebarToggleBound" | "sidebarCollapseBound",
@@ -560,62 +126,14 @@ const navSections: NavSection[] = allNavSections
         document.addEventListener("astro:page-load", initializeSidebarControls);
       }
 
-      // Initialize immediately if DOM is ready, otherwise wait for it
       if (document.readyState === "loading") {
-        document.addEventListener(
-          "DOMContentLoaded",
-          initializeSidebarControls,
-          { once: true }
-        );
+        document.addEventListener("DOMContentLoaded", initializeSidebarControls, { once: true });
       } else {
         initializeSidebarControls();
       }
     </script>
 
-    <script is:inline define:vars={{ userId: user?.id ?? "", permissions: permissionsArray, isSuperAdmin: userData?.isSuperAdmin ?? false }}>
-      // Store user info in window for the module script to access
-      try {
-        if (userId) window.__USER_ID__ = userId;
-        // Store permissions for React components
-        window.__USER_PERMISSIONS__ = permissions || [];
-        window.__IS_SUPER_ADMIN__ = isSuperAdmin || false;
-      } catch (_e) {
-        // Safe defaults if user session expired
-        window.__USER_PERMISSIONS__ = [];
-        window.__IS_SUPER_ADMIN__ = false;
-      }
-    </script>
-
-    <script>
-      // Lazy-load Firebase configurations and notifications - deferred to avoid blocking page load
-      async function initializeFcmOnClient() {
-        const userId = (window as any).__USER_ID__;
-        if (!userId) return;
-
-        try {
-          // Fetch the config asynchronously on the client to avoid blocking the initial HTML stream
-          const req = await fetch('/api/v1/auth/firebase-config');
-          if (!req.ok) return;
-          const firebaseConfig = await req.json();
-
-          if (!firebaseConfig || !firebaseConfig.apiKey) {
-            return;
-          }
-
-          // Dynamic import - Firebase SDK loaded only when needed
-          const { initFirebaseClientNotifications } = await import("@scalius/core/integrations/firebase/client");
-          initFirebaseClientNotifications(userId, firebaseConfig);
-        } catch (err) {
-          console.error("Failed to load Firebase client config:", err);
-        }
-      }
-
-      // Defer Firebase init until browser is idle (or 3s timeout)
-      if ("requestIdleCallback" in window) {
-        (window as any).requestIdleCallback(initializeFcmOnClient, { timeout: 3000 });
-      } else {
-        setTimeout(initializeFcmOnClient, 3000);
-      }
-    </script>
+    <UserContext userId={user?.id ?? ""} permissions={permissionsArray} isSuperAdmin={userData?.isSuperAdmin ?? false} />
+    <FirebaseInit />
   </body>
 </html>

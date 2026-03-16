@@ -1,0 +1,90 @@
+---
+// src/layouts/components/AdminSpinner.astro
+// Navigation loading spinner overlay + CSS state machine
+---
+
+<!-- Premium Cloudflare-style Spinner -->
+<div id="admin-nav-spinner-overlay" aria-hidden="true">
+  <div class="sticky-spinner-wrapper">
+    <svg class="cf-spinner" viewBox="0 0 50 50">
+      <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
+    </svg>
+  </div>
+</div>
+
+<style is:inline>
+  #admin-nav-spinner-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: oklch(var(--background) / 0.5);
+    backdrop-filter: blur(3px);
+    z-index: 50;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 200ms ease, visibility 200ms ease;
+  }
+
+  .sticky-spinner-wrapper {
+    position: sticky;
+    top: calc(50vh - 24px);
+    transform: translateY(-50%);
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 51;
+  }
+
+  /* Show the loading UI quickly */
+  html.admin-nav-pending #admin-nav-spinner-overlay,
+  html.admin-nav-loading #admin-nav-spinner-overlay {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 150ms ease, visibility 0s;
+  }
+
+  html.admin-nav-loaded #admin-nav-spinner-overlay {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 150ms ease, visibility 0s linear 150ms;
+  }
+
+  .cf-spinner {
+    animation: cf-rotate 2s linear infinite;
+    width: 48px;
+    height: 48px;
+    filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1));
+  }
+
+  .cf-spinner .path {
+    stroke: #2563eb; /* Tailwind blue-600 for a consistent premium blue */
+    stroke-linecap: round;
+    animation: cf-dash 1.5s ease-in-out infinite;
+  }
+
+  @keyframes cf-rotate {
+    100% { transform: rotate(360deg); }
+  }
+
+  @keyframes cf-dash {
+    0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
+    50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+    100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
+  }
+
+  html.admin-nav-pending body,
+  html.admin-nav-loading body {
+    cursor: progress;
+  }
+
+  html.admin-nav-pending #main-content,
+  html.admin-nav-loading #main-content {
+    pointer-events: none; /* Physically prevents double clicks */
+  }
+</style>
