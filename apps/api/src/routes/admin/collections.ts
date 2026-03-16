@@ -16,10 +16,37 @@ import {
     createCollectionSchema,
     updateCollectionSchema
 } from "@scalius/core/modules/collections";
+import { categories, products } from "@scalius/database/schema";
+import { isNull } from "drizzle-orm";
 import { NotFoundError, ApiError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
+
+// ── Form Options (categories + products for collection form) ──
+
+const formOptionsRoute = createRoute({
+    method: "get",
+    path: "/form-options",
+    tags: ["Admin - Collections"],
+    summary: "Get categories and products for collection form",
+    responses: {
+        200: { description: "Form options" }
+    }
+});
+
+app.openapi(formOptionsRoute, async (c) => {
+    const db = c.get("db");
+    const [allCategories, allProducts] = await Promise.all([
+        db.select({ id: categories.id, name: categories.name })
+            .from(categories)
+            .where(isNull(categories.deletedAt)),
+        db.select({ id: products.id, name: products.name, price: products.price })
+            .from(products)
+            .where(isNull(products.deletedAt)),
+    ]);
+    return ok(c, { categories: allCategories, products: allProducts });
+});
 
 // ── List Collections ──
 

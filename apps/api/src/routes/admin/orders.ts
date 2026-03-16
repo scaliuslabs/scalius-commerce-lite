@@ -9,8 +9,8 @@ import {
 import { processReturn, processRefund } from "@scalius/core/modules/payments/refund-service";
 import { DeliveryService } from "@scalius/core/modules/delivery/service";
 import { ShipmentTracker } from "@scalius/core/modules/delivery/tracking";
-import { orderPayments, paymentPlans, deliveryShipments, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
-import { eq, and } from "drizzle-orm";
+import { orderPayments, paymentPlans, deliveryShipments, orderItems, products, productVariants, productImages, orders } from "@scalius/database/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -751,6 +751,100 @@ app.openapi(refundOrderRoute, async (c) => {
     const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway });
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     return ok(c, result);
+});
+
+// ─── GET /:id/form-data ──────────────────────────────────────────────────────
+
+const getFormDataRoute = createRoute({
+    method: "get",
+    path: "/{id}/form-data",
+    tags: ["Admin - Orders"],
+    summary: "Get order data with products for the edit form",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: { description: "Order form data" },
+        404: { description: "Order not found" }
+    }
+});
+
+app.openapi(getFormDataRoute, async (c) => {
+    const orderId = c.req.valid("param").id;
+    const db = c.get("db");
+
+    const [order] = await db
+        .select({
+            id: orders.id,
+            customerName: orders.customerName,
+            customerPhone: orders.customerPhone,
+            customerEmail: orders.customerEmail,
+            shippingAddress: orders.shippingAddress,
+            city: orders.city,
+            zone: orders.zone,
+            area: orders.area,
+            notes: orders.notes,
+            discountAmount: orders.discountAmount,
+            shippingCharge: orders.shippingCharge,
+            status: orders.status,
+            createdAt: orders.createdAt,
+            updatedAt: orders.updatedAt,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId));
+
+    if (!order) throw new NotFoundError("Order not found");
+
+    const [items, allProducts] = await Promise.all([
+        db
+            .select({
+                id: orderItems.id,
+                productId: orderItems.productId,
+                variantId: orderItems.variantId,
+                quantity: orderItems.quantity,
+                price: orderItems.price,
+            })
+            .from(orderItems)
+            .where(eq(orderItems.orderId, orderId)),
+        db
+            .select({
+                id: products.id,
+                name: products.name,
+                price: products.price,
+                discountPercentage: products.discountPercentage,
+            })
+            .from(products)
+            .where(isNull(products.deletedAt)),
+    ]);
+
+    // Fetch variants for each product
+    const productsWithVariants = await Promise.all(
+        allProducts.map(async (product) => {
+            const variants = await db
+                .select()
+                .from(productVariants)
+                .where(and(
+                    eq(productVariants.productId, product.id),
+                    isNull(productVariants.deletedAt),
+                ));
+            return { ...product, variants };
+        })
+    );
+
+    return ok(c, {
+        order,
+        productsWithVariants,
+        defaultValues: {
+            ...order,
+            discountAmount: order.discountAmount || null,
+            items: items.map((item) => ({
+                productId: item.productId,
+                variantId: item.variantId,
+                quantity: item.quantity,
+                price: item.price,
+            })),
+        },
+    });
 });
 
 export { app as adminOrdersRoutes };

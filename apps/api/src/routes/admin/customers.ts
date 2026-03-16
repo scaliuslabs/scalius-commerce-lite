@@ -14,6 +14,8 @@ import {
     restoreCustomer,
     bulkDeleteCustomers
 } from "@scalius/core/modules/customers";
+import { customers, customerHistory, orders, deliveryLocations } from "@scalius/database/schema";
+import { eq, sql, inArray, isNull, and } from "drizzle-orm";
 import { NotFoundError, ApiError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -228,6 +230,130 @@ app.openapi(restoreCustomerRoute, async (c) => {
     const { id } = c.req.valid("param");
     await restoreCustomer(db, id);
     return noContent(c);
+});
+
+// ── Get Customer History ──
+
+const getHistoryRoute = createRoute({
+    method: "get",
+    path: "/{id}/history",
+    tags: ["Admin - Customers"],
+    summary: "Get customer details with history and orders",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: { description: "Customer history data" },
+        404: { description: "Customer not found" }
+    }
+});
+
+app.openapi(getHistoryRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+
+    const [customerResults, history, customerOrders] = await db.batch([
+        db
+            .select({
+                id: customers.id,
+                name: customers.name,
+                email: customers.email,
+                phone: customers.phone,
+                address: customers.address,
+                city: customers.city,
+                zone: customers.zone,
+                area: customers.area,
+                totalOrders: customers.totalOrders,
+                totalSpent: customers.totalSpent,
+                lastOrderAt: sql<number>`CAST(${customers.lastOrderAt} AS INTEGER)`,
+                createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
+            })
+            .from(customers)
+            .where(eq(customers.id, id)),
+        db
+            .select({
+                id: customerHistory.id,
+                name: customerHistory.name,
+                email: customerHistory.email,
+                phone: customerHistory.phone,
+                address: customerHistory.address,
+                city: customerHistory.city,
+                zone: customerHistory.zone,
+                area: customerHistory.area,
+                cityName: customerHistory.cityName,
+                zoneName: customerHistory.zoneName,
+                areaName: customerHistory.areaName,
+                changeType: customerHistory.changeType,
+                createdAt: sql<number>`CAST(${customerHistory.createdAt} AS INTEGER)`,
+            })
+            .from(customerHistory)
+            .where(eq(customerHistory.customerId, id))
+            .orderBy(sql`${customerHistory.createdAt} DESC`),
+        db
+            .select({
+                id: orders.id,
+                totalAmount: orders.totalAmount,
+                status: orders.status,
+                createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
+            })
+            .from(orders)
+            .where(eq(orders.customerId, id))
+            .orderBy(sql`${orders.createdAt} DESC`),
+    ]);
+
+    const customer = customerResults[0];
+    if (!customer) throw new NotFoundError("Customer not found");
+
+    // Collect location IDs for name enrichment
+    const locationIds = new Set<string>();
+    if (customer.city) locationIds.add(customer.city);
+    if (customer.zone) locationIds.add(customer.zone);
+    if (customer.area) locationIds.add(customer.area);
+    for (const record of history) {
+        if (record.city) locationIds.add(record.city);
+        if (record.zone) locationIds.add(record.zone);
+        if (record.area) locationIds.add(record.area);
+    }
+
+    const locationArray = Array.from(locationIds).filter(Boolean) as string[];
+    const locationMap = new Map<string, string>();
+    if (locationArray.length > 0) {
+        const locations = await db
+            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
+            .from(deliveryLocations)
+            .where(and(inArray(deliveryLocations.id, locationArray), isNull(deliveryLocations.deletedAt)));
+        locations.forEach((loc) => locationMap.set(loc.id, loc.name));
+    }
+
+    const enrichedCustomer = {
+        ...customer,
+        lastOrderAt: customer.lastOrderAt ? new Date(customer.lastOrderAt * 1000) : null,
+        createdAt: new Date(customer.createdAt * 1000),
+        updatedAt: new Date(customer.updatedAt * 1000),
+        cityName: customer.city ? locationMap.get(customer.city) || customer.city : "",
+        zoneName: customer.zone ? locationMap.get(customer.zone) || customer.zone : "",
+        areaName: customer.area ? locationMap.get(customer.area) || customer.area : null,
+    };
+
+    const enrichedHistory = history.map((record) => ({
+        ...record,
+        createdAt: new Date(record.createdAt * 1000),
+        cityName: record.city ? locationMap.get(record.city) || record.city : "",
+        zoneName: record.zone ? locationMap.get(record.zone) || record.zone : "",
+        areaName: record.area ? locationMap.get(record.area) || record.area : null,
+    }));
+
+    const enrichedOrders = customerOrders.map((order) => ({
+        ...order,
+        createdAt: new Date(order.createdAt * 1000),
+    }));
+
+    return ok(c, {
+        customer: enrichedCustomer,
+        history: enrichedHistory,
+        orders: enrichedOrders,
+    });
 });
 
 export { app as adminCustomerRoutes };

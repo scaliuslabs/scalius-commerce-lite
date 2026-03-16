@@ -15,6 +15,24 @@ import { NotFoundError, ConflictError, ValidationError } from "../../utils/api-e
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
 
+// ── Product Stats ──
+
+const statsRoute = createRoute({
+    method: "get",
+    path: "/stats",
+    tags: ["Admin - Products"],
+    summary: "Get product and category dashboard statistics",
+    responses: {
+        200: { description: "Product stats" }
+    },
+});
+
+app.openapi(statsRoute, async (c) => {
+    const db = c.get("db");
+    const stats = await ProductsAdmin.getProductStats(db);
+    return ok(c, stats);
+});
+
 const bulkDeleteSchema = z.object({
     productIds: z.array(z.string()),
     permanent: z.boolean().default(false)
