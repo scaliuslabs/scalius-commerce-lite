@@ -3,7 +3,7 @@
 // Determines the correct payment gateway from the order's payment records
 // and dispatches the refund to either Stripe or SSLCommerz.
 
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import { orders, orderPayments, PaymentStatus, OrderStatus } from "@scalius/database/schema";
 import { createRefund as stripeRefund } from "./stripe";
 import { initiateSSLCommerzRefund } from "./sslcommerz";
@@ -71,6 +71,43 @@ export async function processRefund(
         throw new ConflictError("Order is already fully refunded");
     }
 
+    // Determine and validate refund amount before any gateway calls
+    const paidAmount = order.paidAmount ?? 0;
+    const refundAmount = roundPrice(params.amount ?? (order.paidAmount ?? order.totalAmount));
+
+    if (refundAmount <= 0) {
+        throw new ValidationError("Refund amount must be greater than zero");
+    }
+
+    if (refundAmount > paidAmount) {
+        throw new ValidationError(
+            `Refund amount (${refundAmount}) exceeds paid amount (${paidAmount})`
+        );
+    }
+
+    // Check cumulative refunds already issued against this order
+    const alreadyRefundedRow = await db
+        .select({ total: sql<number>`COALESCE(SUM(${orderPayments.amount}), 0)` })
+        .from(orderPayments)
+        .where(
+            and(
+                eq(orderPayments.orderId, params.orderId),
+                eq(orderPayments.status, "refunded")
+            )
+        )
+        .get();
+
+    const totalAlreadyRefunded = alreadyRefundedRow?.total ?? 0;
+
+    if (totalAlreadyRefunded + refundAmount > paidAmount) {
+        throw new ValidationError(
+            `Refund of ${refundAmount} would exceed the remaining refundable amount. ` +
+            `Already refunded: ${totalAlreadyRefunded}, paid: ${paidAmount}`
+        );
+    }
+
+    const isFullRefund = refundAmount >= paidAmount;
+
     // 2. Find the latest successful payment
     const payment = await db
         .select()
@@ -84,8 +121,6 @@ export async function processRefund(
     }
 
     const gateway = params.gateway ?? payment.paymentMethod;
-    const refundAmount = params.amount ?? (order.paidAmount ?? order.totalAmount);
-    const isFullRefund = refundAmount >= (order.paidAmount ?? order.totalAmount);
 
     // 3. Dispatch to gateway
     let refundId: string | undefined;
@@ -186,6 +221,9 @@ export async function processRefund(
     // 5. Handle inventory on full refund:
     //    - If still reserved (pre-ship): release reservations
     //    - If already deducted (shipped): do NOT auto-restore (admin must manually adjust)
+    // Note: partial refunds intentionally do NOT restore inventory — a partial refund
+    // does not imply the items were returned. Inventory is only restored on full refund
+    // or via the explicit return flow (processReturn).
     if (isFullRefund) {
         await applyInventoryForStatusChange(db, params.orderId, "cancelled");
     }
