@@ -1,0 +1,146 @@
+/* Sidebar transitions and layout */
+.sidebar-desktop {
+  transition:
+    width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease;
+  will-change: width;
+}
+
+.sidebar-collapsed .sidebar-nav-item {
+  justify-content: center;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.sidebar-collapsed .sidebar-store-link {
+  justify-content: center;
+}
+
+/* Submenu animations */
+.submenu-container {
+  max-height: 0;
+  transition:
+    max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease,
+    margin 0.3s ease;
+  opacity: 0;
+  overflow: hidden;
+}
+
+/* Bug fix: replaced max-height: 600px with max-height: none */
+.submenu-container:not(.hidden) {
+  max-height: none;
+  opacity: 1;
+}
+
+/* Active states */
+.sidebar-nav-item.is-active {
+  background: oklch(var(--sidebar-accent));
+  color: oklch(var(--sidebar-accent-foreground));
+  border-color: oklch(var(--sidebar-border));
+  box-shadow: 0 1px 2px 0 oklch(var(--sidebar-accent-foreground) / 0.08);
+}
+
+.sidebar-nav-item.is-active .sidebar-nav-icon,
+.sidebar-nav-item.is-active .submenu-chevron {
+  color: oklch(var(--sidebar-accent-foreground));
+}
+
+.sidebar-subnav-item.is-active {
+  background: oklch(var(--sidebar-accent));
+  color: oklch(var(--sidebar-accent-foreground));
+  font-weight: 500;
+  box-shadow: 0 1px 2px 0 oklch(var(--sidebar-accent-foreground) / 0.08);
+}
+
+.sidebar-subnav-item.is-active .sidebar-subnav-icon {
+  color: oklch(var(--sidebar-accent-foreground));
+}
+
+/* Nav item layout */
+.sidebar-nav-item {
+  position: relative;
+  transform-origin: center;
+}
+
+/* Remove old hover transform to prevent conflicts with global.css */
+.sidebar-nav-item:hover .sidebar-nav-icon {
+  /* Removed - handled in global.css */
+}
+
+.sidebar-subnav-item {
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-subnav-item:hover {
+  transform: translateX(3px);
+}
+
+/* Enhanced scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 5px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px 0;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: oklch(var(--muted-foreground) / 0.25);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: oklch(var(--muted-foreground) / 0.45);
+}
+
+/* Nav item container */
+.nav-item-container {
+  position: relative;
+}
+
+.nav-item-container:hover {
+  z-index: 1;
+}
+
+/* Smooth chevron rotation */
+.submenu-chevron {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced FOUC prevention */
+.sidebar-pre-collapsed .sidebar-desktop {
+  width: 60px !important;
+}
+
+.sidebar-pre-collapsed .sidebar-brand,
+.sidebar-pre-collapsed .sidebar-nav-text,
+.sidebar-pre-collapsed .sidebar-section-label,
+.sidebar-pre-collapsed .sidebar-subnav-text,
+.sidebar-pre-collapsed .sidebar-store-text,
+.sidebar-pre-collapsed .sidebar-submenu,
+.sidebar-pre-collapsed .sidebar-chevron,
+.sidebar-pre-collapsed .sidebar-external-icon {
+  display: none !important;
+}
+
+.sidebar-pre-collapsed .sidebar-nav-item {
+  justify-content: center !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+.sidebar-pre-collapsed .sidebar-store-link {
+  justify-content: center !important;
+}
+
+/* Only show icon when collapsed */
+.sidebar-collapsed-only {
+  display: none;
+}
+.sidebar-collapsed .sidebar-collapsed-only {
+  display: flex !important;
+}
