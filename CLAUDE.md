@@ -165,12 +165,33 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 - Apps start with staggered delays to prevent Vite inspector port conflicts
 - If ports are stuck: `lsof -ti :8787,:4321,:4322 | xargs kill -9`
 
+## Recent Changes
+
+- **Database**: 14 foreign keys, 20 indexes, 3 migrations (0019-0021)
+- **API**: response standardization, cache TTL fixes
+- **Orders**: state machine (`order-state-machine.ts`), `db.batch()` transactions, optimistic locking (version column), notification return from `updateOrderStatus()`
+- **Inventory**: `reserveStockBatch()`, validation helpers, `releaseExpiredReservations()` cron, `adjustStock()`/`setStock()`, `lookupByBarcodeOrSku()`
+- **Payments**: idempotent `processPaymentConfirmed()` (duplicate check first), state machine enforcement
+- **Delivery**: Pathao/Steadfast webhook handlers rewritten, `pathao-location-import.ts`
+- **Providers**: universal registry architecture (payments gateway-registry, delivery factory, fraud-checker registry)
+- **Admin**: component deduplication (shared `BulkActionDialog`), webhook config UI, barcode variant form
+- **Shared**: price-utils, barcode-utils, barcode-svg
+- **Products**: barcode/barcodeType on variants, `lookupByBarcode()`, barcode-aware search
+
 ## Known Backlog
 
 - **SDK needs regeneration**: `packages/api-client/openapi.json` has 60 paths from an old spec. Live API has 221 paths. Run `pnpm generate:sdk` after starting API to update.
 - **Response helpers unused**: `apps/api/src/utils/api-response.ts` exports `ok()`, `paginated()`, `created()`, `noContent()` but routes still use raw `c.json()`. Future work: standardize all 573 response calls.
 - **Major version upgrades pending**: TipTap 2->3, Firebase 11->12, Recharts 2->3, react-day-picker 8->9, @hookform/resolvers 3->5
 - **ESLint not configured**: `.prettierrc.mjs` exists for formatting but no ESLint setup yet.
+
+## Known Limitations / TODO
+
+- **Scanner app**: needs rebuild as standalone `/scanner` route with QR-token auth
+- **SDK regeneration**: blocked until API routes stabilize
+- **Large service files**: `products.service.ts` (~1600 lines) and `orders.service.ts` (~1400 lines) need splitting
+- **Type safety**: 251 `any` type usages remain across the codebase
+- **Test coverage**: zero test coverage
 
 ## Agent Team Guidelines
 

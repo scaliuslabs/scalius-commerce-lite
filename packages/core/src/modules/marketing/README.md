@@ -1,15 +1,7 @@
 # Marketing
 
-Re-exports from the canonical `discounts` module. The `marketing/discounts.service.ts` has been removed; use `@scalius/core/modules/discounts` directly.
+Re-exports from the `discounts` module. Use `@scalius/core/modules/discounts` directly.
 
-## Exports
+## Files
 
-- Re-exports everything from `../discounts`
-
-## Dependencies
-
-- `discounts` module (same package)
-
-## API Routes
-
-None (use the discounts module routes).
+- `index.ts` -- re-exports everything from `../discounts`

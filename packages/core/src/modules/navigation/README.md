@@ -1,15 +1,12 @@
 # Navigation
 
-Provides navigation item data (categories and published pages) for building site menus.
+Provides navigation item data for building site menus.
 
-## Exports
+## Files
 
-- `NavigationService.getNavigationItems()` — returns all active categories and published pages formatted as navigation items with URLs
+- `index.ts` -- barrel exports
+- `navigation.service.ts` -- `NavigationService.getNavigationItems()` (active categories + published pages)
 
 ## Dependencies
 
-- `@scalius/database` — `categories`, `pages` tables
-
-## API Routes
-
-- `GET /api/v1/navigation` — get navigation items for menu building
+- `@scalius/database` -- `categories`, `pages`

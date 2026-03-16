@@ -1,18 +1,14 @@
 # Notifications
 
-Sends admin push notifications (Firebase Cloud Messaging) and transactional order emails to customers.
+Admin push notifications (FCM) and transactional order emails.
 
-## Exports
+## Files
 
-- `sendOrderNotification()` — push notification to all active admin FCM tokens about a new order
-- `sendOrderNotificationEmail()` — transactional email for order lifecycle events (created, confirmed, shipped, delivered)
+- `index.ts` -- barrel exports
+- `notifications.service.ts` -- `sendOrderNotification()` (FCM push), `sendOrderNotificationEmail()` (order lifecycle emails)
 
 ## Dependencies
 
-- `@scalius/database` — `adminFcmTokens`, `settings` tables
-- `@scalius/core/integrations/firebase` — Firebase Admin messaging
-- `@scalius/core/integrations/email` — email sending service
-
-## API Routes
-
-None (called internally by the queue consumer and order service).
+- `@scalius/database` -- `adminFcmTokens`, `settings`
+- `@scalius/core/integrations/firebase` -- Firebase Admin messaging
+- `@scalius/core/integrations/email` -- email sending
