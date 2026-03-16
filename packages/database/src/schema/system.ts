@@ -79,10 +79,10 @@ export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {
     lastUsed: integer("last_used", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("admin_fcm_tokens_user_id_idx").on(table.userId),
 ]);
@@ -96,10 +96,10 @@ export const shippingMethods = sqliteTable("shipping_methods", {
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("shipping_methods_deleted_at_idx").on(table.deletedAt),
@@ -115,10 +115,10 @@ export const checkoutLanguages = sqliteTable("checkout_languages", {
     fieldVisibility: text("field_visibility").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 });
 

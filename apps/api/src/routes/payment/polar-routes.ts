@@ -171,7 +171,7 @@ polarPaymentRoutes.get("/success", async (c) => {
     const orderId = c.req.query("order_id");
 
     const envObj = c.env;
-    const storefrontUrl = (envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
+    const storefrontUrl = String(envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
 
     if (storefrontUrl) {
         if (orderId) {
@@ -191,7 +191,7 @@ polarPaymentRoutes.get("/cancel", async (c) => {
     const orderId = c.req.query("order_id");
 
     const envObj = c.env;
-    const storefrontUrl = (envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
+    const storefrontUrl = String(envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
 
     if (storefrontUrl) {
         return c.redirect(`${storefrontUrl}/checkout?error=payment_cancelled&payment=polar`);

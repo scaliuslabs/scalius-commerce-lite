@@ -116,10 +116,10 @@ export const metaConversionsSettings = sqliteTable("meta_conversions_settings", 
     logRetentionDays: integer("log_retention_days").notNull().default(30),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 });
 
 export const metaConversionsLogs = sqliteTable("meta_conversions_logs", {
@@ -133,7 +133,7 @@ export const metaConversionsLogs = sqliteTable("meta_conversions_logs", {
     eventTime: integer("event_time", { mode: "timestamp" }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 });
 
 export type Discount = InferSelectModel<typeof discounts>;

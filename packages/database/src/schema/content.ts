@@ -62,10 +62,10 @@ export const widgets = sqliteTable(
         sortOrder: integer("sort_order").notNull().default(0),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`(cast(strftime('%s','now') as int))`),
+            .default(UNIX_NOW),
         updatedAt: integer("updated_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`(cast(strftime('%s','now') as int))`),
+            .default(UNIX_NOW),
         deletedAt: integer("deleted_at", { mode: "timestamp" }),
     },
     (table) => [
@@ -84,7 +84,7 @@ export const widgetHistory = sqliteTable("widget_history", {
     reason: text("reason").notNull().default("updated"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("widget_history_widget_id_idx").on(table.widgetId),
 ]);
