@@ -66,7 +66,7 @@ app.openapi(uploadRoute, async (c) => {
     try {
         const validFiles = (files as unknown[]).filter((f): f is File => f instanceof File);
         const result = await MediaService.uploadFiles(db, validFiles, folderId);
-        return c.json(result, result.status as 200 | 201);
+        return result.status === 201 ? created(c, result) : ok(c, result);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
         throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");

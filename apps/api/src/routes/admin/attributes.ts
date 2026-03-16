@@ -157,7 +157,7 @@ app.openapi(listRoute, async (c) => {
         });
     } catch (error) {
         console.error("Error fetching attributes:", error);
-        return c.json({ error: "Failed to fetch attributes" }, 500);
+        throw error;
     }
 });
 
@@ -212,7 +212,7 @@ app.openapi(createAttributeRoute, async (c) => {
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "ConflictError") throw error;
         console.error("Error creating attribute:", error);
-        return c.json({ error: "Failed to create attribute" }, 500);
+        throw error;
     }
 });
 
@@ -270,7 +270,7 @@ app.openapi(updateAttributeRoute, async (c) => {
     } catch (error: unknown) {
         if (error instanceof Error && (error.name === "NotFoundError" || error.name === "ConflictError")) throw error;
         console.error(`Error updating attribute ${id}:`, error);
-        return c.json({ error: "Failed to update attribute" }, 500);
+        throw error;
     }
 });
 
@@ -307,7 +307,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
         if (usage.length > 0) {
             const productNames = usage.map((p) => p.productName).join(", ");
             const errorMessage = `Cannot delete. Attribute is used by ${usage.length}${usage.length < 5 ? "" : "+"} product(s), including: ${productNames}.`;
-            return c.json({ error: "Attribute in use", message: errorMessage }, 409);
+            throw new ConflictError(errorMessage);
         }
 
         await db
@@ -318,7 +318,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
         return noContent(c);
     } catch (error) {
         console.error(`Error deleting attribute ${id}:`, error);
-        return c.json({ error: "Failed to delete attribute" }, 500);
+        throw error;
     }
 });
 
@@ -349,7 +349,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
         return noContent(c);
     } catch (error) {
         console.error(`Error permanently deleting attribute ${id}:`, error);
-        return c.json({ error: "Failed to permanently delete attribute" }, 500);
+        throw error;
     }
 });
 
@@ -385,7 +385,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
         return noContent(c);
     } catch (error) {
         console.error("Error bulk deleting attributes:", error);
-        return c.json({ error: "Failed to bulk delete attributes" }, 500);
+        throw error;
     }
 });
 
@@ -415,7 +415,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
         return noContent(c);
     } catch (error) {
         console.error("Error bulk restoring attributes:", error);
-        return c.json({ error: "Failed to bulk restore attributes" }, 500);
+        throw error;
     }
 });
 
@@ -542,7 +542,7 @@ app.openapi(listValuesRoute, async (c) => {
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
         console.error("Error fetching attribute values:", error);
-        return c.json({ error: "Failed to fetch attribute values" }, 500);
+        throw error;
     }
 });
 
@@ -589,7 +589,7 @@ app.openapi(addValueRoute, async (c) => {
         return ok(c, {});
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
-        return c.json({ error: "Failed" }, 500);
+        throw error;
     }
 });
 
@@ -650,7 +650,7 @@ app.openapi(updateValueRoute, async (c) => {
         });
     } catch (error) {
         console.error("Error updating attribute value:", error);
-        return c.json({ error: "Failed to update attribute value" }, 500);
+        throw error;
     }
 });
 
@@ -708,7 +708,7 @@ app.openapi(deleteValueRoute, async (c) => {
         });
     } catch (error) {
         console.error("Error deleting attribute value:", error);
-        return c.json({ error: "Failed to delete attribute value" }, 500);
+        throw error;
     }
 });
 

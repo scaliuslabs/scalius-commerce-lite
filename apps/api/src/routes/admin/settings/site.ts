@@ -9,6 +9,7 @@ import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 
 import { ok } from "../../../utils/api-response";
+import { ValidationError } from "../../../utils/api-error";
 const app = new OpenAPIHono();
 
 // ─────────────────────────────────────────
@@ -40,7 +41,7 @@ app.openapi(getCurrencyRoute, async (c) => {
         });
     } catch (error) {
         console.error("Error fetching currency settings:", error);
-        return c.json({ message: "Error fetching currency settings" }, 500);
+        throw error;
     }
 });
 
@@ -77,7 +78,7 @@ app.openapi(saveCurrencyRoute, async (c) => {
         return ok(c, { message: "Currency settings saved successfully" });
     } catch (error) {
         console.error("Error saving currency settings:", error);
-        return c.json({ message: "Error saving currency settings" }, 500);
+        throw error;
     }
 });
 
@@ -153,7 +154,7 @@ app.openapi(saveHeaderRoute, async (c) => {
         await invalidateSiteSettingsCache(getKv());
         return ok(c, {});
     } catch (error: unknown) {
-        return c.json({ error: "Failed to save header configuration" }, 500);
+        throw error;
     }
 });
 
@@ -210,7 +211,7 @@ app.openapi(saveFooterRoute, async (c) => {
         await invalidateSiteSettingsCache(getKv());
         return ok(c, {});
     } catch (error: unknown) {
-        return c.json({ error: "Failed to save footer configuration" }, 500);
+        throw error;
     }
 });
 
@@ -237,7 +238,7 @@ app.openapi(getThemeRoute, async (c) => {
         const colors = row?.value ? JSON.parse(row.value) : {};
         return ok(c, { colors });
     } catch (error) {
-        return c.json({ message: "Error fetching theme settings" }, 500);
+        throw error;
     }
 });
 
@@ -252,7 +253,7 @@ const saveThemeRoute = createRoute({
 app.openapi(saveThemeRoute, async (c) => {
     try {
         const body = (await c.req.json()) as Record<string, unknown>;
-        if (!body.colors || typeof body.colors !== "object") return c.json({ message: "Invalid colors payload" }, 400);
+        if (!body.colors || typeof body.colors !== "object") throw new ValidationError("Invalid colors payload");
 
         await upsertSetting(db, "theme", "storefront_colors", JSON.stringify(body.colors));
         const kv = getKv();
@@ -261,7 +262,7 @@ app.openapi(saveThemeRoute, async (c) => {
         }
         return ok(c, { message: "Theme settings saved successfully" });
     } catch (error) {
-        return c.json({ message: "Error saving theme settings" }, 500);
+        throw error;
     }
 });
 
@@ -341,7 +342,7 @@ app.openapi(saveSeoRoute, async (c) => {
         await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "SEO settings saved successfully" });
     } catch (error) {
-        return c.json({ error: "Failed to save SEO configuration" }, 500);
+        throw error;
     }
 });
 
@@ -399,7 +400,7 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
         await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "Storefront URL saved successfully" });
     } catch (error) {
-        return c.json({ error: "Failed to save storefront URL" }, 500);
+        throw error;
     }
 });
 

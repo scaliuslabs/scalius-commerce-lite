@@ -71,9 +71,9 @@ app.openapi(searchRoute, async (c) => {
     } catch (error: unknown) {
         console.error("Search error:", error);
         if (error instanceof Error && error.message === "Search timed out") {
-            return c.json({ error: "Search timed out", success: false }, 504);
+            throw new Error("Search timed out");
         }
-        return c.json({ error: "Internal server error", success: false }, 500);
+        throw error;
     }
 });
 

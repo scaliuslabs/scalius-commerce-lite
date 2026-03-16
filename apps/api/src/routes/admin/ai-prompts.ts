@@ -56,10 +56,7 @@ app.openapi(getPromptRoute, async (c) => {
         });
     } catch (error: unknown) {
         console.error("Error fetching system prompt:", error);
-        return c.json({
-            error: "Failed to fetch system prompt",
-            message: error instanceof Error ? error.message : "Unknown error occurred"
-        }, 500);
+        throw error;
     }
 });
 

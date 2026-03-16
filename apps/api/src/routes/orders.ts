@@ -15,6 +15,7 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { DeliveryService } from "@scalius/core/modules/delivery/service";
 import { createStorefrontOrder } from "@scalius/core/modules/orders/orders.service";
 import { cacheMiddleware } from "../middleware/cache";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
@@ -31,7 +32,7 @@ const unixToDate = (timestamp: number | null): Date | null => {
 app.use(
   "/:id",
   cacheMiddleware({
-    ttl: 300,
+    ttl: CACHE_TTLS.SHORT,
     methods: ["GET"],
     varyByQuery: false,
     varyByAuth: true

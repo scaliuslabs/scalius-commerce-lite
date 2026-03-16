@@ -5,6 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import { ok } from "../../utils/api-response";
+import { ValidationError } from "../../utils/api-error";
 import {
     OPENROUTER_BASE_URL,
     OPENROUTER_HEADERS,
@@ -63,7 +64,7 @@ app.openapi(listModelsRoute, async (c) => {
         return ok(c, { models: processedModels });
     } catch (error: unknown) {
         console.error("Error fetching OpenRouter models:", error);
-        return c.json({ message: "Error fetching models" }, 500);
+        throw error;
     }
 });
 
@@ -90,14 +91,14 @@ app.openapi(generateRoute, async (c) => {
 
         const apiKey = apiKeyRecord?.value;
         if (!apiKey) {
-            return c.json({ message: ERROR_MESSAGES.apiKeyMissing }, 400);
+            throw new ValidationError(ERROR_MESSAGES.apiKeyMissing);
         }
 
         const body = await c.req.json();
         const { messages, prompt, model, stream, images } = body;
 
         if (!model) {
-            return c.json({ message: "Model is required." }, 400);
+            throw new ValidationError("Model is required.");
         }
 
         let finalMessages: Array<{ role: string; content: unknown }>;
@@ -115,7 +116,7 @@ app.openapi(generateRoute, async (c) => {
                 finalMessages = [{ role: "user", content: prompt }];
             }
         } else {
-            return c.json({ message: "Messages or prompt is required." }, 400);
+            throw new ValidationError("Messages or prompt is required.");
         }
 
         const controller = new AbortController();
@@ -162,7 +163,7 @@ app.openapi(generateRoute, async (c) => {
                 }
 
                 console.error("OpenRouter API Error:", errorBody);
-                return c.json({ message: errorMessage, status: response.status }, response.status as 400 | 401 | 403 | 404 | 500 | 502 | 503);
+                throw new ValidationError(errorMessage);
             }
 
             if (stream) {
@@ -191,16 +192,13 @@ app.openapi(generateRoute, async (c) => {
         } catch (error: unknown) {
             clearTimeout(timeoutId);
             if (error instanceof Error && error.name === 'AbortError') {
-                return c.json({ message: ERROR_MESSAGES.timeoutError }, 408);
+                throw new ValidationError(ERROR_MESSAGES.timeoutError);
             }
             throw error;
         }
     } catch (error: unknown) {
         console.error("Error in generate endpoint:", error);
-        return c.json({
-            message: ERROR_MESSAGES.networkError,
-            details: error instanceof Error ? error.message : String(error)
-        }, 500);
+        throw error;
     }
 });
 
@@ -227,7 +225,7 @@ app.openapi(generateStagedRoute, async (c) => {
 
         const apiKey = apiKeyRecord?.value;
         if (!apiKey) {
-            return c.json({ message: ERROR_MESSAGES.apiKeyMissing }, 400);
+            throw new ValidationError(ERROR_MESSAGES.apiKeyMissing);
         }
 
         const {
@@ -239,7 +237,7 @@ app.openapi(generateStagedRoute, async (c) => {
         } = await c.req.json();
 
         if (!model || !messages) {
-            return c.json({ message: "Model and messages are required." }, 400);
+            throw new ValidationError("Model and messages are required.");
         }
 
         const preparedMessages = messages;
@@ -288,7 +286,7 @@ app.openapi(generateStagedRoute, async (c) => {
                 }
 
                 console.error("OpenRouter API Error:", errorBody);
-                return c.json({ message: errorMessage, details: errorBody }, response.status as 400 | 401 | 403 | 404 | 500 | 502 | 503);
+                throw new ValidationError(errorMessage);
             }
 
             const data = await response.json() as Record<string, unknown> & {
@@ -314,16 +312,13 @@ app.openapi(generateStagedRoute, async (c) => {
         } catch (error: unknown) {
             clearTimeout(timeoutId);
             if (error instanceof Error && error.name === 'AbortError') {
-                return c.json({ message: ERROR_MESSAGES.timeoutError }, 408);
+                throw new ValidationError(ERROR_MESSAGES.timeoutError);
             }
             throw error;
         }
     } catch (error: unknown) {
         console.error("Error in staged generation endpoint:", error);
-        return c.json({
-            message: ERROR_MESSAGES.networkError,
-            details: error instanceof Error ? error.message : String(error)
-        }, 500);
+        throw error;
     }
 });
 

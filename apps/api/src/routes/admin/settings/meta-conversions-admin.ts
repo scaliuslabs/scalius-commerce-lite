@@ -33,7 +33,7 @@ app.openapi(getSettingsRoute, async (c) => {
         const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
         return ok(c, { data: maskedSettings });
     } catch (error) {
-        return c.json({ error: "Failed to fetch settings" }, 500);
+        throw error;
     }
 });
 
@@ -72,7 +72,7 @@ app.openapi(saveSettingsRoute, async (c) => {
         const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
         return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
     } catch (error) {
-        return c.json({ error: "Failed to save settings" }, 500);
+        throw error;
     }
 });
 
@@ -109,7 +109,7 @@ app.openapi(getLogsRoute, async (c) => {
             retention: { hours: getLogRetentionHours(), cleanupIntervalHours: getCleanupCheckIntervalHours(), nextCleanupMessage: "Cleanup active" }
         });
     } catch (error) {
-        return c.json({ error: "Failed to fetch logs" }, 500);
+        throw error;
     }
 });
 
@@ -128,7 +128,7 @@ app.openapi(clearLogsRoute, async (c) => {
         await db.delete(metaConversionsLogs);
         return ok(c, { message: "All logs cleared" });
     } catch (error) {
-        return c.json({ error: "Failed to clear logs" }, 500);
+        throw error;
     }
 });
 
@@ -146,9 +146,9 @@ app.openapi(manualCleanupRoute, async (c) => {
     try {
         const result = await MetaService.manualLogCleanup(db, getLogRetentionHours());
         if (result.success) return ok(c, { message: result.message });
-        return c.json({ error: result.message }, 500);
+        throw new Error(result.message);
     } catch (error) {
-        return c.json({ error: "Manual log cleanup failed" }, 500);
+        throw error;
     }
 });
 

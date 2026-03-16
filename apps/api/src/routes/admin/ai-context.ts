@@ -218,10 +218,7 @@ app.openapi(batchDetailsRoute, async (c) => {
         });
     } catch (error: unknown) {
         console.error("Batch fetch error:", error);
-        return c.json(
-            { error: "Failed to fetch details", message: error instanceof Error ? error.message : String(error) },
-            500,
-        );
+        throw error;
     }
 });
 

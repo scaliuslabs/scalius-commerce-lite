@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
 import { createLocation, getLocationById } from "@scalius/core/modules/delivery/locations";
-import { NotFoundError } from "../../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../../utils/api-error";
 
 import { ok, created } from "../../../utils/api-response";
 const app = new OpenAPIHono();
@@ -97,7 +97,7 @@ app.openapi(listRoute, async (c) => {
         });
     } catch (error: unknown) {
         console.error("Error fetching delivery locations:", error);
-        return c.json({ error: error instanceof Error ? error.message : "Failed to fetch delivery locations" }, 500);
+        throw error;
     }
 });
 
@@ -119,7 +119,7 @@ app.openapi(createLocationRoute, async (c) => {
         return created(c, { data: newLocation });
     } catch (error: unknown) {
         console.error("Error creating delivery location:", error);
-        return c.json({ error: error instanceof Error ? error.message : "Failed to create delivery location" }, 500);
+        throw error;
     }
 });
 
@@ -140,7 +140,7 @@ app.openapi(deleteAllRoute, async (c) => {
         return ok(c, { message: "All delivery locations have been permanently deleted." });
     } catch (error: unknown) {
         console.error("Error cleaning all delivery locations:", error);
-        return c.json({ error: error instanceof Error ? error.message : "Failed to clean all delivery locations" }, 500);
+        throw error;
     }
 });
 
@@ -161,7 +161,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     try {
         const db = c.get("db");
         const { ids } = c.req.valid("json");
-        if (ids.length === 0) return c.json({ error: "An array of location IDs is required" }, 400);
+        if (ids.length === 0) throw new ValidationError("An array of location IDs is required");
 
         await db
             .update(deliveryLocations)
@@ -171,7 +171,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
         return ok(c, { message: `${ids.length} locations deleted successfully.` });
     } catch (error: unknown) {
         console.error("Error bulk deleting delivery locations:", error);
-        return c.json({ error: error instanceof Error ? error.message : "Failed to bulk delete delivery locations" }, 500);
+        throw error;
     }
 });
 
@@ -197,7 +197,7 @@ app.openapi(getByIdRoute, async (c) => {
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
         console.error("Error fetching delivery location:", error);
-        return c.json({ error: error instanceof Error ? error.message : "Failed to fetch delivery location" }, 500);
+        throw error;
     }
 });
 
@@ -245,7 +245,7 @@ app.openapi(updateLocationRoute, async (c) => {
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
         console.error("Error updating location:", error);
-        return c.json({ error: error instanceof Error ? error.message : "Failed to update location" }, 500);
+        throw error;
     }
 });
 
@@ -273,7 +273,7 @@ app.openapi(deleteLocationRoute, async (c) => {
         return ok(c, {});
     } catch (error: unknown) {
         console.error("Error deleting location:", error);
-        return c.json({ error: error instanceof Error ? error.message : "Failed to delete location" }, 500);
+        throw error;
     }
 });
 
@@ -296,7 +296,7 @@ app.post("/import-pathao", async (c) => {
     const kv = (c.env as any)?.CACHE as KVNamespace | undefined;
 
     if (!kv) {
-        return c.json({ error: "KV namespace not available" }, 500);
+        throw new Error("KV namespace not available");
     }
 
     // Find active Pathao provider to get credentials
@@ -307,18 +307,18 @@ app.post("/import-pathao", async (c) => {
         .get();
 
     if (!provider) {
-        return c.json({ error: "No active Pathao provider configured. Add one in Delivery Provider settings first." }, 400);
+        throw new ValidationError("No active Pathao provider configured. Add one in Delivery Provider settings first.");
     }
 
     let creds: { baseUrl: string; clientId: string; clientSecret: string; username: string; password: string };
     try {
         creds = JSON.parse(provider.credentials);
     } catch {
-        return c.json({ error: "Invalid Pathao credentials. Check your provider settings." }, 400);
+        throw new ValidationError("Invalid Pathao credentials. Check your provider settings.");
     }
 
     if (!creds.baseUrl || !creds.clientId || !creds.clientSecret || !creds.username || !creds.password) {
-        return c.json({ error: "Incomplete Pathao credentials. Ensure baseUrl, clientId, clientSecret, username, and password are configured." }, 400);
+        throw new ValidationError("Incomplete Pathao credentials. Ensure baseUrl, clientId, clientSecret, username, and password are configured.");
     }
 
     const result = await processPathaoImportChunk(db, kv, creds);
@@ -330,7 +330,7 @@ app.post("/import-pathao", async (c) => {
  */
 app.get("/import-pathao/status", async (c) => {
     const kv = (c.env as any)?.CACHE as KVNamespace | undefined;
-    if (!kv) return c.json({ error: "KV not available" }, 500);
+    if (!kv) throw new Error("KV not available");
 
     const status = await getPathaoImportStatus(kv);
     return ok(c, status);
@@ -341,7 +341,7 @@ app.get("/import-pathao/status", async (c) => {
  */
 app.delete("/import-pathao", async (c) => {
     const kv = (c.env as any)?.CACHE as KVNamespace | undefined;
-    if (!kv) return c.json({ error: "KV not available" }, 500);
+    if (!kv) throw new Error("KV not available");
 
     await resetPathaoImportProgress(kv);
     return ok(c, { message: "Import progress reset. You can start a fresh import." });

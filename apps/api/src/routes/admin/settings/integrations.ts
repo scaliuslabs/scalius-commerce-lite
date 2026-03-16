@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 
 import { ok } from "../../../utils/api-response";
+import { ValidationError } from "../../../utils/api-error";
 const app = new OpenAPIHono();
 const MASKED_VALUE = "••••••••••••";
 
@@ -32,7 +33,7 @@ app.openapi(getOpenRouterRoute, async (c) => {
         const maskedApiKey = result?.value ? MASKED_VALUE : "";
         return ok(c, { apiKey: maskedApiKey });
     } catch (error) {
-        return c.json({ message: "Error fetching API key" }, 500);
+        throw error;
     }
 });
 
@@ -47,7 +48,7 @@ const saveOpenRouterRoute = createRoute({
 app.openapi(saveOpenRouterRoute, async (c) => {
     try {
         const { apiKey } = await c.req.json();
-        if (typeof apiKey !== "string") return c.json({ message: "Invalid API key" }, 400);
+        if (typeof apiKey !== "string") throw new ValidationError("Invalid API key");
         if (apiKey === MASKED_VALUE) return ok(c, { message: "API key unchanged" });
 
         await db
@@ -66,7 +67,7 @@ app.openapi(saveOpenRouterRoute, async (c) => {
 
         return ok(c, { message: "API key saved successfully" });
     } catch (error) {
-        return c.json({ message: "Error saving API key" }, 500);
+        throw error;
     }
 });
 
@@ -94,7 +95,7 @@ app.openapi(getEmailRoute, async (c) => {
             sender: senderRow?.value || ""
         });
     } catch (error) {
-        return c.json({ message: "Error fetching email settings" }, 500);
+        throw error;
     }
 });
 
@@ -144,7 +145,7 @@ app.openapi(saveEmailRoute, async (c) => {
         await Promise.all(updates);
         return ok(c, { message: "Email settings saved successfully" });
     } catch (error) {
-        return c.json({ message: "Error saving email settings" }, 500);
+        throw error;
     }
 });
 
@@ -183,7 +184,7 @@ app.openapi(getFirebaseRoute, async (c) => {
 
         return ok(c, config);
     } catch (error) {
-        return c.json({ error: "Internal Server Error" }, 500);
+        throw error;
     }
 });
 
@@ -205,7 +206,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
                 JSON.parse(serviceAccount);
                 updates.push({ key: "service_account", value: serviceAccount });
             } catch {
-                return c.json({ error: "Invalid Service Account JSON" }, 400);
+                throw new ValidationError("Invalid Service Account JSON");
             }
         }
 
@@ -232,7 +233,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
         layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);
         return ok(c, { message: "Settings saved successfully" });
     } catch (error) {
-        return c.json({ error: "Internal Server Error" }, 500);
+        throw error;
     }
 });
 

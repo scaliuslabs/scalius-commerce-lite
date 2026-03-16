@@ -1,9 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { search } from "@scalius/core/search";
 import { cacheMiddleware } from "../middleware/cache";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 import { rateLimit } from "@scalius/shared/rate-limit";
 
 import { ok } from "../utils/api-response";
+import { RateLimitError } from "../utils/api-error";
 // Create an OpenAPIHono app for search routes
 const app = new OpenAPIHono();
 
@@ -11,7 +13,7 @@ const app = new OpenAPIHono();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 300, // 5 minutes
+    ttl: CACHE_TTLS.SHORT,
     keyPrefix: "api:search:",
     varyByQuery: true,
     methods: ["GET"]
@@ -72,13 +74,7 @@ app.openapi(searchRoute, async (c) => {
   try {
     await limiter.check(c.req.raw);
   } catch (error) {
-    return c.json(
-      {
-        error: "Too many requests. Please try again later.",
-        success: false as const
-      },
-      429,
-    );
+    throw new RateLimitError("Too many requests. Please try again later.");
   }
 
   const params = c.req.valid("query");

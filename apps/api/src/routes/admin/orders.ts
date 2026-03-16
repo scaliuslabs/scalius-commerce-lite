@@ -11,7 +11,7 @@ import { DeliveryService } from "@scalius/core/modules/delivery/service";
 import { ShipmentTracker } from "@scalius/core/modules/delivery/tracking";
 import { orderPayments, paymentPlans, deliveryShipments, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -524,14 +524,14 @@ app.openapi(createShipmentRoute, async (c) => {
 
     if (!shipmentResult.success) {
         console.error(`Failed to create shipment for order ${orderId}: ${shipmentResult.message}`);
-        return c.json({ error: "Failed to create shipment", message: shipmentResult.message }, 400);
+        throw new ValidationError(shipmentResult.message || "Failed to create shipment");
     }
 
     const provider = await deliveryService.getProvider(data.providerId);
     const createdShipment = await deliveryService.getLatestShipment(orderId);
 
     if (!createdShipment) {
-        return c.json({ error: "Failed to retrieve created shipment" }, 500);
+        throw new Error("Failed to retrieve created shipment");
     }
 
     const now = new Date();
@@ -568,7 +568,7 @@ app.openapi(getShipmentRoute, async (c) => {
 
     const shipment = await deliveryService.getShipment(shipmentId);
     if (!shipment) throw new NotFoundError("Shipment not found");
-    if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
+    if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
     return ok(c, shipment);
 });
@@ -595,7 +595,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
 
     const shipment = await deliveryService.getShipment(shipmentId);
     if (!shipment) throw new NotFoundError("Shipment not found");
-    if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
+    if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
     await deliveryService.deleteShipment(shipmentId);
     return ok(c, {});
@@ -623,7 +623,7 @@ app.openapi(checkShipmentStatusRoute, async (c) => {
 
     const shipment = await deliveryService.getShipment(shipmentId);
     if (!shipment) throw new NotFoundError("Shipment not found");
-    if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 403);
+    if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
     const updatedShipment = await deliveryService.checkShipmentStatus(shipmentId);
     return ok(c, updatedShipment);
@@ -653,20 +653,20 @@ app.openapi(refreshShipmentRoute, async (c) => {
 
     const shipment = await deliveryService.getShipment(shipmentId);
     if (!shipment) throw new NotFoundError("Shipment not found");
-    if (shipment.orderId !== orderId) return c.json({ error: "Shipment does not belong to this order" }, 400);
+    if (shipment.orderId !== orderId) throw new ValidationError("Shipment does not belong to this order");
 
     const previousStatus = shipment.status;
     try {
         await deliveryService.checkShipmentStatus(shipmentId);
     } catch (e: unknown) {
-        return c.json({ error: "Failed to refresh shipment status", message: e instanceof Error ? e.message : String(e) }, 400);
+        throw new ValidationError(e instanceof Error ? e.message : String(e));
     }
 
     const now = new Date();
     await db.update(deliveryShipments).set({ lastChecked: now }).where(eq(deliveryShipments.id, shipmentId));
 
     const updatedShipment = await deliveryService.getShipment(shipmentId);
-    if (!updatedShipment) return c.json({ error: "Failed to retrieve updated shipment" }, 500);
+    if (!updatedShipment) throw new Error("Failed to retrieve updated shipment");
 
     const provider = updatedShipment.providerId ? await deliveryService.getProvider(updatedShipment.providerId) : null;
     const statusChanged = previousStatus !== updatedShipment.status;
@@ -713,7 +713,8 @@ app.openapi(returnOrderRoute, async (c) => {
     const db = c.get("db");
     const envCache = c.env?.CACHE;
     const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false });
-    return c.json(result, result.success ? 200 : 400);
+    if (!result.success) throw new ValidationError(result.message || "Return processing failed");
+    return ok(c, result);
 });
 
 // ─── POST /:id/refund ────────────────────────────────────────────────────────
@@ -748,7 +749,8 @@ app.openapi(refundOrderRoute, async (c) => {
     const db = c.get("db");
     const envCache = c.env?.CACHE;
     const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway });
-    return c.json(result, result.success ? 200 : 400);
+    if (!result.success) throw new ValidationError(result.message || "Refund processing failed");
+    return ok(c, result);
 });
 
 export { app as adminOrdersRoutes };

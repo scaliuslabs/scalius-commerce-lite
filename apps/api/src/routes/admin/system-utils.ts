@@ -8,6 +8,7 @@ import { abandonedCheckouts, orders, OrderStatus, adminFcmTokens } from "@scaliu
 import { ftsMatch } from "@scalius/core/search";
 
 import { ok, noContent } from "../../utils/api-response";
+import { UnauthorizedError, ForbiddenError } from "../../utils/api-error";
 const app = new OpenAPIHono();
 
 // --- Abandoned Checkouts ---
@@ -129,7 +130,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
 
     } catch (error: unknown) {
         console.error("Error fetching abandoned checkouts:", error);
-        return c.json({ error: "Failed to fetch data", message: error instanceof Error ? error.message : String(error) }, 500);
+        throw error;
     }
 });
 
@@ -160,7 +161,7 @@ app.openapi(bulkDeleteCheckoutsRoute, async (c) => {
         return noContent(c);
     } catch (error) {
         console.error("Error bulk deleting checkouts:", error);
-        return c.json({ error: "Failed to bulk delete checkouts" }, 500);
+        throw error;
     }
 });
 
@@ -187,7 +188,7 @@ app.openapi(deleteCheckoutsRoute, async (c) => {
         return noContent(c);
     } catch (error) {
         console.error("Error bulk deleting checkouts:", error);
-        return c.json({ error: "Failed to bulk delete checkouts" }, 500);
+        throw error;
     }
 });
 
@@ -215,12 +216,12 @@ const registerFcmTokenRoute = createRoute({
 app.openapi(registerFcmTokenRoute, async (c) => {
     const db = c.get("db");
     const user = c.get("user");
-    if (!user || !user.id) return c.json({ error: "Unauthorized" }, 401);
+    if (!user || !user.id) throw new UnauthorizedError("Unauthorized");
 
     const { token, userId, deviceInfo } = c.req.valid("json");
 
     if (userId !== user.id) {
-        return c.json({ error: "Forbidden: User ID mismatch" }, 403);
+        throw new ForbiddenError("User ID mismatch");
     }
 
     try {
@@ -250,7 +251,7 @@ app.openapi(registerFcmTokenRoute, async (c) => {
         return ok(c, { message: "FCM token registered successfully" });
     } catch (error) {
         console.error("Error saving FCM token:", error);
-        return c.json({ error: "Failed to save FCM token" }, 500);
+        throw error;
     }
 });
 
@@ -274,7 +275,7 @@ const cleanupFcmTokensRoute = createRoute({
 app.openapi(cleanupFcmTokensRoute, async (c) => {
     const db = c.get("db");
     const user = c.get("user");
-    if (!user || !user.id) return c.json({ error: "Unauthorized" }, 401);
+    if (!user || !user.id) throw new UnauthorizedError("Unauthorized");
 
     try {
         const { invalidTokens } = c.req.valid("json");
@@ -306,7 +307,7 @@ app.openapi(cleanupFcmTokensRoute, async (c) => {
         });
     } catch (error) {
         console.error("Error cleaning up FCM tokens:", error);
-        return c.json({ error: "Internal server error during cleanup." }, 500);
+        throw error;
     }
 });
 
