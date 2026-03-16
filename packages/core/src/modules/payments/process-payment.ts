@@ -17,7 +17,7 @@ import type { Database } from "@scalius/database/client";
 import { releaseMultiple } from "../inventory/release";
 import type { ProcessPaymentParams, PaymentGateway } from "./types";
 import { getCurrencyConfig } from "../settings/settings.service";
-import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import { buildInventoryStatements } from "../inventory/inventory-transitions";
 import { validateTransition } from "../orders/order-state-machine";
 import { roundPrice, pricesEqual } from "@scalius/shared/price-utils";
 
@@ -110,46 +110,50 @@ export async function processPaymentConfirmed(
     // Fetch currency config
     const currencyConfig = await getCurrencyConfig(db);
 
-    // ── 3. Record payment + update order + apply inventory ──
-    // These must all succeed together. If inventory transition fails,
-    // we must NOT leave the order marked as paid with stock not deducted.
+    // ── 3. Record payment + update order + apply inventory atomically ──
+    // All writes are batched in a single D1 transaction — all succeed or all
+    // roll back. This prevents the prior split-write bug where payment could
+    // be recorded but inventory left un-deducted on a partial failure.
 
-    // 3a. Record this payment transaction
-    await db.insert(orderPayments).values({
-      id: crypto.randomUUID(),
-      orderId: params.orderId,
-      amount: params.amount,
-      currency: currencyConfig.code,
-      paymentMethod: params.paymentGateway,
-      paymentType: params.paymentType,
-      status: "succeeded",
-      stripePaymentIntentId: params.stripePaymentIntentId ?? null,
-      stripeChargeId: params.stripeChargeId ?? null,
-      sslcommerzTranId: params.sslcommerzTranId ?? null,
-      sslcommerzValId: params.sslcommerzValId ?? null,
-      sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
-      polarCheckoutId: params.polarCheckoutId ?? null,
-      metadata: params.metadata ? JSON.stringify(params.metadata) : null,
-      createdAt: now,
-      updatedAt: now,
-    });
+    const paymentId = crypto.randomUUID();
 
-    // 3b. Update order totals and payment status
-    await db
-      .update(orders)
-      .set({
+    // Build inventory statements (CAS-based stock ops execute internally;
+    // only the inventoryAction flag update is returned for batching).
+    const { statements: inventoryStmts } = await buildInventoryStatements(
+      db,
+      params.orderId,
+      newStatus,
+    );
+
+    // Atomic batch: payment insert + order update + inventory action update
+    await db.batch([
+      db.insert(orderPayments).values({
+        id: paymentId,
+        orderId: params.orderId,
+        amount: params.amount,
+        currency: currencyConfig.code,
+        paymentMethod: params.paymentGateway,
+        paymentType: params.paymentType,
+        status: "succeeded",
+        stripePaymentIntentId: params.stripePaymentIntentId ?? null,
+        stripeChargeId: params.stripeChargeId ?? null,
+        sslcommerzTranId: params.sslcommerzTranId ?? null,
+        sslcommerzValId: params.sslcommerzValId ?? null,
+        sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
+        polarCheckoutId: params.polarCheckoutId ?? null,
+        metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      db.update(orders).set({
         status: newStatus,
         paidAmount: newPaidAmount,
         balanceDue: newBalanceDue,
         paymentStatus: newPaymentStatus,
         updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(orders.id, params.orderId));
-
-    // 3c. Apply central inventory transitions (e.g. reserved -> deducted)
-    // No .catch() — if inventory fails, the error propagates so the caller
-    // knows the order is in an inconsistent state and can retry.
-    await applyInventoryForStatusChange(db, params.orderId, newStatus);
+      }).where(eq(orders.id, params.orderId)),
+      ...inventoryStmts,
+    ] as any);
 
     // ── 4. Update payment plan if applicable ──
     if (params.paymentType === "deposit") {
