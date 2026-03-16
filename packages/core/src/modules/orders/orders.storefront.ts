@@ -1,0 +1,351 @@
+// src/modules/orders/orders.storefront.ts
+// Storefront order creation — validates and prepares orders for queue dispatch.
+
+import type { Database } from "@scalius/database/client";
+import { subtractPrice, addPrices } from "@scalius/shared/price-utils";
+import {
+    customers,
+    products,
+    productVariants,
+    deliveryLocations,
+    discounts,
+} from "@scalius/database/schema";
+
+import { sql, eq, and, isNull } from "drizzle-orm";
+import { generateOrderId } from "@scalius/shared/order-utils";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import type { CreateStorefrontOrderInput, CreateStorefrontOrderResult } from "./orders.types";
+
+/**
+ * Validates and prepares a storefront order for queue dispatch.
+ * Performs server-side price verification, discount validation, shipping verification,
+ * and partial payment checks. Returns a queue payload ready for ORDER_INGEST_QUEUE.
+ *
+ * @param storefrontDb - The D1 database instance (from c.get("db"))
+ * @param data - Parsed and validated order input
+ * @param requestUrl - The original request URL
+ * @param isDiscountValid - Discount validation function (from discounts route)
+ * @param calculateDiscountAmount - Discount calculation function (from discounts route)
+ */
+export async function createStorefrontOrder(
+    storefrontDb: Database,
+    data: CreateStorefrontOrderInput,
+    requestUrl: string,
+    isDiscountValid: (db: Database, code: string, total: number, items: unknown[], customerPhone: string) => Promise<unknown>,
+    calculateDiscountAmount: (db: Database, discount: unknown, total: number, items: unknown[], shippingCost: number) => number | Promise<number>,
+): Promise<CreateStorefrontOrderResult> {
+    // ------------------------------------------------------------------
+    // 1. Batched Reads
+    // ------------------------------------------------------------------
+    const variantIds = data.items
+        .map((item) => item.variantId)
+        .filter((id): id is string => id !== null);
+
+    const locationIds = [data.city, data.zone, data.area].filter(Boolean);
+
+    // Drizzle D1 batch() requires specific tuple types
+    const readBatch: unknown[] = [];
+
+    // 1. Variants
+    if (variantIds.length > 0) {
+        readBatch.push(
+            storefrontDb
+                .select({
+                    id: productVariants.id,
+                    productId: productVariants.productId,
+                    stock: productVariants.stock,
+                    price: productVariants.price,
+                    discountPercentage: productVariants.discountPercentage,
+                    discountType: productVariants.discountType,
+                    discountAmount: productVariants.discountAmount,
+                })
+                .from(productVariants)
+                .where(
+                    and(
+                        sql`${productVariants.id} IN ${variantIds}`,
+                        isNull(productVariants.deletedAt),
+                    ),
+                ),
+        );
+    } else {
+        readBatch.push(storefrontDb.select().from(productVariants).limit(0));
+    }
+
+    // 2. Locations
+    if (locationIds.length > 0) {
+        readBatch.push(
+            storefrontDb
+                .select()
+                .from(deliveryLocations)
+                .where(
+                    and(
+                        sql`${deliveryLocations.id} IN ${locationIds}`,
+                        isNull(deliveryLocations.deletedAt),
+                    ),
+                ),
+        );
+    } else {
+        readBatch.push(storefrontDb.select().from(deliveryLocations).limit(0));
+    }
+
+    // 3. Customer
+    readBatch.push(
+        storefrontDb
+            .select({
+                id: customers.id,
+                totalOrders: customers.totalOrders,
+                totalSpent: customers.totalSpent,
+            })
+            .from(customers)
+            .where(eq(customers.phone, data.customerPhone)),
+    );
+
+    // 4. Discount
+    if (data.discountCode) {
+        readBatch.push(
+            storefrontDb
+                .select({ id: discounts.id })
+                .from(discounts)
+                .where(eq(discounts.code, data.discountCode)),
+        );
+    } else {
+        readBatch.push(storefrontDb.select().from(discounts).limit(0));
+    }
+
+    // 5. Products (for server-side price verification)
+    const productIds = [...new Set(data.items.map((item) => item.productId))];
+    if (productIds.length > 0) {
+        readBatch.push(
+            storefrontDb
+                .select({
+                    id: products.id,
+                    price: products.price,
+                    discountPercentage: products.discountPercentage,
+                    discountType: products.discountType,
+                    discountAmount: products.discountAmount,
+                    freeDelivery: products.freeDelivery,
+                })
+                .from(products)
+                .where(
+                    and(
+                        sql`${products.id} IN ${productIds}`,
+                        isNull(products.deletedAt),
+                    ),
+                ),
+        );
+    } else {
+        readBatch.push(storefrontDb.select().from(products).limit(0));
+    }
+
+    // 6. Settings (for partial payment checks)
+    const { siteSettings: siteSettingsTable, shippingMethods: shippingMethodsTable, discounts: discountsTable } = await import("@scalius/database/schema");
+    readBatch.push(storefrontDb.select().from(siteSettingsTable).limit(1));
+
+    // 7. Shipping Method
+    if (data.shippingMethodId) {
+        readBatch.push(
+            storefrontDb
+                .select()
+                .from(shippingMethodsTable)
+                .where(eq(shippingMethodsTable.id, data.shippingMethodId)),
+        );
+    } else {
+        readBatch.push(storefrontDb.select().from(shippingMethodsTable).limit(0));
+    }
+
+    // Execute Read Batch
+    const readResults = await storefrontDb.batch(readBatch as any);
+
+    // Unpack Results
+    interface VariantRow { id: string; productId: string; stock: number; price: number; discountPercentage: number | null; discountType: string | null; discountAmount: number | null; }
+    interface LocationRow { id: string; name: string; }
+    const variants = variantIds.length > 0 ? (readResults[0] as VariantRow[]) : [] as VariantRow[];
+    const locationResults = locationIds.length > 0 ? (readResults[1] as LocationRow[]) : [] as LocationRow[];
+
+    const customerList = readResults[2] as { id: string; totalOrders: number; totalSpent: number }[];
+    const existingCustomer = customerList.length > 0 ? customerList[0] : undefined;
+
+    const discountList = data.discountCode ? (readResults[3] as { id: string }[]) : [];
+    const appliedDiscount = discountList.length > 0 ? discountList[0] : null;
+
+    const productList = productIds.length > 0
+        ? (readResults[4] as {
+            id: string;
+            price: number;
+            discountPercentage: number | null;
+            discountType: string | null;
+            discountAmount: number | null;
+            freeDelivery: boolean;
+        }[])
+        : [];
+    const productMap = new Map(productList.map((p) => [p.id, p]));
+
+    const settingsList = readResults[5] as Record<string, unknown>[];
+    const settings = settingsList.length > 0 ? settingsList[0] as Record<string, unknown> : null;
+
+    const shippingMethodList = readResults[6] as Record<string, unknown>[];
+    const shippingMethod = shippingMethodList.length > 0 ? shippingMethodList[0] as Record<string, unknown> : null;
+
+    // Validation (Pre-Check)
+    const variantMap = new Map(variants.map((v) => [v.id, v]));
+    for (const item of data.items) {
+        if (item.variantId) {
+            const variant = variantMap.get(item.variantId);
+            if (!variant) {
+                throw new NotFoundError(`Variant ${item.variantId} not found.`);
+            }
+        }
+        const product = productMap.get(item.productId);
+        if (!product) {
+            throw new NotFoundError(`Product ${item.productId} not found or is inactive.`);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // SERVER-SIDE PRICE VERIFICATION
+    // ------------------------------------------------------------------
+    let serverItemTotal = 0;
+    for (const item of data.items) {
+        let unitPrice: number;
+
+        if (item.variantId) {
+            const variant = variantMap.get(item.variantId)!;
+            unitPrice = variant.price;
+
+            if (variant.discountType === "percentage" && (variant.discountPercentage ?? 0) > 0) {
+                unitPrice = unitPrice * (1 - (variant.discountPercentage ?? 0) / 100);
+            } else if (variant.discountType === "flat" && (variant.discountAmount ?? 0) > 0) {
+                unitPrice = Math.max(0, unitPrice - (variant.discountAmount ?? 0));
+            }
+        } else {
+            const product = productMap.get(item.productId)!;
+            unitPrice = product.price;
+
+            if (product.discountType === "percentage" && (product.discountPercentage ?? 0) > 0) {
+                unitPrice = unitPrice * (1 - (product.discountPercentage ?? 0) / 100);
+            } else if (product.discountType === "flat" && (product.discountAmount ?? 0) > 0) {
+                unitPrice = Math.max(0, unitPrice - (product.discountAmount ?? 0));
+            }
+        }
+
+        serverItemTotal += unitPrice * item.quantity;
+    }
+
+    serverItemTotal = Math.round(serverItemTotal * 100) / 100;
+
+    // Determine exact shipping charge
+    let verifiedShippingCharge = shippingMethod ? (shippingMethod.fee as number) : (data.shippingCharge || 0);
+
+    const hasFreeDeliveryProduct = data.items.some((item) => {
+        const product = productMap.get(item.productId);
+        return product?.freeDelivery === true;
+    });
+    if (hasFreeDeliveryProduct) {
+        verifiedShippingCharge = 0;
+    }
+
+    // ------------------------------------------------------------------
+    // DISCOUNTS VERIFICATION
+    // ------------------------------------------------------------------
+    let verifiedDiscountAmount = 0;
+    if (data.discountCode) {
+        const validationResponse = await isDiscountValid(
+            storefrontDb,
+            data.discountCode,
+            serverItemTotal + verifiedShippingCharge,
+            data.items,
+            data.customerPhone,
+        );
+
+        const validResult = validationResponse as Record<string, unknown> | null;
+        if (validResult && validResult.valid && validResult.discount) {
+            verifiedDiscountAmount = await calculateDiscountAmount(
+                storefrontDb,
+                validResult.discount,
+                serverItemTotal + verifiedShippingCharge,
+                data.items,
+                verifiedShippingCharge,
+            );
+        } else {
+            throw new ValidationError(`Discount code ${data.discountCode} is invalid or expired.`);
+        }
+    }
+
+    const totalAmount = subtractPrice(addPrices(serverItemTotal, verifiedShippingCharge), verifiedDiscountAmount);
+
+    // ------------------------------------------------------------------
+    // PARTIAL PAYMENT SECURITY CHECK
+    // ------------------------------------------------------------------
+    const { PaymentMethod: PaymentMethodEnum, PaymentStatus: PaymentStatusEnum, OrderStatus: OrderStatusEnum, FulfillmentStatus: FulfillmentStatusEnum } = await import("@scalius/database/schema");
+    const isPartialEnabled = (settings?.partialPaymentEnabled as boolean) ?? false;
+    if (isPartialEnabled && data.paymentMethod === PaymentMethodEnum.COD) {
+        throw new ValidationError("Advance deposit is required. COD cannot be selected for the full amount directly.");
+    }
+
+    // Process Location Data
+    const locationMap = new Map(locationResults.map((l: LocationRow) => [l.id, l.name]));
+    const cityName = locationMap.get(data.city) || data.cityName || null;
+    const zoneName = locationMap.get(data.zone) || data.zoneName || null;
+    const areaName = locationMap.get(data.area || "") || data.areaName || null;
+
+    // ------------------------------------------------------------------
+    // Build Queue Payload
+    // ------------------------------------------------------------------
+    const orderId = generateOrderId();
+    const { nanoid: nanoIdFn } = await import("nanoid");
+    const checkoutToken = `chk_${nanoIdFn()}`;
+
+    const queuePayload = {
+        type: "order.ingest",
+        checkoutToken,
+        existingCustomer: existingCustomer ? { id: existingCustomer.id } : null,
+        orderData: {
+            id: orderId,
+            customerName: data.customerName,
+            customerPhone: data.customerPhone,
+            customerEmail: data.customerEmail,
+            shippingAddress: data.shippingAddress,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            cityName,
+            zoneName,
+            areaName,
+            notes: data.notes,
+            totalAmount,
+            shippingCharge: verifiedShippingCharge,
+            discountAmount: verifiedDiscountAmount,
+            status: (isPartialEnabled && data.paymentMethod === PaymentMethodEnum.COD)
+                ? OrderStatusEnum.INCOMPLETE
+                : data.paymentMethod === PaymentMethodEnum.COD ? OrderStatusEnum.PENDING : OrderStatusEnum.INCOMPLETE,
+            paymentMethod: data.paymentMethod,
+            paymentStatus: PaymentStatusEnum.UNPAID,
+            paidAmount: 0,
+            balanceDue: totalAmount,
+            fulfillmentStatus: FulfillmentStatusEnum.PENDING,
+            inventoryPool: data.inventoryPool,
+            inventoryAction: data.items.some(item => item.variantId !== null) ? "reserved" : "none",
+        },
+        items: data.items.map(item => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: item.price,
+            productName: item.productName ?? null,
+            variantLabel: item.variantLabel ?? null,
+        })),
+        discountUsage: appliedDiscount && data.discountAmount && data.discountAmount > 0 ? {
+            discountId: appliedDiscount.id,
+            amountDiscounted: data.discountAmount,
+        } : null,
+        requestUrl,
+    };
+
+    return {
+        checkoutToken,
+        orderId,
+        paymentMethod: data.paymentMethod,
+        totalAmount,
+        queuePayload,
+    };
+}

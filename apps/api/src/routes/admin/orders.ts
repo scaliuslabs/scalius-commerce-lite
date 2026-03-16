@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import * as OrdersService from "@scalius/core/modules/orders/orders.service";
+import * as OrdersService from "@scalius/core/modules/orders";
 import {
     createOrderSchema,
     updateOrderSchema,
