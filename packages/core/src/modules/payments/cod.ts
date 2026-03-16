@@ -2,7 +2,7 @@
 // Cash on Delivery (COD) tracking and management.
 // No external gateway — tracks delivery attempts and cash collection in DB.
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { codTracking, orders, orderPayments } from "@scalius/database/schema";
 import { PaymentStatus } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
@@ -59,52 +59,68 @@ export async function recordCODCollection(
       throw new NotFoundError(`Order ${params.orderId} not found`);
     }
 
+    // Idempotency: check for existing successful COD payment
+    const existingPayment = await db
+      .select({ id: orderPayments.id })
+      .from(orderPayments)
+      .where(
+        and(
+          eq(orderPayments.orderId, params.orderId),
+          eq(orderPayments.paymentMethod, "cod"),
+          eq(orderPayments.status, "succeeded"),
+        ),
+      )
+      .get();
+    if (existingPayment) {
+      return { success: true }; // Already recorded — idempotent
+    }
+
     const now = new Date();
 
-    // Update COD tracking record
-    await db
-      .update(codTracking)
-      .set({
-        codStatus: "collected",
-        collectedBy: params.collectedBy,
-        collectedAmount: params.collectedAmount,
-        collectedAt: now,
-        receiptUrl: params.receiptUrl ?? null,
-        deliveryAttempts: sql`${codTracking.deliveryAttempts} + 1`,
-        lastAttemptAt: now,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(codTracking.orderId, params.orderId));
-
-    // Fetch currency config
+    // Fetch currency config before batch
     const currencyConfig = await getCurrencyConfig(db);
 
-    // Record the payment transaction
-    await db.insert(orderPayments).values({
-      id: crypto.randomUUID(),
-      orderId: params.orderId,
-      amount: params.collectedAmount,
-      currency: currencyConfig.code,
-      paymentMethod: "cod",
-      paymentType: "full",
-      status: "succeeded",
-      codCollectedBy: params.collectedBy,
-      codCollectedAt: now,
-      codReceiptUrl: params.receiptUrl ?? null,
-      createdAt: now,
-      updatedAt: now,
-    });
+    // Atomically apply all three mutations
+    await db.batch([
+      db
+        .update(codTracking)
+        .set({
+          codStatus: "collected",
+          collectedBy: params.collectedBy,
+          collectedAmount: params.collectedAmount,
+          collectedAt: now,
+          receiptUrl: params.receiptUrl ?? null,
+          deliveryAttempts: sql`${codTracking.deliveryAttempts} + 1`,
+          lastAttemptAt: now,
+          updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(codTracking.orderId, params.orderId)),
 
-    // Update the order payment status and paid amount
-    await db
-      .update(orders)
-      .set({
-        paymentStatus: PaymentStatus.PAID,
-        paidAmount: params.collectedAmount,
-        balanceDue: 0,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(orders.id, params.orderId));
+      db.insert(orderPayments).values({
+        id: crypto.randomUUID(),
+        orderId: params.orderId,
+        amount: params.collectedAmount,
+        currency: currencyConfig.code,
+        paymentMethod: "cod",
+        paymentType: "full",
+        status: "succeeded",
+        codCollectedBy: params.collectedBy,
+        codCollectedAt: now,
+        codReceiptUrl: params.receiptUrl ?? null,
+        createdAt: now,
+        updatedAt: now,
+      }),
+
+      db
+        .update(orders)
+        .set({
+          paymentStatus: PaymentStatus.PAID,
+          paidAmount: params.collectedAmount,
+          balanceDue: 0,
+          updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(orders.id, params.orderId)),
+    ]);
 
     return { success: true };
   } catch (err) {
