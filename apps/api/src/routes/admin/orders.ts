@@ -713,7 +713,7 @@ app.openapi(returnOrderRoute, async (c) => {
     const db = c.get("db");
     const envCache = c.env?.CACHE;
     const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false });
-    if (!result.success) throw new ValidationError(result.message || "Return processing failed");
+    if (!result.success) throw new ValidationError(result.error || "Return processing failed");
     return ok(c, result);
 });
 
@@ -749,7 +749,7 @@ app.openapi(refundOrderRoute, async (c) => {
     const db = c.get("db");
     const envCache = c.env?.CACHE;
     const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway });
-    if (!result.success) throw new ValidationError(result.message || "Refund processing failed");
+    if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     return ok(c, result);
 });
 
