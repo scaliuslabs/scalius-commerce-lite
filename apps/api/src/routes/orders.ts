@@ -13,7 +13,7 @@ import { isDiscountValid, calculateDiscountAmount } from "./discounts";
 import { eq, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { DeliveryService } from "@scalius/core/modules/delivery/service";
-import { createStorefrontOrder } from "@scalius/core/modules/orders/orders.service";
+import { createStorefrontOrder } from "@scalius/core/modules/orders";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError, ValidationError } from "../utils/api-error";
