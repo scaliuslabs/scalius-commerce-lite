@@ -12,14 +12,14 @@ const collectionConfigSchema = z.object({
 
 export const createCollectionSchema = z.object({
     name: z.string().min(3).max(100),
-    type: z.enum(["collection1", "collection2"]),
+    type: z.enum(["manual", "dynamic"]),
     isActive: z.boolean(),
     config: collectionConfigSchema,
 });
 
 export const updateCollectionSchema = z.object({
     name: z.string().min(3).max(100).optional(),
-    type: z.enum(["collection1", "collection2"]).optional(),
+    type: z.enum(["manual", "dynamic"]).optional(),
     isActive: z.boolean().optional(),
     config: collectionConfigSchema.optional(),
 });

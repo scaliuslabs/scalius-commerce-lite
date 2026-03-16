@@ -2,9 +2,9 @@
 // System/platform tables: settings, siteSettings, analytics, adminFcmTokens,
 // shippingMethods, checkoutLanguages.
 
-import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, unique, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { UNIX_NOW } from "./shared";
 
 export const settings = sqliteTable(
     "settings",
@@ -16,7 +16,7 @@ export const settings = sqliteTable(
         category: text("category").notNull(),
         updatedAt: integer("updated_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`CURRENT_TIMESTAMP`),
+            .default(UNIX_NOW),
         expiresAt: integer("expires_at", { mode: "timestamp" }),
     },
     (table) => [unique("settings_key_category").on(table.key, table.category)],
@@ -24,6 +24,7 @@ export const settings = sqliteTable(
 
 export const siteSettings = sqliteTable("site_settings", {
     id: text("id").primaryKey(),
+    singletonKey: text("singleton_key").notNull().default("default"),
     logo: text("logo"),
     favicon: text("favicon"),
     siteName: text("site_name").notNull(),
@@ -47,10 +48,10 @@ export const siteSettings = sqliteTable("site_settings", {
     whatsappTemplateName: text("whatsapp_template_name").default("auth_otp"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 });
 
 export const analytics = sqliteTable("analytics", {
@@ -63,10 +64,10 @@ export const analytics = sqliteTable("analytics", {
     location: text("location").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 });
 
 export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {

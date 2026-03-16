@@ -66,10 +66,10 @@ export const CollectionRow = forwardRef<
 
     const getCollectionTypeLabel = (type: string) => {
       switch (type) {
-        case "collection1":
-          return "Style 1";
-        case "collection2":
-          return "Style 2";
+        case "manual":
+          return "Manual (Grid)";
+        case "dynamic":
+          return "Dynamic (Carousel)";
         default:
           return type;
       }
@@ -77,11 +77,11 @@ export const CollectionRow = forwardRef<
 
     const getCollectionTypeIcon = (type: string) => {
       switch (type) {
-        case "collection1":
+        case "manual":
           return (
             <LayoutGrid className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
           );
-        case "collection2":
+        case "dynamic":
           return (
             <GridIcon className="h-3.5 w-3.5 text-purple-500 dark:text-purple-400" />
           );

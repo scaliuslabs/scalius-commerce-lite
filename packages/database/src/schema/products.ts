@@ -2,9 +2,9 @@
 // Product domain tables: products, images, variants, categories, collections,
 // attributes, attribute values, rich content, and media.
 
-import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, unique, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { UNIX_NOW } from "./shared";
 
 export const products = sqliteTable(
     "products",
@@ -21,10 +21,10 @@ export const products = sqliteTable(
         metaDescription: text("meta_description"),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`CURRENT_TIMESTAMP`),
+            .default(UNIX_NOW),
         updatedAt: integer("updated_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`CURRENT_TIMESTAMP`),
+            .default(UNIX_NOW),
         deletedAt: integer("deleted_at", { mode: "timestamp" }),
         isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
         discountPercentage: real("discount_percentage").default(0),
@@ -51,7 +51,7 @@ export const productImages = sqliteTable("product_images", {
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("product_images_product_id_idx").on(table.productId),
     index("product_images_primary_idx").on(table.productId, table.isPrimary),
@@ -88,10 +88,10 @@ export const productVariants = sqliteTable("product_variants", {
     sizeSortOrder: integer("size_sort_order").default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("product_variants_product_id_idx").on(table.productId),
@@ -111,10 +111,10 @@ export const categories = sqliteTable(
         metaDescription: text("meta_description"),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`CURRENT_TIMESTAMP`),
+            .default(UNIX_NOW),
         updatedAt: integer("updated_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`CURRENT_TIMESTAMP`),
+            .default(UNIX_NOW),
         deletedAt: integer("deleted_at", { mode: "timestamp" }),
     },
     (table) => [
@@ -126,16 +126,16 @@ export const categories = sqliteTable(
 export const collections = sqliteTable("collections", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    type: text("type", { enum: ["collection1", "collection2"] }).notNull(),
+    type: text("type", { enum: ["manual", "dynamic"] }).notNull(),
     config: text("config").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("collections_deleted_at_idx").on(table.deletedAt),
@@ -149,10 +149,10 @@ export const productAttributes = sqliteTable("product_attributes", {
     options: text("options", { mode: "json" }).$type<string[]>(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 });
 
@@ -169,7 +169,7 @@ export const productAttributeValues = sqliteTable(
         value: text("value").notNull(),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`CURRENT_TIMESTAMP`),
+            .default(UNIX_NOW),
     },
     (table) => [
         unique().on(table.productId, table.attributeId),
@@ -187,10 +187,10 @@ export const productRichContent = sqliteTable("product_rich_content", {
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("product_rich_content_product_id_idx").on(table.productId),
 ]);
@@ -201,10 +201,10 @@ export const mediaFolders = sqliteTable("media_folders", {
     parentId: text("parent_id"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 });
 
@@ -217,10 +217,10 @@ export const media = sqliteTable("media", {
     folderId: text("folder_id").references(() => mediaFolders.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 });
 

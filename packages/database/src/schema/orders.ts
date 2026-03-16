@@ -78,6 +78,7 @@ export const orderItems = sqliteTable("order_items", {
 }, (table) => [
     index("order_items_order_id_idx").on(table.orderId),
     index("order_items_product_id_idx").on(table.productId),
+    index("order_items_variant_id_idx").on(table.variantId),
 ]);
 
 export const orderPayments = sqliteTable("order_payments", {

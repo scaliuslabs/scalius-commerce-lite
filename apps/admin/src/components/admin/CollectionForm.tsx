@@ -61,13 +61,13 @@ interface Product {
 
 const collectionTypes = [
   {
-    value: "collection1",
-    label: "Collection Style 1",
+    value: "manual",
+    label: "Manual (Grid)",
     description: "Grid layout with featured product (Large card + grid)",
   },
   {
-    value: "collection2",
-    label: "Collection Style 2",
+    value: "dynamic",
+    label: "Dynamic (Carousel)",
     description: "Horizontal scrolling product carousel",
   },
 ] as const;
@@ -79,7 +79,7 @@ const collectionFormSchema = z.object({
     .string()
     .min(3, "Collection name must be at least 3 characters")
     .max(100, "Collection name must be less than 100 characters"),
-  type: z.enum(["collection1", "collection2"]),
+  type: z.enum(["manual", "dynamic"]),
   isActive: z.boolean(),
   config: z.object({
     categoryIds: z.array(z.string()),
@@ -110,7 +110,7 @@ export function CollectionForm({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
       name: "",
-      type: "collection1",
+      type: "manual",
       isActive: true,
       config: {
         categoryIds: [],
@@ -566,8 +566,8 @@ export function CollectionForm({
                     )}
                   />
 
-                  {/* Featured Product (conditional on collection1) */}
-                  {selectedType === "collection1" && (
+                  {/* Featured Product (conditional on manual type) */}
+                  {selectedType === "manual" && (
                     <FormField
                       control={form.control}
                       name="config.featuredProductId"
