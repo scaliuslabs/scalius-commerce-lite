@@ -15,8 +15,12 @@ Stock management with reservation-based concurrency control, batch operations, v
 - `alerts.ts` -- `checkAndAlertLowStock()`, `LowStockAlertResult`
 - `inventory.service.ts` -- `InventoryService` (getInventoryOverview, adjustInventory)
 - `inventory.schema.ts` -- Zod validation schemas
-- `inventory-transitions.ts` -- inventory state transition helpers
+- `inventory-transitions.ts` -- `buildInventoryStatements()` returns SQL statements for batching into caller's `db.batch()`, `applyInventoryForStatusChange()` wraps it for standalone use
 - `types.ts` -- `StockOperationResult`, `ReservationEntry`
+
+## Schema notes
+
+- `stockVersion` column on `productVariants` — separate optimistic locking counter for stock operations, independent from the general `version` column used for non-stock updates like price changes
 
 ## Dependencies
 

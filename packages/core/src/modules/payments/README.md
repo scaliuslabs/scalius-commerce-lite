@@ -22,6 +22,7 @@ Multi-gateway payment processing with unified provider interface and gateway reg
 - State machine validation before status transitions
 - Gateway registry for dynamic provider discovery
 - Settings cached in KV (5 min TTL)
+- Refund validation: amount must be positive, cannot exceed `paidAmount`, and cumulative refunds (existing + new) cannot exceed `paidAmount`. Partial refunds do NOT restore inventory — admin must manually adjust stock after a physical return.
 
 ## Dependencies
 
