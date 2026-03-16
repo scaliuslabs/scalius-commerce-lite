@@ -1,10 +1,15 @@
 import type { DeliveryProviderType, Order } from "@scalius/database/schema";
+import type { ProviderLifecycle, HealthCheckResult } from "@scalius/core/providers/types";
 import type { ShipmentResult, ShipmentStatus, ShipmentOptions } from "./types";
 
 /**
- * Interface that all delivery providers must implement
+ * Interface that all delivery providers must implement.
+ *
+ * Extends ProviderLifecycle so that delivery providers share the same
+ * initialize / healthCheck / dispose contract as all other provider types
+ * (payment, email, SMS).
  */
-export interface DeliveryProviderInterface {
+export interface DeliveryProviderInterface extends ProviderLifecycle {
   /**
    * Get the display name of the provider
    */

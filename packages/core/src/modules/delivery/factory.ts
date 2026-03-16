@@ -1,5 +1,6 @@
 import { PathaoProvider } from "./providers/pathao";
 import { SteadfastProvider } from "./providers/steadfast";
+import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
 import type { DeliveryProviderRecord, DeliveryProviderType } from "@scalius/database/schema";
 import type { DeliveryProviderInterface } from "./provider";
 import type {
@@ -10,21 +11,29 @@ import type {
 } from "./types";
 
 /**
- * Create the appropriate provider instance based on provider type
+ * Create the appropriate provider instance based on provider type.
+ *
+ * If an encryptionKey is provided, credentials are decrypted before parsing.
+ * Graceful decryption allows plaintext credentials to work during migration.
  */
-export function createProvider(
+export async function createProvider(
   provider: DeliveryProviderRecord,
-): DeliveryProviderInterface {
+  encryptionKey?: string,
+): Promise<DeliveryProviderInterface> {
   try {
     console.log(
       `Creating provider instance for: ${provider.name} (${provider.type})`,
     );
 
-    // Parse JSON strings from database
+    // Parse JSON strings from database (decrypt if needed)
     let credentials, config;
 
     try {
-      credentials = JSON.parse(provider.credentials);
+      const rawCreds = await decryptCredentialsGraceful(
+        provider.credentials,
+        encryptionKey,
+      );
+      credentials = JSON.parse(rawCreds);
       console.log(`Parsed credentials for ${provider.type} provider`);
     } catch (credError) {
       console.error(

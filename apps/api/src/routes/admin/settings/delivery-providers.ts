@@ -215,7 +215,7 @@ app.openapi(createTestRoute, async (c) => {
         };
 
         try {
-            const providerInstance = createProvider(mockProvider);
+            const providerInstance = await createProvider(mockProvider);
             const result = await providerInstance.testConnection();
 
             return ok(c, {
@@ -278,7 +278,7 @@ app.openapi(testExistingRoute, async (c) => {
         if (!provider) throw new NotFoundError("Provider not found");
 
         try {
-            const providerInstance = createProvider(provider);
+            const providerInstance = await createProvider(provider);
             const result = await providerInstance.testConnection();
             return ok(c, result);
         } catch (testError: unknown) {

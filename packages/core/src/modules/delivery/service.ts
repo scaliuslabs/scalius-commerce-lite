@@ -1,6 +1,7 @@
 import { db } from "@scalius/database/client";
 import { deliveryProviders, deliveryShipments, orders } from "@scalius/database/schema";
 import { createProvider } from "./factory";
+import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 import type { ShipmentOptions, ShipmentResult } from "./types";
 import { eq, desc } from "drizzle-orm";
@@ -47,19 +48,22 @@ export class DeliveryService {
   /**
    * Save provider to database (create or update)
    */
-  async saveProvider(provider: {
-    id: string;
-    name: string;
-    type: string;
-    isActive: boolean;
-    credentials: Record<string, unknown> | string;
-    config: Record<string, unknown> | string;
-  }) {
+  async saveProvider(
+    provider: {
+      id: string;
+      name: string;
+      type: string;
+      isActive: boolean;
+      credentials: Record<string, unknown> | string;
+      config: Record<string, unknown> | string;
+    },
+    encryptionKey?: string,
+  ) {
     const providerId = provider.id || nanoid();
     const now = new Date();
 
     // Convert objects to JSON strings
-    const credentials =
+    let credentials =
       typeof provider.credentials === "string"
         ? provider.credentials
         : JSON.stringify(provider.credentials);
@@ -68,6 +72,11 @@ export class DeliveryService {
       typeof provider.config === "string"
         ? provider.config
         : JSON.stringify(provider.config);
+
+    // Encrypt credentials if an encryption key is available
+    if (encryptionKey) {
+      credentials = await encryptCredentials(credentials, encryptionKey);
+    }
 
     // Check if provider exists
     const existingProvider = await this.getProvider(providerId);
@@ -121,7 +130,7 @@ export class DeliveryService {
     }
 
     try {
-      const providerInstance = createProvider(provider);
+      const providerInstance = await createProvider(provider);
       return await providerInstance.testConnection();
     } catch (error) {
       return {
@@ -184,7 +193,7 @@ export class DeliveryService {
 
     try {
       // 2. Call provider API
-      const providerInstance = createProvider(provider);
+      const providerInstance = await createProvider(provider);
       const shipmentResult = await providerInstance.createShipment(
         order,
         options,
@@ -305,7 +314,7 @@ export class DeliveryService {
 
     try {
       // Create provider instance
-      const providerInstance = createProvider(provider);
+      const providerInstance = await createProvider(provider);
 
       // Check status
       const statusResult = await providerInstance.checkShipmentStatus(
