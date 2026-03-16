@@ -37,7 +37,7 @@ export async function reserveStock(
         allowPreorder: productVariants.allowPreorder,
         allowBackorder: productVariants.allowBackorder,
         backorderLimit: productVariants.backorderLimit,
-        version: productVariants.version,
+        stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
       .where(eq(productVariants.id, variantId))
@@ -115,12 +115,12 @@ export async function reserveStock(
         ? {
           preorderStock: sql`${productVariants.preorderStock} - ${quantity}`,
           reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
-          version: sql`${productVariants.version} + 1`,
+          stockVersion: sql`${productVariants.stockVersion} + 1`,
           updatedAt: sql`unixepoch()`,
         }
         : {
           reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
-          version: sql`${productVariants.version} + 1`,
+          stockVersion: sql`${productVariants.stockVersion} + 1`,
           updatedAt: sql`unixepoch()`,
         };
 
@@ -130,7 +130,7 @@ export async function reserveStock(
       .where(
         and(
           eq(productVariants.id, variantId),
-          eq(productVariants.version, variant.version)
+          eq(productVariants.stockVersion, variant.stockVersion)
         )
       )
       .returning({ id: productVariants.id });
@@ -252,7 +252,7 @@ export async function reserveStockBatch(
       allowPreorder: boolean;
       allowBackorder: boolean;
       backorderLimit: number;
-      version: number;
+      stockVersion: number;
     }>();
 
     for (const entry of entries) {
@@ -265,7 +265,7 @@ export async function reserveStockBatch(
           allowPreorder: productVariants.allowPreorder,
           allowBackorder: productVariants.allowBackorder,
           backorderLimit: productVariants.backorderLimit,
-          version: productVariants.version,
+          stockVersion: productVariants.stockVersion,
         })
         .from(productVariants)
         .where(eq(productVariants.id, entry.variantId))
@@ -319,12 +319,12 @@ export async function reserveStockBatch(
           ? {
               preorderStock: sql`${productVariants.preorderStock} - ${entry.quantity}`,
               reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
-              version: sql`${productVariants.version} + 1`,
+              stockVersion: sql`${productVariants.stockVersion} + 1`,
               updatedAt: sql`unixepoch()`,
             }
           : {
               reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
-              version: sql`${productVariants.version} + 1`,
+              stockVersion: sql`${productVariants.stockVersion} + 1`,
               updatedAt: sql`unixepoch()`,
             };
 
@@ -334,7 +334,7 @@ export async function reserveStockBatch(
         .where(
           and(
             eq(productVariants.id, entry.variantId),
-            eq(productVariants.version, variant.version)
+            eq(productVariants.stockVersion, variant.stockVersion)
           )
         )
         .returning({ id: productVariants.id });
@@ -379,7 +379,7 @@ export async function reserveStockBatch(
               ...(pool === "preorder"
                 ? { preorderStock: sql`${productVariants.preorderStock} + ${entry.quantity}` }
                 : {}),
-              version: sql`${productVariants.version} + 1`,
+              stockVersion: sql`${productVariants.stockVersion} + 1`,
               updatedAt: sql`unixepoch()`,
             })
             .where(eq(productVariants.id, entry.variantId));
@@ -503,7 +503,7 @@ async function releaseReservationInternal(
       ...(pool === "preorder"
         ? { preorderStock: sql`${productVariants.preorderStock} + ${quantity}` }
         : {}),
-      version: sql`${productVariants.version} + 1`,
+      stockVersion: sql`${productVariants.stockVersion} + 1`,
       updatedAt: sql`unixepoch()`,
     })
     .where(eq(productVariants.id, variantId));

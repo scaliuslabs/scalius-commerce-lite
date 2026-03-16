@@ -55,7 +55,7 @@ export async function adjustStock(
     .update(productVariants)
     .set({
       stock: sql`MAX(0, ${productVariants.stock} + ${delta})`,
-      version: sql`${productVariants.version} + 1`,
+      stockVersion: sql`${productVariants.stockVersion} + 1`,
       updatedAt: sql`unixepoch()`,
     })
     .where(eq(productVariants.id, variantId));
@@ -115,7 +115,7 @@ export async function setStock(
     .update(productVariants)
     .set({
       stock: targetStock,
-      version: sql`${productVariants.version} + 1`,
+      stockVersion: sql`${productVariants.stockVersion} + 1`,
       updatedAt: sql`unixepoch()`,
     })
     .where(eq(productVariants.id, variantId));

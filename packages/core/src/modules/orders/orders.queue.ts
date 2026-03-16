@@ -8,7 +8,7 @@
 //   - COD tracking initialization
 //   - Cloudflare KV checkout status updates
 
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import { orders, orderItems, customers, customerHistory, discountUsage } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 import { reserveStockBatch, releaseMultiple } from "../inventory";
@@ -242,6 +242,35 @@ export async function handleOrderIngestBatch(
     }
 
     console.log(`[Queue] Prepped ${writeBatch.length} statements for ${successMessages.length} successful orders`);
+
+    // ── Phase 1b: Final discount usage check ──────────────────────────────
+    // Re-check discount usage limits to narrow the race window between
+    // validation time (HTTP handler) and queue processing time (here).
+    for (let i = successMessages.length - 1; i >= 0; i--) {
+        const msg = successMessages[i];
+        const payload = msg.body;
+        if (!payload.discountUsage) continue;
+
+        const customerId = (payload.orderData as any).customerId;
+        if (!customerId) continue;
+
+        const customerUsage = await db
+            .select({ count: sql<number>`COUNT(*)` })
+            .from(discountUsage)
+            .where(
+                and(
+                    eq(discountUsage.discountId, payload.discountUsage.discountId),
+                    eq(discountUsage.customerId, customerId),
+                ),
+            )
+            .get();
+
+        if ((customerUsage?.count ?? 0) > 0) {
+            await setCheckoutStatus(env, payload.checkoutToken, "failed", "Discount already used by this customer");
+            successMessages.splice(i, 1);
+            failedMessages.push({ msg, reason: "Discount already used" });
+        }
+    }
 
     // ── Phase 2: Inventory reservations ─────────────────────────────────────
 

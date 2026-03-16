@@ -132,7 +132,7 @@ export async function releaseExpiredReservations(
         .update(productVariants)
         .set({
           reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${totalQuantity})`,
-          version: sql`${productVariants.version} + 1`,
+          stockVersion: sql`${productVariants.stockVersion} + 1`,
           updatedAt: sql`unixepoch()`,
         })
         .where(eq(productVariants.id, variantId));

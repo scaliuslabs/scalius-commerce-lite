@@ -52,7 +52,7 @@ export async function releaseReservation(
       ...(pool === "preorder"
         ? { preorderStock: sql`${productVariants.preorderStock} + ${quantity}` }
         : {}),
-      version: sql`${productVariants.version} + 1`,
+      stockVersion: sql`${productVariants.stockVersion} + 1`,
       updatedAt: sql`unixepoch()`,
     })
     .where(eq(productVariants.id, variantId));

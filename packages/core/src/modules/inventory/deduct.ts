@@ -39,7 +39,7 @@ export async function deductStock(
         stock: productVariants.stock,
         reservedStock: productVariants.reservedStock,
         preorderStock: productVariants.preorderStock,
-        version: productVariants.version,
+        stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
       .where(eq(productVariants.id, variantId))
@@ -64,13 +64,13 @@ export async function deductStock(
         ? {
           stock: sql`MAX(0, ${productVariants.stock} - ${quantity})`,
           reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
-          version: sql`${productVariants.version} + 1`,
+          stockVersion: sql`${productVariants.stockVersion} + 1`,
           updatedAt: sql`unixepoch()`,
         }
         : {
           // preorder & backorder: physical stock counter unchanged; just release hold
           reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
-          version: sql`${productVariants.version} + 1`,
+          stockVersion: sql`${productVariants.stockVersion} + 1`,
           updatedAt: sql`unixepoch()`,
         };
 
@@ -80,7 +80,7 @@ export async function deductStock(
       .where(
         and(
           eq(productVariants.id, variantId),
-          eq(productVariants.version, variant.version)
+          eq(productVariants.stockVersion, variant.stockVersion)
         )
       )
       .returning({ id: productVariants.id });
@@ -177,7 +177,7 @@ async function restoreDeductedStock(
         ? { stock: sql`${productVariants.stock} + ${quantity}` }
         : {}),
       reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
-      version: sql`${productVariants.version} + 1`,
+      stockVersion: sql`${productVariants.stockVersion} + 1`,
       updatedAt: sql`unixepoch()`,
     })
     .where(eq(productVariants.id, variantId));

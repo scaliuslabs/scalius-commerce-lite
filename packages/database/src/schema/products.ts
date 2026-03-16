@@ -71,6 +71,8 @@ export const productVariants = sqliteTable("product_variants", {
     reservedStock: integer("reserved_stock").notNull().default(0),
     preorderStock: integer("preorder_stock").notNull().default(0),
     version: integer("version").notNull().default(1), // Optimistic locking
+    /** Optimistic locking for stock-specific operations (separate from general version) */
+    stockVersion: integer("stock_version").notNull().default(1),
     lowStockThreshold: integer("low_stock_threshold"),
     allowPreorder: integer("allow_preorder", { mode: "boolean" }).notNull().default(false),
     preorderDate: text("preorder_date"),
