@@ -2,10 +2,10 @@ import { apiGet } from "@/lib/api-fetch";
 
 export async function getAnalyticsListData() {
   // API returns ok(c, scripts) where scripts is an array.
-  // Proxy doesn't unwrap arrays: { success, data: [...] }.
-  // apiGet strips success -> { data: [...] }.
+  // apiGet calls the API directly (not through the admin proxy) and
+  // unwraps { success, data: T } → T. So result IS the array.
   const result = await apiGet<any>("/analytics");
-  const scripts = Array.isArray(result.data) ? result.data : [];
+  const scripts = Array.isArray(result) ? result : [];
 
   return scripts.map((script: any) => ({
     id: script.id,

@@ -1,20 +1,10 @@
 ---
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { FraudCheckerSettings } from "@/components/admin/FraudCheckerSettings";
-import { FraudCheckerService } from "@scalius/core/modules/fraud-checker/service";
+import { getFraudCheckerProvidersData } from "@/loaders/admin/settings";
 
-
-// SECURITY: Masked value for sensitive fields
-const MASKED_VALUE = "••••••••••••";
-
-const fraudCheckerService = new FraudCheckerService();
-const dbProviders = await fraudCheckerService.getProviders();
-
-// SECURITY: Mask API keys before sending to client
-const providers = dbProviders.map(provider => ({
-  ...provider,
-  apiKey: provider.apiKey ? MASKED_VALUE : "",
-}));
+// API already masks sensitive fields before returning
+const providers = await getFraudCheckerProvidersData();
 
 ---
 

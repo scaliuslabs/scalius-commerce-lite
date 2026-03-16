@@ -1,8 +1,7 @@
 ---
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import { OrderView } from "@/components/admin/OrderView";
-import { DeliveryService } from "@scalius/core/modules/delivery/service";
-import { getOrderViewData } from "@/loaders/admin/orders";
+import { getOrderViewData, getOrderShipments, getDeliveryProviders } from "@/loaders/admin/orders";
 
 // Get order ID from URL
 const { id } = Astro.params;
@@ -13,16 +12,28 @@ if (!orderViewData) {
 }
 const { order, items, totalAmount, cityName, zoneName, areaName } = orderViewData;
 
-// Get delivery providers and shipments
-const deliveryService = new DeliveryService();
-const shipments = await deliveryService.getShipments(id as string);
-const activeProviders = await deliveryService.getActiveProviders();
+// Get delivery providers and shipments via API
+const [shipments, activeProviders] = await Promise.all([
+  getOrderShipments(id as string),
+  getDeliveryProviders(),
+]);
 
-// Format dates properly
+// Format dates properly — API returns Date objects (serialized as ISO strings)
+const createdAt = order.createdAt instanceof Date
+  ? order.createdAt
+  : typeof order.createdAt === "number"
+    ? new Date(order.createdAt * 1000)
+    : new Date(order.createdAt);
+const updatedAt = order.updatedAt instanceof Date
+  ? order.updatedAt
+  : typeof order.updatedAt === "number"
+    ? new Date(order.updatedAt * 1000)
+    : new Date(order.updatedAt);
+
 const formattedOrder = {
   ...order,
-  createdAt: new Date(order.createdAt * 1000),
-  updatedAt: new Date(order.updatedAt * 1000),
+  createdAt,
+  updatedAt,
   items,
   totalAmount,
   // Add location names
