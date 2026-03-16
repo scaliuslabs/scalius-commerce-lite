@@ -13,6 +13,7 @@ import {
     ServiceUnavailableError,
 } from "@scalius/core/errors";
 import { getOtpTransport, type OtpQueuePayload } from "./otp-transport";
+import { normalizePhone } from "@scalius/shared/customer-utils";
 
 // ─────────────────────────────────────────
 // Constants
@@ -178,6 +179,9 @@ export async function sendOtp(
         throw new ValidationError("Valid phone number required");
     }
 
+    // Normalize phone identifier to E.164 for consistent storage/lookup
+    const normalizedIdentifier = method === "phone" ? normalizePhone(identifier) : identifier;
+
     // Fetch site settings
     const [settings] = await db.select().from(siteSettings).limit(1);
 
@@ -189,7 +193,7 @@ export async function sendOtp(
         throw new ForbiddenError(`Verification via ${method} is currently disabled by the store.`);
     }
 
-    const otpKey = `${OTP_PREFIX}${identifier}`;
+    const otpKey = `${OTP_PREFIX}${normalizedIdentifier}`;
 
     // IP-based Rate Limiting (max 5 requests per 10 minutes per IP)
     if (ip !== "unknown") {
@@ -226,15 +230,14 @@ export async function sendOtp(
     const now = Date.now();
     const storedOtp: StoredOtp = {
         code,
-        email: identifier,
+        email: normalizedIdentifier,
         expiresAt: now + OTP_TTL_SECONDS * 1000,
         attempts: 0,
     };
 
     await kv.put(otpKey, JSON.stringify(storedOtp), { expirationTtl: OTP_TTL_SECONDS });
 
-    // Log OTP in development for testing (never in production — secrets would leak)
-    console.log(`[CustomerAuth] OTP for ${identifier}: ${code} (expires in ${OTP_TTL_SECONDS}s)`);
+    // OTP code is intentionally NOT logged — it would leak secrets in production.
 
     // Resolve transport and validate its configuration
     const transport = getOtpTransport(method, allowedMethod);
@@ -244,8 +247,8 @@ export async function sendOtp(
         throw new ServiceUnavailableError(configError);
     }
 
-    // Build queue payload via transport
-    const queuePayload = transport.buildQueuePayload(code, identifier, name, settings!);
+    // Build queue payload via transport — use original identifier for delivery (user-facing)
+    const queuePayload = transport.buildQueuePayload(code, normalizedIdentifier, name, settings!);
 
     return {
         success: true,
@@ -272,7 +275,11 @@ export async function verifyOtp(
         throw new ValidationError("Contact identifier and code are required");
     }
 
-    const otpKey = `${OTP_PREFIX}${identifier}`;
+    // Normalize phone identifiers to E.164 for consistent KV/DB lookup
+    const normalizedIdentifier = method === "phone" ? normalizePhone(identifier) : identifier;
+    const normalizedPhone = phone ? normalizePhone(phone) : undefined;
+
+    const otpKey = `${OTP_PREFIX}${normalizedIdentifier}`;
 
     // Fetch stored OTP
     const storedRaw = await kv.get(otpKey, "text");
@@ -312,14 +319,14 @@ export async function verifyOtp(
     // Look up customer in DB (if exists)
     let customerId: string | undefined;
     let customerName = name;
-    let resolvedEmail = method === "email" ? identifier : undefined;
-    let resolvedPhone = method === "phone" ? identifier : undefined;
+    let resolvedEmail = method === "email" ? normalizedIdentifier : undefined;
+    let resolvedPhone = method === "phone" ? normalizedIdentifier : undefined;
     let isNewUser = false;
 
     try {
         const existing = method === "email"
-            ? await db.select().from(customers).where(eq(customers.email, identifier)).get()
-            : await db.select().from(customers).where(eq(customers.phone, identifier)).get();
+            ? await db.select().from(customers).where(eq(customers.email, normalizedIdentifier)).get()
+            : await db.select().from(customers).where(eq(customers.phone, normalizedIdentifier)).get();
 
         if (existing) {
             customerId = existing.id;
@@ -328,11 +335,11 @@ export async function verifyOtp(
             resolvedPhone = existing.phone || resolvedPhone;
         } else {
             if (method === "email") {
-                if (!phone) {
+                if (!normalizedPhone) {
                     throw new ValidationError("Phone number is required for registration.");
                 }
                 // Prevent duplicates/account takeover
-                const phoneExists = await db.select().from(customers).where(eq(customers.phone, phone)).get();
+                const phoneExists = await db.select().from(customers).where(eq(customers.phone, normalizedPhone)).get();
                 if (phoneExists) {
                     throw new ValidationError("This phone number is already registered. Please sign in with it instead.");
                 }
@@ -343,9 +350,9 @@ export async function verifyOtp(
 
             // Determine phone value
             let customerPhone = resolvedPhone;
-            if (method === "email" && phone) {
-                customerPhone = phone;
-                resolvedPhone = phone;
+            if (method === "email" && normalizedPhone) {
+                customerPhone = normalizedPhone;
+                resolvedPhone = normalizedPhone;
             }
 
             await db.insert(customers).values({

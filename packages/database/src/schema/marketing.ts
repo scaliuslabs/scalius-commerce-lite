@@ -34,6 +34,9 @@ export const discounts = sqliteTable("discounts", {
     maxUsesPerOrder: integer("max_uses_per_order"),
     maxUses: integer("max_uses"),
     limitOnePerCustomer: integer("limit_one_per_customer", { mode: "boolean" }).default(false),
+    // NOTE: combineWith* flags are reserved for future multi-discount support.
+    // Currently the system supports only ONE discount code per order (single
+    // discountCode field on checkout payload). These flags are not enforced.
     combineWithProductDiscounts: integer("combine_with_product_discounts", { mode: "boolean" }).default(false),
     combineWithOrderDiscounts: integer("combine_with_order_discounts", { mode: "boolean" }).default(false),
     combineWithShippingDiscounts: integer("combine_with_shipping_discounts", { mode: "boolean" }).default(false),

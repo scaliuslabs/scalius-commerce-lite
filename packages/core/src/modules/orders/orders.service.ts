@@ -1046,7 +1046,7 @@ export async function createStorefrontOrder(
     data: CreateStorefrontOrderInput,
     requestUrl: string,
     isDiscountValid: (db: Database, code: string, total: number, items: unknown[], customerPhone: string) => Promise<unknown>,
-    calculateDiscountAmount: (db: Database, discount: unknown, total: number, items: unknown[], shippingCost: number) => number,
+    calculateDiscountAmount: (db: Database, discount: unknown, total: number, items: unknown[], shippingCost: number) => number | Promise<number>,
 ): Promise<CreateStorefrontOrderResult> {
     // ------------------------------------------------------------------
     // 1. Batched Reads
@@ -1273,7 +1273,7 @@ export async function createStorefrontOrder(
 
         const validResult = validationResponse as Record<string, unknown> | null;
         if (validResult && validResult.valid && validResult.discount) {
-            verifiedDiscountAmount = calculateDiscountAmount(
+            verifiedDiscountAmount = await calculateDiscountAmount(
                 storefrontDb,
                 validResult.discount,
                 serverItemTotal + verifiedShippingCharge,
