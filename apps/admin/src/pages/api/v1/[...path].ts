@@ -55,7 +55,29 @@ async function unwrapStandardizedResponse(response: Response): Promise<Response>
       });
     }
 
-    // Pass through as-is for non-standard shapes, arrays, errors, etc.
+    // Flatten structured error responses for admin components.
+    // API returns: { success: false, error: { code, message, details? } }
+    // Admin expects: { success: false, error: "message string" }
+    if (
+      body.success === false &&
+      body.error &&
+      typeof body.error === "object" &&
+      (body.error as Record<string, unknown>).message
+    ) {
+      const err = body.error as Record<string, unknown>;
+      return new Response(JSON.stringify({
+        success: false,
+        error: err.message,
+        errorCode: err.code,
+        details: err.details,
+      }), {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    }
+
+    // Pass through as-is for non-standard shapes, arrays, etc.
     return new Response(JSON.stringify(body), {
       status: response.status,
       statusText: response.statusText,
