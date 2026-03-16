@@ -2,8 +2,6 @@
 // FCM REST API implementation for Cloudflare Workers
 // Replaces firebase-admin SDK with direct HTTP calls
 
-import type { KVNamespace } from "@cloudflare/workers-types";
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function getEnv(contextEnv?: any) {

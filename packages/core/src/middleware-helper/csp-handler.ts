@@ -45,10 +45,11 @@ function getEssentialDomains(): string[] {
 }
 
 async function parseCspAllowedDomains(env?: Record<string, unknown>): Promise<string[]> {
-  let cspAllowed = env?.CSP_ALLOWED || process.env.CSP_ALLOWED || "";
+  let cspAllowed = String(env?.CSP_ALLOWED || process.env.CSP_ALLOWED || "");
   try {
     if (env?.CACHE) {
-      const cached = await env.CACHE.get("security:csp_allowed_domains");
+      const cache = env.CACHE as { get(key: string): Promise<string | null> };
+      const cached = await cache.get("security:csp_allowed_domains");
       if (cached !== null) {
         cspAllowed = cached;
       }
@@ -92,7 +93,7 @@ function getPlatformDomains(env?: Record<string, unknown>): string[] {
   ];
 
   for (const key of envKeys) {
-    const raw: string | undefined = env?.[key] || process.env[key];
+    const raw: string | undefined = (env?.[key] as string | undefined) || process.env[key];
     if (!raw) continue;
 
     // CDN_DOMAIN_URL is stored as a bare domain (no scheme)
@@ -136,7 +137,7 @@ async function getCombinedDomains(env?: Record<string, unknown>): Promise<string
 export async function setPageCspHeader(response: Response, env?: Record<string, unknown>): Promise<Response> {
   const allowedDomains = await getCombinedDomains(env);
   // Use PUBLIC_API_BASE_URL environment variable - no hardcoded fallbacks
-  const currentOrigin = (env?.PUBLIC_API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "").trim();
+  const currentOrigin = String(env?.PUBLIC_API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "").trim();
 
   const scriptSrc = [
     "'self'",
