@@ -1,16 +1,21 @@
 import { defineMiddleware } from "astro:middleware";
 import { createAuth } from "@scalius/core/auth";
 import { env as cfEnv } from "cloudflare:workers";
+import { setRequestHeaders } from "@/lib/api-fetch";
 
 /**
  * Auth middleware — runs first.
  * Detects CF environment, initializes DB/KV/Storage bindings, and extracts
  * the Better Auth session, populating `context.locals` for downstream middleware.
+ * Also stores request headers so SSR loaders can forward auth cookies to the API.
  */
 export const authMiddleware = defineMiddleware(async (context, next) => {
   const request = context.request;
   const url = new URL(request.url);
   const pathname = url.pathname;
+
+  // Store request headers so apiGet/apiPost can forward auth cookies
+  setRequestHeaders(request.headers);
 
   // Use native CF Worker env in prod/dev, fallback to process.env for scripts
   // NOTE: Do NOT use Object.keys(cfEnv) — it returns [] on CF Workers proxy objects.
