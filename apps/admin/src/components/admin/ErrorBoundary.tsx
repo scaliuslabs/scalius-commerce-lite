@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui
 interface ErrorBoundaryProps {
   children: React.ReactNode;
   fallback?: React.ReactNode;
+  onReset?: () => void;
 }
 
 interface ErrorBoundaryState {
@@ -32,7 +33,11 @@ export class ErrorBoundary extends React.Component<
 
   handleReset = () => {
     this.setState({ hasError: false, error: null });
-    window.location.reload();
+    if (this.props.onReset) {
+      this.props.onReset();
+    } else {
+      window.location.reload();
+    }
   };
 
   render() {
