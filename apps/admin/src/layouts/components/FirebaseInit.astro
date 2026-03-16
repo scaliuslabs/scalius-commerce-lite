@@ -1,0 +1,36 @@
+---
+// src/layouts/components/FirebaseInit.astro
+// Lazy-loads Firebase FCM via requestIdleCallback
+---
+
+<script>
+  // Lazy-load Firebase configurations and notifications - deferred to avoid blocking page load
+  async function initializeFcmOnClient() {
+    const userId = (window as any).__USER_ID__;
+    if (!userId) return;
+
+    try {
+      // Fetch the config asynchronously on the client to avoid blocking the initial HTML stream
+      const req = await fetch('/api/v1/auth/firebase-config');
+      if (!req.ok) return;
+      const firebaseConfig = await req.json();
+
+      if (!firebaseConfig || !firebaseConfig.apiKey) {
+        return;
+      }
+
+      // Dynamic import - Firebase SDK loaded only when needed
+      const { initFirebaseClientNotifications } = await import("@scalius/core/integrations/firebase/client");
+      initFirebaseClientNotifications(userId, firebaseConfig);
+    } catch (err) {
+      console.error("Failed to load Firebase client config:", err);
+    }
+  }
+
+  // Defer Firebase init until browser is idle (or 3s timeout)
+  if ("requestIdleCallback" in window) {
+    (window as any).requestIdleCallback(initializeFcmOnClient, { timeout: 3000 });
+  } else {
+    setTimeout(initializeFcmOnClient, 3000);
+  }
+</script>

@@ -1,0 +1,25 @@
+---
+// src/layouts/components/ThemeInit.astro
+// Inline theme FOUC prevention — runs before React hydration
+---
+
+<script is:inline>
+  (function() {
+    function applyTheme() {
+      var theme = "light";
+      try { theme = localStorage.getItem("theme") || "light"; } catch(e) {}
+      if (theme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+      document.documentElement.style.colorScheme = theme;
+    }
+
+    // Execute immediately on initial load
+    applyTheme();
+
+    // Ensure theme persists across Astro View Transitions
+    document.addEventListener("astro:after-swap", applyTheme);
+  })();
+</script>
