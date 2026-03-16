@@ -190,6 +190,7 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 - **Scanner app**: needs rebuild as standalone `/scanner` route with QR-token auth (backend complete, frontend removed)
 - **Type safety**: ~250 `any` type usages remain across the admin app
 - **Test coverage**: zero test coverage (private test suite planned, gitignored)
+- **Widget history**: Admin UI has history/restore/delete buttons but API endpoints don't exist (GET/POST/DELETE `/admin/widgets/{id}/history/*`)
 
 ## Agent Team Guidelines
 
