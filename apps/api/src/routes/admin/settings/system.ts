@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import { settings, siteSettings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -26,6 +25,7 @@ const getAuthRoute = createRoute({
 
 app.openapi(getAuthRoute, async (c) => {
     try {
+        const db = c.get("db");
         const [row] = await db.select().from(siteSettings).limit(1);
         if (!row) throw new NotFoundError("Settings not found");
 
@@ -44,35 +44,48 @@ app.openapi(getAuthRoute, async (c) => {
     }
 });
 
+const saveAuthSchema = z.object({
+    authVerificationMethod: z.enum(["email", "phone", "both", "whatsapp_otp", "sms_otp"]).optional(),
+    guestCheckoutEnabled: z.boolean().optional(),
+    whatsappAccessToken: z.string().optional(),
+    whatsappPhoneNumberId: z.string().nullable().optional(),
+    whatsappTemplateName: z.string().nullable().optional(),
+    checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]).optional(),
+    partialPaymentEnabled: z.boolean().optional(),
+    partialPaymentAmount: z.number().optional(),
+});
+
 const saveAuthRoute = createRoute({
     method: "post",
     path: "/auth",
     tags: ["Admin - Settings"],
     summary: "Save auth/checkout settings",
+    request: { body: { content: { "application/json": { schema: saveAuthSchema } } } },
     responses: { 200: { description: "Auth settings saved"  } }
 });
 
 app.openapi(saveAuthRoute, async (c) => {
     try {
-        const body = (await c.req.json()) as Record<string, unknown>;
+        const db = c.get("db");
+        const body = c.req.valid("json");
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
 
         if (!existingSettings) throw new ValidationError("Base Site Settings must be configured first");
 
         const updates: Partial<typeof siteSettings.$inferInsert> = {};
 
-        if (body.authVerificationMethod && typeof body.authVerificationMethod === "string") {
-            updates.authVerificationMethod = body.authVerificationMethod as "email" | "phone" | "both" | "whatsapp_otp" | "sms_otp";
+        if (body.authVerificationMethod) {
+            updates.authVerificationMethod = body.authVerificationMethod;
         }
         if (typeof body.guestCheckoutEnabled === "boolean") updates.guestCheckoutEnabled = body.guestCheckoutEnabled;
         if (typeof body.whatsappPhoneNumberId === "string" || body.whatsappPhoneNumberId === null) {
-            updates.whatsappPhoneNumberId = body.whatsappPhoneNumberId as string | null;
+            updates.whatsappPhoneNumberId = body.whatsappPhoneNumberId;
         }
         if (typeof body.whatsappTemplateName === "string" || body.whatsappTemplateName === null) {
-            updates.whatsappTemplateName = body.whatsappTemplateName as string | null;
+            updates.whatsappTemplateName = body.whatsappTemplateName;
         }
-        if (body.checkoutMode && typeof body.checkoutMode === "string") {
-            updates.checkoutMode = body.checkoutMode as "guest_cod_only" | "gateways_only" | "all";
+        if (body.checkoutMode) {
+            updates.checkoutMode = body.checkoutMode;
         }
         if (typeof body.partialPaymentEnabled === "boolean") updates.partialPaymentEnabled = body.partialPaymentEnabled;
         if (typeof body.partialPaymentAmount === "number") updates.partialPaymentAmount = body.partialPaymentAmount;
@@ -107,6 +120,7 @@ const getSecurityRoute = createRoute({
 
 app.openapi(getSecurityRoute, async (c) => {
     try {
+        const db = c.get("db");
         const row = await db
             .select({ value: settings.value })
             .from(settings)
@@ -119,17 +133,23 @@ app.openapi(getSecurityRoute, async (c) => {
     }
 });
 
+const saveSecuritySchema = z.object({
+    cspAllowedDomains: z.string().optional(),
+});
+
 const saveSecurityRoute = createRoute({
     method: "post",
     path: "/security",
     tags: ["Admin - Settings"],
     summary: "Save security settings",
+    request: { body: { content: { "application/json": { schema: saveSecuritySchema } } } },
     responses: { 200: { description: "Security settings saved"  } }
 });
 
 app.openapi(saveSecurityRoute, async (c) => {
     try {
-        const { cspAllowedDomains } = await c.req.json();
+        const db = c.get("db");
+        const { cspAllowedDomains } = c.req.valid("json");
 
         if (typeof cspAllowedDomains === "string") {
             await db
@@ -172,6 +192,7 @@ const getEmailRoute = createRoute({
 
 app.openapi(getEmailRoute, async (c) => {
     try {
+        const db = c.get("db");
         const [apiKeyRow, senderRow] = await Promise.all([
             db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "resend_api_key"), eq(settings.category, "email"))).get(),
             db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "email_sender"), eq(settings.category, "email"))).get(),
@@ -186,17 +207,24 @@ app.openapi(getEmailRoute, async (c) => {
     }
 });
 
+const saveEmailSchema = z.object({
+    apiKey: z.string().optional(),
+    sender: z.string().optional(),
+});
+
 const saveEmailRoute = createRoute({
     method: "post",
     path: "/email",
     tags: ["Admin - Settings"],
     summary: "Save email settings (system)",
+    request: { body: { content: { "application/json": { schema: saveEmailSchema } } } },
     responses: { 200: { description: "Email settings saved"  } }
 });
 
 app.openapi(saveEmailRoute, async (c) => {
     try {
-        const { apiKey, sender } = await c.req.json();
+        const db = c.get("db");
+        const { apiKey, sender } = c.req.valid("json");
         const updates: Promise<unknown>[] = [];
 
         if (typeof apiKey === "string" && apiKey !== MASKED) {
@@ -236,6 +264,7 @@ const getFirebaseRoute = createRoute({
 
 app.openapi(getFirebaseRoute, async (c) => {
     try {
+        const db = c.get("db");
         const results = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "firebase")).all();
 
         const config: { serviceAccount: string; publicConfig: Record<string, unknown> } = { serviceAccount: "", publicConfig: {} };
@@ -253,17 +282,24 @@ app.openapi(getFirebaseRoute, async (c) => {
     }
 });
 
+const saveFirebaseSchema = z.object({
+    serviceAccount: z.string().optional(),
+    publicConfig: z.any().optional(),
+});
+
 const saveFirebaseRoute = createRoute({
     method: "post",
     path: "/firebase",
     tags: ["Admin - Settings"],
     summary: "Save Firebase settings (system)",
+    request: { body: { content: { "application/json": { schema: saveFirebaseSchema } } } },
     responses: { 200: { description: "Firebase settings saved"  } }
 });
 
 app.openapi(saveFirebaseRoute, async (c) => {
     try {
-        const { serviceAccount, publicConfig } = await c.req.json();
+        const db = c.get("db");
+        const { serviceAccount, publicConfig } = c.req.valid("json");
         const updates: Promise<unknown>[] = [];
 
         if (serviceAccount && serviceAccount !== MASKED) {

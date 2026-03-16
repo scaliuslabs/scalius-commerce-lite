@@ -1,7 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { DeliveryService } from "@scalius/core/modules/delivery/service";
 import { createProvider } from "@scalius/core/modules/delivery/factory";
-import { db } from "@scalius/database/client";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
@@ -77,36 +76,51 @@ app.openapi(listRoute, async (c) => {
 
 // ── Create Provider ──
 
+const createDeliveryProviderSchema = z.object({
+    name: z.string().min(1),
+    type: z.string().min(1),
+    credentials: z.any(),
+    config: z.any(),
+    isActive: z.boolean().optional().default(true),
+});
+
 const createProviderRoute = createRoute({
     method: "post",
     path: "/",
     tags: ["Admin - Delivery Providers"],
     summary: "Create a delivery provider",
+    request: {
+        body: { content: { "application/json": { schema: createDeliveryProviderSchema } } }
+    },
     responses: { 201: { description: "Provider created"  } }
 });
 
 app.openapi(createProviderRoute, async (c) => {
     try {
-        const provider = await c.req.json();
+        const validated = c.req.valid("json");
+        const credentials = typeof validated.credentials !== "string"
+            ? JSON.stringify(validated.credentials)
+            : validated.credentials;
+        const config = typeof validated.config !== "string"
+            ? JSON.stringify(validated.config)
+            : validated.config;
 
-        if (!provider.name || !provider.type) {
-            throw new ValidationError("Missing required fields: name, type");
-        }
-
-        if (typeof provider.credentials !== "string") {
-            provider.credentials = JSON.stringify(provider.credentials);
-        }
-        if (typeof provider.config !== "string") {
-            provider.config = JSON.stringify(provider.config);
-        }
+        const provider = {
+            id: "",
+            name: validated.name,
+            type: validated.type,
+            isActive: validated.isActive,
+            credentials,
+            config,
+        };
 
         const savedProvider = await deliveryService.saveProvider(provider, (c.env as any)?.CREDENTIAL_ENCRYPTION_KEY);
-        const credentials = typeof savedProvider.credentials === 'string'
+        const savedCredentials = typeof savedProvider.credentials === 'string'
             ? savedProvider.credentials
             : JSON.stringify(savedProvider.credentials);
         const maskedResponse = {
             ...savedProvider,
-            credentials: maskCredentialsForClient(credentials)
+            credentials: maskCredentialsForClient(savedCredentials)
         };
 
         return created(c, maskedResponse);
@@ -117,32 +131,46 @@ app.openapi(createProviderRoute, async (c) => {
 
 // ── Update Provider ──
 
+const updateDeliveryProviderSchema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    type: z.string().min(1),
+    credentials: z.any().optional(),
+    config: z.any().optional(),
+    isActive: z.boolean().optional(),
+});
+
 const updateProviderRoute = createRoute({
     method: "put",
     path: "/",
     tags: ["Admin - Delivery Providers"],
     summary: "Update a delivery provider",
+    request: {
+        body: { content: { "application/json": { schema: updateDeliveryProviderSchema } } }
+    },
     responses: { 200: { description: "Provider updated"  } }
 });
 
 app.openapi(updateProviderRoute, async (c) => {
     try {
-        const provider = await c.req.json();
+        const validated = c.req.valid("json");
+        const credentials = validated.credentials && typeof validated.credentials !== "string"
+            ? JSON.stringify(validated.credentials)
+            : (validated.credentials as string | undefined);
+        const config = validated.config && typeof validated.config !== "string"
+            ? JSON.stringify(validated.config)
+            : (validated.config as string | undefined);
 
-        if (!provider.id || !provider.name || !provider.type) {
-            throw new ValidationError("Missing required fields: id, name, type");
-        }
-
-        if (provider.credentials && typeof provider.credentials !== "string") {
-            provider.credentials = JSON.stringify(provider.credentials);
-        }
-        if (provider.config && typeof provider.config !== "string") {
-            provider.config = JSON.stringify(provider.config);
-        }
-
-        const existingProvider = await deliveryService.getProvider(provider.id);
+        const existingProvider = await deliveryService.getProvider(validated.id);
         if (!existingProvider) {
-            const savedProvider = await deliveryService.saveProvider(provider, (c.env as any)?.CREDENTIAL_ENCRYPTION_KEY);
+            const savedProvider = await deliveryService.saveProvider({
+                id: validated.id,
+                name: validated.name,
+                type: validated.type,
+                isActive: validated.isActive ?? true,
+                credentials: credentials || "{}",
+                config: config || "{}",
+            }, (c.env as any)?.CREDENTIAL_ENCRYPTION_KEY);
             const newCredentials = typeof savedProvider.credentials === 'string'
                 ? savedProvider.credentials
                 : JSON.stringify(savedProvider.credentials);
@@ -153,21 +181,19 @@ app.openapi(updateProviderRoute, async (c) => {
             return created(c, maskedResponse);
         }
 
-        const providerCredentials = typeof provider.credentials === 'string'
-            ? provider.credentials
-            : JSON.stringify(provider.credentials);
+        const providerCredentials = credentials || JSON.stringify(existingProvider.credentials);
         const existingCredentials = typeof existingProvider.credentials === 'string'
             ? existingProvider.credentials
             : JSON.stringify(existingProvider.credentials);
         const unmaskedCreds = unmaskedCredentials(providerCredentials, existingCredentials);
 
         const savedProvider = await deliveryService.saveProvider({
-            ...provider,
+            id: validated.id,
+            name: validated.name,
+            type: validated.type,
+            isActive: validated.isActive !== undefined ? validated.isActive : existingProvider.isActive,
             credentials: unmaskedCreds,
-            id: provider.id,
-            name: provider.name,
-            type: provider.type,
-            isActive: provider.isActive !== undefined ? provider.isActive : existingProvider.isActive
+            config: config || (typeof existingProvider.config === 'string' ? existingProvider.config : JSON.stringify(existingProvider.config)),
         });
 
         const updatedCredentials = typeof savedProvider.credentials === 'string'
@@ -186,22 +212,27 @@ app.openapi(updateProviderRoute, async (c) => {
 
 // ── Create Test Provider ──
 
+const createTestSchema = z.object({
+    type: z.string().min(1),
+    credentials: z.any(),
+    config: z.any(),
+    name: z.string().optional().default("Test Provider"),
+});
+
 const createTestRoute = createRoute({
     method: "post",
     path: "/create-test",
     tags: ["Admin - Delivery Providers"],
     summary: "Test a new provider connection before saving",
+    request: {
+        body: { content: { "application/json": { schema: createTestSchema } } }
+    },
     responses: { 200: { description: "Test result"  } }
 });
 
 app.openapi(createTestRoute, async (c) => {
     try {
-        const data = await c.req.json();
-        const { type, credentials, config, name = "Test Provider" } = data;
-
-        if (!type) throw new ValidationError("Provider type is required");
-        if (!credentials) throw new ValidationError("Provider credentials are required");
-        if (!config) throw new ValidationError("Provider config is required");
+        const { type, credentials, config, name } = c.req.valid("json");
 
         const mockProvider = {
             id: "test_" + Date.now().toString(),
@@ -308,6 +339,7 @@ const deleteProviderRoute = createRoute({
 
 app.openapi(deleteProviderRoute, async (c) => {
     try {
+        const db = c.get("db");
         const { id } = c.req.valid("param");
         await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
         return ok(c, {});

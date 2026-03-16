@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import { settings, siteSettings } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -26,6 +25,7 @@ const getCurrencyRoute = createRoute({
 
 app.openapi(getCurrencyRoute, async (c) => {
     try {
+        const db = c.get("db");
         const rows = await db
             .select({ key: settings.key, value: settings.value })
             .from(settings)
@@ -45,17 +45,25 @@ app.openapi(getCurrencyRoute, async (c) => {
     }
 });
 
+const saveCurrencySchema = z.object({
+    currencyCode: z.string().optional(),
+    currencySymbol: z.string().optional(),
+    usdExchangeRate: z.string().optional(),
+});
+
 const saveCurrencyRoute = createRoute({
     method: "post",
     path: "/currency",
     tags: ["Admin - Settings"],
     summary: "Save currency settings",
+    request: { body: { content: { "application/json": { schema: saveCurrencySchema } } } },
     responses: { 200: { description: "Settings saved"  } }
 });
 
 app.openapi(saveCurrencyRoute, async (c) => {
     try {
-        const body = (await c.req.json()) as Record<string, unknown>;
+        const db = c.get("db");
+        const body = c.req.valid("json");
         const ops: Promise<void>[] = [];
 
         if (typeof body.currencyCode === "string" && body.currencyCode.trim()) {
@@ -96,6 +104,7 @@ const getGeneralRoute = createRoute({
 
 app.openapi(getGeneralRoute, async (c) => {
     try {
+        const db = c.get("db");
         const [row] = await db.select().from(siteSettings).limit(1);
         const safeParseJSON = (val: string | null | undefined) => {
             if (!val) return {};
@@ -157,6 +166,7 @@ const saveHeaderRoute = createRoute({
 
 app.openapi(saveHeaderRoute, async (c) => {
     try {
+        const db = c.get("db");
         const validatedConfig = c.req.valid("json");
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
 
@@ -214,6 +224,7 @@ const saveFooterRoute = createRoute({
 
 app.openapi(saveFooterRoute, async (c) => {
     try {
+        const db = c.get("db");
         const validatedConfig = c.req.valid("json");
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
 
@@ -257,6 +268,7 @@ const getThemeRoute = createRoute({
 
 app.openapi(getThemeRoute, async (c) => {
     try {
+        const db = c.get("db");
         const row = await db
             .select({ value: settings.value })
             .from(settings)
@@ -270,18 +282,23 @@ app.openapi(getThemeRoute, async (c) => {
     }
 });
 
+const saveThemeSchema = z.object({
+    colors: z.record(z.string(), z.any()),
+});
+
 const saveThemeRoute = createRoute({
     method: "post",
     path: "/theme",
     tags: ["Admin - Settings"],
     summary: "Save theme settings",
+    request: { body: { content: { "application/json": { schema: saveThemeSchema } } } },
     responses: { 200: { description: "Theme saved"  } }
 });
 
 app.openapi(saveThemeRoute, async (c) => {
     try {
-        const body = (await c.req.json()) as Record<string, unknown>;
-        if (!body.colors || typeof body.colors !== "object") throw new ValidationError("Invalid colors payload");
+        const db = c.get("db");
+        const body = c.req.valid("json");
 
         await upsertSetting(db, "theme", "storefront_colors", JSON.stringify(body.colors));
         const kv = getKv();
@@ -308,6 +325,7 @@ const getSeoRoute = createRoute({
 
 app.openapi(getSeoRoute, async (c) => {
     try {
+        const db = c.get("db");
         const [row] = await db
             .select({
                 siteTitle: siteSettings.siteTitle,
@@ -329,17 +347,26 @@ app.openapi(getSeoRoute, async (c) => {
     }
 });
 
+const saveSeoSchema = z.object({
+    siteTitle: z.string().optional(),
+    homepageTitle: z.string().optional(),
+    homepageMetaDescription: z.string().optional(),
+    robotsTxt: z.string().optional(),
+});
+
 const saveSeoRoute = createRoute({
     method: "post",
     path: "/seo",
     tags: ["Admin - Settings"],
     summary: "Save SEO settings",
+    request: { body: { content: { "application/json": { schema: saveSeoSchema } } } },
     responses: { 200: { description: "SEO saved"  } }
 });
 
 app.openapi(saveSeoRoute, async (c) => {
     try {
-        const { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt } = await c.req.json();
+        const db = c.get("db");
+        const { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt } = c.req.valid("json");
         const [existing] = await db.select().from(siteSettings).limit(1);
 
         if (existing) {
@@ -388,6 +415,7 @@ const getStorefrontUrlRoute = createRoute({
 
 app.openapi(getStorefrontUrlRoute, async (c) => {
     try {
+        const db = c.get("db");
         const [row] = await db.select({ storefrontUrl: siteSettings.storefrontUrl }).from(siteSettings).limit(1);
         return ok(c, { storefrontUrl: row?.storefrontUrl || "/" });
     } catch (error) {
@@ -395,17 +423,23 @@ app.openapi(getStorefrontUrlRoute, async (c) => {
     }
 });
 
+const saveStorefrontUrlSchema = z.object({
+    storefrontUrl: z.string().optional(),
+});
+
 const saveStorefrontUrlRoute = createRoute({
     method: "post",
     path: "/storefront-url",
     tags: ["Admin - Settings"],
     summary: "Save storefront URL",
+    request: { body: { content: { "application/json": { schema: saveStorefrontUrlSchema } } } },
     responses: { 200: { description: "URL saved"  } }
 });
 
 app.openapi(saveStorefrontUrlRoute, async (c) => {
     try {
-        const { storefrontUrl } = await c.req.json();
+        const db = c.get("db");
+        const { storefrontUrl } = c.req.valid("json");
         const [existing] = await db.select().from(siteSettings).limit(1);
 
         if (existing) {

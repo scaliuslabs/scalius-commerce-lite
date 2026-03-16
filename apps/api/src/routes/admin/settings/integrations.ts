@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -24,6 +23,7 @@ const getOpenRouterRoute = createRoute({
 
 app.openapi(getOpenRouterRoute, async (c) => {
     try {
+        const db = c.get("db");
         const result = await db
             .select({ value: settings.value })
             .from(settings)
@@ -37,18 +37,23 @@ app.openapi(getOpenRouterRoute, async (c) => {
     }
 });
 
+const saveOpenRouterSchema = z.object({
+    apiKey: z.string(),
+});
+
 const saveOpenRouterRoute = createRoute({
     method: "post",
     path: "/openrouter",
     tags: ["Admin - Settings"],
     summary: "Save OpenRouter API key",
+    request: { body: { content: { "application/json": { schema: saveOpenRouterSchema } } } },
     responses: { 200: { description: "API key saved"  } }
 });
 
 app.openapi(saveOpenRouterRoute, async (c) => {
     try {
-        const { apiKey } = await c.req.json();
-        if (typeof apiKey !== "string") throw new ValidationError("Invalid API key");
+        const db = c.get("db");
+        const { apiKey } = c.req.valid("json");
         if (apiKey === MASKED_VALUE) return ok(c, { message: "API key unchanged" });
 
         await db
@@ -85,6 +90,7 @@ const getEmailRoute = createRoute({
 
 app.openapi(getEmailRoute, async (c) => {
     try {
+        const db = c.get("db");
         const [apiKeyRow, senderRow] = await Promise.all([
             db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "resend_api_key"), eq(settings.category, "email"))).get(),
             db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "email_sender"), eq(settings.category, "email"))).get(),
@@ -99,17 +105,24 @@ app.openapi(getEmailRoute, async (c) => {
     }
 });
 
+const saveEmailSchema = z.object({
+    apiKey: z.string().optional(),
+    sender: z.string().optional(),
+});
+
 const saveEmailRoute = createRoute({
     method: "post",
     path: "/email",
     tags: ["Admin - Settings"],
     summary: "Save email settings",
+    request: { body: { content: { "application/json": { schema: saveEmailSchema } } } },
     responses: { 200: { description: "Email settings saved"  } }
 });
 
 app.openapi(saveEmailRoute, async (c) => {
     try {
-        const { apiKey, sender } = await c.req.json();
+        const db = c.get("db");
+        const { apiKey, sender } = c.req.valid("json");
         const updates: Promise<unknown>[] = [];
 
         if (typeof apiKey === "string" && apiKey !== MASKED_VALUE) {
@@ -163,6 +176,7 @@ const getFirebaseRoute = createRoute({
 
 app.openapi(getFirebaseRoute, async (c) => {
     try {
+        const db = c.get("db");
         const results = await db
             .select({ key: settings.key, value: settings.value })
             .from(settings)
@@ -188,17 +202,24 @@ app.openapi(getFirebaseRoute, async (c) => {
     }
 });
 
+const saveFirebaseSchema = z.object({
+    serviceAccount: z.string().optional(),
+    publicConfig: z.any().optional(),
+});
+
 const saveFirebaseRoute = createRoute({
     method: "post",
     path: "/firebase",
     tags: ["Admin - Settings"],
     summary: "Save Firebase settings",
+    request: { body: { content: { "application/json": { schema: saveFirebaseSchema } } } },
     responses: { 200: { description: "Firebase settings saved"  } }
 });
 
 app.openapi(saveFirebaseRoute, async (c) => {
     try {
-        const { serviceAccount, publicConfig } = await c.req.json();
+        const db = c.get("db");
+        const { serviceAccount, publicConfig } = c.req.valid("json");
         const updates = [];
 
         if (serviceAccount && serviceAccount !== MASKED_VALUE) {

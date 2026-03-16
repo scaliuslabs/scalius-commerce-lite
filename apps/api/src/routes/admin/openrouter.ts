@@ -70,11 +70,24 @@ app.openapi(listModelsRoute, async (c) => {
 
 // ── Generate ──
 
+const generateSchema = z.object({
+    model: z.string().min(1),
+    messages: z.array(z.object({ role: z.string(), content: z.any() })).optional(),
+    prompt: z.string().optional(),
+    stream: z.boolean().optional(),
+    images: z.array(z.any()).optional(),
+}).refine(data => data.messages || data.prompt, {
+    message: "Messages or prompt is required.",
+});
+
 const generateRoute = createRoute({
     method: "post",
     path: "/generate",
     tags: ["Admin - OpenRouter"],
     summary: "Generate AI content via OpenRouter",
+    request: {
+        body: { content: { "application/json": { schema: generateSchema } } }
+    },
     responses: {
         200: { description: "Generation result"  }
     }
@@ -94,12 +107,7 @@ app.openapi(generateRoute, async (c) => {
             throw new ValidationError(ERROR_MESSAGES.apiKeyMissing);
         }
 
-        const body = await c.req.json();
-        const { messages, prompt, model, stream, images } = body;
-
-        if (!model) {
-            throw new ValidationError("Model is required.");
-        }
+        const { messages, prompt, model, stream, images } = c.req.valid("json");
 
         let finalMessages: Array<{ role: string; content: unknown }>;
 
@@ -204,11 +212,22 @@ app.openapi(generateRoute, async (c) => {
 
 // ── Generate Staged ──
 
+const generateStagedSchema = z.object({
+    model: z.string().min(1),
+    messages: z.array(z.object({ role: z.string(), content: z.any() })).min(1),
+    stage: z.string().optional(),
+    sectionIndex: z.number().optional(),
+    totalSections: z.number().optional(),
+});
+
 const generateStagedRoute = createRoute({
     method: "post",
     path: "/generate-staged",
     tags: ["Admin - OpenRouter"],
     summary: "Generate AI content in stages via OpenRouter",
+    request: {
+        body: { content: { "application/json": { schema: generateStagedSchema } } }
+    },
     responses: {
         200: { description: "Staged generation result"  }
     }
@@ -234,11 +253,7 @@ app.openapi(generateStagedRoute, async (c) => {
             stage,
             sectionIndex,
             totalSections
-        } = await c.req.json();
-
-        if (!model || !messages) {
-            throw new ValidationError("Model and messages are required.");
-        }
+        } = c.req.valid("json");
 
         const preparedMessages = messages;
         const controller = new AbortController();
