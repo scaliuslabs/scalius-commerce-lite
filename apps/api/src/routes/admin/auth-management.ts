@@ -463,10 +463,61 @@ app.openapi(verify2faRoute, async (c) => {
 });
 
 // ─────────────────────────────────────────
+// Account Security
+// ─────────────────────────────────────────
+
+const getAccountSecurityRoute = createRoute({
+    method: "get",
+    path: "/account-security",
+    tags: ["Admin - Auth Management"],
+    summary: "Get current user account security data",
+    responses: {
+        200: { description: "Account security data" }
+    }
+});
+
+app.openapi(getAccountSecurityRoute, async (c) => {
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const dbUser = await db
+        .select({
+            twoFactorMethod: user.twoFactorMethod,
+            isSuperAdmin: user.isSuperAdmin,
+        })
+        .from(user)
+        .where(eq(user.id, sessionUser.id))
+        .get();
+
+    return ok(c, {
+        twoFactorMethod: dbUser?.twoFactorMethod || null,
+        isSuperAdmin: dbUser?.isSuperAdmin ?? false,
+    });
+});
+
+// ─────────────────────────────────────────
 // Setup Endpoint (bypasses normal auth)
 // ─────────────────────────────────────────
 
 const setupApp = new OpenAPIHono();
+
+// ── Admin Exists Check (for setup page) ──
+
+const adminExistsRoute = createRoute({
+    method: "get",
+    path: "/",
+    tags: ["Admin - Setup"],
+    summary: "Check if any admin user exists",
+    responses: {
+        200: { description: "Admin exists status" }
+    }
+});
+
+setupApp.openapi(adminExistsRoute, async (c) => {
+    const db = c.get("db");
+    const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
+    const adminExists = (adminResult[0]?.count ?? 0) > 0;
+    return ok(c, { adminExists });
+});
 
 const setupSchema = z.object({
     name: z.string().min(1),

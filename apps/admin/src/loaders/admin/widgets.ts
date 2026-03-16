@@ -1,135 +1,76 @@
-import { db } from "@scalius/database/client";
-import {
-  widgets,
-  collections,
-  WidgetPlacementRule,
-  type Widget,
-} from "@scalius/database/schema";
-import { eq, isNull, isNotNull, asc, and, like, desc, sql } from "drizzle-orm";
-import { unixToDate } from "@scalius/shared/utils";
+import { apiGet } from "@/lib/api-fetch";
+
+// Placement rule values inlined from @scalius/database schema (avoids DB dependency)
+const WidgetPlacementRule = {
+  BEFORE_COLLECTION: "before_collection",
+  AFTER_COLLECTION: "after_collection",
+  FIXED_TOP_HOMEPAGE: "fixed_top_homepage",
+  FIXED_BOTTOM_HOMEPAGE: "fixed_bottom_homepage",
+  STANDALONE: "standalone",
+} as const;
 
 export async function getWidgetsListPageData(options: {
   search: string;
   showTrashed: boolean;
 }) {
-  const queryConditions: any[] = [
-    options.showTrashed ? isNotNull(widgets.deletedAt) : isNull(widgets.deletedAt),
-  ];
+  const params: Record<string, string> = {};
+  if (options.search) params.search = options.search;
+  if (options.showTrashed) params.trashed = "true";
 
-  if (options.search) {
-    queryConditions.push(like(widgets.name, `%${options.search}%`));
-  }
+  // The API listWidgets endpoint returns { widgets, availableCollections }
+  // The old loader returned { widgets, collections, stats } with different
+  // field names and extra stats computation.
+  const result = await apiGet<any>("/widgets", params);
 
-  const widgetsQuery = db
-    .select({
-      id: widgets.id,
-      name: widgets.name,
-      htmlContent: widgets.htmlContent,
-      cssContent: widgets.cssContent,
-      aiContext: widgets.aiContext,
-      isActive: widgets.isActive,
-      displayTarget: widgets.displayTarget,
-      placementRule: widgets.placementRule,
-      referenceCollectionId: widgets.referenceCollectionId,
-      sortOrder: widgets.sortOrder,
-      createdAt: sql<number>`CAST(${widgets.createdAt} AS INTEGER)`,
-      updatedAt: sql<number>`CAST(${widgets.updatedAt} AS INTEGER)`,
-      deletedAt: sql<number>`CAST(${widgets.deletedAt} AS INTEGER)`,
-    })
-    .from(widgets)
-    .where(and(...queryConditions));
+  // Map the API field names to what the admin pages expect
+  const widgets = (result.widgets || []).map((widget: any) => ({
+    ...widget,
+    createdAt: widget.createdAt ? new Date(widget.createdAt).toISOString() : null,
+    updatedAt: widget.updatedAt ? new Date(widget.updatedAt).toISOString() : null,
+    deletedAt: widget.deletedAt ? new Date(widget.deletedAt).toISOString() : null,
+  }));
 
-  const dbWidgets = options.showTrashed
-    ? await widgetsQuery.orderBy(desc(widgets.deletedAt))
-    : await widgetsQuery.orderBy(asc(widgets.sortOrder), asc(widgets.name));
+  const collections = result.availableCollections || result.collections || [];
 
-  const mappedWidgets = dbWidgets.map((widget) => {
-    const createdAtDate = unixToDate(widget.createdAt);
-    const updatedAtDate = unixToDate(widget.updatedAt);
-    const deletedAtDate = unixToDate(widget.deletedAt);
-
-    return {
-      ...widget,
-      createdAt: createdAtDate?.toISOString() ?? null,
-      updatedAt: updatedAtDate?.toISOString() ?? null,
-      deletedAt: deletedAtDate?.toISOString() ?? null,
-    };
-  });
-
-  const allCollections = await db
-    .select({
-      id: collections.id,
-      name: collections.name,
-      type: collections.type,
-      sortOrder: collections.sortOrder,
-    })
-    .from(collections)
-    .where(
-      options.showTrashed
-        ? and(eq(collections.isActive, true))
-        : and(isNull(collections.deletedAt), eq(collections.isActive, true)),
-    )
-    .orderBy(asc(collections.sortOrder));
-
-  const statsResult = options.showTrashed
-    ? { total: 0, active: 0, inactive: 0 }
-    : (await db
-        .select({
-          total: sql<number>`count(*)`,
-          active: sql<number>`count(case when is_active = 1 then 1 end)`,
-          inactive: sql<number>`count(case when is_active = 0 then 1 end)`,
-        })
-        .from(widgets)
-        .where(isNull(widgets.deletedAt))
-        .get()) || { total: 0, active: 0, inactive: 0 };
+  // Compute stats from the widget list if not provided by API
+  const statsResult = result.stats || {
+    total: widgets.length,
+    active: widgets.filter((w: any) => w.isActive).length,
+    inactive: widgets.filter((w: any) => !w.isActive).length,
+  };
 
   return {
-    widgets: mappedWidgets,
-    collections: allCollections,
-    stats: statsResult,
+    widgets,
+    collections,
+    stats: options.showTrashed ? { total: 0, active: 0, inactive: 0 } : statsResult,
   };
 }
 
 export async function getWidgetFormPageData(id: string | undefined) {
   const isCreateMode = id === "create";
-  let widgetProp: Widget | null = null;
+  let widgetProp: any = null;
   let pageTitle = "Create New Widget";
   let submitButtonText = "Create Widget";
 
   if (!isCreateMode && id) {
-    const dbWidget = await db
-      .select()
-      .from(widgets)
-      .where(and(eq(widgets.id, id), isNull(widgets.deletedAt)))
-      .get();
+    const dbWidget = await apiGet<any>("/widgets/" + id).catch(() => null);
 
     if (dbWidget) {
       pageTitle = `Edit Widget: ${dbWidget.name}`;
       submitButtonText = "Save Changes";
 
-      const createdAt = unixToDate(dbWidget.createdAt);
-      const updatedAt = unixToDate(dbWidget.updatedAt);
-      const deletedAt = unixToDate(dbWidget.deletedAt);
-
       widgetProp = {
         ...dbWidget,
-        createdAt: createdAt ?? new Date(),
-        updatedAt: updatedAt ?? new Date(),
-        deletedAt: deletedAt ?? null,
+        createdAt: dbWidget.createdAt ? new Date(dbWidget.createdAt) : new Date(),
+        updatedAt: dbWidget.updatedAt ? new Date(dbWidget.updatedAt) : new Date(),
+        deletedAt: dbWidget.deletedAt ? new Date(dbWidget.deletedAt) : null,
       };
     }
   }
 
-  const availableCollections = await db
-    .select({
-      id: collections.id,
-      name: collections.name,
-      type: collections.type,
-      sortOrder: collections.sortOrder,
-    })
-    .from(collections)
-    .where(and(isNull(collections.deletedAt), eq(collections.isActive, true)))
-    .orderBy(asc(collections.sortOrder));
+  // Fetch collections from the widgets list endpoint
+  const listData = await apiGet<any>("/widgets");
+  const availableCollections = listData.availableCollections || listData.collections || [];
 
   return {
     widget: widgetProp,

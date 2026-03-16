@@ -1,63 +1,37 @@
-import { db } from "@scalius/database/client";
-import { metaConversionsSettings, deliveryProviders, siteSettings } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
-
-const MASKED_VALUE = "••••••••••••";
-
-function safeParseJSON(jsonString: string | null | undefined) {
-  if (!jsonString) return null;
-  try {
-    return JSON.parse(jsonString);
-  } catch {
-    return null;
-  }
-}
-
-function maskCredentials(credentialsJson: string): string {
-  try {
-    const credentials = JSON.parse(credentialsJson);
-    const masked = { ...credentials };
-
-    if (masked.clientSecret) masked.clientSecret = MASKED_VALUE;
-    if (masked.password) masked.password = MASKED_VALUE;
-    if (masked.apiKey) masked.apiKey = MASKED_VALUE;
-    if (masked.secretKey) masked.secretKey = MASKED_VALUE;
-
-    return JSON.stringify(masked);
-  } catch {
-    return credentialsJson;
-  }
-}
+import { apiGet } from "@/lib/api-fetch";
 
 export async function getGeneralSettingsData(): Promise<{
   headerConfig: any;
   footerConfig: any;
 }> {
-  const [settings] = await db.select().from(siteSettings).limit(1);
+  const result = await apiGet<{ headerConfig: any; footerConfig: any }>(
+    "/settings/general",
+  ).catch(() => ({ headerConfig: {}, footerConfig: {} }));
+
   return {
-    headerConfig: safeParseJSON(settings?.headerConfig) || {},
-    footerConfig: safeParseJSON(settings?.footerConfig) || {},
+    headerConfig: result.headerConfig || {},
+    footerConfig: result.footerConfig || {},
   };
 }
 
 export async function getMetaConversionSettingsData() {
-  const dbSettings = await db
-    .select()
-    .from(metaConversionsSettings)
-    .where(eq(metaConversionsSettings.id, "singleton"))
-    .get();
-
-  if (!dbSettings) return undefined;
-  return {
-    ...dbSettings,
-    accessToken: dbSettings.accessToken ? MASKED_VALUE : null,
-  };
+  // API returns ok(c, { data: maskedSettings }) — after proxy unwrap: { data: ... }
+  // apiGet strips success: { data: ... }
+  const result = await apiGet<{ data: any }>("/settings/meta-conversions").catch(
+    () => ({ data: undefined }),
+  );
+  return result.data ?? undefined;
 }
 
 export async function getDeliveryProvidersData() {
-  const dbProviders = await db.select().from(deliveryProviders);
-  return dbProviders.map((provider) => ({
-    ...provider,
-    credentials: maskCredentials(provider.credentials),
-  }));
+  // API returns ok(c, maskedProviders) where maskedProviders is an array.
+  // Proxy: arrays are NOT unwrapped, body stays { success, data: [...] }.
+  // apiGet strips success -> returns { data: [...] }.
+  try {
+    const result = await apiGet<any>("/settings/delivery-providers");
+    // Result is { data: [...] } because the proxy doesn't unwrap arrays
+    return Array.isArray(result.data) ? result.data : [];
+  } catch {
+    return [];
+  }
 }

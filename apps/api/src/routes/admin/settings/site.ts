@@ -83,6 +83,34 @@ app.openapi(saveCurrencyRoute, async (c) => {
 });
 
 // ─────────────────────────────────────────
+// GENERAL (header + footer config)
+// ─────────────────────────────────────────
+
+const getGeneralRoute = createRoute({
+    method: "get",
+    path: "/general",
+    tags: ["Admin - Settings"],
+    summary: "Get general settings (header + footer config)",
+    responses: { 200: { description: "General settings" } }
+});
+
+app.openapi(getGeneralRoute, async (c) => {
+    try {
+        const [row] = await db.select().from(siteSettings).limit(1);
+        const safeParseJSON = (val: string | null | undefined) => {
+            if (!val) return {};
+            try { return JSON.parse(val); } catch { return {}; }
+        };
+        return ok(c, {
+            headerConfig: safeParseJSON(row?.headerConfig),
+            footerConfig: safeParseJSON(row?.footerConfig),
+        });
+    } catch (error) {
+        return ok(c, { headerConfig: {}, footerConfig: {} });
+    }
+});
+
+// ─────────────────────────────────────────
 // HEADER
 // ─────────────────────────────────────────
 const socialLinkSchema = z.object({

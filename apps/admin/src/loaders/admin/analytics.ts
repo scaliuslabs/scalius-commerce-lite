@@ -1,10 +1,13 @@
-import { db } from "@scalius/database/client";
-import { AnalyticsService } from "@scalius/core/modules/analytics/analytics.service";
-import { unixToDate } from "@scalius/shared/utils";
+import { apiGet } from "@/lib/api-fetch";
 
 export async function getAnalyticsListData() {
-  const analyticsScripts = await AnalyticsService.listScripts(db);
-  return analyticsScripts.map((script: any) => ({
+  // API returns ok(c, scripts) where scripts is an array.
+  // Proxy doesn't unwrap arrays: { success, data: [...] }.
+  // apiGet strips success -> { data: [...] }.
+  const result = await apiGet<any>("/analytics");
+  const scripts = Array.isArray(result.data) ? result.data : [];
+
+  return scripts.map((script: any) => ({
     id: script.id,
     name: script.name,
     type: script.type,
@@ -17,7 +20,8 @@ export async function getAnalyticsListData() {
 }
 
 export async function getAnalyticsEditData(id: string) {
-  const script = await AnalyticsService.getScript(db, id);
+  // API returns ok(c, script) where script is an object -> proxy unwraps.
+  const script = await apiGet<any>("/analytics/" + id).catch(() => null);
   if (!script) return null;
 
   const validType = ["google_analytics", "facebook_pixel", "custom"].includes(
@@ -38,7 +42,7 @@ export async function getAnalyticsEditData(id: string) {
     usePartytown: script.usePartytown ?? true,
     config: script.config,
     location: validLocation,
-    createdAt: unixToDate(script.createdAt) || new Date(),
-    updatedAt: unixToDate(script.updatedAt) || new Date(),
+    createdAt: script.createdAt ? new Date(script.createdAt) : new Date(),
+    updatedAt: script.updatedAt ? new Date(script.updatedAt) : new Date(),
   };
 }

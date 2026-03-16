@@ -1,6 +1,4 @@
-import { db } from "@scalius/database/client";
-import { settings, siteSettings, user as userTable } from "@scalius/database/schema";
-import { and, count, eq } from "drizzle-orm";
+import { apiGet } from "@/lib/api-fetch";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 
 export interface FirebaseConfig {
@@ -15,23 +13,26 @@ export interface FirebaseConfig {
 }
 
 export async function getSetupAdminExists(): Promise<boolean> {
-  const adminResult = await db
-    .select({ count: count() })
-    .from(userTable)
-    .where(eq(userTable.role, "admin"));
-  return (adminResult[0]?.count ?? 0) > 0;
+  try {
+    // Setup endpoint is at /api/v1/setup (not under /admin), so call directly
+    const response = await fetch("/api/v1/setup");
+    if (!response.ok) return false;
+    const body = await response.json() as any;
+    // API returns { success: true, data: { adminExists: boolean } }
+    // Since this is NOT going through the admin proxy, we read data directly
+    return body?.data?.adminExists ?? false;
+  } catch {
+    return false;
+  }
 }
 
 export async function getSidebarStorefrontUrl(): Promise<string> {
-  let storefrontUrl = layoutCache.get<string>(CACHE_KEYS.STOREFRONT_URL) ?? null;
-  if (storefrontUrl !== null) return storefrontUrl;
+  const cached = layoutCache.get<string>(CACHE_KEYS.STOREFRONT_URL) ?? null;
+  if (cached !== null) return cached;
 
   try {
-    const [storefrontSettings] = await db
-      .select({ storefrontUrl: siteSettings.storefrontUrl })
-      .from(siteSettings)
-      .limit(1);
-    storefrontUrl = storefrontSettings?.storefrontUrl || "/";
+    const result = await apiGet<{ storefrontUrl: string }>("/settings/storefront-url");
+    const storefrontUrl = result.storefrontUrl || "/";
     layoutCache.set(CACHE_KEYS.STOREFRONT_URL, storefrontUrl);
     return storefrontUrl;
   } catch (error) {
@@ -48,16 +49,12 @@ export async function getAdminLayoutFirebaseConfig(
 
   let firebaseConfig: FirebaseConfig = { ...defaultConfig };
   try {
-    const result = await db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(
-        and(eq(settings.key, "public_config"), eq(settings.category, "firebase")),
-      )
-      .get();
-
-    if (result?.value) {
-      const dbConfig = JSON.parse(result.value);
+    // Firebase config is at /api/v1/auth/firebase-config (public, not under /admin)
+    const response = await fetch("/api/v1/auth/firebase-config");
+    if (response.ok) {
+      const body = await response.json() as any;
+      // API returns { success: true, data: { ...config } }
+      const dbConfig = body?.data || {};
       firebaseConfig = { ...firebaseConfig, ...dbConfig };
       if (dbConfig.vapidKey) firebaseConfig.vapidKey = dbConfig.vapidKey;
     }
@@ -73,17 +70,19 @@ export async function getAccountSecurityData(userId: string): Promise<{
   twoFactorMethod: string | null;
   isSuperAdmin: boolean;
 }> {
-  const dbUser = await db
-    .select({
-      twoFactorMethod: userTable.twoFactorMethod,
-      isSuperAdmin: userTable.isSuperAdmin,
-    })
-    .from(userTable)
-    .where(eq(userTable.id, userId))
-    .get();
-
-  return {
-    twoFactorMethod: dbUser?.twoFactorMethod || null,
-    isSuperAdmin: dbUser?.isSuperAdmin ?? false,
-  };
+  try {
+    const result = await apiGet<{
+      twoFactorMethod: string | null;
+      isSuperAdmin: boolean;
+    }>("/auth/account-security");
+    return {
+      twoFactorMethod: result.twoFactorMethod || null,
+      isSuperAdmin: result.isSuperAdmin ?? false,
+    };
+  } catch {
+    return {
+      twoFactorMethod: null,
+      isSuperAdmin: false,
+    };
+  }
 }
