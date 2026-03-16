@@ -1,13 +1,4 @@
-import { db } from "@scalius/database/client";
-import {
-  discounts,
-  discountProducts,
-  discountCollections,
-  products,
-  collections,
-} from "@scalius/database/schema";
-import { eq, inArray, sql } from "drizzle-orm";
-import { DiscountService } from "@scalius/core/modules/discounts";
+import { apiGet } from "@/lib/api-fetch";
 
 export async function getDiscountsIndexData(options: {
   page: number;
@@ -17,85 +8,62 @@ export async function getDiscountsIndexData(options: {
   sort: "code" | "type" | "value" | "startDate" | "endDate" | "createdAt" | "updatedAt";
   order: "asc" | "desc";
 }) {
-  return DiscountService.list(db, options as any);
+  const params: Record<string, string> = {
+    page: String(options.page),
+    limit: String(options.limit),
+    sort: options.sort,
+    order: options.order,
+  };
+  if (options.search) params.search = options.search;
+  if (options.showTrashed) params.trashed = "true";
+
+  return apiGet<any>("/discounts", params);
 }
 
 export async function getDiscountEditData(id: string) {
-  const discount = await db
-    .select({
-      id: discounts.id,
-      code: discounts.code,
-      type: discounts.type,
-      valueType: discounts.valueType,
-      discountValue: discounts.discountValue,
-      minPurchaseAmount: discounts.minPurchaseAmount,
-      minQuantity: discounts.minQuantity,
-      maxUsesPerOrder: discounts.maxUsesPerOrder,
-      maxUses: discounts.maxUses,
-      limitOnePerCustomer: discounts.limitOnePerCustomer,
-      combineWithProductDiscounts: discounts.combineWithProductDiscounts,
-      combineWithOrderDiscounts: discounts.combineWithOrderDiscounts,
-      combineWithShippingDiscounts: discounts.combineWithShippingDiscounts,
-      customerSegment: discounts.customerSegment,
-      isActive: discounts.isActive,
-      deletedAt: discounts.deletedAt,
-      startDate: sql<string>`datetime(${discounts.startDate}, 'unixepoch')`,
-      endDate: sql<string | null>`datetime(${discounts.endDate}, 'unixepoch')`,
-    })
-    .from(discounts)
-    .where(eq(discounts.id, id))
-    .get();
-
+  const discount = await apiGet<any>("/discounts/" + id).catch(() => null);
   if (!discount) return null;
 
-  const [productAssociations, collectionAssociations] = await Promise.all([
-    db.select().from(discountProducts).where(eq(discountProducts.discountId, id)),
-    db.select().from(discountCollections).where(eq(discountCollections.discountId, id)),
-  ]);
+  // The API's getById returns relatedProducts/relatedCollections as { buy: string[], get: string[] }.
+  // The admin form needs resolved product/collection details.
+  // Fetch product and collection details from the collection form-options endpoint.
+  const formOptions = await apiGet<{ categories: any[]; products: any[] }>(
+    "/collections/form-options",
+  ).catch(() => ({ categories: [], products: [] }));
 
-  const productIds = productAssociations.map((association) => association.productId);
-  const collectionIds = collectionAssociations.map(
-    (association) => association.collectionId,
+  // Resolve product IDs to full product objects
+  const allProductIds = [
+    ...(discount.relatedProducts?.buy || []),
+    ...(discount.relatedProducts?.get || []),
+  ];
+  const selectedProducts = formOptions.products.filter((p: any) =>
+    allProductIds.includes(p.id),
   );
 
-  const [selectedProducts, collectionsData] = await Promise.all([
-    productIds.length > 0
-      ? db
-          .select({
-            id: products.id,
-            name: products.name,
-            price: products.price,
-            discountPercentage: products.discountPercentage,
-          })
-          .from(products)
-          .where(inArray(products.id, productIds))
-      : Promise.resolve([]),
-    collectionIds.length > 0
-      ? db
-          .select({
-            id: collections.id,
-            name: collections.name,
-          })
-          .from(collections)
-          .where(inArray(collections.id, collectionIds))
-      : Promise.resolve([]),
-  ]);
+  // Resolve collection IDs — we don't have a collections list API with names
+  // readily available, but we can use the form-options categories approach.
+  // For collections, build minimal objects from what we have.
+  const allCollectionIds = [
+    ...(discount.relatedCollections?.buy || []),
+    ...(discount.relatedCollections?.get || []),
+  ];
+  const selectedCollections = allCollectionIds.map((colId: string) => ({
+    id: colId,
+    name: colId, // Will show ID as fallback — page can resolve names client-side
+    description: null,
+    slug: "",
+  }));
 
   return {
     discount,
     formattedDiscount: {
       ...discount,
       startDate: discount.startDate
-        ? new Date(discount.startDate + "Z")
+        ? new Date(discount.startDate)
         : new Date(),
-      endDate: discount.endDate ? new Date(discount.endDate + "Z") : null,
+      endDate: discount.endDate ? new Date(discount.endDate) : null,
     },
     selectedProducts,
-    selectedCollections: collectionsData.map((collection) => ({
-      id: collection.id,
-      name: collection.name,
-      description: null,
-      slug: "",
-    })),
+    selectedCollections,
   };
 }

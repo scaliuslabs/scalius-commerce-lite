@@ -1,40 +1,20 @@
 import type { APIRoute } from "astro";
-import { db } from "@scalius/database/client";
-import { settings } from "@scalius/database/schema";
-import { eq, and } from "drizzle-orm";
-
-const CATEGORY = "firebase";
-const KEY_PUBLIC_CONFIG = "public_config";
 
 export const GET: APIRoute = async () => {
-  // 1. Fetch config from DB
+  // 1. Fetch Firebase config from API
   let publicConfig: Record<string, string> = {};
   try {
-    const result = await db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(
-        and(
-          eq(settings.key, KEY_PUBLIC_CONFIG),
-          eq(settings.category, CATEGORY),
-        ),
-      )
-      .get();
-
-    if (result && result.value) {
-      publicConfig = JSON.parse(result.value);
+    const response = await fetch("/api/v1/auth/firebase-config");
+    if (response.ok) {
+      const body = (await response.json()) as any;
+      // API returns { success: true, data: { ...config } }
+      publicConfig = body?.data || {};
     }
   } catch (e) {
-    console.error("Error reading Firebase config from DB for SW:", e);
+    console.error("Error reading Firebase config from API for SW:", e);
   }
 
   // 2. Fallback to Env Vars
-  // Note: We use process.env here for compatibility, assuming Vite/Astro injects them or runtime has them.
-  // In Cloudflare Workers, we might need to check if 'import.meta.env' works in this context or pass env from locals if possible.
-  // However, for a static file generation or SSR endpoint, import.meta.env usually works for build-time vars,
-  // but for runtime env vars in Cloudflare, we usually access them via context.
-
-  // Since this is an Astro endpoint, we can try to use import.meta.env for build-time defaults
   if (!publicConfig.apiKey) {
     publicConfig = {
       apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY || "",
@@ -114,7 +94,7 @@ self.addEventListener("notificationclick", (event) => {
     status: 200,
     headers: {
       "Content-Type": "application/javascript",
-      "Cache-Control": "no-cache, no-store, must-revalidate", // Ensure fresh config
+      "Cache-Control": "no-cache, no-store, must-revalidate",
     },
   });
 };

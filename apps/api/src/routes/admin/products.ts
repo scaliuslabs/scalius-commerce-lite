@@ -162,6 +162,30 @@ app.openapi(bulkDeleteRoute, async (c) => {
     }
 });
 
+// ── Get Product By ID ──
+
+const getByIdRoute = createRoute({
+    method: "get",
+    path: "/{id}",
+    tags: ["Admin - Products"],
+    summary: "Get a product by ID with all details",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: { description: "Product details" },
+        404: { description: "Product not found" }
+    }
+});
+
+app.openapi(getByIdRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const product = await ProductsAdmin.getProductDetails(db, id);
+    if (!product) throw new NotFoundError("Product not found");
+    return ok(c, product);
+});
+
 // ── Update Product ──
 
 const updateProductRoute = createRoute({
