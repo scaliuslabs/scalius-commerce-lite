@@ -51,10 +51,20 @@ export const POST: APIRoute = async ({ request }) => {
     // Non-critical: cookie clearing is the primary logout mechanism
   }
 
-  const headers = new Headers({ "Content-Type": "application/json" });
+  const headers = new Headers();
   for (const c of cookieHeaders) {
     headers.append("Set-Cookie", c);
   }
 
+  // If called from a browser form (Accept: text/html), redirect to homepage.
+  // If called from JS fetch, return JSON (fetch follows redirects anyway,
+  // but logoutCustomer() ignores the response body).
+  const accept = request.headers.get("Accept") || "";
+  if (accept.includes("text/html")) {
+    headers.set("Location", "/");
+    return new Response(null, { status: 302, headers });
+  }
+
+  headers.set("Content-Type", "application/json");
   return new Response(JSON.stringify({ success: true }), { status: 200, headers });
 };
