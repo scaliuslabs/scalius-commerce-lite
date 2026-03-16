@@ -1,9 +1,9 @@
 // src/db/schema/content.ts
 // Site content tables: pages, widgets, widgetHistory, heroSections, heroSliders, pageTemplates.
 
-import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { UNIX_NOW } from "./shared";
 import { collections } from "./products";
 import { WidgetPlacementRule } from "./enums";
 
@@ -24,10 +24,10 @@ export const pages = sqliteTable(
         sortOrder: integer("sort_order").notNull().default(0),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`CURRENT_TIMESTAMP`),
+            .default(UNIX_NOW),
         updatedAt: integer("updated_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`CURRENT_TIMESTAMP`),
+            .default(UNIX_NOW),
         deletedAt: integer("deleted_at", { mode: "timestamp" }),
     },
     (table) => [
@@ -97,10 +97,10 @@ export const heroSections = sqliteTable("hero_sections", {
     config: text("config").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 });
 
 export const heroSliders = sqliteTable("hero_sliders", {
@@ -110,10 +110,10 @@ export const heroSliders = sqliteTable("hero_sliders", {
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 });
 
@@ -125,10 +125,10 @@ export const pageTemplates = sqliteTable("page_templates", {
     config: text("config").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 });
 
 export type Page = InferSelectModel<typeof pages>;

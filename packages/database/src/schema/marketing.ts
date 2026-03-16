@@ -2,9 +2,9 @@
 // Marketing domain tables: discounts, discountProducts, discountCollections,
 // discountUsage, metaConversionsSettings, metaConversionsLogs.
 
-import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { UNIX_NOW } from "./shared";
 import { products } from "./products";
 import { collections } from "./products";
 import { orders } from "./orders";
@@ -46,10 +46,10 @@ export const discounts = sqliteTable("discounts", {
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("discounts_code_idx").on(table.code),
@@ -67,8 +67,11 @@ export const discountProducts = sqliteTable("discount_products", {
     applicationType: text("application_type", { enum: ["get"] }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
-});
+        .default(UNIX_NOW),
+}, (table) => [
+    index("discount_products_discount_id_idx").on(table.discountId),
+    index("discount_products_product_id_idx").on(table.productId),
+]);
 
 export const discountCollections = sqliteTable("discount_collections", {
     id: text("id").primaryKey(),
@@ -81,8 +84,10 @@ export const discountCollections = sqliteTable("discount_collections", {
     applicationType: text("application_type", { enum: ["get"] }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
-});
+        .default(UNIX_NOW),
+}, (table) => [
+    index("discount_collections_collection_id_idx").on(table.collectionId),
+]);
 
 export const discountUsage = sqliteTable("discount_usage", {
     id: text("id").primaryKey(),
@@ -96,13 +101,14 @@ export const discountUsage = sqliteTable("discount_usage", {
     amountDiscounted: real("amount_discounted").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("discount_usage_discount_customer_idx").on(table.discountId, table.customerId),
 ]);
 
 export const metaConversionsSettings = sqliteTable("meta_conversions_settings", {
     id: text("id").primaryKey(),
+    singletonKey: text("singleton_key").notNull().default("default"),
     pixelId: text("pixel_id"),
     accessToken: text("access_token"),
     testEventCode: text("test_event_code"),

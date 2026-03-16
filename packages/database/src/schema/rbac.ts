@@ -18,6 +18,8 @@ export const permissions = sqliteTable("permissions", {
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(sql`(cast(strftime('%s','now') as int))`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .default(sql`(cast(strftime('%s','now') as int))`),
 });
 
 export const roles = sqliteTable("roles", {

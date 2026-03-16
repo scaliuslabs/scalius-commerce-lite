@@ -5,6 +5,7 @@
 //   import * as schema from "./schema"
 // continue to work without modification.
 
+export * from "./shared";
 export * from "./enums";
 export * from "./auth";
 export * from "./rbac";

@@ -1,9 +1,9 @@
 // src/db/schema/delivery.ts
 // Delivery domain tables: deliveryLocations, deliveryProviders, deliveryShipments.
 
-import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { UNIX_NOW } from "./shared";
 import { orders } from "./orders";
 
 export const deliveryLocations = sqliteTable("delivery_locations", {
@@ -17,12 +17,14 @@ export const deliveryLocations = sqliteTable("delivery_locations", {
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+    index("delivery_locations_parent_id_idx").on(table.parentId),
+]);
 
 export const deliveryProviders = sqliteTable("delivery_providers", {
     id: text("id").primaryKey(),
@@ -33,10 +35,10 @@ export const deliveryProviders = sqliteTable("delivery_providers", {
     config: text("config").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 });
 
 export const deliveryShipments = sqliteTable("delivery_shipments", {
@@ -60,10 +62,10 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     isFinalShipment: integer("is_final_shipment", { mode: "boolean" }).default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("delivery_shipments_provider_status_idx").on(table.providerId, table.status),
 ]);

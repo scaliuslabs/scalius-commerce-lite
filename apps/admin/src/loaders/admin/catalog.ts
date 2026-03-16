@@ -123,10 +123,10 @@ export async function getCollectionEditData(id: string) {
     subtitle: parsedConfig.subtitle || "",
   };
 
-  const validCollectionTypesForForm = ["collection1", "collection2"];
+  const validCollectionTypesForForm = ["manual", "dynamic"];
   const formType = validCollectionTypesForForm.includes(collection.type)
     ? collection.type
-    : "collection1";
+    : "manual";
 
   return {
     allCategories,
@@ -134,7 +134,7 @@ export async function getCollectionEditData(id: string) {
     defaultValues: {
       id: collection.id,
       name: collection.name,
-      type: formType as "collection1" | "collection2",
+      type: formType as "manual" | "dynamic",
       isActive: collection.isActive,
       config,
     },

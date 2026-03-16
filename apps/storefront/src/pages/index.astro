@@ -74,14 +74,14 @@ const currencySymbol = layoutData?.currency?.symbol ?? "৳";
 
 function isCollection1(
   collection: CollectionWithProducts
-): collection is CollectionWithProducts & { type: "collection1" } {
-  return collection.type === "collection1";
+): collection is CollectionWithProducts & { type: "manual" } {
+  return collection.type === "manual";
 }
 
 function isCollection2(
   collection: CollectionWithProducts
-): collection is CollectionWithProducts & { type: "collection2" } {
-  return collection.type === "collection2";
+): collection is CollectionWithProducts & { type: "dynamic" } {
+  return collection.type === "dynamic";
 }
 ---
 

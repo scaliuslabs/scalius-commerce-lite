@@ -1,9 +1,9 @@
 // src/db/schema/customers.ts
 // Customer domain tables: customers, customerHistory.
 
-import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { UNIX_NOW } from "./shared";
 
 export const customers = sqliteTable("customers", {
     id: text("id").primaryKey(),
@@ -22,13 +22,14 @@ export const customers = sqliteTable("customers", {
     lastOrderAt: integer("last_order_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("customers_email_idx").on(table.email),
+    index("customers_phone_idx").on(table.phone),
 ]);
 
 export const customerHistory = sqliteTable("customer_history", {
@@ -49,7 +50,7 @@ export const customerHistory = sqliteTable("customer_history", {
     changeType: text("change_type", { enum: ["created", "updated", "deleted"] }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`CURRENT_TIMESTAMP`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("customer_history_customer_id_idx").on(table.customerId),
 ]);

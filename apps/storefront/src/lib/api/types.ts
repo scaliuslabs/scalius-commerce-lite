@@ -179,7 +179,7 @@ export interface CollectionConfig {
 export interface Collection {
   id: string;
   name: string;
-  type: "collection1" | "collection2" | "AllCategories";
+  type: "manual" | "dynamic" | "AllCategories";
   config: CollectionConfig;
   sortOrder: number;
   isActive: boolean;
