@@ -73,15 +73,24 @@ export async function getUserPermissions(
     }
   }
 
-  // Get user details including isSuperAdmin
-  const userResult = await db
-    .select({
-      id: user.id,
-      isSuperAdmin: user.isSuperAdmin,
-    })
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
+  // Batch all 3 queries in a single D1 round-trip (was 3 sequential awaits)
+  const [userResult, rolePerms, overrides] = await db.batch([
+    db.select({ id: user.id, isSuperAdmin: user.isSuperAdmin })
+      .from(user).where(eq(user.id, userId)).limit(1),
+    db.select({ permissionName: permissions.name })
+      .from(userRoles)
+      .innerJoin(rolePermissions, eq(userRoles.roleId, rolePermissions.roleId))
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(eq(userRoles.userId, userId)),
+    db.select({ permissionName: permissions.name, granted: userPermissions.granted })
+      .from(userPermissions)
+      .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
+      .where(eq(userPermissions.userId, userId)),
+  ] as any) as [
+    { id: string; isSuperAdmin: boolean | null }[],
+    { permissionName: string }[],
+    { permissionName: string; granted: boolean }[],
+  ];
 
   if (userResult.length === 0) {
     return new Set();
@@ -96,31 +105,12 @@ export async function getUserPermissions(
 
     permissionCache.set(userId, { permissions: permSet, timestamp: Date.now() });
     if (kv) {
-      // Background the KV write so it doesn't block the request
       kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(permSet)), { expirationTtl: CACHE_TTL });
     }
     return permSet;
   }
 
-  // Get role-based permissions
-  const rolePerms = await db
-    .select({ permissionName: permissions.name })
-    .from(userRoles)
-    .innerJoin(rolePermissions, eq(userRoles.roleId, rolePermissions.roleId))
-    .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-    .where(eq(userRoles.userId, userId));
-
   const effectivePermissions = new Set<string>(rolePerms.map((rp) => rp.permissionName));
-
-  // Get user-level overrides
-  const overrides = await db
-    .select({
-      permissionName: permissions.name,
-      granted: userPermissions.granted,
-    })
-    .from(userPermissions)
-    .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
-    .where(eq(userPermissions.userId, userId));
 
   // Apply overrides
   for (const override of overrides) {
