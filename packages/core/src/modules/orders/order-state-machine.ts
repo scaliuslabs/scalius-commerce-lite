@@ -24,7 +24,10 @@ const ORDER_STATUS_TRANSITIONS: Record<OrderStatusValue, readonly OrderStatusVal
     [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.RETURNED, OrderStatus.CANCELLED],
     [OrderStatus.DELIVERED]: [OrderStatus.COMPLETED, OrderStatus.RETURNED, OrderStatus.REFUNDED, OrderStatus.PARTIALLY_REFUNDED],
     [OrderStatus.COMPLETED]: [OrderStatus.RETURNED, OrderStatus.REFUNDED, OrderStatus.PARTIALLY_REFUNDED],
-    [OrderStatus.CANCELLED]: [OrderStatus.PENDING],
+    // CANCELLED is terminal — reactivation requires creating a new order.
+    // Allowing CANCELLED->PENDING creates inventory inconsistency because
+    // stock is released on cancellation but not re-reserved on reactivation.
+    [OrderStatus.CANCELLED]: [],
     [OrderStatus.RETURNED]: [OrderStatus.REFUNDED],
     [OrderStatus.REFUNDED]: [],
     [OrderStatus.PARTIALLY_REFUNDED]: [OrderStatus.REFUNDED],
