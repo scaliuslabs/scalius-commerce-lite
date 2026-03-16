@@ -16,6 +16,9 @@ Full order lifecycle with state machine validation, optimistic locking, batch wr
 - Optimistic locking via `version` column on orders table
 - `updateOrderStatus()` returns `StatusUpdateResult` with notification data
 - State machine enforces valid transitions; throws `ValidationError` on illegal moves
+- `CANCELLED` is a terminal state — no reactivation allowed. Reactivating would create inventory inconsistency (stock is released on cancellation and not re-reserved on reactivation). Create a new order instead.
+- Queue handler (`orders.queue.ts`) tags each reservation entry with its own `orderId` for correct inventory movement tracking across batch processing.
+- `order-notifications` queue has a dead letter queue configured.
 
 ## Dependencies
 

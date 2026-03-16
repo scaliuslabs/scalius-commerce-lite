@@ -16,6 +16,10 @@ Customer management and OTP-based storefront authentication with pluggable trans
 2. Queue consumer delivers via selected transport (email/SMS/WhatsApp)
 3. `verifyOtp()` creates KV session (30-day TTL) on success
 
+## Phone normalization
+
+Phone numbers are normalized to E.164 format (e.g., `+8801XXXXXXXXX`) via `normalizePhone()` from `@scalius/shared/customer-utils` before all DB lookups and writes. This prevents duplicate customer records from different phone formats.
+
 ## Dependencies
 
 - `@scalius/database` -- `customers`, `customerHistory`
