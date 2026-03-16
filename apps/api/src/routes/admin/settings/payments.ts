@@ -4,6 +4,7 @@ import { settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { getKv } from "../../../utils/kv-cache";
 import { ok } from "../../../utils/api-response";
+import { ValidationError } from "../../../utils/api-error";
 import {
     upsertSetting,
     getActivePaymentMethods,
@@ -54,7 +55,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             }
         });
     } catch (error) {
-        return c.json({ error: "Failed to fetch payment methods" }, 500);
+        throw error;
     }
 });
 
@@ -72,7 +73,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         const data = updateMethodsSchema.parse(body);
 
         if (!data.enabledMethods.includes(data.defaultMethod)) {
-            return c.json({ error: "Default method must be one of the enabled methods" }, 400);
+            throw new ValidationError("Default method must be one of the enabled methods");
         }
 
         await Promise.all([
@@ -85,8 +86,8 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
 
         return ok(c, { message: "Payment methods updated" });
     } catch (error: unknown) {
-        if (error instanceof z.ZodError) return c.json({ error: "Invalid request data", details: error.issues }, 400);
-        return c.json({ error: "Failed to save payment methods" }, 500);
+        if (error instanceof z.ZodError) throw new ValidationError("Invalid request data");
+        throw error;
     }
 });
 
@@ -114,7 +115,7 @@ app.openapi(getStripeRoute, async (c) => {
             enabled: map.enabled !== "false"
         });
     } catch (error) {
-        return c.json({ message: "Error fetching Stripe settings" }, 500);
+        throw error;
     }
 });
 
@@ -143,7 +144,7 @@ app.openapi(saveStripeRoute, async (c) => {
 
         return ok(c, { message: "Stripe settings saved successfully" });
     } catch (error) {
-        return c.json({ message: "Error saving Stripe settings" }, 500);
+        throw error;
     }
 });
 
@@ -171,7 +172,7 @@ app.openapi(getSSLCommerzRoute, async (c) => {
             enabled: map.enabled !== "false"
         });
     } catch (error) {
-        return c.json({ message: "Error fetching SSLCommerz settings" }, 500);
+        throw error;
     }
 });
 
@@ -200,7 +201,7 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
 
         return ok(c, { message: "SSLCommerz settings saved successfully" });
     } catch (error) {
-        return c.json({ message: "Error saving SSLCommerz settings" }, 500);
+        throw error;
     }
 });
 
@@ -229,7 +230,7 @@ app.openapi(getPolarRoute, async (c) => {
             enabled: map.enabled !== "false"
         });
     } catch (error) {
-        return c.json({ message: "Error fetching Polar settings" }, 500);
+        throw error;
     }
 });
 
@@ -259,7 +260,7 @@ app.openapi(savePolarRoute, async (c) => {
 
         return ok(c, { message: "Polar settings saved successfully" });
     } catch (error) {
-        return c.json({ message: "Error saving Polar settings" }, 500);
+        throw error;
     }
 });
 

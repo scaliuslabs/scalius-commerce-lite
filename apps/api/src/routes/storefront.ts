@@ -6,6 +6,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 import { getHomepageData, getLayoutData } from "@scalius/core/modules/storefront/storefront.service";
 
 import { ok } from "../utils/api-response";
@@ -29,7 +30,7 @@ const homepageRoute = createRoute({
 
 app.use(
   "/homepage",
-  cacheMiddleware({ ttl: 3600, keyPrefix: "api:storefront:homepage:", varyByQuery: false, methods: ["GET"] }),
+  cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:storefront:homepage:", varyByQuery: false, methods: ["GET"] }),
 );
 
 app.openapi(homepageRoute, async (c) => {
@@ -56,7 +57,7 @@ const layoutRoute = createRoute({
 
 app.use(
   "/layout",
-  cacheMiddleware({ ttl: 3600, keyPrefix: "api:storefront:layout:", varyByQuery: false, methods: ["GET"] }),
+  cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:storefront:layout:", varyByQuery: false, methods: ["GET"] }),
 );
 
 app.openapi(layoutRoute, async (c) => {
@@ -83,7 +84,7 @@ const cspRoute = createRoute({
 
 app.use(
   "/csp",
-  cacheMiddleware({ ttl: 3600, keyPrefix: "api:storefront:csp:", varyByQuery: false, methods: ["GET"] }),
+  cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:storefront:csp:", varyByQuery: false, methods: ["GET"] }),
 );
 
 app.openapi(cspRoute, async (c) => {

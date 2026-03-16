@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { DiscountService, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
-import { NotFoundError, ApiError } from "../../utils/api-error";
+import { NotFoundError, ApiError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
@@ -98,7 +98,7 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { discountIds, permanent } = c.req.valid("json");
-    if (discountIds.length === 0) return c.json({ error: "No discount IDs provided" }, 400);
+    if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
     await DiscountService.bulkDelete(db, discountIds, permanent);
     return noContent(c);
 });
@@ -127,7 +127,7 @@ const bulkRestoreRoute = createRoute({
 app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { discountIds } = c.req.valid("json");
-    if (discountIds.length === 0) return c.json({ error: "No discount IDs provided" }, 400);
+    if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
     await DiscountService.restore(db, discountIds);
     return noContent(c);
 });

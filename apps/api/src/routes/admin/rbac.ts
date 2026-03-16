@@ -18,6 +18,7 @@ import {
 import { PERMISSIONS, getPermissionsByCategory } from "@scalius/core/auth/rbac/permissions";
 
 import { ok, created } from "../../utils/api-response";
+import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
 const app = new OpenAPIHono();
 
 // -- Validation Schemas --
@@ -66,7 +67,7 @@ const listRolesRoute = createRoute({
 app.openapi(listRolesRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
 
@@ -74,14 +75,14 @@ app.openapi(listRolesRoute, async (c) => {
         const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW);
 
         if (!canManageRoles && !canViewTeam) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const rolesWithPermissions = await getAllRolesWithPermissions(db);
         return ok(c, { roles: rolesWithPermissions });
     } catch (error) {
         console.error("Error fetching roles:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -103,20 +104,20 @@ const createRoleRoute = createRoute({
 app.openapi(createRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const data = c.req.valid("json");
 
         const existingRole = await db.select().from(roles).where(eq(roles.name, data.name)).limit(1);
         if (existingRole.length > 0) {
-            return c.json({ error: "A role with this name already exists" }, 400);
+            throw new ConflictError("A role with this name already exists");
         }
 
         const roleId = crypto.randomUUID();
@@ -160,7 +161,7 @@ app.openapi(createRoleRoute, async (c) => {
         });
     } catch (error: unknown) {
         console.error("Error creating role:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -182,7 +183,7 @@ const getRoleRoute = createRoute({
 app.openapi(getRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
         const { id: roleId } = c.req.valid("param");
@@ -191,13 +192,13 @@ app.openapi(getRoleRoute, async (c) => {
         const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW);
 
         if (!canManageRoles && !canViewTeam) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const role = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
 
         if (role.length === 0) {
-            return c.json({ error: "Role not found" }, 404);
+            throw new NotFoundError("Role not found");
         }
 
         const perms = await getRolePermissions(db, roleId);
@@ -210,7 +211,7 @@ app.openapi(getRoleRoute, async (c) => {
         });
     } catch (error) {
         console.error("Error fetching role:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -233,20 +234,20 @@ const updateRoleRoute = createRoute({
 app.openapi(updateRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
         const { id: roleId } = c.req.valid("param");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const existingRole = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
 
         if (existingRole.length === 0) {
-            return c.json({ error: "Role not found" }, 404);
+            throw new NotFoundError("Role not found");
         }
 
         const role = existingRole[0];
@@ -265,7 +266,7 @@ app.openapi(updateRoleRoute, async (c) => {
 
         if (data.permissions !== undefined) {
             if (role.isSystem) {
-                return c.json({ error: "Cannot modify permissions of system roles" }, 400);
+                throw new ValidationError("Cannot modify permissions of system roles");
             }
 
             await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
@@ -300,7 +301,7 @@ app.openapi(updateRoleRoute, async (c) => {
         });
     } catch (error: unknown) {
         console.error("Error updating role:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -322,26 +323,26 @@ const deleteRoleRoute = createRoute({
 app.openapi(deleteRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
         const { id: roleId } = c.req.valid("param");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const existingRole = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
 
         if (existingRole.length === 0) {
-            return c.json({ error: "Role not found" }, 404);
+            throw new NotFoundError("Role not found");
         }
 
         const role = existingRole[0];
 
         if (role.isSystem) {
-            return c.json({ error: "Cannot delete system roles" }, 400);
+            throw new ValidationError("Cannot delete system roles");
         }
 
         const usersWithRole = await db
@@ -351,7 +352,7 @@ app.openapi(deleteRoleRoute, async (c) => {
             .limit(1);
 
         if (usersWithRole.length > 0) {
-            return c.json({ error: "Cannot delete role that is assigned to users" }, 400);
+            throw new ConflictError("Cannot delete role that is assigned to users");
         }
 
         await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
@@ -362,7 +363,7 @@ app.openapi(deleteRoleRoute, async (c) => {
         return ok(c, {});
     } catch (error) {
         console.error("Error deleting role:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -384,33 +385,33 @@ const assignRoleRoute = createRoute({
 app.openapi(assignRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const data = c.req.valid("json");
 
         if (data.userId === sessionUser.id) {
-            return c.json({ error: "Cannot modify your own roles" }, 400);
+            throw new ValidationError("Cannot modify your own roles");
         }
 
         const targetUser = await db.select().from(user).where(eq(user.id, data.userId)).limit(1);
         if (targetUser.length === 0) {
-            return c.json({ error: "User not found" }, 404);
+            throw new NotFoundError("User not found");
         }
 
         if (targetUser[0].isSuperAdmin) {
-            return c.json({ error: "Cannot modify super admin's roles" }, 400);
+            throw new ValidationError("Cannot modify super admin's roles");
         }
 
         const role = await db.select().from(roles).where(eq(roles.id, data.roleId)).limit(1);
         if (role.length === 0) {
-            return c.json({ error: "Role not found" }, 404);
+            throw new NotFoundError("Role not found");
         }
 
         const existingAssignment = await db
@@ -420,7 +421,7 @@ app.openapi(assignRoleRoute, async (c) => {
             .limit(1);
 
         if (existingAssignment.length > 0) {
-            return c.json({ error: "User already has this role" }, 400);
+            throw new ConflictError("User already has this role");
         }
 
         await assignRoleToUser(db, data.userId, data.roleId, sessionUser.id);
@@ -428,7 +429,7 @@ app.openapi(assignRoleRoute, async (c) => {
         return created(c, {});
     } catch (error: unknown) {
         console.error("Error assigning role:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -450,28 +451,28 @@ const removeRoleRoute = createRoute({
 app.openapi(removeRoleRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const data = c.req.valid("json");
 
         if (data.userId === sessionUser.id) {
-            return c.json({ error: "Cannot modify your own roles" }, 400);
+            throw new ValidationError("Cannot modify your own roles");
         }
 
         const targetUser = await db.select().from(user).where(eq(user.id, data.userId)).limit(1);
         if (targetUser.length === 0) {
-            return c.json({ error: "User not found" }, 404);
+            throw new NotFoundError("User not found");
         }
 
         if (targetUser[0].isSuperAdmin) {
-            return c.json({ error: "Cannot modify super admin's roles" }, 400);
+            throw new ValidationError("Cannot modify super admin's roles");
         }
 
         await removeRoleFromUser(db, data.userId, data.roleId);
@@ -479,7 +480,7 @@ app.openapi(removeRoleRoute, async (c) => {
         return ok(c, {});
     } catch (error: unknown) {
         console.error("Error removing role:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -501,35 +502,35 @@ const setOverrideRoute = createRoute({
 app.openapi(setOverrideRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const data = c.req.valid("json");
 
         if (data.userId === sessionUser.id) {
-            return c.json({ error: "Cannot modify your own permissions" }, 400);
+            throw new ValidationError("Cannot modify your own permissions");
         }
 
         const targetUser = await db.select().from(user).where(eq(user.id, data.userId)).limit(1);
         if (targetUser.length === 0) {
-            return c.json({ error: "User not found" }, 404);
+            throw new NotFoundError("User not found");
         }
 
         if (targetUser[0].isSuperAdmin) {
-            return c.json({ error: "Cannot modify super admin's permissions" }, 400);
+            throw new ValidationError("Cannot modify super admin's permissions");
         }
 
         try {
             await setUserPermissionOverride(db, data.userId, data.permission, data.granted, sessionUser.id);
         } catch (error: unknown) {
             if (error instanceof Error && error.message?.includes("not found")) {
-                return c.json({ error: "Permission not found" }, 404);
+                throw new NotFoundError("Permission not found");
             }
             throw error;
         }
@@ -537,7 +538,7 @@ app.openapi(setOverrideRoute, async (c) => {
         return ok(c, {});
     } catch (error: unknown) {
         console.error("Error setting permission override:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -559,28 +560,28 @@ const removeOverrideRoute = createRoute({
 app.openapi(removeOverrideRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
 
         const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const data = c.req.valid("json");
 
         if (data.userId === sessionUser.id) {
-            return c.json({ error: "Cannot modify your own permissions" }, 400);
+            throw new ValidationError("Cannot modify your own permissions");
         }
 
         const targetUser = await db.select().from(user).where(eq(user.id, data.userId)).limit(1);
         if (targetUser.length === 0) {
-            return c.json({ error: "User not found" }, 404);
+            throw new NotFoundError("User not found");
         }
 
         if (targetUser[0].isSuperAdmin) {
-            return c.json({ error: "Cannot modify super admin's permissions" }, 400);
+            throw new ValidationError("Cannot modify super admin's permissions");
         }
 
         await removeUserPermissionOverride(db, data.userId, data.permission);
@@ -588,7 +589,7 @@ app.openapi(removeOverrideRoute, async (c) => {
         return ok(c, {});
     } catch (error: unknown) {
         console.error("Error removing permission override:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -607,7 +608,7 @@ const listPermissionsRoute = createRoute({
 app.openapi(listPermissionsRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
 
@@ -615,7 +616,7 @@ app.openapi(listPermissionsRoute, async (c) => {
         const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW);
 
         if (!canManageRoles && !canViewTeam) {
-            return c.json({ error: "Forbidden", message: "Permission denied" }, 403);
+            throw new ForbiddenError("Permission denied");
         }
 
         const allPermissions = await db.select().from(permissions);
@@ -627,7 +628,7 @@ app.openapi(listPermissionsRoute, async (c) => {
         });
     } catch (error) {
         console.error("Error fetching permissions:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -646,14 +647,14 @@ const myPermissionsRoute = createRoute({
 app.openapi(myPermissionsRoute, async (c) => {
     try {
         const sessionUser = c.get("user");
-        if (!sessionUser) return c.json({ error: "Unauthorized" }, 401);
+        if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
 
         const context = await getUserPermissionContext(db, sessionUser.id);
 
         if (!context) {
-            return c.json({ error: "User not found" }, 404);
+            throw new NotFoundError("User not found");
         }
 
         return ok(c, {
@@ -665,7 +666,7 @@ app.openapi(myPermissionsRoute, async (c) => {
         });
     } catch (error) {
         console.error("Error fetching user permissions:", error);
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 

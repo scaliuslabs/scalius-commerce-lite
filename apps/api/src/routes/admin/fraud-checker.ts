@@ -5,6 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { FraudCheckerService } from "@scalius/core/modules/fraud-checker/service";
 
 import { ok, created } from "../../utils/api-response";
+import { ValidationError } from "../../utils/api-error";
 const app = new OpenAPIHono();
 const fraudCheckerService = new FraudCheckerService();
 const MASKED_VALUE = "••••••••••••";
@@ -32,7 +33,7 @@ app.openapi(listRoute, async (c) => {
 
         return ok(c, maskedProviders);
     } catch (error: unknown) {
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -53,10 +54,7 @@ app.openapi(createProviderRoute, async (c) => {
         const provider = await c.req.json();
 
         if (!provider.name || !provider.apiUrl || !provider.apiKey) {
-            return c.json({
-                error: "Missing required fields",
-                required: ["name", "apiUrl", "apiKey"]
-            }, 400);
+            throw new ValidationError("Missing required fields: name, apiUrl, apiKey");
         }
 
         const savedProvider = await fraudCheckerService.saveProvider(provider);
@@ -68,7 +66,7 @@ app.openapi(createProviderRoute, async (c) => {
 
         return created(c, maskedResponse);
     } catch (error: unknown) {
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -89,10 +87,7 @@ app.openapi(updateProviderRoute, async (c) => {
         const provider = await c.req.json();
 
         if (!provider.id || !provider.name || !provider.apiUrl || !provider.apiKey) {
-            return c.json({
-                error: "Missing required fields",
-                required: ["id", "name", "apiUrl", "apiKey"]
-            }, 400);
+            throw new ValidationError("Missing required fields: id, name, apiUrl, apiKey");
         }
 
         if (provider.apiKey === MASKED_VALUE) {
@@ -111,7 +106,7 @@ app.openapi(updateProviderRoute, async (c) => {
 
         return ok(c, maskedResponse);
     } catch (error: unknown) {
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -136,7 +131,7 @@ app.openapi(deleteProviderRoute, async (c) => {
         await fraudCheckerService.deleteProvider(id);
         return ok(c, {});
     } catch (error: unknown) {
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -161,7 +156,7 @@ app.openapi(testProviderRoute, async (c) => {
         const result = await fraudCheckerService.testProvider(id);
         return ok(c, result);
     } catch (error: unknown) {
-        return c.json({ error: "Internal server error" }, 500);
+        throw error;
     }
 });
 

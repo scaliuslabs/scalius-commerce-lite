@@ -9,6 +9,7 @@ import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
 import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
 import { ok, created } from "../../utils/api-response";
+import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
 const app = new OpenAPIHono();
 
 // Generate a secure random password
@@ -43,7 +44,7 @@ app.openapi(listUsersRoute, async (c) => {
         const sessionUser = c.get("user");
 
         if (sessionUser.role !== "admin") {
-            return c.json({ error: "Forbidden", message: "Only administrators can access this resource" }, 403);
+            throw new ForbiddenError("Only administrators can access this resource");
         }
 
         const adminUsers = await db
@@ -95,7 +96,7 @@ app.openapi(listUsersRoute, async (c) => {
         return ok(c, { users: usersWithRoles });
     } catch (error: unknown) {
         console.error("Get admin users error:", error);
-        return c.json({ error: "Server error", message: "Failed to fetch admin users" }, 500);
+        throw error;
     }
 });
 
@@ -126,18 +127,18 @@ app.openapi(createUserRoute, async (c) => {
         const auth = createAuth(env);
 
         if (sessionUser.role !== "admin") {
-            return c.json({ error: "Forbidden", message: "Only administrators can create new admin users" }, 403);
+            throw new ForbiddenError("Only administrators can create new admin users");
         }
 
         const { name, email, roleId } = c.req.valid("json");
 
         if (roleId) {
             const roleExists = await db.select({ id: roles.id }).from(roles).where(eq(roles.id, roleId)).get();
-            if (!roleExists) return c.json({ error: "Invalid input", message: "Selected role does not exist" }, 400);
+            if (!roleExists) throw new ValidationError("Selected role does not exist");
         }
 
         const existingUser = await db.select({ id: user.id }).from(user).where(eq(user.email, email)).get();
-        if (existingUser) return c.json({ error: "Email exists", message: "A user with this email already exists" }, 400);
+        if (existingUser) throw new ConflictError("A user with this email already exists");
 
         const tempPassword = generateTempPassword();
 
@@ -146,7 +147,7 @@ app.openapi(createUserRoute, async (c) => {
         });
 
         if (!signUpResult || !signUpResult.user) {
-            return c.json({ error: "Failed to create user", message: "Could not create admin user" }, 500);
+            throw new Error("Could not create admin user");
         }
 
         await db
@@ -175,7 +176,7 @@ app.openapi(createUserRoute, async (c) => {
         });
     } catch (error: unknown) {
         console.error("Create admin user error:", error);
-        return c.json({ error: "Server error", message: error instanceof Error ? error.message : "Failed to create admin user" }, 500);
+        throw error;
     }
 });
 
@@ -199,26 +200,26 @@ app.openapi(deleteUserRoute, async (c) => {
         const { id: userId } = c.req.valid("param");
 
         if (sessionUser.role !== "admin") {
-            return c.json({ error: "Forbidden", message: "Only administrators can delete admin users" }, 403);
+            throw new ForbiddenError("Only administrators can delete admin users");
         }
 
         if (userId === sessionUser.id) {
-            return c.json({ error: "Invalid operation", message: "You cannot delete your own account" }, 400);
+            throw new ValidationError("You cannot delete your own account");
         }
 
         const userToDelete = await db.select({ id: user.id, role: user.role }).from(user).where(eq(user.id, userId)).get();
-        if (!userToDelete) return c.json({ error: "Not found", message: "User not found" }, 404);
-        if (userToDelete.role !== "admin") return c.json({ error: "Invalid operation", message: "Can only delete admin users through this endpoint" }, 400);
+        if (!userToDelete) throw new NotFoundError("User not found");
+        if (userToDelete.role !== "admin") throw new ValidationError("Can only delete admin users through this endpoint");
 
         const adminCount = await db.select({ id: user.id }).from(user).where(eq(user.role, "admin"));
-        if (adminCount.length <= 1) return c.json({ error: "Invalid operation", message: "Cannot delete the last admin user" }, 400);
+        if (adminCount.length <= 1) throw new ValidationError("Cannot delete the last admin user");
 
         await db.delete(user).where(eq(user.id, userId));
 
         return ok(c, { message: "Admin user deleted successfully" });
     } catch (error: unknown) {
         console.error("Delete admin user error:", error);
-        return c.json({ error: "Server error", message: "Failed to delete admin user" }, 500);
+        throw error;
     }
 });
 
@@ -255,15 +256,15 @@ app.openapi(changePasswordRoute, async (c) => {
             body: { currentPassword, newPassword, revokeOtherSessions: true }
         });
 
-        if (!result) return c.json({ error: "Failed to change password", message: "Unable to change password. Please check your current password." }, 400);
+        if (!result) throw new ValidationError("Unable to change password. Please check your current password.");
 
         return ok(c, { message: "Password changed successfully" });
     } catch (error: unknown) {
         console.error("Change password error:", error);
         if (error instanceof Error && (error.message?.includes("password") || error.message?.includes("incorrect"))) {
-            return c.json({ error: "Invalid password", message: "Current password is incorrect" }, 400);
+            throw new ValidationError("Current password is incorrect");
         }
-        return c.json({ error: "Server error", message: "Failed to change password. Please try again." }, 500);
+        throw error;
     }
 });
 
@@ -306,7 +307,7 @@ app.openapi(updateProfileRoute, async (c) => {
         return ok(c, { user: updatedUser });
     } catch (error: unknown) {
         console.error("Error updating profile:", error);
-        return c.json({ error: "Failed to update profile" }, 500);
+        throw error;
     }
 });
 
@@ -335,7 +336,7 @@ app.openapi(get2faInfoRoute, async (c) => {
             .where(eq(user.id, sessionUser.id))
             .get();
 
-        if (!userData) return c.json({ success: false, message: "User not found" }, 404);
+        if (!userData) throw new NotFoundError("User not found");
 
         return ok(c, {
             method: userData.twoFactorMethod || "email",
@@ -343,7 +344,7 @@ app.openapi(get2faInfoRoute, async (c) => {
             email: userData.email
         });
     } catch (error: unknown) {
-        return c.json({ success: false, message: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -364,14 +365,14 @@ app.openapi(mark2faVerifiedRoute, async (c) => {
         const session = c.get("session");
 
         if (!sessionUser.twoFactorEnabled) {
-            return c.json({ error: "Forbidden", message: "Two-factor authentication is not enabled for this account" }, 403);
+            throw new ForbiddenError("Two-factor authentication is not enabled for this account");
         }
 
         await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
 
         return ok(c, { message: "Session marked as 2FA verified" });
     } catch (error: unknown) {
-        return c.json({ error: "Internal error", message: error instanceof Error ? error.message : "Failed to update session" }, 500);
+        throw error;
     }
 });
 
@@ -398,7 +399,7 @@ app.openapi(update2faMethodRoute, async (c) => {
 
         return ok(c, {});
     } catch (error: unknown) {
-        return c.json({ success: false, message: "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -454,10 +455,10 @@ app.openapi(verify2faRoute, async (c) => {
             return ok(c, { message: "Two-factor authentication verified" });
         }
 
-        return c.json({ error: "No session", message: "Could not find session to update" }, 401);
+        throw new UnauthorizedError("Could not find session to update");
     } catch (error: unknown) {
-        if (error instanceof Error && error.message?.includes("Invalid")) return c.json({ error: "Invalid code", message: "The verification code is invalid or expired" }, 400);
-        return c.json({ error: "Verification failed", message: error instanceof Error ? error.message : "Failed to verify code" }, 500);
+        if (error instanceof Error && error.message?.includes("Invalid")) throw new ValidationError("The verification code is invalid or expired");
+        throw error;
     }
 });
 
@@ -497,14 +498,14 @@ setupApp.openapi(setupRoute, async (c) => {
 
         if (adminExists) {
             console.warn(`[SECURITY] Setup endpoint accessed after admin exists. IP: ${c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown"}`);
-            return c.json({ error: "Setup already completed", message: "An admin user already exists. Please use the login page." }, 403);
+            throw new ForbiddenError("An admin user already exists. Please use the login page.");
         }
 
         const { name, email, password } = c.req.valid("json");
 
         const signUpResult = await auth.api.signUpEmail({ body: { name, email, password } });
         if (!signUpResult || !signUpResult.user) {
-            return c.json({ error: "Failed to create account", message: "Could not create user account" }, 500);
+            throw new Error("Could not create user account");
         }
 
         await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));
@@ -514,7 +515,7 @@ setupApp.openapi(setupRoute, async (c) => {
 
         return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
     } catch (error: unknown) {
-        return c.json({ error: "Server error", message: error instanceof Error ? error.message : "Failed to create admin account" }, 500);
+        throw error;
     }
 });
 

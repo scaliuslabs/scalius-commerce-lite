@@ -4,7 +4,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
-import { ApiError } from "../../utils/api-error";
+import { ApiError, ValidationError } from "../../utils/api-error";
 import {
     listCategories,
     createCategory,
@@ -109,7 +109,7 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { categoryIds, permanent } = c.req.valid("json");
-    if (categoryIds.length === 0) return c.json({ error: "No category IDs provided" }, 400);
+    if (categoryIds.length === 0) throw new ValidationError("No category IDs provided");
     try {
         await bulkDeleteCategories(db, categoryIds, permanent);
         return noContent(c);
@@ -143,7 +143,7 @@ const bulkRestoreRoute = createRoute({
 app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { categoryIds } = c.req.valid("json");
-    if (categoryIds.length === 0) return c.json({ error: "No category IDs provided" }, 400);
+    if (categoryIds.length === 0) throw new ValidationError("No category IDs provided");
     await restoreCategories(db, categoryIds);
     return noContent(c);
 });

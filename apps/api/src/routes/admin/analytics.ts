@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { AnalyticsService, createAnalyticsSchema, updateAnalyticsSchema, toggleAnalyticsSchema } from "@scalius/core/modules/analytics";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
 const app = new OpenAPIHono();
@@ -93,7 +93,7 @@ app.openapi(updateScriptRoute, async (c) => {
     const data = c.req.valid("json");
 
     if (data.id && data.id !== id) {
-        return c.json({ error: "ID mismatch" }, 400);
+        throw new ValidationError("ID mismatch");
     }
 
     const updated = await AnalyticsService.updateScript(db, id, data);

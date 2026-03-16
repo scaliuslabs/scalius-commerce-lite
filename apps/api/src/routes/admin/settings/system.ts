@@ -8,6 +8,7 @@ import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 
 import { ok } from "../../../utils/api-response";
+import { NotFoundError, ValidationError } from "../../../utils/api-error";
 const app = new OpenAPIHono();
 const MASKED = "••••••••••••";
 
@@ -26,7 +27,7 @@ const getAuthRoute = createRoute({
 app.openapi(getAuthRoute, async (c) => {
     try {
         const [row] = await db.select().from(siteSettings).limit(1);
-        if (!row) return c.json({ message: "Settings not found" }, 404);
+        if (!row) throw new NotFoundError("Settings not found");
 
         return ok(c, {
             authVerificationMethod: row.authVerificationMethod,
@@ -39,7 +40,7 @@ app.openapi(getAuthRoute, async (c) => {
             partialPaymentAmount: row.partialPaymentAmount
         });
     } catch (error) {
-        return c.json({ message: "Error fetching auth settings" }, 500);
+        throw error;
     }
 });
 
@@ -56,7 +57,7 @@ app.openapi(saveAuthRoute, async (c) => {
         const body = (await c.req.json()) as Record<string, unknown>;
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
 
-        if (!existingSettings) return c.json({ message: "Base Site Settings must be configured first" }, 400);
+        if (!existingSettings) throw new ValidationError("Base Site Settings must be configured first");
 
         const updates: Partial<typeof siteSettings.$inferInsert> = {};
 
@@ -88,7 +89,7 @@ app.openapi(saveAuthRoute, async (c) => {
         await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "Auth settings saved successfully" });
     } catch (error) {
-        return c.json({ message: "Error saving auth settings" }, 500);
+        throw error;
     }
 });
 
@@ -114,7 +115,7 @@ app.openapi(getSecurityRoute, async (c) => {
 
         return ok(c, { cspAllowedDomains: row?.value || "" });
     } catch (error) {
-        return c.json({ message: "Error fetching security settings" }, 500);
+        throw error;
     }
 });
 
@@ -153,7 +154,7 @@ app.openapi(saveSecurityRoute, async (c) => {
 
         return ok(c, { message: "Security settings saved successfully" });
     } catch (error) {
-        return c.json({ message: "Error saving security settings" }, 500);
+        throw error;
     }
 });
 
@@ -181,7 +182,7 @@ app.openapi(getEmailRoute, async (c) => {
             sender: senderRow?.value || ""
         });
     } catch (error) {
-        return c.json({ message: "Error fetching email settings" }, 500);
+        throw error;
     }
 });
 
@@ -217,7 +218,7 @@ app.openapi(saveEmailRoute, async (c) => {
         await Promise.all(updates);
         return ok(c, { message: "Email settings saved successfully" });
     } catch (error) {
-        return c.json({ message: "Error saving email settings" }, 500);
+        throw error;
     }
 });
 
@@ -248,7 +249,7 @@ app.openapi(getFirebaseRoute, async (c) => {
 
         return ok(c, config);
     } catch (error) {
-        return c.json({ error: "Internal Server Error" }, 500);
+        throw error;
     }
 });
 
@@ -274,7 +275,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
                         .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: serviceAccount, updatedAt: new Date() } })
                 );
             } catch (e) {
-                return c.json({ error: "Invalid Service Account JSON" }, 400);
+                throw new ValidationError("Invalid Service Account JSON");
             }
         }
 
@@ -293,7 +294,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
 
         return ok(c, { message: "Settings saved successfully" });
     } catch (error) {
-        return c.json({ error: "Internal Server Error" }, 500);
+        throw error;
     }
 });
 

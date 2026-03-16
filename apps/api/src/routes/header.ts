@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { db } from "@scalius/database/client";
 import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
@@ -12,7 +13,7 @@ const app = new OpenAPIHono();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 3600,
+    ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:header:",
     varyByQuery: false,
     methods: ["GET"]
@@ -75,13 +76,7 @@ app.openapi(getHeaderRoute, async (c) => {
     : null;
 
   if (!headerConfig) {
-    return c.json(
-      {
-        error: "Invalid header configuration",
-        success: false as const
-      },
-      500,
-    );
+    throw new Error("Invalid header configuration");
   }
 
   // Build response data

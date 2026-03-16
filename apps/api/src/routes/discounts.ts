@@ -16,6 +16,7 @@ import { eq, sql, and, isNull, count, inArray } from "drizzle-orm";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 
 import { ok } from "../utils/api-response";
+import { ValidationError } from "../utils/api-error";
 import { roundPrice } from "@scalius/shared/price-utils";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -434,7 +435,7 @@ app.openapi(validateDiscountRoute, async (c) => {
         error instanceof z.ZodError
           ? `Invalid cart items: ${error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
           : "Invalid cart items format";
-      return c.json({ valid: false as const, error: message }, 400);
+      throw new ValidationError(message);
     }
   }
 

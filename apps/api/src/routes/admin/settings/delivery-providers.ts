@@ -4,7 +4,7 @@ import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { db } from "@scalius/database/client";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
-import { NotFoundError } from "../../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../../utils/api-error";
 
 import { ok, created } from "../../../utils/api-response";
 const app = new OpenAPIHono();
@@ -71,7 +71,7 @@ app.openapi(listRoute, async (c) => {
 
         return ok(c, maskedProviders);
     } catch (error: unknown) {
-        return c.json({ error: error instanceof Error ? error.message : "Failed to fetch providers" }, 500);
+        throw error;
     }
 });
 
@@ -90,7 +90,7 @@ app.openapi(createProviderRoute, async (c) => {
         const provider = await c.req.json();
 
         if (!provider.name || !provider.type) {
-            return c.json({ error: "Missing required fields", required: ["name", "type"] }, 400);
+            throw new ValidationError("Missing required fields: name, type");
         }
 
         if (typeof provider.credentials !== "string") {
@@ -111,7 +111,7 @@ app.openapi(createProviderRoute, async (c) => {
 
         return created(c, maskedResponse);
     } catch (error: unknown) {
-        return c.json({ error: error instanceof Error ? error.message : "Failed to create provider" }, 500);
+        throw error;
     }
 });
 
@@ -130,7 +130,7 @@ app.openapi(updateProviderRoute, async (c) => {
         const provider = await c.req.json();
 
         if (!provider.id || !provider.name || !provider.type) {
-            return c.json({ error: "Missing required fields", required: ["id", "name", "type"] }, 400);
+            throw new ValidationError("Missing required fields: id, name, type");
         }
 
         if (provider.credentials && typeof provider.credentials !== "string") {
@@ -180,7 +180,7 @@ app.openapi(updateProviderRoute, async (c) => {
 
         return ok(c, maskedResponse);
     } catch (error: unknown) {
-        return c.json({ error: error instanceof Error ? error.message : "Failed to update provider" }, 500);
+        throw error;
     }
 });
 
@@ -199,9 +199,9 @@ app.openapi(createTestRoute, async (c) => {
         const data = await c.req.json();
         const { type, credentials, config, name = "Test Provider" } = data;
 
-        if (!type) return c.json({ error: "Provider type is required" }, 400);
-        if (!credentials) return c.json({ error: "Provider credentials are required" }, 400);
-        if (!config) return c.json({ error: "Provider config is required" }, 400);
+        if (!type) throw new ValidationError("Provider type is required");
+        if (!credentials) throw new ValidationError("Provider credentials are required");
+        if (!config) throw new ValidationError("Provider config is required");
 
         const mockProvider = {
             id: "test_" + Date.now().toString(),
@@ -229,7 +229,7 @@ app.openapi(createTestRoute, async (c) => {
             });
         }
     } catch (error: unknown) {
-        return c.json({ error: error instanceof Error ? error.message : "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -254,7 +254,7 @@ app.openapi(getProviderRoute, async (c) => {
         return ok(c, provider);
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
-        return c.json({ error: error instanceof Error ? error.message : "Failed to get provider" }, 500);
+        throw error;
     }
 });
 
@@ -289,7 +289,7 @@ app.openapi(testExistingRoute, async (c) => {
         }
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
-        return c.json({ error: error instanceof Error ? error.message : "Internal server error" }, 500);
+        throw error;
     }
 });
 
@@ -312,7 +312,7 @@ app.openapi(deleteProviderRoute, async (c) => {
         await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
         return ok(c, {});
     } catch (error: unknown) {
-        return c.json({ error: error instanceof Error ? error.message : "Failed to delete provider" }, 500);
+        throw error;
     }
 });
 
