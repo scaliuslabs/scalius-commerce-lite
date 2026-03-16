@@ -1,6 +1,5 @@
 // src/server/routes/products.ts
 // Storefront product routes — thin HTTP layer.
-// All query logic lives in src/modules/products/products.service.ts.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
 import { cacheMiddleware } from "../middleware/cache";
@@ -8,7 +7,7 @@ import {
   getStorefrontProducts,
   getStorefrontProductBySlug,
   searchStorefrontProducts
-} from "@scalius/core/modules/products/products.service";
+} from "@scalius/core/modules/products/products.storefront";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
