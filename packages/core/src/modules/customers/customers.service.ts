@@ -105,7 +105,8 @@ export async function listCustomers(
         .offset(offset)
         .orderBy(order === "asc" ? asc(sortField) : desc(sortField));
 
-    const [[{ count }], results] = await db.batch([countQuery, resultsQuery]);
+    const [countArr, results] = await db.batch([countQuery, resultsQuery]);
+    const count = countArr[0]?.count ?? 0;
 
     const formattedCustomers = results.map((c) => ({
         ...c,

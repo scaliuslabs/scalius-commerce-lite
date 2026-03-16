@@ -687,8 +687,8 @@ export function getRoutePermission(
   for (const pattern of sortedPatterns) {
     if (matchPattern(pattern, pathname)) {
       const config = ROUTE_PERMISSIONS[pattern];
-      if (config[method]) {
-        return config[method] || null;
+      if (config && config[method]) {
+        return config[method] ?? null;
       }
     }
   }

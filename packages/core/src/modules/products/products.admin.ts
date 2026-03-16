@@ -138,10 +138,11 @@ export async function getProducts(db: DrizzleD1Database<typeof schema>, options:
             })(),
         );
 
-    const [[{ count }], productResults] = await db.batch([
+    const [countArr, productResults] = await db.batch([
         countQuery,
         productResultsQuery,
     ]);
+    const count = countArr[0]?.count ?? 0;
 
     if (productResults.length === 0) {
         return {
@@ -312,17 +313,19 @@ export async function getProductDetails(
 
 /** Returns aggregate product and category counts for the products dashboard. */
 export async function getProductStats(db: DrizzleD1Database<typeof schema>) {
-    const [{ count: totalProducts }] = await db
+    const totalProductsArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(products)
         .where(sql`${products.deletedAt} IS NULL`);
+    const totalProducts = totalProductsArr[0]?.count ?? 0;
 
-    const [{ count: activeProducts }] = await db
+    const activeProductsArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(products)
         .where(sql`${products.deletedAt} IS NULL AND ${products.isActive} = 1`);
+    const activeProducts = activeProductsArr[0]?.count ?? 0;
 
-    const [{ count: productsWithImages }] = await db
+    const productsWithImagesArr = await db
         .select({
             count: sql<number>`count(DISTINCT ${products.id})`,
         })
@@ -335,11 +338,13 @@ export async function getProductStats(db: DrizzleD1Database<typeof schema>) {
             ),
         )
         .where(sql`${products.deletedAt} IS NULL`);
+    const productsWithImages = productsWithImagesArr[0]?.count ?? 0;
 
-    const [{ count: categoriesCount }] = await db
+    const categoriesCountArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(categories)
         .where(sql`${categories.deletedAt} IS NULL`);
+    const categoriesCount = categoriesCountArr[0]?.count ?? 0;
 
     return {
         totalProducts,
@@ -351,22 +356,25 @@ export async function getProductStats(db: DrizzleD1Database<typeof schema>) {
 
 /** Returns category-level stats for the categories admin page. */
 export async function getCategoryStats(db: DrizzleD1Database<typeof schema>) {
-    const [{ count: totalCategories }] = await db
+    const totalCategoriesArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(categories)
         .where(sql`${categories.deletedAt} IS NULL`);
+    const totalCategories = totalCategoriesArr[0]?.count ?? 0;
 
-    const [{ count: categoriesWithImages }] = await db
+    const categoriesWithImagesArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(categories)
         .where(
             sql`${categories.deletedAt} IS NULL AND ${categories.imageUrl} IS NOT NULL`,
         );
+    const categoriesWithImages = categoriesWithImagesArr[0]?.count ?? 0;
 
-    const [{ count: totalProducts }] = await db
+    const totalProductsArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(products)
         .where(sql`${products.deletedAt} IS NULL`);
+    const totalProducts = totalProductsArr[0]?.count ?? 0;
 
     return {
         totalCategories,
@@ -596,21 +604,21 @@ export async function restoreProduct(db: DrizzleD1Database<typeof schema>, id: s
  * Throws an error if the product is linked to any existing orders or discounts.
  */
 export async function permanentDeleteProduct(db: DrizzleD1Database<typeof schema>, id: string): Promise<void> {
-    const [orderCheck] = await db
+    const orderCheckArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(orderItems)
         .where(eq(orderItems.productId, id));
 
-    if (orderCheck.count > 0) {
+    if ((orderCheckArr[0]?.count ?? 0) > 0) {
         throw new ConflictError("Cannot delete product. It is part of one or more existing orders.");
     }
 
-    const [discountCheck] = await db
+    const discountCheckArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(discountProducts)
         .where(eq(discountProducts.productId, id));
 
-    if (discountCheck.count > 0) {
+    if ((discountCheckArr[0]?.count ?? 0) > 0) {
         throw new ConflictError("Cannot delete product. It is linked to one or more discounts.");
     }
 
@@ -631,21 +639,21 @@ export async function bulkDeleteProducts(db: DrizzleD1Database<typeof schema>, p
     if (productIds.length === 0) throw new ValidationError("No product IDs provided");
 
     if (permanent) {
-        const [orderCheck] = await db
+        const orderCheckArr = await db
             .select({ count: sql<number>`count(*)` })
             .from(orderItems)
             .where(inArray(orderItems.productId, productIds));
 
-        if (orderCheck.count > 0) {
+        if ((orderCheckArr[0]?.count ?? 0) > 0) {
             throw new ConflictError("Cannot delete products. One or more products are part of existing orders.");
         }
 
-        const [discountCheck] = await db
+        const discountCheckArr = await db
             .select({ count: sql<number>`count(*)` })
             .from(discountProducts)
             .where(inArray(discountProducts.productId, productIds));
 
-        if (discountCheck.count > 0) {
+        if ((discountCheckArr[0]?.count ?? 0) > 0) {
             throw new ConflictError("Cannot delete products. One or more products are linked to discounts.");
         }
 

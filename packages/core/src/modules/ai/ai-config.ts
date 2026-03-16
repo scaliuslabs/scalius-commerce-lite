@@ -272,7 +272,7 @@ export const SUCCESS_MESSAGES = {
  */
 export function getProviderFromModel(modelId: string): string {
   const parts = modelId.split('/');
-  return parts.length > 1 ? parts[0] : 'default';
+  return (parts.length > 1 ? parts[0] : undefined) ?? 'default';
 }
 
 /**

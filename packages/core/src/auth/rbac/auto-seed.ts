@@ -177,7 +177,7 @@ async function seedRoles(db: Database): Promise<void> {
 
       let roleId: string;
 
-      if (existingRole.length > 0) {
+      if (existingRole.length > 0 && existingRole[0]) {
         roleId = existingRole[0].id;
       } else {
         roleId = crypto.randomUUID();
@@ -226,7 +226,7 @@ async function setFirstAdminAsSuperAdmin(db: Database): Promise<void> {
     .orderBy(asc(user.createdAt))
     .limit(1);
 
-  if (firstAdmin.length > 0 && !firstAdmin[0].isSuperAdmin) {
+  if (firstAdmin.length > 0 && firstAdmin[0] && !firstAdmin[0].isSuperAdmin) {
     await db
       .update(user)
       .set({ isSuperAdmin: true })
@@ -263,7 +263,7 @@ export async function autoSeedRbacIfNeeded(db: Database): Promise<void> {
         .orderBy(asc(user.createdAt))
         .limit(1);
 
-      if (firstAdmin.length > 0 && !firstAdmin[0].isSuperAdmin) {
+      if (firstAdmin.length > 0 && firstAdmin[0] && !firstAdmin[0].isSuperAdmin) {
         await setFirstAdminAsSuperAdmin(db);
       }
     }

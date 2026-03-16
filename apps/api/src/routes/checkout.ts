@@ -71,6 +71,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
 
     for (let i = 0; i < registeredGateways.length; i++) {
       const gw = registeredGateways[i];
+      if (!gw) continue;
       const gwSettings = settingsResults[i];
       if (!gwSettings?.enabled) continue;
       if (gw.id === "cod" && checkoutMode === "gateways_only") continue;

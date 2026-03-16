@@ -19,7 +19,7 @@ function generateTempPassword(length = 16): string {
     const randomValues = new Uint8Array(length);
     crypto.getRandomValues(randomValues);
     for (let i = 0; i < length; i++) {
-        password += chars[randomValues[i] % chars.length];
+        password += chars[(randomValues[i] ?? 0) % chars.length];
     }
     return password;
 }
@@ -494,7 +494,7 @@ setupApp.openapi(setupRoute, async (c) => {
         const auth = createAuth(env);
 
         const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
-        const adminExists = adminResult[0]?.count > 0;
+        const adminExists = (adminResult[0]?.count ?? 0) > 0;
 
         if (adminExists) {
             console.warn(`[SECURITY] Setup endpoint accessed after admin exists. IP: ${c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown"}`);

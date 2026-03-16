@@ -22,11 +22,11 @@ export async function getDashboardStats() {
     );
 
     const [
-        [{ count: totalProducts }],
-        [{ count: totalCustomers }],
-        [currentMonthStats],
-        [lastMonthStats],
-        [{ total: totalRevenue }],
+        totalProductsArr,
+        totalCustomersArr,
+        currentMonthArr,
+        lastMonthArr,
+        totalRevenueArr,
     ] = await Promise.all([
         db
             .select({ count: sql<number>`count(*)` })
@@ -68,17 +68,23 @@ export async function getDashboardStats() {
             ),
     ]);
 
-    const orderGrowth = lastMonthStats.count
+    const totalProducts = totalProductsArr[0]?.count ?? 0;
+    const totalCustomers = totalCustomersArr[0]?.count ?? 0;
+    const currentMonthStats = currentMonthArr[0];
+    const lastMonthStats = lastMonthArr[0];
+    const totalRevenue = totalRevenueArr[0]?.total ?? 0;
+
+    const orderGrowth = lastMonthStats?.count
         ? Math.round(
-            ((currentMonthStats.count - lastMonthStats.count) /
+            (((currentMonthStats?.count ?? 0) - lastMonthStats.count) /
                 lastMonthStats.count) *
             100,
         )
         : 0;
 
-    const revenueGrowth = lastMonthStats.revenue
+    const revenueGrowth = lastMonthStats?.revenue
         ? Math.round(
-            ((currentMonthStats.revenue - lastMonthStats.revenue) /
+            (((currentMonthStats?.revenue ?? 0) - lastMonthStats.revenue) /
                 lastMonthStats.revenue) *
             100,
         )
@@ -89,20 +95,20 @@ export async function getDashboardStats() {
         totalCustomers,
         totalRevenue: totalRevenue || 0,
         currentMonth: {
-            orders: currentMonthStats.count,
-            revenue: currentMonthStats.revenue || 0,
+            orders: currentMonthStats?.count ?? 0,
+            revenue: currentMonthStats?.revenue ?? 0,
             orderGrowth,
             revenueGrowth,
             orderStatus: {
-                delivered: currentMonthStats.delivered || 0,
-                processing: currentMonthStats.processing || 0,
-                shipping: currentMonthStats.shipping || 0,
-                cancelled: currentMonthStats.cancelled || 0,
+                delivered: currentMonthStats?.delivered ?? 0,
+                processing: currentMonthStats?.processing ?? 0,
+                shipping: currentMonthStats?.shipping ?? 0,
+                cancelled: currentMonthStats?.cancelled ?? 0,
             },
         },
         lastMonth: {
-            orders: lastMonthStats.count,
-            revenue: lastMonthStats.revenue || 0,
+            orders: lastMonthStats?.count ?? 0,
+            revenue: lastMonthStats?.revenue ?? 0,
         },
     };
 }
@@ -189,7 +195,7 @@ export async function getDailyActivityData(days: number) {
     );
 
     while (currentDate <= endDate) {
-        const dateStr = currentDate.toISOString().split("T")[0];
+        const dateStr = currentDate.toISOString().split("T")[0] ?? "";
         const orderEntry = orderMap.get(dateStr);
         const customerEntry = customerMap.get(dateStr);
         result.push({

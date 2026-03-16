@@ -251,6 +251,7 @@ app.openapi(updateRoleRoute, async (c) => {
         }
 
         const role = existingRole[0];
+        if (!role) throw new NotFoundError("Role not found");
         const data = c.req.valid("json");
 
         if (data.displayName || data.description !== undefined) {
@@ -293,9 +294,12 @@ app.openapi(updateRoleRoute, async (c) => {
         const updatedRole = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
         const updatedPerms = await getRolePermissions(db, roleId);
 
+        const roleData = updatedRole[0];
+        if (!roleData) throw new NotFoundError("Role not found after update");
+
         return ok(c, {
             role: {
-                ...updatedRole[0],
+                ...roleData,
                 permissions: updatedPerms
             }
         });
@@ -340,6 +344,7 @@ app.openapi(deleteRoleRoute, async (c) => {
         }
 
         const role = existingRole[0];
+        if (!role) throw new NotFoundError("Role not found");
 
         if (role.isSystem) {
             throw new ValidationError("Cannot delete system roles");
@@ -405,7 +410,7 @@ app.openapi(assignRoleRoute, async (c) => {
             throw new NotFoundError("User not found");
         }
 
-        if (targetUser[0].isSuperAdmin) {
+        if (targetUser[0]?.isSuperAdmin) {
             throw new ValidationError("Cannot modify super admin's roles");
         }
 
@@ -471,7 +476,7 @@ app.openapi(removeRoleRoute, async (c) => {
             throw new NotFoundError("User not found");
         }
 
-        if (targetUser[0].isSuperAdmin) {
+        if (targetUser[0]?.isSuperAdmin) {
             throw new ValidationError("Cannot modify super admin's roles");
         }
 
@@ -522,7 +527,7 @@ app.openapi(setOverrideRoute, async (c) => {
             throw new NotFoundError("User not found");
         }
 
-        if (targetUser[0].isSuperAdmin) {
+        if (targetUser[0]?.isSuperAdmin) {
             throw new ValidationError("Cannot modify super admin's permissions");
         }
 
@@ -580,7 +585,7 @@ app.openapi(removeOverrideRoute, async (c) => {
             throw new NotFoundError("User not found");
         }
 
-        if (targetUser[0].isSuperAdmin) {
+        if (targetUser[0]?.isSuperAdmin) {
             throw new ValidationError("Cannot modify super admin's permissions");
         }
 

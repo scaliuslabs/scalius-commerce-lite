@@ -56,10 +56,11 @@ export async function getDiscounts(options: {
         whereConditions.push(eq(discounts.type, type as Discount["type"]));
     }
 
-    const [{ count }] = await db
+    const countArr = await db
         .select({ count: sql<number>`count(distinct ${discounts.id})` })
         .from(discounts)
         .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
+    const count = countArr[0]?.count ?? 0;
 
     const results = await db
         .select({

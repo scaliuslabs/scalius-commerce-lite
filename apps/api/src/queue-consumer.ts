@@ -138,10 +138,11 @@ export async function handleQueueBatch(
   for (let i = 0; i < batch.messages.length; i++) {
     const result = results[i];
     const msg = batch.messages[i];
+    if (!result || !msg) continue;
     if (result.status === "fulfilled") {
       msg.ack();
     } else {
-      console.error(`[Queue] Failed to process message ${msg.id}:`, result.reason);
+      console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
       msg.retry({ delaySeconds: 30 });
     }
   }

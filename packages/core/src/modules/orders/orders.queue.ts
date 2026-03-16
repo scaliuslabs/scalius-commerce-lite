@@ -248,6 +248,7 @@ export async function handleOrderIngestBatch(
     // validation time (HTTP handler) and queue processing time (here).
     for (let i = successMessages.length - 1; i >= 0; i--) {
         const msg = successMessages[i];
+        if (!msg) continue;
         const payload = msg.body;
         if (!payload.discountUsage) continue;
 

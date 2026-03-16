@@ -42,7 +42,7 @@ export function rateLimit(options: RateLimitOptions): RateLimitResponse {
 
       // Get IP from headers or fall back to a default
       const ip =
-        req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+        req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
         req.headers.get("x-real-ip") ||
         "unknown";
 
