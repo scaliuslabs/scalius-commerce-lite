@@ -176,6 +176,30 @@ app.openapi(bulkRestoreRoute, async (c) => {
     return noContent(c);
 });
 
+// ── Restore Collection ──
+
+const restoreRoute = createRoute({
+    method: "post",
+    path: "/{id}/restore",
+    tags: ["Admin - Collections"],
+    summary: "Restore a soft-deleted collection",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: { description: "Collection restored" }
+    }
+});
+
+app.openapi(restoreRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const collection = await getCollectionById(db, id);
+    if (!collection) throw new NotFoundError("Collection not found");
+    await restoreCollections(db, [id]);
+    return ok(c, { message: "Collection restored" });
+});
+
 // ── Reorder Collections ──
 
 const reorderRoute = createRoute({
