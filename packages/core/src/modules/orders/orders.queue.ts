@@ -84,8 +84,7 @@ export async function handleOrderIngestBatch(
 
     // Drizzle D1 batch() requires specific tuple types
     const writeBatch: unknown[] = [];
-    const reservationEntries: { variantId: string; quantity: number; pool: "regular" | "preorder" | "backorder" }[] = [];
-    const orderIdsForReservation: string[] = [];
+    const reservationEntries: { variantId: string; quantity: number; pool: "regular" | "preorder" | "backorder"; orderId: string }[] = [];
 
     const successMessages: Message<OrderIngestQueueMessage>[] = [];
     const failedMessages: { msg: Message<OrderIngestQueueMessage>; reason: string }[] = [];
@@ -107,8 +106,10 @@ export async function handleOrderIngestBatch(
                 }));
 
             if (orderReservationEntries.length > 0) {
-                reservationEntries.push(...orderReservationEntries);
-                orderIdsForReservation.push(payload.orderData.id as string);
+                const oid = payload.orderData.id as string;
+                reservationEntries.push(
+                    ...orderReservationEntries.map((e) => ({ ...e, orderId: oid })),
+                );
             }
 
             // Customer: create new or update existing
@@ -261,7 +262,7 @@ export async function handleOrderIngestBatch(
             const batchItems = entries.map((e) => ({
                 variantId: e.variantId,
                 quantity: e.quantity,
-                orderId: orderIdsForReservation[0] || "batch",
+                orderId: e.orderId,
             }));
             const reserveResult = await reserveStockBatch(db, batchItems, pool);
             if (!reserveResult.success) {
@@ -316,7 +317,7 @@ export async function handleOrderIngestBatch(
 
         if (reservationEntries.length > 0) {
             console.log(`[Queue] Rolling back inventory...`);
-            await releaseMultiple(db, reservationEntries, orderIdsForReservation[0] || "batch").catch((releaseErr) =>
+            await releaseMultiple(db, reservationEntries, "batch-rollback").catch((releaseErr) =>
                 console.error("[Queue] Rollback release failed:", releaseErr),
             );
         }
