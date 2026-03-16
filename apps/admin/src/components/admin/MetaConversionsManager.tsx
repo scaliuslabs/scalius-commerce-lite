@@ -368,7 +368,8 @@ export function MetaConversionsManager({
       }
 
       const data = await response.json();
-      setSettings(data.data);
+      // Proxy unwraps flat objects: data.data exists for direct API, top-level fields for proxy
+      setSettings(data.data || data);
       setHasUnsavedChanges(false);
       toast.success("Settings saved successfully");
     } catch (error: any) {

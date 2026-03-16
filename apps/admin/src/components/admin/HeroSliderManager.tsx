@@ -326,8 +326,10 @@ export function HeroSliderManager() {
 
       const data = await response.json();
       if (data.success) {
-        if (type === "desktop") setDesktopSlider(data.data);
-        else setMobileSlider(data.data);
+        // Proxy unwraps flat objects: data.data exists for direct API, top-level fields for proxy
+        const slider = data.data || data;
+        if (type === "desktop") setDesktopSlider(slider);
+        else setMobileSlider(slider);
 
         toast({ title: "Success", description: "Slider created successfully" });
       }
@@ -361,8 +363,10 @@ export function HeroSliderManager() {
       const data = await response.json();
       if (data.success) {
         // Sync with server response to be sure
-        if (type === "desktop") setDesktopSlider(data.data);
-        else setMobileSlider(data.data);
+        // Proxy unwraps flat objects: data.data exists for direct API, top-level fields for proxy
+        const slider = data.data || data;
+        if (type === "desktop") setDesktopSlider(slider);
+        else setMobileSlider(slider);
 
         if (updates.isActive !== undefined) {
           toast({
