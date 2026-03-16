@@ -47,8 +47,12 @@ export async function sendCustomerOtp(
       credentials: "include",
       body: JSON.stringify({ method, identifier, name }),
     });
-    const data = await res.json() as any;
-    if (!res.ok) return { success: false, error: data.error, retryAfter: data.retryAfter };
+    const raw = await res.json() as any;
+    const data = raw.data ?? raw; // Unwrap { success, data: T } envelope
+    if (!res.ok) {
+      const errMsg = typeof data.error === "object" ? data.error?.message : data.error;
+      return { success: false, error: errMsg, retryAfter: data.retryAfter };
+    }
     return { success: true };
   } catch {
     return { success: false, error: "Network error. Please try again." };
@@ -72,8 +76,12 @@ export async function verifyCustomerOtp(
       credentials: "include",
       body: JSON.stringify({ method, identifier, code, name, phone }),
     });
-    const data = await res.json() as any;
-    if (!res.ok) return { success: false, error: data.error, attemptsLeft: data.attemptsLeft };
+    const raw = await res.json() as any;
+    const data = raw.data ?? raw; // Unwrap { success, data: T } envelope
+    if (!res.ok) {
+      const errMsg = typeof raw.error === "object" ? raw.error?.message : raw.error;
+      return { success: false, error: errMsg, attemptsLeft: data.attemptsLeft };
+    }
     return { success: true, customer: data.customer, isNewUser: data.isNewUser };
   } catch {
     return { success: false, error: "Network error. Please try again." };
@@ -90,7 +98,8 @@ export async function getCustomerSession(): Promise<AuthState> {
       cache: "no-store",
     });
     if (!res.ok) return { authenticated: false };
-    return await res.json() as AuthState;
+    const raw = await res.json() as any;
+    return (raw.data ?? raw) as AuthState;
   } catch {
     return { authenticated: false };
   }
@@ -170,9 +179,11 @@ export async function updateCustomerProfile(data: ProfileUpdateData): Promise<{
       credentials: "include",
       body: JSON.stringify(data),
     });
-    const result = await res.json() as any;
+    const raw = await res.json() as any;
+    const result = raw.data ?? raw; // Unwrap envelope
     if (!res.ok) {
-      return { success: false, error: result.error };
+      const errMsg = typeof raw.error === "object" ? raw.error?.message : raw.error;
+      return { success: false, error: errMsg };
     }
     return { success: true, customer: result.customer };
   } catch {
@@ -194,10 +205,12 @@ export async function getCustomerOrders(): Promise<{
       credentials: "include",
     });
     if (!res.ok) {
-      const data = await res.json() as any;
-      return { success: false, orders: [], error: data.error };
+      const raw = await res.json() as any;
+      const errMsg = typeof raw.error === "object" ? raw.error?.message : raw.error;
+      return { success: false, orders: [], error: errMsg };
     }
-    const data = await res.json() as any;
+    const raw = await res.json() as any;
+    const data = raw.data ?? raw; // Unwrap envelope
     return { success: true, orders: data.orders || [], customer: data.customer };
   } catch {
     return { success: false, orders: [], error: "Network error" };
