@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import * as ProductsService from "@scalius/core/modules/products/products.service";
+import * as ProductsAdmin from "@scalius/core/modules/products/products.admin";
+import * as ProductsVariants from "@scalius/core/modules/products/products.variants";
 import { createProductSchema, updateProductSchema } from "@scalius/core/modules/products/products.validation";
 import {
     createVariantSchema,
@@ -8,7 +9,7 @@ import {
     bulkDeleteVariantsSchema,
     bulkUpdateVariantsSchema,
     updateSortOrderSchema
-} from "@scalius/core/modules/products/products.service";
+} from "@scalius/core/modules/products/products.types";
 import { NotFoundError, ConflictError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -40,7 +41,7 @@ const barcodeLookupRoute = createRoute({
 app.openapi(barcodeLookupRoute, async (c) => {
     const db = c.get("db");
     const { barcode } = c.req.valid("query");
-    const result = await ProductsService.lookupByBarcode(db, barcode);
+    const result = await ProductsVariants.lookupByBarcode(db, barcode);
     if (!result) {
         throw new NotFoundError("No variant found with this barcode");
     }
@@ -73,7 +74,7 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
-    const result = await ProductsService.getProducts(db, {
+    const result = await ProductsAdmin.getProducts(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || undefined,
@@ -104,7 +105,7 @@ app.openapi(createProductRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     try {
-        const result = await ProductsService.createProduct(db, data);
+        const result = await ProductsAdmin.createProduct(db, data);
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("slug")) {
@@ -133,7 +134,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     try {
-        await ProductsService.bulkDeleteProducts(db, data.productIds, data.permanent);
+        await ProductsAdmin.bulkDeleteProducts(db, data.productIds, data.permanent);
         return noContent(c);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("delete")) {
@@ -164,7 +165,7 @@ app.openapi(updateProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        await ProductsService.updateProduct(db, id, data);
+        await ProductsAdmin.updateProduct(db, id, data);
         return ok(c, {});
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -193,7 +194,7 @@ const deleteProductRoute = createRoute({
 app.openapi(deleteProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await ProductsService.deleteProduct(db, id);
+    await ProductsAdmin.deleteProduct(db, id);
     return noContent(c);
 });
 
@@ -215,7 +216,7 @@ const restoreProductRoute = createRoute({
 app.openapi(restoreProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await ProductsService.restoreProduct(db, id);
+    await ProductsAdmin.restoreProduct(db, id);
     return ok(c, {});
 });
 
@@ -238,7 +239,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     try {
-        await ProductsService.permanentDeleteProduct(db, id);
+        await ProductsAdmin.permanentDeleteProduct(db, id);
         return noContent(c);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("delete")) {
@@ -269,7 +270,7 @@ app.openapi(createVariantRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const result = await ProductsService.createVariant(db, id, data);
+        const result = await ProductsVariants.createVariant(db, id, data);
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
@@ -295,7 +296,7 @@ const listVariantsRoute = createRoute({
 app.openapi(listVariantsRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const variants = await ProductsService.getProductVariants(db, id);
+    const variants = await ProductsVariants.getProductVariants(db, id);
     return ok(c, { variants });
 });
 
@@ -320,7 +321,7 @@ app.openapi(updateVariantRoute, async (c) => {
     const { id, variantId } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const result = await ProductsService.updateVariant(db, id, variantId, data);
+        const result = await ProductsVariants.updateVariant(db, id, variantId, data);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -350,7 +351,7 @@ app.openapi(deleteVariantRoute, async (c) => {
     const db = c.get("db");
     const { id, variantId } = c.req.valid("param");
     try {
-        await ProductsService.deleteVariant(db, id, variantId);
+        await ProductsVariants.deleteVariant(db, id, variantId);
         return noContent(c);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -379,7 +380,7 @@ app.openapi(bulkCreateVariantsRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const variants = await ProductsService.bulkCreateVariants(db, id, data.variants);
+        const variants = await ProductsVariants.bulkCreateVariants(db, id, data.variants);
         return created(c, { variants, count: variants.length });
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
@@ -407,7 +408,7 @@ app.openapi(bulkDeleteVariantsRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    await ProductsService.bulkDeleteVariants(db, id, data.variantIds);
+    await ProductsVariants.bulkDeleteVariants(db, id, data.variantIds);
     return noContent(c);
 });
 
@@ -432,7 +433,7 @@ app.openapi(bulkUpdateVariantsRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     if (data.updates.length === 0) throw new ValidationError("No updates provided");
-    await ProductsService.bulkUpdateVariants(db, id, data.updates);
+    await ProductsAdmin.bulkUpdateVariants(db, id, data.updates);
     return ok(c, {});
 });
 
@@ -455,7 +456,7 @@ app.openapi(duplicateVariantRoute, async (c) => {
     const db = c.get("db");
     const { id, variantId } = c.req.valid("param");
     try {
-        const variant = await ProductsService.duplicateVariant(db, id, variantId);
+        const variant = await ProductsVariants.duplicateVariant(db, id, variantId);
         return created(c, variant);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -481,7 +482,7 @@ const getVariantSortOrderRoute = createRoute({
 app.openapi(getVariantSortOrderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const result = await ProductsService.getVariantSortOrder(db, id);
+    const result = await ProductsVariants.getVariantSortOrder(db, id);
     return ok(c, result);
 });
 
@@ -505,7 +506,7 @@ app.openapi(updateVariantSortOrderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    await ProductsService.updateVariantSortOrder(db, id, data);
+    await ProductsVariants.updateVariantSortOrder(db, id, data);
     return ok(c, { message: "Sort order updated successfully" });
 });
 
