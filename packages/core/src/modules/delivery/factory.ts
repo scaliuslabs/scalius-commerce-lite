@@ -21,10 +21,6 @@ export async function createProvider(
   encryptionKey?: string,
 ): Promise<DeliveryProviderInterface> {
   try {
-    console.log(
-      `Creating provider instance for: ${provider.name} (${provider.type})`,
-    );
-
     // Parse JSON strings from database (decrypt if needed)
     let credentials, config;
 
@@ -34,7 +30,6 @@ export async function createProvider(
         encryptionKey,
       );
       credentials = JSON.parse(rawCreds);
-      console.log(`Parsed credentials for ${provider.type} provider`);
     } catch (credError) {
       console.error(
         `Failed to parse credentials for ${provider.type} provider:`,
@@ -47,7 +42,6 @@ export async function createProvider(
 
     try {
       config = JSON.parse(provider.config);
-      console.log(`Parsed config for ${provider.type} provider`);
     } catch (configError) {
       console.error(
         `Failed to parse config for ${provider.type} provider:`,
@@ -60,17 +54,11 @@ export async function createProvider(
 
     switch (provider.type as DeliveryProviderType) {
       case "pathao":
-        console.log(
-          `Creating Pathao provider with baseUrl: ${credentials.baseUrl}`,
-        );
         return new PathaoProvider(
           credentials as PathaoCredentials,
           config as PathaoConfig,
         );
       case "steadfast":
-        console.log(
-          `Creating Steadfast provider with baseUrl: ${credentials.baseUrl}`,
-        );
         return new SteadfastProvider(
           credentials as SteadfastCredentials,
           config as SteadfastConfig,

@@ -299,13 +299,9 @@ export class FCMMessagingService {
       return cachedToken;
     }
 
-    console.log(
-      `KV cache miss for [${cacheKey}]. Minting new Firebase access token...`,
-    );
     try {
       const newAccessToken = await getAccessToken(this.serviceAccount);
       await cache.put(cacheKey, newAccessToken, { expirationTtl: 3300 });
-      console.log(`Access token obtained and cached in KV for [${cacheKey}].`);
       return newAccessToken;
     } catch (error) {
       console.error("Failed to get or cache Firebase access token:", error);

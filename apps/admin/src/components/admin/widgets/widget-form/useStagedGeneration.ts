@@ -364,7 +364,6 @@ ${generatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${
   }, []);
 
   const updateSections = useCallback((updatedSections: SectionContent[]) => {
-    console.log('Updating sections:', updatedSections.length, 'sections');
     setState(prev => ({
       ...prev,
       sections: [...updatedSections], // Create new array to ensure reference changes

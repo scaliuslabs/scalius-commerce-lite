@@ -218,9 +218,6 @@ export async function deleteCacheByPattern(
 
       if (keysToDelete.length > 0) {
         await Promise.all(keysToDelete.map((k) => ns.delete(k)));
-        console.log(
-          `[KV] Deleted ${keysToDelete.length} entries matching prefix "${prefix}"`,
-        );
       }
     } catch (err) {
       console.error(
@@ -231,7 +228,6 @@ export async function deleteCacheByPattern(
     }
   } else {
     memCache.deleteByPrefix(prefix);
-    console.log(`[MemCache] Deleted entries with prefix "${prefix}"`);
   }
 }
 

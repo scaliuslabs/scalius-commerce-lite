@@ -39,10 +39,6 @@ export class ShipmentTracker {
         return;
       }
 
-      console.log(
-        `Mapping shipment status "${newStatus}" to order status. Current order status: ${order.status}`,
-      );
-
       // Map shipment status to order status
       let newOrderStatus = order.status;
 
@@ -100,8 +96,6 @@ export class ShipmentTracker {
             `No order status mapping for shipment status: ${newStatus}`,
           );
       }
-
-      console.log(`New order status will be: ${newOrderStatus}`);
 
       // Update order status if it has changed
       if (newOrderStatus !== order.status) {

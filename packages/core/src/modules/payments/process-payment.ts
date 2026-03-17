@@ -95,8 +95,6 @@ export async function processPaymentConfirmed(
     const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
     const isFullyPaid = pricesEqual(newBalanceDue, 0); // Allow tiny float drift
 
-    console.log(`[process-payment] Order ${params.orderId}: amount=${params.amount}, totalAmount=${order.totalAmount}, paidAmount=${order.paidAmount}, newPaidAmount=${newPaidAmount}, newBalanceDue=${newBalanceDue}, isFullyPaid=${isFullyPaid}`);
-
     // Determine new statuses
     const newPaymentStatus = isFullyPaid
       ? PaymentStatus.PAID

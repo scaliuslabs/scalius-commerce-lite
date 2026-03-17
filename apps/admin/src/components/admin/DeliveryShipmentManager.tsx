@@ -89,25 +89,17 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
 
       // Find the provider to log details
       const provider = providers.find((p) => p.id === selectedProviderId);
-      console.log(
-        `Creating shipment with ${provider?.name} (${selectedProviderId}) for order: ${order.id}`,
-      );
-      console.log("Shipment options:", options);
-
       const result = await window.shipmentActions.createShipment(
         order.id,
         selectedProviderId,
         options,
       );
 
-      console.log("Create shipment API response:", result);
-
       if (!result.success) {
         throw new Error(result.message || "Failed to create shipment");
       }
 
       const shipment = result.data;
-      console.log("Shipment created successfully:", shipment);
 
       // Add the new shipment to the list
       setShipments((prev) => [

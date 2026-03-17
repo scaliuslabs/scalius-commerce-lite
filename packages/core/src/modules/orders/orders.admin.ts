@@ -310,6 +310,8 @@ export async function getOrderDetails(
             cityName: orders.cityName,
             zoneName: orders.zoneName,
             areaName: orders.areaName,
+            paidAmount: orders.paidAmount,
+            balanceDue: orders.balanceDue,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${orders.deletedAt} AS INTEGER)`,

@@ -422,7 +422,6 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                     value={String(targetSection)}
                     onValueChange={(v) => {
                       const newTarget = v === 'all' ? 'all' : Number(v);
-                      console.log('Section target changed:', newTarget);
                       setTargetSection(newTarget);
                     }}
                   >

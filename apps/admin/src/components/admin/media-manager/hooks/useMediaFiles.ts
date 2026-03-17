@@ -55,7 +55,6 @@ export function useMediaFiles(autoLoad: boolean = false) {
           isInitialLoad.current = false;
         } else {
           // Request was superseded, ignore results
-          console.log(`Ignored outdated request ${requestId}, current is ${currentRequestId.current}`);
         }
       } catch (error: any) {
         // Only show error for current request

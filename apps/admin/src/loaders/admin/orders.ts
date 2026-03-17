@@ -106,10 +106,7 @@ export async function getOrderViewData(id: string) {
     ...orderFields
   } = result;
 
-  const totalAmount = (items || []).reduce(
-    (sum: number, item: any) => sum + item.price * item.quantity,
-    0,
-  );
+  const totalAmount = result.totalAmount;
 
   return {
     order: orderFields,
