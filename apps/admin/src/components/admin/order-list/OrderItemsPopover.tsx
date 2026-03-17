@@ -42,7 +42,9 @@ export function OrderItemsPopover({
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error || "Failed to fetch order items");
         }
-        const data: PopoverOrderItem[] = await response.json();
+        const json = await response.json();
+        // API returns { success, data: [...items] } envelope — unwrap it
+        const data: PopoverOrderItem[] = json.data ?? json;
         setItems(data);
       } catch (error) {
         console.error("Failed to fetch order items:", error);

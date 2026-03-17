@@ -299,7 +299,10 @@ export const OrderTableRow = React.memo(function OrderTableRow({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="cursor-default text-xs font-medium text-[var(--foreground)] transition-all duration-200 group-hover:font-semibold">
+                <span
+                  className="cursor-default text-xs font-medium text-[var(--foreground)] transition-all duration-200 group-hover:font-semibold"
+                  suppressHydrationWarning
+                >
                   {formatDate(order.createdAt)}
                 </span>
               </TooltipTrigger>
@@ -307,6 +310,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
                 side="top"
                 align="center"
                 className="max-w-fit text-xs"
+                suppressHydrationWarning
               >
                 {getFullDateTimeString(order.createdAt)}
               </TooltipContent>

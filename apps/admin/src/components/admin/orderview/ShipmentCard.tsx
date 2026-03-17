@@ -138,7 +138,7 @@ const ShipmentHistoryItem = ({
     <div key={shipment.id} className="p-4">
       <div className="flex items-start justify-between">
         <div className="flex flex-col">
-          <span className="mb-1 text-xs text-muted-foreground">
+          <span className="mb-1 text-xs text-muted-foreground" suppressHydrationWarning>
             {new Date(shipment.createdAt).toLocaleDateString()}
           </span>
           <ShipmentStatusIndicator

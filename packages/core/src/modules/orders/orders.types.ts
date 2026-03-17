@@ -57,15 +57,10 @@ export interface OrderDetails extends OrderListItem {
         variantId: string | null;
         quantity: number;
         price: number;
-        product: {
-            name: string;
-            variant?: {
-                size: string | null;
-                color: string | null;
-                weight: number | null;
-                sku: string;
-            };
-        };
+        productName: string | null;
+        productImage: string | null;
+        variantSize: string | null;
+        variantColor: string | null;
     }[];
 }
 

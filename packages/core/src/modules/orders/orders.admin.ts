@@ -10,6 +10,7 @@ import {
     customerHistory,
     products,
     productVariants,
+    productImages,
     deliveryShipments,
     deliveryProviders,
     deliveryLocations,
@@ -332,51 +333,33 @@ export async function getOrderDetails(
             quantity: orderItems.quantity,
             price: orderItems.price,
             productName: products.name,
+            productImage: productImages.url,
+            variantSize: productVariants.size,
+            variantColor: productVariants.color,
         })
         .from(orderItems)
         .leftJoin(products, eq(products.id, orderItems.productId))
+        .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+        .leftJoin(
+            productImages,
+            and(
+                eq(productImages.productId, orderItems.productId),
+                eq(productImages.isPrimary, true),
+            ),
+        )
         .where(eq(orderItems.orderId, id));
 
-    const variantIds = [...new Set(items.map((i) => i.variantId).filter(Boolean))] as string[];
-    const variantMap = new Map<
-        string,
-        { size: string | null; color: string | null; weight: number | null; sku: string }
-    >();
-    if (variantIds.length > 0) {
-        const variants = await db
-            .select({
-                id: productVariants.id,
-                size: productVariants.size,
-                color: productVariants.color,
-                weight: productVariants.weight,
-                sku: productVariants.sku,
-            })
-            .from(productVariants)
-            .where(inArray(productVariants.id, variantIds));
-        for (const v of variants) {
-            variantMap.set(v.id, {
-                size: v.size,
-                color: v.color,
-                weight: v.weight,
-                sku: v.sku,
-            });
-        }
-    }
-
-    const formattedItems = items.map((item) => {
-        const variant = item.variantId ? variantMap.get(item.variantId) : undefined;
-        return {
-            id: item.id,
-            productId: item.productId,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            price: item.price,
-            product: {
-                name: item.productName || "Unknown Product",
-                ...(variant && { variant }),
-            },
-        };
-    });
+    const formattedItems = items.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        price: item.price,
+        productName: item.productName || null,
+        productImage: item.productImage || null,
+        variantSize: item.variantSize || null,
+        variantColor: item.variantColor || null,
+    }));
 
     return {
         ...order,

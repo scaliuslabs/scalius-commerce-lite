@@ -211,6 +211,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
           special_instruction: options?.note || order.notes || undefined,
           item_quantity: itemCount,
           item_weight: options?.itemWeight || this.config.defaultItemWeight,
+          item_description: options?.itemDescription || undefined,
           amount_to_collect: amountToCollect,
         };
 
