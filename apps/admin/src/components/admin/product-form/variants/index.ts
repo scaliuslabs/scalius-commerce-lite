@@ -10,6 +10,8 @@ export { VariantTable } from "./VariantTable";
 export { VariantDisplayRow } from "./VariantDisplayRow";
 export { VariantFormRow } from "./VariantFormRow";
 export { VariantSortModal } from "./VariantSortModal";
+export { VariantStatsDisplay } from "./VariantStatsDisplay";
+export { VariantDeleteDialogs } from "./VariantDeleteDialogs";
 
 export * from "./types";
 export * from "./hooks/useVariantOperations";

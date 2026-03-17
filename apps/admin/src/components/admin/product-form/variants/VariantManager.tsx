@@ -9,22 +9,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowUpDown } from "lucide-react";
-import { cn } from "@scalius/shared/utils";
+import { ArrowUpDown } from "lucide-react";
 import { VariantActionsToolbar } from "./VariantActionsToolbar";
 import { VariantTable } from "./VariantTable";
 import { VariantSortModal } from "./VariantSortModal";
+import { VariantStatsDisplay } from "./VariantStatsDisplay";
+import { VariantDeleteDialogs } from "./VariantDeleteDialogs";
 import { useVariantOperations } from "./hooks/useVariantOperations";
 import {
   filterVariants,
@@ -65,7 +56,7 @@ export function VariantManager({
   );
 
   const [isBulkEditing, setIsBulkEditing] = useState(false);
-  const [draftBulkUpdates, setDraftBulkUpdates] = useState<Record<string, any>>({});
+  const [draftBulkUpdates, setDraftBulkUpdates] = useState<Record<string, Record<string, unknown>>>({});
 
   // Filter and Sort State
   const [searchTerm, setSearchTerm] = useState("");
@@ -127,7 +118,6 @@ export function VariantManager({
     setIsSubmitting(true);
     try {
       if (editingVariantId) {
-        // Update existing variant
         const savedVariant = await updateVariant(
           productId,
           editingVariantId,
@@ -138,17 +128,14 @@ export function VariantManager({
             prev.map((v) => (v.id === savedVariant.id ? savedVariant : v)),
           );
           setEditingVariantId(null);
-          // Dispatch event to notify ProductForm about variant change
           window.dispatchEvent(new CustomEvent("variantChanged"));
           return true;
         }
       } else {
-        // Create new variant
         const savedVariant = await createVariant(productId, values);
         if (savedVariant) {
           setLocalVariants((prev) => [...prev, savedVariant]);
           setIsAdding(false);
-          // Dispatch event to notify ProductForm about variant change
           window.dispatchEvent(new CustomEvent("variantChanged"));
           return true;
         }
@@ -159,7 +146,6 @@ export function VariantManager({
     }
   };
 
-  // Cancel add/edit
   const handleCancelEdit = () => {
     setIsAdding(false);
     setEditingVariantId(null);
@@ -178,7 +164,7 @@ export function VariantManager({
     }
   };
 
-  const handleBulkEditChange = (variantId: string, field: string, value: any) => {
+  const handleBulkEditChange = (variantId: string, field: string, value: unknown) => {
     setDraftBulkUpdates((prev) => ({
       ...prev,
       [variantId]: {
@@ -205,7 +191,7 @@ export function VariantManager({
         prev.map((v) => {
           const update = draftBulkUpdates[v.id];
           return update ? { ...v, ...update } : v;
-        })
+        }),
       );
       window.dispatchEvent(new CustomEvent("variantChanged"));
       handleToggleBulkEdit();
@@ -233,7 +219,6 @@ export function VariantManager({
         newSet.delete(variantToDelete);
         return newSet;
       });
-      // Dispatch event to notify ProductForm about variant change
       window.dispatchEvent(new CustomEvent("variantChanged"));
     }
 
@@ -257,7 +242,6 @@ export function VariantManager({
       setLocalVariants(originalVariants);
     } else {
       setSelectedVariants(new Set());
-      // Dispatch event to notify ProductForm about variant change
       window.dispatchEvent(new CustomEvent("variantChanged"));
     }
 
@@ -269,7 +253,6 @@ export function VariantManager({
     const duplicated = await duplicateVariant(productId, id);
     if (duplicated) {
       setLocalVariants((prev) => [...prev, duplicated]);
-      // Dispatch event to notify ProductForm about variant change
       window.dispatchEvent(new CustomEvent("variantChanged"));
     }
   };
@@ -281,7 +264,6 @@ export function VariantManager({
     const created = await bulkCreateVariants(productId, generatedVariants);
     if (created.length > 0) {
       setLocalVariants((prev) => [...prev, ...created]);
-      // Dispatch event to notify ProductForm about variant change
       window.dispatchEvent(new CustomEvent("variantChanged"));
     }
   };
@@ -291,7 +273,6 @@ export function VariantManager({
     const created = await bulkCreateVariants(productId, importedVariants);
     if (created.length > 0) {
       setLocalVariants((prev) => [...prev, ...created]);
-      // Dispatch event to notify ProductForm about variant change
       window.dispatchEvent(new CustomEvent("variantChanged"));
     }
   };
@@ -307,18 +288,16 @@ export function VariantManager({
   };
 
   const toggleAllSelection = () => {
-    if (selectedVariants.size === filteredAndSortedVariants.length) {
-      setSelectedVariants(new Set());
-    } else {
-      setSelectedVariants(new Set(filteredAndSortedVariants.map((v) => v.id)));
-    }
+    setSelectedVariants((prev) =>
+      prev.size === filteredAndSortedVariants.length
+        ? new Set()
+        : new Set(filteredAndSortedVariants.map((v) => v.id)),
+    );
   };
 
   const isAnyRowEditing = isAdding || !!editingVariantId;
 
-  // Handle sort update
   const handleSortUpdated = () => {
-    // Trigger variant refresh to get updated order
     window.dispatchEvent(new CustomEvent("variantChanged"));
   };
 
@@ -342,33 +321,7 @@ export function VariantManager({
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5 flex-wrap sm:flex-nowrap w-full sm:w-auto mt-2 sm:mt-0">
-              {/* Stats Row */}
-              {stats.total > 0 && (
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50 whitespace-nowrap overflow-x-auto hide-scrollbar hidden sm:flex">
-                  <span>
-                    Stock: <span className="font-medium text-foreground">{stats.totalStock}</span>
-                  </span>
-                  <span className="text-border">|</span>
-                  <span>
-                    Avg: <span className="font-medium text-foreground">{symbol}{stats.averagePrice.toFixed(2)}</span>
-                  </span>
-
-                  {(stats.lowStockCount > 0 || stats.outOfStockCount > 0) && (
-                    <span className="text-border">|</span>
-                  )}
-
-                  {stats.lowStockCount > 0 && (
-                    <span className="font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1 py-0 rounded">
-                      {stats.lowStockCount} Low
-                    </span>
-                  )}
-                  {stats.outOfStockCount > 0 && (
-                    <span className="font-medium text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-400 px-1 py-0 rounded border border-red-200 dark:border-red-900">
-                      {stats.outOfStockCount} Out
-                    </span>
-                  )}
-                </div>
-              )}
+              <VariantStatsDisplay stats={stats} symbol={symbol} />
 
               {stats.total > 0 && (
                 <Button
@@ -453,60 +406,16 @@ export function VariantManager({
       </Card>
 
       {/* Delete Confirmation Dialogs */}
-      <AlertDialog
-        open={!!variantToDelete}
-        onOpenChange={(open) => !open && setVariantToDelete(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the
-              variant.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className={cn("bg-destructive hover:bg-destructive/90")}
-            >
-              {isLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={isBulkDeleteDialogOpen}
-        onOpenChange={setIsBulkDeleteDialogOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete {selectedVariants.size} variants?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This action is permanent and cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmBulkDelete}
-              className={cn("bg-destructive hover:bg-destructive/90")}
-            >
-              {isLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              Confirm Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <VariantDeleteDialogs
+        variantToDelete={variantToDelete}
+        onCancelDelete={() => setVariantToDelete(null)}
+        onConfirmDelete={confirmDelete}
+        isBulkDeleteDialogOpen={isBulkDeleteDialogOpen}
+        onCloseBulkDeleteDialog={setIsBulkDeleteDialogOpen}
+        selectedCount={selectedVariants.size}
+        onConfirmBulkDelete={confirmBulkDelete}
+        isLoading={isLoading}
+      />
 
       {/* Variant Sort Modal */}
       <VariantSortModal
