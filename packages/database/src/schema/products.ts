@@ -154,7 +154,9 @@ export const productAttributes = sqliteTable("product_attributes", {
         .notNull()
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+    index("product_attributes_slug_idx").on(table.slug),
+]);
 
 export const productAttributeValues = sqliteTable(
     "product_attribute_values",
@@ -222,7 +224,10 @@ export const media = sqliteTable("media", {
         .notNull()
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+    index("media_folder_id_idx").on(table.folderId),
+    index("media_deleted_at_idx").on(table.deletedAt),
+]);
 
 export type Product = InferSelectModel<typeof products>;
 export type ProductImage = InferSelectModel<typeof productImages>;

@@ -1,5 +1,5 @@
 import { useState, useEffect, type FC } from "react";
-import type { DeliveryProviderRecord } from "@scalius/database/schema";
+import type { DeliveryProviderRecord } from "@/types/api-responses";
 import { toast } from "sonner";
 
 interface ShipmentFormProps {

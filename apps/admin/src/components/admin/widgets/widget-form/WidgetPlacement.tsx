@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Controller } from 'react-hook-form';
-import { WidgetPlacementRule, type Collection } from '@scalius/database/schema';
+import { WidgetPlacementRule, type Collection } from '@/types/api-responses';
 
 interface WidgetPlacementProps {
   control: any;

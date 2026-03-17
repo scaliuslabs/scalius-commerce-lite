@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { toast } from "sonner";
-import { OrderStatus } from "@scalius/database/schema";
+import { OrderStatus } from "@/types/api-responses";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { navigateTo } from "@/lib/client/navigate";

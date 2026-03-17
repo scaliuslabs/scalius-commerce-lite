@@ -1,5 +1,5 @@
 // src/components/admin/pages-list/types/index.ts
-import type { Page } from "@scalius/database/schema";
+import type { Page } from "@/types/api-responses";
 
 export interface PageItem extends Page {
   // Add any additional computed properties if needed

@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { OrderStatus } from "@scalius/database/schema";
+import { OrderStatus } from "@/types/api-responses";
 import { useStore } from "@nanostores/react";
 import {
   orderCalculations,

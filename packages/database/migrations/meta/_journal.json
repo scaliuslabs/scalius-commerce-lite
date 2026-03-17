@@ -155,6 +155,34 @@
       "when": 1773878400000,
       "tag": "0021_add-variant-barcode",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1773878401000,
+      "tag": "0022_add-stock-version",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1773878402000,
+      "tag": "0023_missing-fk-indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1773878403000,
+      "tag": "0024_singleton-and-enum-fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1773964800000,
+      "tag": "0025_add-query-indexes",
+      "breakpoints": true
     }
   ]
 }

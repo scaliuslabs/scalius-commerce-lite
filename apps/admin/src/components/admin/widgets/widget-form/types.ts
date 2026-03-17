@@ -1,5 +1,5 @@
 
-import type { Product, Category } from '@scalius/database/schema';
+import type { Product, Category } from '@/types/api-responses';
 
 export interface MediaFile {
   id: string;

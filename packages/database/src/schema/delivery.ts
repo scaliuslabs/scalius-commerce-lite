@@ -39,7 +39,9 @@ export const deliveryProviders = sqliteTable("delivery_providers", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
-});
+}, (table) => [
+    index("delivery_providers_type_idx").on(table.type),
+]);
 
 export const deliveryShipments = sqliteTable("delivery_shipments", {
     id: text("id").primaryKey(),

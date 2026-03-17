@@ -1,5 +1,5 @@
 // src/components/admin/collections-list/types/index.ts
-import type { Collection } from "@scalius/database/schema";
+import type { Collection } from "@/types/api-responses";
 
 export interface CollectionItem extends Collection {
   productCount?: number;
