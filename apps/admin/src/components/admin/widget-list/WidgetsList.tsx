@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useWidgets } from "./hooks/useWidgets";
 import { useWidgetActions } from "./hooks/useWidgetActions";
 import { useBulkActions } from "./hooks/useBulkActions";
@@ -48,7 +48,6 @@ export function WidgetsList({
   initialStats,
   initialSearch,
 }: WidgetsListProps) {
-  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState | null>(
     null,
@@ -133,17 +132,13 @@ export function WidgetsList({
         body: JSON.stringify({ apiKey: openRouterApiKey }),
       });
       if (response.ok) {
-        toast({ title: "Success", description: "OpenRouter API key saved." });
+        toast.success("Success", { description: "OpenRouter API key saved." });
         setIsSettingsOpen(false);
       } else {
         throw new Error("Failed to save API key.");
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Could not save API key.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Could not save API key." });
     } finally {
       setIsSavingKey(false);
     }
@@ -163,17 +158,10 @@ export function WidgetsList({
     navigator.clipboard
       .writeText(`[widget id="${widgetId}"]`)
       .then(() => {
-        toast({
-          title: "Success",
-          description: "Shortcode copied to clipboard!",
-        });
+        toast.success("Success", { description: "Shortcode copied to clipboard!" });
       })
       .catch(() => {
-        toast({
-          title: "Error",
-          description: "Failed to copy shortcode.",
-          variant: "destructive",
-        });
+        toast.error("Error", { description: "Failed to copy shortcode." });
       });
   };
 

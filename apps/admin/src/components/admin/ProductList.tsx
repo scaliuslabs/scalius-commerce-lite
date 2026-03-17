@@ -74,7 +74,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
@@ -169,24 +169,16 @@ const ProductRow = React.memo(
     formatDate: (date: Date | null) => string;
     formatPrice: (price: number) => string;
   }) => {
-    const { toast } = useToast();
 
     const copyProductShortcode = (productSlug: string) => {
       const shortcode = `[product slug="${productSlug}"]`;
       navigator.clipboard
         .writeText(shortcode)
         .then(() => {
-          toast({
-            title: "Success",
-            description: "Product shortcode copied to clipboard!",
-          });
+          toast.success("Success", { description: "Product shortcode copied to clipboard!" });
         })
         .catch((err) => {
-          toast({
-            title: "Error",
-            description: "Failed to copy shortcode.",
-            variant: "destructive",
-          });
+          toast.error("Error", { description: "Failed to copy shortcode." });
           console.error("Failed to copy shortcode: ", err);
         });
     };
@@ -343,7 +335,6 @@ export function ProductList({
   showTrashed = false,
   stats,
 }: ProductListProps) {
-  const { toast } = useToast();
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [products, setProducts] = useState(initialProducts || []);
   const [pagination, setPagination] = useState(initialPagination);
@@ -437,16 +428,12 @@ export function ProductList({
         window.history.pushState({}, "", urlToUpdate.toString());
       } catch (err) {
         console.error("Error fetching products:", err);
-        toast({
-          title: "Error",
-          description: "Failed to load products. Please try again.",
-          variant: "destructive",
-        });
+        toast.error("Error", { description: "Failed to load products. Please try again." });
       } finally {
         setIsLoadingProducts(false);
       }
     },
-    [showTrashed, initialPagination, toast],
+    [showTrashed, initialPagination],
   );
 
   useEffect(() => {
@@ -626,7 +613,7 @@ export function ProductList({
       });
       if (!response.ok) throw new Error("Failed to move product to trash");
 
-      toast({ title: "Success", description: "Product moved to trash." });
+      toast.success("Success", { description: "Product moved to trash." });
       setProducts((prev) => prev.filter((p) => p.id !== idToDelete));
       setPagination((prev) => ({
         ...prev,
@@ -639,15 +626,11 @@ export function ProductList({
       });
     } catch (error) {
       console.error("Error deleting product:", error);
-      toast({
-        title: "Error",
-        description: "Failed to move product to trash.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to move product to trash." });
     } finally {
       setIsActionLoading(false);
     }
-  }, [productToDelete, toast]);
+  }, [productToDelete]);
 
   const triggerPermanentDelete = useCallback((id: string) => {
     setProductToDelete(id);
@@ -665,10 +648,7 @@ export function ProductList({
       });
 
       if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Product permanently deleted.",
-        });
+        toast.success("Success", { description: "Product permanently deleted." });
         setProducts((prev) => prev.filter((p) => p.id !== idToDelete));
         setPagination((prev) => ({
           ...prev,
@@ -685,17 +665,13 @@ export function ProductList({
           errorData.error || "Failed to permanently delete product.",
         );
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error permanently deleting product:", error);
-      toast({
-        title: "Deletion Failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Deletion Failed", { description: error instanceof Error ? error.message : String(error) });
     } finally {
       setIsActionLoading(false);
     }
-  }, [productToDelete, toast]);
+  }, [productToDelete]);
 
   const handleRestore = useCallback(
     async (id: string) => {
@@ -706,10 +682,7 @@ export function ProductList({
         });
         if (!response.ok) throw new Error("Failed to restore product");
 
-        toast({
-          title: "Success",
-          description: "Product restored successfully.",
-        });
+        toast.success("Success", { description: "Product restored successfully." });
         setProducts((prev) => prev.filter((p) => p.id !== id));
         setPagination((prev) => ({
           ...prev,
@@ -722,11 +695,7 @@ export function ProductList({
         });
       } catch (error) {
         console.error("Error restoring product:", error);
-        toast({
-          title: "Error",
-          description: "Failed to restore product.",
-          variant: "destructive",
-        });
+        toast.error("Error", { description: "Failed to restore product." });
       } finally {
         setIsActionLoading(false);
       }
@@ -757,10 +726,7 @@ export function ProductList({
       });
 
       if (response.ok) {
-        toast({
-          title: "Success",
-          description: `${idsToDelete.length} products ${showTrashed ? "permanently deleted" : "moved to trash"}.`,
-        });
+        toast.success("Success", { description: `${idsToDelete.length} products ${showTrashed ? "permanently deleted" : "moved to trash"}.` });
 
         setProducts((prev) => prev.filter((p) => !idsToDelete.includes(p.id)));
         setPagination((prev) => ({
@@ -772,17 +738,13 @@ export function ProductList({
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to process bulk delete.");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error bulk deleting products:", error);
-      toast({
-        title: "Bulk Deletion Failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Bulk Deletion Failed", { description: error instanceof Error ? error.message : String(error) });
     } finally {
       setIsActionLoading(false);
     }
-  }, [selectedProducts, showTrashed, toast]);
+  }, [selectedProducts, showTrashed]);
 
   const toggleProductSelection = useCallback(
     (productId: string, checked: boolean) => {

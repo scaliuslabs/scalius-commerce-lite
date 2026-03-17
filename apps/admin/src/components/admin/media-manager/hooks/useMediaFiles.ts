@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { MediaApiClient } from "../api";
 import type { MediaFile, MediaFilterOptions } from "../types";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export function useMediaFiles(autoLoad: boolean = false) {
   const [files, setFiles] = useState<MediaFile[]>([]);
@@ -56,18 +56,14 @@ export function useMediaFiles(autoLoad: boolean = false) {
         } else {
           // Request was superseded, ignore results
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Only show error for current request
         if (requestId === currentRequestId.current) {
           console.error("Error loading files:", error);
 
           // Don't show error toast on initial load (user hasn't interacted yet)
           if (!isInitialLoad.current) {
-            toast({
-              title: "Error Loading Files",
-              description: error.message || "Could not load media files. Please try again.",
-              variant: "destructive",
-            });
+            toast.error("Error Loading Files", { description: (error instanceof Error ? error.message : String(error)) || "Could not load media files. Please try again." });
           }
         }
       } finally {
@@ -111,23 +107,15 @@ export function useMediaFiles(autoLoad: boolean = false) {
 
         await MediaApiClient.deleteFile(fileId);
 
-        toast({
-          title: "File Deleted",
-          description: "The file has been successfully deleted.",
-        });
+        toast.success("File Deleted", { description: "The file has been successfully deleted." });
 
         // Don't reload - optimistic update is enough
         // This prevents unnecessary flicker
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error deleting file:", error);
         // Revert UI on error
         setFiles(filesBeforeDelete);
-        toast({
-          title: "Deletion Failed",
-          description:
-            error.message || "Could not delete the file. Please try again.",
-          variant: "destructive",
-        });
+        toast.error("Deletion Failed", { description: (error instanceof Error ? error.message : String(error)) || "Could not delete the file. Please try again." });
       }
     },
     [files],
@@ -146,33 +134,17 @@ export function useMediaFiles(autoLoad: boolean = false) {
         const result = await MediaApiClient.deleteFiles(fileIds);
 
         if (result.failed === 0) {
-          toast({
-            title: "Bulk Deletion Successful",
-            description: `Successfully deleted ${result.success} file${result.success !== 1 ? "s" : ""}.`,
-          });
+          toast.success("Bulk Deletion Successful", { description: `Successfully deleted ${result.success} file${result.success !== 1 ? "s" : ""}.` });
         } else if (result.success === 0) {
           setFiles(filesBeforeDelete);
-          toast({
-            title: "Bulk Deletion Failed",
-            description: `Failed to delete ${result.failed} file${result.failed !== 1 ? "s" : ""}.`,
-            variant: "destructive",
-          });
+          toast.error("Bulk Deletion Failed", { description: `Failed to delete ${result.failed} file${result.failed !== 1 ? "s" : ""}.` });
         } else {
-          toast({
-            title: "Partial Bulk Deletion",
-            description: `Deleted ${result.success}, failed ${result.failed} file${result.failed !== 1 ? "s" : ""}.`,
-            variant: "destructive",
-          });
+          toast.error("Partial Bulk Deletion", { description: `Deleted ${result.success}, failed ${result.failed} file${result.failed !== 1 ? "s" : ""}.` });
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error deleting files:", error);
         setFiles(filesBeforeDelete);
-        toast({
-          title: "Deletion Failed",
-          description:
-            error.message || "Could not delete files. Please try again.",
-          variant: "destructive",
-        });
+        toast.error("Deletion Failed", { description: (error instanceof Error ? error.message : String(error)) || "Could not delete files. Please try again." });
       }
     },
     [files],

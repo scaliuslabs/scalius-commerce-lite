@@ -34,7 +34,7 @@ import {
   TooltipTrigger,
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useCurrency } from "@/hooks/useCurrency";
 import { navigateTo } from "@/lib/client/navigate";
 
@@ -67,7 +67,6 @@ interface FreeShippingFormProps {
 }
 
 export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
-  const { toast } = useToast();
   const { symbol } = useCurrency();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -141,19 +140,12 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
         );
       }
 
-      toast({
-        title: `Discount ${discountId ? "updated" : "created"} successfully!`,
-      });
+      toast.success(`Discount ${discountId ? "updated" : "created"} successfully!`);
       await navigateTo("/admin/discounts");
     } catch (error) {
       const action = defaultValues?.id ? "updating" : "creating";
       console.error(`Error ${action} Free Shipping discount:`, error);
-      toast({
-        title: "Error",
-        description:
-          error instanceof Error ? error.message : "An unknown error occurred",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: error instanceof Error ? error.message : "An unknown error occurred" });
     } finally {
       setIsSubmitting(false);
     }

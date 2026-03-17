@@ -26,9 +26,9 @@ export function usePageActions(fetchPages: () => void) {
         }
         toast.success(successMessage);
         fetchPages();
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Deletion Failed", {
-          description: error.message,
+          description: (error instanceof Error ? error.message : String(error)),
           duration: 8000,
         });
       } finally {
@@ -50,8 +50,8 @@ export function usePageActions(fetchPages: () => void) {
         }
         toast.success("Page restored.");
         fetchPages();
-      } catch (error: any) {
-        toast.error(error.message);
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setIsActionLoading(false);
       }

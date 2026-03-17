@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useCurrency } from "@/hooks/useCurrency";
 import {
   CreditCard,
@@ -41,6 +41,7 @@ import {
   ReceiptText,
 } from "lucide-react";
 import type { Order } from "./types";
+import { navigateTo } from "@/lib/client/navigate";
 
 interface OrderPayment {
   id: string;
@@ -106,7 +107,6 @@ interface PaymentCardProps {
 }
 
 export function PaymentCard({ order }: PaymentCardProps) {
-  const { toast } = useToast();
   const { symbol } = useCurrency();
   const [payments, setPayments] = React.useState<OrderPayment[]>([]);
   const [plan, setPlan] = React.useState<PaymentPlan | null>(null);
@@ -168,12 +168,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
 
     if (codAction === "collected") {
       if (!collectedBy.trim()) {
-        toast({ title: "Error", description: "Collector name is required.", variant: "destructive" });
+        toast.error("Error", { description: "Collector name is required." });
         return;
       }
       const amount = parseFloat(collectedAmount);
       if (isNaN(amount) || amount <= 0) {
-        toast({ title: "Error", description: "Valid amount is required.", variant: "destructive" });
+        toast.error("Error", { description: "Valid amount is required." });
         return;
       }
     }
@@ -201,23 +201,19 @@ export function PaymentCard({ order }: PaymentCardProps) {
       }
 
       const messages: Record<string, string> = {
-        collected: "COD collection recorded. Page will reload.",
+        collected: "COD collection recorded.",
         failed: "Delivery failure recorded.",
         returned: "Order marked as returned.",
       };
-      toast({ title: "Success", description: messages[codAction] });
+      toast.success("Success", { description: messages[codAction] });
       setCodAction(null);
       await fetchPaymentData();
 
       if (codAction === "collected" || codAction === "returned") {
-        setTimeout(() => window.location.reload(), 1500);
+        void navigateTo(window.location.pathname);
       }
     } catch (err) {
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Failed to record COD action",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: err instanceof Error ? err.message : "Failed to record COD action" });
     } finally {
       setCodLoading(false);
     }
@@ -226,11 +222,11 @@ export function PaymentCard({ order }: PaymentCardProps) {
   async function handleIssueRefund() {
     const amount = parseFloat(refundAmount);
     if (isNaN(amount) || amount <= 0 || amount > (order.paidAmount ?? 0)) {
-      toast({ title: "Error", description: "Valid refund amount up to the paid amount is required.", variant: "destructive" });
+      toast.error("Error", { description: "Valid refund amount up to the paid amount is required." });
       return;
     }
     if (!refundReason.trim()) {
-      toast({ title: "Error", description: "Refund reason is required.", variant: "destructive" });
+      toast.error("Error", { description: "Refund reason is required." });
       return;
     }
 
@@ -250,20 +246,13 @@ export function PaymentCard({ order }: PaymentCardProps) {
         throw new Error(data.error ?? "Failed to issue refund");
       }
 
-      toast({
-        title: "Refund Issued",
-        description: `Successfully initiated refund of ${symbol}${amount}.`,
-      });
+      toast.success("Refund Issued", { description: `Successfully initiated refund of ${symbol}${amount}.` });
 
       setIsRefundDialogOpen(false);
       await fetchPaymentData();
-      setTimeout(() => window.location.reload(), 1500);
+      void navigateTo(window.location.pathname);
     } catch (err) {
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Failed to issue refund",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: err instanceof Error ? err.message : "Failed to issue refund" });
     } finally {
       setRefundLoading(false);
     }

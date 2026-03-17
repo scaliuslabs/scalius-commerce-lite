@@ -16,7 +16,7 @@ import { MediaManager } from "../media-manager";
 import { DraggableImageGallery } from "../DraggableImageGallery";
 import { cn } from "@scalius/shared/utils";
 import type { ProductFormValues } from "./types";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface ProductImagesSectionProps {
   form: UseFormReturn<ProductFormValues>;
@@ -32,7 +32,6 @@ export function ProductImagesSection({
   uniqueColorOptions,
 }: ProductImagesSectionProps) {
   const [isOpen, setIsOpen] = React.useState(true);
-  const { toast } = useToast();
 
   // Check if image already exists in the current images array
   const isImageDuplicate = (imageUrl: string, currentImages: any[]) => {
@@ -42,11 +41,7 @@ export function ProductImagesSection({
   // Handle single image selection with duplicate check
   const handleImageSelect = (file: any, currentImages: any[]) => {
     if (isImageDuplicate(file.url, currentImages)) {
-      toast({
-        title: "Duplicate Image",
-        description: "This image has already been added to the product.",
-        variant: "destructive",
-      });
+      toast.error("Duplicate Image", { description: "This image has already been added to the product." });
       return currentImages;
     }
     return [...currentImages, file];
@@ -63,11 +58,7 @@ export function ProductImagesSection({
 
     if (newFiles.length < files.length) {
       const duplicateCount = files.length - newFiles.length;
-      toast({
-        title: "Duplicate Images Skipped",
-        description: `${duplicateCount} image${duplicateCount > 1 ? "s" : ""} ${duplicateCount > 1 ? "were" : "was"} already added and ${duplicateCount > 1 ? "have" : "has"} been skipped.`,
-        variant: "default",
-      });
+      toast.success("Duplicate Images Skipped", { description: `${duplicateCount} image${duplicateCount > 1 ? "s" : ""} ${duplicateCount > 1 ? "were" : "was"} already added and ${duplicateCount > 1 ? "have" : "has"} been skipped.` });
     }
 
     return [...currentImages, ...newFiles];

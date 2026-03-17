@@ -56,7 +56,7 @@ export function useAttributeSuggestions({
         setSuggestions([]);
         setShowSuggestions(false);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error.name !== "AbortError") {
         console.error("Failed to fetch suggestions:", error);
         setSuggestions([]);

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { MediaFile } from "../types";
 import { formatFileSize, formatDate } from "../utils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { getOptimizedImageUrl, getOriginalImageUrl } from "@scalius/shared/image-optimizer";
 
 interface MediaCardProps {
@@ -77,16 +77,9 @@ export function MediaCard({
       // Always copy the original URL, not the optimized version
       const originalUrl = getOriginalImageUrl(file.url);
       await navigator.clipboard.writeText(originalUrl);
-      toast({
-        title: "URL Copied",
-        description: "Original image URL has been copied to clipboard.",
-      });
+      toast.success("URL Copied", { description: "Original image URL has been copied to clipboard." });
     } catch (error) {
-      toast({
-        title: "Copy Failed",
-        description: "Could not copy URL to clipboard.",
-        variant: "destructive",
-      });
+      toast.error("Copy Failed", { description: "Could not copy URL to clipboard." });
     }
   };
 
@@ -103,10 +96,7 @@ export function MediaCard({
     link.click();
     document.body.removeChild(link);
 
-    toast({
-      title: "Download Started",
-      description: `Downloading ${file.filename}...`,
-    });
+    toast.success("Download Started", { description: `Downloading ${file.filename}...` });
   };
 
   return (

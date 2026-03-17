@@ -1,6 +1,7 @@
 import { type FC, useState, useEffect } from "react";
 import type { DeliveryProviderRecord, DeliveryShipment, Order } from "@scalius/database/schema";
 import { toast } from "sonner";
+import { navigateTo } from "@/lib/client/navigate";
 import { formatDate } from "@scalius/shared/utils";
 import ShipmentStatusIndicator from "./ShipmentStatusIndicator";
 
@@ -114,7 +115,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
       toast.success("Shipment created successfully");
 
       // Refresh the page to update the order status if needed
-      setTimeout(() => window.location.reload(), 1500);
+      void navigateTo(window.location.pathname);
 
       setSelectedProviderId("");
     } catch (error) {
@@ -164,7 +165,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
 
         // If order status was also updated, refresh the page to show the new status
         if (result.data.orderStatusUpdate) {
-          setTimeout(() => window.location.reload(), 1500);
+          void navigateTo(window.location.pathname);
         }
       } else {
         toast.info("Shipment status is up to date");

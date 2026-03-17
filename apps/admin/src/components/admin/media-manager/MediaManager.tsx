@@ -31,7 +31,7 @@ import { useMediaFiles, useMediaUpload, useFolders } from "./hooks";
 import { debounce } from "./utils";
 import { MediaApiClient } from "./api";
 import type { MediaFile, MediaManagerProps } from "./types";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export function MediaManager({
   onSelect,
@@ -94,10 +94,7 @@ export function MediaManager({
           setTimeout(() => {
             setSelectedFileIds(newFileIds);
             setSelectionMode(true);
-            toast({
-              title: "Upload Complete",
-              description: "Files uploaded. Click 'Add' to insert them.",
-            });
+            toast.success("Upload Complete", { description: "Files uploaded. Click 'Add' to insert them." });
           }, 400);
         } else if (onSelect && uploadedFiles.length > 0) {
           // Single select mode
@@ -111,16 +108,10 @@ export function MediaManager({
             };
             onSelect(fileWithDateObject);
             setDialogOpen(false);
-            toast({
-              title: "Image Selected",
-              description: "Newly uploaded image has been selected.",
-            });
+            toast.success("Image Selected", { description: "Newly uploaded image has been selected." });
           } else {
             // Multiple files uploaded in single-select mode: notify user
-            toast({
-              title: "Upload Complete",
-              description: "Multiple files uploaded. Click one to select.",
-            });
+            toast.success("Upload Complete", { description: "Multiple files uploaded. Click one to select." });
           }
         }
       },
@@ -250,20 +241,13 @@ export function MediaManager({
 
     try {
       await MediaApiClient.moveFilesToFolder(selectedFileIds, folderId);
-      toast({
-        title: "Files Moved",
-        description: `Successfully moved ${selectedFileIds.length} file${selectedFileIds.length !== 1 ? "s" : ""}.`,
-      });
+      toast.success("Files Moved", { description: `Successfully moved ${selectedFileIds.length} file${selectedFileIds.length !== 1 ? "s" : ""}.` });
       setSelectedFileIds([]);
       // Reload with correct folder context
       const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
       loadFiles(1, { ...filters, folderId: folderParam });
-    } catch (error: any) {
-      toast({
-        title: "Move Failed",
-        description: error.message || "Could not move files. Please try again.",
-        variant: "destructive",
-      });
+    } catch (error: unknown) {
+      toast.error("Move Failed", { description: (error instanceof Error ? error.message : String(error)) || "Could not move files. Please try again." });
     }
   };
 

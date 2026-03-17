@@ -5,34 +5,16 @@ import { pages } from "@scalius/database/schema";
 import { sql, asc, desc, isNull, isNotNull, and, inArray, eq, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
-import { z } from "zod";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError } from "@scalius/core/errors";
+import {
+    createPageSchema,
+    updatePageSchema,
+    type CreatePageInput,
+    type UpdatePageInput,
+} from "./pages.validation";
 
-// ─────────────────────────────────────────
-// Schema
-// ─────────────────────────────────────────
-
-export const createPageSchema = z.object({
-    title: z.string().min(3).max(100),
-    slug: z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    content: z.string(),
-    metaTitle: z.string().nullable(),
-    metaDescription: z.string().nullable(),
-    isPublished: z.boolean().default(true),
-    publishedAt: z.date().or(z.string()).nullable().optional().transform((val) =>
-        val instanceof Date ? val : val ? new Date(val) : null,
-    ),
-    sortOrder: z.number().default(0),
-    hideHeader: z.boolean().default(false),
-    hideFooter: z.boolean().default(false),
-    hideTitle: z.boolean().default(false),
-});
-
-export const updatePageSchema = createPageSchema.partial();
-
-export type CreatePageInput = z.infer<typeof createPageSchema>;
-export type UpdatePageInput = z.infer<typeof updatePageSchema>;
+export { createPageSchema, updatePageSchema, type CreatePageInput, type UpdatePageInput };
 
 // ─────────────────────────────────────────
 // Queries

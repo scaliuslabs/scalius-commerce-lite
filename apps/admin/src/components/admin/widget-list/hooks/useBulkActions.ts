@@ -1,10 +1,9 @@
 // src/components/admin/widget-list/hooks/useBulkActions.ts
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import type { BulkAction } from "../types";
 
 export function useBulkActions(fetchWidgets: () => Promise<void>) {
-  const { toast } = useToast();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<BulkAction | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -72,21 +71,14 @@ export function useBulkActions(fetchWidgets: () => Promise<void>) {
 
       if (!response.ok) throw new Error(`Failed to ${action} widgets`);
 
-      toast({
-        title: "Success",
-        description: successMessage,
-      });
+      toast.success("Success", { description: successMessage });
 
       setSelectedIds(new Set());
       setBulkAction(null);
       await fetchWidgets();
     } catch (error) {
       console.error(`Error performing bulk ${action}:`, error);
-      toast({
-        title: "Error",
-        description: `Failed to ${action} widgets.`,
-        variant: "destructive",
-      });
+      toast.error("Error", { description: `Failed to ${action} widgets.` });
     } finally {
       setIsActionLoading(false);
     }

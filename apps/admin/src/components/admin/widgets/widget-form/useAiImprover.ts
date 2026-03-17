@@ -287,9 +287,9 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
       }
 
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error improving content:', error);
-      toast.error(ERROR_MESSAGES.generationFailed(error.message));
+      toast.error(ERROR_MESSAGES.generationFailed((error instanceof Error ? error.message : String(error))));
       return false;
     } finally {
       setIsImproving(false);

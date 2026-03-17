@@ -126,10 +126,10 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       setTimeout(() => {
         void navigateTo("/admin/pages");
       }, 500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save page", {
-        description: error.message || "Please try again.",
+        description: (error instanceof Error ? error.message : String(error)) || "Please try again.",
         duration: 6000,
       });
     } finally {

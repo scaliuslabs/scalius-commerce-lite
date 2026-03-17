@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { navigateTo } from "@/lib/client/navigate";
 
 /**
  * Clean an orderId to remove any path-like prefixes
@@ -56,7 +57,7 @@ export function useShipmentStatus() {
           ) ||
           updatedShipment.orderStatusUpdate
         ) {
-          setTimeout(() => window.location.reload(), 1500);
+          void navigateTo(window.location.pathname);
         }
       } else {
         toast.info("Shipment status is up to date");

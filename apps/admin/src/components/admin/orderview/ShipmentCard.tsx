@@ -13,12 +13,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Truck, ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
-import type { DeliveryShipment } from "@scalius/database/schema";
+interface DeliveryShipment {
+  id: string;
+  orderId: string;
+  providerId: string | null;
+  providerType: string;
+  externalId: string | null;
+  trackingId: string | null;
+  courierName: string | null;
+  status: string;
+  rawStatus: string | null;
+  metadata: string | null;
+  lastChecked: Date | string | null;
+  webhookId: string | null;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
+}
 import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
 import type { Order } from "./types";
+import { navigateTo } from "@/lib/client/navigate";
 
 interface ShipmentCardProps {
   order: Order;
@@ -31,17 +47,12 @@ const CreateShipmentForm = ({
   order: Order;
   onShipmentCreated: () => void;
 }) => {
-  const { toast } = useToast();
   const [isCreatingShipment, setIsCreatingShipment] = React.useState(false);
   const [selectedProviderId, setSelectedProviderId] = React.useState("");
 
   const handleCreateShipment = async () => {
     if (!selectedProviderId) {
-      toast({
-        title: "Error",
-        description: "Please select a delivery provider.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Please select a delivery provider." });
       return;
     }
     setIsCreatingShipment(true);
@@ -55,18 +66,10 @@ const CreateShipmentForm = ({
       if (!response.ok) {
         throw new Error(result.error || "Failed to create shipment");
       }
-      toast({
-        title: "Success",
-        description: "Shipment created successfully. Page will reload.",
-      });
+      toast.success("Success", { description: "Shipment created successfully. Page will reload." });
       onShipmentCreated();
     } catch (error) {
-      toast({
-        title: "Error Creating Shipment",
-        description:
-          error instanceof Error ? error.message : "An unknown error occurred.",
-        variant: "destructive",
-      });
+      toast.error("Error Creating Shipment", { description: error instanceof Error ? error.message : "An unknown error occurred." });
     } finally {
       setIsCreatingShipment(false);
     }
@@ -213,10 +216,8 @@ const ShipmentHistoryItem = ({
 };
 
 export function ShipmentCard({ order }: ShipmentCardProps) {
-  const handlePageReload = () => {
-    setTimeout(() => {
-      window.location.reload();
-    }, 1500);
+  const handleRefresh = () => {
+    void navigateTo(window.location.pathname);
   };
 
   const hasProviders = order.deliveryProviders && order.deliveryProviders.length > 0;
@@ -225,7 +226,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
   return (
     <>
       {hasProviders && (
-        <CreateShipmentForm order={order} onShipmentCreated={handlePageReload} />
+        <CreateShipmentForm order={order} onShipmentCreated={handleRefresh} />
       )}
 
       {hasShipments && (
@@ -243,7 +244,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
                   key={shipment.id}
                   shipment={shipment}
                   orderId={order.id}
-                  onStatusUpdated={handlePageReload}
+                  onStatusUpdated={handleRefresh}
                 />
               ))}
             </div>

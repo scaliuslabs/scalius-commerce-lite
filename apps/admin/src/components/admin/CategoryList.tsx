@@ -63,7 +63,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import {
   Tooltip,
@@ -121,7 +121,6 @@ export function CategoryList({
   showTrashed = false,
   stats,
 }: CategoryListProps) {
-  const { toast } = useToast();
   const { getStorefrontPath } = useStorefrontUrl();
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [categories, setCategories] = useState(initialCategories || []);
@@ -206,16 +205,12 @@ export function CategoryList({
         window.history.pushState({}, "", urlToUpdate.toString());
       } catch (err) {
         console.error("Error fetching categories:", err);
-        toast({
-          title: "Error",
-          description: "Failed to load categories. Please try again.",
-          variant: "destructive",
-        });
+        toast.error("Error", { description: "Failed to load categories. Please try again." });
       } finally {
         setIsLoadingCategories(false);
       }
     },
-    [showTrashed, initialPagination, toast],
+    [showTrashed, initialPagination],
   );
 
   useEffect(() => {
@@ -360,22 +355,14 @@ export function CategoryList({
 
         if (errorData.error && errorData.suggestion) {
           // Show detailed error message with suggestion
-          toast({
-            title: "Cannot Delete Category",
-            description: `${errorData.error} ${errorData.suggestion}`,
-            variant: "destructive",
-          });
+          toast.error("Cannot Delete Category", { description: `${errorData.error} ${errorData.suggestion}` });
         } else {
-          toast({
-            title: "Error",
-            description: "Failed to move category to trash.",
-            variant: "destructive",
-          });
+          toast.error("Error", { description: "Failed to move category to trash." });
         }
         return;
       }
 
-      toast({ title: "Success", description: "Category moved to trash." });
+      toast.success("Success", { description: "Category moved to trash." });
       // Optimistic UI Update
       setCategories((prev) => prev.filter((p) => p.id !== idToDelete));
       setPagination((prev) => ({
@@ -389,15 +376,11 @@ export function CategoryList({
       });
     } catch (error) {
       console.error("Error deleting category:", error);
-      toast({
-        title: "Error",
-        description: "Failed to move category to trash.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to move category to trash." });
     } finally {
       setIsActionLoading(false);
     }
-  }, [categoryToDelete, toast]);
+  }, [categoryToDelete]);
 
   const handlePermanentDelete = useCallback(async () => {
     if (!categoryToDelete) return;
@@ -424,22 +407,14 @@ export function CategoryList({
 
         if (errorData.error && errorData.suggestion) {
           // Show detailed error message with suggestion
-          toast({
-            title: "Cannot Delete Category",
-            description: `${errorData.error} ${errorData.suggestion}`,
-            variant: "destructive",
-          });
+          toast.error("Cannot Delete Category", { description: `${errorData.error} ${errorData.suggestion}` });
         } else {
-          toast({
-            title: "Error",
-            description: "Failed to permanently delete category.",
-            variant: "destructive",
-          });
+          toast.error("Error", { description: "Failed to permanently delete category." });
         }
         return;
       }
 
-      toast({ title: "Success", description: "Category permanently deleted." });
+      toast.success("Success", { description: "Category permanently deleted." });
       // Optimistic UI Update
       setCategories((prev) => prev.filter((p) => p.id !== idToDelete));
       setPagination((prev) => ({
@@ -453,15 +428,11 @@ export function CategoryList({
       });
     } catch (error) {
       console.error("Error permanently deleting category:", error);
-      toast({
-        title: "Error",
-        description: "Failed to permanently delete category.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to permanently delete category." });
     } finally {
       setIsActionLoading(false);
     }
-  }, [categoryToDelete, toast]);
+  }, [categoryToDelete]);
 
   const handleRestore = useCallback(
     async (id: string) => {
@@ -472,10 +443,7 @@ export function CategoryList({
         });
         if (!response.ok) throw new Error("Failed to restore category");
 
-        toast({
-          title: "Success",
-          description: "Category restored successfully.",
-        });
+        toast.success("Success", { description: "Category restored successfully." });
         // Optimistic UI Update
         setCategories((prev) => prev.filter((p) => p.id !== id));
         setPagination((prev) => ({
@@ -489,11 +457,7 @@ export function CategoryList({
         });
       } catch (error) {
         console.error("Error restoring category:", error);
-        toast({
-          title: "Error",
-          description: "Failed to restore category.",
-          variant: "destructive",
-        });
+        toast.error("Error", { description: "Failed to restore category." });
       } finally {
         setIsActionLoading(false);
       }
@@ -548,27 +512,16 @@ export function CategoryList({
             ? `${errorData.error} ${errorData.suggestion} Affected products: ${productList}${errorData.affectedProducts.length > 3 ? "..." : ""}`
             : `${errorData.error} ${errorData.suggestion}`;
 
-          toast({
-            title: "Cannot Delete Categories",
-            description: fullMessage,
-            variant: "destructive",
-          });
+          toast.error("Cannot Delete Categories", { description: fullMessage });
         } else {
-          toast({
-            title: "Error",
-            description: "Failed to process bulk delete.",
-            variant: "destructive",
-          });
+          toast.error("Error", { description: "Failed to process bulk delete." });
         }
         return;
       }
 
-      toast({
-        title: "Success",
-        description: `${idsToDelete.length} categories ${
+      toast.success("Success", { description: `${idsToDelete.length} categories ${
           showTrashed ? "permanently deleted" : "moved to trash"
-        }.`,
-      });
+        }.` });
 
       // Optimistic UI Update
       setCategories((prev) => prev.filter((p) => !idsToDelete.includes(p.id)));
@@ -579,15 +532,11 @@ export function CategoryList({
       setSelectedCategories(new Set()); // Clear selection
     } catch (error) {
       console.error("Error bulk deleting categories:", error);
-      toast({
-        title: "Error",
-        description: "Failed to process bulk delete.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to process bulk delete." });
     } finally {
       setIsActionLoading(false);
     }
-  }, [selectedCategories, showTrashed, toast]);
+  }, [selectedCategories, showTrashed]);
 
   const confirmBulkRestore = useCallback(async () => {
     if (selectedCategories.size === 0) return;
@@ -605,10 +554,7 @@ export function CategoryList({
       });
       if (!response.ok) throw new Error("Failed to restore categories");
 
-      toast({
-        title: "Success",
-        description: `Restored ${idsToRestore.length} categories successfully`,
-      });
+      toast.success("Success", { description: `Restored ${idsToRestore.length} categories successfully` });
 
       // Optimistic UI Update
       setCategories((prev) => prev.filter((p) => !idsToRestore.includes(p.id)));
@@ -619,15 +565,11 @@ export function CategoryList({
       setSelectedCategories(new Set()); // Clear selection
     } catch (error) {
       console.error("Error restoring categories:", error);
-      toast({
-        title: "Error",
-        description: "Failed to restore categories.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to restore categories." });
     } finally {
       setIsActionLoading(false);
     }
-  }, [selectedCategories, toast]);
+  }, [selectedCategories]);
 
   const toggleCategorySelection = useCallback(
     (categoryId: string, checked: boolean) => {

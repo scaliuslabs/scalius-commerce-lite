@@ -35,7 +35,7 @@ import { Checkbox } from "../../ui/checkbox";
 import { cn } from "@scalius/shared/utils";
 import { format } from "date-fns";
 import { Separator } from "../../ui/separator";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import {
   Tooltip,
@@ -179,7 +179,6 @@ export function AmountOffOrderForm({
   defaultValues,
   onCancel,
 }: AmountOffOrderFormProps) {
-  const { toast } = useToast();
   const { symbol } = useCurrency();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -263,10 +262,7 @@ export function AmountOffOrderForm({
         );
       }
 
-      toast({
-        title: `Success!`,
-        description: `Discount "${values.code}" ${discountId ? "updated" : "created"} successfully.`,
-      });
+      toast.success("Success!", { description: `Discount "${values.code}" ${discountId ? "updated" : "created"} successfully.` });
       // Redirect or call a success handler instead of hard reload
       // Example: navigate to the list page
       await navigateTo("/admin/discounts");
@@ -274,14 +270,9 @@ export function AmountOffOrderForm({
     } catch (error) {
       const action = defaultValues?.id ? "updating" : "creating";
       console.error(`Error ${action} Amount Off Order discount:`, error);
-      toast({
-        title: "Operation Failed",
-        description:
-          error instanceof Error
+      toast.error("Operation Failed", { description: error instanceof Error
             ? error.message
-            : "An unknown error occurred while saving.",
-        variant: "destructive",
-      });
+            : "An unknown error occurred while saving." });
     } finally {
       setIsSubmitting(false);
     }

@@ -29,8 +29,8 @@ export function useCollectionActions(
             collection.id === id ? { ...collection, ...data } : collection,
           ),
         );
-      } catch (error: any) {
-        toast.error(error.message);
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : String(error));
         onRefresh();
       } finally {
         setSavingStates((prev) => ({ ...prev, [id]: false }));
@@ -62,9 +62,9 @@ export function useCollectionActions(
 
         toast.success(successMessage);
         onRefresh();
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Deletion Failed", {
-          description: error.message,
+          description: (error instanceof Error ? error.message : String(error)),
           duration: 8000,
         });
       } finally {
@@ -84,8 +84,8 @@ export function useCollectionActions(
         if (!response.ok) throw new Error("Failed to restore collection");
         toast.success("Collection restored.");
         onRefresh();
-      } catch (error: any) {
-        toast.error(error.message);
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setIsActionLoading(false);
       }
@@ -107,8 +107,8 @@ export function useCollectionActions(
         }
 
         toast.success("Collection order updated.");
-      } catch (error: any) {
-        toast.error(error.message);
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : String(error));
         throw error;
       }
     },

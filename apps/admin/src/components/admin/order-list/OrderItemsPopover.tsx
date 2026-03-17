@@ -2,7 +2,7 @@ import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
 import { Badge } from "../../ui/badge";
 import { LoaderCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useCurrency } from "@/hooks/useCurrency";
 
 type PopoverOrderItem = {
@@ -26,7 +26,6 @@ export function OrderItemsPopover({
   orderId,
   itemCount,
 }: OrderItemsPopoverProps) {
-  const { toast } = useToast();
   const { symbol } = useCurrency();
   const [isOpen, setIsOpen] = React.useState(false);
   const [items, setItems] = React.useState<PopoverOrderItem[] | null>(null);
@@ -49,11 +48,7 @@ export function OrderItemsPopover({
       } catch (error) {
         console.error("Failed to fetch order items:", error);
         setItems([]); // Set to empty array on error to prevent re-fetching
-        toast({
-          title: "Error",
-          description: "Could not load order items.",
-          variant: "destructive",
-        });
+        toast.error("Error", { description: "Could not load order items." });
       } finally {
         setIsLoading(false);
       }
