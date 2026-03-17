@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Trash2, Filter, X } from "lucide-react";
-import { BulkVariantGenerator } from "./BulkVariantGenerator";
+import { BulkVariantGenerator } from "./bulk-generator";
 import { VariantImportExport } from "./VariantImportExport";
 import type {
   ProductVariant,
