@@ -1,12 +1,15 @@
 // src/components/admin/product-form/AdditionalInfoManager.tsx
-import React from "react";
+import React, { Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TiptapEditor } from "@/components/ui/tiptap-editor";
+
+const TiptapEditor = React.lazy(() =>
+  import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
+);
 import { Plus, Trash2, GripVertical, ChevronDown } from "lucide-react";
 import {
   DndContext,
@@ -138,15 +141,17 @@ function SortableRichContentItem({
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <TiptapEditor
-                        content={field.value || ""}
-                        onChange={(newContent: string) => {
-                          field.onChange(newContent);
-                          onUpdate(item.id, { content: newContent });
-                        }}
-                        placeholder="Add content for this section..."
-                        compact={true}
-                      />
+                      <Suspense fallback={<div className="h-48 animate-pulse rounded-lg bg-muted" />}>
+                        <TiptapEditor
+                          content={field.value || ""}
+                          onChange={(newContent: string) => {
+                            field.onChange(newContent);
+                            onUpdate(item.id, { content: newContent });
+                          }}
+                          placeholder="Add content for this section..."
+                          compact={true}
+                        />
+                      </Suspense>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

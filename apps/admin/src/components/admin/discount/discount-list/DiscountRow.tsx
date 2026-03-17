@@ -110,6 +110,7 @@ export const DiscountRow = React.memo(function DiscountRow({
         isSelected && "bg-muted",
       )}
       data-state={isSelected ? "selected" : undefined}
+      data-admin-list-row=""
     >
       <TableCell className="pl-4 pr-2">
         <Checkbox

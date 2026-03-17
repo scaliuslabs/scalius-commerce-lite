@@ -1,8 +1,12 @@
 // src/components/admin/footer-builder/ContentSection.tsx
+import React, { Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TiptapEditor } from "@/components/ui/tiptap-editor";
+
+const TiptapEditor = React.lazy(() =>
+  import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
+);
 
 interface ContentSectionProps {
   tagline: string;
@@ -39,11 +43,13 @@ export function ContentSection({
         <div className="grid gap-2">
           <Label>Description</Label>
           <div className="border rounded-md overflow-hidden min-h-[150px]">
-            <TiptapEditor
-              content={description}
-              onChange={onDescriptionChange}
-              placeholder="Enter footer description..."
-            />
+            <Suspense fallback={<div className="h-40 animate-pulse rounded-lg bg-muted" />}>
+              <TiptapEditor
+                content={description}
+                onChange={onDescriptionChange}
+                placeholder="Enter footer description..."
+              />
+            </Suspense>
           </div>
         </div>
 

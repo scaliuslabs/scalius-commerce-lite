@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
@@ -24,7 +24,10 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { ExternalLink } from "lucide-react";
-import { TiptapEditor } from "../ui/tiptap-editor";
+
+const TiptapEditor = React.lazy(() =>
+  import("../ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
+);
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
@@ -207,12 +210,14 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                     <FormItem>
                       <FormControl>
                         {isClient && (
-                          <TiptapEditor
-                            content={field.value}
-                            onChange={field.onChange}
-                            placeholder="Write your page content here..."
-                            compact={true}
-                          />
+                          <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-muted" />}>
+                            <TiptapEditor
+                              content={field.value}
+                              onChange={field.onChange}
+                              placeholder="Write your page content here..."
+                              compact={true}
+                            />
+                          </Suspense>
                         )}
                       </FormControl>
                       <FormMessage />
