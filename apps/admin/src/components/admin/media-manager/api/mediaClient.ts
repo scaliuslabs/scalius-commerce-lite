@@ -44,7 +44,12 @@ export class MediaApiClient {
       throw new Error("Failed to load files");
     }
 
-    return response.json();
+    const json = await response.json();
+    // Handle both raw API envelope { success, data: T } and proxy-unwrapped { success, ...T }
+    if (json.data && typeof json.data === "object" && !Array.isArray(json.data) && json.data.files) {
+      return json.data as MediaApiResponse;
+    }
+    return json as MediaApiResponse;
   }
 
   /**
@@ -183,8 +188,10 @@ export class MediaApiClient {
       throw new Error("Failed to load folders");
     }
 
-    const data: MediaFoldersApiResponse = await response.json();
-    return data.folders;
+    const json = await response.json();
+    // Handle both raw API envelope { success, data: { folders } } and proxy-unwrapped { success, folders }
+    const data: MediaFoldersApiResponse = json.data && json.data.folders ? json.data : json;
+    return data.folders ?? [];
   }
 
   /**
@@ -207,7 +214,8 @@ export class MediaApiClient {
       throw new Error(errorData.error || "Failed to create folder");
     }
 
-    const data = await response.json();
+    const json = await response.json();
+    const data = json.data && json.data.folder ? json.data : json;
     return data.folder;
   }
 
@@ -266,7 +274,8 @@ export class MediaApiClient {
       throw new Error(errorData.error || "Failed to update file");
     }
 
-    const data = await response.json();
+    const json = await response.json();
+    const data = json.data && json.data.file ? json.data : json;
     return data.file;
   }
 }
