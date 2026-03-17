@@ -97,6 +97,7 @@ const CustomerRow = React.memo(function CustomerRow({
   return (
     <TableRow
       data-state={isSelected ? "selected" : undefined}
+      data-admin-list-row=""
     >
       <TableCell className="px-4">
         <Checkbox

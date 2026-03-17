@@ -72,6 +72,7 @@ export const ProductRow = React.memo(function ProductRow({
         isSelected && "bg-muted",
       )}
       data-state={isSelected ? "selected" : undefined}
+      data-admin-list-row=""
     >
       <TableCell className="pl-3 pr-1 py-2">
         <Checkbox

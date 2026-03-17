@@ -961,6 +961,12 @@ header {
   color: rgb(255 255 255 / 1) !important;
 }
 
+/* Virtualize off-screen rows for long admin lists */
+[data-admin-list-row] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
+}
+
 /* Accessibility improvements */
 @media (prefers-reduced-motion: reduce) {
 

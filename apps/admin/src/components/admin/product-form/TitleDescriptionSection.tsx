@@ -1,4 +1,5 @@
 // src/components/admin/product-form/TitleDescriptionSection.tsx
+import React, { Suspense } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import {
   FormControl,
@@ -9,7 +10,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
-import { TiptapEditor } from "@/components/ui/tiptap-editor";
+const TiptapEditor = React.lazy(() =>
+  import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
+);
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import {
@@ -76,12 +79,14 @@ export function TitleDescriptionSection({
                 <FormItem>
                   <FormControl>
                     {isClient ? (
-                      <TiptapEditor
-                        content={field.value || ""}
-                        onChange={field.onChange}
-                        placeholder="Describe your product..."
-                        compact={true}
-                      />
+                      <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-muted" />}>
+                        <TiptapEditor
+                          content={field.value || ""}
+                          onChange={field.onChange}
+                          placeholder="Describe your product..."
+                          compact={true}
+                        />
+                      </Suspense>
                     ) : (
                       <div
                         className="border rounded-md p-4"

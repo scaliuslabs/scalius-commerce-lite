@@ -1,11 +1,5 @@
 import { useState, lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
-import { SeoSettingsBuilder } from "../SeoSettingsBuilder";
-import { StorefrontUrlBuilder } from "../StorefrontUrlBuilder";
-import { SecuritySettingsBuilder } from "../SecuritySettingsBuilder";
-import EmailSettingsForm from "./EmailSettingsForm";
-import AuthSettingsBuilder from "./AuthSettingsBuilder";
-import CurrencySettingsBuilder from "./CurrencySettingsBuilder";
 import { Loader2 } from "lucide-react";
 import type { HeaderConfig } from "../header-builder/types";
 import type { FooterConfig } from "../footer-builder/types";
@@ -20,6 +14,24 @@ const FooterBuilder = lazy(() =>
         default: m.FooterBuilder,
     }))
 );
+const SeoSettingsBuilder = lazy(() =>
+    import("../SeoSettingsBuilder").then((m) => ({
+        default: m.SeoSettingsBuilder,
+    }))
+);
+const StorefrontUrlBuilder = lazy(() =>
+    import("../StorefrontUrlBuilder").then((m) => ({
+        default: m.StorefrontUrlBuilder,
+    }))
+);
+const SecuritySettingsBuilder = lazy(() =>
+    import("../SecuritySettingsBuilder").then((m) => ({
+        default: m.SecuritySettingsBuilder,
+    }))
+);
+const EmailSettingsForm = lazy(() => import("./EmailSettingsForm"));
+const AuthSettingsBuilder = lazy(() => import("./AuthSettingsBuilder"));
+const CurrencySettingsBuilder = lazy(() => import("./CurrencySettingsBuilder"));
 
 function TabSpinner() {
     return (
@@ -109,27 +121,51 @@ export default function GeneralSettingsPage({
                     </TabsContent>
 
                     <TabsContent value="seo" className="mt-0">
-                        {mountedTabs.has("seo") && <SeoSettingsBuilder />}
+                        {mountedTabs.has("seo") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <SeoSettingsBuilder />
+                            </Suspense>
+                        )}
                     </TabsContent>
 
                     <TabsContent value="storefront" className="mt-0">
-                        {mountedTabs.has("storefront") && <StorefrontUrlBuilder />}
+                        {mountedTabs.has("storefront") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <StorefrontUrlBuilder />
+                            </Suspense>
+                        )}
                     </TabsContent>
 
                     <TabsContent value="email" className="mt-0">
-                        {mountedTabs.has("email") && <EmailSettingsForm />}
+                        {mountedTabs.has("email") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <EmailSettingsForm />
+                            </Suspense>
+                        )}
                     </TabsContent>
 
                     <TabsContent value="currency" className="mt-0">
-                        {mountedTabs.has("currency") && <CurrencySettingsBuilder />}
+                        {mountedTabs.has("currency") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <CurrencySettingsBuilder />
+                            </Suspense>
+                        )}
                     </TabsContent>
 
                     <TabsContent value="auth" className="mt-0">
-                        {mountedTabs.has("auth") && <AuthSettingsBuilder />}
+                        {mountedTabs.has("auth") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <AuthSettingsBuilder />
+                            </Suspense>
+                        )}
                     </TabsContent>
 
                     <TabsContent value="security" className="mt-0">
-                        {mountedTabs.has("security") && <SecuritySettingsBuilder />}
+                        {mountedTabs.has("security") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <SecuritySettingsBuilder />
+                            </Suspense>
+                        )}
                     </TabsContent>
                 </div>
             </Tabs>

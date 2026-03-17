@@ -1,4 +1,5 @@
 // src/components/admin/product-form/BasicInfoSection.tsx
+import React from "react";
 import type { UseFormReturn } from "react-hook-form";
 import {
   Card,
@@ -31,7 +32,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
-import { TiptapEditor } from "@/components/ui/tiptap-editor";
+import { Suspense } from "react";
+
+const TiptapEditor = React.lazy(() =>
+  import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
+);
 import type { ProductFormValues, Category } from "./types";
 
 interface BasicInfoSectionProps {
@@ -166,12 +171,14 @@ export function BasicInfoSection({
                     <FormItem>
                       <FormControl>
                         {isClient ? (
-                          <TiptapEditor
-                            content={field.value || ""}
-                            onChange={field.onChange}
-                            placeholder="Enter product description"
-                            className="min-h-[180px]"
-                          />
+                          <Suspense fallback={<div className="h-48 animate-pulse rounded-lg bg-muted" />}>
+                            <TiptapEditor
+                              content={field.value || ""}
+                              onChange={field.onChange}
+                              placeholder="Enter product description"
+                              className="min-h-[180px]"
+                            />
+                          </Suspense>
                         ) : (
                           <div className="border rounded-md min-h-[180px] p-4">
                             <div className="text-muted-foreground">

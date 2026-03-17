@@ -66,6 +66,7 @@ const CategoryRow = React.memo(function CategoryRow({
         isSelected && "bg-muted",
       )}
       data-state={isSelected ? "selected" : undefined}
+      data-admin-list-row=""
     >
       <TableCell className="pl-3 pr-1 py-2">
         <Checkbox

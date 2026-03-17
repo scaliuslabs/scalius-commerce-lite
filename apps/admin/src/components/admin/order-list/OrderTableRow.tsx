@@ -126,7 +126,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
     }`;
 
   return (
-    <TableRow key={order.id} className={rowClassName}>
+    <TableRow key={order.id} className={rowClassName} data-admin-list-row="">
       <TableCell className="py-4 pl-4">
         <div
           onClick={(e) => {

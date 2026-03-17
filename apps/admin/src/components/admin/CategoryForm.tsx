@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
@@ -21,8 +21,11 @@ import {
 } from "../ui/card";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
-import { TiptapEditor } from "../ui/tiptap-editor";
 import { Button } from "../ui/button";
+
+const TiptapEditor = React.lazy(() =>
+  import("../ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
+);
 import {
   X,
   ExternalLink,
@@ -241,12 +244,14 @@ export function CategoryForm({
                       <FormItem>
                         <FormControl>
                           {isClient ? (
-                            <TiptapEditor
-                              content={field.value || ""}
-                              onChange={field.onChange}
-                              placeholder="Enter category description with rich formatting..."
-                              compact={true}
-                            />
+                            <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-muted" />}>
+                              <TiptapEditor
+                                content={field.value || ""}
+                                onChange={field.onChange}
+                                placeholder="Enter category description with rich formatting..."
+                                compact={true}
+                              />
+                            </Suspense>
                           ) : (
                             <div
                               className="border rounded-md p-4"
