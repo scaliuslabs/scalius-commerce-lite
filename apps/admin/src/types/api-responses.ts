@@ -178,8 +178,9 @@ export interface DeliveryShipment {
   shipmentItems: string | null;
   shipmentAmount: number | null;
   isFinalShipment: boolean | null;
-  createdAt: Date;
-  updatedAt: Date;
+  webhookId: string | null;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
 }
 
 // ---------------------------------------------------------------------------

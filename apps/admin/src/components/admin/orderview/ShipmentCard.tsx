@@ -15,22 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Truck, ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
-interface DeliveryShipment {
-  id: string;
-  orderId: string;
-  providerId: string | null;
-  providerType: string;
-  externalId: string | null;
-  trackingId: string | null;
-  courierName: string | null;
-  status: string;
-  rawStatus: string | null;
-  metadata: string | null;
-  lastChecked: Date | string | null;
-  webhookId: string | null;
-  createdAt: Date | string | number;
-  updatedAt: Date | string | number;
-}
+import type { DeliveryShipment } from "@/types/api-responses";
 import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
 import type { Order } from "./types";
