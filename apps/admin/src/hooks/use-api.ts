@@ -131,9 +131,27 @@ export function useApi<T>(
           );
         }
 
-        // Strip `success` flag, return the rest as T
-        const { success: _, ...rest } = body;
-        const result = rest as T;
+        // Handle both proxy-unwrapped and raw API envelope shapes:
+        // - Proxy (production): { success, ...T } → strip success, return rest
+        // - Raw API (dev via Vite proxy): { success, data: T } → unwrap data
+        let result: T;
+        if (
+          body.data !== undefined &&
+          body.data !== null &&
+          typeof body.data === "object" &&
+          !Array.isArray(body.data) &&
+          Object.keys(body).length === 2 // only { success, data }
+        ) {
+          // Raw envelope: { success: true, data: T } — unwrap
+          result = body.data as T;
+        } else if (body.data !== undefined && Array.isArray(body.data) && Object.keys(body).length === 2) {
+          // Raw envelope with array: { success: true, data: [...] } — unwrap
+          result = body.data as T;
+        } else {
+          // Proxy-unwrapped: { success, ...T } — strip success
+          const { success: _, ...rest } = body;
+          result = rest as T;
+        }
 
         setData(result);
         setError(null);

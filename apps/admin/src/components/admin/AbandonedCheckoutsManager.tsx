@@ -375,7 +375,9 @@ export function AbandonedCheckoutsManager() {
             }));
           throw new Error(errorData.message || "Failed to fetch data");
         }
-        const data = await response.json();
+        const json = await response.json();
+        // Handle both raw API envelope { success, data: T } and proxy-unwrapped { success, ...T }
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setCheckouts(data.checkouts);
         setPagination(data.pagination);
         setSelectedIds(new Set());
