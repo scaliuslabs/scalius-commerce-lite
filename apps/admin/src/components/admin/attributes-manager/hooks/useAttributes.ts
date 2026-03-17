@@ -34,7 +34,9 @@ export function useAttributes(
         `/api/v1/admin/attributes?${params.toString()}`,
       );
       if (!response.ok) throw new Error("Failed to fetch attributes");
-      const data = await response.json();
+      const json = await response.json();
+      // Handle both raw API envelope { success, data: T } and proxy-unwrapped { success, ...T }
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setAttributes(data.attributes);
       setPagination(data.pagination);
     } catch (error) {
