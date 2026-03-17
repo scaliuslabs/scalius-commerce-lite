@@ -1,7 +1,7 @@
 // src/components/admin/AccountSettingsWithPermissions.tsx
 // Wrapper component that provides PermissionProvider context to AccountSettings
 import { PermissionProvider } from "@/contexts/PermissionContext";
-import { AccountSettings } from "./AccountSettings";
+import { AccountSettings } from "./account-settings";
 
 interface User {
   id: string;
