@@ -310,15 +310,15 @@ export function MetaConversionsManager({
       const response = await fetch("/api/v1/admin/settings/meta-conversions");
       if (response.ok) {
         const data = await response.json();
-        setSettings(data.data);
+        setSettings(data.settings);
         setFormData(
-          data.data
+          data.settings
             ? {
-              pixelId: data.data.pixelId || "",
-              accessToken: data.data.accessToken || "",
-              testEventCode: data.data.testEventCode || "",
-              isEnabled: data.data.isEnabled || false,
-              logRetentionDays: data.data.logRetentionDays || 30,
+              pixelId: data.settings.pixelId || "",
+              accessToken: data.settings.accessToken || "",
+              testEventCode: data.settings.testEventCode || "",
+              isEnabled: data.settings.isEnabled || false,
+              logRetentionDays: data.settings.logRetentionDays || 30,
             }
             : DEFAULT_FORM_DATA,
         );
@@ -342,7 +342,7 @@ export function MetaConversionsManager({
       );
       if (response.ok) {
         const data = await response.json();
-        setLogs(data.data || []);
+        setLogs(data.logs || []);
         setLogsPagination((prev: LogsPagination) => data.pagination || prev);
         setRetentionInfo(data.retention || null);
       }

@@ -376,7 +376,7 @@ export function AbandonedCheckoutsManager() {
           throw new Error(errorData.message || "Failed to fetch data");
         }
         const data = await response.json();
-        setCheckouts(data.data);
+        setCheckouts(data.checkouts);
         setPagination(data.pagination);
         setSelectedIds(new Set());
       } catch (error: any) {

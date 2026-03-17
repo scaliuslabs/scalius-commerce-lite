@@ -97,7 +97,7 @@ app.openapi(listRoute, async (c) => {
         const totalPages = Math.ceil(total / limit);
 
         return ok(c, {
-            data: results,
+            shippingMethods: results,
             pagination: {
                 page,
                 limit,
@@ -158,7 +158,7 @@ app.openapi(createRoute_, async (c) => {
             })
             .returning();
 
-        return created(c, { data: insertedMethod });
+        return created(c, { shippingMethod: insertedMethod });
     } catch (error: unknown) {
         console.error("Error creating shipping method:", error);
         if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
@@ -193,7 +193,7 @@ app.openapi(getByIdRoute, async (c) => {
             .get();
 
         if (!method) throw new NotFoundError("Shipping method not found");
-        return ok(c, { data: method });
+        return ok(c, { shippingMethod: method });
     } catch (error) {
         console.error(`Error fetching shipping method ${id}:`, error);
         throw error;
@@ -260,7 +260,7 @@ app.openapi(updateRoute, async (c) => {
             throw new NotFoundError("Shipping method not found or no changes made");
         }
 
-        return ok(c, { data: updatedMethod });
+        return ok(c, { shippingMethod: updatedMethod });
     } catch (error: unknown) {
         console.error(`Error updating shipping method ${id}:`, error);
         if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {

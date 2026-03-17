@@ -119,7 +119,7 @@ export function AddNavItemDialog({
         if (attrRes.ok) {
           const data = await attrRes.json();
           setAttributes(
-            data.data
+            data.attributes
               ?.filter((a: any) => a.filterable !== false)
               .map((a: any) => ({
                 id: a.id,

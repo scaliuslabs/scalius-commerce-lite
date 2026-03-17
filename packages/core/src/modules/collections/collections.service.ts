@@ -61,7 +61,7 @@ export async function listCollections(
         }
     })();
 
-    const data = await db
+    const items = await db
         .select()
         .from(collections)
         .where(whereClause)
@@ -70,7 +70,7 @@ export async function listCollections(
         .offset(offset);
 
     return {
-        data,
+        collections: items,
         pagination: {
             page,
             limit,

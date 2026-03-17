@@ -35,7 +35,7 @@ export function useAttributes(
       );
       if (!response.ok) throw new Error("Failed to fetch attributes");
       const data = await response.json();
-      setAttributes(data.data);
+      setAttributes(data.attributes);
       setPagination(data.pagination);
     } catch (error) {
       toast.error("Failed to load attributes.");

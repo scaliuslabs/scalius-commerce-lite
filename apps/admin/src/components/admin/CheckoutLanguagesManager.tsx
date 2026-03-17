@@ -221,7 +221,7 @@ export function CheckoutLanguagesManager({ }: CheckoutLanguagesManagerProps) {
         if (!response.ok) throw new Error("Failed to fetch checkout languages");
         const data = await response.json();
 
-        const parsedLanguages = (data.data || []).map((lang: any) => ({
+        const parsedLanguages = (data.languages || []).map((lang: any) => ({
           ...lang,
           languageData:
             typeof lang.languageData === "string"

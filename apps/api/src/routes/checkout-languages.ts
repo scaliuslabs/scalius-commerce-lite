@@ -204,7 +204,7 @@ app.openapi(listRoute, async (c) => {
 
   const total = countResult?.count || 0;
   return ok(c, {
-    data: results,
+    languages: results,
     pagination: {
       page,
       limit,
@@ -273,7 +273,7 @@ app.openapi(createRoute2, async (c) => {
     updatedAt: sql`(cast(strftime('%s','now') as int))`
   }).returning();
 
-  return created(c, { data: insertedLanguage });
+  return created(c, { language: insertedLanguage });
 });
 
 // GET /checkout-languages/:id — get checkout language by ID
@@ -366,7 +366,7 @@ app.openapi(updateRoute, async (c) => {
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
   const [updated] = await db.update(checkoutLanguages).set(updateData).where(eq(checkoutLanguages.id, id)).returning();
-  return ok(c, { data: updated });
+  return ok(c, { language: updated });
 });
 
 // PATCH /checkout-languages/:id — soft delete a checkout language

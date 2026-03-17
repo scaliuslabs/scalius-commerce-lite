@@ -155,7 +155,7 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
         if (!response.ok) throw new Error("Failed to fetch shipping methods");
         const data = await response.json();
 
-        setMethods(data.data || []);
+        setMethods(data.shippingMethods || []);
         setPagination(
           data.pagination || {
             total: 0,

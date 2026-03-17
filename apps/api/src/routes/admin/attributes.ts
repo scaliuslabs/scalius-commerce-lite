@@ -141,13 +141,13 @@ app.openapi(listRoute, async (c) => {
             valueCounts.map((item) => [item.attributeId, item.valueCount]),
         );
 
-        const data = attributes.map((attr) => ({
+        const enrichedAttributes = attributes.map((attr) => ({
             ...attr,
             valueCount: valueCountMap.get(attr.id) || 0
         }));
 
         return ok(c, {
-            data,
+            attributes: enrichedAttributes,
             pagination: {
                 page,
                 limit,
@@ -208,7 +208,7 @@ app.openapi(createAttributeRoute, async (c) => {
             })
             .returning();
 
-        return created(c, { data: insertedAttribute });
+        return created(c, { attribute: insertedAttribute });
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "ConflictError") throw error;
         console.error("Error creating attribute:", error);
@@ -266,7 +266,7 @@ app.openapi(updateAttributeRoute, async (c) => {
 
         if (!updatedAttribute) throw new NotFoundError("Attribute not found");
 
-        return ok(c, { data: updatedAttribute });
+        return ok(c, { attribute: updatedAttribute });
     } catch (error: unknown) {
         if (error instanceof Error && (error.name === "NotFoundError" || error.name === "ConflictError")) throw error;
         console.error(`Error updating attribute ${id}:`, error);
