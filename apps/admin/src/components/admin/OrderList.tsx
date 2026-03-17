@@ -613,7 +613,7 @@ export function OrderList({
       order.totalAmount,
       order.discountAmount || 0,
       order.itemCount,
-      order.createdAt.toLocaleDateString(),
+      order.createdAt.toLocaleDateString("en-US"),
     ]);
 
     const csvContent = [
