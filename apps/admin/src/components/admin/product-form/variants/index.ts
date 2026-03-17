@@ -1,7 +1,7 @@
 // src/components/admin/ProductForm/variants/index.ts
 
 export { VariantManager } from "./VariantManager";
-export { BulkVariantGenerator } from "./BulkVariantGenerator";
+export { BulkVariantGenerator } from "./bulk-generator";
 export { VariantImportExport } from "./VariantImportExport";
 export { VariantTemplateSelector } from "./VariantTemplateSelector";
 export { SkuTemplateConfig } from "./SkuTemplateConfig";

@@ -37,3 +37,7 @@ tests/
 .idea/
 .vercel
 /Docs
+/.agent
+/.agents
+/.claude
+skills-lock.json
