@@ -13,7 +13,7 @@ const formComponentMap: Record<string, () => Promise<void>> = {
     );
     if (container && placeholder) {
       const [module, React, ReactDOM] = await Promise.all([
-        import("@/components/admin/discount/AmountOffProductsForm"),
+        import("@/components/admin/discount/amount-off-products"),
         import("react"),
         import("react-dom/client"),
       ]);
