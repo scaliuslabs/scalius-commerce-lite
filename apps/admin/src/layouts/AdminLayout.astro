@@ -1,6 +1,5 @@
 ---
 // src/layouts/AdminLayout.astro — Orchestrator
-import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ClientRouter } from "astro:transitions";
 import "../styles/global.css";
@@ -92,8 +91,7 @@ const navSections = getFilteredNavSections(permissions, userData.isSuperAdmin);
       </div>
     </div>
 
-    <ShadcnToaster client:idle />
-    <SonnerToaster richColors closeButton client:idle />
+    <SonnerToaster richColors closeButton client:idle transition:persist />
 
     <script>
       import { initNavProgress } from "@/lib/client/nav-progress";
