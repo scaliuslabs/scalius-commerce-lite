@@ -106,6 +106,7 @@ export function OrderForm({
       setLocations((prev) => ({ ...prev, cities: data.locations || [] }));
     } catch (error) {
       console.error("Error loading cities:", error);
+      toast.error("Could not load city list. Please refresh the page.");
     }
   };
 
@@ -127,6 +128,7 @@ export function OrderForm({
       form.setValue("area", null);
     } catch (error) {
       console.error("Error loading zones:", error);
+      toast.error("Could not load zone list. Please refresh the page.");
     } finally {
       setIsLoading((prev) => ({ ...prev, zones: false }));
     }
@@ -148,6 +150,7 @@ export function OrderForm({
       setLocations((prev) => ({ ...prev, areas: data.locations || [] }));
     } catch (error) {
       console.error("Error loading areas:", error);
+      toast.error("Could not load area list. Please refresh the page.");
     } finally {
       setIsLoading((prev) => ({ ...prev, areas: false }));
     }
@@ -188,8 +191,14 @@ export function OrderForm({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to save order");
+        let errorMessage = "Failed to save order. Please try again.";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          errorMessage = `Server error (${response.status}). Please try again.`;
+        }
+        throw new Error(errorMessage);
       }
 
       toast.success(isEdit ? "Order updated successfully" : "Order created successfully");
