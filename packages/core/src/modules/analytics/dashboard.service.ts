@@ -2,12 +2,12 @@
 // Dashboard statistics and activity data queries.
 // Extracted from src/lib/admin.ts.
 
-import { db } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import { products, customers, orders } from "@scalius/database/schema";
 import { and, sql, desc, gte } from "drizzle-orm";
 
 /** Aggregated dashboard metrics for the admin home page. */
-export async function getDashboardStats() {
+export async function getDashboardStats(db: Database) {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const firstDayOfLastMonth = new Date(
@@ -114,7 +114,7 @@ export async function getDashboardStats() {
 }
 
 /** Returns the N most recent orders for the dashboard feed. */
-export async function getRecentOrders(limit = 5) {
+export async function getRecentOrders(db: Database, limit = 5) {
     const recentOrders = await db
         .select({
             id: orders.id,
@@ -137,7 +137,7 @@ export async function getRecentOrders(limit = 5) {
  * Returns per-day order counts, revenue, and new customer counts for the
  * last N days (filling in zero-rows for days with no data).
  */
-export async function getDailyActivityData(days: number) {
+export async function getDailyActivityData(db: Database, days: number) {
     const now = new Date();
     const startDate = new Date(now);
     startDate.setDate(now.getDate() - days);
