@@ -116,7 +116,7 @@ app.openapi(checkStatusRoute, async (c) => {
 
         return ok(c, {
             message: `Shipment status updated from ${previousStatus} to ${result.status}`,
-            data: {
+            statusCheck: {
                 ...result,
                 statusChanged: true,
                 orderStatusUpdate: orderStatusUpdate || "No change needed",
@@ -127,7 +127,7 @@ app.openapi(checkStatusRoute, async (c) => {
 
     return ok(c, {
         message: "Shipment status checked successfully",
-        data: {
+        statusCheck: {
             ...result,
             statusChanged: false,
             lastChecked: now.toISOString()

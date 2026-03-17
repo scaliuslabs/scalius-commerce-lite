@@ -119,7 +119,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
         const total = totalResult[0]?.total ?? 0;
 
         return ok(c, {
-            data: results,
+            checkouts: results,
             pagination: {
                 page,
                 limit,

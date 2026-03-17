@@ -286,8 +286,8 @@ export function DeliveryLocationsManager() {
       }
 
       const result = await response.json();
-      setLocations(result.data);
-      setFilteredLocations(result.data);
+      setLocations(result.locations);
+      setFilteredLocations(result.locations);
       setPagination({
         page: result.pagination.page,
         limit: result.pagination.limit,
@@ -314,7 +314,7 @@ export function DeliveryLocationsManager() {
       }
 
       const result = await response.json();
-      setParentLocations(result.data);
+      setParentLocations(result.locations);
     } catch (error) {
       console.error(`Error loading ${parentType}s:`, error);
       toast.error(`Failed to load ${parentType}s`);

@@ -103,7 +103,7 @@ export function OrderForm({
       const res = await fetch("/api/v1/admin/settings/delivery-locations?type=city");
       if (!res.ok) throw new Error("Failed to load cities");
       const data = await res.json();
-      setLocations((prev) => ({ ...prev, cities: data.data || [] }));
+      setLocations((prev) => ({ ...prev, cities: data.locations || [] }));
     } catch (error) {
       console.error("Error loading cities:", error);
     }
@@ -123,7 +123,7 @@ export function OrderForm({
       );
       if (!res.ok) throw new Error("Failed to load zones");
       const data = await res.json();
-      setLocations((prev) => ({ ...prev, zones: data.data || [], areas: [] }));
+      setLocations((prev) => ({ ...prev, zones: data.locations || [], areas: [] }));
       form.setValue("area", null);
     } catch (error) {
       console.error("Error loading zones:", error);
@@ -145,7 +145,7 @@ export function OrderForm({
       );
       if (!res.ok) throw new Error("Failed to load areas");
       const data = await res.json();
-      setLocations((prev) => ({ ...prev, areas: data.data || [] }));
+      setLocations((prev) => ({ ...prev, areas: data.locations || [] }));
     } catch (error) {
       console.error("Error loading areas:", error);
     } finally {

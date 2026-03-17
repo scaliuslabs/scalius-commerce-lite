@@ -87,7 +87,7 @@ app.openapi(listRoute, async (c) => {
         }));
 
         return ok(c, {
-            data: formattedLocations,
+            locations: formattedLocations,
             pagination: {
                 total: totalCount,
                 page,
@@ -116,7 +116,7 @@ app.openapi(createLocationRoute, async (c) => {
     try {
         const data = c.req.valid("json");
         const newLocation = await createLocation(data);
-        return created(c, { data: newLocation });
+        return created(c, { location: newLocation });
     } catch (error: unknown) {
         console.error("Error creating delivery location:", error);
         throw error;

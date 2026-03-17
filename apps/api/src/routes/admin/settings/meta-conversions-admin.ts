@@ -31,7 +31,7 @@ app.openapi(getSettingsRoute, async (c) => {
     try {
         const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
         const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
-        return ok(c, { data: maskedSettings });
+        return ok(c, { settings: maskedSettings });
     } catch (error) {
         throw error;
     }
@@ -106,7 +106,7 @@ app.openapi(getLogsRoute, async (c) => {
         const logs = await db.select().from(metaConversionsLogs).orderBy(desc(metaConversionsLogs.createdAt)).limit(limit).offset(offset).all();
 
         return ok(c, {
-            data: logs,
+            logs: logs,
             pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
             retention: { hours: getLogRetentionHours(), cleanupIntervalHours: getCleanupCheckIntervalHours(), nextCleanupMessage: "Cleanup active" }
         });

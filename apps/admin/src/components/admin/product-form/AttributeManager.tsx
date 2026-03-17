@@ -56,8 +56,8 @@ export function AttributeManager({
       const response = await fetch("/api/v1/admin/attributes?limit=999");
       if (!response.ok) throw new Error("Failed");
       const data = await response.json();
-      setAvailableAttributes(data.data);
-      return data.data as AttributeDefinition[];
+      setAvailableAttributes(data.attributes);
+      return data.attributes as AttributeDefinition[];
     } catch {
       toast.error("Could not load attributes");
       return [];
@@ -110,7 +110,7 @@ export function AttributeManager({
 
       if (!response.ok) throw new Error("Failed");
       const data = await response.json();
-      const created = data.data;
+      const created = data.attribute;
 
       toast.success("Attribute created");
       setAvailableAttributes((prev) => [...prev, created]);

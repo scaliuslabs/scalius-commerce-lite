@@ -72,7 +72,7 @@ export function LocationSelector() {
         );
         if (!response.ok) throw new Error("Failed to load cities");
         const result = await response.json();
-        setCities(result.data);
+        setCities(result.locations);
 
         // If we have a city value, proceed to load zones
         if (initialCity) {
@@ -83,7 +83,7 @@ export function LocationSelector() {
             );
             if (!zoneResponse.ok) throw new Error("Failed to load zones");
             const zoneResult = await zoneResponse.json();
-            setZones(zoneResult.data);
+            setZones(zoneResult.locations);
 
             // If we have a zone value, proceed to load areas
             if (initialZone) {
@@ -94,7 +94,7 @@ export function LocationSelector() {
                 );
                 if (!areaResponse.ok) throw new Error("Failed to load areas");
                 const areaResult = await areaResponse.json();
-                setAreas(areaResult.data);
+                setAreas(areaResult.locations);
               } catch (error) {
                 console.error("Error loading initial areas:", error);
               } finally {
@@ -222,7 +222,7 @@ export function LocationSelector() {
       }
 
       const result = await response.json();
-      setZones(result.data);
+      setZones(result.locations);
     } catch (error) {
       console.error("Error loading zones:", error);
     } finally {
@@ -242,7 +242,7 @@ export function LocationSelector() {
       }
 
       const result = await response.json();
-      setAreas(result.data);
+      setAreas(result.locations);
     } catch (error) {
       console.error("Error loading areas:", error);
     } finally {

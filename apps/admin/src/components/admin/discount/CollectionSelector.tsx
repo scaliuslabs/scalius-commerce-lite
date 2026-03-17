@@ -55,7 +55,7 @@ export function CollectionSelector({
         const response = await fetch("/api/v1/admin/collections?limit=50");
         const data = await response.json();
         // Handle both response formats: { data: [...] } from Astro API and { collections: [...] } from Hono API
-        const collectionsArray = data.data || data.collections || [];
+        const collectionsArray = data.collections || [];
         if (collectionsArray.length > 0) {
           // Map to expected interface (ensure all required fields are present)
           const mappedCollections = collectionsArray.map((c: any) => ({
@@ -97,7 +97,7 @@ export function CollectionSelector({
         const data = await response.json();
 
         // Handle both response formats: { data: [...] } from Astro API and { collections: [...] } from Hono API
-        const collectionsArray = data.data || data.collections || [];
+        const collectionsArray = data.collections || [];
         const mappedCollections = collectionsArray.map((c: any) => ({
           id: c.id,
           name: c.name,
