@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, ExternalLink } from "lucide-react";
+import { Loader2, ExternalLink } from "lucide-react";
 
 interface StorefrontUrlBuilderProps {
   initialUrl?: string;

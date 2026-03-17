@@ -9,7 +9,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Search, Trash2, Plus, Languages, X } from "lucide-react";
-import { useLanguages, type ManagerCheckoutLanguage, defaultLanguageData, defaultFieldVisibility } from "./hooks/useLanguages";
+import { useLanguages, type ManagerCheckoutLanguage } from "./hooks/useLanguages";
 import { LanguagesTable } from "./LanguagesTable";
 import { LanguageFormDialog } from "./LanguageFormDialog";
 import { LanguageActionsDialog } from "./LanguageActionsDialog";

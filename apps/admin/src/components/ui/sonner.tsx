@@ -18,7 +18,6 @@ function Toaster(props: ToasterProps) {
       gap={12}
       offset={16}
       duration={4000}
-      pauseWhenPageIsHidden
       toastOptions={{
         classNames: {
           toast:

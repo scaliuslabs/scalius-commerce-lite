@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
 

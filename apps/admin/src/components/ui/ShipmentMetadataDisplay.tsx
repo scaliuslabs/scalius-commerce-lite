@@ -1,5 +1,3 @@
-import React from "react";
-
 interface ShipmentMetadataDisplayProps {
   metadata: any;
   className?: string;
