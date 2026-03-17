@@ -1,48 +1,55 @@
-import { Toaster as SonnerToaster } from "sonner";
-import { CheckCircle } from "lucide-react";
+import { Toaster as Sonner, type ToasterProps } from "sonner";
+import {
+  CircleCheck,
+  CircleX,
+  Info,
+  Loader2,
+  TriangleAlert,
+} from "lucide-react";
 
-interface ToasterProps {
-  position?:
-    | "top-left"
-    | "top-right"
-    | "bottom-left"
-    | "bottom-right"
-    | "top-center"
-    | "bottom-center";
-  expand?: boolean;
-  richColors?: boolean;
-  closeButton?: boolean;
-  offset?: string | number;
-  theme?: "light" | "dark" | "system";
-  className?: string;
-  duration?: number;
-}
-
-export function Toaster({
-  position = "top-right",
-  expand = false,
-  richColors = true,
-  closeButton = false,
-  theme = "system",
-  className = "",
-  offset,
-  duration,
-  ...props
-}: ToasterProps) {
+function Toaster(props: ToasterProps) {
   return (
-    <SonnerToaster
-      position={position}
-      expand={expand}
-      richColors={richColors}
-      closeButton={closeButton}
-      theme={theme}
-      className={`${className} sonner-toast-container`}
-      offset={offset}
-      duration={duration}
-      icons={{
-        success: <CheckCircle className="h-5 w-5 text-green-600" />,
+    <Sonner
+      position="bottom-right"
+      richColors
+      closeButton
+      expand={false}
+      visibleToasts={4}
+      gap={12}
+      offset={16}
+      duration={4000}
+      pauseWhenPageIsHidden
+      toastOptions={{
+        classNames: {
+          toast:
+            "!border !shadow-lg !rounded-lg !font-sans !text-[13px] !leading-snug !px-4 !py-3",
+          title: "!font-medium !text-[13px]",
+          description: "!text-[12px] !opacity-80",
+          actionButton:
+            "!bg-primary !text-primary-foreground !text-xs !font-medium !rounded-md !px-3 !h-7",
+          cancelButton:
+            "!bg-muted !text-muted-foreground !text-xs !font-medium !rounded-md !px-3 !h-7",
+          closeButton: "!transition-all",
+        },
       }}
+      icons={{
+        success: <CircleCheck className="h-[18px] w-[18px]" />,
+        error: <CircleX className="h-[18px] w-[18px]" />,
+        info: <Info className="h-[18px] w-[18px]" />,
+        warning: <TriangleAlert className="h-[18px] w-[18px]" />,
+        loading: <Loader2 className="h-[18px] w-[18px] animate-spin" />,
+      }}
+      style={
+        {
+          "--normal-bg": "var(--popover)",
+          "--normal-text": "var(--popover-foreground)",
+          "--normal-border": "var(--border)",
+          "--border-radius": "var(--radius)",
+        } as React.CSSProperties
+      }
       {...props}
     />
   );
 }
+
+export { Toaster };
