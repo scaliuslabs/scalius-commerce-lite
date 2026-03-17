@@ -108,4 +108,5 @@ export interface ShipmentOptions {
   codAmount?: number;
   note?: string;
   itemCount?: number;
+  itemDescription?: string;
 }

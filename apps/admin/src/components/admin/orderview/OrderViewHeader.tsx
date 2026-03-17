@@ -149,7 +149,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
               <span className="font-mono text-sm">#{order.id}</span>
             </InfoItem>
             <InfoItem icon={CalendarClock} label="Order Date">
-              {formatDate(order.createdAt)}
+              <span suppressHydrationWarning>{formatDate(order.createdAt)}</span>
             </InfoItem>
             <InfoItem icon={DollarSign} label="Grand Total">
               <span className="font-semibold">

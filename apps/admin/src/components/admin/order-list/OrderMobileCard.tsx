@@ -228,7 +228,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
 
         {/* Footer - Date and Actions */}
         <div className="flex items-center justify-between">
-          <span className="text-xs text-[var(--muted-foreground)]">
+          <span className="text-xs text-[var(--muted-foreground)]" suppressHydrationWarning>
             {formatDate(order.createdAt)}
           </span>
           <div className="flex items-center gap-1">

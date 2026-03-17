@@ -1,5 +1,5 @@
 import { db } from "@scalius/database/client";
-import { deliveryProviders, deliveryShipments, orders } from "@scalius/database/schema";
+import { deliveryProviders, deliveryShipments, orders, orderItems, products } from "@scalius/database/schema";
 import { createProvider } from "./factory";
 import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
@@ -175,6 +175,28 @@ export class DeliveryService {
       };
     }
 
+    // Load order items with product names for item description and count
+    const items = await db
+      .select({
+        quantity: orderItems.quantity,
+        productName: products.name,
+      })
+      .from(orderItems)
+      .leftJoin(products, eq(products.id, orderItems.productId))
+      .where(eq(orderItems.orderId, orderId));
+
+    const totalItemCount = items.reduce((sum, i) => sum + i.quantity, 0);
+    const itemDescription = items
+      .map((i) => `${i.productName || "Product"} x${i.quantity}`)
+      .join(", ");
+
+    // Merge enriched options with caller-provided options
+    const enrichedOptions: ShipmentOptions = {
+      itemCount: totalItemCount,
+      itemDescription,
+      ...options,
+    };
+
     // 1. Insert a "creating" placeholder shipment FIRST
     const shipmentId = nanoid();
     const now = new Date();
@@ -196,7 +218,7 @@ export class DeliveryService {
       const providerInstance = await createProvider(provider);
       const shipmentResult = await providerInstance.createShipment(
         order,
-        options,
+        enrichedOptions,
       );
 
       if (shipmentResult.success && shipmentResult.data) {
