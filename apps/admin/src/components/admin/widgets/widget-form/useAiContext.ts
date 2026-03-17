@@ -46,7 +46,7 @@ export const useAiContext = (
         setProductPage(pageToFetch);
         setHasMoreProducts(data.pagination.totalPages > pageToFetch);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to fetch latest products:", error);
       toast.error("Could not load products.");
     } finally {

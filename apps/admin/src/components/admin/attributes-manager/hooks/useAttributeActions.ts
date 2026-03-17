@@ -28,8 +28,8 @@ export function useAttributeActions(
         setAttributes((prev) =>
           prev.map((attr) => (attr.id === id ? { ...attr, ...data } : attr)),
         );
-      } catch (error: any) {
-        toast.error(error.message);
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : String(error));
         onRefresh();
       } finally {
         setSavingStates((prev) => ({ ...prev, [id]: false }));
@@ -58,8 +58,8 @@ export function useAttributeActions(
         toast.success(`Attribute "${newAttribute.name}" created successfully.`);
         onSuccess();
         onRefresh();
-      } catch (error: any) {
-        toast.error(error.message);
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setIsCreating(false);
       }
@@ -90,9 +90,9 @@ export function useAttributeActions(
 
         toast.success(successMessage);
         onRefresh();
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Deletion Failed", {
-          description: error.message,
+          description: (error instanceof Error ? error.message : String(error)),
           duration: 8000,
         });
       } finally {
@@ -109,8 +109,8 @@ export function useAttributeActions(
         await fetch(`/api/v1/admin/attributes/${id}/restore`, { method: "POST" });
         toast.success("Attribute restored.");
         onRefresh();
-      } catch (error: any) {
-        toast.error(error.message);
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setIsActionLoading(false);
       }

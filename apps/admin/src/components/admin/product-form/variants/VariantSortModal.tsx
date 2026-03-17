@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Loader2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface VariantSortModalProps {
   productId: string;
@@ -34,7 +34,6 @@ export function VariantSortModal({
   onClose,
   onSortUpdated,
 }: VariantSortModalProps) {
-  const { toast } = useToast();
   const [colors, setColors] = useState<SortItem[]>([]);
   const [sizes, setSizes] = useState<SortItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,11 +60,7 @@ export function VariantSortModal({
       }
     } catch (error) {
       console.error("Failed to fetch sort order:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load variant sort order",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to load variant sort order" });
     } finally {
       setIsLoading(false);
     }
@@ -121,10 +116,7 @@ export function VariantSortModal({
       );
 
       if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Variant sort order updated successfully",
-        });
+        toast.success("Success", { description: "Variant sort order updated successfully" });
         onSortUpdated();
         onClose();
       } else {
@@ -132,11 +124,7 @@ export function VariantSortModal({
       }
     } catch (error) {
       console.error("Failed to save sort order:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update variant sort order",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to update variant sort order" });
     } finally {
       setIsSaving(false);
     }

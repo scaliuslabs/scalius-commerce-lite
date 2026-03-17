@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { MediaApiClient } from "../api";
 import type { MediaFile, UploadProgress } from "../types";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { validateFiles } from "../utils";
 
 interface UseMediaUploadOptions {
@@ -39,11 +39,7 @@ export function useMediaUpload(options: UseMediaUploadOptions = {}) {
       });
 
       if (!validation.isValid) {
-        toast({
-          title: "Validation Error",
-          description: validation.error,
-          variant: "destructive",
-        });
+        toast.error("Validation Error", { description: validation.error });
         return;
       }
 
@@ -74,11 +70,7 @@ export function useMediaUpload(options: UseMediaUploadOptions = {}) {
           const failCount = warnings.length;
 
           // Show summary toast
-          toast({
-            title: "Partial Upload Success",
-            description: summary || `${successCount} file(s) uploaded, ${failCount} failed`,
-            variant: "default",
-          });
+          toast.success("Partial Upload Success", { description: summary || `${successCount} file(s) uploaded, ${failCount} failed` });
 
           // Log detailed errors for debugging
           warnings.forEach((warning: { filename: string; error: string }) => {
@@ -97,58 +89,21 @@ export function useMediaUpload(options: UseMediaUploadOptions = {}) {
               .join("\n");
             const moreFiles = warnings.length > 3 ? `\n...and ${warnings.length - 3} more file(s)` : "";
 
-            toast({
-              title: `${failCount} File(s) Failed`,
-              description: `${failedFilesList}${moreFiles}`,
-              variant: "destructive",
-              duration: 8000, // Show longer for error messages
-            });
+            toast.error(`${failCount} File(s) Failed`, { description: `${failedFilesList}${moreFiles}` });
           }, 600);
         } else {
           // Complete success
-          toast({
-            title: "Upload Successful",
-            description: summary || `Successfully uploaded ${uploadedFiles.length} file${uploadedFiles.length !== 1 ? "s" : ""}.`,
-            duration: 4000,
-          });
+          toast.success("Upload Successful", { description: summary || `Successfully uploaded ${uploadedFiles.length} file${uploadedFiles.length !== 1 ? "s" : ""}.` });
         }
 
         onUploadComplete?.(uploadedFiles);
 
         return uploadedFiles;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error uploading files:", error);
 
-        // Try to extract detailed error information
-        let errorTitle = "Upload Failed";
-        let errorDescription = "Could not upload files. Please try again.";
-
-        // Use summary if available
-        if (error.summary) {
-          errorDescription = error.summary;
-        } else if (error.message) {
-          errorDescription = error.message;
-        }
-
-        // Check if error has details array (for server validation errors)
-        if (error.details && Array.isArray(error.details)) {
-          const detailsList = error.details
-            .map((d: { filename: string; error: string }) => {
-              const errorMsg = d.error.length > 50 ? d.error.substring(0, 50) + "..." : d.error;
-              return `• ${d.filename}: ${errorMsg}`;
-            })
-            .slice(0, 3)
-            .join("\n");
-          const moreFiles = error.details.length > 3 ? `\n...and ${error.details.length - 3} more file(s)` : "";
-          errorDescription = `${detailsList}${moreFiles}`;
-        }
-
-        toast({
-          title: errorTitle,
-          description: errorDescription,
-          variant: "destructive",
-          duration: 8000, // Show longer for errors
-        });
+        const message = error instanceof Error ? error.message : "Could not upload files. Please try again.";
+        toast.error("Upload Failed", { description: message });
         throw error;
       } finally {
         setIsUploading(false);

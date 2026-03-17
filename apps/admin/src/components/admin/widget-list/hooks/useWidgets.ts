@@ -1,6 +1,7 @@
 // src/components/admin/widget-list/hooks/useWidgets.ts
 import { useState, useEffect } from "react";
 import type { WidgetItem, CollectionOption, WidgetStatistics } from "../types";
+import { navigateTo } from "@/lib/client/navigate";
 
 export function useWidgets(
   initialWidgets: WidgetItem[],
@@ -20,8 +21,7 @@ export function useWidgets(
   const fetchWidgets = async () => {
     setIsLoading(true);
     try {
-      // Reload the page to get fresh data from the server
-      window.location.reload();
+      void navigateTo(window.location.pathname + window.location.search);
     } catch (error) {
       console.error("Error fetching widgets:", error);
       setIsLoading(false);

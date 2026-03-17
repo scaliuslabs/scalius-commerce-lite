@@ -29,6 +29,8 @@ import {
 } from "../ui/alert-dialog";
 import { Edit, Trash2, Plus, Power, PowerOff } from "lucide-react";
 import { formatDate } from "@scalius/shared/utils";
+import { toast } from "sonner";
+import { navigateTo } from "@/lib/client/navigate";
 import { AdminListPagination } from "./shared/AdminListPagination";
 
 interface Analytics {
@@ -103,11 +105,11 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
         throw new Error("Failed to delete analytics script");
       }
 
-      // Reload the page to reflect changes
-      window.location.reload();
+      toast.success("Deleted", { description: "Analytics script has been deleted." });
+      void navigateTo(window.location.pathname);
     } catch (error) {
       console.error("Error deleting analytics script:", error);
-      alert("Failed to delete analytics script. Please try again.");
+      toast.error("Error", { description: "Failed to delete analytics script. Please try again." });
     } finally {
       setIsDeleting(false);
     }
@@ -127,11 +129,11 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
         throw new Error("Failed to toggle analytics script status");
       }
 
-      // Reload the page to reflect changes
-      window.location.reload();
+      toast.success("Updated", { description: "Analytics script status has been updated." });
+      void navigateTo(window.location.pathname);
     } catch (error) {
       console.error("Error toggling analytics script status:", error);
-      alert("Failed to update analytics script status. Please try again.");
+      toast.error("Error", { description: "Failed to update analytics script status. Please try again." });
     }
   };
 

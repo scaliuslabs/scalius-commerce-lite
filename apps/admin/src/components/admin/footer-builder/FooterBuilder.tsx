@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { nanoid } from "nanoid";
 
@@ -65,7 +65,6 @@ function migrateConfig(config: any): FooterConfig {
 }
 
 export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
-  const { toast } = useToast();
 
   const [config, setConfig] = useState<FooterConfig>(() => {
     return migrateConfig(initialConfig || defaultFooterConfig);
@@ -104,18 +103,10 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
         }
       }
 
-      toast({
-        title: "Saved",
-        description: "Footer configuration updated.",
-        action: <CheckCircle2 className="h-5 w-5 text-green-500" />,
-      });
+      toast.success("Saved", { description: "Footer configuration updated." });
     } catch (error) {
       console.error("Error saving footer:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: error instanceof Error ? error.message : "Failed to save." });
     } finally {
       setIsLoading(false);
     }

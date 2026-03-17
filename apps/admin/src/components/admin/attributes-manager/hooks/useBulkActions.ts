@@ -40,8 +40,8 @@ export function useBulkActions(onRefresh: () => void) {
         toast.success(`${selectedIds.size} attributes processed successfully.`);
         setSelectedIds(new Set());
         onRefresh();
-      } catch (error: any) {
-        toast.error(error.message);
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setIsActionLoading(false);
         setBulkAction(null);

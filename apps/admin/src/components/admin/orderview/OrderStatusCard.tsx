@@ -25,17 +25,17 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Receipt, Loader2, Undo2 } from "lucide-react";
 import type { Order } from "./types";
 import { ORDER_STATUSES } from "./types";
+import { navigateTo } from "@/lib/client/navigate";
 
 interface OrderStatusCardProps {
   order: Order;
 }
 
 export function OrderStatusCard({ order }: OrderStatusCardProps) {
-  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReturning, setIsReturning] = useState(false);
   const [returnReason, setReturnReason] = useState("");
@@ -62,24 +62,16 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
         throw new Error(errorMessage);
       }
 
-      toast({
-        title: "Success",
-        description: "Order status has been updated. The page will now reload.",
-      });
+      toast.success("Success", { description: "Order status has been updated." });
 
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+      void navigateTo(window.location.pathname);
 
     } catch (error) {
       console.error("Error updating status:", error);
-      toast({
-        title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to update status. Please try again.",
-        variant: "destructive",
+      toast.error("Error", {
+        description: error instanceof Error
+          ? error.message
+          : "Failed to update status. Please try again.",
       });
       setIsSubmitting(false);
     }
@@ -87,7 +79,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
 
   const handleReturnOrder = async () => {
     if (!returnReason.trim()) {
-      toast({ title: "Error", description: "Return reason is required.", variant: "destructive" });
+      toast.error("Error", { description: "Return reason is required." });
       return;
     }
 
@@ -104,19 +96,14 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
         throw new Error(result.error || "Failed to process return");
       }
 
-      toast({
-        title: "Order Returned",
-        description: "Order return has been processed successfully.",
-      });
+      toast.success("Order Returned", { description: "Order return has been processed successfully." });
 
       setIsReturnDialogOpen(false);
-      setTimeout(() => window.location.reload(), 1500);
+      void navigateTo(window.location.pathname);
     } catch (error) {
       console.error("Error processing return:", error);
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: error instanceof Error ? error.message : "Failed to process return.",
-        variant: "destructive",
       });
     } finally {
       setIsReturning(false);

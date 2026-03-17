@@ -6,6 +6,7 @@ import { Loader2, Shield, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { MediaManager, type MediaFile } from "../media-manager";
 import type { User } from "./AccountSettingsContainer";
+import { navigateTo } from "@/lib/client/navigate";
 
 function getInitials(nameStr: string): string {
   return nameStr
@@ -63,8 +64,8 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
 
       toast.success("Profile updated successfully");
       setIsEditing(false);
-      // Reload to refresh header with updated user info
-      window.location.reload();
+      // Refresh to update header with updated user info
+      void navigateTo(window.location.pathname);
     } catch {
       toast.error("An unexpected error occurred");
     } finally {

@@ -8,7 +8,7 @@ import { Upload, Loader2, ImageIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import type { UploadProgress } from "../types";
 import { filterImageFiles } from "../utils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface MediaUploadZoneProps {
   onUpload: (files: FileList | null) => Promise<void>;
@@ -66,11 +66,7 @@ export function MediaUploadZone({
         imageFiles.forEach((file) => dataTransfer.items.add(file));
         await onUpload(dataTransfer.files);
       } else {
-        toast({
-          title: "Invalid File Type",
-          description: "Only image files can be uploaded via drag and drop.",
-          variant: "destructive",
-        });
+        toast.error("Invalid File Type", { description: "Only image files can be uploaded via drag and drop." });
       }
       event.dataTransfer.clearData();
     }

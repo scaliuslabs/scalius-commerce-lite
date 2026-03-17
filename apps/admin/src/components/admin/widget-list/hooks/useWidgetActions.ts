@@ -1,6 +1,6 @@
 // src/components/admin/widget-list/hooks/useWidgetActions.ts
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import type { WidgetItem } from "../types";
 
 export function useWidgetActions(
@@ -9,7 +9,6 @@ export function useWidgetActions(
     widgets: WidgetItem[] | ((prev: WidgetItem[]) => WidgetItem[]),
   ) => void,
 ) {
-  const { toast } = useToast();
   const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
   const [isActionLoading, setIsActionLoading] = useState(false);
 
@@ -30,17 +29,10 @@ export function useWidgetActions(
         prev.map((w) => (w.id === widgetId ? { ...w, ...updatedWidget } : w)),
       );
 
-      toast({
-        title: "Success",
-        description: "Widget updated successfully.",
-      });
+      toast.success("Success", { description: "Widget updated successfully." });
     } catch (error) {
       console.error("Error updating widget:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update widget.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to update widget." });
     } finally {
       setSavingStates((prev) => ({ ...prev, [widgetId]: false }));
     }
@@ -63,19 +55,12 @@ export function useWidgetActions(
 
       setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
 
-      toast({
-        title: "Success",
-        description: isPermanent
+      toast.success("Success", { description: isPermanent
           ? "Widget permanently deleted."
-          : "Widget moved to trash.",
-      });
+          : "Widget moved to trash." });
     } catch (error) {
       console.error("Error deleting widget:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete widget.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to delete widget." });
     } finally {
       setIsActionLoading(false);
     }
@@ -93,17 +78,10 @@ export function useWidgetActions(
 
       setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
 
-      toast({
-        title: "Success",
-        description: "Widget restored successfully.",
-      });
+      toast.success("Success", { description: "Widget restored successfully." });
     } catch (error) {
       console.error("Error restoring widget:", error);
-      toast({
-        title: "Error",
-        description: "Failed to restore widget.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to restore widget." });
     } finally {
       setIsActionLoading(false);
       setSavingStates((prev) => ({ ...prev, [widgetId]: false }));

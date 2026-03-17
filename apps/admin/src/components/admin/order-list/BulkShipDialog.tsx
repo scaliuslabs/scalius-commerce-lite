@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { LoaderCircle, Truck } from "lucide-react";
 
 interface Provider {
@@ -39,7 +39,6 @@ export function BulkShipDialog({
   onConfirm,
   itemCount,
 }: BulkShipDialogProps) {
-  const { toast } = useToast();
   const [providers, setProviders] = React.useState<Provider[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = React.useState(false);
   const [selectedProvider, setSelectedProvider] = React.useState("");
@@ -60,11 +59,7 @@ export function BulkShipDialog({
           setProviders(activeProviders);
         } catch (error) {
           console.error("Error fetching providers:", error);
-          toast({
-            title: "Error",
-            description: "Failed to load delivery providers",
-            variant: "destructive",
-          });
+          toast.error("Error", { description: "Failed to load delivery providers" });
         } finally {
           setIsLoadingProviders(false);
         }
@@ -72,15 +67,11 @@ export function BulkShipDialog({
 
       fetchProviders();
     }
-  }, [isOpen, toast]);
+  }, [isOpen]);
 
   const handleSubmit = () => {
     if (!selectedProvider) {
-      toast({
-        title: "Error",
-        description: "Please select a delivery provider.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Please select a delivery provider." });
       return;
     }
     onConfirm(selectedProvider);

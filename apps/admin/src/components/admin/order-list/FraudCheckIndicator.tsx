@@ -6,7 +6,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Shield, ShieldAlert, ShieldCheck, LoaderCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface FraudCheckIndicatorProps {
   phone: string;
@@ -14,7 +14,6 @@ interface FraudCheckIndicatorProps {
 }
 
 export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
-  const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [fraudData, setFraudData] = useState<any>(null);
@@ -34,18 +33,10 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
       if (json.success && result) {
         setFraudData(result);
       } else {
-        toast({
-          title: "Check Failed",
-          description: result.error || "Failed to check fraud data",
-          variant: "destructive",
-        });
+        toast.error("Check Failed", { description: result.error || "Failed to check fraud data" });
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to perform fraud check",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to perform fraud check" });
     } finally {
       setIsLoading(false);
     }

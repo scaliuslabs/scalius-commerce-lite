@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { nanoid } from "nanoid";
@@ -62,7 +62,6 @@ function migrateConfig(config: any): HeaderConfig {
 }
 
 export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
-  const { toast } = useToast();
   const { getStorefrontPath } = useStorefrontUrl();
 
   const [config, setConfig] = useState<HeaderConfig>(() => {
@@ -82,11 +81,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
     if (isLoading) return;
 
     if (!config.logo.src) {
-      toast({
-        title: "Logo Required",
-        description: "Please select a logo before saving.",
-        variant: "destructive",
-      });
+      toast.error("Logo Required", { description: "Please select a logo before saving." });
       setActiveTab("branding");
       return;
     }
@@ -112,22 +107,12 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
         }
       }
 
-      toast({
-        title: "Success!",
-        description: "Header configuration saved successfully.",
-        variant: "default",
-        action: <CheckCircle2 className="h-5 w-5 text-green-500" />,
-      });
+      toast.success("Success!", { description: "Header configuration saved successfully." });
     } catch (error) {
       console.error("Error saving header:", error);
-      toast({
-        title: "Save Failed",
-        description:
-          error instanceof Error
+      toast.error("Save Failed", { description: error instanceof Error
             ? error.message
-            : "An unexpected error occurred.",
-        variant: "destructive",
-      });
+            : "An unexpected error occurred." });
     } finally {
       setIsLoading(false);
     }

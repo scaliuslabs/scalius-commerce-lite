@@ -2,11 +2,10 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
 export function SecuritySettingsBuilder() {
-    const { toast } = useToast();
     const [cspAllowedDomains, setCspAllowedDomains] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(true);
@@ -47,22 +46,12 @@ export function SecuritySettingsBuilder() {
                 );
             }
 
-            toast({
-                title: "Success!",
-                description: "Security settings saved successfully.",
-                variant: "default",
-                action: <CheckCircle2 className="h-5 w-5 text-green-500" />,
-            });
+            toast.success("Success!", { description: "Security settings saved successfully." });
         } catch (error) {
             console.error("Error saving security settings:", error);
-            toast({
-                title: "Save Failed",
-                description:
-                    error instanceof Error
+            toast.error("Save Failed", { description: error instanceof Error
                         ? error.message
-                        : "An unexpected error occurred.",
-                variant: "destructive",
-            });
+                        : "An unexpected error occurred." });
         } finally {
             setIsLoading(false);
         }

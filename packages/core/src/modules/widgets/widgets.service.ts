@@ -1,59 +1,19 @@
 // src/modules/widgets/widgets.service.ts
 // All DB queries and business logic for the widgets domain.
 
-import { widgets, collections, WidgetPlacementRule } from "@scalius/database/schema";
+import { widgets, collections } from "@scalius/database/schema";
 import { isNull, asc, and, sql, inArray, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { z } from "zod";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
+import {
+    createWidgetSchema,
+    updateWidgetSchema,
+    type CreateWidgetInput,
+    type UpdateWidgetInput,
+} from "./widgets.validation";
 
-// ─────────────────────────────────────────
-// Schema
-// ─────────────────────────────────────────
-
-// Base shape without .refine() so .partial() works for the update schema
-const widgetBaseSchema = z.object({
-    name: z.string().min(3),
-    htmlContent: z.string().min(1),
-    cssContent: z.string().optional(),
-    aiContext: z.any().optional(),
-    isActive: z.boolean().default(true),
-    displayTarget: z.enum(["homepage"]).default("homepage"),
-    placementRule: z.enum([
-        WidgetPlacementRule.BEFORE_COLLECTION,
-        WidgetPlacementRule.AFTER_COLLECTION,
-        WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
-        WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
-        WidgetPlacementRule.STANDALONE,
-    ]),
-    referenceCollectionId: z.string().optional().nullable(),
-    sortOrder: z.number().int().optional().default(0),
-});
-
-// Create schema adds the cross-field validation refine
-export const createWidgetSchema = widgetBaseSchema.refine(
-    (data) => {
-        if (
-            (data.placementRule === WidgetPlacementRule.BEFORE_COLLECTION ||
-                data.placementRule === WidgetPlacementRule.AFTER_COLLECTION) &&
-            !data.referenceCollectionId
-        ) {
-            return false;
-        }
-        return true;
-    },
-    {
-        message: "A reference collection is required for this placement rule.",
-        path: ["referenceCollectionId"],
-    },
-);
-
-// Update schema is partial of the base (no cross-field validation needed for partial updates)
-export const updateWidgetSchema = widgetBaseSchema.partial();
-
-export type CreateWidgetInput = z.infer<typeof createWidgetSchema>;
-export type UpdateWidgetInput = z.infer<typeof updateWidgetSchema>;
+export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type UpdateWidgetInput };
 
 // ─────────────────────────────────────────
 // Queries

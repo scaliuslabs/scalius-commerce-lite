@@ -1,7 +1,7 @@
 // src/components/admin/ProductForm/variants/hooks/useVariantOperations.ts
 
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import type { ProductVariant, VariantFormValues, BulkGeneratedVariant } from "../types";
 
 export interface UseVariantOperationsReturn {
@@ -37,7 +37,6 @@ export interface UseVariantOperationsReturn {
 }
 
 export function useVariantOperations(): UseVariantOperationsReturn {
-  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
   const createVariant = async (
@@ -66,19 +65,12 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         deletedAt: result.deletedAt ? new Date(result.deletedAt) : null,
       };
 
-      toast({
-        title: "Success!",
-        description: "Variant has been created successfully.",
-      });
+      toast.success("Success!", { description: "Variant has been created successfully." });
 
       return savedVariant;
     } catch (error) {
       console.error("Failed to create variant:", error);
-      toast({
-        title: "Error Creating Variant",
-        description: error instanceof Error ? error.message : "An unknown error occurred.",
-        variant: "destructive",
-      });
+      toast.error("Error Creating Variant", { description: error instanceof Error ? error.message : "An unknown error occurred." });
       return null;
     } finally {
       setIsLoading(false);
@@ -112,19 +104,12 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         deletedAt: result.deletedAt ? new Date(result.deletedAt) : null,
       };
 
-      toast({
-        title: "Success!",
-        description: "Variant has been updated successfully.",
-      });
+      toast.success("Success!", { description: "Variant has been updated successfully." });
 
       return savedVariant;
     } catch (error) {
       console.error("Failed to update variant:", error);
-      toast({
-        title: "Error Updating Variant",
-        description: error instanceof Error ? error.message : "An unknown error occurred.",
-        variant: "destructive",
-      });
+      toast.error("Error Updating Variant", { description: error instanceof Error ? error.message : "An unknown error occurred." });
       return null;
     } finally {
       setIsLoading(false);
@@ -143,19 +128,12 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         throw new Error(result.error || "Failed to delete variant");
       }
 
-      toast({
-        title: "Success!",
-        description: "Variant has been deleted.",
-      });
+      toast.success("Success!", { description: "Variant has been deleted." });
 
       return true;
     } catch (error) {
       console.error("Failed to delete variant:", error);
-      toast({
-        title: "Deletion Failed",
-        description: error instanceof Error ? error.message : "Could not delete variant.",
-        variant: "destructive",
-      });
+      toast.error("Deletion Failed", { description: error instanceof Error ? error.message : "Could not delete variant." });
       return false;
     } finally {
       setIsLoading(false);
@@ -179,19 +157,12 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         throw new Error(result.error || "Failed to delete variants");
       }
 
-      toast({
-        title: "Success!",
-        description: `${variantIds.length} variants deleted.`,
-      });
+      toast.success("Success!", { description: `${variantIds.length} variants deleted.` });
 
       return true;
     } catch (error) {
       console.error("Failed to bulk delete variants:", error);
-      toast({
-        title: "Bulk Deletion Failed",
-        description: error instanceof Error ? error.message : "Could not delete variants.",
-        variant: "destructive",
-      });
+      toast.error("Bulk Deletion Failed", { description: error instanceof Error ? error.message : "Could not delete variants." });
       return false;
     } finally {
       setIsLoading(false);
@@ -223,19 +194,12 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         throw new Error(result.error || "Failed to update variants");
       }
 
-      toast({
-        title: "Success!",
-        description: "Variants updated successfully.",
-      });
+      toast.success("Success!", { description: "Variants updated successfully." });
 
       return true;
     } catch (error) {
       console.error("Failed to bulk update variants:", error);
-      toast({
-        title: "Update Failed",
-        description: error instanceof Error ? error.message : "Could not update variants.",
-        variant: "destructive",
-      });
+      toast.error("Update Failed", { description: error instanceof Error ? error.message : "Could not update variants." });
       return false;
     } finally {
       setIsLoading(false);
@@ -268,19 +232,12 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         deletedAt: v.deletedAt ? new Date(v.deletedAt) : null,
       }));
 
-      toast({
-        title: "Success!",
-        description: `${savedVariants.length} variants created successfully.`,
-      });
+      toast.success("Success!", { description: `${savedVariants.length} variants created successfully.` });
 
       return savedVariants;
     } catch (error) {
       console.error("Failed to bulk create variants:", error);
-      toast({
-        title: "Bulk Creation Failed",
-        description: error instanceof Error ? error.message : "Could not create variants.",
-        variant: "destructive",
-      });
+      toast.error("Bulk Creation Failed", { description: error instanceof Error ? error.message : "Could not create variants." });
       return [];
     } finally {
       setIsLoading(false);
@@ -312,19 +269,12 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         deletedAt: result.deletedAt ? new Date(result.deletedAt) : null,
       };
 
-      toast({
-        title: "Success!",
-        description: "Variant has been duplicated successfully.",
-      });
+      toast.success("Success!", { description: "Variant has been duplicated successfully." });
 
       return savedVariant;
     } catch (error) {
       console.error("Failed to duplicate variant:", error);
-      toast({
-        title: "Duplication Failed",
-        description: error instanceof Error ? error.message : "Could not duplicate variant.",
-        variant: "destructive",
-      });
+      toast.error("Duplication Failed", { description: error instanceof Error ? error.message : "Could not duplicate variant." });
       return null;
     } finally {
       setIsLoading(false);

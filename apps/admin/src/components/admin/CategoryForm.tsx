@@ -180,7 +180,7 @@ export function CategoryForm({
       setTimeout(() => {
         void navigateTo("/admin/categories");
       }, 500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error submitting form:", error);
       // Toast notifications are already shown above
     } finally {

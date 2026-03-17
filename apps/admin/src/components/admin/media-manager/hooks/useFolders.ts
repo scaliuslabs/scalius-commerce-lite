@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { MediaApiClient } from "../api";
 import type { MediaFolder } from "../types";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export function useFolders(autoLoad: boolean = false) {
   const [folders, setFolders] = useState<MediaFolder[]>([]);
@@ -17,11 +17,7 @@ export function useFolders(autoLoad: boolean = false) {
       setFolders(loadedFolders);
     } catch (error) {
       console.error("Error loading folders:", error);
-      toast({
-        title: "Error Loading Folders",
-        description: "Could not load folders. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Error Loading Folders", { description: "Could not load folders. Please try again." });
     } finally {
       setIsLoading(false);
     }
@@ -33,20 +29,12 @@ export function useFolders(autoLoad: boolean = false) {
         const newFolder = await MediaApiClient.createFolder(name, parentId);
         setFolders((prev) => [...prev, newFolder]);
 
-        toast({
-          title: "Folder Created",
-          description: `Successfully created folder "${name}".`,
-        });
+        toast.success("Folder Created", { description: `Successfully created folder "${name}".` });
 
         return newFolder;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error creating folder:", error);
-        toast({
-          title: "Folder Creation Failed",
-          description:
-            error.message || "Could not create folder. Please try again.",
-          variant: "destructive",
-        });
+        toast.error("Folder Creation Failed", { description: (error instanceof Error ? error.message : String(error)) || "Could not create folder. Please try again." });
         throw error;
       }
     },
@@ -64,18 +52,10 @@ export function useFolders(autoLoad: boolean = false) {
           setCurrentFolderId(null);
         }
 
-        toast({
-          title: "Folder Deleted",
-          description: "The folder has been successfully deleted.",
-        });
-      } catch (error: any) {
+        toast.success("Folder Deleted", { description: "The folder has been successfully deleted." });
+      } catch (error: unknown) {
         console.error("Error deleting folder:", error);
-        toast({
-          title: "Deletion Failed",
-          description:
-            error.message || "Could not delete folder. Please try again.",
-          variant: "destructive",
-        });
+        toast.error("Deletion Failed", { description: (error instanceof Error ? error.message : String(error)) || "Could not delete folder. Please try again." });
         throw error;
       }
     },

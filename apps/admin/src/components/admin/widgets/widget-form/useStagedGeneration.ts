@@ -110,9 +110,9 @@ Respond ONLY with the JSON object, no markdown formatting.`,
       }
 
       return plan;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating plan:", error);
-      toast.error(`Planning failed: ${error.message}`);
+      toast.error(`Planning failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }, []);
@@ -214,7 +214,7 @@ Respond with the section code in tag format.`,
         id: `section-${sectionIndex}-${Date.now()}`,
         timestamp: Date.now(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error generating section ${sectionIndex}:`, error);
 
       // Retry logic with exponential backoff
@@ -225,7 +225,7 @@ Respond with the section code in tag format.`,
         return generateSection(model, messages, sectionIndex, sectionDescription, totalSections, previousSections, retryAttempt + 1);
       }
 
-      toast.error(`Failed to generate section ${sectionIndex + 1}: ${error.message}`);
+      toast.error(`Failed to generate section ${sectionIndex + 1}: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }, []);
@@ -338,15 +338,15 @@ ${generatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${
         html: combinedHtml,
         css: combinedCss,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Staged generation error:", error);
       setState(prev => ({
         ...prev,
         currentStage: 'error',
-        error: error.message,
+        error: (error instanceof Error ? error.message : String(error)),
         isGenerating: false,
       }));
-      toast.error(`Generation failed: ${error.message}`);
+      toast.error(`Generation failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }, [createPlan, generateSection]);

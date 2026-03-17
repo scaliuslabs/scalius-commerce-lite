@@ -177,8 +177,8 @@ function CategoryCombobox({
       onCategoryCreated(newCategory);
       setOpen(false);
       setSearch("");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to create category");
+    } catch (error: unknown) {
+      toast.error((error instanceof Error ? error.message : String(error)) || "Failed to create category");
     } finally {
       setIsCreating(false);
     }

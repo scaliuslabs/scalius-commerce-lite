@@ -327,13 +327,13 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         body: JSON.stringify({ historyId }),
       });
       if (response.ok) {
-        toast.success('Version restored successfully! The page will now reload.');
-        setTimeout(() => window.location.reload(), 1500);
+        toast.success('Version restored successfully!');
+        void navigateTo(window.location.pathname);
       } else {
         throw new Error('Failed to restore version.');
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -352,8 +352,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       } else {
         throw new Error('Failed to delete version.');
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -400,7 +400,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         const errorData = await response.json().catch(() => ({ message: 'An unexpected error occurred.' }));
         toast.error(errorData.message || `Failed to ${isCreateMode ? 'create' : 'update'} widget.`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error('An error occurred during submission.');
     }
   };

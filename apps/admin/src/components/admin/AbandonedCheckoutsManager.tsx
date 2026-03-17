@@ -381,8 +381,8 @@ export function AbandonedCheckoutsManager() {
         setCheckouts(data.checkouts);
         setPagination(data.pagination);
         setSelectedIds(new Set());
-      } catch (error: any) {
-        toast.error("Failed to load checkouts", { description: error.message });
+      } catch (error: unknown) {
+        toast.error("Failed to load checkouts", { description: error instanceof Error ? error.message : String(error) });
       } finally {
         setIsLoading(false);
       }

@@ -150,9 +150,9 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
         await handleSimpleGeneration(promptResult.messages);
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error generating content:`, error);
-      toast.error(ERROR_MESSAGES.generationFailed(error.message));
+      toast.error(ERROR_MESSAGES.generationFailed(error instanceof Error ? error.message : String(error)));
       setIsPreviewOpen(false);
     } finally {
       setIsLoadingPrompt(false);
@@ -241,9 +241,9 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
         }
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error generating content:`, error);
-      toast.error(`Generation failed: ${error.message}`);
+      toast.error(`Generation failed: ${error instanceof Error ? error.message : String(error)}`);
       setIsPreviewOpen(false);
     } finally {
       setIsLoadingPrompt(false);
@@ -313,9 +313,9 @@ ${aiContext.selectedImages.length > 0 ? `\n\n**Note**: ${aiContext.selectedImage
       await navigator.clipboard.writeText(standalonePrompt);
       toast.success("Standalone prompt copied! Paste it into any AI chatbot.", { id: toastId });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error preparing prompt for copy:", error);
-      toast.error(`Failed to copy prompt: ${error.message}`, { id: toastId });
+      toast.error(`Failed to copy prompt: ${error instanceof Error ? error.message : String(error)}`, { id: toastId });
     }
   };
 

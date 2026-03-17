@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { MediaApiClient } from "./api";
 import { Upload, Loader2 } from "lucide-react";
 import {
@@ -169,20 +169,13 @@ export function MediaManagerPage() {
 
     try {
       await MediaApiClient.moveFilesToFolder(selectedFileIds, folderId);
-      toast({
-        title: "Files Moved",
-        description: `Successfully moved ${selectedFileIds.length} file${selectedFileIds.length !== 1 ? "s" : ""}.`,
-      });
+      toast.success("Files Moved", { description: `Successfully moved ${selectedFileIds.length} file${selectedFileIds.length !== 1 ? "s" : ""}.` });
       setSelectedFileIds([]);
       // Reload with correct folder context
       const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
       applyFilters({ ...filters, folderId: folderParam });
-    } catch (error: any) {
-      toast({
-        title: "Move Failed",
-        description: error.message || "Could not move files. Please try again.",
-        variant: "destructive",
-      });
+    } catch (error: unknown) {
+      toast.error("Move Failed", { description: (error instanceof Error ? error.message : String(error)) || "Could not move files. Please try again." });
     }
   };
 

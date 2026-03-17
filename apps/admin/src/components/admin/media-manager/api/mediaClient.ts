@@ -128,7 +128,7 @@ export class MediaApiClient {
 
       // Fallback for unexpected responses
       return data.files || [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Re-throw with better context if it's a network error
       if (error instanceof TypeError && error.message.includes("fetch")) {
         throw new Error(

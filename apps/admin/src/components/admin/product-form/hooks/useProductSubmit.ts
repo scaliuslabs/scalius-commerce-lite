@@ -1,7 +1,7 @@
 // src/components/admin/product-form/hooks/useProductSubmit.ts
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission } from "../utils";
 import { navigateTo } from "@/lib/client/navigate";
@@ -30,7 +30,6 @@ export function useProductSubmit({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
-  const { toast } = useToast();
 
   const handleSubmit = async (values: ProductFormValues) => {
     try {
@@ -78,28 +77,16 @@ export function useProductSubmit({
               });
             }
           });
-          toast({
-            variant: "destructive",
-            title: "Validation Error",
-            description: "Please check the form for errors.",
-          });
+          toast.error("Validation Error", { description: "Please check the form for errors." });
         } else {
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description:
-              data.error || "Failed to save product. Please try again.",
-          });
+          toast.error("Error", { description: data.error || "Failed to save product. Please try again." });
         }
         throw new Error(data.error || "Failed to save product");
       }
 
-      toast({
-        title: "Success",
-        description: isEdit
+      toast.success("Success", { description: isEdit
           ? "Product updated successfully."
-          : "Product created successfully.",
-      });
+          : "Product created successfully." });
 
       // Reset form dirty state after successful save
       if (isEdit) {
