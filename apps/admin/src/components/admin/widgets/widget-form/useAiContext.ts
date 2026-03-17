@@ -34,7 +34,8 @@ export const useAiContext = (
     try {
       const response = await fetch(`/api/v1/admin/products?page=${pageToFetch}&limit=10&sort=updatedAt&order=desc`);
       if (response.ok) {
-        const data = await response.json();
+        const json = await response.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         const newProducts: ProductSearchResult[] = (data.products || []).map((p: any) => ({
           id: p.id,
           name: p.name,
@@ -64,7 +65,8 @@ export const useAiContext = (
       try {
         const response = await fetch("/api/v1/admin/categories?limit=200");
         if (response.ok) {
-          const data = await response.json();
+          const json = await response.json();
+          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
           setAllCategoriesList(data.categories || []);
         }
       } catch (error) {
@@ -84,7 +86,8 @@ export const useAiContext = (
       try {
         const response = await fetch(`/api/v1/admin/products?search=${encodeURIComponent(debouncedProductSearch)}&limit=10`);
         if (response.ok) {
-          const data = await response.json();
+          const json = await response.json();
+          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
           const newProducts: ProductSearchResult[] = (data.products || []).map((p: any) => ({
             id: p.id,
             name: p.name,

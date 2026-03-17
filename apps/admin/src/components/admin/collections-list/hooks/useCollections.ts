@@ -37,7 +37,8 @@ export function useCollections(
     try {
       const response = await fetch(`/api/v1/admin/collections?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch collections");
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setCollections(data.collections || []);
       if (data.pagination) {
         setPagination(data.pagination);

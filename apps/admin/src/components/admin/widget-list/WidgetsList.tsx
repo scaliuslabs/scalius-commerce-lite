@@ -106,7 +106,10 @@ export function WidgetsList({
     if (isSettingsOpen) {
       fetch("/api/v1/admin/settings/openrouter")
         .then((res) => res.json())
-        .then((data) => setOpenRouterApiKey(data.apiKey || ""))
+        .then((json) => {
+          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+          setOpenRouterApiKey(data.apiKey || "");
+        })
         .catch(() => {});
     }
   }, [isSettingsOpen]);

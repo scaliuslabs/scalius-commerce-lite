@@ -28,7 +28,8 @@ async function fetchStorefrontUrl(): Promise<string> {
       }
       return response.json();
     })
-    .then((data) => {
+    .then((json) => {
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       const url = data.storefrontUrl || "/";
       globalStorefrontUrl = url;
       globalPromise = null; // Clear the promise

@@ -162,7 +162,8 @@ function CategoryCombobox({
         }),
       });
 
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       if (!response.ok) {
         throw new Error(data.error || "Failed to create category");
       }

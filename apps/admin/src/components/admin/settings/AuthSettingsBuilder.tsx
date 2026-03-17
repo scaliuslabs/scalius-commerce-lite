@@ -42,7 +42,8 @@ export default function AuthSettingsBuilder() {
         try {
             const res = await fetch("/api/v1/admin/settings/auth");
             if (res.ok) {
-                const data = await res.json();
+                const json = await res.json();
+                const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
                 setAuthVerificationMethod(data.authVerificationMethod || "email");
                 setWhatsappAccessToken(data.whatsappAccessToken || "");
                 setWhatsappPhoneNumberId(data.whatsappPhoneNumberId || "");

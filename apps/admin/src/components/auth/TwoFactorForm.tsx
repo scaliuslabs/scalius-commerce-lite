@@ -44,8 +44,9 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
       try {
         const response = await fetch("/api/v1/admin/auth/2fa/info");
         if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.method) {
+          const json = await response.json();
+          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+          if (data.method) {
             setMethod(data.method);
             setUserEmail(data.email || "");
             if (data.method === "email") {

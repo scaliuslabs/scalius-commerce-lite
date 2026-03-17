@@ -109,15 +109,18 @@ export function CacheManager() {
       ]);
 
       if (statsRes.ok) {
-        const data = await statsRes.json();
+        const json1 = await statsRes.json();
+        const data = json1.data && typeof json1.data === "object" && !Array.isArray(json1.data) ? json1.data : json1;
         setStats(data.stats);
       }
       if (timestampsRes.ok) {
-        const data = await timestampsRes.json();
+        const json2 = await timestampsRes.json();
+        const data = json2.data && typeof json2.data === "object" && !Array.isArray(json2.data) ? json2.data : json2;
         setTimestamps(data.timestamps || {});
       }
       if (groupsRes.ok) {
-        const data = await groupsRes.json();
+        const json3 = await groupsRes.json();
+        const data = json3.data && typeof json3.data === "object" && !Array.isArray(json3.data) ? json3.data : json3;
         setGroups(data.groups || {});
         setPathMapping(data.pathMapping || {});
       }

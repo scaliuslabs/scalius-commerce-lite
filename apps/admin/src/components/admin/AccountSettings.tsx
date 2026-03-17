@@ -1108,7 +1108,8 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
   const fetchAdminUsers = async () => {
     try {
       const response = await fetch("/api/v1/admin/auth/users");
-      const result = await response.json();
+      const json = await response.json();
+      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       if (response.ok) setAdminUsers(result.users);
     } catch {
       console.error("Failed to fetch admin users");
@@ -1120,7 +1121,8 @@ function AdminUsersSection({ currentUserId }: { currentUserId: string }) {
   const fetchRoles = async () => {
     try {
       const response = await fetch("/api/v1/admin/rbac/roles");
-      const result = await response.json();
+      const json2 = await response.json();
+      const result = json2.data && typeof json2.data === "object" && !Array.isArray(json2.data) ? json2.data : json2;
       if (response.ok) {
         // Filter out super_admin role - it shouldn't be assignable
         setAvailableRoles(result.roles.filter((r: Role) => r.name !== "super_admin"));

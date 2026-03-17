@@ -285,7 +285,8 @@ export function DeliveryLocationsManager() {
         throw new Error("Failed to load locations");
       }
 
-      const result = await response.json();
+      const json = await response.json();
+      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setLocations(result.locations);
       setFilteredLocations(result.locations);
       setPagination({
@@ -313,7 +314,8 @@ export function DeliveryLocationsManager() {
         throw new Error(`Failed to load ${parentType}s`);
       }
 
-      const result = await response.json();
+      const json2 = await response.json();
+      const result = json2.data && typeof json2.data === "object" && !Array.isArray(json2.data) ? json2.data : json2;
       setParentLocations(result.locations);
     } catch (error) {
       console.error(`Error loading ${parentType}s:`, error);

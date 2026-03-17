@@ -77,7 +77,8 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
         throw new Error(errorData.error || "Failed to create shipment");
       }
 
-      const shipment = await response.json();
+      const shipmentJson = await response.json();
+      const shipment = shipmentJson.data && typeof shipmentJson.data === "object" && !Array.isArray(shipmentJson.data) ? shipmentJson.data : shipmentJson;
       toast.success("Shipment created successfully");
 
       if (onSuccess) {

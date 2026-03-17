@@ -71,7 +71,8 @@ export function AttributeValueEditor({
         `/api/v1/admin/attributes/${attributeId}/values`,
       );
       if (!response.ok) throw new Error("Failed to fetch values");
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setValues(data.values || []);
     } catch (error) {
       console.error("Error fetching values:", error);

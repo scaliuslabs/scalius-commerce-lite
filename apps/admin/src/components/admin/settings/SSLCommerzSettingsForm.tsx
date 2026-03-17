@@ -37,7 +37,8 @@ export default function SSLCommerzSettingsForm() {
     try {
       const res = await fetch("/api/v1/admin/settings/sslcommerz");
       if (res.ok) {
-        const data = await res.json();
+        const json = await res.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setStoreId(data.storeId || "");
         setStorePassword(data.storePassword || "");
         setSandbox(data.sandbox ?? true);

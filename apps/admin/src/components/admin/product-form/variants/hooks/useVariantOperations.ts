@@ -52,12 +52,13 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         body: JSON.stringify(values),
       });
 
-      const result = await response.json();
+      const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to create variant");
+        throw new Error(json.error || "Failed to create variant");
       }
 
+      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       const savedVariant: ProductVariant = {
         ...result,
         createdAt: new Date(result.createdAt),
@@ -97,12 +98,13 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         body: JSON.stringify(values),
       });
 
-      const result = await response.json();
+      const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to update variant");
+        throw new Error(json.error || "Failed to update variant");
       }
 
+      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       const savedVariant: ProductVariant = {
         ...result,
         createdAt: new Date(result.createdAt),
@@ -252,12 +254,13 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         body: JSON.stringify({ variants }),
       });
 
-      const result = await response.json();
+      const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to create variants");
+        throw new Error(json.error || "Failed to create variants");
       }
 
+      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       const savedVariants: ProductVariant[] = result.variants.map((v: any) => ({
         ...v,
         createdAt: new Date(v.createdAt),
@@ -295,12 +298,13 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         headers: { "Content-Type": "application/json" },
       });
 
-      const result = await response.json();
+      const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to duplicate variant");
+        throw new Error(json.error || "Failed to duplicate variant");
       }
 
+      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       const savedVariant: ProductVariant = {
         ...result,
         createdAt: new Date(result.createdAt),

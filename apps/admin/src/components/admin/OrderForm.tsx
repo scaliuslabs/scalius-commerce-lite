@@ -102,7 +102,8 @@ export function OrderForm({
     try {
       const res = await fetch("/api/v1/admin/settings/delivery-locations?type=city");
       if (!res.ok) throw new Error("Failed to load cities");
-      const data = await res.json();
+      const json = await res.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setLocations((prev) => ({ ...prev, cities: data.locations || [] }));
     } catch (error) {
       console.error("Error loading cities:", error);
@@ -123,7 +124,8 @@ export function OrderForm({
         `/api/v1/admin/settings/delivery-locations?type=zone&parentId=${cityId}`,
       );
       if (!res.ok) throw new Error("Failed to load zones");
-      const data = await res.json();
+      const json = await res.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setLocations((prev) => ({ ...prev, zones: data.locations || [], areas: [] }));
       form.setValue("area", null);
     } catch (error) {
@@ -146,7 +148,8 @@ export function OrderForm({
         `/api/v1/admin/settings/delivery-locations?type=area&parentId=${zoneId}`,
       );
       if (!res.ok) throw new Error("Failed to load areas");
-      const data = await res.json();
+      const json = await res.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setLocations((prev) => ({ ...prev, areas: data.locations || [] }));
     } catch (error) {
       console.error("Error loading areas:", error);

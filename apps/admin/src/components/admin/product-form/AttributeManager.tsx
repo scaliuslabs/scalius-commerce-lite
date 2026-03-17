@@ -55,7 +55,8 @@ export function AttributeManager({
     try {
       const response = await fetch("/api/v1/admin/attributes?limit=999");
       if (!response.ok) throw new Error("Failed");
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setAvailableAttributes(data.attributes);
       return data.attributes as AttributeDefinition[];
     } catch {
@@ -109,7 +110,8 @@ export function AttributeManager({
       });
 
       if (!response.ok) throw new Error("Failed");
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       const created = data.attribute;
 
       toast.success("Attribute created");
@@ -367,7 +369,8 @@ function AttributeValueSelector({
           `/api/v1/admin/attributes/${attributeId}/values?${p.toString()}`,
         );
         if (!res.ok) return;
-        const data = await res.json();
+        const json = await res.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
 
         setItems((prev) => (reset ? data.values : [...prev, ...data.values]));
         setHasMore(data.values.length === 10);

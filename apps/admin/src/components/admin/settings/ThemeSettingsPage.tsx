@@ -179,7 +179,8 @@ export default function ThemeSettingsPage() {
             setLoading(true);
             const res = await fetch("/api/v1/admin/settings/theme");
             if (!res.ok) throw new Error("Failed to load");
-            const data = await res.json();
+            const json = await res.json();
+            const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
             setColors(data.colors || {});
         } catch {
             setMessage({ type: "error", text: "Failed to load theme settings." });

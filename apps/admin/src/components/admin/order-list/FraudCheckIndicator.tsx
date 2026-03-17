@@ -28,10 +28,11 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
         body: JSON.stringify({ phone }),
       });
 
-      const result = await response.json();
+      const json = await response.json();
+      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
 
-      if (result.success && result.data) {
-        setFraudData(result.data);
+      if (json.success && result) {
+        setFraudData(result);
       } else {
         toast({
           title: "Check Failed",

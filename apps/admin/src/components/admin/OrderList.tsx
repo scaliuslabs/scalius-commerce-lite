@@ -152,7 +152,8 @@ export function OrderList({
         const response = await fetch(url.toString());
         if (!response.ok) throw new Error("Failed to fetch orders");
 
-        const data = await response.json();
+        const json = await response.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         const parsedOrders = data.orders.map((order: any) => ({
           ...order,
           createdAt: new Date(order.createdAt),
