@@ -8,8 +8,14 @@ import { invalidateHonoCacheIfNeeded } from "@/lib/middleware-helper/hono-cache-
 export const cacheInvalidationMiddleware = defineMiddleware(
   async (context, next) => {
     const response = await next();
+    if (!response) return new Response("Internal Server Error", { status: 500 });
 
-    await invalidateHonoCacheIfNeeded(context, response);
+    try {
+      await invalidateHonoCacheIfNeeded(context, response);
+    } catch (error) {
+      console.error("[Cache Invalidation] Error:", error);
+      // Don't crash the response — cache invalidation is best-effort
+    }
 
     return response;
   },
