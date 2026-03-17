@@ -40,7 +40,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useMetaConversionsLogs, type MetaConversionsLog } from "./hooks/useMetaConversionsLogs";
+import { useMetaConversionsLogs } from "./hooks/useMetaConversionsLogs";
 import { LogDetails } from "./LogDetails";
 
 function formatDate(timestamp: string | number | Date | null): string {

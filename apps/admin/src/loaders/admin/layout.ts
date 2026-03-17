@@ -66,7 +66,7 @@ export async function getAdminLayoutFirebaseConfig(
   return firebaseConfig;
 }
 
-export async function getAccountSecurityData(userId: string): Promise<{
+export async function getAccountSecurityData(_userId: string): Promise<{
   twoFactorMethod: string | null;
   isSuperAdmin: boolean;
 }> {

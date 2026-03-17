@@ -38,7 +38,7 @@ export function BulkActionDialog({
   open,
   onOpenChange,
   currentAction,
-  selectedCount,
+  selectedCount: _selectedCount,
   actionConfigs,
   onConfirm,
   isLoading = false,

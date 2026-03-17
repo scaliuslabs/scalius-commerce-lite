@@ -91,7 +91,9 @@ const navSections = getFilteredNavSections(permissions, userData.isSuperAdmin);
       </div>
     </div>
 
-    <SonnerToaster richColors closeButton client:idle transition:persist />
+    <div id="toast-portal" transition:persist="toast-portal">
+      <SonnerToaster richColors closeButton client:load transition:persist />
+    </div>
 
     <script>
       import { initNavProgress } from "@/lib/client/nav-progress";

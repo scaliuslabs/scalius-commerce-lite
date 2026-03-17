@@ -4,7 +4,6 @@ import { Label } from "@/components/ui/label";
 import { CheckCircle2, HelpCircle } from "lucide-react";
 import {
   type PolarData,
-  MASKED,
   PasswordInput,
   LiveWarning,
   SaveBtn,
