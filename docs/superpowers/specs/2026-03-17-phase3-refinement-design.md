@@ -131,9 +131,9 @@ React component
 ### Agent 1 — Products & Catalog
 
 **Files owned (exact paths):**
-- `apps/admin/src/components/admin/categories/CategoryList.tsx` (1,438 lines)
-- `apps/admin/src/components/admin/products/ProductList.tsx` (1,386 lines)
-- `apps/admin/src/components/admin/collections/CollectionForm.tsx` (653 lines)
+- `apps/admin/src/components/admin/CategoryList.tsx` (1,438 lines)
+- `apps/admin/src/components/admin/ProductList.tsx` (1,386 lines)
+- `apps/admin/src/components/admin/CollectionForm.tsx` (653 lines)
 - `apps/admin/src/components/admin/product-form/variants/BulkVariantGenerator.tsx` (706 lines)
 - All new files created by splitting these components
 
@@ -151,8 +151,8 @@ React component
 ### Agent 2 — Orders, Customers & Discounts
 
 **Files owned (exact paths):**
-- `apps/admin/src/components/admin/orders/OrderList.tsx` (804 lines)
-- `apps/admin/src/components/admin/customers/CustomerList.tsx` (959 lines)
+- `apps/admin/src/components/admin/OrderList.tsx` (804 lines)
+- `apps/admin/src/components/admin/CustomerList.tsx` (959 lines)
 - `apps/admin/src/components/admin/discount/DiscountList.tsx` (1,367 lines)
 - `apps/admin/src/components/admin/discount/AmountOffProductsForm.tsx` (905 lines)
 - All new files created by splitting these components
