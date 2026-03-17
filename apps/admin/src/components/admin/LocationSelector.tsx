@@ -38,29 +38,12 @@ export function LocationSelector() {
   const [loadingZones, setLoadingZones] = useState(false);
   const [loadingAreas, setLoadingAreas] = useState(false);
 
-  // Log initial values when component first mounts
-  console.log("LocationSelector initial values:", {
-    city: form.getValues("city"),
-    zone: form.getValues("zone"),
-    area: form.getValues("area"),
-    cityName: form.getValues("cityName"),
-    zoneName: form.getValues("zoneName"),
-    areaName: form.getValues("areaName"),
-  });
-
   // Load cities on initial mount and handle initial values
   useEffect(() => {
     const loadInitialData = async () => {
       // Keep record of initial values
       const initialCity = form.getValues("city");
       const initialZone = form.getValues("zone");
-      const initialArea = form.getValues("area");
-
-      console.log("Initial location values:", {
-        initialCity,
-        initialZone,
-        initialArea,
-      });
 
       // Set loading states
       setLoadingCities(true);
@@ -125,7 +108,6 @@ export function LocationSelector() {
       const selectedCity = cities.find((c) => c.id === city);
       if (selectedCity) {
         form.setValue("cityName", selectedCity.name);
-        console.log("Set cityName to", selectedCity.name);
       }
 
       loadZones(city);
@@ -148,7 +130,6 @@ export function LocationSelector() {
       const selectedZone = zones.find((z) => z.id === zone);
       if (selectedZone) {
         form.setValue("zoneName", selectedZone.name);
-        console.log("Set zoneName to", selectedZone.name);
       }
 
       loadAreas(zone);
@@ -168,7 +149,6 @@ export function LocationSelector() {
       const selectedArea = areas.find((a) => a.id === area);
       if (selectedArea) {
         form.setValue("areaName", selectedArea.name);
-        console.log("Set areaName to", selectedArea.name);
       }
     } else {
       form.setValue("areaName", "");
@@ -180,13 +160,6 @@ export function LocationSelector() {
     // This effect runs on every render to check if the values changed from outside
     const currentCity = form.getValues("city");
     const currentZone = form.getValues("zone");
-    const currentArea = form.getValues("area");
-
-    console.log("LocationSelector checking values:", {
-      currentCity,
-      currentZone,
-      currentArea,
-    });
 
     // If we have city and cities are loaded but the city isn't in the currently selected dropdown
     if (
@@ -194,7 +167,6 @@ export function LocationSelector() {
       cities.length > 0 &&
       !cities.some((c) => c.id === currentCity)
     ) {
-      console.log("City value present but not in dropdown, loading zones");
       loadZones(currentCity);
     }
 
@@ -204,7 +176,6 @@ export function LocationSelector() {
       zones.length > 0 &&
       !zones.some((z) => z.id === currentZone)
     ) {
-      console.log("Zone value present but not in dropdown, loading areas");
       loadAreas(currentZone);
     }
   }, []);
@@ -271,10 +242,6 @@ export function LocationSelector() {
                   const selectedCity = cities.find((c) => c.id === cityId);
                   if (selectedCity) {
                     form.setValue("cityName", selectedCity.name);
-                    console.log(
-                      "✅ Direct cityName set on change:",
-                      selectedCity.name,
-                    );
                   }
                 } else {
                   form.setValue("cityName", "");
@@ -332,10 +299,6 @@ export function LocationSelector() {
                   const selectedZone = zones.find((z) => z.id === zoneId);
                   if (selectedZone) {
                     form.setValue("zoneName", selectedZone.name);
-                    console.log(
-                      "✅ Direct zoneName set on change:",
-                      selectedZone.name,
-                    );
                   }
                 } else {
                   form.setValue("zoneName", "");
@@ -392,10 +355,6 @@ export function LocationSelector() {
                   const selectedArea = areas.find((a) => a.id === areaId);
                   if (selectedArea) {
                     form.setValue("areaName", selectedArea.name);
-                    console.log(
-                      "✅ Direct areaName set on change:",
-                      selectedArea.name,
-                    );
                   }
                 } else {
                   form.setValue("areaName", "");

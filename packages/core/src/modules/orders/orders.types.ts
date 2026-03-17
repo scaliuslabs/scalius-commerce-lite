@@ -50,6 +50,8 @@ export interface OrderDetails extends OrderListItem {
     notes: string | null;
     shippingAddress: string;
     customerId: string | null;
+    paidAmount: number | null;
+    balanceDue: number | null;
     deletedAt: Date | null;
     items: {
         id: string;

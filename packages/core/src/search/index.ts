@@ -53,8 +53,6 @@ export async function search(
   pages: PageSearchResult[];
   categories: CategorySearchResult[];
 }> {
-  console.log(`Search request: "${query}" with options:`, options);
-
   const limit = options?.limit || 10;
   const searchPages = options?.searchPages !== false;
   const searchCategories = options?.searchCategories !== false;
@@ -186,10 +184,6 @@ export async function search(
       ...category,
       type: "category" as const,
     })) as CategorySearchResult[];
-
-    console.log(
-      `Search for "${query}" found products: ${formattedProducts.length}, pages: ${formattedPages.length}, categories: ${formattedCategories.length}`,
-    );
 
     return {
       products: formattedProducts,

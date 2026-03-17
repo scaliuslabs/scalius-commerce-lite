@@ -149,9 +149,6 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
         if (done) {
           // Save raw output for debugging
           setRawOutput(accumulatedJson);
-          console.log('=== RAW IMPROVEMENT OUTPUT ===');
-          console.log(accumulatedJson);
-          console.log('=== END RAW OUTPUT ===');
 
           // Try tag-based parsing first, then fall back to JSON
           const tagResult = parseTagBasedResponse(accumulatedJson);

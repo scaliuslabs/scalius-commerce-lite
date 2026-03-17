@@ -30,13 +30,6 @@ export function useShipmentStatus() {
     // Clean the orderId to ensure it doesn't contain path segments
     const cleanedOrderId = cleanOrderId(orderId);
 
-    console.log(`Original orderId: ${orderId}`);
-    console.log(`Cleaned orderId: ${cleanedOrderId}`);
-    console.log(`shipmentId: ${shipmentId}`);
-    console.log(
-      `Request URL: /api/v1/admin/orders/${cleanedOrderId}/shipments/${shipmentId}/refresh`,
-    );
-
     setIsRefreshing((prev) => ({ ...prev, [shipmentId]: true }));
     try {
       const response = await fetch(
@@ -52,7 +45,6 @@ export function useShipmentStatus() {
       }
 
       const updatedShipment = await response.json();
-      console.log("Shipment refresh response:", updatedShipment);
 
       if (updatedShipment.statusChanged) {
         toast.success(`Status updated to: ${updatedShipment.status}`);

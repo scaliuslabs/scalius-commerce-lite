@@ -352,7 +352,6 @@ export function CategoryList({
         let errorData;
         try {
           errorData = await response.json();
-          console.log("Category delete error response:", errorData);
         } catch (parseError) {
           console.error("Failed to parse error response:", parseError);
           errorData = {};
@@ -414,7 +413,6 @@ export function CategoryList({
         let errorData;
         try {
           errorData = await response.json();
-          console.log("Permanent delete error response:", errorData);
         } catch (parseError) {
           console.error(
             "Failed to parse permanent delete error response:",
@@ -528,7 +526,6 @@ export function CategoryList({
         let errorData;
         try {
           errorData = await response.json();
-          console.log("Bulk delete error response:", errorData);
         } catch (parseError) {
           console.error(
             "Failed to parse bulk delete error response:",

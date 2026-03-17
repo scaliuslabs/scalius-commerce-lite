@@ -68,10 +68,6 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   const handleRefresh = async () => {
     if (isRefreshing[shipment.id]) return;
 
-    console.log(
-      `Attempting to refresh shipment status with orderId: ${shipment.orderId}, shipmentId: ${shipment.id}`,
-    );
-
     const updatedShipment = await refreshShipmentStatus(
       shipment.orderId,
       shipment.id,

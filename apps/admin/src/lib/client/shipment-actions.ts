@@ -38,7 +38,6 @@ export function initShipmentActions(): void {
       orderId = cleanOrderId(orderId);
 
       try {
-        console.log("Creating shipment:", { orderId, providerId, options });
         const response = await fetch(`/api/orders/${orderId}/shipments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -86,17 +85,6 @@ export function initShipmentActions(): void {
         // Clean the orderId to be safe
         orderId = cleanOrderId(orderId);
 
-        console.log(
-          "Checking shipment status for order:",
-          orderId,
-          "shipment:",
-          shipmentId
-        );
-        console.log(
-          "Request URL:",
-          `/api/orders/${orderId}/shipments/${shipmentId}/refresh`
-        );
-
         const response = await fetch(
           `/api/orders/${orderId}/shipments/${shipmentId}/refresh`,
           {
@@ -114,7 +102,6 @@ export function initShipmentActions(): void {
         }
 
         const result = await response.json();
-        console.log("Shipment status check result:", result);
 
         return {
           success: true,
