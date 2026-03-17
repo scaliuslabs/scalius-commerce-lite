@@ -131,13 +131,14 @@ export function RolesManagement() {
         body: JSON.stringify(roleData),
       });
 
-      const data = await response.json();
+      const json = await response.json();
 
       if (!response.ok) {
-        toast.error(data.error || "Failed to create role");
+        toast.error(json.error || "Failed to create role");
         return false;
       }
 
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setRoles([...roles, data.role]);
       toast.success("Role created successfully");
       return true;
@@ -163,13 +164,14 @@ export function RolesManagement() {
         body: JSON.stringify(updates),
       });
 
-      const data = await response.json();
+      const json = await response.json();
 
       if (!response.ok) {
-        toast.error(data.error || "Failed to update role");
+        toast.error(json.error || "Failed to update role");
         return false;
       }
 
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setRoles(roles.map((r) => (r.id === roleId ? data.role : r)));
       toast.success("Role updated successfully");
       return true;

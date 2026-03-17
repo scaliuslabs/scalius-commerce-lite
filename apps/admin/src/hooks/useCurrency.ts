@@ -35,7 +35,8 @@ export function useCurrency() {
     if (!hasFetchedThisSession && !_fetchPromise) {
       _fetchPromise = fetch("/api/v1/admin/settings/currency")
         .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
+        .then((json) => {
+          const data = json?.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
           const s = data?.currencySymbol || DEFAULT_SYMBOL;
           const c = data?.currencyCode || DEFAULT_CODE;
           _cached = { symbol: s, code: c };

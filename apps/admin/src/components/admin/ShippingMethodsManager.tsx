@@ -153,7 +153,8 @@ export function ShippingMethodsManager({}: ShippingMethodsManagerProps) {
           `/api/v1/admin/settings/shipping-methods?${params.toString()}`,
         );
         if (!response.ok) throw new Error("Failed to fetch shipping methods");
-        const data = await response.json();
+        const json = await response.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
 
         setMethods(data.shippingMethods || []);
         setPagination(

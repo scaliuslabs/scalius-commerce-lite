@@ -162,7 +162,8 @@ export function AddNavItemDialog({
       try {
         const res = await fetch(`/api/v1/admin/attributes/${attributeId}/values`);
         if (res.ok) {
-          const data = await res.json();
+          const json = await res.json();
+          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
           setAttributeValues((prev) => ({
             ...prev,
             [attributeId]: data.values || [],
@@ -199,7 +200,8 @@ export function AddNavItemDialog({
           `/api/v1/admin/navigation/preview-products?${params.toString()}`,
         );
         if (res.ok) {
-          const data = await res.json();
+          const json = await res.json();
+          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
           setPreviewCount(data.count);
         }
       } catch (error) {

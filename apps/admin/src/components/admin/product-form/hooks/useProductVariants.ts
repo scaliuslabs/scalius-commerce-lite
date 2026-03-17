@@ -33,7 +33,8 @@ export function useProductVariants({
     setIsLoading(true);
     try {
       const response = await fetch(`/api/v1/admin/products/${productId}/variants`);
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       if (response.ok && Array.isArray(data.variants)) {
         setVariants(data.variants);
       }

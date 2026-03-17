@@ -267,10 +267,12 @@ export function HeroSliderManager() {
   const fetchSliders = async () => {
     try {
       const response = await fetch("/api/v1/admin/settings/hero-sliders");
-      const data = await response.json();
-      if (data.success) {
-        const desktop = data.data.find((s: HeroSlider) => s.type === "desktop");
-        const mobile = data.data.find((s: HeroSlider) => s.type === "mobile");
+      const json = await response.json();
+      const data = json.data !== undefined ? json.data : json;
+      if (json.success || Array.isArray(data)) {
+        const items = Array.isArray(data) ? data : [];
+        const desktop = items.find((s: HeroSlider) => s.type === "desktop");
+        const mobile = items.find((s: HeroSlider) => s.type === "mobile");
         setDesktopSlider(desktop || null);
         setMobileSlider(mobile || null);
       }
@@ -324,10 +326,9 @@ export function HeroSliderManager() {
         }),
       });
 
-      const data = await response.json();
-      if (data.success) {
-        // Proxy unwraps flat objects: data.data exists for direct API, top-level fields for proxy
-        const slider = data.data || data;
+      const json = await response.json();
+      const slider = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      if (json.success !== false) {
         if (type === "desktop") setDesktopSlider(slider);
         else setMobileSlider(slider);
 
@@ -360,13 +361,11 @@ export function HeroSliderManager() {
         body: JSON.stringify(updates),
       });
 
-      const data = await response.json();
-      if (data.success) {
-        // Sync with server response to be sure
-        // Proxy unwraps flat objects: data.data exists for direct API, top-level fields for proxy
-        const slider = data.data || data;
-        if (type === "desktop") setDesktopSlider(slider);
-        else setMobileSlider(slider);
+      const json = await response.json();
+      const updatedSlider = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      if (json.success !== false) {
+        if (type === "desktop") setDesktopSlider(updatedSlider);
+        else setMobileSlider(updatedSlider);
 
         if (updates.isActive !== undefined) {
           toast({

@@ -151,7 +151,8 @@ export function InventoryManager() {
           order: sort.order
         });
         const res = await fetch(`/api/v1/admin/inventory?${params}`);
-        const data = await res.json();
+        const json = await res.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setVariants(data.variants || []);
         setStats(data.stats || null);
         setPagination(data.pagination || null);
@@ -162,7 +163,8 @@ export function InventoryManager() {
           limit: String(movementsPagination?.limit || 50),
         });
         const res = await fetch(`/api/v1/admin/inventory?${params}`);
-        const data = await res.json();
+        const json2 = await res.json();
+        const data = json2.data && typeof json2.data === "object" && !Array.isArray(json2.data) ? json2.data : json2;
         setMovements(data.movements || []);
         setMovementsPagination(data.pagination || null);
       }

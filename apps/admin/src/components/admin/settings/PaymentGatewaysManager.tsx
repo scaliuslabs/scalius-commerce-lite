@@ -177,7 +177,8 @@ export default function PaymentGatewaysManager() {
         try {
             const res = await fetch("/api/v1/admin/settings/payment-methods");
             if (res.ok) {
-                const d = await res.json() as PaymentMethodsData;
+                const json = await res.json();
+                const d = (json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json) as PaymentMethodsData;
                 setMethods(d);
                 setEnabledMethods(new Set(d.enabledMethods));
                 setDefaultMethod(d.defaultMethod);
@@ -195,15 +196,17 @@ export default function PaymentGatewaysManager() {
         try {
             const res = await fetch(`/api/v1/admin/settings/${gw}`);
             if (!res.ok) return;
+            const json = await res.json();
+            const d = (json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json);
             if (gw === "stripe") {
-                const d = await res.json() as StripeData;
-                setStripe(d); setStripeConf({ secret: !!d.secretKey, webhook: !!d.webhookSecret });
+                const sd = d as StripeData;
+                setStripe(sd); setStripeConf({ secret: !!sd.secretKey, webhook: !!sd.webhookSecret });
             } else if (gw === "sslcommerz") {
-                const d = await res.json() as SSLCommerzData;
-                setSsl(d); setSslConf({ password: !!d.storePassword });
+                const sd = d as SSLCommerzData;
+                setSsl(sd); setSslConf({ password: !!sd.storePassword });
             } else if (gw === "polar") {
-                const d = await res.json() as PolarData;
-                setPolar(d); setPolarConf({ token: !!d.accessToken, webhook: !!d.webhookSecret });
+                const sd = d as PolarData;
+                setPolar(sd); setPolarConf({ token: !!sd.accessToken, webhook: !!sd.webhookSecret });
             }
             loadedGateways.current.add(gw);
         } catch { toast.error(`Failed to load ${META[gw].label} settings`); }

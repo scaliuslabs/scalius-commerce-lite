@@ -57,7 +57,8 @@ export default function FirebaseSettingsForm() {
     try {
       const res = await fetch("/api/v1/admin/settings/firebase");
       if (res.ok) {
-        const data = await res.json();
+        const json = await res.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         if (data.serviceAccount && data.serviceAccount.includes("••••")) {
           setServiceAccountStatus("configured");
         }

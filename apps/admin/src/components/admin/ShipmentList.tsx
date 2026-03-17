@@ -40,9 +40,10 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
         throw new Error("Failed to fetch shipments");
       }
 
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data !== undefined ? json.data : json;
       // Initialize lastChecked to updatedAt for existing shipments
-      const enhancedData = data.map((shipment: Shipment) => ({
+      const enhancedData = (Array.isArray(data) ? data : []).map((shipment: Shipment) => ({
         ...shipment,
         lastChecked: shipment.lastChecked || shipment.updatedAt,
       }));

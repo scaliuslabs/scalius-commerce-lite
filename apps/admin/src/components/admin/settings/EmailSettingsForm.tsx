@@ -50,7 +50,8 @@ export default function EmailSettingsForm() {
     try {
       const res = await fetch("/api/v1/admin/settings/email");
       if (res.ok) {
-        const data = await res.json();
+        const json = await res.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setApiKey(data.apiKey || "");
         setSender(data.sender || "");
         setApiKeyConfigured(!!data.apiKey);

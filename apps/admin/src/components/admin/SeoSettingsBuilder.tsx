@@ -37,7 +37,8 @@ export function SeoSettingsBuilder() {
           const errorData = await response.json();
           throw new Error(errorData.details || "Failed to fetch SEO settings");
         }
-        const data = await response.json();
+        const json = await response.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setConfig({
           siteTitle: data.siteTitle || defaultConfig.siteTitle,
           homepageTitle: data.homepageTitle || defaultConfig.homepageTitle,

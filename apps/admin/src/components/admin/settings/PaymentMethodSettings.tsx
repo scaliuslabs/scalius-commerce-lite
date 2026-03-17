@@ -78,7 +78,8 @@ export default function PaymentMethodSettings() {
         try {
             const res = await fetch("/api/v1/admin/settings/payment-methods");
             if (res.ok) {
-                const json = await res.json() as PaymentMethodsData;
+                const raw = await res.json();
+                const json = (raw.data && typeof raw.data === "object" && !Array.isArray(raw.data) ? raw.data : raw) as PaymentMethodsData;
                 setData(json);
                 setEnabledMethods(new Set(json.enabledMethods));
                 setDefaultMethod(json.defaultMethod);

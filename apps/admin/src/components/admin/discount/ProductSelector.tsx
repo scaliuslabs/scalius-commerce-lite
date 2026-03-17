@@ -108,7 +108,8 @@ export function ProductSelector({
 
       const url = `/api/v1/admin/products?${params.toString()}`;
       const response = await fetch(url);
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
 
       if (data.products) {
         if (page === 1) {

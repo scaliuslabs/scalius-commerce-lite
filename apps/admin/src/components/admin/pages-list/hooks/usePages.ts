@@ -33,7 +33,8 @@ export function usePages(showTrashed: boolean) {
     try {
       const response = await fetch(`/api/v1/admin/pages?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch pages");
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
 
       // Convert Unix timestamps to Date objects
       // API returns ISO strings but they're converted from Unix timestamps

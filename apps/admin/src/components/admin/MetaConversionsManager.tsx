@@ -309,7 +309,8 @@ export function MetaConversionsManager({
     try {
       const response = await fetch("/api/v1/admin/settings/meta-conversions");
       if (response.ok) {
-        const data = await response.json();
+        const json = await response.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setSettings(data.settings);
         setFormData(
           data.settings
@@ -341,7 +342,8 @@ export function MetaConversionsManager({
         `/api/v1/admin/settings/meta-conversions/logs?${params}`,
       );
       if (response.ok) {
-        const data = await response.json();
+        const json = await response.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setLogs(data.logs || []);
         setLogsPagination((prev: LogsPagination) => data.pagination || prev);
         setRetentionInfo(data.retention || null);
@@ -367,9 +369,9 @@ export function MetaConversionsManager({
         throw new Error(errorData.error || "Failed to save settings");
       }
 
-      const data = await response.json();
-      // Proxy unwraps flat objects: data.data exists for direct API, top-level fields for proxy
-      setSettings(data.data || data);
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      setSettings(data);
       setHasUnsavedChanges(false);
       toast.success("Settings saved successfully");
     } catch (error: any) {
@@ -421,7 +423,8 @@ export function MetaConversionsManager({
         throw new Error(errorData.error || "Failed to perform manual cleanup");
       }
 
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       toast.success(data.message || "Manual cleanup completed");
       fetchLogs();
     } catch (error: any) {

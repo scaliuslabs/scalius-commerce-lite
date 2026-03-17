@@ -158,7 +158,8 @@ async function apiSaveProvider(provider: any) {
     const errorData = await response.json();
     throw new Error(errorData.error || "Failed to save provider");
   }
-  return response.json();
+  const json = await response.json();
+  return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
 }
 
 async function apiDeleteProvider(id: string) {
@@ -185,7 +186,8 @@ async function apiTestProvider(id: string) {
       message: errorData.error || "Failed to test provider connection",
     };
   }
-  return response.json();
+  const json = await response.json();
+  return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
 }
 
 async function apiTestCredentials(
@@ -206,7 +208,8 @@ async function apiTestCredentials(
       }),
     }
   );
-  const result = await response.json();
+  const json = await response.json();
+  const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
   if (!response.ok) {
     return {
       success: false,

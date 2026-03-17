@@ -24,7 +24,8 @@ export function useWidgetActions(
 
       if (!response.ok) throw new Error("Failed to update widget");
 
-      const updatedWidget = await response.json();
+      const json = await response.json();
+      const updatedWidget = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setWidgets((prev) =>
         prev.map((w) => (w.id === widgetId ? { ...w, ...updatedWidget } : w)),
       );

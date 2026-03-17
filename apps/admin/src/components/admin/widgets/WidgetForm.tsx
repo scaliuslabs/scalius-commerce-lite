@@ -312,7 +312,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     if (widget?.id) {
       setIsHistoryOpen(true);
       const response = await fetch(`/api/v1/admin/widgets/${widget.id}/history`);
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data !== undefined ? json.data : json;
       setHistory(data);
     }
   };

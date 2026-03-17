@@ -54,7 +54,8 @@ export function VariantSortModal({
         `/api/v1/admin/products/${productId}/variants/sort-order`,
       );
       if (response.ok) {
-        const data = await response.json();
+        const json = await response.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setColors(data.colors || []);
         setSizes(data.sizes || []);
       }

@@ -129,7 +129,8 @@ export const suggestionsActions = {
           }
 
           if (response.ok) {
-            const data = await response.json();
+            const json = await response.json();
+            const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
             const values = data.values || [];
 
             // Cache the results

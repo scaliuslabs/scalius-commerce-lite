@@ -37,7 +37,8 @@ export function initFraudCheckerActions(): void {
           throw new Error(errorData.error || "Failed to save provider");
         }
 
-        return response.json();
+        const json = await response.json();
+        return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       } catch (error) {
         console.error("Error in saveProvider:", error);
         throw error;
@@ -85,7 +86,8 @@ export function initFraudCheckerActions(): void {
           };
         }
 
-        return response.json();
+        const json = await response.json();
+        return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       } catch (error) {
         console.error("Error in testProvider:", error);
         return {

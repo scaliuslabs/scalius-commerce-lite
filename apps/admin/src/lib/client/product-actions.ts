@@ -29,7 +29,8 @@ export function initProductNewPage(): void {
         throw new Error("Failed to create product");
       }
 
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       const destination = `/admin/products/${data.id}/edit`;
       if (typeof win.navigateToProductEdit !== "function") {
         throw new Error("Product navigation helper is unavailable");

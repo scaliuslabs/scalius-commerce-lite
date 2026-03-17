@@ -85,7 +85,8 @@ export default function CurrencySettingsBuilder() {
     try {
       const res = await fetch("/api/v1/admin/settings/currency");
       if (res.ok) {
-        const data = await res.json();
+        const json = await res.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setCurrencyCode(data.currencyCode || "BDT");
         setCurrencySymbol(data.currencySymbol || "\u09F3");
         setUsdExchangeRate(data.usdExchangeRate || "1");

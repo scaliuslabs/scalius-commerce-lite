@@ -411,7 +411,8 @@ export function ProductList({
 
         const res = await fetch(url.toString());
         if (!res.ok) throw new Error("Failed to fetch products");
-        const data = await res.json();
+        const json = await res.json();
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
 
         const parsed = (data.products || []).map((p: any) => ({
           ...p,

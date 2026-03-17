@@ -62,7 +62,8 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
         }),
       });
       if (!contextRes.ok) throw new Error(ERROR_MESSAGES.contextFetchFailed);
-      const contextData = await contextRes.json();
+      const contextJson = await contextRes.json();
+      const contextData = contextJson.data && typeof contextJson.data === "object" && !Array.isArray(contextJson.data) ? contextJson.data : contextJson;
 
       // Get latest sections from stagedGeneration state
       const sections = aiGenerator.stagedGeneration.sections;
