@@ -15,7 +15,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { WidgetPlacementRule, type Widget, type Collection } from '@scalius/database/schema';
+import { WidgetPlacementRule, type Widget, type Collection } from '@/types/api-responses';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { ArrowLeft, Clock } from 'lucide-react';

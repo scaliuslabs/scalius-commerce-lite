@@ -1,5 +1,5 @@
 import { type FC, useState, useEffect } from "react";
-import type { DeliveryProviderRecord, DeliveryShipment, Order } from "@scalius/database/schema";
+import type { DeliveryProviderRecord, DeliveryShipment, Order } from "@/types/api-responses";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
 import { formatDate } from "@scalius/shared/utils";
