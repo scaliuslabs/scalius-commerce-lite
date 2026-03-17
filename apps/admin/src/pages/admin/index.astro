@@ -5,14 +5,9 @@ import { DashboardStats } from "../../components/admin/DashboardStats";
 import { RecentOrders } from "../../components/admin/RecentOrders";
 import { QuickActions } from "../../components/admin/QuickActions";
 import { WelcomeBanner } from "../../components/admin/WelcomeBanner";
-import { getDashboardStats, getRecentOrders, getDailyActivityData } from "@scalius/core/modules/analytics";
+import { getDashboardData } from "@/loaders/admin/dashboard";
 
-// Parallel fetch for faster dashboard load (vs sequential)
-const [stats, recentOrders, dailyActivityData] = await Promise.all([
-  getDashboardStats(),
-  getRecentOrders(11),
-  getDailyActivityData(90),
-]);
+const { stats, recentOrders, dailyActivityData } = await getDashboardData();
 
 const pageTitle = "Admin Dashboard";
 ---

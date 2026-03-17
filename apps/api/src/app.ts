@@ -70,6 +70,7 @@ import { adminAiContextRoutes } from "./routes/admin/ai-context";
 import { adminAiPromptsRoutes } from "./routes/admin/ai-prompts";
 import { adminOpenRouterRoutes } from "./routes/admin/openrouter";
 import { adminAttributesRoutes } from "./routes/admin/attributes";
+import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 
 // Create typed OpenAPIHono app with Cloudflare Workers Env bindings
@@ -281,6 +282,7 @@ app.route("/admin/navigation", adminNavigationRoutes);
 app.route("/admin/search", adminSearchRoutes);
 app.route("/admin/shipments", adminShipmentRoutes);
 app.route("/admin/analytics", adminAnalyticsRoutes);
+app.route("/admin/dashboard", adminDashboardRoutes);
 app.route("/admin/fraud-checker", adminFraudCheckerRoutes);
 app.route("/admin/rbac", adminRbacRoutes);
 app.route("/admin/settings", adminSettingsRoutes);
