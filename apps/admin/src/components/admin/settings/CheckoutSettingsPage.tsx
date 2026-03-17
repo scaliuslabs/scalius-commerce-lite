@@ -19,7 +19,7 @@ const ShippingMethodsManager = lazy(() =>
     }))
 );
 const DeliveryLocationsManager = lazy(() =>
-    import("../DeliveryLocationsManager").then((m) => ({
+    import("../delivery-locations").then((m) => ({
         default: m.DeliveryLocationsManager,
     }))
 );
