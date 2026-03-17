@@ -21,9 +21,9 @@ Four waves, each gated by verification. Parallel subagents within waves, sequent
 ```
 Wave 0: Verification Pass (solo, sequential)
     ↓ bug list produced
-Wave 1: Domain Agent Splits (3-4 parallel agents)
+Wave 1: Domain Agent Splits (4 parallel agents)
     ↓ all domains split + verified
-Wave 2: Cross-Cutting Sweeps (2-3 parallel agents)
+Wave 2: Cross-Cutting Sweeps (3 parallel agents)
     ↓ patterns unified
 Wave 3: Final Sweep (solo)
     ↓ lazy-loading + final verification
@@ -35,19 +35,23 @@ Wave 3: Final Sweep (solo)
 - **Barrel files**: Component directories use barrel `index.ts` for ergonomic imports. Third-party libraries use direct imports (Vercel `bundle-barrel-imports` rule).
 - **Fresh spec**: This is a standalone spec, not an amendment to the Phase 1+2 design doc.
 - **Subagent context**: Every agent gets full data flow context, explicit file ownership boundaries, Vercel React best practices, and domain-specific bug lists from Wave 0.
+- **Wave 1 handles toast + schema imports**: To prevent cross-wave file conflicts, Wave 1 agents migrate `useToast` → `sonner` and `@scalius/database/schema` → local types within their own files. Wave 2 Agent 5 only handles files NOT touched by Wave 1.
 
 ## Current State (Verified by Exploration)
 
 | Metric | Count | Notes |
 |--------|-------|-------|
 | Components >1,000 lines | 9 | CategoryList 1438, DeliveryLocationsManager 1419, AccountSettings 1419, CheckoutLanguagesManager 1392, ProductList 1386, DiscountList 1367, ShippingMethodsManager 1270, DeliveryProviderSettings 1132, CustomerList 959 |
-| `any` type usages | 163 | Across 72 files |
-| `window.location.reload()` | 13 | Across 9 files |
-| `@scalius/database/schema` imports in admin | 8 | Type-only, architectural violation |
-| Custom `use-toast.ts` | 187 lines | Redundant with sonner |
-| Test files | 0 | Directory structure exists, all empty |
+| Components 800–1,000 lines | 3 | tiptap-editor 953, AmountOffProductsForm 905, MetaConversionsManager 835 |
+| `any` type usages | ~163 | Across 72 files (includes `: any`, `as any`, `Record<string, any>` patterns) |
+| `window.location.reload()` | 14 | Across 10 admin files (ErrorBoundary stays, 9 others to fix) |
+| `@scalius/database/schema` imports in admin | ~21 files | Type-only, architectural violation (Wave 1 handles ~4, Agent 5 handles ~3, Agent 7 handles the rest) |
+| Custom `use-toast` files | 2 | `components/ui/use-toast.ts` (188 lines) + `hooks/use-toast.ts` (192 lines) — duplicates with different configs |
+| Test files | 0 | Directory structure exists (`tests/unit/`, `tests/integration/`, `tests/fixtures/`), all empty |
 | API routes (all follow OpenAPI pattern) | 68 | Consistent, no outliers |
 | Duplicate schema definitions | 2 modules | pages.service.ts + widgets.service.ts duplicate their .validation.ts |
+| Existing extracted sub-forms | 2 | StripeSettingsForm.tsx + SSLCommerzSettingsForm.tsx already separate files |
+| `window.d.ts` | exists | 13 lines, covers __USER_ID__, __USER_PERMISSIONS__, etc. |
 
 ## Data Flow Reference
 
@@ -126,7 +130,7 @@ React component
 
 ### Agent 1 — Products & Catalog
 
-**Files owned:**
+**Files owned (exact paths):**
 - `apps/admin/src/components/admin/categories/CategoryList.tsx` (1,438 lines)
 - `apps/admin/src/components/admin/products/ProductList.tsx` (1,386 lines)
 - `apps/admin/src/components/admin/collections/CollectionForm.tsx` (653 lines)
@@ -144,30 +148,32 @@ React component
 
 **Reference pattern:** `apps/admin/src/components/admin/product-form/` (39 files, section-based decomposition with dedicated hooks).
 
-### Agent 2 — Orders & Customers
+### Agent 2 — Orders, Customers & Discounts
 
-**Files owned:**
+**Files owned (exact paths):**
 - `apps/admin/src/components/admin/orders/OrderList.tsx` (804 lines)
 - `apps/admin/src/components/admin/customers/CustomerList.tsx` (959 lines)
 - `apps/admin/src/components/admin/discount/DiscountList.tsx` (1,367 lines)
+- `apps/admin/src/components/admin/discount/AmountOffProductsForm.tsx` (905 lines)
 - All new files created by splitting these components
 
 **Split targets:**
 
 | Component | Split Into |
 |-----------|-----------|
-| `OrderList.tsx` (804) | `order-list/` dir: OrderListContainer + OrderTable + OrderFilters + OrderToolbar |
+| `OrderList.tsx` (804) | Refactor into OrderListContainer; extract remaining inline state/filters into useOrderList hook. Note: `order-list/` sub-components may already exist (OrderTable, OrderListToolbar, etc.) — reuse them, don't recreate |
 | `CustomerList.tsx` (959) | `customer-list/` dir: CustomerListContainer + CustomerTable + CustomerFilters + CustomerBulkActions |
 | `DiscountList.tsx` (1,367) | `discount-list/` dir: DiscountListContainer + DiscountTable + DiscountFilters + TypeSelector + useDiscountList hook |
+| `AmountOffProductsForm.tsx` (905) | `amount-off-products/` dir: Container + ProductSelectorStep + DiscountConfigStep + SummaryStep |
 
 ### Agent 3 — Settings & Checkout
 
-**Files owned:**
-- `apps/admin/src/components/admin/settings/AccountSettings.tsx` (1,419 lines)
-- `apps/admin/src/components/admin/settings/checkout/CheckoutLanguagesManager.tsx` (1,392 lines)
-- `apps/admin/src/components/admin/settings/shipping/ShippingMethodsManager.tsx` (1,270 lines)
-- `apps/admin/src/components/admin/settings/payment/PaymentGatewaysManager.tsx` (510 lines)
-- `apps/admin/src/components/admin/settings/MetaConversionsManager.tsx` (835 lines)
+**Files owned (exact paths):**
+- `apps/admin/src/components/admin/AccountSettings.tsx` (1,419 lines)
+- `apps/admin/src/components/admin/CheckoutLanguagesManager.tsx` (1,392 lines)
+- `apps/admin/src/components/admin/ShippingMethodsManager.tsx` (1,270 lines)
+- `apps/admin/src/components/admin/settings/PaymentGatewaysManager.tsx` (510 lines)
+- `apps/admin/src/components/admin/MetaConversionsManager.tsx` (835 lines)
 - All new files created by splitting these components
 
 **Split targets:**
@@ -177,15 +183,15 @@ React component
 | `AccountSettings.tsx` (1,419) | `account-settings/` dir: AccountSettingsContainer + ProfileTab + SecurityTab + RolesTab + PermissionsTab |
 | `CheckoutLanguagesManager.tsx` (1,392) | `checkout-languages/` dir: Container + LanguagesTab + PaymentMethodsTab + ShippingTab |
 | `ShippingMethodsManager.tsx` (1,270) | `shipping-methods/` dir: Container + MethodTable + FormDialog + ProviderConfig |
-| `PaymentGatewaysManager.tsx` (510) | Extract StripeForm, SSLForm, PolarForm to separate files |
+| `PaymentGatewaysManager.tsx` (510) | Extract inline PolarForm to `settings/PolarSettingsForm.tsx` (StripeSettingsForm + SSLCommerzSettingsForm already extracted — verify imports) |
 | `MetaConversionsManager.tsx` (835) | `meta-conversions/` dir: SettingsForm + LogsViewer + CleanupDialog |
 
 ### Agent 4 — Delivery & Content
 
-**Files owned:**
-- `apps/admin/src/components/admin/delivery/DeliveryLocationsManager.tsx` (1,419 lines)
-- `apps/admin/src/components/admin/delivery/DeliveryProviderSettings.tsx` (1,132 lines)
-- `apps/admin/src/components/admin/widgets/HeroSliderManager.tsx` (662 lines)
+**Files owned (exact paths):**
+- `apps/admin/src/components/admin/DeliveryLocationsManager.tsx` (1,419 lines)
+- `apps/admin/src/components/admin/DeliveryProviderSettings.tsx` (1,132 lines)
+- `apps/admin/src/components/admin/HeroSliderManager.tsx` (662 lines)
 - `apps/admin/src/components/admin/product-form/variants/VariantManager.tsx` (521 lines)
 - All new files created by splitting these components
 
@@ -195,7 +201,7 @@ React component
 |-----------|-----------|
 | `DeliveryLocationsManager.tsx` (1,419) | `delivery-locations/` dir: Container + LocationTable + LocationForm + LocationImport + useDeliveryLocations hook |
 | `DeliveryProviderSettings.tsx` (1,132) | `delivery-providers/` dir: Container + ProviderCard + CredentialForm + WebhookConfig |
-| `HeroSliderManager.tsx` (662) | `hero-slider/` dir: Container + SliderEditor + SortableSlide |
+| `HeroSliderManager.tsx` (662) | `hero-slider/` dir: Container + SliderEditor + SortableSlide. Also replace `Math.random()` with `crypto.randomUUID()` |
 | `VariantManager.tsx` (521) | Extract VariantStats + VariantBulkEdit to separate files |
 
 ### Shared Rules for All Wave 1 Agents
@@ -219,7 +225,17 @@ React component
 - `catch (error: any)` → `catch (error: unknown)` + `error instanceof Error` check
 - `icon: any` → `icon: React.ComponentType<{ className?: string }>`
 - API response types: type the `useApi<T>` generic parameter with proper interfaces
-- If a file imports from `@scalius/database/schema`, replace with a local type definition
+- If a file imports from `@scalius/database/schema`, replace with a local type definition in the new split files (do NOT carry over the import)
+
+**Toast migration (within split files):**
+- If a file being split uses `useToast` from either `@/components/ui/use-toast` or `@/hooks/use-toast`, migrate it to `import { toast } from "sonner"` as part of the split
+- Adapt call patterns: `toast({ title, description, variant: "destructive" })` → `toast.error(title)` or `toast.error(title, { description })`
+- Do NOT preserve `useToast` imports in any new files
+
+**`window.location.reload()` replacement (within split files):**
+- If a file being split contains `window.location.reload()`, replace with `useApi` `refetch()` or React state updates
+- If the component uses `useApi`, call `refetch()` after the mutation succeeds
+- If the component uses direct `fetch()`, add a state flag to trigger data refresh
 
 **Boundaries:**
 - Do NOT touch files outside your domain file list.
@@ -236,29 +252,40 @@ React component
 
 ## Wave 2: Cross-Cutting Sweeps
 
-**Executor:** 3 parallel subagents. These touch different file sets with zero overlap to Wave 1 output.
+**Executor:** 3 parallel subagents. These touch file sets NOT modified by Wave 1.
 
-### Agent 5 — Toast Migration + Pattern Cleanup
+### Agent 5 — Toast Migration (Remaining) + Pattern Cleanup
 
-**Files owned:** All files containing `useToast()` imports, plus:
-- `apps/admin/src/components/ui/use-toast.ts` (to be deleted)
+**Scope:** Only files NOT touched by Wave 1 agents. Wave 1 agents handle toast/reload migration in their own files.
+
+**Files owned (explicit list to avoid conflicts with Agent 7):**
+- All files importing `useToast` that are NOT in any Wave 1 agent's file list
+- `apps/admin/src/components/ui/use-toast.ts` (188 lines, to be deleted)
+- `apps/admin/src/hooks/use-toast.ts` (192 lines, to be deleted)
+- `apps/admin/src/components/ui/toaster.tsx` (update if it depends on use-toast)
+- `apps/admin/src/components/admin/orderview/OrderStatusCard.tsx` (reload + any types)
+- `apps/admin/src/components/admin/orderview/ShipmentCard.tsx` (reload + schema imports + any types)
+- `apps/admin/src/components/admin/orderview/PaymentCard.tsx` (reload + any types)
+- `apps/admin/src/components/admin/AnalyticsList.tsx` (reload + any types)
+- `apps/admin/src/components/admin/widget-list/hooks/useWidgets.ts` (reload)
+- `apps/admin/src/components/admin/widgets/WidgetForm.tsx` (reload + schema imports + any types)
+- `apps/admin/src/components/admin/DeliveryShipmentManager.tsx` (reload + schema imports)
+- `apps/admin/src/hooks/use-shipment-status.ts` (reload)
 - `packages/core/src/modules/pages/pages.service.ts` (schema dedup)
 - `packages/core/src/modules/widgets/widgets.service.ts` (schema dedup)
 
-**Tasks:**
-1. Find all files importing `useToast` from `@/components/ui/use-toast`
-2. Replace each with `import { toast } from "sonner"` — adapt the call pattern:
-   - `toast({ title, description, variant: "destructive" })` → `toast.error(description)` or `toast.error(title, { description })`
-   - `toast({ title, description })` → `toast.success(description)` or `toast(title, { description })`
-3. After all consumers migrated, delete `use-toast.ts`
-4. Replace all 13 `window.location.reload()` calls with `useApi` `refetch()` or React state updates. For each:
-   - If the component already uses `useApi`, call `refetch()` after the mutation succeeds
-   - If the component uses direct `fetch()` for mutations, add a state flag to trigger re-render
-   - The `ErrorBoundary.tsx` reload is acceptable (keep it — it's a last-resort recovery)
-5. Replace `Math.random()` in `HeroSliderManager.tsx` with `crypto.randomUUID()` (available in Workers runtime, no dependency needed)
-6. Remove duplicate schema definitions from `pages.service.ts` and `widgets.service.ts` — import from their `.validation.ts` files instead
+**Note on conflict prevention:** Agent 5 owns ALL changes to ShipmentCard.tsx, WidgetForm.tsx, and DeliveryShipmentManager.tsx (reload + schema imports + any types). Agent 7 must NOT touch these files.
 
-**Verification:** `pnpm typecheck` passes. Grep confirms zero `useToast` imports remain (except the deleted file). Grep confirms zero `window.location.reload()` outside ErrorBoundary.
+**Tasks:**
+1. Find all remaining files importing `useToast` from either `@/components/ui/use-toast` or `@/hooks/use-toast` (excluding Wave 1 files which handle their own migration)
+2. Replace each with `import { toast } from "sonner"` — adapt call patterns
+3. After all consumers migrated, delete BOTH use-toast files and update toaster.tsx if needed
+4. Replace remaining `window.location.reload()` calls in the orderview files, AnalyticsList, WidgetForm, useWidgets, use-shipment-status, and DeliveryShipmentManager (ErrorBoundary.tsx reload stays — last-resort recovery)
+5. Replace `@scalius/database/schema` imports in ShipmentCard.tsx, WidgetForm.tsx, and DeliveryShipmentManager.tsx with local type definitions from `@/types/api-responses`
+6. Remove duplicate schema definitions from `pages.service.ts` and `widgets.service.ts` — import from their `.validation.ts` files instead
+7. Fix remaining `catch (error: any)` patterns in files not touched by Wave 1 (~60 instances across non-split files)
+
+**Verification:** `pnpm typecheck` passes. Grep confirms zero `useToast` imports remain. Grep confirms zero `window.location.reload()` outside ErrorBoundary.
 
 ### Agent 6 — Test Infrastructure
 
@@ -267,26 +294,27 @@ React component
 **Tasks:**
 1. Create `tests/vitest.config.ts` — configure vitest with globals, path aliases matching the monorepo
 2. Create `tests/setup.ts` — D1 test database helpers, mock env factory, seed data generators
-3. Write core service tests targeting exact bugs from the hardening session:
+3. Write core service tests targeting exact bugs from the hardening session, using the EXISTING directory convention:
 
 ```
 tests/
-  core/
-    orders/
-      order-lifecycle.test.ts         — PENDING → CONFIRMED → SHIPPED → DELIVERED → COMPLETED
-      order-state-machine.test.ts     — All valid + blocked transitions (CANCELLED terminal, admin reactivation)
-      order-cancellation.test.ts      — Inventory release on cancel
-    inventory/
-      reserve-deduct-release.test.ts  — CAS with stockVersion, retry on conflict
-      batch-reservation.test.ts       — Multi-variant atomic batch
-    payments/
-      process-payment.test.ts         — Atomicity via db.batch(), all gateways
-      cod-idempotency.test.ts         — Duplicate COD collection prevention
-      refund-validation.test.ts       — Cumulative refund limit, partial vs full
-    discounts/
-      discount-validation.test.ts     — Per-customer usage limits, expired codes
-  api/
-    response-envelope.test.ts         — All routes return { success, data } shape
+  unit/
+    core/
+      orders/
+        order-lifecycle.test.ts         — PENDING → CONFIRMED → SHIPPED → DELIVERED → COMPLETED
+        order-state-machine.test.ts     — All valid + blocked transitions (CANCELLED terminal, admin reactivation)
+        order-cancellation.test.ts      — Inventory release on cancel
+      inventory/
+        reserve-deduct-release.test.ts  — CAS with stockVersion, retry on conflict
+        batch-reservation.test.ts       — Multi-variant atomic batch
+      payments/
+        process-payment.test.ts         — Atomicity via db.batch(), all gateways
+        cod-idempotency.test.ts         — Duplicate COD collection prevention
+        refund-validation.test.ts       — Cumulative refund limit, partial vs full
+      discounts/
+        discount-validation.test.ts     — Per-customer usage limits, expired codes
+    api/
+      response-envelope.test.ts         — All routes return { success, data } shape
 ```
 
 **Note:** Tests import from `@scalius/core` and `@scalius/database` directly. They do NOT test admin UI — they test the domain logic layer. The `tests/` directory is gitignored per project convention.
@@ -295,7 +323,10 @@ tests/
 
 **Files owned:**
 - `packages/database/src/schema/*.ts` (index additions only)
-- `apps/admin/src/types/` (new files)
+- `apps/admin/src/types/` (new and existing files)
+- Admin component files that import from `@scalius/database/schema` and were NOT touched by Wave 1 or Agent 5
+
+**Exclusions (owned by Agent 5):** `ShipmentCard.tsx`, `WidgetForm.tsx`, `DeliveryShipmentManager.tsx` — Agent 5 handles their schema imports alongside reload replacement.
 
 **Tasks:**
 
@@ -316,24 +347,24 @@ index("analytics_type_idx").on(table.type)
 index("product_attributes_slug_idx").on(table.slug)
 ```
 
-2. Run `pnpm db:generate` to produce migration 0025.
+2. Run `pnpm db:generate` — verify migration number (expected 0025, but check for conflicts).
 
-3. Create `apps/admin/src/types/api-responses.ts` — proper interfaces for all admin API responses. These replace the 8 `@scalius/database/schema` imports:
+3. Create `apps/admin/src/types/api-responses.ts` — proper interfaces for ALL admin API response types used across the admin app. Read the actual DB schema types being imported and create matching local types. Note: the actual number of files importing from `@scalius/database/schema` is ~21 across the admin app (more than the 8 originally estimated). Grep for all imports and create types for every imported type:
 ```typescript
-// Types that mirror DB schema types but are owned by admin, not database package
 export type OrderStatus = "PENDING" | "CONFIRMED" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "COMPLETED" | "CANCELLED" | "RETURNED" | "REFUNDED";
-export interface DeliveryProviderRecord { id: string; name: string; type: string; /* ... */ }
+export interface DeliveryProviderRecord { id: string; name: string; type: string; /* read actual schema for full shape */ }
 export interface DeliveryShipment { id: string; orderId: string; /* ... */ }
 export interface ShippingMethod { id: string; name: string; /* ... */ }
 export interface CheckoutLanguage { id: string; code: string; /* ... */ }
 export interface AbandonedCheckout { id: string; /* ... */ }
 export interface MetaConversionsSettings { /* ... */ }
 export interface MetaConversionsLog { /* ... */ }
+// ... plus any other types found by grepping all @scalius/database/schema imports
 ```
 
-4. Update the 8 admin component files to import from `@/types/api-responses` instead of `@scalius/database/schema`.
+4. Update all remaining admin component files (excluding Wave 1 files and Agent 5's files) to import from `@/types/api-responses` instead of `@scalius/database/schema`.
 
-5. Create `apps/admin/src/types/window.d.ts` (if not already complete) — extend global `Window` for all `window.__USER_ID__`, `window.__USER_PERMISSIONS__`, etc.
+5. Verify `apps/admin/src/types/window.d.ts` is complete — it already exists with 6 globals, check if any `window.__*` usages reference globals not yet declared.
 
 **Verification:** `pnpm typecheck` passes. Grep confirms zero `@scalius/database/schema` imports in `apps/admin/src/components/`.
 
@@ -349,7 +380,6 @@ export interface MetaConversionsLog { /* ... */ }
 
 1. **Lazy-load Recharts** (~300KB, dashboard only):
 ```typescript
-// In dashboard component:
 const DashboardChart = React.lazy(() => import("./DashboardChart"));
 // Wrap in <Suspense fallback={<ChartSkeleton />}>
 ```
@@ -359,6 +389,7 @@ const DashboardChart = React.lazy(() => import("./DashboardChart"));
 const TiptapEditor = React.lazy(() => import("./TiptapEditor"));
 // Wrap in <Suspense fallback={<EditorSkeleton />}>
 ```
+Also split `tiptap-editor.tsx` (953 lines) into: TiptapEditor (core), TiptapToolbar, TiptapBubbleMenu, TiptapExtensions config.
 
 3. **Extend React.lazy** to all settings tabs with heavy sub-components (following existing pattern from CheckoutSettingsPage/GeneralSettingsPage).
 
@@ -419,6 +450,20 @@ VERCEL REACT BEST PRACTICES TO APPLY:
 6. [MEDIUM] Use refs for transient values (scroll, timers)
 7. [MEDIUM] Ternary for conditional rendering, not &&
 
+TOAST MIGRATION (within your files):
+- Replace useToast imports with: import { toast } from "sonner"
+- toast({ title, variant: "destructive" }) → toast.error(title)
+- toast({ title }) → toast.success(title)
+- Do NOT preserve useToast imports in new files
+
+SCHEMA IMPORT MIGRATION (within your files):
+- Replace @scalius/database/schema imports with local type definitions
+- Do NOT carry over database schema imports into new split files
+
+RELOAD REPLACEMENT (within your files):
+- Replace window.location.reload() with useApi refetch() or state updates
+- ErrorBoundary.tsx reload is acceptable (keep it)
+
 BOUNDARIES:
 - Only touch files in YOUR domain list
 - Do NOT modify shared hooks, types, middleware, or other domains' files
@@ -441,11 +486,11 @@ Phase 3 is complete when:
 | 2 | Container/presentational pattern | All split components have container (data) + children (render) |
 | 3 | `any` types ≤ 8 | Only Drizzle batch casts remain (with eslint-disable comments) |
 | 4 | Zero `window.location.reload()` | Except ErrorBoundary last-resort recovery |
-| 5 | `use-toast.ts` deleted | All toasts via sonner's `toast()` |
+| 5 | Both `use-toast` files deleted | All toasts via sonner's `toast()` |
 | 6 | React.memo on list rows | CategoryRow, ProductRow, OrderRow, CustomerRow, DiscountRow, etc. |
 | 7 | Heavy deps lazy-loaded | Recharts + TipTap behind React.lazy + Suspense |
 | 8 | Core tests passing | Order lifecycle, payments, inventory, discounts, envelope |
-| 9 | DB indexes added | Migration 0025 with 5 new indexes |
+| 9 | DB indexes added | Migration via `pnpm db:generate` with 5 new indexes |
 | 10 | Zero `@scalius/database/schema` in admin components | Replaced with `@/types/api-responses` |
 | 11 | `pnpm typecheck` passes | Zero errors across all workspaces |
 | 12 | All admin pages verified | Manual smoke test post-refactor |
