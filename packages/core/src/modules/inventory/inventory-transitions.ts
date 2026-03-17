@@ -10,6 +10,7 @@ import { orders, orderItems, InventoryPool } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { releaseMultiple } from "./release";
 import { deductMultiple } from "./deduct";
+import { reserveMultiple } from "./reserve";
 import { checkAndAlertLowStock } from "./alerts";
 
 // The set of order statuses that mean "this order is dead / returned"
@@ -84,6 +85,22 @@ export async function buildInventoryStatements(
                     .where(eq(orders.id, orderId)),
             ],
             newAction: "deducted",
+        };
+    }
+
+    // Re-reservation: when an admin reactivates a cancelled order (restored → pending/confirmed),
+    // inventory was already released during cancellation. We need to re-reserve stock so that the
+    // order items are accounted for again. This mirrors the initial storefront checkout reservation.
+    const needsReReserve = !needsRestore && !needsDeduct && currentAction === "restored";
+    if (needsReReserve) {
+        await reserveOrderItems(db, orderId, order.inventoryPool);
+        return {
+            statements: [
+                db.update(orders)
+                    .set({ inventoryAction: "reserved", updatedAt: sql`unixepoch()` })
+                    .where(eq(orders.id, orderId)),
+            ],
+            newAction: "reserved",
         };
     }
 
@@ -184,5 +201,44 @@ async function releaseOrderReservations(
 
     if (entries.length > 0) {
         await releaseMultiple(db, entries, orderId);
+    }
+}
+
+/**
+ * Re-reserve stock for all items in an order.
+ * Used when an admin reactivates a cancelled order (cancelled → pending/confirmed).
+ * Stock was released on cancellation; this re-reserves it.
+ */
+async function reserveOrderItems(
+    db: Database,
+    orderId: string,
+    inventoryPool: string,
+): Promise<void> {
+    const items = await db
+        .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+
+    const pool = (inventoryPool ?? InventoryPool.REGULAR) as
+        | "regular"
+        | "preorder"
+        | "backorder";
+
+    const entries = items
+        .filter((i) => i.variantId !== null)
+        .map((i) => ({
+            variantId: i.variantId as string,
+            quantity: i.quantity,
+            pool,
+        }));
+
+    if (entries.length > 0) {
+        const result = await reserveMultiple(db, entries, orderId);
+        if (!result.success) {
+            console.error(
+                `[inventory-transitions] Failed to re-reserve stock for order ${orderId}: ${result.error}`
+            );
+        }
     }
 }

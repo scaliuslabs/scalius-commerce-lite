@@ -421,7 +421,16 @@ export function OrderList({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus.toLowerCase() }),
       });
-      if (!response.ok) throw new Error("Failed to update status");
+      if (!response.ok) {
+        let errorMessage = "Failed to update order status. Please try again.";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          errorMessage = `Server error (${response.status}). Please try again.`;
+        }
+        throw new Error(errorMessage);
+      }
       toast({
         title: "Status Updated",
         description: (
@@ -436,7 +445,7 @@ export function OrderList({
       setDisplayOrders(originalOrders);
       toast({
         title: "Error",
-        description: "Failed to update order status. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to update order status. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -460,7 +469,16 @@ export function OrderList({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderIds: ids, permanent }),
       });
-      if (!response.ok) throw new Error("Failed to delete orders");
+      if (!response.ok) {
+        let errorMessage = "Failed to delete orders. Please try again.";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          errorMessage = `Server error (${response.status}). Please try again.`;
+        }
+        throw new Error(errorMessage);
+      }
 
       toast({
         title: "Success",
@@ -483,7 +501,7 @@ export function OrderList({
       setDisplayOrders(originalOrders);
       toast({
         title: "Error",
-        description: "Failed to delete orders. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to delete orders. Please try again.",
         variant: "destructive",
       });
     } finally {
