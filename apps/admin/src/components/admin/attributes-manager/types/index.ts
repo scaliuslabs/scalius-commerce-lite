@@ -1,5 +1,5 @@
 // src/components/admin/attributes-manager/types/index.ts
-import type { ProductAttribute } from "@scalius/database/schema";
+import type { ProductAttribute } from "@/types/api-responses";
 
 export interface Attribute extends ProductAttribute {
   valueCount?: number;

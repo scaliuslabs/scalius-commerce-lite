@@ -1,5 +1,5 @@
 // src/components/admin/widget-list/types/index.ts
-import type { WidgetPlacementRule } from "@scalius/database/schema";
+import type { WidgetPlacementRule } from "@/types/api-responses";
 
 export interface WidgetItem {
   id: string;

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/popover";
 import { Plus, Trash2, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
-import type { ProductAttribute } from "@scalius/database/schema";
+import type { ProductAttribute } from "@/types/api-responses";
 import { cn } from "@scalius/shared/utils";
 
 interface AssignedAttribute {

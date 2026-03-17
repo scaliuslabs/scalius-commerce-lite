@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useDebounce } from '@/hooks/use-debounce';
-import type { Category } from '@scalius/database/schema';
+import type { Category } from '@/types/api-responses';
 import type { MediaFile, ProductSearchResult } from './types';
 
 export const useAiContext = (

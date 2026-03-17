@@ -68,7 +68,9 @@ export const analytics = sqliteTable("analytics", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
-});
+}, (table) => [
+    index("analytics_type_idx").on(table.type),
+]);
 
 export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {
     id: text("id").primaryKey(),

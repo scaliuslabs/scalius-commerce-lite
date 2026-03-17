@@ -49,7 +49,7 @@ import {
   Package,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import type { AbandonedCheckout } from "@scalius/database/schema";
+import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 
 // --- Type Definitions ---

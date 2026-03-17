@@ -1,4 +1,4 @@
-import type { DeliveryProviderRecord, DeliveryShipment } from "@scalius/database/schema";
+import type { DeliveryProviderRecord, DeliveryShipment } from "@/types/api-responses";
 
 export interface OrderItem {
   id: string;
