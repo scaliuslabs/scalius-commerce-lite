@@ -9,12 +9,12 @@ const PaymentGatewaysManager = lazy(() =>
     import("./PaymentGatewaysManager")
 );
 const CheckoutLanguagesManager = lazy(() =>
-    import("../CheckoutLanguagesManager").then((m) => ({
+    import("../checkout-languages").then((m) => ({
         default: m.CheckoutLanguagesManager,
     }))
 );
 const ShippingMethodsManager = lazy(() =>
-    import("../ShippingMethodsManager").then((m) => ({
+    import("../shipping-methods").then((m) => ({
         default: m.ShippingMethodsManager,
     }))
 );
