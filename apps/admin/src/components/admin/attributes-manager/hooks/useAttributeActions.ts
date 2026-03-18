@@ -1,6 +1,7 @@
 // src/components/admin/attributes-manager/hooks/useAttributeActions.ts
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/api-helpers";
 import type { Attribute, NewAttribute } from "../types";
 
 export function useAttributeActions(
@@ -82,10 +83,7 @@ export function useAttributeActions(
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const errorMessage =
-            errorData.message ||
-            `Failed to delete attribute. Status: ${response.status}`;
-          throw new Error(errorMessage);
+          throw new Error(extractApiError(errorData, "Failed to delete attribute"));
         }
 
         toast.success(successMessage);
@@ -106,7 +104,11 @@ export function useAttributeActions(
     async (id: string) => {
       setIsActionLoading(true);
       try {
-        await fetch(`/api/v1/admin/attributes/${id}/restore`, { method: "POST" });
+        const response = await fetch(`/api/v1/admin/attributes/${id}/restore`, { method: "POST" });
+        if (!response.ok) {
+          const errorJson = await response.json().catch(() => ({}));
+          throw new Error(extractApiError(errorJson, "Failed to restore attribute"));
+        }
         toast.success("Attribute restored.");
         onRefresh();
       } catch (error: unknown) {

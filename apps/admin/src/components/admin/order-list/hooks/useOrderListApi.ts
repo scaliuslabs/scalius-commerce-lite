@@ -2,7 +2,7 @@ import React from "react";
 import { toast } from "sonner";
 import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { UseOrderListStateReturn } from "./useOrderListState";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface ShipmentStatus {
   id: string;
@@ -230,7 +230,10 @@ export function useOrderListApi(
       const response = await fetch(`/api/v1/admin/orders/${id}/restore`, {
         method: "POST",
       });
-      if (!response.ok) throw new Error("Failed to restore order");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to restore order"));
+      }
       toast.success("Order restored");
 
       setCurrentPagination((prev) => ({
@@ -240,7 +243,7 @@ export function useOrderListApi(
       }));
     } catch (error) {
       console.error("Error restoring order:", error);
-      toast.error("Error restoring order");
+      toast.error(error instanceof Error ? error.message : "Error restoring order");
       setDisplayOrders(initialOrders);
     }
   }, [initialOrders, setDisplayOrders, setCurrentPagination]);

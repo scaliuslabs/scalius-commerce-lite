@@ -1,6 +1,7 @@
 // src/components/admin/widget-list/hooks/useBulkActions.ts
 import { useState } from "react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/api-helpers";
 import type { BulkAction } from "../types";
 
 export function useBulkActions(fetchWidgets: () => Promise<void>) {
@@ -69,7 +70,10 @@ export function useBulkActions(fetchWidgets: () => Promise<void>) {
         }),
       });
 
-      if (!response.ok) throw new Error(`Failed to ${action} widgets`);
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, `Failed to ${action} widgets`));
+      }
 
       toast.success("Success", { description: successMessage });
 
@@ -78,7 +82,7 @@ export function useBulkActions(fetchWidgets: () => Promise<void>) {
       await fetchWidgets();
     } catch (error: unknown) {
       console.error(`Error performing bulk ${action}:`, error);
-      toast.error("Error", { description: `Failed to ${action} widgets.` });
+      toast.error("Error", { description: error instanceof Error ? error.message : `Failed to ${action} widgets.` });
     } finally {
       setIsActionLoading(false);
     }
@@ -94,4 +98,3 @@ export function useBulkActions(fetchWidgets: () => Promise<void>) {
     toggleSelectAll,
   };
 }
-

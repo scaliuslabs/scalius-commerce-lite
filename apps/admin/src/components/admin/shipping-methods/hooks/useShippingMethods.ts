@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 // Local type replacing @scalius/database/schema import
 export interface ShippingMethod {
@@ -234,8 +234,10 @@ export function useShippingMethods() {
         `/api/v1/admin/settings/shipping-methods/${id}`,
         { method: "DELETE" },
       );
-      if (!response.ok && response.status !== 204)
-        throw new Error("Failed to move to trash");
+      if (!response.ok && response.status !== 204) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to move to trash"));
+      }
 
       toast.success("Shipping method moved to trash.");
       fetchMethods(pagination.page);
@@ -244,8 +246,8 @@ export function useShippingMethods() {
         next.delete(id);
         return next;
       });
-    } catch {
-      toast.error("Failed to move to trash.");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to move to trash.");
     } finally {
       setIsActionLoading(false);
     }
@@ -258,8 +260,10 @@ export function useShippingMethods() {
         `/api/v1/admin/settings/shipping-methods/${id}/permanent-delete`,
         { method: "DELETE" },
       );
-      if (!response.ok && response.status !== 204)
-        throw new Error("Failed to permanently delete method");
+      if (!response.ok && response.status !== 204) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to permanently delete method"));
+      }
 
       toast.success("Shipping method permanently deleted.");
       fetchMethods(pagination.page);
@@ -268,8 +272,8 @@ export function useShippingMethods() {
         next.delete(id);
         return next;
       });
-    } catch {
-      toast.error("Failed to permanently delete method.");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to permanently delete method.");
     } finally {
       setIsActionLoading(false);
     }
@@ -282,7 +286,10 @@ export function useShippingMethods() {
         `/api/v1/admin/settings/shipping-methods/${id}/restore`,
         { method: "POST" },
       );
-      if (!response.ok) throw new Error("Failed to restore shipping method");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to restore shipping method"));
+      }
       toast.success("Shipping method restored successfully.");
       fetchMethods(pagination.page);
       setSelectedMethods((prev) => {
@@ -290,8 +297,8 @@ export function useShippingMethods() {
         next.delete(id);
         return next;
       });
-    } catch {
-      toast.error("Failed to restore shipping method.");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to restore shipping method.");
     } finally {
       setIsActionLoading(false);
     }

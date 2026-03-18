@@ -2,7 +2,7 @@ import { useState, useEffect, type FC } from "react";
 import { ShipmentStatusBadge } from "./ShipmentStatusBadge";
 import { ShipmentMetadataDisplay } from "../ui/ShipmentMetadataDisplay";
 import { toast } from "sonner";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface Shipment {
   id: string;
@@ -38,7 +38,8 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
     try {
       const response = await fetch(`/api/v1/admin/orders/${orderId}/shipments`);
       if (!response.ok) {
-        throw new Error("Failed to fetch shipments");
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to fetch shipments"));
       }
 
       const json = await response.json();
@@ -82,7 +83,8 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to refresh shipment status");
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to refresh shipment status"));
       }
 
       const updatedShipment = await response.json();
@@ -137,7 +139,8 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to delete shipment");
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to delete shipment"));
       }
 
       // Remove from list

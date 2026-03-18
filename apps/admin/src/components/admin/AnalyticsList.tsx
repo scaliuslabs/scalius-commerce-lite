@@ -30,6 +30,7 @@ import {
 import { Edit, Trash2, Plus, Power, PowerOff } from "lucide-react";
 import { formatDate } from "@scalius/shared/utils";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/api-helpers";
 import { navigateTo } from "@/lib/client/navigate";
 import { AdminListPagination } from "./shared/AdminListPagination";
 
@@ -102,14 +103,15 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete analytics script");
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to delete analytics script"));
       }
 
       toast.success("Deleted", { description: "Analytics script has been deleted." });
       void navigateTo(window.location.pathname);
     } catch (error: unknown) {
       console.error("Error deleting analytics script:", error);
-      toast.error("Error", { description: "Failed to delete analytics script. Please try again." });
+      toast.error("Error", { description: error instanceof Error ? error.message : "Failed to delete analytics script." });
     } finally {
       setIsDeleting(false);
     }
@@ -126,14 +128,15 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to toggle analytics script status");
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to toggle analytics script status"));
       }
 
       toast.success("Updated", { description: "Analytics script status has been updated." });
       void navigateTo(window.location.pathname);
     } catch (error: unknown) {
       console.error("Error toggling analytics script status:", error);
-      toast.error("Error", { description: "Failed to update analytics script status. Please try again." });
+      toast.error("Error", { description: error instanceof Error ? error.message : "Failed to update analytics script status." });
     }
   };
 

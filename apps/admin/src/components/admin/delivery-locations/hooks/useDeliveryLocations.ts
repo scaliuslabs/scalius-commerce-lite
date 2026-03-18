@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 export interface Location {
   id: string;
@@ -322,10 +322,9 @@ export function useDeliveryLocations() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          errorData.error ||
-          `Failed to ${editMode ? "update" : "create"} location`,
+          extractApiError(errorData, `Failed to ${editMode ? "update" : "create"} location`),
         );
       }
 
@@ -341,7 +340,7 @@ export function useDeliveryLocations() {
         `Error ${editMode ? "updating" : "creating"} location:`,
         error,
       );
-      toast.error(`Failed to ${editMode ? "update" : "create"} ${activeTab}`);
+      toast.error(error instanceof Error ? error.message : `Failed to ${editMode ? "update" : "create"} ${activeTab}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -365,7 +364,10 @@ export function useDeliveryLocations() {
         `/api/v1/admin/settings/delivery-locations/${deletingLocationId}`,
         { method: "DELETE" },
       );
-      if (!response.ok) throw new Error(`Failed to delete ${activeTab}`);
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, `Failed to delete ${activeTab}`));
+      }
 
       toast.success(
         `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} deleted successfully`,
@@ -374,7 +376,7 @@ export function useDeliveryLocations() {
       closeDeleteDialog();
     } catch (error: unknown) {
       console.error(`Error deleting ${activeTab}:`, error);
-      toast.error(`Failed to delete ${activeTab}`);
+      toast.error(error instanceof Error ? error.message : `Failed to delete ${activeTab}`);
       closeDeleteDialog();
     }
   };
@@ -387,7 +389,10 @@ export function useDeliveryLocations() {
         body: JSON.stringify({ isActive: !currentStatus }),
       });
 
-      if (!response.ok) throw new Error(`Failed to update ${activeTab} status`);
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, `Failed to update ${activeTab} status`));
+      }
 
       toast.success(
         `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} status updated`,
@@ -395,7 +400,7 @@ export function useDeliveryLocations() {
       loadLocations();
     } catch (error: unknown) {
       console.error(`Error updating ${activeTab} status:`, error);
-      toast.error(`Failed to update ${activeTab} status`);
+      toast.error(error instanceof Error ? error.message : `Failed to update ${activeTab} status`);
     }
   };
 
@@ -451,9 +456,9 @@ export function useDeliveryLocations() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          errorData.error || `Failed to delete selected ${activeTab}s`,
+          extractApiError(errorData, `Failed to delete selected ${activeTab}s`),
         );
       }
 
@@ -465,7 +470,7 @@ export function useDeliveryLocations() {
       setIsBulkDeleteDialogOpen(false);
     } catch (error: unknown) {
       console.error(`Error bulk deleting ${activeTab}s:`, error);
-      toast.error(`Failed to delete selected ${activeTab}s`);
+      toast.error(error instanceof Error ? error.message : `Failed to delete selected ${activeTab}s`);
       setIsBulkDeleteDialogOpen(false);
     }
   };
@@ -481,9 +486,9 @@ export function useDeliveryLocations() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          errorData.error || "Failed to clean all delivery locations",
+          extractApiError(errorData, "Failed to clean all delivery locations"),
         );
       }
 
@@ -493,7 +498,7 @@ export function useDeliveryLocations() {
       setIsCleanAllDialogOpen(false);
     } catch (error: unknown) {
       console.error("Error cleaning all delivery locations:", error);
-      toast.error("Failed to clean all delivery locations");
+      toast.error(error instanceof Error ? error.message : "Failed to clean all delivery locations");
       setIsCleanAllDialogOpen(false);
     }
   };

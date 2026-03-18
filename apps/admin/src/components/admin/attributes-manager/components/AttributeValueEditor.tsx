@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AttributeValue } from "../types";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface AttributeValueEditorProps {
   attributeId: string | null;
@@ -71,7 +71,10 @@ export function AttributeValueEditor({
       const response = await fetch(
         `/api/v1/admin/attributes/${attributeId}/values`,
       );
-      if (!response.ok) throw new Error("Failed to fetch values");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to fetch values"));
+      }
       const json = await response.json();
       const data = unwrapEnvelope(json);
       setValues(data.values || []);
@@ -120,7 +123,10 @@ export function AttributeValueEditor({
         },
       );
 
-      if (!response.ok) throw new Error("Failed to update value");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to update value"));
+      }
 
       toast.success(`Value renamed to "${editedValue.trim()}"`);
       setEditingValue(null);
@@ -128,7 +134,7 @@ export function AttributeValueEditor({
       fetchValues();
     } catch (error: unknown) {
       console.error("Error updating value:", error);
-      toast.error("Failed to update value");
+      toast.error(error instanceof Error ? error.message : "Failed to update value");
     } finally {
       setSavingValue(null);
     }
@@ -150,7 +156,10 @@ export function AttributeValueEditor({
         },
       );
 
-      if (!response.ok) throw new Error("Failed to add value");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to add value"));
+      }
 
       toast.success(`Value "${newValue.trim()}" added`);
       setNewValue("");
@@ -158,7 +167,7 @@ export function AttributeValueEditor({
       fetchValues();
     } catch (error: unknown) {
       console.error("Error adding value:", error);
-      toast.error("Failed to add value");
+      toast.error(error instanceof Error ? error.message : "Failed to add value");
     } finally {
       setSavingValue(null);
     }
@@ -178,14 +187,17 @@ export function AttributeValueEditor({
         },
       );
 
-      if (!response.ok) throw new Error("Failed to delete value");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to delete value"));
+      }
 
       toast.success(`Value "${value}" deleted from all products`);
       setDeleteConfirm(null);
       fetchValues();
     } catch (error: unknown) {
       console.error("Error deleting value:", error);
-      toast.error("Failed to delete value");
+      toast.error(error instanceof Error ? error.message : "Failed to delete value");
     } finally {
       setSavingValue(null);
     }
