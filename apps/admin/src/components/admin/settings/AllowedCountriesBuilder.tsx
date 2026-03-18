@@ -40,7 +40,7 @@ export default function AllowedCountriesBuilder() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("/api/v1/admin/settings/site");
+      const res = await fetch("/api/v1/admin/settings/allowed-countries");
       if (res.ok) {
         const json = await res.json();
         const data =
@@ -61,7 +61,7 @@ export default function AllowedCountriesBuilder() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch("/api/v1/admin/settings/site", {
+      const res = await fetch("/api/v1/admin/settings/allowed-countries", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ allowedCountries: selected }),
