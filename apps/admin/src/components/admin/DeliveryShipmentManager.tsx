@@ -243,7 +243,9 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
                 ? {
                   ...s,
                   status: updatedShipment.status,
-                  lastChecked: updatedShipment.lastChecked,
+                  lastChecked: updatedShipment.lastChecked
+                    ? new Date(updatedShipment.lastChecked)
+                    : null,
                 }
                 : s,
             ),

@@ -1,6 +1,6 @@
 import { apiGet } from "@/lib/api-fetch";
+import type { OrderListItem } from "@scalius/core/modules/orders";
 import type {
-  Order,
   PaginationResponse,
   ProductListItem,
   OrderDetail,
@@ -30,18 +30,18 @@ export async function getOrdersIndexData(options: {
   if (options.status) params.status = options.status;
   if (options.showTrashed) params.trashed = "true";
 
-  const result = await apiGet<{ orders: Order[]; pagination: PaginationResponse }>("/orders", params);
+  const result = await apiGet<{ orders: OrderListItem[]; pagination: PaginationResponse }>("/orders", params);
 
-  const ordersWithDates = result.orders.map((order) => ({
+  const ordersWithDates: OrderListItem[] = result.orders.map((order) => ({
     ...order,
     createdAt:
       order.createdAt instanceof Date
         ? order.createdAt
-        : new Date(order.createdAt),
+        : new Date(order.createdAt as unknown as string),
     updatedAt:
       order.updatedAt instanceof Date
         ? order.updatedAt
-        : new Date(order.updatedAt),
+        : new Date(order.updatedAt as unknown as string),
   }));
 
   return { orders: ordersWithDates, pagination: result.pagination };
@@ -70,8 +70,8 @@ export async function getOrderFormProducts() {
                 size: v.size,
                 color: v.color,
                 weight: v.weight,
-                sku: v.sku,
-                price: v.price,
+                sku: v.sku || "",
+                price: v.price ?? 0,
                 stock: v.stock,
               })),
           };
@@ -122,7 +122,17 @@ export async function getOrderEditData(id: string) {
   const result = await apiGet<OrderFormData>("/orders/" + id + "/form-data").catch(() => null);
   if (!result) return null;
 
-  return result;
+  return {
+    ...result,
+    productsWithVariants: result.productsWithVariants.map((p) => ({
+      ...p,
+      variants: p.variants.map((v) => ({
+        ...v,
+        sku: v.sku || "",
+        price: v.price ?? 0,
+      })),
+    })),
+  };
 }
 
 export async function getOrderShipments(orderId: string) {

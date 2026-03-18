@@ -42,7 +42,8 @@ export const WidgetPasteModal: React.FC<WidgetPasteModalProps> = ({ isOpen, onOp
     if (jsonResult.success && jsonResult.data) {
       const validation = validateWidgetJSON(jsonResult.data);
       if (validation.valid) {
-        onApply({ html: jsonResult.data.html, css: jsonResult.data.css || '' });
+        const widgetData = jsonResult.data as Record<string, unknown>;
+        onApply({ html: String(widgetData.html || widgetData.htmljs || ''), css: String(widgetData.css || '') });
         toast.success("JSON content applied successfully!");
         onOpenChange(false);
         setJsonInput("");

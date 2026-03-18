@@ -1,4 +1,6 @@
 import { apiGet } from "@/lib/api-fetch";
+import type { HeaderConfig } from "@/components/admin/header-builder/types";
+import type { FooterConfig } from "@/components/admin/footer-builder/types";
 import type {
   GeneralSettings,
   MetaConversionsSettingsResponse,
@@ -7,16 +9,16 @@ import type {
 } from "@/types/api-responses";
 
 export async function getGeneralSettingsData(): Promise<{
-  headerConfig: unknown;
-  footerConfig: unknown;
+  headerConfig: HeaderConfig | null;
+  footerConfig: FooterConfig | null;
 }> {
   const result = await apiGet<GeneralSettings>(
     "/settings/general",
-  ).catch(() => ({ headerConfig: {}, footerConfig: {} }));
+  ).catch(() => ({ headerConfig: null, footerConfig: null }));
 
   return {
-    headerConfig: result.headerConfig || {},
-    footerConfig: result.footerConfig || {},
+    headerConfig: result.headerConfig ? (result.headerConfig as unknown as HeaderConfig) : null,
+    footerConfig: result.footerConfig ? (result.footerConfig as unknown as FooterConfig) : null,
   };
 }
 

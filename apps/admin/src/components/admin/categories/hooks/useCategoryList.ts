@@ -12,7 +12,8 @@ interface Category {
   metaDescription: string | null;
   createdAt: Date;
   updatedAt: Date;
-  productCount: number;
+  deletedAt?: Date | null;
+  productCount?: number;
 }
 
 type SortField = "name" | "createdAt" | "updatedAt";
@@ -209,7 +210,7 @@ export function useCategoryList({
       categoriesWithImages: initialCategories.filter((cat) => cat.imageUrl)
         .length,
       totalProducts: initialCategories.reduce(
-        (sum, cat) => sum + cat.productCount,
+        (sum, cat) => sum + (cat.productCount ?? 0),
         0,
       ),
     };

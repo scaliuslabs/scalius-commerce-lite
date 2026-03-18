@@ -8,7 +8,8 @@ export interface Category {
 export interface Product {
   id: string;
   name: string;
-  categoryId: string;
+  categoryId?: string;
+  price?: number;
 }
 
 export const collectionTypes = [

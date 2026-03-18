@@ -57,7 +57,7 @@ export function CollectionForm({
       return products;
     }
     return products.filter((product) =>
-      selectedCategoryIds.includes(product.categoryId),
+      product.categoryId ? selectedCategoryIds.includes(product.categoryId) : false,
     );
   }, [selectedCategoryIds, products]);
 

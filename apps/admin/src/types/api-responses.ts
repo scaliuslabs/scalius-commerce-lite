@@ -135,6 +135,8 @@ export interface Order {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+  itemCount?: number;
+  latestShipment?: unknown;
 }
 
 export interface AbandonedCheckout {
@@ -397,6 +399,8 @@ export interface ProductStats {
   activeProducts: number;
   productsWithImages: number;
   categoriesCount: number;
+  totalCategories?: number;
+  categoriesWithImages?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -576,8 +580,8 @@ export interface Discount {
 // ---------------------------------------------------------------------------
 
 export interface GeneralSettings {
-  headerConfig: unknown;
-  footerConfig: unknown;
+  headerConfig: Record<string, unknown> | null;
+  footerConfig: Record<string, unknown> | null;
 }
 
 export interface MetaConversionsSettingsResponse {
@@ -657,5 +661,5 @@ export interface DashboardDailyActivity {
 
 export interface CollectionFormOptions {
   categories: Array<{ id: string; name: string }>;
-  products: Array<{ id: string; name: string; price: number }>;
+  products: Array<{ id: string; name: string; price: number; categoryId?: string }>;
 }

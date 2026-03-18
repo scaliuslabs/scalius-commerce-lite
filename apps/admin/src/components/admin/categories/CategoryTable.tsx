@@ -126,14 +126,14 @@ const CategoryRow = React.memo(function CategoryRow({
           <span
             className={cn(
               "text-sm tabular-nums",
-              category.productCount > 0
+              (category.productCount ?? 0) > 0
                 ? "text-foreground font-medium"
                 : "text-muted-foreground/60",
             )}
           >
-            {category.productCount}
+            {category.productCount ?? 0}
           </span>
-          {category.productCount > 0 && (
+          {(category.productCount ?? 0) > 0 && (
             <a
               href={`/admin/products?category=${category.id}`}
               className="text-xs text-primary/80 hover:text-primary hover:underline"

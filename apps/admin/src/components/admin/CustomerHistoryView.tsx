@@ -41,7 +41,7 @@ import { Separator } from "../ui/separator";
 import { ScrollArea } from "../ui/scroll-area";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 
-// --- Interfaces (Unchanged) ---
+// --- Interfaces ---
 interface Customer {
   id: string;
   name: string;
@@ -56,24 +56,25 @@ interface Customer {
   lastOrderAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  cityName?: string;
-  zoneName?: string;
+  deletedAt?: Date | string | number | null;
+  cityName?: string | null;
+  zoneName?: string | null;
   areaName?: string | null;
 }
 
 interface CustomerHistory {
   id: string;
-  name: string;
+  name: string | null;
   email: string | null;
-  phone: string;
+  phone: string | null;
   address: string | null;
   city: string | null;
   zone: string | null;
   area: string | null;
-  changeType: "created" | "updated" | "deleted";
+  changeType: string | null;
   createdAt: Date;
-  cityName?: string;
-  zoneName?: string;
+  cityName?: string | null;
+  zoneName?: string | null;
   areaName?: string | null;
 }
 

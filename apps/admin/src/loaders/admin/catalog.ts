@@ -46,8 +46,8 @@ export async function getCategoriesIndexData(options: {
 
   const formattedCategories = categoriesResult.categories.map((category) => ({
     ...category,
-    createdAt: category.createdAt ? new Date(category.createdAt) : null,
-    updatedAt: category.updatedAt ? new Date(category.updatedAt) : null,
+    createdAt: category.createdAt ? new Date(category.createdAt) : new Date(),
+    updatedAt: category.updatedAt ? new Date(category.updatedAt) : new Date(),
     deletedAt: category.deletedAt ? new Date(category.deletedAt) : null,
   }));
 
