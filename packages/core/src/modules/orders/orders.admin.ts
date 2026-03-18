@@ -541,6 +541,7 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
         );
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(writeBatch as any);
 
     return { id: orderId };

@@ -54,7 +54,7 @@ async function parseCspAllowedDomains(env?: Record<string, unknown>): Promise<st
         cspAllowed = cached;
       }
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("Failed to read CSP_ALLOWED from KV Cache", e);
   }
 

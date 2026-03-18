@@ -71,7 +71,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
       // but don't log it. We primarily care about the status code here.
       try {
         await response.text();
-      } catch (readError) {
+      } catch (readError: unknown) {
         // Ignore error reading body for test connection
       }
 
@@ -84,14 +84,14 @@ export class SteadfastProvider implements DeliveryProviderInterface {
             success: false,
             message: `Connection failed: ${data.message || response.statusText}`,
           };
-        } catch (e) {
+        } catch (e: unknown) {
           return {
             success: false,
             message: `Connection failed with status: ${response.status} ${response.statusText}`,
           };
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         success: false,
         message: `Connection failed: ${error instanceof Error ? error.message : String(error)
@@ -160,7 +160,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         const responseText = await response.text();
         try {
           responseData = JSON.parse(responseText);
-        } catch (jsonError) {
+        } catch (jsonError: unknown) {
           // If it's an HTML error page from Laravel, try to extract the error message
           let errorMessage = "Invalid JSON response";
           if (responseText.includes("<!DOCTYPE html>")) {
@@ -178,7 +178,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
             message: `${errorMessage}`,
           };
         }
-      } catch (parseError) {
+      } catch (parseError: unknown) {
         return {
           success: false,
           message: `Failed to parse API response: ${response.statusText}`,
@@ -207,7 +207,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
           message: `API Error: ${responseData.message || "Unknown error"}`,
         };
       }
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         success: false,
         message: `Failed to create shipment: ${error instanceof Error ? error.message : String(error)
@@ -236,7 +236,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
       let responseData: SteadfastStatusResponse;
       try {
         responseData = await response.json();
-      } catch (parseError) {
+      } catch (parseError: unknown) {
         throw new Error(`Failed to parse API response: ${parseError}`);
       }
 
@@ -251,7 +251,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         updatedAt: new Date(),
         metadata: responseData as unknown as Record<string, unknown>,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: "unknown",
         rawStatus: "error",

@@ -36,7 +36,7 @@ export async function bulkShipOrders(orderIds: string[], providerId: string, opt
                 }).where(eq(orders.id, orderId));
             }
             results.push({ orderId, success: shipment.success, shipment: shipment.success ? shipment : undefined, error: shipment.success ? undefined : shipment.message });
-        } catch (error) {
+        } catch (error: unknown) {
             results.push({ orderId, success: false, error: error instanceof Error ? error.message : String(error) });
         }
     }
@@ -109,6 +109,7 @@ export async function createFulfillmentShipment(orderId: string, body: Record<st
     if (isFinalShipment && order.status === OrderStatus.CONFIRMED) orderUpdate.status = OrderStatus.SHIPPED;
 
     writes.push(db.update(orders).set(orderUpdate).where(eq(orders.id, orderId)));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(writes as any);
 
     if (isFinalShipment && order.status === OrderStatus.CONFIRMED) {

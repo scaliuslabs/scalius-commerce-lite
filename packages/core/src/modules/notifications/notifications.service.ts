@@ -44,7 +44,7 @@ export async function sendOrderNotification(
             if (result && result.value) {
                 serviceAccountJson = result.value;
             }
-        } catch (e) {
+        } catch (e: unknown) {
             console.warn(
                 "Failed to fetch custom Firebase credentials from DB, falling back to env:",
                 e,
@@ -120,7 +120,7 @@ export async function sendOrderNotification(
                     .where(sql`${adminFcmTokens.token} IN ${invalidTokens}`);
             }
         }
-    } catch (error) {
+    } catch (error: unknown) {
         // Log but don't crash — this runs in background
         console.error("Error in background order notification:", error);
     }

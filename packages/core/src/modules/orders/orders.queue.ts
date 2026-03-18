@@ -57,7 +57,7 @@ export async function setCheckoutStatus(
             { expirationTtl: 86400 }, // Keep final status for 24h
         );
         console.log(`[Queue] Successfully wrote ${status} to KV`);
-    } catch (kvErr) {
+    } catch (kvErr: unknown) {
         console.error(`[Queue] Failed to write KV status ${status}:`, kvErr);
     }
 }
@@ -235,7 +235,7 @@ export async function handleOrderIngestBatch(
             }
 
             successMessages.push(msg);
-        } catch (e) {
+        } catch (e: unknown) {
             console.error(`[Queue] Error preparing order ${payload.orderData.id as string}:`, e);
             failedMessages.push({ msg, reason: String(e) });
         }
@@ -252,6 +252,7 @@ export async function handleOrderIngestBatch(
         const payload = msg.body;
         if (!payload.discountUsage) continue;
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- orderData shape varies by queue message type
         const customerId = (payload.orderData as any).customerId;
         if (!customerId) continue;
 
@@ -313,6 +314,7 @@ export async function handleOrderIngestBatch(
     try {
         console.log(`[Queue] Calling db.batch() with ${writeBatch.length} queries`);
         if (writeBatch.length > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
             await db.batch(writeBatch as any);
         }
         console.log(`[Queue] db.batch() completed successfully`);
@@ -341,7 +343,7 @@ export async function handleOrderIngestBatch(
         }
 
         console.log(`[Queue] Batch processing completely finished`);
-    } catch (batchError) {
+    } catch (batchError: unknown) {
         // ── Phase 4: Rollback on DB failure ───────────────────────────────────
         console.error("[Queue] Order ingest DB batch failed WITH EXCEPTION:", batchError);
 

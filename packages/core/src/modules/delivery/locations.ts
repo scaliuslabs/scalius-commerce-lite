@@ -216,14 +216,14 @@ export async function getExternalLocationId(
         `No external ID found for location ${locationId} with provider ${providerType}`,
       );
       return undefined;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(
         `Error parsing external IDs for location ${locationId}:`,
         error,
       );
       return undefined;
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(
       `Error getting external ID for location ${locationId}:`,
       error,

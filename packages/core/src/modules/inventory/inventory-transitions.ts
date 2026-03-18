@@ -123,6 +123,7 @@ export async function applyInventoryForStatusChange(
 ): Promise<InventoryAction> {
     const { statements, newAction } = await buildInventoryStatements(db, orderId, newStatus);
     if (statements.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
         await db.batch(statements as any);
     }
     return newAction;

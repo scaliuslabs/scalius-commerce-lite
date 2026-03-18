@@ -94,7 +94,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       );
 
       return this.accessToken;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new Error(
         `Failed to obtain Pathao access token: ${error instanceof Error ? error.message : String(error)
         }`,
@@ -145,7 +145,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       }
 
       return { success: true, message: "Connection successful" };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         success: false,
         message: `Connection failed: ${error instanceof Error ? error.message : String(error)
@@ -250,13 +250,13 @@ export class PathaoProvider implements DeliveryProviderInterface {
             message: `API Error: ${responseData.message || "Unknown error"}`,
           };
         }
-      } catch (parseError) {
+      } catch (parseError: unknown) {
         return {
           success: false,
           message: `Error preparing shipment request: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
         };
       }
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         success: false,
         message: `Failed to create shipment: ${error instanceof Error ? error.message : String(error)
@@ -313,7 +313,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
         updatedAt: new Date(),
         metadata: responseData.data,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: "unknown",
         rawStatus: "error",

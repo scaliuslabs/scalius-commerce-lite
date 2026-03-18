@@ -190,7 +190,7 @@ export async function search(
       pages: formattedPages,
       categories: formattedCategories,
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Search error:", error);
     // Return empty results in case of error
     return {

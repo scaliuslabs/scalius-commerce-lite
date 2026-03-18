@@ -206,6 +206,7 @@ export const DiscountService = {
         if (productsToInsert.length > 0) batchOps.push(db.insert(discountProducts).values(productsToInsert));
         if (collectionsToInsert.length > 0) batchOps.push(db.insert(discountCollections).values(collectionsToInsert));
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
         await db.batch(batchOps as any);
         return { id: discountId };
     },
@@ -280,6 +281,7 @@ export const DiscountService = {
         if (productsToInsert.length > 0) batchOps.push(db.insert(discountProducts).values(productsToInsert));
         if (collectionsToInsert.length > 0) batchOps.push(db.insert(discountCollections).values(collectionsToInsert));
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
         await db.batch(batchOps as any);
         return { success: true };
     },

@@ -10,6 +10,7 @@ export const deliveryLocations = sqliteTable("delivery_locations", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     type: text("type", { enum: ["city", "zone", "area"] }).notNull(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle self-referential FK requires any return type
     parentId: text("parent_id").references((): any => deliveryLocations.id, { onDelete: "set null" }),
     externalIds: text("external_ids").notNull(),
     metadata: text("metadata").notNull(),

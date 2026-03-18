@@ -151,6 +151,7 @@ export async function processPaymentConfirmed(
         updatedAt: sql`unixepoch()`,
       }).where(eq(orders.id, params.orderId)),
       ...inventoryStmts,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ] as any);
 
     // ── 4. Update payment plan if applicable ──
@@ -174,7 +175,7 @@ export async function processPaymentConfirmed(
         .where(eq(paymentPlans.orderId, params.orderId));
     }
     return { success: true };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Payment processing error";
     console.error(`[process-payment] Error for order ${params.orderId}:`, err);
     return { success: false, error: message };
@@ -226,7 +227,7 @@ export async function processPaymentFailed(
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error(`[process-payment] Failed payment recording error:`, err);
   }
 }
@@ -276,7 +277,7 @@ export async function releaseOrderInventory(
       .update(orders)
       .set({ inventoryAction: "restored" })
       .where(eq(orders.id, orderId));
-  } catch (err) {
+  } catch (err: unknown) {
     console.error(`[process-payment] Inventory release error for order ${orderId}:`, err);
   }
 }

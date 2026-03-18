@@ -197,7 +197,7 @@ export async function processImagesWithDimensions(
         height: dimensions.height,
         aspectRatio,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn(`Failed to get dimensions for ${img.filename}:`, error);
       // Return fallback instead of failing completely
       return {

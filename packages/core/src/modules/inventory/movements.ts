@@ -28,7 +28,7 @@ export async function recordMovement(
       createdBy: entry.createdBy ?? null,
       createdAt: new Date(),
     });
-  } catch (err) {
+  } catch (err: unknown) {
     // Log but don't throw — movement logging is best-effort
     console.error("[inventory/movements] Failed to record movement:", err);
   }

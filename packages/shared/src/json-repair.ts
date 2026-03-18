@@ -6,7 +6,7 @@
 /**
  * Attempts to extract and parse JSON from a string that might contain markdown or extra text
  */
-export function extractAndParseJSON(text: string): any {
+export function extractAndParseJSON(text: string): unknown {
   // Remove markdown code blocks
   let cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "");
 
@@ -85,31 +85,31 @@ export function aggressiveRepairJSON(jsonString: string): string {
  */
 export function parseJSONSafely(text: string): {
   success: boolean;
-  data?: any;
+  data?: unknown;
   error?: string;
 } {
   // Strategy 1: Direct parse
   try {
     const data = JSON.parse(text);
     return { success: true, data };
-  } catch (e1) {
+  } catch (e1: unknown) {
     // Strategy 2: Extract and parse
     try {
       const data = extractAndParseJSON(text);
       return { success: true, data };
-    } catch (e2) {
+    } catch (e2: unknown) {
       // Strategy 3: Repair and parse
       try {
         const repaired = repairJSON(text);
         const data = JSON.parse(repaired);
         return { success: true, data };
-      } catch (e3) {
+      } catch (e3: unknown) {
         // Strategy 4: Aggressive repair
         try {
           const repaired = aggressiveRepairJSON(text);
           const data = JSON.parse(repaired);
           return { success: true, data };
-        } catch (e4) {
+        } catch (e4: unknown) {
           return {
             success: false,
             error: `Failed to parse JSON after all repair attempts: ${e4}`,
@@ -124,7 +124,7 @@ export function parseJSONSafely(text: string): {
  * Validates if a JSON object has the required structure for widget content - ENHANCED
  * Supports both "html" and "htmljs" fields for compatibility with tag-based format
  */
-export function validateWidgetJSON(data: any): {
+export function validateWidgetJSON(data: unknown): {
   valid: boolean;
   error?: string;
 } {
@@ -132,8 +132,10 @@ export function validateWidgetJSON(data: any): {
     return { valid: false, error: "Response is not an object" };
   }
 
+  const record = data as Record<string, unknown>;
+
   // Accept either "html" or "htmljs" field (tag-based format uses "htmljs")
-  const htmlContent = data.html || data.htmljs;
+  const htmlContent = (record.html || record.htmljs) as string | undefined;
 
   if (!htmlContent || typeof htmlContent !== "string") {
     return {
@@ -156,11 +158,11 @@ export function validateWidgetJSON(data: any): {
   }
 
   // Normalize the data object to always have "html" field
-  if (data.htmljs && !data.html) {
-    data.html = data.htmljs;
+  if (record.htmljs && !record.html) {
+    record.html = record.htmljs;
   }
 
-  if (data.css !== undefined && typeof data.css !== "string") {
+  if (record.css !== undefined && typeof record.css !== "string") {
     return { valid: false, error: 'Invalid "css" field type' };
   }
 

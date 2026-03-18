@@ -153,7 +153,7 @@ export async function releaseExpiredReservations(
 
       result.released++;
       result.releasedVariantIds.push(variantId);
-    } catch (err) {
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       result.errors.push(`Failed to release variant ${variantId}: ${msg}`);
       console.error(`[inventory/expiry] Failed to release expired reservation for variant ${variantId}:`, err);

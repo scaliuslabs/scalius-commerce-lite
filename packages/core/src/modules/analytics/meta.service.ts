@@ -15,7 +15,7 @@ export class MetaService {
                 .where(eq(metaConversionsSettings.id, "singleton"))
                 .get();
             return settings || null;
-        } catch (error) {
+        } catch (error: unknown) {
             console.error("Error fetching Meta CAPI settings:", error);
             return null;
         }
@@ -47,7 +47,7 @@ export class MetaService {
 
             // Implement lazy cleanup directly in the service
             this.performLogCleanup(db, retentionHours);
-        } catch (error) {
+        } catch (error: unknown) {
             console.error("Failed to write to Meta CAPI log:", error);
         }
     }
@@ -64,7 +64,7 @@ export class MetaService {
             await db
                 .delete(metaConversionsLogs)
                 .where(lt(metaConversionsLogs.createdAt, cutoffTime));
-        } catch (error) {
+        } catch (error: unknown) {
             console.error("Error during Meta CAPI log cleanup:", error);
         }
     }

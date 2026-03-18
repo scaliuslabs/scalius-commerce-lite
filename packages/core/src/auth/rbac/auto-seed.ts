@@ -269,7 +269,7 @@ export async function autoSeedRbacIfNeeded(db: Database): Promise<void> {
     }
 
     seedingChecked = true;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("RBAC: Auto-seeding failed:", error);
     // Don't set seedingChecked so it retries on next request
   }

@@ -63,7 +63,7 @@ export async function createPaymentIntent(
       clientSecret: intent.client_secret ?? undefined,
       paymentIntentId: intent.id,
     };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Stripe.errors.StripeError
       ? err.message
       : "Failed to create payment intent";
@@ -88,7 +88,7 @@ export async function capturePaymentIntent(
     }
     await stripe.paymentIntents.capture(paymentIntentId, params);
     return { success: true };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Stripe.errors.StripeError
       ? err.message
       : "Failed to capture payment intent";
@@ -107,7 +107,7 @@ export async function cancelPaymentIntent(
     const stripe = getStripe(secretKey);
     await stripe.paymentIntents.cancel(paymentIntentId);
     return { success: true };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Stripe.errors.StripeError
       ? err.message
       : "Failed to cancel payment intent";
@@ -132,7 +132,7 @@ export async function createRefund(
       ...(reason ? { reason } : {}),
     });
     return { success: true, refundId: refund.id };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Stripe.errors.StripeError
       ? err.message
       : "Failed to create refund";

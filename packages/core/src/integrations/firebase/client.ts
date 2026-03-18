@@ -8,6 +8,17 @@ import {
   type Messaging,
 } from "firebase/messaging";
 
+interface FirebaseClientConfig {
+  apiKey: string;
+  authDomain?: string;
+  projectId?: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+  measurementId?: string;
+  vapidKey?: string;
+}
+
 let app: FirebaseApp | null = null;
 let messaging: Messaging | null = null;
 let publicVapidKey: string | null = null; // Store VAPID key dynamically
@@ -73,7 +84,7 @@ function showCustomFCMToast(title: string, body: string, link?: string) {
   }, 10);
 }
 
-function initializeFirebaseApp(config: any) {
+function initializeFirebaseApp(config: FirebaseClientConfig) {
   if (app) {
     return; // Already initialized
   }
@@ -87,7 +98,7 @@ function initializeFirebaseApp(config: any) {
     app = initializeApp(config);
     messaging = getMessaging(app);
     console.log("Firebase client app and messaging initialized.");
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error initializing Firebase client app:", error);
   }
 }
@@ -119,7 +130,7 @@ async function requestNotificationPermissionAndToken(userId: string) {
     } else {
       console.log("Notification permission not granted. Status:", permission);
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(
       "An error occurred while requesting notification permission or retrieving the token.",
       error,
@@ -155,7 +166,7 @@ async function sendTokenToServer(token: string, userId: string) {
         deviceInfo: JSON.stringify(deviceInfo),
       }),
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error sending token to server:", error);
   }
 }
@@ -184,7 +195,7 @@ function setupForegroundMessageListener() {
 
 export async function initFirebaseClientNotifications(
   userId: string | null,
-  config: any,
+  config: FirebaseClientConfig,
 ) {
   if (typeof window === "undefined" || !("Notification" in window) || !userId) {
     console.log(
@@ -199,7 +210,7 @@ export async function initFirebaseClientNotifications(
   }
 
   // Set VAPID key from config or env fallback (passed from server)
-  publicVapidKey = config.vapidKey;
+  publicVapidKey = config.vapidKey ?? null;
 
   initializeFirebaseApp(config);
   if (app && messaging) {

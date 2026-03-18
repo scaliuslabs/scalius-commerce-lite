@@ -132,7 +132,7 @@ export class DeliveryService {
     try {
       const providerInstance = await createProvider(provider);
       return await providerInstance.testConnection();
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         success: false,
         message: `Failed to test provider: ${error instanceof Error ? error.message : String(error)}`,
@@ -253,7 +253,7 @@ export class DeliveryService {
         .where(eq(deliveryShipments.id, shipmentId));
 
       return shipmentResult;
-    } catch (error) {
+    } catch (error: unknown) {
       // 5. Exception during provider call — mark record as failed
       const errorMsg = error instanceof Error ? error.message : String(error);
 
@@ -363,7 +363,7 @@ export class DeliveryService {
         rawStatus: statusResult.rawStatus,
         metadata: statusResult.metadata,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(
         `Error checking shipment status: ${error instanceof Error ? error.message : String(error)}`,
       );

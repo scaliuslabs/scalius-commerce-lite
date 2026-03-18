@@ -2,9 +2,15 @@
 // FCM REST API implementation for Cloudflare Workers
 // Replaces firebase-admin SDK with direct HTTP calls
 
+interface ServiceAccount {
+  client_email: string;
+  private_key: string;
+  project_id: string;
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function getEnv(contextEnv?: any) {
+function getEnv(contextEnv?: Record<string, unknown>) {
   if (contextEnv) {
     return contextEnv;
   }
@@ -24,7 +30,7 @@ function base64UrlEncode(str: string): string {
     .replace(/=/g, "");
 }
 
-async function createJWT(serviceAccount: any): Promise<string> {
+async function createJWT(serviceAccount: ServiceAccount): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: serviceAccount.client_email,
@@ -57,7 +63,7 @@ async function createJWT(serviceAccount: any): Promise<string> {
       false,
       ["sign"],
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to import private key:", error);
     throw new Error(
       `Private key import failed: ${
@@ -95,13 +101,13 @@ function pemToArrayBuffer(pem: string): ArrayBuffer {
       bytes[i] = binaryString.charCodeAt(i);
     }
     return bytes.buffer;
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("Failed to decode base64 PEM key:", e);
     throw new Error("Invalid PEM private key format. Check your secret value.");
   }
 }
 
-async function getAccessToken(serviceAccount: any): Promise<string> {
+async function getAccessToken(serviceAccount: ServiceAccount): Promise<string> {
   const jwt = await createJWT(serviceAccount);
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -148,7 +154,7 @@ interface FCMErrorResponse {
     code: number;
     message: string;
     status: string;
-    details: any[];
+    details: unknown[];
   };
 }
 
@@ -212,7 +218,7 @@ async function sendFCMMessage(
   };
 }
 
-function initializeFCMService(environment?: any, serviceAccountJson?: string) {
+function initializeFCMService(environment?: Record<string, unknown>, serviceAccountJson?: string) {
   const env = getEnv(environment);
   const firebaseServiceAccountJson =
     serviceAccountJson || env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON;
@@ -225,7 +231,7 @@ function initializeFCMService(environment?: any, serviceAccountJson?: string) {
 
   // Sanitize the JSON string to handle common env var formatting issues
   // 1. Remove leading/trailing quotes if they exist (sometimes added by shell/env tools)
-  let jsonStr = firebaseServiceAccountJson.trim();
+  let jsonStr = (firebaseServiceAccountJson as string).trim();
   if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
     jsonStr = jsonStr.slice(1, -1);
   }
@@ -235,13 +241,13 @@ function initializeFCMService(environment?: any, serviceAccountJson?: string) {
     // Attempt parse
     try {
       serviceAccount = JSON.parse(jsonStr);
-    } catch (e) {
+    } catch (e: unknown) {
       // Retry with aggressive newline cleanup if first parse fails
       // This helps when newlines are literal instead of escaped \n
       try {
         const fixedJson = jsonStr.replace(/\n/g, "\\n");
         serviceAccount = JSON.parse(fixedJson);
-      } catch (e2) {
+      } catch (e2: unknown) {
         throw e; // Throw original error if both fail
       }
     }
@@ -259,7 +265,7 @@ function initializeFCMService(environment?: any, serviceAccountJson?: string) {
       serviceAccount,
       projectId: serviceAccount.project_id,
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error initializing FCM service:", error);
     throw new Error(
       `Failed to parse or initialize Firebase service account: ${
@@ -270,11 +276,11 @@ function initializeFCMService(environment?: any, serviceAccountJson?: string) {
 }
 
 export class FCMMessagingService {
-  private serviceAccount: any;
+  private serviceAccount: ServiceAccount;
   private projectId: string;
-  private env: any;
+  private env: Record<string, unknown>;
 
-  constructor(environment: any, serviceAccountJson?: string) {
+  constructor(environment: Record<string, unknown>, serviceAccountJson?: string) {
     const { serviceAccount, projectId } = initializeFCMService(
       environment,
       serviceAccountJson,
@@ -303,7 +309,7 @@ export class FCMMessagingService {
       const newAccessToken = await getAccessToken(this.serviceAccount);
       await cache.put(cacheKey, newAccessToken, { expirationTtl: 3300 });
       return newAccessToken;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to get or cache Firebase access token:", error);
       throw error;
     }
@@ -361,7 +367,7 @@ export class FCMMessagingService {
           successCount++;
           responses.push({ success: true });
         }
-      } catch (error) {
+      } catch (error: unknown) {
         failureCount++;
         responses.push({
           success: false,
@@ -399,7 +405,7 @@ export class FCMMessagingService {
 let fcmInstance: FCMMessagingService | null = null;
 
 export function getFirebaseAdminMessaging(
-  environment: any,
+  environment: Record<string, unknown>,
   serviceAccountJson?: string,
 ): FCMMessagingService {
   // If a specific service account is provided, we might want to bypass singleton or handle it differently.
