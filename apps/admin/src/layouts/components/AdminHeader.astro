@@ -7,6 +7,7 @@ import { UserMenu } from "@/components/auth/UserMenu";
 import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
 import { CacheNukeButton } from "@/components/admin/CacheNukeButton";
+import { NotificationDropdown } from "@/components/admin/NotificationDropdown";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button.tsx";
 import type { BreadcrumbItem } from "@/lib/adminBreadCrumb";
@@ -59,6 +60,8 @@ const { user, breadcrumbItems } = Astro.props;
   <TooltipProvider client:idle>
     <div class="flex items-center">
       <CacheNukeButton client:idle />
+      <div class="h-5 w-px bg-border mx-2.5"></div>
+      <NotificationDropdown client:load />
       <div class="h-5 w-px bg-border mx-2.5"></div>
       <DarkModeToggle client:idle />
       <div class="h-5 w-px bg-border mx-2.5"></div>
