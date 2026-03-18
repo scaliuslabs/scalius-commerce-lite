@@ -14,15 +14,34 @@ interface ScannerTokenPayload {
   adminName: string;
   createdAt: number;
   claimed: boolean;
+  /** Unique session ID bound to the claiming device via HttpOnly cookie */
+  sessionId?: string;
 }
 
 const TOKEN_TTL_SECONDS = 6 * 60 * 60; // 6 hours
 
-function jsonResponse(data: Record<string, unknown>, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+const COOKIE_NAME = "scanner_sid";
+
+function jsonResponse(
+  data: Record<string, unknown>,
+  status = 200,
+  extraHeaders?: Record<string, string>,
+): Response {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...extraHeaders,
+  };
+  return new Response(JSON.stringify(data), { status, headers });
+}
+
+function getCookie(request: Request, name: string): string | undefined {
+  const cookieHeader = request.headers.get("Cookie") || "";
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+function buildCookieHeader(sessionId: string, maxAge: number): string {
+  return `${COOKIE_NAME}=${sessionId}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`;
 }
 
 /**
@@ -60,8 +79,13 @@ export const POST: APIRoute = async ({ locals }) => {
 
 /**
  * GET -- Verify and claim a scanner token.
+ *
+ * Device binding: On first claim, a sessionId is generated and stored in
+ * both KV and an HttpOnly cookie. Subsequent requests must present the
+ * matching cookie — this prevents the same token from being used on
+ * multiple devices. The claiming device can refresh freely.
  */
-export const GET: APIRoute = async ({ url, locals }) => {
+export const GET: APIRoute = async ({ url, locals, request }) => {
   const token = url.searchParams.get("token");
 
   if (!token) {
@@ -88,28 +112,38 @@ export const GET: APIRoute = async ({ url, locals }) => {
     return jsonResponse({ success: false, error: "Corrupt token data" }, 401);
   }
 
-  // Already claimed is OK — user might be refreshing the page.
-  // The token is still valid until it expires from KV.
-  if (payload.claimed) {
-    return jsonResponse({
-      success: true,
-      valid: true,
-      adminName: payload.adminName,
-    });
+  const elapsedSeconds = Math.floor((Date.now() - payload.createdAt) / 1000);
+  const remainingTtl = Math.max(TOKEN_TTL_SECONDS - elapsedSeconds, 60);
+
+  // --- Already claimed: validate device binding ---
+  if (payload.claimed && payload.sessionId) {
+    const cookieSid = getCookie(request, COOKIE_NAME);
+    if (cookieSid !== payload.sessionId) {
+      return jsonResponse(
+        { success: false, error: "Token already claimed by another device" },
+        403,
+      );
+    }
+    // Same device refreshing — re-set cookie to extend its lifetime
+    return jsonResponse(
+      { success: true, valid: true, adminName: payload.adminName },
+      200,
+      { "Set-Cookie": buildCookieHeader(payload.sessionId, remainingTtl) },
+    );
   }
 
-  // Mark as claimed and keep the remaining TTL (re-derive from creation time)
-  const elapsedSeconds = Math.floor((Date.now() - payload.createdAt) / 1000);
-  const remainingTtl = Math.max(TOKEN_TTL_SECONDS - elapsedSeconds, 60); // minimum 60s
-
+  // --- First claim: bind to this device ---
+  const sessionId = nanoid(32);
   payload.claimed = true;
+  payload.sessionId = sessionId;
+
   await kv.put(`scanner:token:${token}`, JSON.stringify(payload), {
     expirationTtl: remainingTtl,
   });
 
-  return jsonResponse({
-    success: true,
-    valid: true,
-    adminName: payload.adminName,
-  });
+  return jsonResponse(
+    { success: true, valid: true, adminName: payload.adminName },
+    200,
+    { "Set-Cookie": buildCookieHeader(sessionId, remainingTtl) },
+  );
 };
