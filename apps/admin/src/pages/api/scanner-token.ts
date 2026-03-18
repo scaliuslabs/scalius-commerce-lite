@@ -88,8 +88,14 @@ export const GET: APIRoute = async ({ url, locals }) => {
     return jsonResponse({ success: false, error: "Corrupt token data" }, 401);
   }
 
+  // Already claimed is OK — user might be refreshing the page.
+  // The token is still valid until it expires from KV.
   if (payload.claimed) {
-    return jsonResponse({ success: false, error: "Token already claimed" }, 401);
+    return jsonResponse({
+      success: true,
+      valid: true,
+      adminName: payload.adminName,
+    });
   }
 
   // Mark as claimed and keep the remaining TTL (re-derive from creation time)
