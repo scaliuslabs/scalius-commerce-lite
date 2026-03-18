@@ -194,8 +194,8 @@ const restoreRoute = createRoute({
 app.openapi(restoreRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const page = await getPageById(db, id);
-    if (!page) throw new NotFoundError("Page not found");
+    // Note: do NOT call getPageById here — it filters deletedAt IS NULL,
+    // which would always 404 for soft-deleted pages being restored
     await restorePages(db, [id]);
     return ok(c, { message: "Page restored" });
 });

@@ -221,8 +221,8 @@ const restoreRoute = createRoute({
 app.openapi(restoreRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const collection = await getCollectionById(db, id);
-    if (!collection) throw new NotFoundError("Collection not found");
+    // Note: do NOT call getCollectionById here — it filters deletedAt IS NULL,
+    // which would always 404 for soft-deleted collections being restored
     await restoreCollections(db, [id]);
     return ok(c, { message: "Collection restored" });
 });

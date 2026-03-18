@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
 import { sql, eq, desc, count } from "drizzle-orm";
 import { getLogRetentionHours, getCleanupCheckIntervalHours } from "@scalius/core/integrations/meta/conversions-api";
@@ -28,13 +27,10 @@ const getSettingsRoute = createRoute({
 });
 
 app.openapi(getSettingsRoute, async (c) => {
-    try {
-        const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
-        const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
-        return ok(c, { settings: maskedSettings });
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
+    const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
+    return ok(c, { settings: maskedSettings });
 });
 
 // ── Save Settings ──
@@ -49,33 +45,30 @@ const saveSettingsRoute = createRoute({
 });
 
 app.openapi(saveSettingsRoute, async (c) => {
-    try {
-        const validation = c.req.valid("json");
-        let { pixelId, accessToken, testEventCode, isEnabled, logRetentionDays } = validation;
-        const existingSettings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
+    const db = c.get("db");
+    const validation = c.req.valid("json");
+    let { pixelId, accessToken, testEventCode, isEnabled, logRetentionDays } = validation;
+    const existingSettings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
 
-        if (accessToken === MASKED_VALUE && existingSettings?.accessToken) {
-            accessToken = existingSettings.accessToken;
-        }
-
-        let resultArr;
-        if (existingSettings) {
-            resultArr = await db.update(metaConversionsSettings)
-                .set({ pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, updatedAt: sql`(cast(strftime('%s','now') as int))` })
-                .where(eq(metaConversionsSettings.id, "singleton")).returning();
-        } else {
-            resultArr = await db.insert(metaConversionsSettings)
-                .values({ id: "singleton", pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, createdAt: sql`(cast(strftime('%s','now') as int))`, updatedAt: sql`(cast(strftime('%s','now') as int))` })
-                .returning();
-        }
-        const result = resultArr[0];
-
-        if (!result) throw new Error("Failed to save settings");
-        const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
-        return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
-    } catch (error: unknown) {
-        throw error;
+    if (accessToken === MASKED_VALUE && existingSettings?.accessToken) {
+        accessToken = existingSettings.accessToken;
     }
+
+    let resultArr;
+    if (existingSettings) {
+        resultArr = await db.update(metaConversionsSettings)
+            .set({ pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, updatedAt: sql`(cast(strftime('%s','now') as int))` })
+            .where(eq(metaConversionsSettings.id, "singleton")).returning();
+    } else {
+        resultArr = await db.insert(metaConversionsSettings)
+            .values({ id: "singleton", pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, createdAt: sql`(cast(strftime('%s','now') as int))`, updatedAt: sql`(cast(strftime('%s','now') as int))` })
+            .returning();
+    }
+    const result = resultArr[0];
+
+    if (!result) throw new Error("Failed to save settings");
+    const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
+    return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
 });
 
 // ── Get Logs ──
@@ -95,24 +88,21 @@ const getLogsRoute = createRoute({
 });
 
 app.openapi(getLogsRoute, async (c) => {
-    try {
-        const query = c.req.valid("query");
-        const page = query.page;
-        const limit = query.limit;
-        const offset = (page - 1) * limit;
+    const db = c.get("db");
+    const query = c.req.valid("query");
+    const page = query.page;
+    const limit = query.limit;
+    const offset = (page - 1) * limit;
 
-        const totalResult = await db.select({ count: count(metaConversionsLogs.id) }).from(metaConversionsLogs).get();
-        const total = totalResult?.count ?? 0;
-        const logs = await db.select().from(metaConversionsLogs).orderBy(desc(metaConversionsLogs.createdAt)).limit(limit).offset(offset).all();
+    const totalResult = await db.select({ count: count(metaConversionsLogs.id) }).from(metaConversionsLogs).get();
+    const total = totalResult?.count ?? 0;
+    const logs = await db.select().from(metaConversionsLogs).orderBy(desc(metaConversionsLogs.createdAt)).limit(limit).offset(offset).all();
 
-        return ok(c, {
-            logs: logs,
-            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-            retention: { hours: getLogRetentionHours(), cleanupIntervalHours: getCleanupCheckIntervalHours(), nextCleanupMessage: "Cleanup active" }
-        });
-    } catch (error: unknown) {
-        throw error;
-    }
+    return ok(c, {
+        logs: logs,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+        retention: { hours: getLogRetentionHours(), cleanupIntervalHours: getCleanupCheckIntervalHours(), nextCleanupMessage: "Cleanup active" }
+    });
 });
 
 // ── Clear Logs ──
@@ -126,12 +116,9 @@ const clearLogsRoute = createRoute({
 });
 
 app.openapi(clearLogsRoute, async (c) => {
-    try {
-        await db.delete(metaConversionsLogs);
-        return ok(c, { message: "All logs cleared" });
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    await db.delete(metaConversionsLogs);
+    return ok(c, { message: "All logs cleared" });
 });
 
 // ── Manual Log Cleanup ──
@@ -145,13 +132,10 @@ const manualCleanupRoute = createRoute({
 });
 
 app.openapi(manualCleanupRoute, async (c) => {
-    try {
-        const result = await manualLogCleanup(db, getLogRetentionHours());
-        if (result.success) return ok(c, { message: result.message });
-        throw new Error(result.message);
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const result = await manualLogCleanup(db, getLogRetentionHours());
+    if (result.success) return ok(c, { message: result.message });
+    throw new Error(result.message);
 });
 
 export { app as metaConversionsAdminRoutes };
