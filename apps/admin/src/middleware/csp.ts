@@ -15,6 +15,7 @@ export const cspMiddleware = defineMiddleware(async (context, next) => {
     try {
       const cspIsCfEnv = (() => {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Cloudflare env is a Proxy; property detection requires any
           return !!(cfEnv as any)?.ASSETS || !!(cfEnv as any)?.DB;
         } catch {
           return false;
@@ -26,7 +27,7 @@ export const cspMiddleware = defineMiddleware(async (context, next) => {
           ? (process.env as unknown as Env)
           : ({} as Env);
       return await setPageCspHeader(response, env);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("[CSP] Error setting CSP header:", error);
       return response;
     }

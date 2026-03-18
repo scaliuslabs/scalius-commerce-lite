@@ -42,7 +42,7 @@ export const rbacMiddleware = defineMiddleware(async (context, next) => {
     return (await next()) || new Response();
   }
 
-  const env = (context.locals as any)._env as Env | undefined;
+  const env = context.locals._env;
   const sessionUser = context.locals.user;
   const session = context.locals.session;
 
@@ -58,10 +58,10 @@ export const rbacMiddleware = defineMiddleware(async (context, next) => {
       context.locals.permissions = userPermissions;
 
       const userIsSuperAdminFlag = await isSuperAdmin(db, sessionUser.id);
-      (context.locals as any)._isSuperAdmin = userIsSuperAdminFlag;
-      (context.locals as any)._hasAdminAccess =
+      context.locals._isSuperAdmin = userIsSuperAdminFlag;
+      context.locals._hasAdminAccess =
         userIsSuperAdminFlag || sessionUser.role === "admin" || userPermissions.size > 0;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading user permissions:", error);
       context.locals.permissions = new Set<string>();
     }
@@ -79,7 +79,7 @@ export const rbacMiddleware = defineMiddleware(async (context, next) => {
     }
 
     if (pathname.startsWith("/api/v1/admin/")) {
-      const userHasAdminAccess = (context.locals as any)._hasAdminAccess ?? false;
+      const userHasAdminAccess = context.locals._hasAdminAccess ?? false;
       if (sessionUser.role !== "admin" && !userHasAdminAccess) {
         return jsonError(403, { error: "Forbidden", message: "Admin access required" });
       }
@@ -89,7 +89,7 @@ export const rbacMiddleware = defineMiddleware(async (context, next) => {
     const routePermission = getRoutePermission(pathname, method);
 
     if (routePermission) {
-      const userIsSuperAdmin = (context.locals as any)._isSuperAdmin ?? false;
+      const userIsSuperAdmin = context.locals._isSuperAdmin ?? false;
       if (!userIsSuperAdmin) {
         const userPerms = context.locals.permissions || new Set<string>();
         let hasRequired = false;
@@ -119,7 +119,7 @@ export const rbacMiddleware = defineMiddleware(async (context, next) => {
 
   // Enforce page-level access for admin routes
   if (pathname.startsWith("/admin")) {
-    const userHasAdminAccess = (context.locals as any)._hasAdminAccess ?? false;
+    const userHasAdminAccess = context.locals._hasAdminAccess ?? false;
 
     if (sessionUser?.role !== "admin" && !userHasAdminAccess) {
       return new Response("Forbidden: Admin access required.", { status: 403 });
@@ -127,7 +127,7 @@ export const rbacMiddleware = defineMiddleware(async (context, next) => {
 
     if (pathname !== "/admin/access-denied" && pathname !== "/admin/settings/account") {
       const userPerms = context.locals.permissions || new Set<string>();
-      const userIsSuperAdmin = (context.locals as any)._isSuperAdmin ?? false;
+      const userIsSuperAdmin = context.locals._isSuperAdmin ?? false;
 
       if (!hasPageAccess(userPerms, userIsSuperAdmin, pathname)) {
         const accessDeniedUrl = new URL("/admin/access-denied", url.origin);
