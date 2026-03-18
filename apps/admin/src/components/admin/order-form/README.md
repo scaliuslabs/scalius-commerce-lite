@@ -35,7 +35,7 @@ OrderForm (main component)
 |------|---------|
 | `types.ts` | `Product`, `DeliveryLocation`, `OrderItem`, `OrderFormProps`, `orderFormSchema` (Zod), `OrderFormValues` type |
 | `OrderFormContext.tsx` | `OrderFormProvider` + `useOrderForm()` hook. Centralizes form instance, products, locations, loading state, refs for keyboard navigation, and `handleKeyDown` for Enter-to-next-field. |
-| `CustomerInfoSection.tsx` | Customer name, phone, email, address, city/zone/area cascading selects, notes |
+| `CustomerInfoSection.tsx` | Customer name, international phone input (react-phone-number-input, E.164 output), email, address, city/zone/area cascading selects, notes |
 | `ItemSelection.tsx` | Product picker with variant selection for adding items to the order |
 | `ProductSearch.tsx` | Searchable product list with variant drill-down |
 | `OrderItemsSection.tsx` | Container for item selection + items table |
@@ -44,12 +44,12 @@ OrderForm (main component)
 
 ## Features
 
-- **Zod validation**: `orderFormSchema` validates all fields with clear error messages. Phone: 11-14 chars. Name: 3-100 chars. Address: 10-500 chars. Notes: max 500 chars.
+- **Zod validation**: `orderFormSchema` validates all fields with clear error messages. Phone: 7-16 chars (E.164 format from PhoneInput). Name: 3-100 chars. Address: 10-500 chars. Notes: max 500 chars.
 - **Cascading location selects**: City -> Zone -> Area. Each level fetches from `/api/v1/admin/settings/delivery-locations?type={type}&parentId={parentId}`. Changing city clears zone/area. Changing zone clears area.
 - **Location name enrichment**: Before submission, the form resolves city/zone/area IDs to names and includes them as `cityName`, `zoneName`, `areaName` hidden fields.
 - **Nanostore sync**: Items, shipping charge, and discount amount are synced to `orderStore` (nanostores) for potential cross-component access.
 - **Keyboard navigation**: Enter key advances to the next field. Ctrl+Enter submits the form. Combobox triggers are opened on Enter focus.
-- **Customer phone sanitization**: Before submission, strips leading `+880` or `880` and prepends `0` if the number starts with `1`.
+- **International phone input**: Uses `react-phone-number-input` with country flag dropdown. Outputs E.164 format directly -- no manual sanitization needed.
 - **Edit mode**: Loads existing order data, includes status selector, uses PUT method.
 - **Create mode**: Generates order ID via `generateOrderId()`, uses POST method, defaults status to `pending`.
 
@@ -77,7 +77,7 @@ OrderForm (main component)
 orderFormSchema = {
   id: string (optional),
   customerName: string, 3-100 chars,
-  customerPhone: string, 11-14 chars,
+  customerPhone: string, 7-16 chars (E.164 format),
   customerEmail: email | null,
   shippingAddress: string, 10-500 chars,
   city: string, required,
@@ -94,7 +94,7 @@ orderFormSchema = {
 }
 ```
 
-**Note:** The form-level `orderFormSchema` in `types.ts` is separate from `createOrderSchema` in `@scalius/core/modules/orders/orders.validation.ts`. The core schema uses `phoneNumberSchema` from `@scalius/shared/customer-utils` (E.164 format validation), while the form schema uses a simpler 11-14 character length check. The form sanitizes the phone number before submission to bridge this gap.
+**Note:** The form-level `orderFormSchema` in `types.ts` is separate from `createOrderSchema` in `@scalius/core/modules/orders/orders.validation.ts`. Both now accept E.164 format phone numbers (7-16 chars). The `react-phone-number-input` component outputs E.164 directly, so no manual sanitization is needed.
 
 ## State Management
 
@@ -106,6 +106,7 @@ orderFormSchema = {
 
 - `react-hook-form` + `@hookform/resolvers/zod` -- form state and validation
 - `zod` -- schema validation
+- `react-phone-number-input` -- international phone input with country flag dropdown (E.164 output)
 - `sonner` -- toast notifications
 - `nanostores` -- `orderStore` for item/pricing atoms
 - `@scalius/shared/order-utils` -- `generateOrderId()`

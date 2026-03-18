@@ -183,10 +183,6 @@ export function OrderForm({
         values.id = generateOrderId();
       }
 
-      // Sanitize phone number
-      const phone = values.customerPhone.replace(/^\+?880/, "").trim();
-      values.customerPhone = phone.startsWith("1") ? "0" + phone : phone;
-
       const response = await fetch(endpoint, {
         method,
         headers: { "Content-Type": "application/json" },

@@ -73,7 +73,7 @@ URL query parameters (`page`, `limit`, `search`, `sort`, `order`, `trashed`) are
 
 | Component | Path | Purpose |
 |-----------|------|---------|
-| `CustomerForm` | `apps/admin/src/components/admin/CustomerForm.tsx` | Create/edit form with react-hook-form + zod validation, LocationSelector for city/zone/area cascading dropdowns |
+| `CustomerForm` | `apps/admin/src/components/admin/CustomerForm.tsx` | Create/edit form with react-hook-form + zod validation, international phone input (react-phone-number-input, E.164 output), LocationSelector for city/zone/area cascading dropdowns |
 | `CustomerHistoryView` | `apps/admin/src/components/admin/CustomerHistoryView.tsx` | Detail page: profile card (contact, address, stats), recent orders table with load-more pagination, change history timeline with ScrollArea |
 
 ## Astro Pages
@@ -96,7 +96,7 @@ URL query parameters (`page`, `limit`, `search`, `sort`, `order`, `trashed`) are
 ## Types
 
 The `Customer` interface (in `useCustomerListState.ts`) includes:
-- Core fields: `id`, `name`, `email` (nullable), `phone`, `address` (nullable)
+- Core fields: `id`, `name`, `email` (nullable), `phone` (E.164 format), `address` (nullable)
 - Location: `city`, `zone`, `area` (IDs), `cityName`, `zoneName`, `areaName` (display names)
 - Stats: `totalOrders`, `totalSpent`, `lastOrderAt` (Date | null)
 - Timestamps: `createdAt` (Date), `updatedAt` (Date), `deletedAt` (optional)

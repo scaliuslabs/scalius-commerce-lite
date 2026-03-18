@@ -45,8 +45,8 @@ export interface Product {
   
   export const phoneNumberSchema = z
     .string()
-    .min(11, "Phone number must be at least 11 characters")
-    .max(14, "Phone number must be less than 14 characters");
+    .min(7, "Phone number too short")
+    .max(16, "Phone number too long");
   
   export const orderFormSchema = z.object({
     id: z.string().optional(),
