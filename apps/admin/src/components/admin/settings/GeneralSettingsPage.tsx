@@ -32,6 +32,7 @@ const SecuritySettingsBuilder = lazy(() =>
 const EmailSettingsForm = lazy(() => import("./EmailSettingsForm"));
 const AuthSettingsBuilder = lazy(() => import("./AuthSettingsBuilder"));
 const CurrencySettingsBuilder = lazy(() => import("./CurrencySettingsBuilder"));
+const AllowedCountriesBuilder = lazy(() => import("./AllowedCountriesBuilder"));
 
 function TabSpinner() {
     return (
@@ -53,6 +54,7 @@ const tabs = [
     { value: "storefront", label: "Storefront" },
     { value: "email", label: "Email" },
     { value: "currency", label: "Currency" },
+    { value: "countries", label: "Countries" },
     { value: "auth", label: "Auth & Access" },
     { value: "security", label: "Security" },
 ] as const;
@@ -148,6 +150,14 @@ export default function GeneralSettingsPage({
                         {mountedTabs.has("currency") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <CurrencySettingsBuilder />
+                            </Suspense>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="countries" className="mt-0">
+                        {mountedTabs.has("countries") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <AllowedCountriesBuilder />
                             </Suspense>
                         )}
                     </TabsContent>

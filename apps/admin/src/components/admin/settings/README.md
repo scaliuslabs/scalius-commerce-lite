@@ -6,7 +6,8 @@ Settings UI split across three tab-based pages: General Settings, Checkout Setti
 
 | File | Description |
 |------|-------------|
-| `GeneralSettingsPage.tsx` | Top-level tabbed container for general settings. 8 lazy-loaded tabs: Header, Footer, SEO, Storefront, Email, Currency, Auth & Access, Security |
+| `GeneralSettingsPage.tsx` | Top-level tabbed container for general settings. 9 lazy-loaded tabs: Header, Footer, SEO, Storefront, Email, Currency, Countries, Auth & Access, Security |
+| `AllowedCountriesBuilder.tsx` | Allowed countries multi-select. Searchable list of all countries from `react-phone-number-input`. Saves JSON array to `PUT /admin/settings/site` as `allowedCountries`. Used to restrict phone number countries at checkout and customer registration |
 | `CheckoutSettingsPage.tsx` | Top-level tabbed container for checkout settings. 5 lazy-loaded tabs: Checkout Flow, Payment Gateways, Languages, Shipping Methods, Delivery Locations |
 | `ThemeSettingsPage.tsx` | Storefront theme color editor. 17 semantic color tokens with hex input + native color picker. 5 predefined palettes (Zinc, Ocean Blue, Eco Emerald, Rose Blush, Midnight Dark). Live preview panel with sticky sidebar showing product card, buttons, alert mockups |
 | `CurrencySettingsBuilder.tsx` | Currency selector (43 currencies), symbol override, USD exchange rate input. Fetches/saves via `/admin/settings/currency` |
@@ -49,12 +50,14 @@ This pattern appears in every `fetch` response handler because dev mode (Vite pr
 | ThemeSettingsPage | `/admin/settings/theme` | `/admin/settings/theme` |
 | PaymentMethodSettings | `/admin/settings/payment-methods` | `/admin/settings/payment-methods` |
 | PaymentGatewaysManager | `/admin/settings/payment-methods`, `/admin/settings/{gw}` | `/admin/settings/payment-methods`, `/admin/settings/{gw}` |
+| AllowedCountriesBuilder | `/admin/settings/site` | `/admin/settings/site` (PUT) |
 
 ## Dependencies
 
 - shadcn/ui components (Card, Tabs, Input, Select, Switch, Button, Badge, Alert, Accordion, Dialog)
 - `sonner` for toast notifications
 - `lucide-react` for icons
+- `react-phone-number-input` -- country list, calling codes, locale labels (used by AllowedCountriesBuilder)
 - `@scalius/shared/utils` -- `cn()` classname utility
 
 ## Known Gaps

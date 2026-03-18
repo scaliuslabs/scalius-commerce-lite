@@ -4,6 +4,8 @@ import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
+import PhoneInput from "react-phone-number-input";
+import "react-phone-number-input/style.css";
 import {
   Form,
   FormControl,
@@ -33,8 +35,8 @@ const customerFormSchema = z.object({
   email: z.email().nullable(),
   phone: z
     .string()
-    .min(11, "Phone number must be at least 11 characters")
-    .max(14, "Phone number must be less than 14 characters"),
+    .min(7, "Phone number too short")
+    .max(16, "Phone number too long"),
   address: z
     .string()
     .max(500, "Address must be less than 500 characters")
@@ -195,7 +197,13 @@ export function CustomerForm({
                       <FormItem>
                         <FormLabel>Phone Number</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter phone number" {...field} />
+                          <PhoneInput
+                            international
+                            defaultCountry="BD"
+                            value={field.value}
+                            onChange={(value) => field.onChange(value || "")}
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
