@@ -36,6 +36,7 @@ import { OrderStatusSelector } from "./OrderStatusSelector";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { FraudCheckIndicator } from "./FraudCheckIndicator";
 import { useCurrency } from "@/hooks/use-currency";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 interface OrderTableRowProps {
   order: OrderListItem;
@@ -187,7 +188,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
             <span className="flex items-center gap-1 rounded-full bg-[var(--muted)]/70 px-2 py-0.5 transition-colors duration-200 group-hover:bg-[var(--muted)]">
               <Phone className="h-3 w-3" />
-              {order.customerPhone}
+              {formatPhoneForDisplay(order.customerPhone)}
             </span>
             {order.customerEmail && (
               <span className="flex items-center gap-1 rounded-full bg-[var(--muted)]/70 px-2 py-0.5 transition-colors duration-200 group-hover:bg-[var(--muted)]">

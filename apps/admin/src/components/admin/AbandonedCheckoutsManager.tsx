@@ -52,6 +52,7 @@ import { cn } from "@scalius/shared/utils";
 import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 import { unwrapEnvelope } from "@/lib/api-helpers";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 // --- Type Definitions ---
 interface CartItem {
@@ -180,7 +181,7 @@ const CheckoutRow = React.memo(
           {checkout.checkoutId.substring(0, 12)}
         </TableCell>
         <TableCell className="font-medium">
-          {checkout.customerPhone || (
+          {checkout.customerPhone ? formatPhoneForDisplay(checkout.customerPhone) : (
             <span className="text-muted-foreground">No phone</span>
           )}
         </TableCell>
@@ -254,7 +255,7 @@ const DetailsModal = ({
                 <Phone className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />{" "}
                 <span>
                   <strong>Phone:</strong>{" "}
-                  {checkout.customerPhone || customerInfo.phone || "N/A"}
+                  {(checkout.customerPhone || customerInfo.phone) ? formatPhoneForDisplay(checkout.customerPhone || customerInfo.phone || "") : "N/A"}
                 </span>
               </p>
               <p className="flex items-start gap-3">

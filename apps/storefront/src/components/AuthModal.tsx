@@ -9,7 +9,7 @@ import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/client";
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
+import { isValidPhoneNumber, formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import type { Country } from "react-phone-number-input";
 
 /**
@@ -338,7 +338,7 @@ export default function AuthModal() {
                 <User className="h-6 w-6 text-primary" />
               </div>
               <p className="font-medium text-foreground">{customer.name}</p>
-              <p className="text-sm text-muted-foreground mt-1">{customer.phone || customer.email}</p>
+              <p className="text-sm text-muted-foreground mt-1">{customer.phone ? formatPhoneForDisplay(customer.phone) : customer.email}</p>
             </div>
             <div className="flex gap-3">
               <a

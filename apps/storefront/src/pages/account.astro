@@ -164,6 +164,7 @@ const layoutData = await getLayoutData();
 <script>
   import { getCustomerSession, getCustomerOrders, logoutCustomer, updateCustomerProfile, type CustomerOrder } from "@/lib/api/customer-auth";
   import { getCities, getZones } from "@/lib/api/shipping";
+  import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 
 
@@ -264,7 +265,7 @@ const layoutData = await getLayoutData();
     document.getElementById("profileName")!.textContent = customer.name;
     document.getElementById("profileEmail")!.textContent = customer.email;
     if (customer.phone) {
-      document.getElementById("profilePhone")!.textContent = customer.phone;
+      document.getElementById("profilePhone")!.textContent = formatPhoneForDisplay(customer.phone);
     }
 
     // Fetch orders

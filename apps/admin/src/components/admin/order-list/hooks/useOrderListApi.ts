@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { UseOrderListStateReturn } from "./useOrderListState";
 import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 interface ShipmentStatus {
   id: string;
@@ -305,7 +306,7 @@ export function useOrderListApi(
     const csvRows = displayOrders.map((order) => [
       order.id,
       order.customerName,
-      order.customerPhone,
+      formatPhoneForDisplay(order.customerPhone),
       order.customerEmail || "",
       order.cityName || order.city,
       order.zoneName || order.zone,

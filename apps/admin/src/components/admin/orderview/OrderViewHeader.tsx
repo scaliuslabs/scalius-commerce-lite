@@ -15,6 +15,7 @@ import {
 import type { Order } from "./types";
 import { getStatusBadgeClass, formatDate } from "@scalius/shared/utils";
 import { useCurrency } from "@/hooks/use-currency";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 interface OrderViewHeaderProps {
   order: Order;
@@ -109,7 +110,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                 href={`tel:${order.customerPhone}`}
                 className="hover:text-primary"
               >
-                {order.customerPhone}
+                {formatPhoneForDisplay(order.customerPhone)}
               </a>
             </InfoItem>
 

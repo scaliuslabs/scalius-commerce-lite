@@ -35,6 +35,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { Customer, SortField } from "./hooks/useCustomerListState";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 interface CustomerTableProps {
   customers: Customer[];
@@ -118,7 +119,7 @@ const CustomerRow = React.memo(function CustomerRow({
           <div className="text-xs text-muted-foreground mt-1 space-y-1">
             <div className="flex items-center gap-2">
               <Phone className="h-3 w-3" />
-              <span>{customer.phone}</span>
+              <span>{formatPhoneForDisplay(customer.phone)}</span>
             </div>
             {customer.email ? (
               <div className="flex items-center gap-2">
