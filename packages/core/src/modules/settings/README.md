@@ -13,7 +13,7 @@ Central store configuration: site settings (singleton row), key-value settings, 
 |----------|-------------|
 | `getStorefrontPath(db, path, kv?)` | Builds a full storefront URL by fetching the base URL from DB, delegates to `@scalius/shared/storefront-url.buildStorefrontPath()` |
 | `getStorefrontBaseUrl(db, kv?)` | Returns the storefront base URL from `siteSettings.storefrontUrl`. Falls back to `"/"`. KV-cached at `gw:storefront_url` (300s TTL) |
-| `getCurrencyConfig(db, kv?)` | Returns `{ code, symbol, usdExchangeRate }` from the `settings` table (`category = "currency"`). Defaults to `BDT / ৳ / 1`. KV-cached at `gw:currency` (300s TTL) |
+| `getCurrencyConfig(db, kv?)` | Returns `{ code, symbol, usdExchangeRate, decimalPlaces }` from the `settings` table (`category = "currency"`). `decimalPlaces` is derived from ISO 4217 via `getDecimalPlaces()` from `@scalius/shared/currency`. Defaults to `BDT / ৳ / 1 / 2`. KV-cached at `gw:currency` (300s TTL) |
 | `getSiteSettings(db, kv?)` | Returns the full `siteSettings` singleton row (headerConfig, footerConfig, storefrontUrl, etc.). KV-cached at `gw:site_settings` (300s TTL) |
 | `invalidateSiteSettingsCache(kv?)` | Deletes the `gw:site_settings` KV key. Called by admin settings routes after any update to the siteSettings table |
 

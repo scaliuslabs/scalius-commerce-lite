@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@paralleldrive/cuid2": "^2.3.1",
+    "currency.js": "^2.0.4",
     "@polar-sh/sdk": "^0.46.4",
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",

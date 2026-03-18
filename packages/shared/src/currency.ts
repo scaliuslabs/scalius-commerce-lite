@@ -1,25 +1,46 @@
 // packages/shared/src/currency.ts
 // Pure currency type and formatting utilities.
 // getCurrencyConfig lives in @scalius/core (settings service) because it requires DB access.
+// Uses currency.js for precision arithmetic and ISO 4217 decimal places.
 
-declare global {
-  interface Window {
-    __CURRENCY_SYMBOL__?: string;
-    __CURRENCY_CODE__?: string;
-  }
-}
+import Currency from "currency.js";
+
+// Declare window for environments without DOM types (e.g. Cloudflare Workers).
+// Uses a plain object type so it compiles without the DOM lib.
+// The typeof check at runtime ensures this is only accessed in browsers.
+declare const window: { __CURRENCY_SYMBOL__?: string; __CURRENCY_CODE__?: string; __CURRENCY_DECIMAL_PLACES__?: number } | undefined;
 
 export interface CurrencyConfig {
   code: string;
   symbol: string;
   usdExchangeRate: number;
+  decimalPlaces: number;
 }
 
 export const DEFAULT_CURRENCY: CurrencyConfig = {
   code: "BDT",
-  symbol: "\u09F3",
+  symbol: "৳",
   usdExchangeRate: 1,
+  decimalPlaces: 2,
 };
+
+// ---------------------------------------------------------------------------
+// ISO 4217 decimal places lookup
+// ---------------------------------------------------------------------------
+// Most currencies use 2 decimal places. Only exceptions are listed here.
+
+const CURRENCY_DECIMALS: Record<string, number> = {
+  // 0 decimal places
+  BIF: 0, CLP: 0, DJF: 0, GNF: 0, ISK: 0, JPY: 0, KMF: 0, KRW: 0,
+  PYG: 0, RWF: 0, UGX: 0, VND: 0, VUV: 0, XAF: 0, XOF: 0, XPF: 0,
+  // 3 decimal places
+  BHD: 3, IQD: 3, JOD: 3, KWD: 3, LYD: 3, OMR: 3, TND: 3,
+};
+
+/** Get the ISO 4217 decimal places for a currency code. Defaults to 2. */
+export function getDecimalPlaces(currencyCode: string): number {
+  return CURRENCY_DECIMALS[currencyCode.toUpperCase()] ?? 2;
+}
 
 // ---------------------------------------------------------------------------
 // Client-side formatting utilities
@@ -45,17 +66,36 @@ export function getCurrencyCode(): string {
   return DEFAULT_CURRENCY.code;
 }
 
-/** Format a price with the configured currency symbol */
-export function formatPrice(price: number): string {
-  const symbol = getCurrencySymbol();
-  return `${symbol}${price.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+/**
+ * Format a price with the correct symbol and decimal places.
+ * Uses currency.js for precision.
+ */
+export function formatPrice(
+  price: number | string,
+  opts?: { symbol?: string; code?: string; precision?: number },
+): string {
+  const symbol = opts?.symbol ?? getCurrencySymbol();
+  const code = opts?.code ?? getCurrencyCode();
+  const precision = opts?.precision ?? getDecimalPlaces(code);
+
+  return Currency(price, { symbol, precision, separator: ",", decimal: "." }).format();
 }
 
-/** Format a price with no decimals */
-export function formatPriceShort(price: number): string {
-  const symbol = getCurrencySymbol();
-  return `${symbol}${price.toLocaleString()}`;
+/**
+ * Short format — no trailing zeros for whole numbers.
+ */
+export function formatPriceShort(
+  price: number | string,
+  opts?: { symbol?: string; code?: string },
+): string {
+  const symbol = opts?.symbol ?? getCurrencySymbol();
+  const code = opts?.code ?? getCurrencyCode();
+  const precision = getDecimalPlaces(code);
+
+  const val = Currency(price, { precision });
+  // If it's a whole number, show without decimals
+  if (val.cents() % Math.pow(10, precision) === 0) {
+    return Currency(price, { symbol, precision: 0, separator: "," }).format();
+  }
+  return Currency(price, { symbol, precision, separator: ",", decimal: "." }).format();
 }
