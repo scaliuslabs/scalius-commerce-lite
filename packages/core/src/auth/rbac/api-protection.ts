@@ -5,10 +5,12 @@ import type { Database } from "@scalius/database/client";
 
 /** Generic request context compatible with Astro's APIContext */
 interface GenericAPIContext {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- framework adapter interface must accept arbitrary local values
   locals: Record<string, any>;
   request: Request;
   url: URL;
   params: Record<string, string | undefined>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- framework adapter interface must accept arbitrary context properties
   [key: string]: any;
 }
 

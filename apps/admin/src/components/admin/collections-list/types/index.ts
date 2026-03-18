@@ -29,7 +29,7 @@ export interface CollectionRowProps {
   isSaving: boolean;
   isActionLoading: boolean;
   showTrashed: boolean;
-  dragHandleProps?: any;
+  dragHandleProps?: Record<string, unknown>;
   isDragging?: boolean;
 }
 
@@ -104,7 +104,7 @@ export interface CollectionTableProps {
   onToggleSelection: (id: string) => void;
   onToggleSelectAll: () => void;
   onCreateClick: () => void;
-  onDragEnd: (result: any) => void;
+  onDragEnd: (result: { source: { index: number }; destination?: { index: number } | null }) => void;
   onDragStart: () => void;
 }
 

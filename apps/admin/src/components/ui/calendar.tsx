@@ -57,12 +57,13 @@ function Calendar({
         day_hidden: "invisible",
         ...classNames,
       }}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-day-picker v8 component typing limitation
       components={{
-        IconLeft: ({ className, ...props }: { className?: string; [key: string]: any }) => (
-          <ChevronLeft className={cn("size-4", className)} {...props} />
+        IconLeft: ({ className, ...props }: { className?: string; [key: string]: unknown }) => (
+          <ChevronLeft className={cn("size-4", className)} {...(props as Record<string, unknown>)} />
         ),
-        IconRight: ({ className, ...props }: { className?: string; [key: string]: any }) => (
-          <ChevronRight className={cn("size-4", className)} {...props} />
+        IconRight: ({ className, ...props }: { className?: string; [key: string]: unknown }) => (
+          <ChevronRight className={cn("size-4", className)} {...(props as Record<string, unknown>)} />
         ),
       } as any}
       {...props}

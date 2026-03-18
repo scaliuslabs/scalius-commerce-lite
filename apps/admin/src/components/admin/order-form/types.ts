@@ -19,8 +19,8 @@ export interface Product {
     name: string;
     type: "city" | "zone" | "area";
     parentId: string | null;
-    externalIds: Record<string, any>;
-    metadata: Record<string, any>;
+    externalIds: Record<string, unknown>;
+    metadata: Record<string, unknown>;
     isActive: boolean;
     sortOrder: number;
   }

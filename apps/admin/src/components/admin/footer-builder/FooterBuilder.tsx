@@ -22,6 +22,7 @@ import { defaultFooterConfig } from "./types";
 /**
  * Migrate legacy config formats to the new structure
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy config migration accepts arbitrary shapes
 function migrateConfig(config: any): FooterConfig {
   // Ensure menu items have IDs
   const ensureMenuIds = (menus: any[]): FooterMenu[] => {

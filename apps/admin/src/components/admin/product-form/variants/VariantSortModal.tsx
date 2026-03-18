@@ -66,7 +66,7 @@ export function VariantSortModal({
     }
   };
 
-  const handleColorDragEnd = (result: any) => {
+  const handleColorDragEnd = (result: { source: { index: number }; destination?: { index: number } | null }) => {
     if (!result.destination) return;
 
     const items = Array.from(colors);
@@ -82,7 +82,7 @@ export function VariantSortModal({
     setColors(updatedItems);
   };
 
-  const handleSizeDragEnd = (result: any) => {
+  const handleSizeDragEnd = (result: { source: { index: number }; destination?: { index: number } | null }) => {
     if (!result.destination) return;
 
     const items = Array.from(sizes);

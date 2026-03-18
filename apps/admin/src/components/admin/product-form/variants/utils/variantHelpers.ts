@@ -70,16 +70,17 @@ export function sortVariants(variants: ProductVariant[], sort: VariantSort): Pro
   const sorted = [...variants];
 
   sorted.sort((a, b) => {
-    let aValue: any = a[sort.field];
-    let bValue: any = b[sort.field];
+    let aValue: string | number = "";
+    let bValue: string | number = "";
+
+    const rawA = a[sort.field];
+    const rawB = b[sort.field];
 
     // Handle null/undefined values
-    if (aValue === null || aValue === undefined) aValue = "";
-    if (bValue === null || bValue === undefined) bValue = "";
-
-    // Handle dates
-    if (aValue instanceof Date) aValue = aValue.getTime();
-    if (bValue instanceof Date) bValue = bValue.getTime();
+    if (rawA instanceof Date) aValue = rawA.getTime();
+    else if (rawA != null) aValue = rawA as string | number;
+    if (rawB instanceof Date) bValue = rawB.getTime();
+    else if (rawB != null) bValue = rawB as string | number;
 
     // Compare
     if (aValue < bValue) return sort.order === "asc" ? -1 : 1;

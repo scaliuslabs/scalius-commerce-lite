@@ -22,7 +22,7 @@ interface Location {
   parentId?: string | null;
   type: "city" | "zone" | "area";
   externalIds: Record<string, string | number>;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   isActive: boolean;
   sortOrder: number;
 }

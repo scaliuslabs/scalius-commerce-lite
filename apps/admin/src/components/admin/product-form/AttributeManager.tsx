@@ -235,7 +235,13 @@ function AttributeDefinitionCombobox({
   onSelect,
   onCreate,
   isCreating,
-}: any) {
+}: {
+  attributes: AttributeDefinition[];
+  assignedIds: Set<string>;
+  onSelect: (id: string) => void;
+  onCreate: (name: string) => void;
+  isCreating: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -284,12 +290,12 @@ function AttributeDefinitionCombobox({
             <CommandGroup>
               {attributes
                 .filter(
-                  (attr: any) =>
+                  (attr: AttributeDefinition) =>
                     !search ||
                     attr.name.toLowerCase().includes(search.toLowerCase()) ||
                     attr.slug.includes(search.toLowerCase()),
                 )
-                .map((attr: any) => (
+                .map((attr: AttributeDefinition) => (
                   <CommandItem
                     key={attr.id}
                     value={attr.name}
@@ -311,7 +317,7 @@ function AttributeDefinitionCombobox({
             </CommandGroup>
             {search &&
               !attributes.some(
-                (a: any) => a.name.toLowerCase() === search.toLowerCase(),
+                (a: AttributeDefinition) => a.name.toLowerCase() === search.toLowerCase(),
               ) && (
                 <>
                   <CommandSeparator />

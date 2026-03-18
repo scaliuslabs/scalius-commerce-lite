@@ -1,6 +1,7 @@
 // src/layouts/components/AdminNav.ts
 // Pure TypeScript module — nav data definitions and permission filtering
 
+import type React from "react";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -31,7 +32,7 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 export interface NavSubItem {
   name: string;
   href: string;
-  icon?: any;
+  icon?: React.ComponentType<{ className?: string }>;
   requiredPermission?: string;
   anyOfPermissions?: string[];
 }
@@ -39,7 +40,7 @@ export interface NavSubItem {
 export interface NavItem {
   name: string;
   href: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   subItems?: NavSubItem[];
   requiredPermission?: string;
   anyOfPermissions?: string[];

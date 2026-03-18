@@ -36,7 +36,7 @@ import {
 interface ProductFormProps {
   categories: Category[];
   defaultValues?: Partial<
-    ProductFormValues & { attributes?: any[]; additionalInfo?: any[] }
+    ProductFormValues & { attributes?: Array<{ attributeId: string; value: string }>; additionalInfo?: Array<{ id: string; title: string; content: string }> }
   >;
   isEdit?: boolean;
 }

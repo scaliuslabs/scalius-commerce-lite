@@ -44,6 +44,7 @@ export async function buildInventoryStatements(
     db: Database,
     orderId: string,
     newStatus: string,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch statements require any[] return type
 ): Promise<{ statements: any[]; newAction: InventoryAction }> {
     const order = await db
         .select({

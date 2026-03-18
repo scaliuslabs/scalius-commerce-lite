@@ -154,6 +154,7 @@ export async function createStorefrontOrder(
     }
 
     // Execute Read Batch
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     const readResults = await storefrontDb.batch(readBatch as any);
 
     // Unpack Results

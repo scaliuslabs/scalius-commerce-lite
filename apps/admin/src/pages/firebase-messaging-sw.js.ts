@@ -6,7 +6,7 @@ export const GET: APIRoute = async () => {
   try {
     const response = await fetch("/api/v1/auth/firebase-config");
     if (response.ok) {
-      const body = (await response.json()) as any;
+      const body = (await response.json()) as { data?: Record<string, string> };
       // API returns { success: true, data: { ...config } }
       publicConfig = body?.data || {};
     }

@@ -4,7 +4,7 @@ import type { ProductFormValues } from "./types";
 /**
  * Extract unique color options from variants, sorted by colorSortOrder
  */
-export const extractUniqueColors = (variants: any[]): string[] => {
+export const extractUniqueColors = (variants: Array<{ color?: string | null; colorSortOrder?: number }>): string[] => {
   // Create a map of color to its sort order
   const colorMap = new Map<string, number>();
 
@@ -87,7 +87,7 @@ export const formatFormValuesForSubmission = (
           : img.createdAt,
     })),
     attributes:
-      (values.attributes as any[])?.map(({ attributeId, value }) => ({
+      (values.attributes as Array<{ attributeId: string; value: string }>)?.map(({ attributeId, value }) => ({
         attributeId,
         value,
       })) || [],

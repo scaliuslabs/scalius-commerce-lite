@@ -62,7 +62,7 @@ interface GroupDef {
 }
 
 // Group display config: icon, styling
-const GROUP_CONFIG: Record<string, { icon: any; bgColor: string; iconColor: string; hoverBorder: string }> = {
+const GROUP_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; bgColor: string; iconColor: string; hoverBorder: string }> = {
   products: { icon: ShoppingCart, bgColor: "bg-blue-100 dark:bg-blue-900/40", iconColor: "text-blue-600 dark:text-blue-400", hoverBorder: "hover:border-blue-500/50" },
   categories: { icon: FolderTree, bgColor: "bg-green-100 dark:bg-green-900/40", iconColor: "text-green-600 dark:text-green-400", hoverBorder: "hover:border-green-500/50" },
   collections: { icon: Layers3, bgColor: "bg-purple-100 dark:bg-purple-900/40", iconColor: "text-purple-600 dark:text-purple-400", hoverBorder: "hover:border-purple-500/50" },

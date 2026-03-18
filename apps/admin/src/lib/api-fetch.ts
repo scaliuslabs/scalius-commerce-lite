@@ -131,14 +131,14 @@ async function apiFetch(
   };
 
   // Production: service binding
-  if (env && (env as any).API) {
+  if (env && (env as Record<string, unknown>).API) {
     const target = new URL(pathAndQuery, "http://api.internal").toString();
-    return (env as any).API.fetch(target, fetchOptions);
+    return ((env as Record<string, unknown>).API as { fetch: typeof globalThis.fetch }).fetch(target, fetchOptions);
   }
 
   // Local dev: HTTP to API worker
   const apiBase =
-    (env as any)?.PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+    ((env as Record<string, unknown>)?.PUBLIC_API_BASE_URL as string) ?? "http://localhost:8787";
   const target = new URL(pathAndQuery, apiBase).toString();
   return fetch(target, fetchOptions);
 }

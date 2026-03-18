@@ -93,6 +93,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<WidgetFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- @hookform/resolvers upstream typing limitation with .refine()
     resolver: zodResolver(widgetFormSchema) as any,
     defaultValues: widget && !isCreateMode
       ? {
@@ -146,7 +147,9 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         if (context.preferredAiModel) aiGenerator.setSelectedModel(context.preferredAiModel);
         if (typeof context.useStagedMode === 'boolean') aiGenerator.setUseStagedMode(context.useStagedMode);
         if (context.savedImages) aiContext.handleMultiImageSelect(context.savedImages);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI context saved data shapes are loosely typed from serialization
         if (context.savedProducts) context.savedProducts.forEach((p: any) => aiContext.handleProductSelect(p));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI context saved data shapes are loosely typed from serialization
         if (context.savedCategories) context.savedCategories.forEach((c: any) => aiContext.handleCategorySelect(c));
         if (typeof context.allCategoriesSelected === 'boolean') {
           aiContext.handleToggleAllCategories(context.allCategoriesSelected);

@@ -10,9 +10,9 @@ interface FraudCheckerSettingsProps {
 declare global {
   interface Window {
     fraudCheckerActions: {
-      saveProvider: (provider: any) => Promise<any>;
+      saveProvider: (provider: Omit<FraudCheckerProvider, "id"> & { id?: string }) => Promise<FraudCheckerProvider>;
       deleteProvider: (id: string) => Promise<boolean>;
-      testProvider: (id: string) => Promise<any>;
+      testProvider: (id: string) => Promise<{ success: boolean; message?: string }>;
     };
   }
 }
@@ -48,7 +48,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
     }
   };
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 

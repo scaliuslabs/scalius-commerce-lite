@@ -8,7 +8,7 @@ interface UseProductVariantsOptions {
 }
 
 interface UseProductVariantsReturn {
-  variants: any[];
+  variants: Array<{ color?: string | null; colorSortOrder?: number; [key: string]: unknown }>;
   uniqueColorOptions: string[];
   isLoading: boolean;
   refreshVariants: () => void;
@@ -18,7 +18,7 @@ export function useProductVariants({
   productId,
   isEdit,
 }: UseProductVariantsOptions): UseProductVariantsReturn {
-  const [variants, setVariants] = useState<any[]>([]);
+  const [variants, setVariants] = useState<Array<{ color?: string | null; colorSortOrder?: number; [key: string]: unknown }>>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Extract unique colors from variants for image mapping

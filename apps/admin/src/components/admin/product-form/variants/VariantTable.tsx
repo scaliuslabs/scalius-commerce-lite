@@ -32,8 +32,8 @@ interface VariantTableProps {
   isAnyRowEditing: boolean;
   onAddVariant: () => void;
   isBulkEditing?: boolean;
-  draftUpdates?: Record<string, any>;
-  onBulkEditChange?: (variantId: string, field: string, value: any) => void;
+  draftUpdates?: Record<string, Record<string, unknown>>;
+  onBulkEditChange?: (variantId: string, field: string, value: string | number | null) => void;
   productName?: string;
 }
 
@@ -71,6 +71,7 @@ export function VariantTable({
                   checked={allSelected}
                   ref={(el) => {
                     if (el) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DOM indeterminate property not on Radix Checkbox type
                       (el as any).indeterminate = someSelected;
                     }
                   }}

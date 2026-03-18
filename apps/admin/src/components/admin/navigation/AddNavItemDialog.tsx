@@ -120,8 +120,8 @@ export function AddNavItemDialog({
           const data = await attrRes.json();
           setAttributes(
             data.attributes
-              ?.filter((a: any) => a.filterable !== false)
-              .map((a: any) => ({
+              ?.filter((a: { id: string; name: string; slug: string; filterable?: boolean }) => a.filterable !== false)
+              .map((a: { id: string; name: string; slug: string }) => ({
                 id: a.id,
                 name: a.name,
                 slug: a.slug,

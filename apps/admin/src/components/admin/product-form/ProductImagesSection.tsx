@@ -34,12 +34,12 @@ export function ProductImagesSection({
   const [isOpen, setIsOpen] = React.useState(true);
 
   // Check if image already exists in the current images array
-  const isImageDuplicate = (imageUrl: string, currentImages: any[]) => {
+  const isImageDuplicate = (imageUrl: string, currentImages: ProductFormValues["images"]) => {
     return currentImages.some((img) => img.url === imageUrl);
   };
 
   // Handle single image selection with duplicate check
-  const handleImageSelect = (file: any, currentImages: any[]) => {
+  const handleImageSelect = (file: ProductFormValues["images"][number], currentImages: ProductFormValues["images"]) => {
     if (isImageDuplicate(file.url, currentImages)) {
       toast.error("Duplicate Image", { description: "This image has already been added to the product." });
       return currentImages;
@@ -48,7 +48,7 @@ export function ProductImagesSection({
   };
 
   // Handle multiple image selection with duplicate check
-  const handleMultipleImageSelect = (files: any[], currentImages: any[]) => {
+  const handleMultipleImageSelect = (files: ProductFormValues["images"], currentImages: ProductFormValues["images"]) => {
     const newFiles = files.filter((file) => {
       if (isImageDuplicate(file.url, currentImages)) {
         return false;
