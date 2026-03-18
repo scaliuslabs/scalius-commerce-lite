@@ -99,7 +99,8 @@ app.openapi(searchRoute, async (c) => {
   }
 
   // Set up timeout for search (5 seconds)
-  const searchPromise = search(query, {
+  const db = c.get("db");
+  const searchPromise = search(db, query, {
     categoryId,
     minPrice,
     maxPrice,

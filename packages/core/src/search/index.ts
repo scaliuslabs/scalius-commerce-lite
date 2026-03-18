@@ -1,4 +1,4 @@
-import { db } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import { products, productImages, categories, pages } from "@scalius/database/schema";
 import { eq, sql, and, inArray, gte, lte } from "drizzle-orm";
 import { ftsMatch } from "./fts5";
@@ -39,6 +39,7 @@ export type SearchResult =
   | CategorySearchResult;
 
 export async function search(
+  db: Database,
   query: string,
   options?: {
     limit?: number;
