@@ -1,70 +1,120 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useWebHaptics } from "web-haptics/react";
 import {
-  Zap,
-  PackageOpen,
+  Menu,
   ClipboardList,
+  X,
+  Volume2,
+  VolumeOff,
+  Smartphone,
+  User,
   Clock,
-  WifiOff,
 } from "lucide-react";
 import { BarcodeScanner } from "./BarcodeScanner";
-import { ProductCard, type ScannedProduct } from "./ProductCard";
-import { StockAdjuster } from "./StockAdjuster";
-import { ReceivingMode, type ReceivingSession, type ReceivingItem } from "./ReceivingMode";
-import { ScanHistory, type ScanHistoryItem } from "./ScanHistory";
+import { ManualSheet } from "./ManualSheet";
+import { ScanFlash, type FlashState } from "./ScanFlash";
+import { ScanHistory } from "./ScanHistory";
+import { LastScanBar } from "./LastScanBar";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type ScannerMode = "quick" | "receiving" | "count";
+export type ScannerMode = "quick-receive" | "quick-deduct" | "manual";
 
-type AppState =
-  | "idle"
-  | "scanning"
-  | "looking-up"
-  | "result"
-  | "adjusting"
-  | "error";
+export interface ScannedProduct {
+  productName: string;
+  variantId: string;
+  sku: string;
+  barcode: string;
+  stock: number;
+  reserved: number;
+  productImage: string | null;
+  size: string | null;
+  color: string | null;
+  weight: number | null;
+}
+
+export interface ScanResult {
+  id: string;
+  timestamp: number;
+  barcode: string;
+  product: {
+    name: string;
+    variantId: string;
+    sku: string;
+    image?: string;
+    size?: string;
+    color?: string;
+  } | null;
+  action: "add" | "deduct" | "set" | "error";
+  quantity: number;
+  oldStock: number;
+  newStock: number;
+  reason: string;
+}
 
 interface ScannerAppProps {
   token: string;
 }
 
 // ---------------------------------------------------------------------------
-// Audio feedback (Web Audio API)
+// Audio feedback
 // ---------------------------------------------------------------------------
 
-function playBeep(frequency: number, duration: number) {
+function playBeep(type: "success" | "error" | "scan") {
   try {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.frequency.value = frequency;
-    gain.gain.value = 0.3;
-    osc.start();
-    setTimeout(() => {
-      osc.stop();
-      ctx.close();
-    }, duration);
+    gain.gain.value = 0.15;
+
+    if (type === "success") {
+      osc.frequency.value = 880;
+      osc.start();
+      setTimeout(() => osc.stop(), 100);
+      setTimeout(() => {
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        gain2.gain.value = 0.15;
+        osc2.frequency.value = 1100;
+        osc2.start();
+        setTimeout(() => {
+          osc2.stop();
+          ctx.close();
+        }, 100);
+      }, 120);
+    } else if (type === "error") {
+      osc.frequency.value = 220;
+      osc.start();
+      setTimeout(() => {
+        osc.stop();
+        ctx.close();
+      }, 300);
+    } else {
+      osc.frequency.value = 660;
+      osc.start();
+      setTimeout(() => {
+        osc.stop();
+        ctx.close();
+      }, 80);
+    }
   } catch {
-    // Audio not available — silent fallback
+    // Audio not available
   }
 }
-
-const successBeep = () => playBeep(880, 150);
-const errorBeep = () => playBeep(220, 300);
-const scanBeep = () => playBeep(660, 100);
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-let historyIdCounter = 0;
-function nextHistoryId(): string {
-  return `scan-${Date.now()}-${++historyIdCounter}`;
+let idCounter = 0;
+function nextId(): string {
+  return `scan-${Date.now()}-${++idCounter}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,14 +122,14 @@ function nextHistoryId(): string {
 // ---------------------------------------------------------------------------
 
 export function ScannerApp({ token }: ScannerAppProps) {
-  // ---- Auth state ----
+  // ---- Auth ----
   const [authState, setAuthState] = useState<"verifying" | "error" | "ready">(
     token ? "verifying" : "error",
   );
-  const [authError, setAuthError] = useState<string>("");
-  const [adminName, setAdminName] = useState<string>("");
+  const [authError, setAuthError] = useState("");
+  const [adminName, setAdminName] = useState("Admin");
+  const sessionStart = useRef(Date.now());
 
-  // Verify token on mount
   useEffect(() => {
     if (!token) {
       setAuthState("error");
@@ -103,41 +153,51 @@ export function ScannerApp({ token }: ScannerAppProps) {
   }, [token]);
 
   // ---- Core state ----
-  const [mode, setMode] = useState<ScannerMode>("quick");
-  const [appState, setAppState] = useState<AppState>("idle");
-  const [lastScan, setLastScan] = useState<ScannedProduct | null>(null);
-  const [stockDelta, setStockDelta] = useState<number | null>(null);
-  const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>([]);
+  const [mode, setMode] = useState<ScannerMode>("quick-receive");
+  const [history, setHistory] = useState<ScanResult[]>([]);
+  const [lastResult, setLastResult] = useState<ScanResult | null>(null);
+  const [flash, setFlash] = useState<FlashState | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [lookupError, setLookupError] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== "undefined" ? navigator.onLine : true,
-  );
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // ---- Receiving session ----
-  const [receivingSession, setReceivingSession] =
-    useState<ReceivingSession | null>(null);
+  // Manual mode state
+  const [manualProduct, setManualProduct] = useState<ScannedProduct | null>(null);
+  const [manualBarcode, setManualBarcode] = useState("");
+  const [cameraPaused, setCameraPaused] = useState(false);
+
+  // Settings
+  const [defaultQuantity, setDefaultQuantity] = useState(1);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [hapticsEnabled, setHapticsEnabled] = useState(true);
 
   // ---- Haptics ----
   const { trigger: hapticTrigger } = useWebHaptics();
-
-  // Stable ref so child callbacks don't re-render scanner
   const hapticRef = useRef(hapticTrigger);
   hapticRef.current = hapticTrigger;
 
-  // ---- Online/offline detection ----
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
+  const haptic = useCallback(
+    (type: "success" | "error" | "light" | "warning" | "selection" | "medium") => {
+      if (!hapticsEnabled) return;
+      hapticRef.current(type);
+    },
+    [hapticsEnabled],
+  );
+
+  const beep = useCallback(
+    (type: "success" | "error" | "scan") => {
+      if (!soundEnabled) return;
+      playBeep(type);
+    },
+    [soundEnabled],
+  );
+
+  // ---- Flash management ----
+  const showFlash = useCallback((state: FlashState) => {
+    setFlash(state);
+    setTimeout(() => setFlash(null), 500);
   }, []);
 
-  // ---- Product lookup ----
+  // ---- Barcode lookup ----
   const lookupBarcode = useCallback(
     async (code: string): Promise<ScannedProduct | null> => {
       const url = `/api/v1/admin/inventory/scanner/lookup?code=${encodeURIComponent(code)}`;
@@ -157,145 +217,249 @@ export function ScannerApp({ token }: ScannerAppProps) {
     [token],
   );
 
-  // ---- Handle scan event (from camera or keyboard wedge) ----
+  // ---- Quick mode stock adjust (fire-and-forget with optimistic feedback) ----
+  const quickAdjust = useCallback(
+    async (product: ScannedProduct, quantity: number) => {
+      const oldStock = product.stock;
+      const newStock = oldStock + quantity;
+      const isAdd = quantity > 0;
+
+      // Optimistic feedback — instant
+      const result: ScanResult = {
+        id: nextId(),
+        timestamp: Date.now(),
+        barcode: product.barcode,
+        product: {
+          name: product.productName,
+          variantId: product.variantId,
+          sku: product.sku,
+          image: product.productImage ?? undefined,
+          size: product.size ?? undefined,
+          color: product.color ?? undefined,
+        },
+        action: isAdd ? "add" : "deduct",
+        quantity: Math.abs(quantity),
+        oldStock,
+        newStock,
+        reason: isAdd ? "Quick Receive" : "Quick Deduct",
+      };
+
+      setLastResult(result);
+      setHistory((prev) => [result, ...prev].slice(0, 50));
+
+      showFlash({
+        type: "success",
+        action: `${quantity > 0 ? "+" : ""}${quantity} ${isAdd ? "Added" : "Deducted"}`,
+        productName: product.productName,
+        oldStock,
+        newStock,
+      });
+      beep("success");
+      haptic("success");
+
+      // Fire API call — correct on failure
+      try {
+        const res = await fetch("/api/v1/admin/inventory/stock-adjust", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Scanner-Token": token,
+          },
+          body: JSON.stringify({
+            variantId: product.variantId,
+            adjustment: quantity,
+            reason: isAdd ? "Quick Receive" : "Quick Deduct",
+          }),
+        });
+        if (!res.ok) {
+          // Mark result as failed in history
+          setHistory((prev) =>
+            prev.map((r) =>
+              r.id === result.id
+                ? { ...r, action: "error" as const, reason: "API call failed" }
+                : r,
+            ),
+          );
+        }
+      } catch {
+        setHistory((prev) =>
+          prev.map((r) =>
+            r.id === result.id
+              ? { ...r, action: "error" as const, reason: "Network error" }
+              : r,
+          ),
+        );
+      }
+    },
+    [token, showFlash, beep, haptic],
+  );
+
+  // ---- Handle scan from camera or keyboard wedge ----
   const handleScan = useCallback(
-    async (code: string, format: string) => {
-      scanBeep();
-      setLookupError(null);
-      setStockDelta(null);
-      setAppState("looking-up");
+    async (code: string, _format: string) => {
+      beep("scan");
 
       try {
         const product = await lookupBarcode(code);
 
         if (!product) {
-          errorBeep();
-          hapticRef.current("error");
-          setLookupError(`No product found for: ${code}`);
-          setLastScan(null);
-          setAppState("error");
+          // Not found
+          showFlash({ type: "error", barcode: code });
+          beep("error");
+          haptic("error");
 
-          setScanHistory((prev) => [
-            {
-              id: nextHistoryId(),
-              timestamp: Date.now(),
-              barcode: code,
-              productName: null,
-              action: "Lookup",
-              detail: "Not found",
-              variantId: null,
-              previousStock: null,
-            },
-            ...prev,
-          ].slice(0, 50));
+          const errorResult: ScanResult = {
+            id: nextId(),
+            timestamp: Date.now(),
+            barcode: code,
+            product: null,
+            action: "error",
+            quantity: 0,
+            oldStock: 0,
+            newStock: 0,
+            reason: "Barcode not found",
+          };
+          setLastResult(errorResult);
+          setHistory((prev) => [errorResult, ...prev].slice(0, 50));
           return;
         }
 
-        successBeep();
-        hapticRef.current("success");
-        setLastScan(product);
-        setAppState("result");
-
-        // ---- Receiving mode: auto-add ----
-        if (mode === "receiving" && receivingSession) {
-          const qty = receivingSession.defaultQuantity;
-          setReceivingSession((prev) => {
-            if (!prev) return prev;
-            const items = new Map(prev.items);
-            const existing = items.get(product.variantId);
-            if (existing) {
-              // Duplicate scan check — warn if within 2 seconds
-              if (Date.now() - existing.lastScanned < 2000) {
-                hapticRef.current("warning");
-              }
-              items.set(product.variantId, {
-                ...existing,
-                count: existing.count + qty,
-                lastScanned: Date.now(),
-              });
-            } else {
-              items.set(product.variantId, {
-                product,
-                count: qty,
-                lastScanned: Date.now(),
-              });
-            }
-            return { ...prev, items };
-          });
-          hapticRef.current("selection");
-
-          setScanHistory((prev) => [
-            {
-              id: nextHistoryId(),
-              timestamp: Date.now(),
-              barcode: code,
-              productName: product.productName,
-              action: "Receiving",
-              detail: `+${qty}`,
-              variantId: product.variantId,
-              previousStock: null,
-            },
-            ...prev,
-          ].slice(0, 50));
+        if (mode === "quick-receive") {
+          await quickAdjust(product, defaultQuantity);
+        } else if (mode === "quick-deduct") {
+          await quickAdjust(product, -defaultQuantity);
         } else {
-          // Quick / count mode — just show product
-          setScanHistory((prev) => [
-            {
-              id: nextHistoryId(),
-              timestamp: Date.now(),
-              barcode: code,
-              productName: product.productName,
-              action: "Scanned",
-              detail: format,
-              variantId: product.variantId,
-              previousStock: null,
-            },
-            ...prev,
-          ].slice(0, 50));
+          // Manual mode — pause camera, show product sheet
+          setCameraPaused(true);
+          setManualProduct(product);
+          setManualBarcode(code);
+          haptic("selection");
+          beep("success");
         }
       } catch (err) {
-        errorBeep();
-        hapticRef.current("error");
-        setLookupError(
-          err instanceof Error ? err.message : "Lookup failed",
-        );
-        setLastScan(null);
-        setAppState("error");
+        showFlash({
+          type: "error",
+          barcode: code,
+        });
+        beep("error");
+        haptic("error");
+
+        const errorResult: ScanResult = {
+          id: nextId(),
+          timestamp: Date.now(),
+          barcode: code,
+          product: null,
+          action: "error",
+          quantity: 0,
+          oldStock: 0,
+          newStock: 0,
+          reason: err instanceof Error ? err.message : "Lookup failed",
+        };
+        setLastResult(errorResult);
+        setHistory((prev) => [errorResult, ...prev].slice(0, 50));
       }
     },
-    [lookupBarcode, mode, receivingSession],
+    [mode, lookupBarcode, quickAdjust, defaultQuantity, showFlash, beep, haptic],
   );
 
-  // ---- Stock adjustment complete ----
-  const handleAdjustComplete = useCallback(
-    (newStock: number) => {
-      if (!lastScan) return;
-      const delta = newStock - lastScan.stock;
-      setStockDelta(delta);
-      setLastScan((prev) => (prev ? { ...prev, stock: newStock } : prev));
-      successBeep();
+  // ---- Manual mode submit ----
+  const handleManualSubmit = useCallback(
+    async (opts: {
+      variantId: string;
+      adjustment: number;
+      reason: string;
+      isAbsolute: boolean;
+      product: ScannedProduct;
+    }) => {
+      const { variantId, adjustment, reason, isAbsolute, product } = opts;
 
-      setScanHistory((prev) => {
-        const entry: ScanHistoryItem = {
-          id: nextHistoryId(),
+      try {
+        const url = isAbsolute
+          ? "/api/v1/admin/inventory/stock-set"
+          : "/api/v1/admin/inventory/stock-adjust";
+
+        const body = isAbsolute
+          ? { variantId, newStock: adjustment, reason }
+          : { variantId, adjustment, reason };
+
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Scanner-Token": token,
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => null);
+          throw new Error(
+            errBody?.error?.message ?? errBody?.error ?? `API error: ${res.status}`,
+          );
+        }
+
+        const json = await res.json();
+        const data = json.data ?? json;
+        const newStock = data.stock ?? (isAbsolute ? adjustment : product.stock + adjustment);
+        const oldStock = product.stock;
+
+        const result: ScanResult = {
+          id: nextId(),
           timestamp: Date.now(),
-          barcode: lastScan.barcode,
-          productName: lastScan.productName,
-          action: "Adjusted",
-          detail: `${delta >= 0 ? "+" : ""}${delta} → ${newStock}`,
-          variantId: lastScan.variantId,
-          previousStock: lastScan.stock,
+          barcode: manualBarcode,
+          product: {
+            name: product.productName,
+            variantId: product.variantId,
+            sku: product.sku,
+            image: product.productImage ?? undefined,
+            size: product.size ?? undefined,
+            color: product.color ?? undefined,
+          },
+          action: isAbsolute ? "set" : adjustment > 0 ? "add" : "deduct",
+          quantity: Math.abs(isAbsolute ? newStock - oldStock : adjustment),
+          oldStock,
+          newStock,
+          reason,
         };
-        return [entry, ...prev].slice(0, 50);
-      });
+
+        setLastResult(result);
+        setHistory((prev) => [result, ...prev].slice(0, 50));
+
+        showFlash({
+          type: "success",
+          action: isAbsolute
+            ? `Set to ${newStock}`
+            : `${adjustment > 0 ? "+" : ""}${adjustment} ${adjustment > 0 ? "Added" : "Deducted"}`,
+          productName: product.productName,
+          oldStock,
+          newStock,
+        });
+        beep("success");
+        haptic("success");
+
+        // Resume camera
+        setManualProduct(null);
+        setCameraPaused(false);
+      } catch (err) {
+        beep("error");
+        haptic("error");
+        throw err; // Let ManualSheet display the error
+      }
     },
-    [lastScan],
+    [token, manualBarcode, showFlash, beep, haptic],
   );
 
-  // ---- Undo last adjustment ----
+  // ---- Manual mode cancel ----
+  const handleManualCancel = useCallback(() => {
+    setManualProduct(null);
+    setCameraPaused(false);
+    haptic("light");
+  }, [haptic]);
+
+  // ---- Undo ----
   const handleUndo = useCallback(
-    async (item: ScanHistoryItem) => {
-      if (!item.variantId || item.previousStock == null) return;
+    async (item: ScanResult) => {
+      if (!item.product) return;
 
       try {
         const res = await fetch("/api/v1/admin/inventory/stock-set", {
@@ -305,134 +469,53 @@ export function ScannerApp({ token }: ScannerAppProps) {
             "X-Scanner-Token": token,
           },
           body: JSON.stringify({
-            variantId: item.variantId,
-            newStock: item.previousStock,
+            variantId: item.product.variantId,
+            newStock: item.oldStock,
             reason: "Undo scanner adjustment",
           }),
         });
         if (!res.ok) throw new Error("Undo failed");
 
-        hapticRef.current("medium");
-        successBeep();
+        haptic("medium");
+        beep("success");
 
-        // Update displayed product if it's the same variant
-        if (lastScan?.variantId === item.variantId) {
-          setLastScan((prev) =>
-            prev ? { ...prev, stock: item.previousStock! } : prev,
-          );
-          setStockDelta(null);
+        // Remove undone entry
+        setHistory((prev) => prev.filter((h) => h.id !== item.id));
+
+        // Update lastResult if same variant
+        if (lastResult?.product?.variantId === item.product.variantId) {
+          setLastResult(null);
         }
-
-        // Remove the undone entry from history
-        setScanHistory((prev) => prev.filter((h) => h.id !== item.id));
       } catch {
-        errorBeep();
-        hapticRef.current("error");
+        beep("error");
+        haptic("error");
       }
     },
-    [lastScan, token],
+    [token, lastResult, haptic, beep],
   );
 
-  // ---- Haptic pass-through for StockAdjuster ----
-  const handleStockHaptic = useCallback(
-    (type: "light" | "medium" | "warning") => {
-      hapticRef.current(type);
+  // ---- Camera active ----
+  const isCameraActive = !cameraPaused;
+
+  // ---- Mode switch ----
+  const handleModeSwitch = useCallback(
+    (newMode: ScannerMode) => {
+      setMode(newMode);
+      setManualProduct(null);
+      setCameraPaused(false);
+      haptic("selection");
+      setMenuOpen(false);
     },
-    [],
+    [haptic],
   );
 
-  // ---- Receiving session management ----
-  const startReceivingSession = useCallback(() => {
-    setReceivingSession({
-      startedAt: Date.now(),
-      items: new Map(),
-      defaultQuantity: 1,
-    });
-  }, []);
-
-  const endReceivingSession = useCallback(
-    async (items: ReceivingItem[]) => {
-      // Apply all receiving adjustments
-      for (const item of items) {
-        try {
-          await fetch("/api/v1/admin/inventory/stock-adjust", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Scanner-Token": token,
-            },
-            body: JSON.stringify({
-              variantId: item.product.variantId,
-              adjustment: item.count,
-              reason: "Receiving",
-            }),
-          });
-        } catch {
-          // Individual failures — continue with remaining items
-        }
-      }
-
-      hapticRef.current("success");
-      successBeep();
-      setReceivingSession(null);
-      setLastScan(null);
-      setAppState("idle");
-    },
-    [token],
-  );
-
-  const updateReceivingQuantity = useCallback(
-    (variantId: string, delta: number) => {
-      setReceivingSession((prev) => {
-        if (!prev) return prev;
-        const items = new Map(prev.items);
-        const existing = items.get(variantId);
-        if (!existing) return prev;
-        const newCount = existing.count + delta;
-        if (newCount <= 0) {
-          items.delete(variantId);
-        } else {
-          items.set(variantId, { ...existing, count: newCount });
-        }
-        return { ...prev, items };
-      });
-    },
-    [],
-  );
-
-  const removeReceivingItem = useCallback((variantId: string) => {
-    setReceivingSession((prev) => {
-      if (!prev) return prev;
-      const items = new Map(prev.items);
-      items.delete(variantId);
-      return { ...prev, items };
-    });
-  }, []);
-
-  const setReceivingDefaultQty = useCallback((qty: number) => {
-    setReceivingSession((prev) =>
-      prev ? { ...prev, defaultQuantity: qty } : prev,
-    );
-  }, []);
-
-  // ---- Camera active logic ----
-  const isCameraActive =
-    appState !== "looking-up" && mode !== "count";
-
-  // ---- Mode tabs ----
-  const MODE_TABS: { key: ScannerMode; label: string; icon: typeof Zap }[] = [
-    { key: "quick", label: "Quick", icon: Zap },
-    { key: "receiving", label: "Receive", icon: PackageOpen },
-    { key: "count", label: "Count", icon: ClipboardList },
-  ];
-
-  // ---- Auth gate ----
+  // ---- Auth gates ----
   if (authState === "verifying") {
     return (
       <div className="flex h-dvh items-center justify-center bg-zinc-950 text-white">
         <div className="text-center">
           <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
-          <p className="text-sm text-zinc-400">Verifying scanner token…</p>
+          <p className="text-sm text-zinc-400">Verifying scanner token...</p>
         </div>
       </div>
     );
@@ -443,165 +526,255 @@ export function ScannerApp({ token }: ScannerAppProps) {
       <div className="flex h-dvh items-center justify-center bg-zinc-950 text-white p-6">
         <div className="text-center max-w-sm">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
-            <WifiOff className="h-8 w-8 text-red-400" />
+            <X className="h-8 w-8 text-red-400" />
           </div>
           <h1 className="text-lg font-semibold mb-2">Access Required</h1>
           <p className="text-sm text-zinc-400 mb-6">{authError}</p>
-          <p className="text-xs text-zinc-500">Ask an admin to generate a new scanner QR code from Settings → Scanner.</p>
+          <p className="text-xs text-zinc-500">
+            Ask an admin to generate a new scanner QR code from Settings.
+          </p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex h-dvh flex-col bg-zinc-950 text-white">
-      {/* ---- Top bar ---- */}
-      <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2">
-        {/* Mode tabs */}
-        <div className="flex gap-1">
-          {MODE_TABS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => {
-                setMode(key);
-                if (key !== "receiving") {
-                  setReceivingSession(null);
-                }
-              }}
-              className={`flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors ${
-                mode === key
-                  ? "bg-emerald-600 text-white"
-                  : "bg-zinc-800 text-zinc-400 active:bg-zinc-700"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
+  // ---- History view ----
+  if (historyOpen) {
+    return (
+      <ScanHistory
+        items={history}
+        onUndo={handleUndo}
+        onClear={() => setHistory([])}
+        onClose={() => setHistoryOpen(false)}
+      />
+    );
+  }
 
-        {/* Status icons */}
-        <div className="flex items-center gap-2">
-          {!isOnline && (
-            <WifiOff className="h-4 w-4 text-red-400" />
+  const MODE_PILLS: { key: ScannerMode; label: string }[] = [
+    { key: "quick-receive", label: "Quick Receive" },
+    { key: "quick-deduct", label: "Quick Deduct" },
+    { key: "manual", label: "Manual" },
+  ];
+
+  return (
+    <div className="flex h-dvh flex-col bg-zinc-950 text-white select-none">
+      {/* ---- Flash overlay ---- */}
+      {flash && <ScanFlash flash={flash} />}
+
+      {/* ---- Header ---- */}
+      <div className="flex shrink-0 items-center justify-between bg-zinc-900 px-3 py-2 border-b border-zinc-800">
+        <button
+          type="button"
+          onClick={() => setMenuOpen(!menuOpen)}
+          className="flex h-10 w-10 items-center justify-center rounded-lg active:bg-zinc-800"
+          aria-label="Menu"
+        >
+          <Menu className="h-5 w-5 text-zinc-300" />
+        </button>
+
+        <span className="text-sm font-bold tracking-wide text-zinc-200">
+          SCALIUS SCANNER
+        </span>
+
+        <button
+          type="button"
+          onClick={() => setHistoryOpen(true)}
+          className="relative flex h-10 w-10 items-center justify-center rounded-lg active:bg-zinc-800"
+          aria-label="History"
+        >
+          <ClipboardList className="h-5 w-5 text-zinc-300" />
+          {history.length > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+              {history.length > 9 ? "9+" : history.length}
+            </span>
           )}
-          <button
-            type="button"
-            onClick={() => setHistoryOpen(!historyOpen)}
-            className="relative flex h-9 items-center gap-1 rounded-lg bg-zinc-800 px-2.5 text-xs text-zinc-400 active:bg-zinc-700"
-          >
-            <Clock className="h-3.5 w-3.5" />
-            {scanHistory.length > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white">
-                {scanHistory.length > 9 ? "9+" : scanHistory.length}
-              </span>
-            )}
-          </button>
-        </div>
+        </button>
       </div>
 
-      {/* ---- Scrollable content ---- */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Camera / Scanner */}
+      {/* ---- Mode selector ---- */}
+      <div className="flex shrink-0 gap-1.5 bg-zinc-900/80 px-3 py-2">
+        {MODE_PILLS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => handleModeSwitch(key)}
+            className={`flex h-9 flex-1 items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
+              mode === key
+                ? key === "quick-deduct"
+                  ? "bg-orange-600 text-white"
+                  : key === "manual"
+                    ? "bg-blue-600 text-white"
+                    : "bg-emerald-600 text-white"
+                : "bg-zinc-800 text-zinc-400 active:bg-zinc-700"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ---- Camera viewfinder ---- */}
+      <div className="relative flex-1 min-h-0">
         <BarcodeScanner
           onScan={handleScan}
           isActive={isCameraActive}
           showTorchButton
         />
 
-        {/* Content area */}
-        <div className="space-y-3 p-3">
-          {/* Loading state */}
-          {appState === "looking-up" && (
-            <div className="flex items-center justify-center rounded-xl border border-zinc-700/50 bg-zinc-900 py-8">
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-400" />
-                Looking up product...
-              </div>
-            </div>
-          )}
-
-          {/* Lookup error */}
-          {appState === "error" && lookupError && (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-center">
-              <p className="text-sm font-medium text-red-400">
-                {lookupError}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Scan another barcode or try manual input
-              </p>
-            </div>
-          )}
-
-          {/* Product card */}
-          {lastScan && appState !== "looking-up" && (
-            <ProductCard product={lastScan} stockDelta={stockDelta} />
-          )}
-
-          {/* Mode-specific content */}
-          {mode === "quick" && lastScan && appState !== "looking-up" && (
-            <StockAdjuster
-              variantId={lastScan.variantId}
-              currentStock={lastScan.stock}
-              onAdjustComplete={handleAdjustComplete}
-              onHaptic={handleStockHaptic}
-            />
-          )}
-
-          {mode === "receiving" && (
-            <ReceivingMode
-              session={receivingSession}
-              onStartSession={startReceivingSession}
-              onEndSession={endReceivingSession}
-              onUpdateQuantity={updateReceivingQuantity}
-              onRemoveItem={removeReceivingItem}
-              onSetDefaultQuantity={setReceivingDefaultQty}
-            />
-          )}
-
-          {mode === "count" && lastScan && appState !== "looking-up" && (
-            <div className="space-y-3">
-              <StockAdjuster
-                variantId={lastScan.variantId}
-                currentStock={lastScan.stock}
-                onAdjustComplete={handleAdjustComplete}
-                onHaptic={handleStockHaptic}
-              />
-              <p className="text-center text-xs text-zinc-600">
-                Count mode — use camera or manual input to scan
-              </p>
-            </div>
-          )}
-
-          {/* Idle prompt */}
-          {appState === "idle" && !lastScan && mode !== "receiving" && (
-            <div className="flex flex-col items-center py-8 text-center">
-              <p className="text-sm text-zinc-500">
-                Scan a barcode to get started
-              </p>
-              <p className="mt-1 text-xs text-zinc-600">
-                Use camera, USB scanner, or manual input
-              </p>
-            </div>
-          )}
-
-          {/* History panel */}
-          {historyOpen && (
-            <ScanHistory
-              items={scanHistory}
-              onUndo={handleUndo}
-              isOpen={historyOpen}
-              onToggle={() => setHistoryOpen(!historyOpen)}
-            />
-          )}
-        </div>
+        {/* Dim overlay when camera paused in manual mode */}
+        {cameraPaused && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+            <p className="text-sm text-zinc-400">Camera paused</p>
+          </div>
+        )}
       </div>
 
-      {/* ---- Offline banner ---- */}
-      {!isOnline && (
-        <div className="shrink-0 bg-red-600 px-3 py-1.5 text-center text-xs font-medium text-white">
-          Offline — scans will fail until connection is restored
+      {/* ---- Last scan bar ---- */}
+      <LastScanBar result={lastResult} mode={mode} />
+
+      {/* ---- Manual mode bottom sheet ---- */}
+      {manualProduct && (
+        <ManualSheet
+          product={manualProduct}
+          onSubmit={handleManualSubmit}
+          onCancel={handleManualCancel}
+          onHaptic={haptic}
+        />
+      )}
+
+      {/* ---- Hamburger menu ---- */}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-40 flex"
+          onClick={() => setMenuOpen(false)}
+        >
+          <div
+            className="w-72 bg-zinc-900 border-r border-zinc-800 h-full flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+              <span className="text-sm font-bold text-zinc-200">Settings</span>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg active:bg-zinc-800"
+              >
+                <X className="h-4 w-4 text-zinc-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+              {/* Current mode */}
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">
+                  Current Mode
+                </div>
+                <div className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                  mode === "quick-receive"
+                    ? "bg-emerald-600/20 text-emerald-400"
+                    : mode === "quick-deduct"
+                      ? "bg-orange-600/20 text-orange-400"
+                      : "bg-blue-600/20 text-blue-400"
+                }`}>
+                  {mode === "quick-receive" ? "Quick Receive" : mode === "quick-deduct" ? "Quick Deduct" : "Manual"}
+                </div>
+              </div>
+
+              {/* Default quantity */}
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">
+                  Default Quantity (Quick modes)
+                </div>
+                <div className="flex gap-2">
+                  {[1, 5, 10].map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setDefaultQuantity(q)}
+                      className={`flex h-10 w-14 items-center justify-center rounded-lg text-sm font-bold ${
+                        defaultQuantity === q
+                          ? "bg-emerald-600 text-white"
+                          : "bg-zinc-800 text-zinc-400 active:bg-zinc-700"
+                      }`}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sound toggle */}
+              <button
+                type="button"
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className="flex w-full items-center justify-between rounded-lg bg-zinc-800 px-4 py-3 active:bg-zinc-700"
+              >
+                <div className="flex items-center gap-3">
+                  {soundEnabled ? (
+                    <Volume2 className="h-4 w-4 text-zinc-400" />
+                  ) : (
+                    <VolumeOff className="h-4 w-4 text-zinc-500" />
+                  )}
+                  <span className="text-sm text-zinc-300">Sound</span>
+                </div>
+                <div
+                  className={`h-6 w-10 rounded-full p-0.5 transition-colors ${
+                    soundEnabled ? "bg-emerald-600" : "bg-zinc-700"
+                  }`}
+                >
+                  <div
+                    className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                      soundEnabled ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </div>
+              </button>
+
+              {/* Haptics toggle */}
+              <button
+                type="button"
+                onClick={() => setHapticsEnabled(!hapticsEnabled)}
+                className="flex w-full items-center justify-between rounded-lg bg-zinc-800 px-4 py-3 active:bg-zinc-700"
+              >
+                <div className="flex items-center gap-3">
+                  <Smartphone className="h-4 w-4 text-zinc-400" />
+                  <span className="text-sm text-zinc-300">Haptics</span>
+                </div>
+                <div
+                  className={`h-6 w-10 rounded-full p-0.5 transition-colors ${
+                    hapticsEnabled ? "bg-emerald-600" : "bg-zinc-700"
+                  }`}
+                >
+                  <div
+                    className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                      hapticsEnabled ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </div>
+              </button>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-zinc-800 p-4 space-y-2">
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                <User className="h-3.5 w-3.5" />
+                <span>{adminName}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-zinc-600">
+                <Clock className="h-3.5 w-3.5" />
+                <span>
+                  Session started{" "}
+                  {new Date(sessionStart.current).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Click-away backdrop */}
+          <div className="flex-1" />
         </div>
       )}
     </div>

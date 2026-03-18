@@ -1,26 +1,23 @@
-import { Clock, Undo2, ChevronDown, ChevronUp, Package } from "lucide-react";
+import {
+  ArrowLeft,
+  Undo2,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  ArrowRight,
+  Package,
+} from "lucide-react";
+import type { ScanResult } from "./ScannerApp";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ScanHistoryItem {
-  id: string;
-  timestamp: number;
-  barcode: string;
-  productName: string | null;
-  action: string;
-  detail: string;
-  variantId: string | null;
-  /** Previous stock before this action — enables undo */
-  previousStock: number | null;
-}
-
 interface ScanHistoryProps {
-  items: ScanHistoryItem[];
-  onUndo: (item: ScanHistoryItem) => void;
-  isOpen: boolean;
-  onToggle: () => void;
+  items: ScanResult[];
+  onUndo: (item: ScanResult) => void;
+  onClear: () => void;
+  onClose: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -28,91 +25,155 @@ interface ScanHistoryProps {
 // ---------------------------------------------------------------------------
 
 function formatTime(ts: number): string {
-  const d = new Date(ts);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return new Date(ts).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatElapsed(ts: number): string {
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  return `${Math.floor(diff / 3600)}h ago`;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function ScanHistory({ items, onUndo, isOpen, onToggle }: ScanHistoryProps) {
+export function ScanHistory({ items, onUndo, onClear, onClose }: ScanHistoryProps) {
+  const undoableCount = 5;
+
   return (
-    <div className="rounded-xl border border-zinc-700/50 bg-zinc-900">
-      {/* Header toggle */}
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between px-4 py-3 text-left active:bg-zinc-800/50"
-      >
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-zinc-500" />
-          <span className="text-sm font-medium text-zinc-300">
-            Scan History
-          </span>
-          {items.length > 0 && (
-            <span className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
-              {items.length}
-            </span>
-          )}
-        </div>
-        {isOpen ? (
-          <ChevronUp className="h-4 w-4 text-zinc-500" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-zinc-500" />
+    <div className="flex h-dvh flex-col bg-zinc-950 text-white">
+      {/* Header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 py-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-10 items-center gap-2 rounded-lg px-2 text-sm text-zinc-300 active:bg-zinc-800"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          Back to Scanner
+        </button>
+
+        {items.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="flex h-10 items-center gap-1.5 rounded-lg bg-zinc-800 px-3 text-xs text-zinc-400 active:bg-zinc-700"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Clear
+          </button>
         )}
-      </button>
+      </div>
+
+      {/* Title */}
+      <div className="shrink-0 px-4 py-3 border-b border-zinc-800/50">
+        <h1 className="text-lg font-bold text-zinc-200">Scan History</h1>
+        <p className="text-xs text-zinc-500">
+          {items.length} scan{items.length !== 1 ? "s" : ""} this session
+        </p>
+      </div>
 
       {/* List */}
-      {isOpen && (
-        <div className="max-h-64 overflow-y-auto border-t border-zinc-800 px-3 pb-3">
-          {items.length === 0 ? (
-            <div className="flex flex-col items-center py-6 text-zinc-500">
-              <Package className="mb-2 h-6 w-6" />
-              <p className="text-xs">No scans yet</p>
-            </div>
-          ) : (
-            <div className="space-y-1 pt-2">
-              {items.map((item, idx) => (
+      <div className="flex-1 overflow-y-auto">
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
+            <Package className="mb-3 h-10 w-10" />
+            <p className="text-sm">No scans yet</p>
+            <p className="text-xs text-zinc-700 mt-1">
+              Scanned items will appear here
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800/50">
+            {items.map((item, idx) => {
+              const isError = item.action === "error";
+              const canUndo =
+                idx < undoableCount &&
+                !isError &&
+                item.product != null;
+
+              return (
                 <div
                   key={item.id}
-                  className="flex items-start gap-2 rounded-lg bg-zinc-800/40 px-2.5 py-2"
+                  className="flex items-center gap-3 px-4 py-3"
                 >
-                  {/* Time */}
-                  <div className="shrink-0 pt-0.5 text-[10px] tabular-nums text-zinc-600">
-                    {formatTime(item.timestamp)}
-                  </div>
+                  {/* Icon */}
+                  {isError ? (
+                    <XCircle className="h-5 w-5 shrink-0 text-red-400" />
+                  ) : (
+                    <CheckCircle className="h-5 w-5 shrink-0 text-emerald-400" />
+                  )}
 
                   {/* Content */}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-medium text-zinc-300">
-                      {item.productName ?? item.barcode}
-                    </div>
-                    <div className="text-[10px] text-zinc-500">
-                      {item.action}
-                      {item.detail && (
-                        <span className="text-zinc-600"> — {item.detail}</span>
+                    <div className="flex items-center gap-2">
+                      {!isError && (
+                        <span
+                          className={`text-sm font-bold ${
+                            item.action === "deduct"
+                              ? "text-orange-400"
+                              : item.action === "set"
+                                ? "text-blue-400"
+                                : "text-emerald-400"
+                          }`}
+                        >
+                          {item.action === "set"
+                            ? `Set ${item.newStock}`
+                            : item.action === "deduct"
+                              ? `-${item.quantity}`
+                              : `+${item.quantity}`}
+                        </span>
                       )}
+                      <span className="truncate text-sm text-zinc-300">
+                        {item.product?.name ?? item.barcode}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {!isError && (
+                        <div className="flex items-center gap-1 text-xs text-zinc-500">
+                          <span>{item.oldStock}</span>
+                          <ArrowRight className="h-2.5 w-2.5" />
+                          <span>{item.newStock}</span>
+                        </div>
+                      )}
+                      {isError && (
+                        <span className="text-xs text-red-400/70">
+                          {item.reason}
+                        </span>
+                      )}
+                      <span className="text-xs text-zinc-600">
+                        {formatTime(item.timestamp)}
+                      </span>
+                      <span className="text-xs text-zinc-700">
+                        {formatElapsed(item.timestamp)}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Undo (only for most recent adjustable item) */}
-                  {idx === 0 && item.previousStock != null && (
+                  {/* Undo button */}
+                  {canUndo && (
                     <button
                       type="button"
                       onClick={() => onUndo(item)}
-                      className="flex h-7 shrink-0 items-center gap-1 rounded bg-zinc-700 px-2 text-[10px] text-zinc-400 active:bg-zinc-600"
+                      className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-zinc-800 px-3 text-xs text-zinc-400 active:bg-zinc-700"
                     >
-                      <Undo2 className="h-3 w-3" />
+                      <Undo2 className="h-3.5 w-3.5" />
                       Undo
                     </button>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
