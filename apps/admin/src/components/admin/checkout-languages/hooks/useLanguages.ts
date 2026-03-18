@@ -149,7 +149,7 @@ export function useLanguages() {
             hasPrevPage: false,
           },
         );
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching checkout languages:", error);
         toast.error("Could not load checkout languages.");
       } finally {

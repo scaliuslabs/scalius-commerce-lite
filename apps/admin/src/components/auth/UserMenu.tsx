@@ -32,7 +32,7 @@ export function UserMenu({ user }: UserMenuProps) {
     try {
       await authClient.signOut();
       window.location.href = "/auth/login";
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Sign out error:", error);
       setIsLoading(false);
     }

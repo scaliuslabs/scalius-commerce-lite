@@ -30,7 +30,7 @@ export function useWidgetActions(
       );
 
       toast.success("Success", { description: "Widget updated successfully." });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error updating widget:", error);
       toast.error("Error", { description: "Failed to update widget." });
     } finally {
@@ -58,7 +58,7 @@ export function useWidgetActions(
       toast.success("Success", { description: isPermanent
           ? "Widget permanently deleted."
           : "Widget moved to trash." });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting widget:", error);
       toast.error("Error", { description: "Failed to delete widget." });
     } finally {
@@ -79,7 +79,7 @@ export function useWidgetActions(
       setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
 
       toast.success("Success", { description: "Widget restored successfully." });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error restoring widget:", error);
       toast.error("Error", { description: "Failed to restore widget." });
     } finally {

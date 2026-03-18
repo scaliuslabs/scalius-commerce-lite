@@ -136,7 +136,7 @@ export function useCategoryList({
         if (showTrashed) urlToUpdate.searchParams.set("trashed", "true");
         else urlToUpdate.searchParams.delete("trashed");
         window.history.pushState({}, "", urlToUpdate.toString());
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("Error fetching categories:", err);
         toast.error("Failed to load categories. Please try again.");
       } finally {
@@ -326,7 +326,7 @@ export function useCategoryList({
         newSet.delete(idToDelete);
         return newSet;
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting category:", error);
       toast.error("Failed to move category to trash.");
     } finally {
@@ -376,7 +376,7 @@ export function useCategoryList({
         newSet.delete(idToDelete);
         return newSet;
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error permanently deleting category:", error);
       toast.error("Failed to permanently delete category.");
     } finally {
@@ -404,7 +404,7 @@ export function useCategoryList({
         newSet.delete(id);
         return newSet;
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error restoring category:", error);
       toast.error("Failed to restore category.");
     } finally {
@@ -478,7 +478,7 @@ export function useCategoryList({
         total: Math.max(0, prev.total - idsToDelete.length),
       }));
       setSelectedCategories(new Set());
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error bulk deleting categories:", error);
       toast.error("Failed to process bulk delete.");
     } finally {
@@ -511,7 +511,7 @@ export function useCategoryList({
         total: Math.max(0, prev.total - idsToRestore.length),
       }));
       setSelectedCategories(new Set());
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error restoring categories:", error);
       toast.error("Failed to restore categories.");
     } finally {
@@ -578,7 +578,7 @@ export function useCategoryList({
         day: "numeric",
         year: "numeric",
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error formatting date:", error);
       return "Invalid date";
     }

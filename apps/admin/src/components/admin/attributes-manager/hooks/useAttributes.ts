@@ -39,7 +39,7 @@ export function useAttributes(
       const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setAttributes(data.attributes);
       setPagination(data.pagination);
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Failed to load attributes.");
     } finally {
       setIsLoading(false);

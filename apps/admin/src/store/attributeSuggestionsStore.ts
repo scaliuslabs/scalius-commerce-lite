@@ -153,7 +153,7 @@ export const suggestionsActions = {
             suggestionsStore.setKey("suggestions", []);
             suggestionsStore.setKey("showSuggestions", false);
           }
-        } catch (error) {
+        } catch (error: unknown) {
           console.error("Failed to fetch suggestions:", error);
           suggestionsStore.setKey("suggestions", []);
           suggestionsStore.setKey("showSuggestions", false);

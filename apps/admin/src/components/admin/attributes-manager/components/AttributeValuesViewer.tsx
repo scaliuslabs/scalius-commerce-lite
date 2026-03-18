@@ -53,7 +53,7 @@ export function AttributeValuesViewer({
         const json = await response.json();
         const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         setValues(data.values || []);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching attribute values:", error);
         toast.error("Failed to load attribute values");
         setValues([]);

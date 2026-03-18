@@ -141,7 +141,7 @@ export function CustomerForm({
       await response.json();
       toast.success(isEdit ? "Customer updated successfully" : "Customer created successfully");
       await navigateTo("/admin/customers");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save customer", {
         description: error instanceof Error ? error.message : "Please try again.",

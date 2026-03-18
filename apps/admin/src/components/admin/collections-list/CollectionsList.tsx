@@ -106,7 +106,7 @@ export function CollectionsList({
 
     try {
       await handleReorder(updatedOrder);
-    } catch (error) {
+    } catch (error: unknown) {
       // Revert to original order on error
       fetchCollections();
     }

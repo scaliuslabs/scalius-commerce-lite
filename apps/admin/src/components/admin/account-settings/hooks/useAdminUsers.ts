@@ -79,7 +79,7 @@ export function useAdminUsers() {
       toast.success("Admin user created. An email has been sent with login instructions.");
       fetchAdminUsers();
       return true;
-    } catch (err) {
+    } catch (err: unknown) {
       throw err;
     }
   };

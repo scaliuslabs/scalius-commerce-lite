@@ -10,7 +10,7 @@ export const GET: APIRoute = async () => {
       // API returns { success: true, data: { ...config } }
       publicConfig = body?.data || {};
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("Error reading Firebase config from API for SW:", e);
   }
 

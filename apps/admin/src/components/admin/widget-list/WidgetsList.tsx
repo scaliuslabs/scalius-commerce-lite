@@ -137,7 +137,7 @@ export function WidgetsList({
       } else {
         throw new Error("Failed to save API key.");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Error", { description: "Could not save API key." });
     } finally {
       setIsSavingKey(false);

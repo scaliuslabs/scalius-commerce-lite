@@ -172,7 +172,7 @@ export function useProductList({
         if (showTrashed) urlToUpdate.searchParams.set("trashed", "true");
         else urlToUpdate.searchParams.delete("trashed");
         window.history.pushState({}, "", urlToUpdate.toString());
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("Error fetching products:", err);
         toast.error("Failed to load products. Please try again.");
       } finally {
@@ -378,7 +378,7 @@ export function useProductList({
         newSet.delete(idToDelete);
         return newSet;
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting product:", error);
       toast.error("Failed to move product to trash.");
     } finally {
@@ -421,7 +421,7 @@ export function useProductList({
             "Failed to permanently delete product.",
         );
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error permanently deleting product:", error);
       toast.error(
         error instanceof Error
@@ -453,7 +453,7 @@ export function useProductList({
         newSet.delete(id);
         return newSet;
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error restoring product:", error);
       toast.error("Failed to restore product.");
     } finally {
@@ -502,7 +502,7 @@ export function useProductList({
             "Failed to process bulk delete.",
         );
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error bulk deleting products:", error);
       toast.error(
         error instanceof Error
@@ -552,7 +552,7 @@ export function useProductList({
         day: "numeric",
         year: "numeric",
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error formatting date:", error);
       return "Invalid date";
     }

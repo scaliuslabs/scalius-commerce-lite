@@ -1,10 +1,10 @@
 import { useState, useEffect, type FC } from "react";
-import type { DeliveryProviderRecord } from "@/types/api-responses";
+import type { DeliveryProviderRecord, DeliveryShipment } from "@/types/api-responses";
 import { toast } from "sonner";
 
 interface ShipmentFormProps {
   orderId: string;
-  onSuccess?: (shipment: any) => void;
+  onSuccess?: (shipment: DeliveryShipment) => void;
   onCancel?: () => void;
 }
 
@@ -40,7 +40,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
         if (activeProviders.length > 0) {
           setSelectedProviderId(activeProviders[0].id);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching providers:", error);
         toast.error("Failed to load delivery providers");
       } finally {
@@ -84,7 +84,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
       if (onSuccess) {
         onSuccess(shipment);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error creating shipment:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to create shipment",

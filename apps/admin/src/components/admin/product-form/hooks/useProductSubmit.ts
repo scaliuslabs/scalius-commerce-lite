@@ -100,7 +100,7 @@ export function useProductSubmit({
         // For new products, redirect to edit page with the new product ID
         await navigateTo(`/admin/products/${data.id}/edit?new=true`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error submitting form:", error);
       // Don't show a generic alert as we're using toast notifications and alert dialog
     } finally {

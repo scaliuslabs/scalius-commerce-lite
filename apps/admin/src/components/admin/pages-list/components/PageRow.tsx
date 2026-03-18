@@ -18,7 +18,7 @@ const formatDate = (date: Date | null): string => {
       day: "numeric",
       year: "numeric",
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error formatting date:", error);
     return "Invalid date";
   }

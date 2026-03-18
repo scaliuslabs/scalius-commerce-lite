@@ -60,7 +60,7 @@ export function usePages(showTrashed: boolean) {
 
       setPages(formattedPages);
       setPagination(data.pagination);
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Failed to load pages.");
     } finally {
       setIsLoading(false);

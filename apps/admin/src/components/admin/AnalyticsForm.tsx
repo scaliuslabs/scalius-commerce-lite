@@ -97,7 +97,7 @@ export function AnalyticsForm({
 
       await response.json();
       await navigateTo("/admin/analytics");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error submitting form:", error);
       alert("Failed to save analytics script. Please try again.");
     } finally {

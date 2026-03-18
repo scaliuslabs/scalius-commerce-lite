@@ -107,7 +107,7 @@ export function RolesManagement() {
           setAllPermissions(data.permissions);
           setGroupedPermissions(data.grouped);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching RBAC data:", error);
         toast.error("Failed to load roles and permissions");
       } finally {
@@ -142,7 +142,7 @@ export function RolesManagement() {
       setRoles([...roles, data.role]);
       toast.success("Role created successfully");
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error creating role:", error);
       toast.error("An unexpected error occurred");
       return false;
@@ -175,7 +175,7 @@ export function RolesManagement() {
       setRoles(roles.map((r) => (r.id === roleId ? data.role : r)));
       toast.success("Role updated successfully");
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error updating role:", error);
       toast.error("An unexpected error occurred");
       return false;
@@ -196,7 +196,7 @@ export function RolesManagement() {
 
       setRoles(roles.filter((r) => r.id !== roleId));
       toast.success("Role deleted successfully");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting role:", error);
       toast.error("An unexpected error occurred");
     }

@@ -68,7 +68,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       toast.success("Success!", { description: "Variant has been created successfully." });
 
       return savedVariant;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to create variant:", error);
       toast.error("Error Creating Variant", { description: error instanceof Error ? error.message : "An unknown error occurred." });
       return null;
@@ -107,7 +107,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       toast.success("Success!", { description: "Variant has been updated successfully." });
 
       return savedVariant;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to update variant:", error);
       toast.error("Error Updating Variant", { description: error instanceof Error ? error.message : "An unknown error occurred." });
       return null;
@@ -131,7 +131,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       toast.success("Success!", { description: "Variant has been deleted." });
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to delete variant:", error);
       toast.error("Deletion Failed", { description: error instanceof Error ? error.message : "Could not delete variant." });
       return false;
@@ -160,7 +160,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       toast.success("Success!", { description: `${variantIds.length} variants deleted.` });
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to bulk delete variants:", error);
       toast.error("Bulk Deletion Failed", { description: error instanceof Error ? error.message : "Could not delete variants." });
       return false;
@@ -197,7 +197,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       toast.success("Success!", { description: "Variants updated successfully." });
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to bulk update variants:", error);
       toast.error("Update Failed", { description: error instanceof Error ? error.message : "Could not update variants." });
       return false;
@@ -235,7 +235,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       toast.success("Success!", { description: `${savedVariants.length} variants created successfully.` });
 
       return savedVariants;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to bulk create variants:", error);
       toast.error("Bulk Creation Failed", { description: error instanceof Error ? error.message : "Could not create variants." });
       return [];
@@ -272,7 +272,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       toast.success("Success!", { description: "Variant has been duplicated successfully." });
 
       return savedVariant;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to duplicate variant:", error);
       toast.error("Duplication Failed", { description: error instanceof Error ? error.message : "Could not duplicate variant." });
       return null;

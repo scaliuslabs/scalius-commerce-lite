@@ -67,7 +67,7 @@ export function CollectionSelector({
           setCollections(mappedCollections);
           setFilteredCollections(mappedCollections);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching collections:", error);
       }
     };
@@ -104,7 +104,7 @@ export function CollectionSelector({
           slug: c.slug || "",
         }));
         setFilteredCollections(mappedCollections);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error searching collections:", error);
       } finally {
         setIsSearching(false);

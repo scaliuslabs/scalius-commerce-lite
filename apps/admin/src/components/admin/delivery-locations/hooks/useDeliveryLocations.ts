@@ -157,7 +157,7 @@ export function useDeliveryLocations() {
         total: result.pagination.total,
         totalPages: result.pagination.totalPages,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading locations:", error);
       toast.error("Failed to load locations");
     } finally {
@@ -176,7 +176,7 @@ export function useDeliveryLocations() {
       const json = await response.json();
       const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setParentLocations(result.locations);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`Error loading ${parentType}s:`, error);
       toast.error(`Failed to load ${parentType}s`);
     } finally {
@@ -335,7 +335,7 @@ export function useDeliveryLocations() {
 
       closeDialog();
       loadLocations(pagination.page, pagination.limit);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(
         `Error ${editMode ? "updating" : "creating"} location:`,
         error,
@@ -371,7 +371,7 @@ export function useDeliveryLocations() {
       );
       loadLocations(pagination.page, pagination.limit);
       closeDeleteDialog();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`Error deleting ${activeTab}:`, error);
       toast.error(`Failed to delete ${activeTab}`);
       closeDeleteDialog();
@@ -392,7 +392,7 @@ export function useDeliveryLocations() {
         `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} status updated`,
       );
       loadLocations();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`Error updating ${activeTab} status:`, error);
       toast.error(`Failed to update ${activeTab} status`);
     }
@@ -462,7 +462,7 @@ export function useDeliveryLocations() {
       setSelectedLocationIds([]);
       loadLocations(pagination.page, pagination.limit);
       setIsBulkDeleteDialogOpen(false);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`Error bulk deleting ${activeTab}s:`, error);
       toast.error(`Failed to delete selected ${activeTab}s`);
       setIsBulkDeleteDialogOpen(false);
@@ -490,7 +490,7 @@ export function useDeliveryLocations() {
       setSelectedLocationIds([]);
       loadLocations(1, pagination.limit);
       setIsCleanAllDialogOpen(false);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error cleaning all delivery locations:", error);
       toast.error("Failed to clean all delivery locations");
       setIsCleanAllDialogOpen(false);

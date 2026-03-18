@@ -53,7 +53,7 @@ const CreateShipmentForm = ({
       }
       toast.success("Success", { description: "Shipment created successfully. Page will reload." });
       onShipmentCreated();
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Error Creating Shipment", { description: error instanceof Error ? error.message : "An unknown error occurred." });
     } finally {
       setIsCreatingShipment(false);

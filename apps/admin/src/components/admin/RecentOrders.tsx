@@ -107,7 +107,7 @@ function getStatusInfo(status: string): {
 const parseOrderDate = (date: string | Date): Date | null => {
   try {
     return typeof date === "string" ? new Date(date) : date;
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("Failed to parse date:", date, e);
     return null;
   }

@@ -78,7 +78,7 @@ export function MediaCard({
       const originalUrl = getOriginalImageUrl(file.url);
       await navigator.clipboard.writeText(originalUrl);
       toast.success("URL Copied", { description: "Original image URL has been copied to clipboard." });
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Copy Failed", { description: "Could not copy URL to clipboard." });
     }
   };

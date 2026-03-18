@@ -85,7 +85,7 @@ export function useCustomerListActions({
         if (showTrashed) urlToUpdate.searchParams.set("trashed", "true");
         else urlToUpdate.searchParams.delete("trashed");
         window.history.pushState({}, "", urlToUpdate.toString());
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("Error fetching customers:", err);
         toast.error("Failed to load customers. Please try again.");
       } finally {
@@ -202,7 +202,7 @@ export function useCustomerListActions({
         optimisticUpdate();
         setSelectedCustomers(new Set());
         toast.success(successTitle, { description: successDescription });
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`${errorTitle}:`, error);
         toast.error(errorTitle, {
           description: error instanceof Error ? error.message : String(error),

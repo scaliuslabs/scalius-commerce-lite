@@ -168,7 +168,7 @@ export function InventoryManager() {
         setMovements(data.movements || []);
         setMovementsPagination(data.pagination || null);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to fetch inventory data:", err);
     } finally {
       setLoading(false);

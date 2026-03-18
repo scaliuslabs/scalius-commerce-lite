@@ -38,7 +38,7 @@ export function useProductVariants({
       if (response.ok && Array.isArray(data.variants)) {
         setVariants(data.variants);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to fetch variants:", error);
     } finally {
       setIsLoading(false);

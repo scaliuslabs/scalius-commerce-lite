@@ -441,7 +441,7 @@ export function AbandonedCheckoutsManager() {
       if (!response.ok) throw new Error("Failed to delete checkouts");
       toast.success(`${deleteDialog.ids.length} checkout(s) deleted.`);
       fetchCheckouts(1);
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Deletion failed.");
     } finally {
       setIsActionLoading(false);

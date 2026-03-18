@@ -24,7 +24,7 @@ export function StorefrontUrlBuilder({
           const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
           setStorefrontUrl(data.storefrontUrl || "/");
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching storefront URL:", error);
       }
     };
@@ -48,7 +48,7 @@ export function StorefrontUrlBuilder({
       }
 
       toast.success("Success!", { description: "Storefront URL saved successfully." });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error saving storefront URL:", error);
       toast.error("Save Failed", { description: error instanceof Error
             ? error.message

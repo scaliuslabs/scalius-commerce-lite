@@ -139,7 +139,7 @@ export function AmountOffProductsContainer({
         description: `Code: ${values.code}`,
       });
       await navigateTo("/admin/discounts");
-    } catch (error) {
+    } catch (error: unknown) {
       const action = defaultValues?.id ? "updating" : "creating";
       console.error(`Error ${action} discount:`, error);
       toast.error(

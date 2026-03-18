@@ -156,7 +156,7 @@ export function useApi<T>(
         setData(result);
         setError(null);
         onSuccessRef.current?.(result);
-      } catch (err) {
+      } catch (err: unknown) {
         // Ignore abort errors — they happen on cleanup
         if (err instanceof DOMException && err.name === "AbortError") {
           return;

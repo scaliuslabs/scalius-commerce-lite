@@ -79,7 +79,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
       setIsEditing(false);
       setIsCreating(false);
       toast.success("Provider saved successfully");
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(`Error saving provider: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsSaving(false);
@@ -104,7 +104,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
       setProviders((prev) => prev.filter((p) => p.id !== selectedProvider.id));
       toast.success("Provider deleted");
       setSelectedProvider(null);
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(`Error deleting provider: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsDeleting(false);
@@ -128,7 +128,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
       } else {
         toast.error(result.message || "Connection failed");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(`Error testing provider: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsTesting(false);
