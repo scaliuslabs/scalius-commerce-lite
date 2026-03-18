@@ -377,7 +377,7 @@ app.openapi(updateStatusRoute, async (c) => {
                 customerName: result.notification.customerName,
                 notificationType: result.notification.notificationType,
             });
-        } catch (err) {
+        } catch (err: unknown) {
             console.error(`[orders] Failed to enqueue notification for ${orderId}:`, err);
         }
     }
@@ -676,7 +676,7 @@ app.openapi(refreshShipmentRoute, async (c) => {
         try {
             const orderUpdate = await ShipmentTracker.updateOrderStatusFromShipment(shipmentId, updatedShipment.status);
             orderStatusUpdate = !!orderUpdate && !!orderUpdate.orderId;
-        } catch (e) {
+        } catch (e: unknown) {
             console.error("Error updating order status:", e);
         }
     }

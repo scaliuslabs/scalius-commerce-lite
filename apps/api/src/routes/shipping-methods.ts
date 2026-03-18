@@ -18,12 +18,6 @@ app.use(
   }),
 );
 
-// Helper function to convert Unix timestamp to Date
-const unixToDate = (timestamp: number | null): Date | null => {
-  if (!timestamp) return null;
-  return new Date(timestamp * 1000);
-};
-
 // GET /shipping-methods — list all active shipping methods
 const listShippingMethodsRoute = createRoute({
   method: "get",
@@ -56,7 +50,7 @@ app.openapi(listShippingMethodsRoute, async (c) => {
     .from(shippingMethodsTable)
     .where(
       and(
-        eq(shippingMethodsTable.isActive, 1 as unknown as boolean),
+        eq(shippingMethodsTable.isActive, true),
         isNull(shippingMethodsTable.deletedAt),
       ),
     )
@@ -68,11 +62,9 @@ app.openapi(listShippingMethodsRoute, async (c) => {
   const formattedMethods = methods.map((method) => ({
     ...method,
     createdAt:
-      unixToDate(method.createdAt as unknown as number)?.toISOString() ||
-      null,
+      method.createdAt instanceof Date ? method.createdAt.toISOString() : null,
     updatedAt:
-      unixToDate(method.updatedAt as unknown as number)?.toISOString() ||
-      null
+      method.updatedAt instanceof Date ? method.updatedAt.toISOString() : null
   }));
 
   return ok(c, { shippingMethods: formattedMethods });

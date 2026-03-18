@@ -107,7 +107,7 @@ app.openapi(listRoute, async (c) => {
                 hasPrevPage: page > 1
             }
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error fetching shipping methods:", error);
         throw error;
     }
@@ -194,7 +194,7 @@ app.openapi(getByIdRoute, async (c) => {
 
         if (!method) throw new NotFoundError("Shipping method not found");
         return ok(c, { shippingMethod: method });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error(`Error fetching shipping method ${id}:`, error);
         throw error;
     }
@@ -304,7 +304,7 @@ app.openapi(deleteRoute, async (c) => {
             .where(eq(shippingMethods.id, id));
 
         return noContent(c);
-    } catch (error) {
+    } catch (error: unknown) {
         console.error(`Error deleting shipping method ${id}:`, error);
         throw error;
     }
@@ -355,7 +355,7 @@ app.openapi(restoreRoute, async (c) => {
             .where(eq(shippingMethods.id, id));
 
         return ok(c, { message: "Shipping method restored successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error(`Error restoring shipping method ${id}:`, error);
         throw error;
     }
@@ -392,7 +392,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
         await db.delete(shippingMethods).where(eq(shippingMethods.id, id));
 
         return noContent(c);
-    } catch (error) {
+    } catch (error: unknown) {
         console.error(`Error permanently deleting shipping method ${id}:`, error);
         throw error;
     }

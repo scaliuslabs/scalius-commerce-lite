@@ -159,7 +159,7 @@ app.openapi(bulkDeleteCheckoutsRoute, async (c) => {
         const { ids } = c.req.valid("json");
         await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, ids));
         return noContent(c);
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error bulk deleting checkouts:", error);
         throw error;
     }
@@ -186,7 +186,7 @@ app.openapi(deleteCheckoutsRoute, async (c) => {
         const { ids } = c.req.valid("json");
         await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, ids));
         return noContent(c);
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error bulk deleting checkouts:", error);
         throw error;
     }
@@ -249,7 +249,7 @@ app.openapi(registerFcmTokenRoute, async (c) => {
             });
 
         return ok(c, { message: "FCM token registered successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error saving FCM token:", error);
         throw error;
     }
@@ -305,7 +305,7 @@ app.openapi(cleanupFcmTokensRoute, async (c) => {
             message: "Token cleanup completed successfully.",
             cleanedCount: invalidTokens.length
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error cleaning up FCM tokens:", error);
         throw error;
     }

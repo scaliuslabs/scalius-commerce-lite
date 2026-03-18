@@ -302,7 +302,7 @@ app.openapi(createOrderRoute, async (c) => {
       },
       202,
     );
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith("VALIDATION_ERROR:")) {
       throw new ValidationError(error.message.replace("VALIDATION_ERROR:", ""));
     }

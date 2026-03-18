@@ -166,7 +166,7 @@ app.openapi(generateRoute, async (c) => {
                 try {
                     const errorJson = JSON.parse(errorBody);
                     errorMessage = errorJson.error?.message || errorMessage;
-                } catch (e) {
+                } catch (e: unknown) {
                     errorMessage = errorBody.substring(0, 200);
                 }
 
@@ -296,7 +296,7 @@ app.openapi(generateStagedRoute, async (c) => {
                 try {
                     const errorJson = JSON.parse(errorBody);
                     errorMessage = errorJson.error?.message || errorMessage;
-                } catch (e) {
+                } catch (e: unknown) {
                     errorMessage = errorBody.substring(0, 200);
                 }
 

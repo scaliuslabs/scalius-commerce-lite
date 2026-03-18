@@ -165,7 +165,7 @@ app.openapi(createUserRoute, async (c) => {
 
         try {
             await sendAdminInviteEmail(email, sessionUser.name, tempPassword, loginUrl);
-        } catch (emailError) {
+        } catch (emailError: unknown) {
             console.error("Failed to send invitation email:", emailError);
             console.log(`IMPORTANT: Temp password for ${email}: ${tempPassword}`);
         }

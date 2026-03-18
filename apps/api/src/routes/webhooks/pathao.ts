@@ -163,7 +163,7 @@ app.post("/", async (c) => {
             202,
             { "X-Pathao-Merchant-Webhook-Integration-Secret": merchantSecret },
         );
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("[pathao-webhook] Error:", error);
         return c.json({ success: false, error: "Internal processing error" }, 500);
     }

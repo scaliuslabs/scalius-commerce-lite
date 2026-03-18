@@ -42,7 +42,7 @@ app.openapi(listRoute, async (c) => {
         const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
         const parsedData = data.map((slider) => ({ ...slider, images: JSON.parse(slider.images) }));
         return ok(c, parsedData);
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -80,7 +80,7 @@ app.openapi(createSliderRoute, async (c) => {
         if (!slider) throw new Error("Failed to create slider");
 
         return created(c, { ...slider, images: JSON.parse(slider.images) });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -105,7 +105,7 @@ app.openapi(getByIdRoute, async (c) => {
 
         if (!slider) throw new NotFoundError("Slider not found");
         return ok(c, { ...slider, images: JSON.parse(slider.images) });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -142,7 +142,7 @@ app.openapi(updateSliderRoute, async (c) => {
 
         if (!slider) throw new NotFoundError("Slider not found");
         return ok(c, { ...slider, images: JSON.parse(slider.images) });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -170,7 +170,7 @@ app.openapi(deleteSliderRoute, async (c) => {
 
         if (!slider) throw new NotFoundError("Slider not found");
         return ok(c, { ...slider, images: JSON.parse(slider.images) });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });

@@ -106,7 +106,7 @@ polarWebhookRoutes.post("/", async (c) => {
         }
 
         return c.json({ received: true });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("[Polar Webhook] Unhandled error:", error);
         return c.json({ error: "Internal error" }, 500);
     }

@@ -232,7 +232,7 @@ app.openapi(logoutRoute, async (c) => {
     if (token) {
       await deleteCustomerSession(c.env.CACHE, token);
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("[CustomerAuth] KV session delete failed:", error);
   }
 

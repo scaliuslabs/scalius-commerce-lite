@@ -155,7 +155,7 @@ app.openapi(listRoute, async (c) => {
                 totalPages: Math.ceil(total / limit)
             }
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error fetching attributes:", error);
         throw error;
     }
@@ -316,7 +316,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
             .where(eq(productAttributes.id, id));
 
         return noContent(c);
-    } catch (error) {
+    } catch (error: unknown) {
         console.error(`Error deleting attribute ${id}:`, error);
         throw error;
     }
@@ -347,7 +347,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
             .where(eq(productAttributes.id, id));
 
         return noContent(c);
-    } catch (error) {
+    } catch (error: unknown) {
         console.error(`Error permanently deleting attribute ${id}:`, error);
         throw error;
     }
@@ -383,7 +383,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
                 .where(inArray(productAttributes.id, ids));
         }
         return noContent(c);
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error bulk deleting attributes:", error);
         throw error;
     }
@@ -413,7 +413,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
             .set({ deletedAt: null })
             .where(inArray(productAttributes.id, ids));
         return noContent(c);
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error bulk restoring attributes:", error);
         throw error;
     }
@@ -689,7 +689,7 @@ app.openapi(updateValueRoute, async (c) => {
         return ok(c, {
             message: `Value "${oldValue}" renamed to "${newValue}"`
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error updating attribute value:", error);
         throw error;
     }
@@ -747,7 +747,7 @@ app.openapi(deleteValueRoute, async (c) => {
         return ok(c, {
             message: `Value "${value}" deleted from all products`
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error deleting attribute value:", error);
         throw error;
     }

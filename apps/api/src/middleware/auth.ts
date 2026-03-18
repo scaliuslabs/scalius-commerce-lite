@@ -69,7 +69,7 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
 
       // Continue to next middleware/handler
       await next();
-    } catch (error) {
+    } catch (error: unknown) {
       // SECURITY: Use generic error message to prevent token enumeration
       return c.json(
         {
@@ -80,7 +80,7 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
         401,
       );
     }
-  } catch (error) {
+  } catch (error: unknown) {
     // Log unexpected errors in production
     if (process.env.NODE_ENV === "production") {
       console.error("Auth middleware error:", error);

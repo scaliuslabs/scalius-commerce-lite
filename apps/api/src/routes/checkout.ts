@@ -93,7 +93,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
       partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error fetching checkout config:", error);
     return ok(c, {
       gateways: [{ id: "cod", name: "Cash on Delivery", currencies: ["bdt"] }],

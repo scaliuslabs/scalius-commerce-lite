@@ -190,7 +190,7 @@ export async function invalidateEntireCache(kv?: KVNamespace): Promise<void> {
   try {
     await deleteCacheByPattern("*", kv);
     console.log("[Cache] Successfully cleared the entire project cache.");
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("[Cache] Error clearing the entire project cache:", error);
   }
 }
