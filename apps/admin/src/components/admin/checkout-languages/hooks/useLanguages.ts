@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // Local type replacing @scalius/database/schema import
 export interface CheckoutLanguage {
@@ -124,7 +125,7 @@ export function useLanguages() {
         );
         if (!response.ok) throw new Error("Failed to fetch checkout languages");
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
 
         const parsedLanguages = (data.languages || []).map((lang: Record<string, unknown>) => ({
           ...lang,

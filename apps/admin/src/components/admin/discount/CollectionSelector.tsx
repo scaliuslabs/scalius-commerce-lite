@@ -13,6 +13,7 @@ import { Button } from "../../ui/button";
 import { Check, ChevronsUpDown, Folder, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // Collection interface
 interface Collection {
@@ -54,7 +55,7 @@ export function CollectionSelector({
       try {
         const response = await fetch("/api/v1/admin/collections?limit=50");
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         const collectionsArray = data.collections || [];
         if (collectionsArray.length > 0) {
           // Map to expected interface (ensure all required fields are present)
@@ -95,7 +96,7 @@ export function CollectionSelector({
           `/api/v1/admin/collections?search=${encodeURIComponent(searchTerm)}&limit=20`,
         );
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         const collectionsArray = data.collections || [];
         const mappedCollections = collectionsArray.map((c: Record<string, unknown>) => ({
           id: c.id as string,

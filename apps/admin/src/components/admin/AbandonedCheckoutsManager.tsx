@@ -51,6 +51,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // --- Type Definitions ---
 interface CartItem {
@@ -377,7 +378,7 @@ export function AbandonedCheckoutsManager() {
         }
         const json = await response.json();
         // Handle both raw API envelope { success, data: T } and proxy-unwrapped { success, ...T }
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         setCheckouts(data.checkouts);
         setPagination(data.pagination);
         setSelectedIds(new Set());

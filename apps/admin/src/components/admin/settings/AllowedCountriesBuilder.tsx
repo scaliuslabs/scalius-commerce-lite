@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Loader2, Save, X, Search } from "lucide-react";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import en from "react-phone-number-input/locale/en";
 import type { Country } from "react-phone-number-input";
@@ -47,10 +48,7 @@ export default function AllowedCountriesBuilder() {
       const res = await fetch("/api/v1/admin/settings/allowed-countries");
       if (res.ok) {
         const json = await res.json();
-        const data =
-          json.data && typeof json.data === "object" && !Array.isArray(json.data)
-            ? json.data
-            : json;
+        const data = unwrapEnvelope(json);
         // Backward compatible: old format is { allowedCountries: string[] }
         // New format is { allowedCountries: string[], allowedCountriesMode: "include" | "exclude" }
         if (Array.isArray(data.allowedCountries)) {

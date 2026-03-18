@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { unixToDate } from "@scalius/shared/utils";
 import type { PageItem, Pagination, SortField, SortOrder } from "../types";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export function usePages(showTrashed: boolean) {
   const [pages, setPages] = useState<PageItem[]>([]);
@@ -34,7 +35,7 @@ export function usePages(showTrashed: boolean) {
       const response = await fetch(`/api/v1/admin/pages?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch pages");
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
 
       // Convert Unix timestamps to Date objects
       // API returns ISO strings but they're converted from Unix timestamps

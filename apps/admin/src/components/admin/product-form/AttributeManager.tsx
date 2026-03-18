@@ -19,6 +19,7 @@ import { Plus, Trash2, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import type { ProductAttribute } from "@/types/api-responses";
 import { cn } from "@scalius/shared/utils";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface AssignedAttribute {
   attributeId: string;
@@ -56,7 +57,7 @@ export function AttributeManager({
       const response = await fetch("/api/v1/admin/attributes?limit=999");
       if (!response.ok) throw new Error("Failed");
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setAvailableAttributes(data.attributes);
       return data.attributes as AttributeDefinition[];
     } catch {
@@ -111,7 +112,7 @@ export function AttributeManager({
 
       if (!response.ok) throw new Error("Failed");
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       const created = data.attribute;
 
       toast.success("Attribute created");
@@ -376,7 +377,7 @@ function AttributeValueSelector({
         );
         if (!res.ok) return;
         const json = await res.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
 
         setItems((prev) => (reset ? data.values : [...prev, ...data.values]));
         setHasMore(data.values.length === 10);

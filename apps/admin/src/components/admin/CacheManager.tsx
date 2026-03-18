@@ -30,6 +30,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Separator } from "../ui/separator";
 import {
@@ -110,17 +111,17 @@ export function CacheManager() {
 
       if (statsRes.ok) {
         const json1 = await statsRes.json();
-        const data = json1.data && typeof json1.data === "object" && !Array.isArray(json1.data) ? json1.data : json1;
+        const data = unwrapEnvelope(json1);
         setStats(data.stats);
       }
       if (timestampsRes.ok) {
         const json2 = await timestampsRes.json();
-        const data = json2.data && typeof json2.data === "object" && !Array.isArray(json2.data) ? json2.data : json2;
+        const data = unwrapEnvelope(json2);
         setTimestamps(data.timestamps || {});
       }
       if (groupsRes.ok) {
         const json3 = await groupsRes.json();
-        const data = json3.data && typeof json3.data === "object" && !Array.isArray(json3.data) ? json3.data : json3;
+        const data = unwrapEnvelope(json3);
         setGroups(data.groups || {});
         setPathMapping(data.pathMapping || {});
       }

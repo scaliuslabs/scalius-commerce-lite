@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 /**
  * Global cache for storefront URL to avoid repeated API calls across components
@@ -29,7 +30,7 @@ async function fetchStorefrontUrl(): Promise<string> {
       return response.json();
     })
     .then((json) => {
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       const url = data.storefrontUrl || "/";
       globalStorefrontUrl = url;
       globalPromise = null; // Clear the promise

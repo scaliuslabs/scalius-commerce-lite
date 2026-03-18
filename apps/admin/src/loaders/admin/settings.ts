@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api-fetch";
+import { apiGet } from "@/lib/api-server";
 import type { HeaderConfig } from "@/components/admin/header-builder/types";
 import type { FooterConfig } from "@/components/admin/footer-builder/types";
 import type {

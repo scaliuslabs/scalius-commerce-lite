@@ -1,6 +1,7 @@
 // src/components/admin/product-form/hooks/useProductVariants.ts
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { extractUniqueColors } from "../utils";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface UseProductVariantsOptions {
   productId?: string;
@@ -34,7 +35,7 @@ export function useProductVariants({
     try {
       const response = await fetch(`/api/v1/admin/products/${productId}/variants`);
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       if (response.ok && Array.isArray(data.variants)) {
         setVariants(data.variants);
       }

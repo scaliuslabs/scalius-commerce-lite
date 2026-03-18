@@ -1,7 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { createAuth } from "@scalius/core/auth";
 import { env as cfEnv } from "cloudflare:workers";
-import { setRequestHeaders } from "@/lib/api-fetch";
+import { setRequestHeaders } from "@/lib/api-server";
 
 /**
  * Auth middleware — runs first.

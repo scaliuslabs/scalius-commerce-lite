@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { ProductVariant, VariantFormValues, BulkGeneratedVariant } from "../types";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export interface UseVariantOperationsReturn {
   createVariant: (
@@ -57,7 +58,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         throw new Error(json.error || "Failed to create variant");
       }
 
-      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const result = unwrapEnvelope(json);
       const savedVariant: ProductVariant = {
         ...result,
         createdAt: new Date(result.createdAt),
@@ -96,7 +97,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         throw new Error(json.error || "Failed to update variant");
       }
 
-      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const result = unwrapEnvelope(json);
       const savedVariant: ProductVariant = {
         ...result,
         createdAt: new Date(result.createdAt),
@@ -224,7 +225,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         throw new Error(json.error || "Failed to create variants");
       }
 
-      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const result = unwrapEnvelope(json);
       const savedVariants: ProductVariant[] = result.variants.map((v: Record<string, unknown>) => ({
         ...v,
         createdAt: new Date(v.createdAt as string),
@@ -261,7 +262,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
         throw new Error(json.error || "Failed to duplicate variant");
       }
 
-      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const result = unwrapEnvelope(json);
       const savedVariant: ProductVariant = {
         ...result,
         createdAt: new Date(result.createdAt),

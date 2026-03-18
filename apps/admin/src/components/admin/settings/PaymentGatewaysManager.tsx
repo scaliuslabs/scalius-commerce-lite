@@ -32,6 +32,7 @@ import {
     ExtLink,
 } from "./payment-gateway-utils";
 import { PolarForm, PolarSetupGuide } from "./PolarSettingsForm";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // --- Main Component ---
 
@@ -66,7 +67,7 @@ export default function PaymentGatewaysManager() {
             const res = await fetch("/api/v1/admin/settings/payment-methods");
             if (res.ok) {
                 const json = await res.json();
-                const d = (json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json) as PaymentMethodsData;
+                const d = unwrapEnvelope<PaymentMethodsData>(json);
                 setMethods(d);
                 setEnabledMethods(new Set(d.enabledMethods));
                 setDefaultMethod(d.defaultMethod);
@@ -85,7 +86,7 @@ export default function PaymentGatewaysManager() {
             const res = await fetch(`/api/v1/admin/settings/${gw}`);
             if (!res.ok) return;
             const json = await res.json();
-            const d = (json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json);
+            const d = unwrapEnvelope(json);
             if (gw === "stripe") {
                 const sd = d as StripeData;
                 setStripe(sd); setStripeConf({ secret: !!sd.secretKey, webhook: !!sd.webhookSecret });

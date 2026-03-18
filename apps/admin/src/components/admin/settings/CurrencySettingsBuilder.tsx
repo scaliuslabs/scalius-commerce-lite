@@ -14,6 +14,7 @@ import { Loader2, Save, Info, Search, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@scalius/shared/utils";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface CurrencyEntry {
   code: string;
@@ -243,7 +244,7 @@ export default function CurrencySettingsBuilder() {
       const res = await fetch("/api/v1/admin/settings/currency");
       if (res.ok) {
         const json = await res.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         setCurrencyCode(data.currencyCode || "BDT");
         setCurrencySymbol(data.currencySymbol || "\u09F3");
         setUsdExchangeRate(data.usdExchangeRate || "1");

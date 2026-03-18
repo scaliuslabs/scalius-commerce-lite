@@ -1,3 +1,5 @@
+import { unwrapEnvelope } from "@/lib/api-helpers";
+
 type FraudCheckerProvider = {
   id?: string;
   [key: string]: unknown;
@@ -38,7 +40,7 @@ export function initFraudCheckerActions(): void {
         }
 
         const json = await response.json();
-        return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        return unwrapEnvelope(json);
       } catch (error: unknown) {
         console.error("Error in saveProvider:", error);
         throw error;
@@ -87,7 +89,7 @@ export function initFraudCheckerActions(): void {
         }
 
         const json = await response.json();
-        return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        return unwrapEnvelope(json);
       } catch (error: unknown) {
         console.error("Error in testProvider:", error);
         return {

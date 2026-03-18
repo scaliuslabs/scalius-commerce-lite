@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
 import type { Customer, SortField, CustomerListPagination } from "./useCustomerListState";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface UseCustomerListActionsProps {
   showTrashed: boolean;
@@ -64,7 +65,7 @@ export function useCustomerListActions({
         const res = await fetch(url.toString());
         if (!res.ok) throw new Error("Failed to fetch customers");
         const json = await res.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
 
         const parsed = (data.customers || []).map((c: Record<string, unknown>) => ({
           ...c,

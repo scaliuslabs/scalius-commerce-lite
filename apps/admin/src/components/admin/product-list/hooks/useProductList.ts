@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
 import { useCurrency } from "@/hooks/useCurrency";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export interface ProductListItem {
   id: string;
@@ -146,7 +147,7 @@ export function useProductList({
 
         const res = await fetch(url.toString());
         if (!res.ok) throw new Error("Failed to fetch products");
-        const data = await res.json();
+        const data = unwrapEnvelope(await res.json());
 
         const parsed = (data.products || []).map(
           (p: Record<string, unknown>) => ({

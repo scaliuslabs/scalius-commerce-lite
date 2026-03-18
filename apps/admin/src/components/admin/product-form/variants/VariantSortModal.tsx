@@ -15,6 +15,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Loader2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface VariantSortModalProps {
   productId: string;
@@ -54,7 +55,7 @@ export function VariantSortModal({
       );
       if (response.ok) {
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         setColors(data.colors || []);
         setSizes(data.sizes || []);
       }

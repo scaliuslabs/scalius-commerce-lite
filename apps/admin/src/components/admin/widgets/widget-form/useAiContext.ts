@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { Category } from '@/types/api-responses';
 import type { MediaFile, ProductSearchResult } from './types';
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface RawProduct {
   id: string;
@@ -42,7 +43,7 @@ export const useAiContext = (
       const response = await fetch(`/api/v1/admin/products?page=${pageToFetch}&limit=10&sort=updatedAt&order=desc`);
       if (response.ok) {
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         const newProducts: ProductSearchResult[] = (data.products || []).map((p: RawProduct) => ({
           id: p.id,
           name: p.name,
@@ -73,7 +74,7 @@ export const useAiContext = (
         const response = await fetch("/api/v1/admin/categories?limit=200");
         if (response.ok) {
           const json = await response.json();
-          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+          const data = unwrapEnvelope(json);
           setAllCategoriesList(data.categories || []);
         }
       } catch (error) {
@@ -94,7 +95,7 @@ export const useAiContext = (
         const response = await fetch(`/api/v1/admin/products?search=${encodeURIComponent(debouncedProductSearch)}&limit=10`);
         if (response.ok) {
           const json = await response.json();
-          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+          const data = unwrapEnvelope(json);
           const newProducts: ProductSearchResult[] = (data.products || []).map((p: RawProduct) => ({
             id: p.id,
             name: p.name,

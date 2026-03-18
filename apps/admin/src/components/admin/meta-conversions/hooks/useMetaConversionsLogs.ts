@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // Local type replacing @scalius/database/schema import
 export interface MetaConversionsLog {
@@ -54,7 +55,7 @@ export function useMetaConversionsLogs() {
       );
       if (response.ok) {
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         setLogs(data.logs || []);
         setLogsPagination((prev) => data.pagination || prev);
         setRetentionInfo(data.retention || null);
@@ -110,7 +111,7 @@ export function useMetaConversionsLogs() {
       }
 
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       toast.success(data.message || "Manual cleanup completed");
       fetchLogs();
     } catch (error: unknown) {

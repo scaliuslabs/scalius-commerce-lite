@@ -14,6 +14,7 @@ import { Check, ChevronsUpDown, Loader2, Tag, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "@/hooks/useCurrency";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // Product interface based on what's used in OrderForm
 interface Product {
@@ -109,7 +110,7 @@ export function ProductSelector({
       const url = `/api/v1/admin/products?${params.toString()}`;
       const response = await fetch(url);
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
 
       if (data.products) {
         if (page === 1) {

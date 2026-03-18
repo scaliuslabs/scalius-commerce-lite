@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/popover";
 import { Shield, ShieldAlert, ShieldCheck, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface FraudCheckIndicatorProps {
   phone: string;
@@ -28,7 +29,7 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
       });
 
       const json = await response.json();
-      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const result = unwrapEnvelope(json);
 
       if (json.success && result) {
         setFraudData(result);

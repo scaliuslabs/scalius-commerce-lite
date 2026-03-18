@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { CharacterCounter } from "@/components/ui/character-counter";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface SeoConfig {
   siteTitle: string;
@@ -37,7 +38,7 @@ export function SeoSettingsBuilder() {
           throw new Error(errorData.details || "Failed to fetch SEO settings");
         }
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         setConfig({
           siteTitle: data.siteTitle || defaultConfig.siteTitle,
           homepageTitle: data.homepageTitle || defaultConfig.homepageTitle,

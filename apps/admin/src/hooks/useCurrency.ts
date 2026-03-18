@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { formatPrice } from "@scalius/shared/currency";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 const DEFAULT_SYMBOL = "৳";
 const DEFAULT_CODE = "BDT";
@@ -42,10 +43,7 @@ function getCurrencyData(): Promise<CurrencyData> {
   fetchPromise = fetch("/api/v1/admin/settings/currency")
     .then((res) => res.json())
     .then((json) => {
-      const data =
-        json.data && typeof json.data === "object" && !Array.isArray(json.data)
-          ? json.data
-          : json;
+      const data = unwrapEnvelope<Record<string, string>>(json);
       const result: CurrencyData = {
         symbol: data.currencySymbol || DEFAULT_SYMBOL,
         code: data.currencyCode || DEFAULT_CODE,

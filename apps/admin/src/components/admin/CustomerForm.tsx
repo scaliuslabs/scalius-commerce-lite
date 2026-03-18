@@ -26,6 +26,7 @@ import { Textarea } from "../ui/textarea";
 import { LocationSelector } from "./LocationSelector";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { navigateTo } from "@/lib/client/navigate";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 const customerFormSchema = z.object({
   id: z.string().optional(),
@@ -68,7 +69,7 @@ export function CustomerForm({
     fetch("/api/v1/admin/settings/allowed-countries")
       .then(res => res.json())
       .then(json => {
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         if (Array.isArray(data.allowedCountries) && data.allowedCountries.length > 0) {
           setAllowedCountries(data.allowedCountries);
         }

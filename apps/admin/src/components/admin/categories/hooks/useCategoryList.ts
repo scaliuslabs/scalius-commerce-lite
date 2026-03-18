@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface Category {
   id: string;
@@ -111,7 +112,7 @@ export function useCategoryList({
 
         const res = await fetch(url.toString());
         if (!res.ok) throw new Error("Failed to fetch categories");
-        const data = await res.json();
+        const data = unwrapEnvelope(await res.json());
 
         const parsed = (data.categories || []).map(
           (c: Record<string, unknown>) => ({

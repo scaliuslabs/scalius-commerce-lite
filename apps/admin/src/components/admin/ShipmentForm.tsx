@@ -1,6 +1,7 @@
 import { useState, useEffect, type FC } from "react";
 import type { DeliveryProviderRecord, DeliveryShipment } from "@/types/api-responses";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface ShipmentFormProps {
   orderId: string;
@@ -78,7 +79,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
       }
 
       const shipmentJson = await response.json();
-      const shipment = shipmentJson.data && typeof shipmentJson.data === "object" && !Array.isArray(shipmentJson.data) ? shipmentJson.data : shipmentJson;
+      const shipment = unwrapEnvelope(shipmentJson);
       toast.success("Shipment created successfully");
 
       if (onSuccess) {

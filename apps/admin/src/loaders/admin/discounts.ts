@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api-fetch";
+import { apiGet } from "@/lib/api-server";
 import type {
   Discount,
   PaginationResponse,

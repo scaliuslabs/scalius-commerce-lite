@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api-fetch";
+import { apiGet } from "@/lib/api-server";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 
 export interface FirebaseConfig {

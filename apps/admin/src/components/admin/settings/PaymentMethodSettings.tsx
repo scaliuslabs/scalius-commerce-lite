@@ -30,6 +30,7 @@ import {
     AlertTriangle,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface GatewayStatus {
     configured: boolean;
@@ -79,7 +80,7 @@ export default function PaymentMethodSettings() {
             const res = await fetch("/api/v1/admin/settings/payment-methods");
             if (res.ok) {
                 const raw = await res.json();
-                const json = (raw.data && typeof raw.data === "object" && !Array.isArray(raw.data) ? raw.data : raw) as PaymentMethodsData;
+                const json = unwrapEnvelope<PaymentMethodsData>(raw);
                 setData(json);
                 setEnabledMethods(new Set(json.enabledMethods));
                 setDefaultMethod(json.defaultMethod);

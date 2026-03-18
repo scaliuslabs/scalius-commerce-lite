@@ -1,3 +1,5 @@
+import { unwrapEnvelope } from "@/lib/api-helpers";
+
 type ProductNavigationWindow = Window & {
   __productEditNavigate?: (url: string) => Promise<void>;
   navigateToProductEdit?: (url: string) => Promise<void>;
@@ -30,7 +32,7 @@ export function initProductNewPage(): void {
       }
 
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       const destination = `/admin/products/${data.id}/edit`;
       if (typeof win.navigateToProductEdit !== "function") {
         throw new Error("Product navigation helper is unavailable");

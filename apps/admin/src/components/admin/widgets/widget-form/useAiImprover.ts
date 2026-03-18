@@ -14,6 +14,7 @@ import { generateStructuredPrompt } from '@scalius/core/modules/ai/prompt-helper
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@scalius/core/modules/ai/ai-config';
+import { unwrapEnvelope } from "@/lib/api-helpers";
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
 import type { useAiContext } from './useAiContext';
 import type { useAiGenerator } from './useAiGenerator';
@@ -75,7 +76,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       });
       if (!contextRes.ok) throw new Error(ERROR_MESSAGES.contextFetchFailed);
       const contextJson = await contextRes.json();
-      const contextData = contextJson.data && typeof contextJson.data === "object" && !Array.isArray(contextJson.data) ? contextJson.data : contextJson;
+      const contextData = unwrapEnvelope(contextJson);
 
       // Get latest sections from stagedGeneration state
       const sections = aiGenerator.stagedGeneration.sections;
