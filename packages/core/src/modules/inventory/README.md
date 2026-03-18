@@ -83,6 +83,17 @@ Handled by `inventory-transitions.ts` -- the **single source of truth** for how 
 
 All transitions are **idempotent**: calling `applyInventoryForStatusChange()` multiple times with the same status produces no duplicate adjustments because it checks `inventoryAction` before acting.
 
+## Admin Order Creation Inventory Flow
+
+Admin-created orders follow a reserve-then-deduct pattern:
+
+1. `reserveMultiple()` validates availability and holds stock for all variant items
+2. `db.batch()` inserts customer + order + items atomically with `inventoryAction: "reserved"`
+3. If batch fails: `releaseMultiple()` releases all reservations (no orphaned holds)
+4. `deductMultiple()` converts reservations to permanent deductions (decrements `stock`, clears `reservedStock`)
+5. If deduction succeeds: `inventoryAction` updated to `"deducted"`
+6. If deduction fails: stock remains reserved (logged, not fatal -- no overselling risk)
+
 ## Stock Pools
 
 Three pools control how stock is sourced:
@@ -125,7 +136,7 @@ The function is **idempotent** -- the "released" movement it creates excludes th
 | `movements.ts`             | `recordMovement()` -- best-effort audit log insert (errors logged, not thrown)                      |
 | `alerts.ts`                | `checkAndAlertLowStock()` -- creates/reactivates/resolves `productLowStockAlerts`; `acknowledgeLowStockAlert()` -- marks alert as acknowledged |
 | `stock-adjustment.ts`      | `adjustStock()` -- relative delta adjustment with `stockVersion` CAS; `setStock()` -- absolute stocktake; `lookupByBarcodeOrSku()` -- barcode/SKU lookup with product image |
-| `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated variants/movements/alerts query; `InventoryService.adjustInventory()` -- admin adjustment with pool support (uses `version`, not `stockVersion`) |
+| `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated variants/movements/alerts query; `InventoryService.adjustInventory()` -- admin adjustment with `stockVersion` CAS + retry (3 attempts, exponential backoff) |
 | `inventory.schema.ts`      | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
 | `inventory-transitions.ts` | `buildInventoryStatements()` -- returns SQL statements for batching; `applyInventoryForStatusChange()` -- standalone wrapper; single source of truth for order-status-driven inventory changes |
 | `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()` |
@@ -218,17 +229,19 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 
 `releaseMultiple()` -- Best-effort. Does NOT use CAS because releasing is always safe (uses `MAX(0, ...)` to guard underflow). Continues processing even if individual releases fail. A missed release only over-reserves, never causes overselling.
 
+### adjustInventory (InventoryService)
+
+`InventoryService.adjustInventory()` uses `stockVersion` CAS with 3 retries and exponential backoff (50ms base). Supports `stock` and `preorderStock` pools. Throws `ConflictError` after exhausting retries.
+
 ## Dependencies
 
 - `@scalius/database` -- `productVariants`, `products`, `productImages`, `inventoryMovements`, `productLowStockAlerts`, `orders`, `orderItems`, `InventoryPool`
-- `@scalius/core/errors` -- `NotFoundError`, `ValidationError`
+- `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ConflictError`
 - `@scalius/shared/price-utils` -- `roundPrice()` (used in `calculateFinalPrice`)
 
 ## Known Gaps
 
 - **Movement type `restored`** is defined in `MovementEntry.type` but never written by any operation -- `restoreDeductedStock()` logs as `adjusted` instead
-- **`InventoryService.adjustInventory()` does not use CAS** -- it increments `version` (not `stockVersion`) and does not condition on any version field, so concurrent admin adjustments could produce unexpected results. Meanwhile `adjustStock()` in `stock-adjustment.ts` uses `stockVersion` correctly.
 - **Batch deduction not implemented** -- `deductMultiple()` is sequential (no batch equivalent like `reserveStockBatch()`)
 - **Alert check timing** -- `checkAndAlertLowStock()` is called after adjustments and deductions but not after releases, so alerts are not auto-resolved when stock is released back
 - **Expiry sweep has no batch limit** -- `releaseExpiredReservations()` processes all expired reservations in a single invocation with no cap, which could be slow if many reservations expire simultaneously
-- **Admin order creation does not deduct inventory** -- `orders.admin.ts` sets `inventoryAction: "deducted"` but calls no inventory functions, so the flag is misleading and stock is unaffected

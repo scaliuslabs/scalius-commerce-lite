@@ -52,10 +52,10 @@ Returns per-day arrays for the last N days with zero-filling for days with no da
 
 | Method | Description |
 |--------|-------------|
-| `getCapiSettings(db)` | Fetch singleton Meta CAPI settings from `metaConversionsSettings` (id = "singleton") |
-| `logCapiEvent(db, logData, retentionHours=12)` | Insert event log + trigger lazy cleanup |
-| `performLogCleanup(db, retentionHours)` | Delete logs older than retention period |
-| `manualLogCleanup(db, retentionHours)` | Admin-triggered cleanup, returns success/failure message |
+| `getCapiSettings(db)` | Fetch singleton Meta CAPI settings from `metaConversionsSettings` (id = "singleton"). Typed catch blocks (`error: unknown`) |
+| `logCapiEvent(db, logData, retentionHours=12)` | Insert event log + trigger lazy cleanup. Typed catch blocks |
+| `performLogCleanup(db, retentionHours)` | Delete logs older than retention period. Typed catch blocks |
+| `manualLogCleanup(db, retentionHours)` | Admin-triggered cleanup, returns `{ success: boolean; message: string }`. Typed catch blocks with `error instanceof Error` checks |
 
 ## API Endpoints
 

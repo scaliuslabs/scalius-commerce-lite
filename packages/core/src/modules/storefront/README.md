@@ -63,10 +63,15 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 |--------|------|-------------|-------|
 | GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt). Defaults to "Scalius Commerce" | `api:seo:*` with TTL=0 |
 
+### Public Checkout (`/api/v1/checkout`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/config` | Returns checkout config including `allowedCountries`, `allowedCountriesMode`, and `currency` with `decimalPlaces` |
+
 ### Public Checkout Languages (`/api/v1/checkout-languages`)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/active` | Get active checkout language. Falls back to default, then hardcoded English fallback with 30+ label strings |
+| GET | `/active` | Get active checkout language. Falls back to default, then hardcoded English fallback with 30+ label strings. Includes `customerPhoneHelp` field |
 | GET | `/` | List all languages with pagination, search, sort, trashed filter |
 | POST | `/` | Create language. Auto-deactivates other active/default languages when setting isActive/isDefault |
 | GET | `/{id}` | Get language by ID |
@@ -100,10 +105,10 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 - `@scalius/database` -- `siteSettings`, `products`, `categories`, `collections`, `widgets`, `heroSliders`, `analytics`, `pages`, `settings`, `checkoutLanguages`, `abandonedCheckouts`
 - `@scalius/core/integrations/analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
 - `nanoid` -- fallback ID generation for footer social links/menus
+- `currency.js` -- discount price calculation in `getHomepageData()`
 
 ## Known Gaps
 
 - Public hero route at `/api/v1/hero/sliders` and the consolidated `/api/v1/storefront/homepage` both serve hero slider data -- the storefront uses the consolidated endpoint, making the standalone hero endpoint partially redundant.
 - Public SEO route at `/api/v1/seo` has TTL=0 on its cache middleware (effectively no caching), while the same data is cached via the consolidated homepage endpoint.
 - Abandoned checkouts cleanup endpoint requires auth middleware, but the save endpoint does not.
-- Cache `clear-group` endpoint calls `clearGroup` on individual group names but the actual fetch URL pattern is `clear-${groupName}` which does not match the route definition (`/clear-group` with body `{ groups: [...] }`).

@@ -47,7 +47,7 @@ Validated by Zod schema in the API route:
 
 ### `conversions-api.ts` -- Event Sending
 
-- `sendCapiEvent(db, event)` -- Main function. Fetches settings, hashes user data, sends to Meta Graph API, logs results.
+- `sendCapiEvent(db, event)` -- Main function. Fetches settings, hashes user data, sends to Meta Graph API, logs results. Response data typed as `Record<string, unknown>`. Error objects typed via `error instanceof Error` checks.
 - `prepareUserData(userData)` -- Hashes PII fields per Meta's formatting rules:
   - `em` (email): lowercase, trim, SHA-256
   - `ph` (phone): digits only, SHA-256
@@ -102,10 +102,10 @@ This runs in the browser. The actual CAPI call happens server-side in the API wo
 ## Service Layer (`packages/core/src/modules/analytics/meta.service.ts`)
 
 `MetaService` class with static methods:
-- `getCapiSettings(db)` -- Fetches singleton settings row
-- `logCapiEvent(db, logData, retentionHours)` -- Inserts log entry and triggers lazy cleanup
-- `performLogCleanup(db, retentionHours)` -- Deletes logs older than retention period
-- `manualLogCleanup(db, retentionHours)` -- Admin-triggered cleanup with success/failure result
+- `getCapiSettings(db)` -- Fetches singleton settings row. Typed `error: unknown` catch.
+- `logCapiEvent(db, logData, retentionHours)` -- Inserts log entry and triggers lazy cleanup. Typed `error: unknown` catch.
+- `performLogCleanup(db, retentionHours)` -- Deletes logs older than retention period. Typed `error: unknown` catch.
+- `manualLogCleanup(db, retentionHours)` -- Admin-triggered cleanup with `{ success: boolean; message: string }` result. Uses `error instanceof Error ? error.message : String(error)`.
 
 ## Dependencies
 

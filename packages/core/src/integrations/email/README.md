@@ -22,7 +22,7 @@ Credentials are read from the `settings` DB table on every send (no caching):
 - `resend_api_key` (category `email`) -- Resend API key
 - `email_sender` (category `email`) -- Default sender address (falls back to `noreply@example.com`)
 
-The `getEmailSettings()` function uses dynamic imports (`await import("@scalius/database/client")`) to avoid circular dependencies and enable tree-shaking.
+The `getEmailSettings()` function uses dynamic imports (`await import("@scalius/database/client")`) to avoid circular dependencies and enable tree-shaking. All catch blocks use typed `error: unknown` with `instanceof Error` checks.
 
 ### Admin Settings UI
 
@@ -97,5 +97,5 @@ All functions use inline HTML templates with basic responsive styling. No templa
 ## Key Files
 
 - `provider.ts` -- `EmailProvider` interface, registry (`registerEmailProvider`, `getEmailProvider`, `setActiveEmailProvider`)
-- `resend.ts` -- `ResendEmailProvider` implementation (reads settings from DB per-send, calls Resend API, console fallback)
+- `resend.ts` -- `ResendEmailProvider` implementation (reads settings from DB per-send, calls Resend API, console fallback). Typed `error: unknown` catch blocks.
 - `index.ts` -- barrel exports, provider registration at load time, convenience email functions

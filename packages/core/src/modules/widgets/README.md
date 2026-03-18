@@ -18,13 +18,22 @@ Widgets with `before_collection` or `after_collection` require a valid `referenc
 
 Sorting within the same placement group is by `sortOrder` (ascending), then `name` (ascending).
 
+## Trash / Soft Delete
+
+The `listWidgets` service accepts `{ showTrashed?: boolean }`. When `showTrashed` is true, it returns widgets where `deletedAt IS NOT NULL`. When false (default), it returns widgets where `deletedAt IS NULL`. The admin API list route passes the `trashed` query parameter through to the service, so the trash view (`?trashed=true`) correctly shows only soft-deleted widgets.
+
+Individual and bulk operations:
+- `deleteWidget(db, id)` -- soft-delete (sets `deletedAt`)
+- `bulkDeleteWidgets(db, ids, permanent?)` -- soft delete by default; permanent=true does hard delete
+- `restoreWidgets(db, ids)` -- clears `deletedAt`
+
 ## Version History
 
 Widget content changes can be tracked via the `widgetHistory` table:
 
 - **Save version** (`createHistoryEntry`): Snapshots the widget's current `htmlContent` and `cssContent` with a reason string (default: "Manual save").
 - **Restore version** (`restoreFromHistory`): Before overwriting the widget, auto-snapshots the current state with reason "Auto-saved before restore", then applies the selected history entry's HTML/CSS.
-- **Delete version** (`deleteHistoryEntry`): Permanently removes a single history entry.
+- **Delete version** (`deleteHistoryEntry`): Permanently removes a single history entry. Validates the entry belongs to the specified widget.
 - **List history** (`getWidgetHistory`): Returns all entries for a widget, ordered by `createdAt DESC`.
 - History entries cascade-delete when the parent widget is permanently deleted (FK `onDelete: cascade`).
 
@@ -61,7 +70,7 @@ The storefront's `processShortcodes()` in `apps/storefront/src/lib/shortcodes.ts
 ### Service Functions
 
 **Queries:**
-- `listWidgets(db)` -- returns all non-deleted widgets (sorted by `sortOrder`, `name`) plus all active collections (for the placement selector)
+- `listWidgets(db, options?)` -- returns widgets filtered by `showTrashed` flag (non-deleted by default, only-deleted when trashed) sorted by `sortOrder`, `name`; also returns all active non-deleted collections for the placement selector
 - `getWidgetById(db, id)` -- single widget by ID (non-deleted only)
 
 **Mutations:**
@@ -74,9 +83,9 @@ The storefront's `processShortcodes()` in `apps/storefront/src/lib/shortcodes.ts
 
 **History:**
 - `createHistoryEntry(db, widgetId, reason?)` -- snapshots current widget content
-- `getWidgetHistory(db, widgetId)` -- lists all history entries (newest first)
+- `getWidgetHistory(db, widgetId)` -- lists all history entries (newest first); throws `NotFoundError` if widget not found
 - `restoreFromHistory(db, widgetId, historyId)` -- auto-saves current state, then overwrites widget with history entry
-- `deleteHistoryEntry(db, widgetId, historyId)` -- removes a single history entry
+- `deleteHistoryEntry(db, widgetId, historyId)` -- removes a single history entry; throws `NotFoundError` if entry not found
 
 ## API Endpoints
 
@@ -84,7 +93,7 @@ The storefront's `processShortcodes()` in `apps/storefront/src/lib/shortcodes.ts
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/admin/widgets` | List all widgets + available collections |
+| GET | `/admin/widgets` | List all widgets + available collections (`?trashed=true` for trash view) |
 | POST | `/admin/widgets` | Create widget |
 | GET | `/admin/widgets/{id}` | Get widget by ID |
 | PUT | `/admin/widgets/{id}` | Update widget |
@@ -92,13 +101,13 @@ The storefront's `processShortcodes()` in `apps/storefront/src/lib/shortcodes.ts
 | DELETE | `/admin/widgets/{id}/permanent` | Hard-delete widget |
 | POST | `/admin/widgets/{id}/restore` | Restore soft-deleted widget |
 | PATCH | `/admin/widgets/{id}/toggle-status` | Toggle `isActive` |
-| POST | `/admin/widgets/bulk-delete` | Bulk soft/hard delete |
-| POST | `/admin/widgets/bulk-activate` | Bulk activate |
-| POST | `/admin/widgets/bulk-deactivate` | Bulk deactivate |
-| POST | `/admin/widgets/bulk-restore` | Bulk restore |
+| POST | `/admin/widgets/bulk-delete` | Bulk soft/hard delete (`{ ids, permanent }`) |
+| POST | `/admin/widgets/bulk-activate` | Bulk activate (`{ ids }`) |
+| POST | `/admin/widgets/bulk-deactivate` | Bulk deactivate (`{ ids }`) |
+| POST | `/admin/widgets/bulk-restore` | Bulk restore (`{ ids }`) |
 | GET | `/admin/widgets/{id}/history` | List widget version history |
-| POST | `/admin/widgets/{id}/history` | Save current state as history entry |
-| POST | `/admin/widgets/{id}/history/restore` | Restore widget from history version |
+| POST | `/admin/widgets/{id}/history` | Save current state as history entry (`{ reason? }`) |
+| POST | `/admin/widgets/{id}/history/restore` | Restore widget from history version (`{ historyId }`) |
 | DELETE | `/admin/widgets/{id}/history/{versionId}` | Delete a history entry |
 
 ### Public (via `apps/api/src/routes/widgets.ts`)
@@ -118,8 +127,5 @@ Public routes convert timestamps to ISO strings and wrap in `{ widget }` / `{ wi
 
 ## Known Gaps
 
-- **Trash listing**: The admin `listWidgets` service always filters `deletedAt IS NULL`. The trash view calls the same endpoint. The loader (`apps/admin/src/loaders/admin/widgets.ts`) passes a `trashed` param, but the service function ignores it -- the trash page currently shows widgets fetched with the same `isNull(deletedAt)` filter. This means the trash view may not actually display trashed widgets unless the API endpoint handles the `trashed` query parameter (which it does not -- the admin list route has no query params at all).
-- **Widget shortcode in [slug].astro**: The `[slug].astro` page references `page.widgets` (an optional array on the storefront's `Page` type), but the public pages API does not return a `widgets` field. The shortcode system works through `processShortcodes()` which parses `[widget id="..."]` from the content string -- the `page.widgets` array rendering path appears to be dead code or intended for future widget-page associations.
-- **Public route uses raw `db` import**: The public pages route (`apps/api/src/routes/pages.ts`) imports `db` directly from `@scalius/database/client` instead of using `c.get("db")` from Hono context, inconsistent with the admin routes.
 - **No search on widget list**: The admin widget list does client-side name filtering only (no FTS5 integration, unlike pages).
 - **displayTarget**: The schema has `displayTarget` with only `"homepage"` as an enum value. Changing this in the future would require a schema migration.

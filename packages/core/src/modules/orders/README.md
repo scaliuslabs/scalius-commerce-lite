@@ -37,9 +37,7 @@ partially_refunded --> refunded
 
 All 11 states: `incomplete`, `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `returned`, `refunded`, `partially_refunded`.
 
-**Note on CANCELLED:** The state machine allows `cancelled -> pending` and `cancelled -> confirmed` for admin reactivation. When this happens, `inventory-transitions.ts` detects `currentAction === "restored"` and re-reserves stock via `reserveOrderItems()`. The README previously stated "CANCELLED is terminal" -- that is incorrect per the actual code. The comment in the state machine explicitly says "Admin override only: merchants can reactivate cancelled orders."
-
-**Note on ORDER_STATUSES in admin UI:** The `orderview/types.ts` file defines `ORDER_STATUSES` as only 8 values: `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `returned`. The status dropdown in `OrderStatusCard` renders only these 8, meaning `incomplete`, `refunded`, and `partially_refunded` cannot be set via the UI status dropdown (they are set programmatically by payment/refund flows).
+**Note on CANCELLED:** The state machine allows `cancelled -> pending` and `cancelled -> confirmed` for admin reactivation. When this happens, `inventory-transitions.ts` detects `currentAction === "restored"` and re-reserves stock via `reserveOrderItems()`. The comment in the state machine explicitly says "Admin override only: merchants can reactivate cancelled orders."
 
 ### Payment Status Transitions
 
@@ -81,34 +79,40 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
    - Phase 4: On DB failure, rollback inventory via `releaseMultiple()`, retry all messages
 4. **Storefront polls** -- `GET /orders/status/:token` reads KV until "completed" or "failed"
 
-### Admin Order Creation (synchronous)
+### Admin Order Creation (synchronous, reserve then deduct)
 
-1. **Admin POST /admin/orders** -- `createOrder()` calculates totals, resolves locations, finds/creates customer, inserts order + items in `db.batch()` with `inventoryAction: "deducted"` (stock is directly deducted, not reserved)
-2. No queue involved -- writes happen synchronously
+1. **Admin POST /admin/orders** -- `createOrder()` calculates totals, resolves locations, finds/creates customer
+2. **Reserve stock**: Calls `reserveMultiple()` for all variant items. If any variant has insufficient stock, throws `ValidationError` immediately -- order is never created.
+3. **Atomic DB write**: Inserts customer (new or update), order, and items in a single `db.batch()` call with `inventoryAction: "reserved"`.
+4. **On batch failure**: Calls `releaseMultiple()` to release all reservations made in step 2.
+5. **Convert to deduction**: Calls `deductMultiple()` to permanently deduct stock (decrements `stock`, clears `reservedStock`). On success, updates `inventoryAction` to `"deducted"`.
+6. **On deduction failure**: Stock remains reserved (no overselling risk). Error is logged but the order itself succeeds.
 
 ### Admin Order Update
 
 1. `updateOrder()` validates status transition via state machine
 2. If `inventoryAction === "reserved"`: releases old reservations, reserves new quantities (rollback on failure)
-3. If `inventoryAction === "deducted"`: adjusts stock deltas directly on `productVariants`
-4. Optimistic locking via `version` column -- throws `ConflictError` if version mismatch
-5. Deletes all existing items and re-inserts (full replacement)
-6. Updates customer stats
+3. If `inventoryAction === "deducted"`: adjusts stock deltas directly on `productVariants` -- restores stock for removed/changed variants, deducts for new/increased variants (validates stock availability before deducting)
+4. If status is changing: calls `applyInventoryForStatusChange()` to handle status-driven inventory transitions
+5. Optimistic locking via `version` column -- throws `ConflictError` if version mismatch
+6. Deletes all existing items and re-inserts (full replacement)
+7. Updates customer stats for both old and new customer (if customer changed)
 
 ### Status Update Flow
 
 1. `updateOrderStatus()` reads current order state
 2. Validates transition via `validateTransition()`
-3. CAS update on `version` column FIRST (prevents race between admin + webhook)
-4. On CAS success: applies inventory side effects via `applyInventoryForStatusChange()`
-5. Persists new `inventoryAction`
-6. Returns `StatusUpdateResult` with optional notification payload
-7. API route enqueues notification to `ORDER_NOTIFICATIONS_QUEUE` if present
+3. **COD auto-sync**: If order is COD and new status is DELIVERED or COMPLETED, auto-updates `paymentStatus` to `paid`
+4. CAS update on `version` column FIRST (prevents race between admin + webhook)
+5. On CAS success: applies inventory side effects via `applyInventoryForStatusChange()`
+6. Persists new `inventoryAction`
+7. Returns `StatusUpdateResult` with optional notification payload
+8. API route enqueues notification to `ORDER_NOTIFICATIONS_QUEUE` if present
 
 ### Fulfillment Flow
 
 1. `createFulfillmentShipment()` checks order is not cancelled/returned
-2. Validates no items are already shipped/delivered
+2. Validates no items are already shipped/delivered (throws `ConflictError` if so)
 3. Creates `deliveryShipments` row, updates item fulfillment statuses to `shipped`
 4. If final shipment: updates order `fulfillmentStatus` to `complete`, order status to `shipped`
 5. Applies inventory deduction for the shipped status
@@ -122,10 +126,10 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
 
 ### Delete Flow
 
-- **Soft delete**: Sets `deletedAt`, releases inventory (`inventoryAction` set to `restored`)
-- **Permanent delete**: Releases inventory, deletes order items, then deletes order
-- **Restore**: Clears `deletedAt` (does NOT re-reserve inventory -- known gap)
-- **Bulk delete**: Iterates and applies inventory release per order
+- **Soft delete**: Releases inventory via `applyInventoryForStatusChange(db, id, "cancelled")` if reserved or deducted, sets `deletedAt`, sets `inventoryAction` to `"restored"`
+- **Permanent delete**: Releases inventory, deletes order items first (FK ordering), then deletes order
+- **Restore**: If `inventoryAction === "restored"`, re-reserves stock via `reserveMultiple()`. Throws `ValidationError` if insufficient stock to re-reserve. Sets `inventoryAction` to `"reserved"`. If inventory was not previously tracked, simply clears `deletedAt`.
+- **Bulk delete**: Iterates and applies inventory release per order. For permanent: deletes items first, then orders (FK ordering fixed).
 
 ## Queue Processing
 
@@ -134,7 +138,9 @@ Two queues are relevant:
 | Queue | Message Type | Handler |
 |-------|-------------|---------|
 | `ORDER_INGEST_QUEUE` | `order.ingest` | `handleOrderIngestBatch()` -- batched DB writes + inventory reservation |
-| `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | `sendOrderNotificationEmail()` via `queue-consumer.ts` |
+| `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM push) via `queue-consumer.ts` |
+
+The `order.notification` handler in `queue-consumer.ts` sends both email (via `sendOrderNotificationEmail()`) and FCM push notifications (via `sendOrderNotification()`) to admin devices. FCM failures are caught and logged but do not affect email delivery.
 
 Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.confirmed`, `payment.polar.confirmed`, etc.) are handled in `queue-consumer.ts` and call `processPaymentConfirmed()` / `processPaymentFailed()` from the payments module.
 
@@ -153,15 +159,15 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | Method | Path | Handler | Purpose |
 |--------|------|---------|---------|
 | GET | `/` | `getOrders()` | Paginated list with FTS5 search, status/date filters, shipment summary |
-| POST | `/` | `createOrder()` | Manual order creation |
+| POST | `/` | `createOrder()` | Manual order creation with reserve-then-deduct inventory |
 | GET | `/:id` | `getOrderDetails()` | Full order with items, variant info, images |
 | PUT | `/:id` | `updateOrder()` | Full order update with inventory adjustment |
 | DELETE | `/:id` | `deleteOrder()` | Soft delete |
-| POST | `/:id/restore` | `restoreOrder()` | Restore soft-deleted order |
+| POST | `/:id/restore` | `restoreOrder()` | Restore soft-deleted order (re-reserves inventory) |
 | DELETE | `/:id/permanent` | `permanentlyDeleteOrder()` | Hard delete |
 | POST | `/bulk-delete` | `bulkDeleteOrders()` | Bulk soft/permanent delete |
 | POST | `/bulk-ship` | `bulkShipOrders()` | Bulk shipment creation |
-| PUT | `/:id/status` | `updateOrderStatus()` | Status change with inventory + notifications |
+| PUT | `/:id/status` | `updateOrderStatus()` | Status change with inventory + COD auto-sync + notifications |
 | GET | `/:id/items` | direct query | Items with product details and images |
 | GET | `/:id/payments` | direct query | Order payments + payment plan |
 | GET | `/:id/cod` | direct query | COD tracking record |
@@ -196,17 +202,9 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 
 ## Known Gaps
 
-1. **`restoreOrder()` does not re-reserve inventory**: Soft-delete releases inventory, but restore only clears `deletedAt` without re-reserving. The order's `inventoryAction` remains "restored". This means restored orders have untracked inventory until a status change triggers re-reservation via `inventory-transitions.ts`.
+1. **Notification types limited**: Only `shipped` and `delivered` trigger customer notifications from `updateOrderStatus()`. Other transitions (confirmed, completed, etc.) do not.
 
-2. **Admin create sets `inventoryAction: "deducted"` but does not actually deduct**: `createOrder()` sets the flag to "deducted" and does NOT call any inventory functions. Stock is not reserved or deducted. This means admin-created orders do not affect inventory at all until a status change.
-
-3. ~~**`bulkDeleteOrders()` permanent delete ordering**~~: Fixed — order items are now deleted before orders.
-
-4. ~~**No payment status update on status change**~~: Fixed — `updateOrderStatus()` now auto-updates `paymentStatus` to "paid" for COD orders when status changes to DELIVERED or COMPLETED. Non-COD orders (gateway payments) are not touched.
-
-5. **Notification types limited**: Only `shipped` and `delivered` trigger customer notifications from `updateOrderStatus()`. Other transitions (confirmed, completed, etc.) do not.
-
-6. **`ORDER_STATUSES` in UI missing states**: The admin UI status dropdown shows only 8 of 11 states. `incomplete`, `refunded`, and `partially_refunded` are not selectable.
+2. **`updateOrder()` item replacement is non-atomic**: The order update uses CAS on the `version` column, but the subsequent `DELETE` + `INSERT` of order items is done in separate queries outside the CAS-protected batch.
 
 ## Dependencies
 
@@ -214,7 +212,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 - `inventory` module -- reservation, deduction, release, transitions
 - `payments` module -- COD collection/return, refund service
 - `delivery` module -- `DeliveryService`, `ShipmentTracker`
-- `notifications` module -- `sendOrderNotificationEmail()`
+- `notifications` module -- `sendOrderNotificationEmail()`, `sendOrderNotification()` (FCM push)
 - `@scalius/core/search` -- FTS5 for order search
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ConflictError`
 - `@scalius/shared/price-utils` -- `roundPrice`, `addPrices`, `subtractPrice`

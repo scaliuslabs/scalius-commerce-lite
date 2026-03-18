@@ -21,13 +21,14 @@ The edit flow (`[id]/edit.astro`) skips the type selector and renders the correc
 | `AmountOffOrderForm` | `AmountOffOrderForm.tsx` | `amount_off_order` | percentage, fixed_amount |
 | `FreeShippingForm` | `FreeShippingForm.tsx` | `free_shipping` | Always `free` (hardcoded) |
 
-### Shared Selectors
+### Shared Components
 
 | Component | File | Description |
 |-----------|------|-------------|
-| `ProductSelector` | `ProductSelector.tsx` | Searchable, paginated product picker with badge display. Fetches from `/api/v1/admin/products`. |
-| `CollectionSelector` | `CollectionSelector.tsx` | Searchable collection picker with badge display. Initial load from `/api/v1/admin/collections?limit=50`. |
+| `ProductSelector` | `ProductSelector.tsx` | Searchable, paginated product picker with badge display. Fetches from `/api/v1/admin/products`. Uses `useCurrency()` for dynamic currency symbol. |
+| `CollectionSelector` | `CollectionSelector.tsx` | Searchable collection picker with badge display. Initial load from `/api/v1/admin/collections?limit=50`, search from `/api/v1/admin/collections?search=...&limit=20`. |
 | `DiscountTypeSelector` | `DiscountTypeSelector.tsx` | Card-based type picker. Emits `discountTypeSelected` CustomEvent with `{ type: string }` detail. |
+| `utils.ts` | `utils.ts` | `generateDiscountCode()` -- generates 8-character random uppercase alphanumeric codes, excluding ambiguous characters (0, O, 1, I). Used by all three form types. |
 
 ### Amount Off Products Sub-Components
 
@@ -36,13 +37,13 @@ Split into card-based sections in `amount-off-products/`:
 | Component | File | Description |
 |-----------|------|-------------|
 | `AmountOffProductsContainer` | `AmountOffProductsContainer.tsx` | Main form orchestrator. Manages selected products/collections state, form submission. |
-| `DiscountDetailsSection` | `DiscountDetailsSection.tsx` | Code input with random generator, value type selector, discount value input. |
+| `DiscountDetailsSection` | `DiscountDetailsSection.tsx` | Code input with random generator (from `../utils.ts`), value type selector, discount value input. Uses `useCurrency()` for dynamic symbol. |
 | `AppliesToSection` | `AppliesToSection.tsx` | Wraps ProductSelector and CollectionSelector. Validates at least one product or collection is selected. |
 | `MinimumRequirementsSection` | `MinimumRequirementsSection.tsx` | Min purchase amount and min quantity inputs. |
 | `UsageLimitsSection` | `UsageLimitsSection.tsx` | Max uses per order, total usage limit, one-per-customer toggle. |
 | `CombinationsSection` | `CombinationsSection.tsx` | Three checkboxes for combineWith* flags. |
 | `ActiveDatesSection` | `ActiveDatesSection.tsx` | Start/end date pickers with calendar popover. End date disabled before start date. |
-| `SummaryCard` | `SummaryCard.tsx` | Live preview card showing current form values. |
+| `SummaryCard` | `SummaryCard.tsx` | Live preview card showing current form values. Uses `useCurrency()` for dynamic symbol. |
 | `types.ts` | `types.ts` | Zod schema, TypeScript interfaces (Product, Collection, FormValues), `handleOptionalNumberChange` helper. |
 
 ### Discount List Components
@@ -52,10 +53,10 @@ In `discount-list/`:
 | Component | File | Description |
 |-----------|------|-------------|
 | `DiscountListContainer` | `DiscountListContainer.tsx` | Full list page: search, type filter, sortable table, pagination, bulk actions. Exported as `DiscountList`. |
-| `DiscountRow` | `DiscountRow.tsx` | Single table row. Shows code (with tooltip summary), type badge, value, dates, usage progress bar, status, and action dropdown (edit, duplicate, activate/deactivate, delete). |
-| `DiscountStatusBadge` | `DiscountStatusBadge.tsx` | Status badge with four states: Active (green, clickable toggle), Inactive (outline, clickable toggle), Scheduled (amber, when startDate > now), Expired (gray, when endDate < now), Deleted (in trash view). |
+| `DiscountRow` | `DiscountRow.tsx` | Single table row. Shows code (with tooltip summary), type badge, value, dates, usage progress bar, total discount amount, status, and action dropdown (edit, duplicate, activate/deactivate, delete). Uses `useCurrency()` for dynamic symbol. |
+| `DiscountStatusBadge` | `DiscountStatusBadge.tsx` | Status badge with five states: Active (green, clickable toggle), Inactive (outline, clickable toggle), Scheduled (amber, when startDate > now), Expired (gray, when endDate < now), Deleted (in trash view). |
 | `DiscountDeleteDialogs` | `DiscountDeleteDialogs.tsx` | Three AlertDialog variants: soft-delete confirmation, permanent delete confirmation, bulk action confirmation. |
-| `useDiscountListFilters` | `hooks/useDiscountListFilters.ts` | State management hook for list: search, sort, pagination, selection, type filter, all CRUD actions via fetch. URL-driven (SSR pattern via `navigateTo`). |
+| `useDiscountListFilters` | `hooks/useDiscountListFilters.ts` | State management hook for list: search, sort, pagination, selection, type filter, all CRUD actions via fetch including toggle-status. URL-driven (SSR pattern via `navigateTo`). |
 
 ## Form Validation
 
@@ -79,6 +80,8 @@ Each form has its own Zod schema. Key validation rules:
 - minPurchaseAmount defaults to 1000
 - Dates: startDate required, endDate optional
 
+All forms use `useCurrency()` for dynamic currency symbol display (no hardcoded currency characters).
+
 ## Data Flow
 
 ### Create Flow
@@ -94,6 +97,11 @@ Each form has its own Zod schema. Key validation rules:
 3. Correct form component rendered based on `discount.type`
 4. On submit, component calls `PUT /api/v1/admin/discounts/{id}`
 5. On success, navigates to `/admin/discounts`
+
+### Duplicate Flow
+1. User clicks "Duplicate" in discount row dropdown menu
+2. Navigates to `/admin/discounts/{id}/edit?duplicate=true`
+3. Edit page loads the discount data as a pre-populated form
 
 ### List Flow
 1. `index.astro` calls `getDiscountsIndexData()` loader with URL search params
@@ -113,11 +121,11 @@ Each form has its own Zod schema. Key validation rules:
 | `/api/v1/admin/discounts/{id}` | DELETE | List row action (soft-delete) |
 | `/api/v1/admin/discounts/{id}/permanent` | DELETE | Trash view row action |
 | `/api/v1/admin/discounts/{id}/restore` | POST | Trash view row action |
+| `/api/v1/admin/discounts/{id}/toggle-status` | POST | Status badge click, row dropdown activate/deactivate |
 | `/api/v1/admin/discounts/bulk-delete` | POST | Bulk selection action |
 | `/api/v1/admin/discounts/bulk-restore` | POST | Bulk selection action (trash view) |
-| `/api/v1/admin/discounts/{id}/toggle-status` | POST | Status badge click |
 | `/api/v1/admin/products` | GET | ProductSelector search |
-| `/api/v1/admin/collections` | GET | CollectionSelector initial load |
+| `/api/v1/admin/collections` | GET | CollectionSelector initial load + search |
 | `/api/v1/admin/collections/form-options` | GET | Edit page loader (resolves product IDs) |
 
 ## Files
@@ -129,6 +137,7 @@ discount/
   FreeShippingForm.tsx              -- Full form for free shipping discounts
   ProductSelector.tsx               -- Paginated product picker (shared)
   CollectionSelector.tsx            -- Collection picker (shared)
+  utils.ts                          -- generateDiscountCode() shared helper
   amount-off-products/
     index.ts                        -- Re-exports AmountOffProductsContainer as AmountOffProductsForm
     types.ts                        -- Zod schema, TS interfaces, helper
@@ -152,10 +161,7 @@ discount/
 
 ## Known Gaps
 
-1. **`toggle-status` endpoint missing**: `useDiscountListFilters.ts` calls `POST /admin/discounts/{id}/toggle-status`, but this route does not exist in the API. The UI will show an error toast.
-2. **CollectionSelector search URL wrong**: Search uses `/api/collections?search=...` (missing `/v1/admin` prefix). Initial load correctly uses `/api/v1/admin/collections?limit=50`.
-3. **Duplicate button navigates but no dedup logic**: The "Duplicate" action navigates to `/admin/discounts/{id}/edit?duplicate=true`, but the edit page does not read the `duplicate` query parameter. The form loads as a normal edit, not a duplicate (code won't be cleared, ID won't be removed).
-4. **Code uniqueness not validated client-side**: Code uniqueness is only checked server-side on submit. No real-time availability check.
-5. **`generateDiscountCode()` duplicated**: The random code generator function is defined identically in three files: `AmountOffOrderForm.tsx`, `FreeShippingForm.tsx`, and `DiscountDetailsSection.tsx`.
-6. **Form schemas diverge**: The three form types have separate Zod schemas with slightly different validation rules (e.g., code min length is 1 vs 3, regex pattern only on AmountOffOrderForm). Should be unified.
-7. **No time-of-day selection**: Start/end dates are date-only (no time picker). The schema stores unix timestamps, but the UI always uses midnight.
+1. **Duplicate button navigates but no dedup logic**: The "Duplicate" action navigates to `/admin/discounts/{id}/edit?duplicate=true`, but the edit page does not read the `duplicate` query parameter. The form loads as a normal edit, not a duplicate (code won't be cleared, ID won't be removed).
+2. **Code uniqueness not validated client-side**: Code uniqueness is only checked server-side on submit. No real-time availability check.
+3. **Form schemas diverge**: The three form types have separate Zod schemas with slightly different validation rules (e.g., code min length is 1 vs 3, regex pattern only on AmountOffOrderForm). Should be unified.
+4. **No time-of-day selection**: Start/end dates are date-only (no time picker). The schema stores unix timestamps, but the UI always uses midnight.

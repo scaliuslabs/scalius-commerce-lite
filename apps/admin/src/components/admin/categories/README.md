@@ -66,6 +66,11 @@ The form component lives separately at `apps/admin/src/components/admin/Category
 - Active view: Edit, View on Website (storefront link), View Products, Move to Trash
 - Trash view: Restore, Delete Permanently
 
+### Delete Guards
+- Soft-delete and permanent-delete both check for products assigned to the category
+- If products are still assigned, the API returns an error with the affected product names and a suggestion message
+- The UI displays this error via toast notification
+
 ### Bulk Operations
 - Multi-select via checkboxes (per-row + select-all header with indeterminate state)
 - Active view: "Trash (N)" button

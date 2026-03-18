@@ -1,6 +1,6 @@
 # Delivery Locations Admin UI
 
-Admin interface for managing the city/zone/area location hierarchy used by delivery providers. No standalone Astro page -- the `DeliveryLocationsContainer` component is embedded within the checkout settings page.
+Admin interface for managing the city/zone/area location hierarchy used by delivery providers. The `DeliveryLocationsContainer` component is embedded within the checkout settings page.
 
 ## Files
 
@@ -86,6 +86,8 @@ Response parsing: unwraps `json.data` if present and is a non-array object.
 
 Abort mechanism: `importAbortRef` ref checked each iteration; set by `resetImport()`.
 
+Server-side: the import endpoint finds the active Pathao provider, decrypts credentials via `decryptCredentialsGraceful()`, validates all required fields are present, then calls `processPathaoImportChunk()`.
+
 ## Location Table Features
 
 - **Checkbox selection**: individual row checkboxes + select-all header checkbox
@@ -113,7 +115,6 @@ Three levels:
 
 ## Known Gaps
 
-- No standalone Astro page for this component -- it is referenced by the delivery providers integration guide but there is no `/admin/settings/delivery-locations` route
 - The form dialog does not allow editing `externalIds` -- these can only be set via API directly or via Pathao import
 - The form dialog does not allow editing `sortOrder` or `metadata`
 - Search uses SQL `LIKE %query%` which is case-sensitive in SQLite and does not use FTS5

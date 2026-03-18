@@ -4,8 +4,6 @@ Firebase Cloud Messaging integration for sending push notifications to admin das
 
 ## Connection Status
 
-**The server-side sending code is complete but NOT wired into any order flow.** See `packages/core/src/modules/notifications/README.md` for full details.
-
 | Component | Status |
 |-----------|--------|
 | `admin.ts` -- Server-side FCM REST API client | Fully implemented |
@@ -14,7 +12,7 @@ Firebase Cloud Messaging integration for sending push notifications to admin das
 | FCM token registration API endpoint | Fully implemented |
 | FCM token storage in DB (`adminFcmTokens` table) | Fully implemented |
 | Admin settings UI for Firebase config | Fully implemented |
-| Calling `sendOrderNotification()` on new orders | **NOT CONNECTED** |
+| Calling `sendOrderNotification()` on new orders | Connected via queue consumer |
 
 ### What Works
 
@@ -25,9 +23,7 @@ If Firebase is configured (service account JSON + public config + VAPID key in s
 4. Listen for foreground messages and show custom toast notifications with sound (`/alert.mp3`)
 5. Register a service worker (`firebase-messaging-sw.js`) for background notifications
 
-### What Does Not Work
-
-No code path actually sends FCM messages. `sendOrderNotification()` is exported but never called by any route or queue consumer. The FCM infrastructure is fully built but the trigger is missing.
+The queue consumer calls `sendOrderNotification()` on new orders, which sends FCM push to all registered admin tokens.
 
 ## Files
 
@@ -41,9 +37,32 @@ A custom FCM implementation for Cloudflare Workers (no Node.js `firebase-admin` 
 - **Retry logic**: Up to 3 retries for 429/5xx errors with exponential backoff + jitter
 - **PEM parsing**: Converts PEM private key to ArrayBuffer for Web Crypto, handles formatting issues from env vars
 
+#### Interfaces
+
+```typescript
+interface ServiceAccount {
+  client_email: string;
+  private_key: string;
+  project_id: string;
+}
+```
+
+```typescript
+interface FirebaseClientConfig {
+  apiKey: string;
+  authDomain?: string;
+  projectId?: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+  measurementId?: string;
+  vapidKey?: string;
+}
+```
+
 Key exports:
-- `FCMMessagingService` -- Class with `sendEachForMulticast(payload)` method. Iterates tokens sequentially (not concurrent) and maps error codes to `messaging/*` format.
-- `getFirebaseAdminMessaging(env, serviceAccountJson?)` -- Factory function. Returns a singleton instance for env-var credentials, or a new instance when a specific service account JSON is provided (e.g., from DB settings).
+- `FCMMessagingService` -- Class with `sendEachForMulticast(payload)` method. Iterates tokens sequentially (not concurrent) and maps error codes to `messaging/*` format. All catch blocks use typed `error: unknown`.
+- `getFirebaseAdminMessaging(env, serviceAccountJson?)` -- Factory function. When `serviceAccountJson` is provided (e.g., from DB settings), creates a new instance. Otherwise returns a singleton for env-var credentials.
 
 Credential resolution order:
 1. `serviceAccountJson` parameter (from DB `settings` table, category `firebase`, key `service_account`)
@@ -57,7 +76,7 @@ Runs in the admin dashboard browser. Uses the standard Firebase JS SDK (`firebas
 
 - `initFirebaseClientNotifications(userId, config)` -- Entry point called from `FirebaseInit.astro`
   1. Checks browser environment and notification support
-  2. Sets VAPID key from config
+  2. Sets VAPID key from config (`config.vapidKey`)
   3. Initializes Firebase app and messaging
   4. Requests notification permission, obtains FCM token via `getToken()`
   5. Sends token to server via `POST /api/v1/admin/fcm-token` with device info (browser, user agent, URL)
@@ -67,6 +86,7 @@ Runs in the admin dashboard browser. Uses the standard Firebase JS SDK (`firebas
   - Plays `/alert.mp3` audio alert
   - Shows a custom toast notification (not Sonner -- uses hand-built DOM elements with CSS classes `custom-fcm-toast-*`)
   - Toast includes order info, "View Order" link, and close button
+  - All catch blocks use typed `error: unknown`
 
 ## Admin Dashboard Integration
 

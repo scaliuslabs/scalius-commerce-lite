@@ -191,8 +191,8 @@ The public GET `/{id}` endpoint performs full product resolution:
 - **Reorder is sequential**: `reorderCollections()` issues one UPDATE per item in a loop rather than using `db.batch()` -- O(n) round trips
 - **No FTS5 search**: Admin search uses SQL `LIKE %term%` instead of FTS5 (categories use FTS5)
 - **Collection `type` in storefront types includes `"AllCategories"`**: The storefront `Collection` interface in `apps/storefront/src/lib/api/types.ts` includes `"AllCategories"` as a valid type, but neither the DB schema enum nor the service accepts it
-- **`updateCollection()` uses `new Date()`**: Sets `updatedAt: new Date()` instead of `sql\`unixepoch()\`` like categories do -- both work with Drizzle's timestamp mode but the pattern is inconsistent
+- **`updateCollection()` uses `new Date()`**: Sets `updatedAt: new Date()` instead of `sql`unixepoch()`` like categories do -- both work with Drizzle's timestamp mode but the pattern is inconsistent
 - **No product count on collection list**: Unlike categories which show product counts, the collection list shows a "content source" summary (N categories + M products from config) but not the actual resolved product count
 - **Public routes duplicate product resolution logic**: The public collection routes in `apps/api/src/routes/collections.ts` contain ~200 lines of product resolution logic that could be extracted to the service module
 - **`getCollectionById()` excludes deleted collections**: The service-layer `getCollectionById()` filters on `isNull(deletedAt)`, so the admin trash view's restore flow must fetch via the list endpoint instead
-- **`deleteCollection()` / bulk operations use `new Date()`**: Soft-delete sets `deletedAt: new Date()` rather than `sql\`unixepoch()\`` -- same inconsistency as update
+- **`deleteCollection()` / bulk operations use `new Date()`**: Soft-delete sets `deletedAt: new Date()` rather than `sql`unixepoch()`` -- same inconsistency as update

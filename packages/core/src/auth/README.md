@@ -55,7 +55,7 @@ Customer Auth Flow (storefront):
 ## Better Auth Configuration
 
 - **Provider**: Email/password only (no OAuth)
-- **Min password length**: 12 characters (enforced by Better Auth config; API schema says 8 -- mismatch)
+- **Min password length**: 12 characters (enforced consistently: Better Auth config, API `changePasswordSchema`, admin frontend `ChangePasswordForm`, and `SetupForm`)
 - **Email verification**: Disabled (`requireEmailVerification: false`)
 - **Session TTL**: 7 days, updated daily, cookie cache 5 minutes
 - **Rate limiting**: 5 sign-in attempts/min, 3 password resets/5min, 5 2FA attempts/min, session checks unlimited
@@ -190,13 +190,13 @@ Completely separate from Better Auth. OTP-based, sessionless JWT-free design usi
 
 ### Flow
 
-1. `sendOtp()` -- validates identifier, checks site settings for allowed method (email/phone/both), rate limits by IP, generates 6-digit OTP, stores in KV, returns queue payload for async delivery
-2. `verifyOtp()` -- validates OTP, creates/finds customer in DB, creates KV session, returns `CustomerSession` with `cs_tok` cookie
+1. `sendOtp()` -- validates identifier, normalizes phone to E.164, checks site settings for allowed method (email/phone/both), rate limits by IP, generates 6-digit OTP, stores in KV, returns queue payload for async delivery
+2. `verifyOtp()` -- normalizes identifier to E.164, validates OTP, creates/finds customer in DB, creates KV session, returns `CustomerSession` with `cs_tok` cookie
 3. `getCustomerBySession()` -- retrieves session from KV by token
 4. `deleteCustomerSession()` -- logout
 5. `updateCustomerProfile()` -- updates customer DB record and refreshes KV session
 
-Phone numbers normalized to E.164 format. New customer records auto-created on first successful OTP verification.
+Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer records auto-created on first successful OTP verification.
 
 ## API Endpoints
 
@@ -207,7 +207,7 @@ Phone numbers normalized to E.164 format. New customer records auto-created on f
 | GET | `/users` | List all admin users with roles and overrides |
 | POST | `/users` | Create admin user (generates temp password, sends invite email, assigns role) |
 | DELETE | `/users/{id}` | Delete admin user (prevents last admin deletion) |
-| POST | `/change-password` | Change current user password |
+| POST | `/change-password` | Change current user password (12-char minimum) |
 | POST | `/update-profile` | Update name and avatar |
 | GET | `/2fa/info` | Get current user 2FA status |
 | POST | `/2fa/mark-verified` | Mark session as 2FA verified |
@@ -242,18 +242,16 @@ Phone numbers normalized to E.164 format. New customer records auto-created on f
 
 1. **2FA is NOT enforced as mandatory**. The `/auth/setup-2fa` page exists and the `TwoFactorSetup` component shows "2FA Required" messaging, but no middleware redirects users there. Users without 2FA can access the admin dashboard freely. The admin-detection middleware only redirects to `/auth/two-factor` if 2FA IS enabled but NOT yet verified for the current session.
 
-2. **Password length mismatch**: Better Auth config enforces `minPasswordLength: 12`, but the API `changePasswordSchema` validates `min(8)`. The stricter Better Auth check wins at runtime, but the API schema is misleading.
+2. **`clearAllPermissionCache()` is local only**: When roles/permissions are modified via the RBAC API, `clearAllPermissionCache()` clears only the current Worker isolate's in-memory Map. Other isolates serve stale permissions for up to 5 minutes (KV TTL). No KV prefix-scan deletion exists.
 
-3. **`clearAllPermissionCache()` is local only**: When roles/permissions are modified via the RBAC API, `clearAllPermissionCache()` clears only the current Worker isolate's in-memory Map. Other isolates serve stale permissions for up to 5 minutes (KV TTL). No KV prefix-scan deletion exists.
+3. **Route permission map has mixed path prefixes**: Some entries use `/api/products/*` (legacy prefix), others use `/api/v1/admin/categories/*` (current prefix). The admin-auth middleware normalizes paths by prepending `/api/v1` if not present, but the rbac middleware in Astro uses paths as-is.
 
-4. **Route permission map has mixed path prefixes**: Some entries use `/api/products/*` (legacy prefix), others use `/api/v1/admin/categories/*` (current prefix). The admin-auth middleware normalizes paths by prepending `/api/v1` if not present, but the rbac middleware in Astro uses paths as-is.
+4. **Fraud checker is NOT called during checkout or order processing**. It is a standalone admin-only tool for manual phone number lookups. No automated fraud screening exists in the order pipeline. See `packages/core/src/modules/fraud-checker/README.md`.
 
-5. **Fraud checker is NOT called during checkout or order processing**. It is a standalone admin-only tool for manual phone number lookups. No automated fraud screening exists in the order pipeline. See `packages/core/src/modules/fraud-checker/README.md`.
+5. **Customer auth has no 2FA**. Storefront customers authenticate solely via single-factor OTP (email or phone).
 
-6. **Customer auth has no 2FA**. Storefront customers authenticate solely via single-factor OTP (email or phone).
+6. **Admin user creation sends temp password by email**. If email delivery fails, the temp password is logged to console as a fallback -- a security concern in production.
 
-7. **Admin user creation sends temp password by email**. If email delivery fails, the temp password is logged to console as a fallback -- a security concern in production.
+7. **No session revocation on role changes**. When a user's roles or permissions are modified, their existing sessions remain valid with stale permissions until the cache TTL expires (5 min). Active sessions are not invalidated.
 
-8. **No session revocation on role changes**. When a user's roles or permissions are modified, their existing sessions remain valid with stale permissions until the cache TTL expires (5 min). Active sessions are not invalidated.
-
-9. **Super admin is set by first-user heuristic**. `autoSeedRbacIfNeeded()` also checks on every isolate start whether the first `role=admin` user (by `createdAt`) is a super admin and sets them if not. This could promote an unintended user if the original super admin is deleted.
+8. **Super admin is set by first-user heuristic**. `autoSeedRbacIfNeeded()` also checks on every isolate start whether the first `role=admin` user (by `createdAt`) is a super admin and sets them if not. This could promote an unintended user if the original super admin is deleted.

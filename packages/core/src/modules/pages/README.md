@@ -27,12 +27,21 @@ These flags are passed through the storefront's `Layout` component and respected
 
 ## Slug System
 
-Slugs are validated with regex `^[a-z0-9]+(?:-[a-z0-9]+)*$` (lowercase alphanumeric with hyphens). The admin form auto-generates slugs from the title. Duplicate slugs are rejected at the service layer (`ConflictError`), checked against non-deleted pages.
+Slugs are validated with regex `^[a-z0-9]+(?:-[a-z0-9]+)*$` (lowercase alphanumeric with hyphens). The admin form auto-generates slugs from the title. The slug prefix in the admin form shows `/` (matching the actual storefront route `/{slug}`). Duplicate slugs are rejected at the service layer (`ConflictError`), checked against non-deleted pages.
 
 On the storefront, `[slug].astro` is the catch-all dynamic route. It performs early validation before making API calls:
 1. Rejects empty slugs, file extensions, known non-page paths (`api`, `favicon`, `_astro`, etc.)
 2. Validates slug format against the same regex pattern
 3. Only then calls `getPageBySlug()` via the public API
+
+## Soft Delete
+
+- `getPageById(db, id)` filters `deletedAt IS NULL` -- soft-deleted pages are invisible to lookups
+- `getPageBySlug(db, slug)` also filters `deletedAt IS NULL`
+- `listPages` supports `showTrashed` flag: when true, shows only deleted pages (`deletedAt IS NOT NULL`); when false (default), shows only non-deleted pages
+- `deletePage(db, id)` -- soft-delete (sets `deletedAt`)
+- `bulkDeletePages(db, ids, permanent?)` -- soft delete by default; permanent=true does hard delete
+- `restorePages(db, ids)` -- clears `deletedAt`
 
 ## Files
 
@@ -48,7 +57,7 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 - `getPageBySlug(db, slug)` -- single page by slug (non-deleted only)
 
 **Mutations:**
-- `createPage(db, data)` -- inserts with `page_` prefixed nanoid; checks slug uniqueness; returns `{ id }`
+- `createPage(db, data)` -- inserts with `page_` prefixed nanoid; checks slug uniqueness among non-deleted pages; returns `{ id }`
 - `updatePage(db, id, data)` -- partial update; validates slug uniqueness if slug changed; throws `NotFoundError` / `ConflictError`
 - `deletePage(db, id)` -- soft-delete (sets `deletedAt`)
 - `bulkDeletePages(db, ids, permanent?)` -- soft or hard delete
@@ -107,7 +116,6 @@ Public routes return `{ page }` or `{ pages, pagination }` inside the standard `
 - Fetches layout data and page data in parallel
 - Processes shortcodes in page content
 - Applies `hideHeader`, `hideFooter`, `hideTitle` flags
-- Passes `page.widgets` array if present (renders inline HTML/CSS)
 
 ## Dependencies
 
@@ -120,5 +128,3 @@ Public routes return `{ page }` or `{ pages, pagination }` inside the standard `
 
 - **No version history**: Unlike widgets, pages have no content versioning system. There is no `pageHistory` table or restore-from-history capability.
 - **Public route uses raw `db` import**: `apps/api/src/routes/pages.ts` imports `db` from `@scalius/database/client` instead of using `c.get("db")` from Hono context.
-- ~~**SEO**: Admin form slug prefix showed `/pages/`~~: Fixed -- slug prefix now shows `/` to match the actual storefront route `/{slug}`.
-- **`page.widgets`**: The storefront `Page` type includes an optional `widgets?: ApiWidget[]` array, and `[slug].astro` renders them. However, the public pages API does not return a `widgets` field -- this array would always be empty/undefined unless populated by a different mechanism.

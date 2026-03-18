@@ -38,7 +38,7 @@ pages-list/
 ### Page Table
 - Sortable columns: Title, Sort Order, Last Updated (click column header to toggle sort direction)
 - Columns: checkbox, title, slug, sort order, status (Published/Draft badge), last updated, actions
-- Actions per row: view on storefront (external link), edit (`/admin/pages/{id}/edit`), soft-delete
+- Actions per row: view on storefront (external link to `/{slug}`), edit (`/admin/pages/{id}/edit`), soft-delete
 - Trash view: restore, permanent delete
 
 ### Publish Status
@@ -79,6 +79,7 @@ Each page row has an external link icon that opens the page on the storefront. T
 - Two-column layout: content (left 2/3), settings (right 1/3)
 - TipTap rich text editor (lazy-loaded) for content
 - Auto-slug generation from title
+- Slug prefix shows `/` (matching the storefront route `/{slug}`)
 - Status & Display card: isPublished, hideHeader, hideFooter, hideTitle toggles
 - URL & Settings card: slug input, sort order, "View on Storefront" link (edit mode only)
 - Collapsible SEO card: metaTitle (with 60-char counter), metaDescription (with 160-char counter)
@@ -105,5 +106,4 @@ The `usePages` hook converts timestamps from the API response. It handles both I
 
 - **Statistics are partial**: Published/draft counts are computed from the current page of results only, not from all pages. The total count comes from API pagination metadata but published/draft breakdown requires all pages or a dedicated stats endpoint.
 - **No inline publish toggle**: Unlike widgets (which have an inline active/inactive switch), pages require bulk actions to change publish status.
-- ~~**Admin form slug prefix**~~: Fixed -- slug prefix now shows `/` to match the storefront route `/{slug}`.
 - **Loader split**: The page edit route uses `getPageEditData` from `@/loaders/admin/catalog` (not a pages-specific loader). The list page has no loader -- data is fully client-side fetched.

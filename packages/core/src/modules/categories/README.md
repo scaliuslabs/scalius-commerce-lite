@@ -9,8 +9,9 @@ Categories group products for navigation and filtering. Each product belongs to 
 ## Features
 
 - **FTS5 search**: Admin list uses `ftsMatch("categories_fts", "categories", search)` for full-text search
-- **Soft-delete with guards**: Cannot soft-delete a category that still has products assigned (throws `ValidationError` with affected product names)
-- **Permanent delete with cleanup**: Bulk permanent-delete scans all active collections and strips deleted category IDs from their JSON `config.categoryIds` arrays
+- **Soft-delete with guards**: Cannot soft-delete a category that still has products assigned (throws `ValidationError` with affected product names and a suggestion message)
+- **Permanent delete with product check**: `permanentlyDeleteCategory()` checks for products and throws `ConflictError` if any still reference the category
+- **Bulk permanent delete with cleanup**: `bulkDeleteCategories()` with `permanent=true` scans all active collections and strips deleted category IDs from their JSON `config.categoryIds` arrays
 - **Slug uniqueness**: Enforced at create and update time (only among non-deleted categories)
 - **Product count**: Admin list includes a per-category product count via a separate grouped query, batched with the main queries
 - **Batch queries**: `listCategories()` uses `db.batch()` to run count, results, and product-count queries in parallel
@@ -77,10 +78,10 @@ Table `categories` in `packages/database/src/schema/products.ts`:
 |----------|-----------|-------|
 | `createCategory()` | `(db, data)` | Slug uniqueness check, returns `{ id }` |
 | `updateCategory()` | `(db, id, data)` | Slug conflict check, throws `NotFoundError` |
-| `deleteCategory()` | `(db, id)` | Soft-delete, rejects if products assigned |
-| `bulkDeleteCategories()` | `(db, categoryIds, permanent?)` | Soft or permanent; permanent cleans collection configs |
+| `deleteCategory()` | `(db, id)` | Soft-delete, rejects if products assigned (throws `ValidationError` with suggestion + affected product list) |
+| `bulkDeleteCategories()` | `(db, categoryIds, permanent?)` | Soft or permanent; checks for products first; permanent cleans collection configs |
 | `restoreCategories()` | `(db, categoryIds)` | Sets `deletedAt = null` |
-| `permanentlyDeleteCategory()` | `(db, id)` | Hard delete, rejects if products assigned (throws `ConflictError`) |
+| `permanentlyDeleteCategory()` | `(db, id)` | Hard delete, rejects if products assigned (throws `ConflictError` with count) |
 
 ## API Endpoints
 

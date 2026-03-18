@@ -6,21 +6,18 @@ Admin push notifications (FCM) and transactional order lifecycle emails.
 
 | Feature | Implemented | Connected End-to-End |
 |---------|-------------|---------------------|
-| FCM push to admin (new order) | Yes | **NO** -- function exists but is never called |
+| FCM push to admin (new order) | Yes | Yes -- called from queue consumer via `sendOrderNotification()` |
 | Order email to customer | Yes | Yes -- via Cloudflare Queue |
 | OTP email to customer | Yes | Yes -- via Cloudflare Queue |
 | OTP via WhatsApp | Yes | Yes -- via Cloudflare Queue |
 | OTP via SMS | No | No -- provider logic pending |
 
-### FCM Push: NOT Connected
+### FCM Push: Connected
 
-`sendOrderNotification()` is fully implemented and exported but is **never imported or called** by any route, queue consumer, or order creation flow. The function exists in both:
-- `packages/core/src/modules/notifications/notifications.service.ts` (modular version, takes `db` param)
-- `packages/core/src/notification-utils.ts` (legacy version, uses global `db` import)
+`sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler calls it with `ctx.waitUntil()` for background execution.
 
-Neither version is invoked anywhere. The queue consumer only handles `order.notification` messages by calling `sendOrderNotificationEmail()` -- it does not call `sendOrderNotification()` for FCM push. No order creation or status update route enqueues an FCM push message.
-
-To connect it, the order creation flow (or the `order.notification` queue handler) would need to call `sendOrderNotification(db, order, env, requestUrl)` -- likely via `ctx.waitUntil()` since it is designed for background execution.
+- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`), falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var
+- `getFirebaseAdminMessaging(env, serviceAccountJson?)` creates a new `FCMMessagingService` instance when DB credentials are provided, or returns a singleton for env-var credentials
 
 ### Order Emails: Connected
 
@@ -35,7 +32,7 @@ The order email flow is fully connected:
 
 ### `sendOrderNotification(db, order, env, requestUrl)`
 
-Sends FCM push notifications to all active admin devices about a new order. **Not connected** -- see above.
+Sends FCM push notifications to all active admin devices about a new order.
 
 - Reads Firebase service account from `settings` table (category `firebase`, key `service_account`), falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var
 - Queries all active tokens from `adminFcmTokens` table
@@ -43,10 +40,11 @@ Sends FCM push notifications to all active admin devices about a new order. **No
 - Calls `FCMMessagingService.sendEachForMulticast()` (iterates tokens sequentially)
 - Auto-deactivates invalid tokens (unregistered or invalid registration) in the database
 - Designed for `ctx.waitUntil()` -- catches all errors internally to prevent unhandled rejections
+- All catch blocks use typed `error: unknown` with `instanceof Error` checks
 
 ### `sendOrderNotificationEmail(email, name, orderId, type, data?)`
 
-Sends transactional order emails to customers. **Connected** via queue.
+Sends transactional order emails to customers. Connected via queue.
 
 Supported email types:
 - `order_created` -- "We've received your order"
@@ -62,7 +60,7 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification
 
 ### `order.notification`
 - Enqueued by: `PATCH /admin/orders/:id/status` when status change warrants notification
-- Handler: Calls `sendOrderNotificationEmail()` if `customerEmail` is present
+- Handler: Calls `sendOrderNotificationEmail()` if `customerEmail` is present, and `sendOrderNotification()` for FCM push
 - Queue: `ORDER_NOTIFICATIONS_QUEUE`
 - Retry: Cloudflare auto-retry up to 3 times, 30s delay on failure
 
@@ -77,7 +75,6 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification
 
 - `index.ts` -- barrel exports: `sendOrderNotification`, `sendOrderNotificationEmail`
 - `notifications.service.ts` -- both functions
-- `../../notification-utils.ts` -- legacy copy of `sendOrderNotification` (uses global `db` import instead of parameter; also not called anywhere)
 
 ## Dependencies
 

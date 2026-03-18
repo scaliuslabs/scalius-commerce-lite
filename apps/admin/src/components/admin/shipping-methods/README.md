@@ -27,12 +27,12 @@ The shipping methods UI lives under the admin settings section. It provides a fu
 
 ```
 ShippingMethodsContainer
-  ├── useShippingMethods() hook  ──>  GET  /api/v1/admin/settings/shipping-methods
-  ├── MethodsTable                    (renders data, emits sort/edit/delete/restore/selection events)
-  ├── MethodFormDialog                POST /api/v1/admin/settings/shipping-methods     (create)
-  │                                   PUT  /api/v1/admin/settings/shipping-methods/:id (update)
-  ├── BulkActionsBar                  (loops over selected IDs, calls individual endpoints)
-  └── AlertDialog (x2)               (single-item soft-delete and permanent-delete confirmations)
+  |-- useShippingMethods() hook  -->  GET  /api/v1/admin/settings/shipping-methods
+  |-- MethodsTable                    (renders data, emits sort/edit/delete/restore/selection events)
+  |-- MethodFormDialog                POST /api/v1/admin/settings/shipping-methods     (create)
+  |                                   PUT  /api/v1/admin/settings/shipping-methods/:id (update)
+  |-- BulkActionsBar                  (loops over selected IDs, calls individual endpoints)
+  +-- AlertDialog (x2)               (single-item soft-delete and permanent-delete confirmations)
 ```
 
 ## API Endpoints Consumed
@@ -49,6 +49,10 @@ All requests go through the admin Vite proxy to the API worker.
 | `POST`   | `/api/v1/admin/settings/shipping-methods/:id/restore` | Restore soft-deleted method     |
 | `DELETE` | `/api/v1/admin/settings/shipping-methods/:id/permanent-delete` | Hard delete from DB     |
 
+### Server-Side Uniqueness Validation
+
+The create endpoint checks for an existing non-deleted method with the same name before inserting. The update endpoint checks for a non-deleted method with the same name AND a different ID (`id != :id`), correctly excluding the method being updated from the uniqueness check.
+
 ## Shipping Method Schema
 
 From `packages/database/src/schema/system.ts` -- `shipping_methods` table:
@@ -56,7 +60,7 @@ From `packages/database/src/schema/system.ts` -- `shipping_methods` table:
 | Column       | Type      | Default  | Notes                                 |
 |--------------|-----------|----------|---------------------------------------|
 | `id`         | text PK   |          | Format: `sm_` + nanoid                |
-| `name`       | text      |          | Required, unique                      |
+| `name`       | text      |          | Required, unique among non-deleted    |
 | `fee`        | real      | 0        | Shipping cost (displayed with currency symbol from `useCurrency()` hook) |
 | `description`| text      | null     | Optional, max 255 chars               |
 | `is_active`  | boolean   | true     | Whether method appears on storefront  |
@@ -73,7 +77,7 @@ A separate public route exists for storefront consumption:
 
 | Method | Path                     | Notes                                                              |
 |--------|--------------------------|--------------------------------------------------------------------|
-| `GET`  | `/api/v1/shipping-methods` | Returns active, non-deleted methods ordered by `sortOrder` then `name`. Cached 5 minutes via `cacheMiddleware`. |
+| `GET`  | `/api/v1/shipping-methods` | Returns active, non-deleted methods ordered by `sortOrder` then `name`. Cached 5 minutes via `cacheMiddleware`. Formats `createdAt`/`updatedAt` as ISO strings if they are Date objects. |
 
 This endpoint is defined in `apps/api/src/routes/shipping-methods.ts` and is independent of the admin CRUD routes.
 
@@ -93,6 +97,5 @@ Table supports sorting by: `name`, `fee`, `isActive`, `sortOrder`, `createdAt`, 
 ## Known Gaps
 
 - **No bulk API endpoint** -- bulk trash/delete/restore loops over individual endpoints sequentially, which could be slow with many selections
-- **Name uniqueness check in update is inverted** -- the admin shipping API update handler checks for a method with the same name AND the same ID (should exclude the current ID), so the duplicate name check during update may not catch actual conflicts
 - **No optimistic locking** -- shipping method updates do not use version checking, so concurrent edits overwrite silently
 - **Form validation is minimal** -- relies on HTML `required` attribute and Zod on the API side; no client-side error display for API validation failures beyond toast

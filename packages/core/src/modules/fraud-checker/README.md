@@ -8,7 +8,7 @@ Phone number fraud risk assessment via pluggable providers. Admin-only manual lo
 |------|---------|
 | `index.ts` | Barrel exports for service, provider interface, and registry functions |
 | `provider.ts` | `FraudCheckProvider` interface, `DefaultFraudCheckProvider`, provider registry (`registerFraudCheckProvider`, `getFraudCheckProvider`) |
-| `service.ts` | `FraudCheckerService` class -- CRUD for provider configs, phone number lookup, connection testing |
+| `service.ts` | `FraudCheckerService` class -- CRUD for provider configs, phone number lookup, connection testing. Receives `Database` via constructor injection. |
 
 ## How It Works
 
@@ -53,13 +53,13 @@ Risk level calculation:
 - Cancel rate >= 20% -> `"medium"`
 - Cancel rate < 20% -> `"low"`
 
-Default API URL: `https://fraudchecker.link/api/v1/qc/`
-
 ### Provider Registry
 
 In-memory `Map<string, FraudCheckProvider>`. The `"default"` provider is registered on module load. Custom providers are registered via `registerFraudCheckProvider()`. Lookup falls back to `"default"` when the requested type is not found.
 
 ### Service Layer (`FraudCheckerService`)
+
+Constructor-injected: `new FraudCheckerService(db)` receives the `Database` instance per request (from Hono context), avoiding module-level singleton issues.
 
 Stores provider configurations in the `settings` table with `category = "fraud-checker"`. Each provider is a JSON blob keyed by a nanoid.
 
@@ -111,6 +111,4 @@ API keys are masked as `"••••••••••••"` in all responses
 
 3. **No audit trail.** Fraud check lookups are not logged. There is no history of which phone numbers were checked, when, or by whom.
 
-4. **`db` import is module-level singleton.** `service.ts` imports `db` directly from `@scalius/database/client` (the module-level singleton), not from Hono context. This works in single-tenant but would break in multi-tenant scenarios.
-
-5. **Test phone number is hardcoded.** `testProvider()` always uses `"01700000000"` as the test phone number. This is a Bangladesh mobile number format.
+4. **Test phone number is hardcoded.** `testProvider()` always uses `"01700000000"` as the test phone number. This is a Bangladesh mobile number format.
