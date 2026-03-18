@@ -77,6 +77,39 @@ import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 // basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
 const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
+// Global error handler — ensures ALL uncaught errors return JSON, not plain text.
+// Hono's built-in default returns c.text("Internal Server Error", 500) which causes
+// SyntaxError when the browser tries to JSON.parse() it. This handler mirrors the
+// middleware-based handler below but acts as Hono's registered onError fallback.
+app.onError((err, c) => {
+  console.error("API Error (onError):", err);
+
+  if (err instanceof ApiError) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: err.code,
+          message: err.message,
+          details: err.details,
+        },
+      },
+      err.status as 400 | 401 | 403 | 404 | 409 | 422 | 500,
+    );
+  }
+
+  return c.json(
+    {
+      success: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: err.message || "Internal Server Error",
+      },
+    },
+    500,
+  );
+});
+
 // NOTE: Do NOT add compress() middleware here. Cloudflare Workers handles
 // compression at the edge automatically. Application-level compression
 // breaks the cache middleware (compressed body stored as garbled text).

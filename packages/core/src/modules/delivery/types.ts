@@ -35,6 +35,8 @@ export interface PathaoOrderResponse {
     order_status: string;
     delivery_fee: number;
   };
+  /** Field-level validation errors returned by Pathao (e.g. { recipient_phone: ["..."] }) */
+  errors?: Record<string, string[]>;
 }
 
 export interface PathaoStatusResponse {
@@ -70,6 +72,8 @@ export interface PathaoConfig {
 export interface SteadfastOrderResponse {
   status: number;
   message: string;
+  /** Field-level validation errors returned by Steadfast */
+  errors?: Record<string, string[]>;
   consignment: {
     consignment_id: number;
     invoice: string;

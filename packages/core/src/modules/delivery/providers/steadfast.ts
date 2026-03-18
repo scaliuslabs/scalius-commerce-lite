@@ -202,9 +202,19 @@ export class SteadfastProvider implements DeliveryProviderInterface {
           },
         };
       } else {
+        // Include field-level validation errors from Steadfast when available
+        let errorDetail = responseData.message || "Unknown error";
+        if (responseData.errors && typeof responseData.errors === "object") {
+          const fieldErrors = Object.entries(responseData.errors)
+            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(", ") : msgs}`)
+            .join("; ");
+          if (fieldErrors) {
+            errorDetail = `${errorDetail} — ${fieldErrors}`;
+          }
+        }
         return {
           success: false,
-          message: `API Error: ${responseData.message || "Unknown error"}`,
+          message: `Steadfast: ${errorDetail}`,
         };
       }
     } catch (error: unknown) {
