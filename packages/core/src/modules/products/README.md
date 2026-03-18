@@ -1,20 +1,152 @@
-# Products
+# Products Core Module
 
-Product CRUD, variant management, image handling, barcode support, and storefront queries.
+Product CRUD, variant management, image handling, rich content (additional info), product attributes, barcode support, and storefront queries. Split across three service files by consumer: admin, storefront, and variant-specific operations.
+
+## Features
+
+- Paginated product listing with FTS5 full-text search (admin + storefront)
+- Barcode-aware search: auto-detects digit-only 8-13 char queries and searches by exact barcode match in addition to FTS
+- Product CRUD with slug uniqueness enforcement
+- Soft delete / restore / permanent delete lifecycle with order/discount safety checks
+- Bulk soft-delete and bulk permanent-delete with order/discount guards
+- Product images: ordered, first = primary, stored via `productImages` table
+- Rich content sections (additional info): arbitrary titled HTML blocks stored in `productRichContent`, ordered by `sortOrder`
+- Product attributes: many-to-many via `productAttributeValues`, linked to global `productAttributes` definitions
+- Variant CRUD: size, color, weight, SKU (unique), price, stock, barcode, barcode type, discount (percentage or flat)
+- Variant duplicate with auto-incrementing SKU suffix (`-COPY`, `-COPY2`, etc.)
+- Bulk variant create (chunked at 50 per insert), bulk delete, bulk update
+- Variant sort order: separate `colorSortOrder` and `sizeSortOrder` columns, updated per-value across all variants of a product
+- Storefront product listing with attribute-based filtering (AND logic across attributes)
+- Storefront product detail: parallel fetching of images, variants, rich content, attributes, category, and up to 6 related products from same category
+- Storefront search: lightweight variant-aware product search for cart/checkout use
+- Discounted price calculation supporting both percentage and flat discount types
+- Feature extraction from description (parses bullet-point lines)
+- Default variant synthesis: if a product has no variants, storefront returns a synthetic default variant with stock=100
+
+## Data Flow
+
+```
+Admin UI (ProductForm.tsx)
+  --> fetch(/api/v1/admin/products) [POST/PUT]
+    --> apps/api/src/routes/admin/products.ts [Hono route, Zod validation]
+      --> packages/core/src/modules/products/products.admin.ts [createProduct/updateProduct]
+        --> D1 batch: products + productImages + productRichContent + productAttributeValues
+
+Storefront ([slug].astro)
+  --> apps/storefront/src/lib/api/products.ts [getProductBySlug, edge-cached]
+    --> fetch(/api/storefront/products/:slug)
+      --> apps/api/src/routes/products.ts [Hono route, 1h cache middleware]
+        --> packages/core/src/modules/products/products.storefront.ts [getStorefrontProductBySlug]
+          --> D1: parallel queries for images, variants, richContent, attributes, category, relatedProducts
+```
 
 ## Files
 
-- `index.ts` -- barrel exports
-- `products.service.ts` -- `getProducts()`, `getProductDetails()`, `getProductStats()`, `getCategoryStats()`, `createProduct()`, `updateProduct()`, `deleteProduct()`, `restoreProduct()`, `permanentDeleteProduct()`, `bulkDeleteProducts()`, `bulkUpdateVariants()`, `getStorefrontProducts()`, `getStorefrontProductBySlug()`, `lookupByBarcode()`, `getProductVariants()`, `createVariant()`, `updateVariant()`, `deleteVariant()`, `duplicateVariant()`, `bulkCreateVariants()`, `bulkDeleteVariants()`, `getVariantSortOrder()`, `updateVariantSortOrder()`, `searchStorefrontProducts()`
-- `products.validation.ts` -- `CreateProductInput`, `UpdateProductInput`, `createVariantSchema`, `updateVariantSchema`, `bulkVariantSchema`, `updateSortOrderSchema`
+| File | Description |
+|------|-------------|
+| `index.ts` | Barrel re-exports from all submodules |
+| `products.types.ts` | Zod schemas for variant operations (`createVariantSchema`, `updateVariantSchema`, `bulkVariantSchema`, `bulkCreateVariantsSchema`, `bulkDeleteVariantsSchema`, `bulkUpdateVariantsSchema`, `updateSortOrderSchema`) and TypeScript interfaces (`ProductWithDetails`, `ProductListItem`, `StorefrontProductFilterInput`) |
+| `products.validation.ts` | Zod schemas for product create/update: `createProductSchema`, `updateProductSchema` with shared sub-schemas for images, attributes, and additional info |
+| `products.admin.ts` | Admin read queries (`getProducts`, `getProductDetails`, `getProductStats`, `getCategoryStats`) and write mutations (`createProduct`, `updateProduct`, `deleteProduct`, `restoreProduct`, `permanentDeleteProduct`, `bulkDeleteProducts`, `bulkUpdateVariants`) |
+| `products.storefront.ts` | Storefront read queries (`getStorefrontProducts`, `getStorefrontProductBySlug`, `searchStorefrontProducts`) with discount calculation, feature extraction, and default variant synthesis |
+| `products.variants.ts` | Variant-specific operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`, `duplicateVariant`, `bulkCreateVariants`, `bulkDeleteVariants`, `getVariantSortOrder`, `updateVariantSortOrder`) |
 
-## Key patterns
+## API Endpoints
 
-- Variants support `barcode` and `barcodeType` fields (ean13, upc, isbn, gtin, custom)
-- `lookupByBarcode()` finds variant + product by exact barcode match
-- Search auto-detects barcode patterns (all digits, 8-13 chars) and searches by barcode OR FTS
+### Admin Products (`/api/v1/admin/products`)
+
+| Method | Path | Handler | Description |
+|--------|------|---------|-------------|
+| GET | `/stats` | `getProductStats` | Dashboard stats: total, active, with-images, category count |
+| GET | `/lookup-barcode?barcode=X` | `lookupByBarcode` | Find variant + product by exact barcode |
+| GET | `/` | `getProducts` | Paginated list with FTS search, category filter, sort, trash toggle |
+| POST | `/` | `createProduct` | Create product with images, attributes, rich content |
+| POST | `/bulk-delete` | `bulkDeleteProducts` | Soft or permanent bulk delete |
+| GET | `/{id}` | `getProductDetails` | Full product with variants, images, rich content, attributes |
+| PUT | `/{id}` | `updateProduct` | Replace product + images + attributes + rich content |
+| DELETE | `/{id}` | `deleteProduct` | Soft delete (set deletedAt) |
+| POST | `/{id}/restore` | `restoreProduct` | Clear deletedAt |
+| DELETE | `/{id}/permanent` | `permanentDeleteProduct` | Hard delete with order/discount guards |
+| POST | `/{id}/variants` | `createVariant` | Create single variant |
+| GET | `/{id}/variants` | `getProductVariants` | List variants for product |
+| PUT | `/{id}/variants/{variantId}` | `updateVariant` | Update single variant |
+| DELETE | `/{id}/variants/{variantId}` | `deleteVariant` | Hard delete variant |
+| POST | `/{id}/variants/bulk-create` | `bulkCreateVariants` | Bulk create (chunked at 50) |
+| POST | `/{id}/variants/bulk-delete` | `bulkDeleteVariants` | Bulk hard delete |
+| POST | `/{id}/variants/bulk-update` | `bulkUpdateVariants` | Bulk update fields |
+| POST | `/{id}/variants/{variantId}/duplicate` | `duplicateVariant` | Clone variant with new SKU |
+| GET | `/{id}/variants/sort-order` | `getVariantSortOrder` | Get color/size sort order |
+| POST | `/{id}/variants/sort-order` | `updateVariantSortOrder` | Set color/size sort order |
+
+### Admin Attributes (`/api/v1/admin/attributes`)
+
+| Method | Path | Handler | Description |
+|--------|------|---------|-------------|
+| GET | `/` | inline | Paginated list with search, sort, trash toggle, value counts |
+| POST | `/` | inline | Create attribute (name, slug, filterable, options) |
+| PUT | `/{id}` | inline | Update attribute fields |
+| DELETE | `/{id}` | inline | Soft delete (blocked if in use by products) |
+| DELETE | `/{id}/permanent` | inline | Hard delete |
+| POST | `/{id}/restore` | inline | Restore soft-deleted attribute |
+| POST | `/bulk-delete` | inline | Bulk soft or permanent delete |
+| POST | `/bulk-restore` | inline | Bulk restore |
+| GET | `/{id}/values` | inline | List unique values with product counts, preset flags, sample products |
+| POST | `/{id}/values` | inline | Add preset value to options array |
+| PUT | `/{id}/values` | inline | Rename value across all products + options array |
+| DELETE | `/{id}/values` | inline | Remove value from all products + options array |
+
+### Storefront Products (`/api/storefront/products`)
+
+| Method | Path | Handler | Description |
+|--------|------|---------|-------------|
+| GET | `/` | `getStorefrontProducts` | Paginated list with category, search, price range, freeDelivery, hasDiscount, attribute filters, sort |
+| GET | `/search` | `searchStorefrontProducts` | Lightweight search with variants for cart/checkout |
+| GET | `/{slug}` | `getStorefrontProductBySlug` | Full product detail with variants, images, attributes, additionalInfo, relatedProducts |
+
+### Storefront Attributes (`/api/storefront/attributes`)
+
+| Method | Path | Handler | Description |
+|--------|------|---------|-------------|
+| GET | `/filterable` | inline | All filterable attributes with their unique values (1h cache) |
+| GET | `/category/{categoryId}` | inline | Filterable attributes scoped to a category by ID (30m cache) |
+| GET | `/category-slug/{categorySlug}` | inline | Filterable attributes scoped to a category by slug (30m cache) |
+| GET | `/search-filters?q=X&categoryId=Y` | inline | Filterable attributes for search results (based on matching product categories) |
+
+## Known Gaps
+
+1. **`discountType` not stored on product list view**: `getProducts()` in `products.admin.ts:106` selects `discountPercentage` but not `discountType` or `discountAmount`. The product list row only displays percentage discount (`ProductRow.tsx:140`) even though flat discounts exist. A flat-amount discount shows as "0% off" in the list.
+
+2. **`hasDiscount` filter only checks percentage**: `getStorefrontProducts()` in `products.storefront.ts:90-91` filters `hasDiscount` using only `discountPercentage > 0`, missing products with flat discounts (`discountAmount > 0, discountPercentage = 0`).
+
+3. **Update is delete-and-reinsert for images/attributes/richContent**: `updateProduct()` in `products.admin.ts:573-575` deletes ALL images, attributes, and rich content then re-inserts. This means image IDs change on every save (unless the admin passes the original ID and it doesn't start with `temp_`).
+
+4. **`getProductDetails` does not filter soft-deleted variants**: `products.admin.ts:288-290` fetches all variants including soft-deleted ones. The admin loader then filters them client-side (`products.ts:98`). Not a bug, but inconsistent with storefront which filters server-side.
+
+5. **Variant sort order updates are not batched**: `updateVariantSortOrder()` in `products.variants.ts:364-395` runs individual UPDATE queries per color and per size value rather than using `db.batch()`, which could be slow for many distinct values.
+
+6. **`searchStorefrontProducts` re-imports modules at call time**: `products.storefront.ts:458-459` uses dynamic `import()` for `ftsMatch` and drizzle-orm operators that are already available at module scope. This is unnecessary overhead.
+
+7. **`permanentDeleteProduct` does not clean up attribute values in bulk delete**: `bulkDeleteProducts()` in `products.admin.ts:688-691` deletes variants, images, and products but not `productAttributeValues` or `productRichContent` for permanent deletes. Single `permanentDeleteProduct()` does clean these up (`products.admin.ts:653-657`). The FK cascade on `productAttributeValues` and `productRichContent` handles this because both reference `products.id` with `onDelete: cascade`, so this is not a data integrity issue, but the bulk path relies on cascade while the single path explicitly deletes.
+
+8. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain all business logic inline in the route handlers rather than delegating to a core service module.
+
+9. **Variant images feature uses HTML comment marker**: The variant-images-enabled flag is stored as `<!--variant_images:enabled-->` appended to `metaDescription` (`utils.ts:47-54`). Both admin and storefront parse this marker. This piggybacks on an SEO field for unrelated feature flagging.
 
 ## Dependencies
 
-- `@scalius/database` -- `products`, `productVariants`, `productImages`, `productRichContent`, `productAttributes`, `productAttributeValues`, `categories`, `orderItems`
-- `@scalius/core/search` -- FTS5
+### This module depends on:
+- `@scalius/database/schema` -- `products`, `productVariants`, `productImages`, `productRichContent`, `productAttributes`, `productAttributeValues`, `categories`, `orderItems`, `discountProducts`
+- `@scalius/core/search` -- `ftsMatch`, `sanitizeFtsQuery` for FTS5 full-text search
+- `@scalius/core/errors` -- `NotFoundError`, `ConflictError`, `ValidationError`
+- `drizzle-orm` -- query building, batch operations
+- `nanoid` -- ID generation (prefixed: `prod_`, `img_`, `var_`, `prc_`, `val_`, `attr_`)
+- `zod` -- validation schemas
+
+### Depends on this module:
+- `apps/api/src/routes/admin/products.ts` -- admin API routes
+- `apps/api/src/routes/products.ts` -- storefront API routes
+- `apps/admin/src/loaders/admin/products.ts` -- SSR data loaders
+- `apps/admin/src/components/admin/ProductForm.tsx` -- admin form (via fetch)
+- `apps/admin/src/components/admin/product-form/variants/` -- variant management (via fetch)
+- `apps/storefront/src/lib/api/products.ts` -- storefront API client (via fetch, edge-cached)
+- `apps/storefront/src/pages/products/[slug].astro` -- product detail page

@@ -1,27 +1,234 @@
-# Inventory
+# Inventory Module
 
-Stock management with reservation-based concurrency control, batch operations, validation, and expiry.
+Stock management with reservation-based concurrency control, batch operations, order-status-driven transitions, reservation expiry, low-stock alerts, and audit logging.
+
+## Overview
+
+The inventory system tracks stock at the **product variant** level. Three stock counters live on the `product_variants` table:
+
+| Column          | Purpose                                                        |
+|-----------------|----------------------------------------------------------------|
+| `stock`         | Physical on-hand inventory count                               |
+| `reservedStock` | Units currently held for unconfirmed orders                     |
+| `preorderStock` | Pre-order allocation (separate from regular stock)             |
+
+**Available stock** is always `stock - reservedStock`.
+
+Concurrency is managed through `stockVersion` (CAS -- compare-and-swap), a dedicated optimistic-locking counter on `product_variants` that is independent from the general `version` column used for non-stock updates (price, metadata, etc.). Every stock mutation increments `stockVersion` and conditions the UPDATE on the previously-read value. On conflict the operation retries up to 3 times with exponential backoff (50ms base).
+
+## Inventory Lifecycle / State Machine
+
+Stock follows a clear lifecycle driven by order status transitions. The order-level `inventoryAction` column (`orders.inventory_action`) tracks which phase each order is in.
+
+### Per-Order Inventory States
+
+```
+  none ──> reserved ──> deducted
+             │              │
+             │              └──> restored (returned/refunded)
+             │
+             └──> restored (cancelled pre-payment)
+                    │
+                    └──> reserved (admin reactivation)
+```
+
+| `inventoryAction` | Meaning                                                              |
+|-------------------|----------------------------------------------------------------------|
+| `none`            | No inventory action yet (e.g. incomplete checkout)                   |
+| `reserved`        | `reservedStock` incremented on storefront checkout                   |
+| `deducted`        | `stock` decremented and reservation released on shipment             |
+| `restored`        | Stock added back on cancellation/return after deduction              |
+
+### Per-Variant Stock Transitions
+
+```
+                    ┌──────────────────────────────────┐
+                    │       product_variants row        │
+                    │  stock=100  reservedStock=0       │
+                    └──────────────┬───────────────────┘
+                                   │
+                          reserveStock() [checkout]
+                          reservedStock += qty
+                          stockVersion += 1
+                                   │
+                    ┌──────────────▼───────────────────┐
+                    │  stock=100  reservedStock=5       │
+                    │  available = 95                   │
+                    └──────────────┬───────────────────┘
+                                   │
+              ┌────────────────────┼────────────────────┐
+              │                    │                     │
+     deductStock()        releaseReservation()    [expiry cron]
+     [payment confirmed]  [cancel/payment fail]   releaseExpiredReservations()
+     stock -= qty         reservedStock -= qty    reservedStock -= qty
+     reservedStock -= qty stockVersion += 1       stockVersion += 1
+     stockVersion += 1
+              │                    │                     │
+              ▼                    ▼                     ▼
+    stock=95                stock=100              stock=100
+    reservedStock=0         reservedStock=0         reservedStock=0
+```
+
+### Order Status to Inventory Action Mapping
+
+Handled by `inventory-transitions.ts` -- the **single source of truth** for how inventory reacts to order status changes:
+
+| Order status change | `inventoryAction` guard  | Inventory operation              | New `inventoryAction` |
+|---------------------|-------------------------|----------------------------------|-----------------------|
+| Any -> `shipped`    | Must be `reserved`       | `deductMultiple()` -- decrements `stock`, releases `reservedStock` | `deducted`     |
+| Any -> `cancelled`  | Must be `reserved`       | `releaseMultiple()` -- releases `reservedStock`                    | `restored`     |
+| Any -> `returned`   | Must be `reserved`       | `releaseMultiple()` -- releases `reservedStock`                    | `restored`     |
+| Any -> `refunded`   | Must be `reserved`       | `releaseMultiple()` -- releases `reservedStock`                    | `restored`     |
+| `cancelled` -> active status | Must be `restored` | `reserveMultiple()` -- re-reserves stock                       | `reserved`     |
+
+All transitions are **idempotent**: calling `applyInventoryForStatusChange()` multiple times with the same status produces no duplicate adjustments because it checks `inventoryAction` before acting.
+
+## Stock Pools
+
+Three pools control how stock is sourced:
+
+| Pool        | Reserve behavior                              | Deduct behavior                                   |
+|-------------|-----------------------------------------------|---------------------------------------------------|
+| `regular`   | Increments `reservedStock`, checks `stock - reservedStock >= qty` | Decrements both `stock` and `reservedStock`    |
+| `preorder`  | Decrements `preorderStock`, increments `reservedStock`, requires `allowPreorder` | Decrements only `reservedStock` (preorderStock already consumed) |
+| `backorder` | Increments `reservedStock`, requires `allowBackorder`, checks `backorderLimit` (0 = unlimited) | Decrements only `reservedStock`               |
+
+The pool is stored on `orders.inventoryPool` and flows through all inventory operations.
+
+## Reservation Expiry (Cron)
+
+`releaseExpiredReservations()` sweeps for orphaned reservations. Designed for a Cloudflare Cron Trigger (e.g. every 15 minutes).
+
+A reservation is considered expired when:
+1. It is a movement of type `reserved` or `preorder_reserved`
+2. It was created more than `maxAgeMinutes` ago (default: 30)
+3. It has an `orderId` (not null)
+4. No corresponding `deducted` / `preorder_deducted` movement exists for the same order+variant
+5. No corresponding `released` movement with notes containing "expired reservation" exists (prevents double-release)
+
+The sweep groups by `(variantId, orderId)`, sums quantities, and for each expired group:
+- Decrements `reservedStock` on the variant (clamped to 0 via `MAX(0, ...)`)
+- Records a "released" movement with note `"expired reservation (age > 30min, order {orderId})"`
+
+The function is **idempotent** -- the "released" movement it creates excludes that reservation from future sweeps.
 
 ## Files
 
-- `index.ts` -- barrel exports
-- `reserve.ts` -- `reserveStock()`, `reserveMultiple()`, `reserveStockBatch()`
-- `deduct.ts` -- `deductStock()`, `deductMultiple()`
-- `release.ts` -- `releaseReservation()`, `releaseMultiple()`
-- `expiry.ts` -- `releaseExpiredReservations()` (cron), `ExpiryResult`
-- `validation.ts` -- `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()`
-- `stock-adjustment.ts` -- `adjustStock()`, `setStock()`, `lookupByBarcodeOrSku()`
-- `movements.ts` -- `recordMovement()` audit trail
-- `alerts.ts` -- `checkAndAlertLowStock()`, `LowStockAlertResult`
-- `inventory.service.ts` -- `InventoryService` (getInventoryOverview, adjustInventory)
-- `inventory.schema.ts` -- Zod validation schemas
-- `inventory-transitions.ts` -- `buildInventoryStatements()` returns SQL statements for batching into caller's `db.batch()`, `applyInventoryForStatusChange()` wraps it for standalone use
-- `types.ts` -- `StockOperationResult`, `ReservationEntry`
+| File                       | Exports / Purpose                                                                                  |
+|----------------------------|----------------------------------------------------------------------------------------------------|
+| `index.ts`                 | Barrel re-exports for all public API                                                               |
+| `types.ts`                 | `StockOperationResult`, `ReservationEntry`, `MovementEntry` interfaces                             |
+| `reserve.ts`               | `reserveStock()` -- single variant CAS reservation; `reserveMultiple()` -- sequential with rollback; `reserveStockBatch()` -- atomic D1 batch with CAS verification and batch rollback |
+| `deduct.ts`                | `deductStock()` -- single variant CAS deduction; `deductMultiple()` -- sequential with rollback via `restoreDeductedStock()` |
+| `release.ts`               | `releaseReservation()` -- single variant (no CAS, safe to apply unconditionally with MAX(0,...)); `releaseMultiple()` -- best-effort, continues on individual failures |
+| `expiry.ts`                | `releaseExpiredReservations()` -- cron sweep; `ExpiryResult` interface                             |
+| `movements.ts`             | `recordMovement()` -- best-effort audit log insert (errors logged, not thrown)                      |
+| `alerts.ts`                | `checkAndAlertLowStock()` -- creates/reactivates/resolves `productLowStockAlerts`; `acknowledgeLowStockAlert()` -- marks alert as acknowledged |
+| `stock-adjustment.ts`      | `adjustStock()` -- relative delta adjustment with `stockVersion` CAS; `setStock()` -- absolute stocktake; `lookupByBarcodeOrSku()` -- barcode/SKU lookup with product image |
+| `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated variants/movements/alerts query; `InventoryService.adjustInventory()` -- admin adjustment with pool support (uses `version`, not `stockVersion`) |
+| `inventory.schema.ts`      | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
+| `inventory-transitions.ts` | `buildInventoryStatements()` -- returns SQL statements for batching; `applyInventoryForStatusChange()` -- standalone wrapper; single source of truth for order-status-driven inventory changes |
+| `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()` |
 
-## Schema notes
+## Database Schema
 
-- `stockVersion` column on `productVariants` — separate optimistic locking counter for stock operations, independent from the general `version` column used for non-stock updates like price changes
+### `product_variants` (stock columns only)
+
+| Column             | Type      | Default | Notes                                              |
+|--------------------|-----------|---------|---------------------------------------------------|
+| `stock`            | integer   | 0       | Physical on-hand count                             |
+| `reserved_stock`   | integer   | 0       | Units held for unconfirmed orders                  |
+| `preorder_stock`   | integer   | 0       | Pre-order allocation pool                          |
+| `stock_version`    | integer   | 1       | CAS counter for stock operations only              |
+| `version`          | integer   | 1       | General optimistic locking (non-stock changes)     |
+| `low_stock_threshold` | integer | null   | Alert trigger threshold (null = no alerts)         |
+| `allow_preorder`   | boolean   | false   | Whether pre-order pool is enabled                  |
+| `preorder_date`    | text      | null    | Expected availability date                         |
+| `allow_backorder`  | boolean   | false   | Whether backorder pool is enabled                  |
+| `backorder_limit`  | integer   | 0       | Max backorder quantity (0 = unlimited)             |
+| `barcode`          | text      | null    | Scannable barcode value                            |
+| `barcode_type`     | text enum | null    | `ean13`, `upc`, `isbn`, `gtin`, `custom`          |
+
+### `inventory_movements` (audit log)
+
+| Column          | Type      | Notes                                                         |
+|-----------------|-----------|---------------------------------------------------------------|
+| `id`            | text PK   | UUID                                                          |
+| `variant_id`    | text FK   | References `product_variants.id` (on delete: set null)        |
+| `order_id`      | text FK   | References `orders.id` (on delete: set null), nullable        |
+| `type`          | text      | `reserved`, `deducted`, `released`, `adjusted`, `preorder_reserved`, `preorder_deducted` |
+| `quantity`      | integer   | Positive = added, negative = removed                          |
+| `previous_stock`| integer   | Stock level before operation                                  |
+| `new_stock`     | integer   | Stock level after operation                                   |
+| `notes`         | text      | Human-readable context                                        |
+| `created_by`    | text      | Admin user ID (for manual adjustments)                        |
+| `created_at`    | timestamp | Unix epoch seconds                                            |
+
+Indexes: `variant_id`, `order_id`, `created_at`
+
+### `product_low_stock_alerts`
+
+| Column           | Type      | Notes                                              |
+|------------------|-----------|----------------------------------------------------|
+| `id`             | text PK   | UUID                                               |
+| `variant_id`     | text FK   | References `product_variants.id` (unique, cascade)  |
+| `product_id`     | text FK   | References `products.id` (cascade)                  |
+| `current_qty`    | integer   | Available stock at time of alert                    |
+| `threshold`      | integer   | The threshold that triggered the alert              |
+| `alert_status`   | text      | `active`, `acknowledged`, `resolved`                |
+| `alert_sent_at`  | timestamp | When the alert was first triggered                  |
+| `acknowledged_at`| timestamp | When admin acknowledged                             |
+| `resolved_at`    | timestamp | When stock was replenished above threshold          |
+| `created_at`     | timestamp |                                                     |
+| `updated_at`     | timestamp |                                                     |
+
+Indexes: `product_id`, `alert_status`
+
+## Low Stock Alert Lifecycle
+
+```
+[stock drops below threshold]
+     │
+     ├── No existing alert ──> CREATE alert (status: active)
+     ├── Existing alert resolved ──> REACTIVATE (status: active, clear ack/resolved dates)
+     └── Existing alert active/acknowledged ──> UPDATE currentQty only
+
+[stock rises above threshold]
+     └── Existing non-resolved alert ──> RESOLVE (status: resolved, set resolvedAt)
+
+[admin acknowledges]
+     └── Active alert ──> status: acknowledged
+```
+
+Alerts are checked after: manual adjustments (negative delta), stock deductions on shipment, and scanner adjustments.
+
+## Concurrency Control Details
+
+### Reserve: Two Strategies
+
+1. **`reserveMultiple()`** -- Sequential. Reserves one variant at a time with individual CAS. On any failure, rolls back all previously successful reservations. Suitable for small order sizes.
+
+2. **`reserveStockBatch()`** -- Atomic. Reads all variant states upfront, validates ALL availability before writing, batches all CAS updates into a single `db.batch()` call. If any CAS update fails (empty return), rolls back successful ones via a second `db.batch()` and retries the entire operation. Deduplicates variant IDs by merging quantities. Prevents orphaned reservations.
+
+### Deduct
+
+`deductMultiple()` -- Sequential deduction with rollback via `restoreDeductedStock()`. For regular pool: decrements both `stock` and `reservedStock`. For preorder/backorder pool: decrements only `reservedStock`.
+
+### Release
+
+`releaseMultiple()` -- Best-effort. Does NOT use CAS because releasing is always safe (uses `MAX(0, ...)` to guard underflow). Continues processing even if individual releases fail. A missed release only over-reserves, never causes overselling.
 
 ## Dependencies
 
-- `@scalius/database` -- `productVariants`, `products`, `inventoryMovements`, `productLowStockAlerts`
+- `@scalius/database` -- `productVariants`, `products`, `productImages`, `inventoryMovements`, `productLowStockAlerts`, `orders`, `orderItems`, `InventoryPool`
+- `@scalius/core/errors` -- `NotFoundError`, `ValidationError`
+- `@scalius/shared/price-utils` -- `roundPrice()` (used in `calculateFinalPrice`)
+
+## Known Gaps
+
+- **Movement type `restored`** is defined in `MovementEntry.type` but never written by any operation -- `restoreDeductedStock()` logs as `adjusted` instead
+- **`InventoryService.adjustInventory()` does not use CAS** -- it increments `version` (not `stockVersion`) and does not condition on any version field, so concurrent admin adjustments could produce unexpected results. Meanwhile `adjustStock()` in `stock-adjustment.ts` uses `stockVersion` correctly.
+- **Batch deduction not implemented** -- `deductMultiple()` is sequential (no batch equivalent like `reserveStockBatch()`)
+- **Alert check timing** -- `checkAndAlertLowStock()` is called after adjustments and deductions but not after releases, so alerts are not auto-resolved when stock is released back
+- **Expiry sweep has no batch limit** -- `releaseExpiredReservations()` processes all expired reservations in a single invocation with no cap, which could be slow if many reservations expire simultaneously
+- **Admin order creation does not deduct inventory** -- `orders.admin.ts` sets `inventoryAction: "deducted"` but calls no inventory functions, so the flag is misleading and stock is unaffected
