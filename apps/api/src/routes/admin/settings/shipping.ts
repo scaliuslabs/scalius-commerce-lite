@@ -237,8 +237,8 @@ app.openapi(updateRoute, async (c) => {
                 .where(
                     and(
                         eq(shippingMethods.name, data.name),
+                        sql`${shippingMethods.id} != ${id}`,
                         isNull(shippingMethods.deletedAt),
-                        eq(shippingMethods.id, id),
                     ),
                 )
                 .get();
