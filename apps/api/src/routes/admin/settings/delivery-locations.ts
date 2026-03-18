@@ -313,7 +313,8 @@ app.post("/import-pathao", async (c) => {
 
     let creds: { baseUrl: string; clientId: string; clientSecret: string; username: string; password: string };
     try {
-        const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined;
+        const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+            ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
         const rawCreds = await decryptCredentialsGraceful(provider.credentials, encryptionKey);
         creds = JSON.parse(rawCreds);
     } catch {
