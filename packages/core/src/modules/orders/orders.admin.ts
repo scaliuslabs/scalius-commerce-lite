@@ -16,7 +16,7 @@ import {
     deliveryLocations,
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
-import { reserveMultiple, releaseMultiple } from "../inventory";
+import { reserveMultiple, deductMultiple, releaseMultiple } from "../inventory";
 import type { ReservationEntry } from "../inventory";
 
 import { sql, desc, eq, inArray, isNull, and } from "drizzle-orm";
@@ -381,6 +381,12 @@ export async function getOrderDetails(
  * Creates an order in the admin context (manual order entry).
  * Handles customer lookup/creation, location name resolution,
  * order row insertion, and order items insertion.
+ *
+ * Inventory flow:
+ *   1. Reserve stock for all variant items (validates availability)
+ *   2. Insert order + items atomically via db.batch()
+ *   3. Convert reservations to permanent deductions (admin orders are immediately active)
+ *   4. If batch fails, release all reservations (no orphaned holds)
  */
 export async function createOrder(data: CreateOrderInput): Promise<{ id: string }> {
     // Calculate total amount
@@ -431,10 +437,31 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
         customerStats = calculateCustomerStats(allOrders);
     }
 
+    // ── Pre-validate and reserve inventory ─────────────────────────────
+    // Reserve stock BEFORE inserting the order. This validates availability
+    // and holds stock atomically. If any variant has insufficient stock,
+    // the order creation fails immediately with a clear error.
+    const orderId = generateOrderId();
+    const reservationEntries: ReservationEntry[] = data.items
+        .filter((item): item is typeof item & { variantId: string } => item.variantId !== null)
+        .map((item) => ({
+            variantId: item.variantId,
+            quantity: item.quantity,
+            pool: "regular" as const,
+        }));
+
+    if (reservationEntries.length > 0) {
+        const reserveResult = await reserveMultiple(db, reservationEntries, orderId);
+        if (!reserveResult.success) {
+            throw new ValidationError(
+                reserveResult.error ?? "Insufficient stock for one or more items",
+            );
+        }
+    }
+
     // ── Atomic batch: customer + order + items ──────────────────────────
     // D1 batch() executes all statements in a single atomic operation.
     // If any statement fails, none are committed.
-    const orderId = generateOrderId();
     const writeBatch: unknown[] = [];
 
     if (!existingCustomer) {
@@ -517,7 +544,7 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
             discountAmount: data.discountAmount,
             status: "pending",
             customerId,
-            inventoryAction: "deducted",
+            inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
             version: 1,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
@@ -542,7 +569,33 @@ export async function createOrder(data: CreateOrderInput): Promise<{ id: string 
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    await db.batch(writeBatch as any);
+    try {
+        await db.batch(writeBatch as any);
+    } catch (batchError) {
+        // DB write failed -- release any reservations we made
+        if (reservationEntries.length > 0) {
+            await releaseMultiple(db, reservationEntries, orderId);
+        }
+        throw batchError;
+    }
+
+    // ── Convert reservations to permanent deductions ────────────────────
+    // Admin orders are immediately active, so we deduct right away.
+    // This decrements `stock` and clears `reservedStock` for each variant.
+    if (reservationEntries.length > 0) {
+        const deductResult = await deductMultiple(db, reservationEntries, orderId);
+        if (deductResult.success) {
+            await db.update(orders)
+                .set({ inventoryAction: "deducted", updatedAt: sql`unixepoch()` })
+                .where(eq(orders.id, orderId));
+        } else {
+            // Deduction failed -- log but don't fail the order.
+            // Stock is still reserved, so no overselling risk.
+            console.error(
+                `[orders.admin] Failed to deduct stock for order ${orderId}: ${deductResult.error}. Stock remains reserved.`,
+            );
+        }
+    }
 
     return { id: orderId };
 }
@@ -776,7 +829,55 @@ export async function deleteOrder(id: string) {
 }
 
 export async function restoreOrder(id: string) {
-    await db.update(orders).set({ deletedAt: null }).where(eq(orders.id, id));
+    // Load the order to check its current inventory state
+    const order = await db
+        .select({
+            id: orders.id,
+            inventoryAction: orders.inventoryAction,
+            inventoryPool: orders.inventoryPool,
+            deletedAt: orders.deletedAt,
+        })
+        .from(orders)
+        .where(eq(orders.id, id))
+        .get();
+
+    if (!order) throw new NotFoundError("Order not found");
+    if (!order.deletedAt) throw new ValidationError("Order is not deleted");
+
+    // If inventory was released during deletion (inventoryAction = "restored"),
+    // we must re-reserve stock before restoring the order.
+    if (order.inventoryAction === "restored") {
+        const items = await db
+            .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
+            .from(orderItems)
+            .where(eq(orderItems.orderId, id));
+
+        const pool = (order.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
+        const entries: ReservationEntry[] = items
+            .filter((i): i is typeof i & { variantId: string } => i.variantId !== null)
+            .map((i) => ({
+                variantId: i.variantId,
+                quantity: i.quantity,
+                pool,
+            }));
+
+        if (entries.length > 0) {
+            const reserveResult = await reserveMultiple(db, entries, id);
+            if (!reserveResult.success) {
+                throw new ValidationError(
+                    `Cannot restore order: ${reserveResult.error ?? "insufficient stock to re-reserve inventory"}`,
+                );
+            }
+        }
+
+        await db.update(orders)
+            .set({ deletedAt: null, inventoryAction: "reserved", updatedAt: sql`unixepoch()` })
+            .where(eq(orders.id, id));
+    } else {
+        await db.update(orders)
+            .set({ deletedAt: null, updatedAt: sql`unixepoch()` })
+            .where(eq(orders.id, id));
+    }
 }
 
 export async function permanentlyDeleteOrder(id: string) {
