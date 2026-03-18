@@ -13,6 +13,7 @@ import type { DeliveryProviderInterface } from "../provider";
 import { mapProviderStatus } from "../status-mapper";
 import { db } from "@scalius/database/client";
 import { getExternalLocationIds } from "../locations";
+import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 
 /**
  * Implementation of the Pathao delivery provider
@@ -202,7 +203,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
           store_id: parseInt(this.config.storeId),
           merchant_order_id: order.id,
           recipient_name: order.customerName,
-          recipient_phone: order.customerPhone,
+          recipient_phone: formatPhoneForProvider(order.customerPhone),
           recipient_address: order.shippingAddress,
           recipient_city: externalLocationIds.city,
           recipient_zone: externalLocationIds.zone,

@@ -43,6 +43,24 @@ export function formatPhoneForDisplay(e164: string): string {
   }
 }
 
+/**
+ * Format E.164 phone to local/national format for delivery providers.
+ * E.g., "+8801712345678" → "01712345678" (strips country code, keeps leading 0)
+ * Falls back to stripping "+" if parsing fails.
+ */
+export function formatPhoneForProvider(e164: string): string {
+  try {
+    const parsed = parsePhoneNumber(e164);
+    if (parsed) {
+      return parsed.formatNational().replace(/[\s\-()]/g, "");
+    }
+  } catch {
+    // Fall through to basic cleanup
+  }
+  // Basic fallback: strip + prefix
+  return e164.replace(/^\+/, "");
+}
+
 // Phone number validation schema — validates and transforms to E.164
 export const phoneNumberSchema = z
   .string()
