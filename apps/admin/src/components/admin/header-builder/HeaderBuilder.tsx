@@ -20,6 +20,7 @@ import { defaultHeaderConfig } from "./types";
 /**
  * Migrate legacy config formats to the new structure
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy config migration accepts arbitrary shapes
 function migrateConfig(config: any): HeaderConfig {
   // Ensure navigation items have IDs and subMenus
   const ensureNavIds = (items: any[]): NavigationItem[] => {

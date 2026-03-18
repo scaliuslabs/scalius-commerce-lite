@@ -22,9 +22,9 @@ export function useVariantTemplates(): UseVariantTemplatesReturn {
       if (stored) {
         const parsed = JSON.parse(stored);
         // Convert date strings back to Date objects
-        const templatesWithDates = parsed.map((t: any) => ({
+        const templatesWithDates = parsed.map((t: Record<string, unknown>) => ({
           ...t,
-          createdAt: new Date(t.createdAt),
+          createdAt: new Date(t.createdAt as string),
         }));
         setTemplates(templatesWithDates);
       }

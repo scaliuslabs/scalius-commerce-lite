@@ -13,7 +13,7 @@ interface VariantBulkEditRowProps {
         price?: number;
         stock?: number;
     };
-    onChange: (variantId: string, field: string, value: any) => void;
+    onChange: (variantId: string, field: string, value: string | number | null) => void;
 }
 
 export function VariantBulkEditRow({ variant, draftUpdate, onChange }: VariantBulkEditRowProps) {

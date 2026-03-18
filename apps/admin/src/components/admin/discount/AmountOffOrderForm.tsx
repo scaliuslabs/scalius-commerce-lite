@@ -139,6 +139,7 @@ const CheckboxFormItem = ({
   name: keyof FormValues;
   label: string;
   description: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-hook-form Control type requires generic parameter that varies per usage
   control: any;
 }) => (
   <FormField

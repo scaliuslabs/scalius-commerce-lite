@@ -38,8 +38,8 @@ export function usePages(showTrashed: boolean) {
 
       // Convert Unix timestamps to Date objects
       // API returns ISO strings but they're converted from Unix timestamps
-      const formattedPages = data.pages.map((page: any) => {
-        const parseDate = (val: any) => {
+      const formattedPages = data.pages.map((page: Record<string, unknown>) => {
+        const parseDate = (val: string | number | null | undefined) => {
           if (!val) return null;
           // If it's an ISO string, parse it directly
           if (typeof val === "string" && val.includes("T")) {
@@ -51,10 +51,10 @@ export function usePages(showTrashed: boolean) {
 
         return {
           ...page,
-          createdAt: parseDate(page.createdAt) || new Date(),
-          updatedAt: parseDate(page.updatedAt) || new Date(),
-          deletedAt: parseDate(page.deletedAt),
-          publishedAt: parseDate(page.publishedAt),
+          createdAt: parseDate(page.createdAt as string | number | null) || new Date(),
+          updatedAt: parseDate(page.updatedAt as string | number | null) || new Date(),
+          deletedAt: parseDate(page.deletedAt as string | number | null),
+          publishedAt: parseDate(page.publishedAt as string | number | null),
         };
       });
 

@@ -75,7 +75,7 @@ async function triggerStorefrontCachePurge(
 
     if (response.ok) {
       const data = await response.json();
-      console.log("[Storefront Cache] Purge successful:", (data as any).message);
+      console.log("[Storefront Cache] Purge successful:", (data as Record<string, unknown>).message);
     } else {
       const errorText = await response.text();
       console.error(
@@ -144,7 +144,8 @@ export async function invalidateHonoCacheIfNeeded(
       const bumpVersion = shouldBumpStorefrontVersion(groups);
       const prefixes = getStorefrontPrefixesForGroups(groups);
 
-      const runtimeCtx = (locals as any).cfContext;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Astro Locals type lacks cfContext from Cloudflare adapter
+      const runtimeCtx = (locals as any).cfContext as { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
       const waitUntil = runtimeCtx?.waitUntil?.bind(runtimeCtx);
 
       if (waitUntil) {

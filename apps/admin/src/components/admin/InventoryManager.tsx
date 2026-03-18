@@ -204,11 +204,15 @@ export function InventoryManager() {
 
   // Sort function applied client-side if API doesn't support all sorts yet
   const displayVariants = [...variants].sort((a, b) => {
-    let aVal: any = a[sort.field as keyof typeof a];
-    let bVal: any = b[sort.field as keyof typeof b];
+    let aVal: string | number = "";
+    let bVal: string | number = "";
 
-    if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-    if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+    const rawA = a[sort.field as keyof typeof a];
+    const rawB = b[sort.field as keyof typeof b];
+    if (typeof rawA === 'string') aVal = rawA.toLowerCase();
+    else if (typeof rawA === 'number') aVal = rawA;
+    if (typeof rawB === 'string') bVal = rawB.toLowerCase();
+    else if (typeof rawB === 'number') bVal = rawB;
 
     if (aVal < bVal) return sort.order === 'asc' ? -1 : 1;
     if (aVal > bVal) return sort.order === 'asc' ? 1 : -1;
@@ -371,6 +375,7 @@ export function InventoryManager() {
                           </TableCell>
                           <TableCell className="py-2 text-right text-xs font-semibold">{v.available}</TableCell>
                           <TableCell className="py-2 text-center">
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- badge.variant computed from runtime status, safe to cast */}
                             <Badge variant={badge.variant as any} className={cn("text-[10px] px-1.5 py-0", badge.className)}>
                               {badge.label}
                             </Badge>
@@ -501,7 +506,7 @@ function PaginationControls({
   );
 }
 
-function StatCard({ label, value, icon: Icon, iconBgColor, iconTextColor }: { label: string; value: number | null | undefined; icon: any; iconBgColor: string; iconTextColor: string }) {
+function StatCard({ label, value, icon: Icon, iconBgColor, iconTextColor }: { label: string; value: number | null | undefined; icon: React.ComponentType<{ className?: string }>; iconBgColor: string; iconTextColor: string }) {
   const safeValue = Number.isFinite(value) ? Number(value) : 0;
 
   return (

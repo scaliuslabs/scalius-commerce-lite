@@ -58,11 +58,11 @@ export function CollectionSelector({
         const collectionsArray = data.collections || [];
         if (collectionsArray.length > 0) {
           // Map to expected interface (ensure all required fields are present)
-          const mappedCollections = collectionsArray.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            description: c.description || null,
-            slug: c.slug || "",
+          const mappedCollections = collectionsArray.map((c: Record<string, unknown>) => ({
+            id: c.id as string,
+            name: c.name as string,
+            description: (c.description as string) || null,
+            slug: (c.slug as string) || "",
           }));
           setCollections(mappedCollections);
           setFilteredCollections(mappedCollections);
@@ -97,11 +97,11 @@ export function CollectionSelector({
         const json = await response.json();
         const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
         const collectionsArray = data.collections || [];
-        const mappedCollections = collectionsArray.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          description: c.description || null,
-          slug: c.slug || "",
+        const mappedCollections = collectionsArray.map((c: Record<string, unknown>) => ({
+          id: c.id as string,
+          name: c.name as string,
+          description: (c.description as string) || null,
+          slug: (c.slug as string) || "",
         }));
         setFilteredCollections(mappedCollections);
       } catch (error: unknown) {

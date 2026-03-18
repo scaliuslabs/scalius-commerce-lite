@@ -1,5 +1,5 @@
 interface ShipmentMetadataDisplayProps {
-  metadata: any;
+  metadata: Record<string, unknown> | string | null;
   className?: string;
 }
 
@@ -88,7 +88,7 @@ export function ShipmentMetadataDisplay({
   }
 
   // Show last webhook time if available
-  const lastWebhookAt = parsed.lastWebhookAt;
+  const lastWebhookAt = parsed.lastWebhookAt as string | number | undefined;
 
   return (
     <div className={`text-sm space-y-1 ${className}`}>

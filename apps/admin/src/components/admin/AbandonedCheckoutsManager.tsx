@@ -58,7 +58,7 @@ interface CartItem {
   name: string;
   quantity: number;
   price: number;
-  [key: string]: any; // Allow other properties
+  [key: string]: unknown; // Allow other properties
 }
 
 interface CustomerInfo {

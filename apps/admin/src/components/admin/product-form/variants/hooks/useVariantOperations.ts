@@ -225,11 +225,11 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       }
 
       const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
-      const savedVariants: ProductVariant[] = result.variants.map((v: any) => ({
+      const savedVariants: ProductVariant[] = result.variants.map((v: Record<string, unknown>) => ({
         ...v,
-        createdAt: new Date(v.createdAt),
-        updatedAt: new Date(v.updatedAt),
-        deletedAt: v.deletedAt ? new Date(v.deletedAt) : null,
+        createdAt: new Date(v.createdAt as string),
+        updatedAt: new Date(v.updatedAt as string),
+        deletedAt: v.deletedAt ? new Date(v.deletedAt as string) : null,
       }));
 
       toast.success("Success!", { description: `${savedVariants.length} variants created successfully.` });

@@ -1,5 +1,6 @@
 // Debounce utility
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic debounce requires any for flexible function signatures
 export function debounce<F extends (...args: any[]) => any>(
   func: F,
   waitFor: number,

@@ -83,6 +83,7 @@ export class MediaApiClient {
       });
 
       // Parse response JSON
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- upload response shape varies between success/partial/error
       let data: any;
       try {
         data = await response.json();
@@ -111,7 +112,7 @@ export class MediaApiClient {
         // Create a more informative error object
         const errorMessage =
           data.error || data.details || "Upload failed for unknown reason";
-        const error: any = new Error(errorMessage);
+        const error: Error & { details?: Array<{ filename: string; error: string }>; summary?: string } = new Error(errorMessage);
 
         // Attach details array if available
         if (data.details && Array.isArray(data.details)) {

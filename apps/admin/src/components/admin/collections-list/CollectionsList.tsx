@@ -87,7 +87,7 @@ export function CollectionsList({
   };
 
   // Drag and drop handlers
-  const handleDragEnd = async (result: any) => {
+  const handleDragEnd = async (result: { source: { index: number }; destination?: { index: number } | null }) => {
     setIsDragging(false);
     if (!result.destination) return;
 

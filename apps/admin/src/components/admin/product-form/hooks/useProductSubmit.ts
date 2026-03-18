@@ -68,7 +68,7 @@ export function useProductSubmit({
           setShowAlert(true);
         } else if (data.details && Array.isArray(data.details)) {
           // Handle Zod validation errors
-          data.details.forEach((error: any) => {
+          data.details.forEach((error: { path?: string[]; message?: string }) => {
             if (error.path && error.path.length > 0) {
               const fieldName = error.path[0] as keyof ProductFormValues;
               form.setError(fieldName, {

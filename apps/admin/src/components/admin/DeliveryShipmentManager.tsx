@@ -19,12 +19,9 @@ interface DeliveryShipmentManagerProps {
 
 declare global {
   interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- window bridge interface between Astro page script and React component
     shipmentActions: {
-      createShipment: (
-        orderId: string,
-        providerId: string,
-        options?: any,
-      ) => Promise<any>;
+      createShipment: (orderId: string, providerId: string, options?: Record<string, unknown>) => Promise<any>;
       checkShipmentStatus: (shipmentId: string) => Promise<any>;
       deleteShipment: (shipmentId: string) => Promise<boolean>;
     };

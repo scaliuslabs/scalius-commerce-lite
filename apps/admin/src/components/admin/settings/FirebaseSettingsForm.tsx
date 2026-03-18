@@ -127,7 +127,7 @@ export default function FirebaseSettingsForm() {
       input = input.replace(/,(\s*[}\]])/g, "$1");
 
       const parsed = JSON.parse(input);
-      const mapped: any = { ...publicConfig };
+      const mapped: FirebaseConfig["publicConfig"] = { ...publicConfig };
       const keys = [
         "apiKey",
         "authDomain",
@@ -136,7 +136,7 @@ export default function FirebaseSettingsForm() {
         "messagingSenderId",
         "appId",
         "measurementId",
-      ];
+      ] as const;
       keys.forEach((k) => {
         if (parsed[k]) mapped[k] = parsed[k];
       });
@@ -155,7 +155,7 @@ export default function FirebaseSettingsForm() {
     setSaving(true);
 
     try {
-      const payload: any = { publicConfig };
+      const payload: { publicConfig: FirebaseConfig["publicConfig"]; serviceAccount?: string } = { publicConfig };
 
       if (serviceAccountJson && !serviceAccountJson.includes("••••")) {
         const validation = validateServiceAccountJson(serviceAccountJson);
