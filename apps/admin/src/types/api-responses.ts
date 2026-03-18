@@ -277,3 +277,59 @@ export interface CheckoutLanguage {
   updatedAt: Date;
   deletedAt: Date | null;
 }
+
+// ---------------------------------------------------------------------------
+// API Response Shapes (used by loaders + components)
+// ---------------------------------------------------------------------------
+
+export interface PaginationResponse {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface WidgetHistoryEntry {
+  id: string;
+  widgetId: string;
+  htmlContent: string;
+  cssContent: string | null;
+  reason: string;
+  createdAt: number;
+}
+
+export interface ProductVariantDetail {
+  id: string;
+  productId: string;
+  sku: string | null;
+  barcode: string | null;
+  price: number | null;
+  compareAtPrice: number | null;
+  costPerItem: number | null;
+  stock: number;
+  reserved: number;
+  lowStockThreshold: number | null;
+  weight: number | null;
+  supplier: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+  version: number;
+  stockVersion: number;
+  createdAt: string | number;
+  updatedAt: string | number;
+}
+
+export interface ProductImageDetail {
+  id: string;
+  productId: string;
+  url: string;
+  altText: string | null;
+  isPrimary: boolean;
+  sortOrder: number;
+  createdAt: string | number;
+}
+
+export interface OpenRouterMessage {
+  role: string;
+  content: string | Array<{ type: string; [key: string]: unknown }>;
+}
