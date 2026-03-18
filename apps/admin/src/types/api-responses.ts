@@ -333,3 +333,329 @@ export interface OpenRouterMessage {
   role: string;
   content: string | Array<{ type: string; [key: string]: unknown }>;
 }
+
+// ---------------------------------------------------------------------------
+// Product list item (enriched, from GET /products list)
+// ---------------------------------------------------------------------------
+
+export interface ProductListItem {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  description: string | null;
+  isActive: boolean;
+  discountPercentage: number | null;
+  freeDelivery: boolean;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
+  category: { name: string };
+  variantCount: number;
+  imageCount: number;
+  primaryImage: string | null;
+  sku?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Product detail (extended for GET /products/:id)
+// ---------------------------------------------------------------------------
+
+export interface ProductVariant {
+  id: string;
+  productId: string;
+  size: string | null;
+  color: string | null;
+  weight: number | null;
+  sku: string | null;
+  price: number | null;
+  stock: number;
+  reservedStock: number;
+  barcode: string | null;
+  barcodeType: string | null;
+  discountType: string | null;
+  discountPercentage: number | null;
+  discountAmount: number | null;
+  isDefault: boolean;
+  isActive: boolean;
+  version: number;
+  stockVersion: number;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
+  deletedAt: Date | string | number | null;
+}
+
+export interface ProductDetail extends Product {
+  category: { name: string | null };
+  variants: ProductVariant[];
+  images: ProductImageDetail[];
+  attributes: Array<{ attributeId: string; value: string }>;
+  additionalInfo: Array<{ label: string; value: string }>;
+}
+
+export interface ProductStats {
+  totalProducts: number;
+  activeProducts: number;
+  productsWithImages: number;
+  categoriesCount: number;
+}
+
+// ---------------------------------------------------------------------------
+// Order detail (extended for GET /orders/:id)
+// ---------------------------------------------------------------------------
+
+export interface OrderItem {
+  id: string;
+  productId: string;
+  variantId: string | null;
+  quantity: number;
+  price: number;
+  productName: string | null;
+  productImage: string | null;
+  variantSize: string | null;
+  variantColor: string | null;
+}
+
+export interface OrderDetail extends Order {
+  items: OrderItem[];
+  latestShipment: unknown;
+  itemCount: number;
+}
+
+export interface OrderFormData {
+  order: {
+    id: string;
+    customerName: string;
+    customerPhone: string;
+    customerEmail: string | null;
+    shippingAddress: string;
+    city: string;
+    zone: string;
+    area: string | null;
+    notes: string | null;
+    discountAmount: number | null;
+    shippingCharge: number;
+    status: string;
+    createdAt: Date | string | number;
+    updatedAt: Date | string | number;
+  };
+  productsWithVariants: Array<{
+    id: string;
+    name: string;
+    price: number;
+    discountPercentage: number | null;
+    variants: ProductVariant[];
+  }>;
+  defaultValues: {
+    id: string;
+    customerName: string;
+    customerPhone: string;
+    customerEmail: string | null;
+    shippingAddress: string;
+    city: string;
+    zone: string;
+    area: string | null;
+    notes: string | null;
+    discountAmount: number | null;
+    shippingCharge: number;
+    status: string;
+    createdAt: Date | string | number;
+    updatedAt: Date | string | number;
+    items: Array<{
+      productId: string;
+      variantId: string | null;
+      quantity: number;
+      price: number;
+    }>;
+  };
+}
+
+export interface EnhancedShipment extends DeliveryShipment {
+  providerName: string;
+}
+
+// ---------------------------------------------------------------------------
+// Customer domain
+// ---------------------------------------------------------------------------
+
+export interface Customer {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string;
+  address: string | null;
+  city: string | null;
+  zone: string | null;
+  area: string | null;
+  cityName: string | null;
+  zoneName: string | null;
+  areaName: string | null;
+  totalOrders: number;
+  totalSpent: number;
+  lastOrderAt: Date | string | number | null;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
+  deletedAt: Date | string | number | null;
+}
+
+export interface CustomerHistoryRecord {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  zone: string | null;
+  area: string | null;
+  cityName: string;
+  zoneName: string;
+  areaName: string | null;
+  changeType: string | null;
+  createdAt: Date | string | number;
+}
+
+export interface CustomerOrderSummary {
+  id: string;
+  totalAmount: number;
+  status: string;
+  createdAt: Date | string | number;
+}
+
+export interface CustomerHistoryData {
+  customer: Customer;
+  history: CustomerHistoryRecord[];
+  orders: CustomerOrderSummary[];
+}
+
+// ---------------------------------------------------------------------------
+// Widget list response (from GET /widgets)
+// ---------------------------------------------------------------------------
+
+export interface WidgetListResponse {
+  widgets: Widget[];
+  availableCollections: Array<{
+    id: string;
+    name: string;
+    sortOrder: number;
+    type: "manual" | "dynamic";
+  }>;
+}
+
+// ---------------------------------------------------------------------------
+// Discount domain
+// ---------------------------------------------------------------------------
+
+export interface Discount {
+  id: string;
+  code: string;
+  type: string;
+  valueType: string;
+  discountValue: number;
+  minPurchaseAmount: number | null;
+  minQuantity: number | null;
+  maxUsesPerOrder: number | null;
+  maxUses: number | null;
+  limitOnePerCustomer: boolean | null;
+  combineWithProductDiscounts: boolean | null;
+  combineWithOrderDiscounts: boolean | null;
+  combineWithShippingDiscounts: boolean | null;
+  customerSegment: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  isActive: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+  deletedAt: string | null;
+  relatedProducts: { buy: string[]; get: string[] };
+  relatedCollections: { buy: string[]; get: string[] };
+  usageCount?: number;
+  totalDiscountAmount?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Settings domain
+// ---------------------------------------------------------------------------
+
+export interface GeneralSettings {
+  headerConfig: unknown;
+  footerConfig: unknown;
+}
+
+export interface MetaConversionsSettingsResponse {
+  settings: MetaConversionsSettings | null;
+}
+
+export interface FraudCheckerProvider {
+  id: string;
+  name: string;
+  apiUrl: string;
+  apiKey: string;
+  isActive: boolean;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
+}
+
+// ---------------------------------------------------------------------------
+// Analytics domain
+// ---------------------------------------------------------------------------
+
+export interface AnalyticsScript {
+  id: string;
+  name: string;
+  type: string;
+  isActive: boolean;
+  usePartytown: boolean;
+  config: string | null;
+  location: string;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard domain
+// ---------------------------------------------------------------------------
+
+export interface DashboardStats {
+  totalProducts: number;
+  totalCustomers: number;
+  totalRevenue: number;
+  currentMonth: {
+    orders: number;
+    revenue: number;
+    orderGrowth: number;
+    revenueGrowth: number;
+    orderStatus: {
+      delivered: number;
+      processing: number;
+      shipping: number;
+      cancelled: number;
+    };
+  };
+  lastMonth: {
+    orders: number;
+    revenue: number;
+  };
+}
+
+export interface DashboardRecentOrder {
+  id: string;
+  customerName: string;
+  totalAmount: number;
+  status: string;
+  createdAt: Date | string;
+}
+
+export interface DashboardDailyActivity {
+  date: string;
+  orders: number;
+  revenue: number;
+  newCustomers: number;
+}
+
+// ---------------------------------------------------------------------------
+// Collection form options
+// ---------------------------------------------------------------------------
+
+export interface CollectionFormOptions {
+  categories: Array<{ id: string; name: string }>;
+  products: Array<{ id: string; name: string; price: number }>;
+}

@@ -1,13 +1,11 @@
 import { apiGet } from "@/lib/api-fetch";
+import type { AnalyticsScript } from "@/types/api-responses";
 
 export async function getAnalyticsListData() {
-  // API returns ok(c, scripts) where scripts is an array.
-  // apiGet calls the API directly (not through the admin proxy) and
-  // unwraps { success, data: T } → T. So result IS the array.
-  const result = await apiGet<any>("/analytics");
+  const result = await apiGet<AnalyticsScript[]>("/analytics");
   const scripts = Array.isArray(result) ? result : [];
 
-  return scripts.map((script: any) => ({
+  return scripts.map((script) => ({
     id: script.id,
     name: script.name,
     type: script.type,
@@ -20,8 +18,7 @@ export async function getAnalyticsListData() {
 }
 
 export async function getAnalyticsEditData(id: string) {
-  // API returns ok(c, script) where script is an object -> proxy unwraps.
-  const script = await apiGet<any>("/analytics/" + id).catch(() => null);
+  const script = await apiGet<AnalyticsScript>("/analytics/" + id).catch(() => null);
   if (!script) return null;
 
   const validType = ["google_analytics", "facebook_pixel", "custom"].includes(
@@ -40,7 +37,7 @@ export async function getAnalyticsEditData(id: string) {
     type: validType,
     isActive: script.isActive,
     usePartytown: script.usePartytown ?? true,
-    config: script.config,
+    config: script.config || "",
     location: validLocation,
     createdAt: script.createdAt ? new Date(script.createdAt) : new Date(),
     updatedAt: script.updatedAt ? new Date(script.updatedAt) : new Date(),

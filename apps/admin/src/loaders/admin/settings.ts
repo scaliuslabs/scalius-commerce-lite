@@ -1,10 +1,16 @@
 import { apiGet } from "@/lib/api-fetch";
+import type {
+  GeneralSettings,
+  MetaConversionsSettingsResponse,
+  DeliveryProviderRecord,
+  FraudCheckerProvider,
+} from "@/types/api-responses";
 
 export async function getGeneralSettingsData(): Promise<{
-  headerConfig: any;
-  footerConfig: any;
+  headerConfig: unknown;
+  footerConfig: unknown;
 }> {
-  const result = await apiGet<{ headerConfig: any; footerConfig: any }>(
+  const result = await apiGet<GeneralSettings>(
     "/settings/general",
   ).catch(() => ({ headerConfig: {}, footerConfig: {} }));
 
@@ -15,20 +21,15 @@ export async function getGeneralSettingsData(): Promise<{
 }
 
 export async function getMetaConversionSettingsData() {
-  // API returns ok(c, { data: maskedSettings }) — after proxy unwrap: { data: ... }
-  // apiGet strips success: { data: ... }
-  const result = await apiGet<{ data: any }>("/settings/meta-conversions").catch(
-    () => ({ data: undefined }),
+  const result = await apiGet<MetaConversionsSettingsResponse>("/settings/meta-conversions").catch(
+    () => ({ settings: null }),
   );
-  return result.data ?? undefined;
+  return result.settings ?? undefined;
 }
 
 export async function getDeliveryProvidersData() {
-  // API returns ok(c, maskedProviders) where maskedProviders is an array.
-  // apiGet calls the API directly (not through the admin proxy) and
-  // unwraps { success, data: T } → T. So result IS the array.
   try {
-    const result = await apiGet<any>("/settings/delivery-providers");
+    const result = await apiGet<DeliveryProviderRecord[]>("/settings/delivery-providers");
     return Array.isArray(result) ? result : [];
   } catch {
     return [];
@@ -36,11 +37,8 @@ export async function getDeliveryProvidersData() {
 }
 
 export async function getFraudCheckerProvidersData() {
-  // Fraud checker is mounted at /admin/fraud-checker (not under /settings).
-  // API returns ok(c, maskedProviders) — an array with apiKey already masked.
-  // apiGet unwraps { success, data: T } → T. So result IS the array.
   try {
-    const result = await apiGet<any>("/fraud-checker");
+    const result = await apiGet<FraudCheckerProvider[]>("/fraud-checker");
     return Array.isArray(result) ? result : [];
   } catch {
     return [];

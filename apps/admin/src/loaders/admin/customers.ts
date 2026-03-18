@@ -1,4 +1,11 @@
 import { apiGet } from "@/lib/api-fetch";
+import type {
+  Customer,
+  PaginationResponse,
+  CustomerHistoryData,
+  CustomerHistoryRecord,
+  CustomerOrderSummary,
+} from "@/types/api-responses";
 
 export async function getCustomersIndexData(options: {
   page: number;
@@ -23,10 +30,9 @@ export async function getCustomersIndexData(options: {
   if (options.search) params.search = options.search;
   if (options.showTrashed) params.trashed = "true";
 
-  const result = await apiGet<{ customers: any[]; pagination: any }>("/customers", params);
+  const result = await apiGet<{ customers: Customer[]; pagination: PaginationResponse }>("/customers", params);
 
-  // Convert timestamps to Date objects for admin pages
-  const formattedCustomers = result.customers.map((customer: any) => ({
+  const formattedCustomers = result.customers.map((customer) => ({
     ...customer,
     lastOrderAt: customer.lastOrderAt ? new Date(customer.lastOrderAt) : null,
     createdAt: new Date(customer.createdAt),
@@ -40,7 +46,7 @@ export async function getCustomersIndexData(options: {
 }
 
 export async function getCustomerEditData(id: string) {
-  const customer = await apiGet<any>("/customers/" + id).catch(() => null);
+  const customer = await apiGet<Customer>("/customers/" + id).catch(() => null);
   if (!customer) return null;
 
   return {
@@ -52,12 +58,9 @@ export async function getCustomerEditData(id: string) {
 }
 
 export async function getCustomerHistoryData(id: string) {
-  const result = await apiGet<any>("/customers/" + id + "/history").catch(() => null);
+  const result = await apiGet<CustomerHistoryData>("/customers/" + id + "/history").catch(() => null);
   if (!result) return null;
 
-  // The API already enriches with location names and converts timestamps
-  // to Date objects via JSON serialization (they come as ISO strings).
-  // Convert ISO strings back to Date objects for admin pages.
   const customer = {
     ...result.customer,
     lastOrderAt: result.customer.lastOrderAt ? new Date(result.customer.lastOrderAt) : null,
@@ -65,12 +68,12 @@ export async function getCustomerHistoryData(id: string) {
     updatedAt: new Date(result.customer.updatedAt),
   };
 
-  const history = (result.history || []).map((record: any) => ({
+  const history = (result.history || []).map((record: CustomerHistoryRecord) => ({
     ...record,
     createdAt: new Date(record.createdAt),
   }));
 
-  const orders = (result.orders || []).map((order: any) => ({
+  const orders = (result.orders || []).map((order: CustomerOrderSummary) => ({
     ...order,
     createdAt: new Date(order.createdAt),
   }));

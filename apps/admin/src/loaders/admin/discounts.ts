@@ -1,4 +1,9 @@
 import { apiGet } from "@/lib/api-fetch";
+import type {
+  Discount,
+  PaginationResponse,
+  CollectionFormOptions,
+} from "@/types/api-responses";
 
 export async function getDiscountsIndexData(options: {
   page: number;
@@ -17,39 +22,32 @@ export async function getDiscountsIndexData(options: {
   if (options.search) params.search = options.search;
   if (options.showTrashed) params.trashed = "true";
 
-  return apiGet<any>("/discounts", params);
+  return apiGet<{ discounts: Discount[]; pagination: PaginationResponse }>("/discounts", params);
 }
 
 export async function getDiscountEditData(id: string) {
-  const discount = await apiGet<any>("/discounts/" + id).catch(() => null);
+  const discount = await apiGet<Discount>("/discounts/" + id).catch(() => null);
   if (!discount) return null;
 
-  // The API's getById returns relatedProducts/relatedCollections as { buy: string[], get: string[] }.
-  // The admin form needs resolved product/collection details.
-  // Fetch product and collection details from the collection form-options endpoint.
-  const formOptions = await apiGet<{ categories: any[]; products: any[] }>(
+  const formOptions = await apiGet<CollectionFormOptions>(
     "/collections/form-options",
   ).catch(() => ({ categories: [], products: [] }));
 
-  // Resolve product IDs to full product objects
   const allProductIds = [
     ...(discount.relatedProducts?.buy || []),
     ...(discount.relatedProducts?.get || []),
   ];
-  const selectedProducts = formOptions.products.filter((p: any) =>
+  const selectedProducts = formOptions.products.filter((p) =>
     allProductIds.includes(p.id),
   );
 
-  // Resolve collection IDs — we don't have a collections list API with names
-  // readily available, but we can use the form-options categories approach.
-  // For collections, build minimal objects from what we have.
   const allCollectionIds = [
     ...(discount.relatedCollections?.buy || []),
     ...(discount.relatedCollections?.get || []),
   ];
   const selectedCollections = allCollectionIds.map((colId: string) => ({
     id: colId,
-    name: colId, // Will show ID as fallback — page can resolve names client-side
+    name: colId,
     description: null,
     slug: "",
   }));

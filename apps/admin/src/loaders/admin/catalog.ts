@@ -1,8 +1,16 @@
 import { apiGet } from "@/lib/api-fetch";
 import { unixToDate } from "@scalius/shared/utils";
+import type {
+  Page,
+  Category,
+  Collection,
+  PaginationResponse,
+  ProductStats,
+  CollectionFormOptions,
+} from "@/types/api-responses";
 
 export async function getPageEditData(id: string) {
-  const page = await apiGet<any>("/pages/" + id).catch(() => null);
+  const page = await apiGet<Page>("/pages/" + id).catch(() => null);
   if (!page) return null;
 
   return {
@@ -32,11 +40,11 @@ export async function getCategoriesIndexData(options: {
   if (options.showTrashed) params.trashed = "true";
 
   const [categoriesResult, stats] = await Promise.all([
-    apiGet<{ categories: any[]; pagination: any }>("/categories", params),
-    apiGet<any>("/products/stats"),
+    apiGet<{ categories: Category[]; pagination: PaginationResponse }>("/categories", params),
+    apiGet<ProductStats>("/products/stats"),
   ]);
 
-  const formattedCategories = categoriesResult.categories.map((category: any) => ({
+  const formattedCategories = categoriesResult.categories.map((category) => ({
     ...category,
     createdAt: category.createdAt ? new Date(category.createdAt) : null,
     updatedAt: category.updatedAt ? new Date(category.updatedAt) : null,
@@ -51,14 +59,12 @@ export async function getCategoriesIndexData(options: {
 }
 
 export async function getCategoryEditData(id: string) {
-  // Categories API has no GET /{id} endpoint — fetch from list and filter.
-  // Acceptable for admin since category counts are low.
-  const listResult = await apiGet<{ categories: any[]; pagination: any }>("/categories", {
+  const listResult = await apiGet<{ categories: Category[]; pagination: PaginationResponse }>("/categories", {
     page: "1",
     limit: "999",
   });
 
-  const category = listResult.categories.find((c: any) => c.id === id);
+  const category = listResult.categories.find((c) => c.id === id);
   if (!category) return null;
 
   return {
@@ -77,7 +83,7 @@ export async function getCategoryEditData(id: string) {
 }
 
 export async function getCollectionFormOptions() {
-  const result = await apiGet<{ categories: any[]; products: any[] }>(
+  const result = await apiGet<CollectionFormOptions>(
     "/collections/form-options",
   );
   return { allCategories: result.categories, allProducts: result.products };
@@ -85,7 +91,7 @@ export async function getCollectionFormOptions() {
 
 export async function getCollectionEditData(id: string) {
   const [collection, formOptions] = await Promise.all([
-    apiGet<any>("/collections/" + id).catch(() => null),
+    apiGet<Collection>("/collections/" + id).catch(() => null),
     getCollectionFormOptions(),
   ]);
 

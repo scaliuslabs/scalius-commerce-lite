@@ -12,14 +12,21 @@ export interface FirebaseConfig {
   vapidKey?: string;
 }
 
+interface SetupResponse {
+  success: boolean;
+  data?: { adminExists: boolean };
+}
+
+interface FirebaseConfigResponse {
+  success: boolean;
+  data?: Record<string, string>;
+}
+
 export async function getSetupAdminExists(): Promise<boolean> {
   try {
-    // Setup endpoint is at /api/v1/setup (not under /admin), so call directly
     const response = await fetch("/api/v1/setup");
     if (!response.ok) return false;
-    const body = await response.json() as any;
-    // API returns { success: true, data: { adminExists: boolean } }
-    // Since this is NOT going through the admin proxy, we read data directly
+    const body = await response.json() as SetupResponse;
     return body?.data?.adminExists ?? false;
   } catch {
     return false;
@@ -49,11 +56,9 @@ export async function getAdminLayoutFirebaseConfig(
 
   let firebaseConfig: FirebaseConfig = { ...defaultConfig };
   try {
-    // Firebase config is at /api/v1/auth/firebase-config (public, not under /admin)
     const response = await fetch("/api/v1/auth/firebase-config");
     if (response.ok) {
-      const body = await response.json() as any;
-      // API returns { success: true, data: { ...config } }
+      const body = await response.json() as FirebaseConfigResponse;
       const dbConfig = body?.data || {};
       firebaseConfig = { ...firebaseConfig, ...dbConfig };
       if (dbConfig.vapidKey) firebaseConfig.vapidKey = dbConfig.vapidKey;
