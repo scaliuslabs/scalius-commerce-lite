@@ -11,6 +11,8 @@ export interface ProductListItem {
   description: string | null;
   isActive: boolean;
   discountPercentage: number | null;
+  discountType: "percentage" | "flat" | null;
+  discountAmount: number | null;
   freeDelivery: boolean;
   createdAt: Date;
   updatedAt: Date;

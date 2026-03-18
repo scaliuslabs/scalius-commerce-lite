@@ -137,11 +137,15 @@ export const ProductRow = React.memo(function ProductRow({
         <div className="font-medium text-sm text-foreground">
           {formatPrice(product.price)}
         </div>
-        {product.discountPercentage != null && product.discountPercentage > 0 && (
+        {product.discountType === "flat" && product.discountAmount != null && product.discountAmount > 0 ? (
+          <div className="text-xs text-green-600 dark:text-green-500">
+            {formatPrice(product.discountAmount)} off
+          </div>
+        ) : product.discountPercentage != null && product.discountPercentage > 0 ? (
           <div className="text-xs text-green-600 dark:text-green-500">
             {product.discountPercentage}% off
           </div>
-        )}
+        ) : null}
       </TableCell>
       <TableCell className="text-sm text-muted-foreground py-2">
         {product.variantCount} variant{product.variantCount !== 1 ? "s" : ""}
