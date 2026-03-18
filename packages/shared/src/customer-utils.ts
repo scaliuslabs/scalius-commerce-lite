@@ -1,63 +1,54 @@
 import { z } from "zod";
+import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
 
-// Phone number validation schema
-export const phoneNumberSchema = z
-  .string()
-  .min(11, "Phone number must be at least 11 digits")
-  .max(14, "Phone number must be at most 14 digits")
-  .transform((phone) => standardizePhoneNumber(phone));
+// Re-export for consumers that need direct validation (e.g. customer-auth)
+export { isValidPhoneNumber } from "libphonenumber-js";
 
 /**
- * Standardizes a phone number to the format: 01XXXXXXXXX
- * Handles various formats:
- * - +880 1XXX-XXXXXX
- * - +880 1XXXXXXXXX
- * - +8801XXXXXXXXX
- * - 01XXXXXXXXX
+ * Validate and format a phone number to E.164.
+ * Returns the E.164 string or throws with a clear message.
  */
-export function standardizePhoneNumber(phone: string): string {
-  // Remove all non-digit characters
-  const digits = phone.replace(/\D/g, "");
+export function validateAndFormatPhone(
+  input: string,
+  allowedCountries?: string[],
+): string {
+  const trimmed = input.trim();
+  if (!trimmed) throw new Error("Phone number is required");
 
-  // If starts with 880, remove it
-  const withoutCountryCode = digits.startsWith("880")
-    ? digits.slice(3)
-    : digits;
-
-  // Ensure starts with 0
-  const standardized = withoutCountryCode.startsWith("1")
-    ? "0" + withoutCountryCode
-    : withoutCountryCode;
-
-  // Validate final format
-  if (!/^01\d{9}$/.test(standardized)) {
+  if (!isValidPhoneNumber(trimmed)) {
     throw new Error("Invalid phone number format");
   }
 
-  return standardized;
+  const parsed = parsePhoneNumber(trimmed);
+  if (!parsed) throw new Error("Could not parse phone number");
+
+  if (allowedCountries && allowedCountries.length > 0 && parsed.country) {
+    if (!allowedCountries.includes(parsed.country)) {
+      throw new Error(`Phone numbers from ${parsed.country} are not accepted`);
+    }
+  }
+
+  return parsed.format("E.164");
 }
 
 /**
- * Normalize a phone number to E.164 storage format.
- * Strips spaces, dashes, and parentheses. Prepends country code if missing.
- * Default country code: +880 (Bangladesh).
- *
- * Use this for DB storage. The existing standardizePhoneNumber() remains
- * for display purposes (local format).
+ * Format E.164 phone for display (international format).
  */
-export function normalizePhone(
-  phone: string,
-  countryCode: string = "+880",
-): string {
-  let cleaned = phone.replace(/[\s\-()]/g, "");
-  if (cleaned.startsWith("0")) {
-    cleaned = countryCode + cleaned.slice(1);
+export function formatPhoneForDisplay(e164: string): string {
+  try {
+    const parsed = parsePhoneNumber(e164);
+    return parsed ? parsed.formatInternational() : e164;
+  } catch {
+    return e164;
   }
-  if (!cleaned.startsWith("+")) {
-    cleaned = "+" + cleaned;
-  }
-  return cleaned;
 }
+
+// Phone number validation schema — validates and transforms to E.164
+export const phoneNumberSchema = z
+  .string()
+  .min(7, "Phone number too short")
+  .max(16, "Phone number too long")
+  .transform((val) => validateAndFormatPhone(val));
 
 /**
  * Updates customer stats based on an order
