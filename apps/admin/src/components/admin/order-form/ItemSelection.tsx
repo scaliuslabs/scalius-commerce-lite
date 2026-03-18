@@ -12,7 +12,7 @@ import { FormLabel } from "@/components/ui/form";
 import { Plus } from "lucide-react";
 import type { Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 interface ItemSelectionProps {
   selectedProduct: Product;

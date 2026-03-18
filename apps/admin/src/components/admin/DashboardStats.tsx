@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import type { ChartConfig } from "@/components/ui/chart";
 import { motion } from "framer-motion";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 const DashboardChart = React.lazy(() =>
   import("./DashboardChart").then((m) => ({ default: m.DashboardChart }))

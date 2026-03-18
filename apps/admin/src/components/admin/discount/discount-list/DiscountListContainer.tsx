@@ -39,7 +39,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { navigateTo } from "@/lib/client/navigate";
 import { DiscountRow } from "./DiscountRow";
 import { DiscountDeleteDialogs } from "./DiscountDeleteDialogs";

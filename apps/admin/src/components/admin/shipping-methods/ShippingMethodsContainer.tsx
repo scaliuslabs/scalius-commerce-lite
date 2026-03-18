@@ -38,7 +38,7 @@ import {
   ChevronsRight,
   X,
 } from "lucide-react";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { useShippingMethods, type ShippingMethod } from "./hooks/useShippingMethods";
 import { MethodsTable } from "./MethodsTable";
 import { MethodFormDialog } from "./MethodFormDialog";

@@ -1,7 +1,7 @@
 // src/components/admin/ProductForm/variants/VariantTemplateSelector.tsx
 
 import { useState } from "react";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

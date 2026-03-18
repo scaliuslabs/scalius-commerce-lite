@@ -25,7 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { ProductFormValues } from "./types";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 interface PricingAvailabilitySectionProps {
   form: UseFormReturn<ProductFormValues>;

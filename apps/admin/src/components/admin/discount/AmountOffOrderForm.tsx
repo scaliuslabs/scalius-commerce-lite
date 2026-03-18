@@ -44,7 +44,7 @@ import {
   TooltipTrigger,
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { navigateTo } from "@/lib/client/navigate";
 import { generateDiscountCode } from "./utils";
 

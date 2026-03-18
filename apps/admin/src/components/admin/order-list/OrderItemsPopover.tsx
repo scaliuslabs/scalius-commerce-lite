@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
 import { Badge } from "../../ui/badge";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 type PopoverOrderItem = {
   id: string;

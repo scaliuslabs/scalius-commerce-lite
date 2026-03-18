@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, X } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
 import type { Product } from "./types";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 interface ProductSearchProps {
   searchTerm: string;

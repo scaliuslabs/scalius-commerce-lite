@@ -14,7 +14,7 @@ import {
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { markCODReturned, recordCODCollection, recordCODFailure } from "../payments/cod";
-import { createShipment } from "../delivery/service";
+import { createShipment } from "../delivery/delivery.service";
 
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";

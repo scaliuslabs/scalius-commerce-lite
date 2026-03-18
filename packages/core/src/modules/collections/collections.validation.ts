@@ -1,4 +1,4 @@
-// src/modules/collections/collections.schema.ts
+// src/modules/collections/collections.validation.ts
 import { z } from "zod";
 
 const collectionConfigSchema = z.object({

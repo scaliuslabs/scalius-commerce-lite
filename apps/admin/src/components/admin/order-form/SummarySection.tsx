@@ -29,7 +29,7 @@ import {
   updateDiscountAmount,
 } from "../../../store/orderStore";
 import { useOrderForm } from "./OrderFormContext";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 export function SummarySection() {
   const { form, isEdit, refs, handleKeyDown } = useOrderForm();

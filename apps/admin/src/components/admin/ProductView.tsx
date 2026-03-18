@@ -30,7 +30,7 @@ import { cn } from "@scalius/shared/utils";
 import { RichContent } from "../ui/rich-content";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 interface ProductVariant {
   id: string;

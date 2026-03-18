@@ -13,7 +13,7 @@ import { Button } from "../../../ui/button";
 import { Switch } from "../../../ui/switch";
 import { Separator } from "../../../ui/separator";
 import { toast } from "sonner";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { navigateTo } from "@/lib/client/navigate";
 import { DiscountDetailsSection } from "./DiscountDetailsSection";
 import { AppliesToSection } from "./AppliesToSection";

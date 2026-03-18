@@ -35,7 +35,7 @@ import { OrderItemsPopover } from "./OrderItemsPopover";
 import { OrderStatusSelector } from "./OrderStatusSelector";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { FraudCheckIndicator } from "./FraudCheckIndicator";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 interface OrderTableRowProps {
   order: OrderListItem;

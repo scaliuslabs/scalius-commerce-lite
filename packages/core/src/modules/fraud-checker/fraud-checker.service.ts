@@ -1,4 +1,4 @@
-// src/modules/fraud-checker/service.ts
+// src/modules/fraud-checker/fraud-checker.service.ts
 // Fraud checker provider management and phone lookup service.
 // Moved from src/lib/fraud-checker/service.ts.
 

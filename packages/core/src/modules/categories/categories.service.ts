@@ -6,7 +6,7 @@ import { categories, products, collections } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, desc, asc, inArray, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
-import type { CreateCategoryInput, UpdateCategoryInput } from "./categories.schema";
+import type { CreateCategoryInput, UpdateCategoryInput } from "./categories.validation";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 
