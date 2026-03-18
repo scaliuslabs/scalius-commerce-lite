@@ -1,5 +1,23 @@
 // src/lib/payment/types.ts
 // Shared types for payment gateway integrations.
+//
+// ── Amount convention ────────────────────────────────────────────────────────
+// Amounts stored in the database (orders.totalAmount, etc.) are in MAJOR units
+// (e.g. 150.00 BDT, 29.99 USD). This is the canonical representation.
+//
+// Gateway APIs each have their own convention:
+//   Stripe & Polar — expect amounts in SMALLEST currency unit (cents, paisa, fils).
+//     Conversion: amount * 10^(ISO 4217 decimal places).
+//     e.g. 150.00 BDT → 15000, 150 JPY → 150, 1.500 BHD → 1500.
+//     This conversion happens at the API route layer before calling gateway functions.
+//     The queue consumer reverses it (÷ 10^decimals) before writing to the DB.
+//   SSLCommerz — expects amounts in MAJOR units with appropriate decimal formatting.
+//     Uses toFixed(getDecimalPlaces(currency)) for the API call.
+//     No ×/÷ conversion needed; the amount passes through as-is.
+//   COD — no external gateway; amounts are always in major units.
+//
+// Use getDecimalPlaces() from @scalius/shared/currency for the ISO 4217 lookup.
+// ─────────────────────────────────────────────────────────────────────────────
 
 export type PaymentGateway = "stripe" | "sslcommerz" | "polar" | "cod";
 export type PaymentType = "full" | "deposit" | "balance";
@@ -11,8 +29,8 @@ export type PaymentResult = "succeeded" | "failed" | "pending" | "cancelled";
 
 export interface CreateStripePaymentIntentParams {
   orderId: string;
-  amount: number; // In smallest currency unit (e.g. cents, paisa)
-  currency: string; // ISO 4217 lowercase (usd, bdt)
+  amount: number; // In smallest currency unit — use getDecimalPlaces(currency) for conversion
+  currency: string; // ISO 4217 lowercase (usd, bdt, jpy)
   paymentType: PaymentType;
   /** Set to true for manual capture (authorise now, capture on fulfilment) */
   manualCapture?: boolean;
@@ -32,7 +50,7 @@ export interface StripePaymentIntentResult {
 
 export interface InitSSLCommerzSessionParams {
   orderId: string;
-  totalAmount: number; // BDT (or other currency)
+  totalAmount: number; // Major units (e.g. 150.00 BDT) — SSLCommerz formats via toFixed(decimals)
   currency: string; // BDT | USD | EUR | GBP | SGD
   successUrl: string;
   failUrl: string;
@@ -99,8 +117,8 @@ export interface SSLCommerzValidationResult {
 
 export interface CreatePolarCheckoutParams {
   orderId: string;
-  amount: number; // In cents (smallest currency unit)
-  currency: string; // ISO 4217 lowercase
+  amount: number; // In smallest currency unit — use getDecimalPlaces(currency) for conversion
+  currency: string; // ISO 4217 lowercase (usd, jpy, bdt)
   productId: string; // Polar product ID (required by Polar)
   paymentType: PaymentType;
   successUrl: string;
@@ -119,7 +137,7 @@ export interface PolarCheckoutResult {
 
 export interface PolarRefundParams {
   polarOrderId: string; // The ID of the order within Polar, which usually matches checkoutId
-  amount: number; // In cents. Must be explicitly provided.
+  amount: number; // In smallest currency unit. Must be explicitly provided.
   reason?: "fraudulent" | "customer_request" | "duplicate" | "other" | "service_disruption" | "satisfaction_guarantee" | "dispute_prevention";
   comment?: string;
 }
@@ -157,7 +175,7 @@ export interface RecordCODFailureParams {
 
 export interface ProcessPaymentParams {
   orderId: string;
-  amount: number;
+  amount: number; // Major units (e.g. 150.00 BDT) — queue consumer converts from smallest unit before calling
   paymentGateway: PaymentGateway;
   paymentType: PaymentType;
   stripePaymentIntentId?: string;

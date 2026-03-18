@@ -119,7 +119,7 @@ export async function isDiscountValid(
   total?: number,
   cartItems: Array<{ id: string; price: number; quantity: number; variantId?: string }> = [],
   customerPhone?: string,
-  currencySymbol: string = "\u09F3",
+  currencySymbol: string = "",
 ) {
   // Get current timestamp
   const currentTime = Math.floor(Date.now() / 1000);

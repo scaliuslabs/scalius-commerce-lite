@@ -23,6 +23,7 @@ import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } 
 import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 
 // Re-export so webhook routes can import message types from one place.
 export type { OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
@@ -32,7 +33,7 @@ export type PaymentQueueMessage =
     type: "payment.stripe.confirmed";
     orderId: string;
     paymentIntentId: string;
-    amount: number; // in cents
+    amount: number; // in smallest currency unit (cents, yen, fils — see ISO 4217)
     currency: string;
     chargeId?: string;
     metadata?: Record<string, string>;
@@ -53,7 +54,7 @@ export type PaymentQueueMessage =
     type: "payment.stripe.refunded";
     orderId: string;
     paymentIntentId: string;
-    amountRefunded: number; // in cents
+    amountRefunded: number; // in smallest currency unit (cents, yen, fils — see ISO 4217)
     chargeId: string;
   }
   | {
@@ -78,7 +79,7 @@ export type PaymentQueueMessage =
     type: "payment.polar.confirmed";
     orderId: string;
     checkoutId: string;
-    amount?: number; // in cents
+    amount?: number; // in smallest currency unit (cents, yen, fils — see ISO 4217)
     currency?: string;
     paymentType?: string;
     metadata?: Record<string, string>;
@@ -222,7 +223,10 @@ async function processQueueMessage(
     // ── Stripe ─────────────────────────────────────────────────────────────
 
     case "payment.stripe.confirmed": {
-      const amountInMajor = payload.amount / 100; // cents → major unit
+      // Convert smallest currency unit → major unit using ISO 4217 decimals.
+      // e.g. USD/BDT: ÷100, JPY: ÷1, BHD: ÷1000
+      const stripeDecimals = getDecimalPlaces(payload.currency);
+      const amountInMajor = payload.amount / Math.pow(10, stripeDecimals);
       await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "stripe",
@@ -281,7 +285,10 @@ async function processQueueMessage(
     // ── Polar ──────────────────────────────────────────────────────────────
 
     case "payment.polar.confirmed": {
-      const amountInMajor = (payload.amount ?? 0) / 100; // cents → major unit
+      // Convert smallest currency unit → major unit using ISO 4217 decimals.
+      const polarCurrency = payload.currency ?? "usd";
+      const polarDecimals = getDecimalPlaces(polarCurrency);
+      const amountInMajor = (payload.amount ?? 0) / Math.pow(10, polarDecimals);
       await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "polar",

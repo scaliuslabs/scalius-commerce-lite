@@ -121,13 +121,13 @@ Dispatches `PaymentQueueMessage` types:
 
 | Message Type | Handler | Action |
 |------|---------|--------|
-| `payment.stripe.confirmed` | `processPaymentConfirmed()` | Converts amount from cents to major unit, records payment, updates order, applies inventory |
+| `payment.stripe.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`), records payment, updates order, applies inventory |
 | `payment.stripe.failed` | `processPaymentFailed()` | Marks order as failed if no prior payments |
 | `payment.stripe.canceled` | `releaseOrderInventory()` | Releases reserved inventory |
 | `payment.stripe.refunded` | (audit only) | Logs refund event; actual refund handled synchronously |
 | `payment.sslcommerz.confirmed` | `processPaymentConfirmed()` | Amount already in major unit (no conversion), records payment |
 | `payment.sslcommerz.failed` | `processPaymentFailed()` | Marks order as failed |
-| `payment.polar.confirmed` | `processPaymentConfirmed()` | Converts amount from cents to major unit |
+| `payment.polar.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`) |
 | `payment.polar.failed` | `processPaymentFailed()` | Marks order as failed |
 
 ## Provider Details
@@ -144,7 +144,7 @@ Dispatches `PaymentQueueMessage` types:
 - **Replay protection**: KV key `stripe_wh:{event.id}` with 24h TTL
 - **Refund**: `createRefund()` refunds by charge ID; supports partial amount and reason codes (`duplicate`, `fraudulent`, `requested_by_customer`)
 - **Settings**: `secret_key`, `publishable_key`, `webhook_secret`, `enabled` (stored in `settings` table, category `stripe`)
-- **Currency**: Amount in smallest unit (cents/paisa); API route multiplies by 100, queue consumer divides by 100
+- **Currency**: Amount in smallest currency unit. API route converts via `getDecimalPlaces(currency)`: `amount * 10^decimals` (e.g. USD: x100, JPY: x1, BHD: x1000). Queue consumer reverses: `amount / 10^decimals`.
 
 ### SSLCommerz
 
@@ -158,7 +158,7 @@ Dispatches `PaymentQueueMessage` types:
 - **Replay protection**: KV key `ssl_wh:{tran_id}_{val_id}` with 24h TTL
 - **Refund**: `initiateSSLCommerzRefund()` uses `bank_tran_id` (from original payment). Production requires IP whitelisting. `querySSLCommerzRefundStatus()` checks refund progress (refunded/processing/cancelled).
 - **Settings**: `store_id`, `store_password`, `sandbox`, `enabled` (stored in `settings` table, category `sslcommerz`)
-- **Currency**: Amount in major unit (no conversion); SSLCommerz receives BDT directly
+- **Currency**: Amount in major unit with ISO 4217 decimal formatting via `toFixed(getDecimalPlaces(currency))`. No smallest-unit conversion needed -- SSLCommerz always receives the display amount.
 
 ### Polar
 
@@ -170,7 +170,7 @@ Dispatches `PaymentQueueMessage` types:
 - **Replay protection**: KV key `polar_webhook:{eventId}:{eventType}` with 24h TTL
 - **Refund**: `createPolarRefund()` refunds by Polar order ID. Reason codes: `fraudulent`, `customer_request`, `duplicate`, `other`, `service_disruption`, `satisfaction_guarantee`, `dispute_prevention`.
 - **Settings**: `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` (stored in `settings` table, category `polar`)
-- **Currency**: Amount in cents; API route multiplies by 100, queue consumer divides by 100
+- **Currency**: Amount in smallest currency unit. API route converts via `getDecimalPlaces(currency)`: `amount * 10^decimals`. Queue consumer reverses: `amount / 10^decimals`.
 
 ### COD (Cash on Delivery)
 
@@ -328,6 +328,7 @@ Mirrors the server-side pattern. `apps/storefront/src/lib/checkout/` has:
 - `@scalius/core/modules/inventory/inventory-transitions` -- `buildInventoryStatements()`, `applyInventoryForStatusChange()`
 - `@scalius/core/modules/orders/order-state-machine` -- `validateTransition()` for state machine checks
 - `@scalius/shared/price-utils` -- `roundPrice()`, `pricesEqual()` for float-safe comparisons
+- `@scalius/shared/currency` -- `getDecimalPlaces()` for ISO 4217 decimal lookup (used by route-layer amount conversions and SSLCommerz formatting)
 
 ## Known Gaps
 
@@ -338,6 +339,6 @@ Mirrors the server-side pattern. `apps/storefront/src/lib/checkout/` has:
 5. **COD refund**: `CODProvider.createRefund()` returns a marker ID only. Actual cash refund is a manual operational process.
 6. **No capture endpoint exposed**: `capturePaymentIntent()` and `cancelPaymentIntent()` exist in `stripe.ts` but have no API route. They would need to be called from an admin fulfillment flow.
 7. **processPaymentFailed**: Does not record `polarCheckoutId` on the failed payment entry (only handles stripe/sslcommerz gateway-specific IDs).
-8. **Amount unit inconsistency between gateways**: Stripe and Polar use cents (smallest unit), SSLCommerz uses major units. Conversion happens at the API route layer (x100) and queue consumer layer (/100), not in the core module. SSLCommerz amounts pass through without conversion.
+8. **Amount unit conversion is ISO 4217-aware**: Stripe and Polar expect smallest currency units; SSLCommerz expects major units. Conversion uses `getDecimalPlaces(currency)` from `@scalius/shared/currency` -- not hardcoded x100. The route layer multiplies by `10^decimals`, the queue consumer divides by `10^decimals`. SSLCommerz formats via `toFixed(decimals)`. See `types.ts` header comment for the full convention.
 9. **Partial payment COD exclusion**: When `partialPaymentEnabled` is true on the storefront, COD is hidden from the payment method list. However, the API routes do not enforce this -- a direct API call could still create a COD order with partial payment config active.
 10. **Factory not used by API routes**: API routes call legacy wrapper functions (`createPaymentIntent()`, `initSSLCommerzSession()`, etc.) directly rather than going through `createPaymentProvider()` factory. The factory/provider pattern is implemented but not yet the primary code path for session creation.

@@ -23,6 +23,7 @@ import type {
   WebhookPayload,
 } from "./provider";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 
 /** SSLCommerz API base URLs */
 const SANDBOX_BASE = "https://sandbox.sslcommerz.com";
@@ -48,7 +49,8 @@ export async function initSSLCommerzSession(
   const body = new URLSearchParams({
     store_id: storeId,
     store_passwd: storePassword,
-    total_amount: params.totalAmount.toFixed(2),
+    // Use ISO 4217 decimal places for the currency (e.g. BDT: 2, JPY: 0, BHD: 3)
+    total_amount: params.totalAmount.toFixed(getDecimalPlaces(params.currency)),
     currency: params.currency,
     tran_id: params.orderId,
     success_url: params.successUrl,
@@ -219,6 +221,9 @@ export async function initiateSSLCommerzRefund(
   const base = getBaseUrl(sandbox);
   const url = new URL(`${base}/validator/api/merchantTransIDvalidationAPI.php`);
   url.searchParams.set("bank_tran_id", params.bankTranId);
+  // SSLCommerz refund amount uses same decimal convention as session init.
+  // We don't have the currency param here — SSLCommerz only supports BDT for
+  // refunds, which has 2 decimals. Default to 2 as a safe fallback.
   url.searchParams.set("refund_amount", params.refundAmount.toFixed(2));
   url.searchParams.set("refund_remarks", params.refundRemarks);
   url.searchParams.set("refund_trans_id", params.refundTranId);

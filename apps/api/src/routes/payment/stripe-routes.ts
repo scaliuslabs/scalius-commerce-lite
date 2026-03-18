@@ -7,6 +7,7 @@ import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@scalius/datab
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
 import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
@@ -101,7 +102,10 @@ app.openapi(createIntentRoute, async (c) => {
     chargeAmount = order.totalAmount;
   }
 
-  const amountInSmallestUnit = Math.round(chargeAmount * 100);
+  // Convert major-unit amount to smallest currency unit using ISO 4217 decimals.
+  // e.g. USD/BDT: ×100, JPY: ×1, BHD: ×1000
+  const decimals = getDecimalPlaces(body.currency);
+  const amountInSmallestUnit = Math.round(chargeAmount * Math.pow(10, decimals));
 
   const result = await createPaymentIntent(stripe.secretKey, {
     orderId: body.orderId,
