@@ -6,6 +6,11 @@
 -- SQLite doesn't support ALTER TABLE to modify constraints directly,
 -- so we use the create-copy-drop-rename pattern for each affected table.
 
+-- Disable FK checks during table recreation to avoid constraint failures
+-- on orphaned data (e.g., FCM tokens referencing deleted users)
+PRAGMA foreign_keys=OFF;
+--> statement-breakpoint
+
 -- 1. Fix products.category_id (remove NOT NULL, keep FK with onDelete: set null)
 CREATE TABLE `__new_products` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -82,3 +87,6 @@ INSERT INTO `__new_media_folders` SELECT * FROM `media_folders`;
 DROP TABLE `media_folders`;
 --> statement-breakpoint
 ALTER TABLE `__new_media_folders` RENAME TO `media_folders`;
+--> statement-breakpoint
+-- Re-enable FK checks
+PRAGMA foreign_keys=ON;
