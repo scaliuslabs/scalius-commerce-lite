@@ -12,7 +12,7 @@ import {
     orderItems,
     discountProducts,
 } from "@scalius/database/schema";
-import { and, sql, desc, eq, asc, inArray } from "drizzle-orm";
+import { and, sql, desc, eq, asc, inArray, isNull } from "drizzle-orm";
 import { sanitizeFtsQuery } from "../../search/fts5";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
@@ -103,6 +103,8 @@ export async function getProducts(db: DrizzleD1Database<typeof schema>, options:
             description: products.description,
             isActive: products.isActive,
             discountPercentage: products.discountPercentage,
+            discountType: products.discountType,
+            discountAmount: products.discountAmount,
             freeDelivery: products.freeDelivery,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
@@ -228,6 +230,8 @@ export async function getProducts(db: DrizzleD1Database<typeof schema>, options:
         description: product.description,
         isActive: product.isActive,
         discountPercentage: product.discountPercentage || 0,
+        discountType: product.discountType || "percentage",
+        discountAmount: product.discountAmount || 0,
         freeDelivery: product.freeDelivery,
         createdAt: new Date(product.createdAt * 1000),
         updatedAt: new Date(product.updatedAt * 1000),
@@ -288,7 +292,7 @@ export async function getProductDetails(
     const variants = await db
         .select()
         .from(productVariants)
-        .where(eq(productVariants.productId, id));
+        .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt)));
 
     const images = await db
         .select()

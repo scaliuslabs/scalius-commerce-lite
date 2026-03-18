@@ -31,6 +31,11 @@ const listRoute = createRoute({
     path: "/",
     tags: ["Admin - Widgets"],
     summary: "List all widgets",
+    request: {
+        query: z.object({
+            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
+        })
+    },
     responses: {
         200: { description: "Widget list"  }
     }
@@ -38,7 +43,8 @@ const listRoute = createRoute({
 
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
-    const result = await listWidgets(db);
+    const query = c.req.valid("query");
+    const result = await listWidgets(db, { showTrashed: query.trashed === "true" });
     return ok(c, result);
 });
 

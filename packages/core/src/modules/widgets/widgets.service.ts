@@ -20,7 +20,8 @@ export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type Up
 // Queries
 // ─────────────────────────────────────────
 
-export async function listWidgets(db: Database) {
+export async function listWidgets(db: Database, options?: { showTrashed?: boolean }) {
+    const { showTrashed = false } = options ?? {};
     const allWidgets = await db
         .select({
             id: widgets.id,
@@ -38,7 +39,7 @@ export async function listWidgets(db: Database) {
             deletedAt: sql<number>`CAST(${widgets.deletedAt} AS INTEGER)`,
         })
         .from(widgets)
-        .where(isNull(widgets.deletedAt))
+        .where(showTrashed ? sql`${widgets.deletedAt} IS NOT NULL` : isNull(widgets.deletedAt))
         .orderBy(asc(widgets.sortOrder), asc(widgets.name));
 
     const availableCollections = await db
