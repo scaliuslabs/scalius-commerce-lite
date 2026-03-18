@@ -42,6 +42,11 @@ export const rbacMiddleware = defineMiddleware(async (context, next) => {
     return (await next()) || new Response();
   }
 
+  // Skip RBAC for scanner token requests — the API worker handles scanner auth itself
+  if (context.request.headers.get("X-Scanner-Token") && pathname.startsWith("/api/v1/admin/inventory/")) {
+    return (await next()) || new Response();
+  }
+
   const env = context.locals._env;
   const sessionUser = context.locals.user;
   const session = context.locals.session;
