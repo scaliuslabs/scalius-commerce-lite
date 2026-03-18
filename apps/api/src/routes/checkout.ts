@@ -7,7 +7,7 @@ import { getRegisteredGateways } from "@scalius/core/modules/payments/gateway-re
 import "@scalius/core/modules/payments/gateway-settings";
 import { getDb } from "@scalius/database/client";
 import { siteSettings, settings } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { cacheMiddleware } from "../middleware/cache";
 
@@ -56,7 +56,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
         .catch(() => [] as { key: string; value: string }[]),
       db.select({ value: settings.value })
         .from(settings)
-        .where(eq(settings.key, "allowedCountries"))
+        .where(and(eq(settings.category, "phone"), eq(settings.key, "allowed_countries")))
         .get()
         .catch(() => null),
     ]);
