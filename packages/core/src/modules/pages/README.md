@@ -44,7 +44,7 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 
 **Queries:**
 - `listPages(db, options)` -- paginated list with FTS5 search, sort (`title`/`createdAt`/`updatedAt`/`sortOrder`), trash filter. Defaults: page 1, limit 10, sort by `updatedAt` desc.
-- `getPageById(db, id)` -- single page by ID (includes deleted pages)
+- `getPageById(db, id)` -- single page by ID (non-deleted only)
 - `getPageBySlug(db, slug)` -- single page by slug (non-deleted only)
 
 **Mutations:**
@@ -120,6 +120,5 @@ Public routes return `{ page }` or `{ pages, pagination }` inside the standard `
 
 - **No version history**: Unlike widgets, pages have no content versioning system. There is no `pageHistory` table or restore-from-history capability.
 - **Public route uses raw `db` import**: `apps/api/src/routes/pages.ts` imports `db` from `@scalius/database/client` instead of using `c.get("db")` from Hono context.
-- **`getPageById` includes deleted pages**: The service's `getPageById` does not filter by `deletedAt`, so admin can retrieve soft-deleted pages. The public route adds its own `isNull(deletedAt)` filter, so this is not a public concern, but the service function is inconsistent with `getPageBySlug` which does filter deleted.
 - ~~**SEO**: Admin form slug prefix showed `/pages/`~~: Fixed -- slug prefix now shows `/` to match the actual storefront route `/{slug}`.
 - **`page.widgets`**: The storefront `Page` type includes an optional `widgets?: ApiWidget[]` array, and `[slug].astro` renders them. However, the public pages API does not return a `widgets` field -- this array would always be empty/undefined unless populated by a different mechanism.

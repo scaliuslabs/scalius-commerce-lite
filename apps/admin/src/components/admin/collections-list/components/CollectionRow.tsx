@@ -12,7 +12,6 @@ import {
   Undo,
   XCircle,
   Pencil,
-  Eye,
   GripVertical,
   LayoutGrid,
   GridIcon,
@@ -201,19 +200,6 @@ export const CollectionRow = forwardRef<
                     data-astro-prefetch="hover"
                   >
                     <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
-                  </a>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  asChild
-                  title="Preview collection"
-                >
-                  <a
-                    href={`/?preview=collection&id=${collection.id}`}
-                    target="_blank"
-                  >
-                    <Eye className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
                   </a>
                 </Button>
               </>

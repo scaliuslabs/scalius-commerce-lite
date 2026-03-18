@@ -5,7 +5,7 @@ import { DiscountType, DiscountValueType } from "@scalius/database/schema";
 const discountTypeEnum = z.nativeEnum(DiscountType);
 const discountValueTypeEnum = z.nativeEnum(DiscountValueType);
 
-export const createDiscountSchema = z.object({
+const baseDiscountFields = {
     code: z.string().min(3).max(50),
     type: discountTypeEnum,
     valueType: discountValueTypeEnum,
@@ -45,11 +45,16 @@ export const createDiscountSchema = z.object({
     isActive: z.boolean().default(true),
     appliesToProducts: z.array(z.string()).optional(),
     appliesToCollections: z.array(z.string()).optional(),
-});
+} as const;
 
-export const updateDiscountSchema = createDiscountSchema.extend({
-    id: z.string(),
-});
+const percentageCheck = (data: { valueType: string; discountValue: number }) =>
+    data.valueType !== DiscountValueType.PERCENTAGE || data.discountValue <= 100;
+
+const percentageError = { message: "Percentage discount cannot exceed 100%", path: ["discountValue"] };
+
+export const createDiscountSchema = z.object(baseDiscountFields).refine(percentageCheck, percentageError);
+
+export const updateDiscountSchema = z.object({ ...baseDiscountFields, id: z.string() }).refine(percentageCheck, percentageError);
 
 export type CreateDiscountInput = z.infer<typeof createDiscountSchema>;
 export type UpdateDiscountInput = z.infer<typeof updateDiscountSchema>;
