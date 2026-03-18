@@ -51,6 +51,10 @@ try {
     initialSearchQuery={search}
     initialSort={{ field: sort, order }}
     showTrashed={showTrashed}
-    stats={stats}
+    stats={stats ? {
+      totalCategories: stats.totalCategories ?? stats.categoriesCount ?? 0,
+      categoriesWithImages: stats.categoriesWithImages ?? 0,
+      totalProducts: stats.totalProducts,
+    } : undefined}
   />
 </AdminLayout>

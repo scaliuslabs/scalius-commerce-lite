@@ -86,7 +86,11 @@ export async function getProductEditData(id: string) {
       createdAt: new Date(img.createdAt),
     })),
     attributes: product.attributes || [],
-    additionalInfo: product.additionalInfo || [],
+    additionalInfo: (product.additionalInfo || []).map((item, idx) => ({
+      id: `info-${idx}`,
+      title: item.label,
+      content: item.value,
+    })),
   };
 
   const formattedVariants = (product.variants || [])
@@ -97,13 +101,13 @@ export async function getProductEditData(id: string) {
       size: variant.size,
       color: variant.color,
       weight: variant.weight,
-      sku: variant.sku,
-      price: variant.price,
+      sku: variant.sku || "",
+      price: variant.price ?? 0,
       stock: variant.stock,
       reservedStock: variant.reservedStock,
       barcode: variant.barcode || null,
-      barcodeType: variant.barcodeType || null,
-      discountType: variant.discountType || "percentage",
+      barcodeType: (variant.barcodeType || null) as "ean13" | "upc" | "isbn" | "gtin" | "custom" | null,
+      discountType: (variant.discountType || "percentage") as "percentage" | "flat",
       discountPercentage: variant.discountPercentage || 0,
       discountAmount: variant.discountAmount || 0,
       createdAt: new Date(variant.createdAt),
@@ -147,12 +151,16 @@ export async function getProductViewData(id: string) {
     },
     variants: (product.variants || []).map((variant: ProductVariant) => ({
       ...variant,
+      sku: variant.sku || "",
+      price: variant.price ?? 0,
+      reservedStock: variant.reservedStock ?? 0,
       createdAt: new Date(variant.createdAt),
       updatedAt: new Date(variant.updatedAt),
       deletedAt: variant.deletedAt ? new Date(variant.deletedAt) : null,
     })),
     images: (product.images || []).map((image: ProductImageDetail) => ({
       ...image,
+      alt: image.altText,
       createdAt: new Date(image.createdAt),
     })),
     additionalInfo: product.additionalInfo || [],

@@ -14,8 +14,9 @@ export interface Customer {
   lastOrderAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  cityName?: string;
-  zoneName?: string;
+  deletedAt?: Date | string | number | null;
+  cityName?: string | null;
+  zoneName?: string | null;
   areaName?: string | null;
 }
 

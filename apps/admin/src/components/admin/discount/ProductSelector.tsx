@@ -20,7 +20,7 @@ interface Product {
   id: string;
   name: string;
   price: number;
-  discountPercentage: number | null;
+  discountPercentage?: number | null;
   variants?: Array<{
     id: string;
     size: string | null;

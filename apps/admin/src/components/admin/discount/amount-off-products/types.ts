@@ -4,7 +4,7 @@ export interface Product {
   id: string;
   name: string;
   price: number;
-  discountPercentage: number | null;
+  discountPercentage?: number | null;
 }
 
 export interface Collection {

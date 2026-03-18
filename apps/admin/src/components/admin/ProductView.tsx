@@ -44,6 +44,7 @@ interface ProductVariant {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+  [key: string]: unknown;
 }
 
 interface ProductImage {
@@ -75,9 +76,8 @@ interface ProductViewProps {
       name: string;
     };
     additionalInfo?: {
-      id: string;
-      title: string;
-      content: string;
+      label: string;
+      value: string;
     }[];
     variants: ProductVariant[];
     images: ProductImage[];
@@ -156,14 +156,14 @@ export function ProductView({ product }: ProductViewProps) {
                         />
                       </AccordionContent>
                     </AccordionItem>
-                    {product.additionalInfo?.map((info) => (
-                      <AccordionItem key={info.id} value={`info-${info.id}`} className="border-none mt-2">
+                    {product.additionalInfo?.map((info, idx) => (
+                      <AccordionItem key={`info-${idx}`} value={`info-${idx}`} className="border-none mt-2">
                         <AccordionTrigger className="py-2 text-sm font-semibold hover:no-underline text-foreground transition-colors justify-start gap-2 border rounded-lg px-4 bg-muted/20 data-[state=open]:rounded-b-none data-[state=open]:bg-muted/40">
-                          {info.title}
+                          {info.label}
                         </AccordionTrigger>
                         <AccordionContent className="pt-4 pb-4 px-4 border border-t-0 rounded-b-lg">
                           <RichContent
-                            content={info.content}
+                            content={info.value}
                             variant="product"
                             className="text-sm text-foreground/90 max-w-3xl"
                           />
@@ -176,14 +176,14 @@ export function ProductView({ product }: ProductViewProps) {
               {!product.description && product.additionalInfo && product.additionalInfo.length > 0 && (
                 <div className="pt-2">
                   <Accordion type="single" collapsible className="w-full">
-                    {product.additionalInfo.map((info) => (
-                      <AccordionItem key={info.id} value={`info-${info.id}`} className="border-none mb-2">
+                    {product.additionalInfo.map((info, idx) => (
+                      <AccordionItem key={`info-${idx}`} value={`info-${idx}`} className="border-none mb-2">
                         <AccordionTrigger className="py-2 text-sm font-semibold hover:no-underline text-foreground transition-colors justify-start gap-2 border rounded-lg px-4 bg-muted/20 data-[state=open]:rounded-b-none data-[state=open]:bg-muted/40">
-                          {info.title}
+                          {info.label}
                         </AccordionTrigger>
                         <AccordionContent className="pt-4 pb-4 px-4 border border-t-0 rounded-b-lg">
                           <RichContent
-                            content={info.content}
+                            content={info.value}
                             variant="product"
                             className="text-sm text-foreground/90 max-w-3xl"
                           />
