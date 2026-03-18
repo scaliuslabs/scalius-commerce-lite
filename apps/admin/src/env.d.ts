@@ -71,6 +71,10 @@ declare namespace App {
     permissions: Set<string>;
     cfContext: ExecutionContext;
     apiBaseUrl: string;
+    // Middleware-internal properties (set in auth.ts, consumed in rbac.ts/admin-detection.ts)
+    _env?: Env;
+    _isSuperAdmin?: boolean;
+    _hasAdminAccess?: boolean;
   }
 }
 
