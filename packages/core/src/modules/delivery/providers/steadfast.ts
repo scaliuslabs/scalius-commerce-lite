@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import type { DeliveryProviderInterface } from "../provider";
 import { mapProviderStatus } from "../status-mapper";
+import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 
 /**
  * Implementation of the Steadfast delivery provider
@@ -139,7 +140,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
       const payload = {
         invoice: order.id,
         recipient_name: order.customerName,
-        recipient_phone: order.customerPhone,
+        recipient_phone: formatPhoneForProvider(order.customerPhone),
         recipient_address: fullAddress, // Use the full address
         cod_amount: codAmount,
         note: options?.note || order.notes || undefined,
