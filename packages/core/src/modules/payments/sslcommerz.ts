@@ -98,7 +98,7 @@ export async function initSSLCommerzSession(
       success: false,
       error: data.failedreason ?? data.status ?? "Failed to initiate SSLCommerz session",
     };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Network error contacting SSLCommerz";
     return { success: false, error: message };
   }
@@ -165,7 +165,7 @@ export async function validateSSLCommerzPayment(
     }
     const isValid = element.status === "VALID" || element.status === "VALIDATED";
     return { valid: isValid, data: element };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Network error";
     return { valid: false, error: message };
   }
@@ -257,7 +257,7 @@ export async function initiateSSLCommerzRefund(
       status: refundStatus,
       error: data.errorReason || "Refund request failed",
     };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Network error";
     return { success: false, error: message };
   }
@@ -316,7 +316,7 @@ export async function querySSLCommerzRefundStatus(
       initiatedOn: data.initiated_on,
       refundedOn: data.refunded_on,
     };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Network error";
     return {
       status: "cancelled",

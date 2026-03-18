@@ -39,7 +39,7 @@ async function getEmailSettings(): Promise<{
       apiKey: apiKeyRow?.value || null,
       sender: senderRow?.value || DEFAULT_FROM,
     };
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[Email] Failed to load email settings from DB:", err);
     return { apiKey: null, sender: DEFAULT_FROM };
   }
@@ -81,7 +81,7 @@ export class ResendEmailProvider implements EmailProvider {
         }
 
         console.log(`[Email] Sent to ${to}`);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("[Email] Failed to send via Resend:", error);
         throw new Error(
           `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`,

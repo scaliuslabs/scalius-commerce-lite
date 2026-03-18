@@ -343,8 +343,9 @@ export async function reserveStockBatch(
     // Phase 4: Execute all updates atomically via D1 batch
     let batchResults: { id: string }[][];
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
       batchResults = await db.batch(updateQueries as any) as any;
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("[inventory/reserve] Batch execution failed:", err);
       return {
         success: false,
@@ -388,8 +389,9 @@ export async function reserveStockBatch(
 
       if (rollbackQueries.length > 0) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
           await db.batch(rollbackQueries as any);
-        } catch (rollbackErr) {
+        } catch (rollbackErr: unknown) {
           console.error("[inventory/reserve] Batch rollback failed:", rollbackErr);
         }
       }

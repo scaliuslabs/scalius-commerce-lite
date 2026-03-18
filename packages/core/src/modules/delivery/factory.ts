@@ -30,7 +30,7 @@ export async function createProvider(
         encryptionKey,
       );
       credentials = JSON.parse(rawCreds);
-    } catch (credError) {
+    } catch (credError: unknown) {
       console.error(
         `Failed to parse credentials for ${provider.type} provider:`,
         credError,
@@ -42,7 +42,7 @@ export async function createProvider(
 
     try {
       config = JSON.parse(provider.config);
-    } catch (configError) {
+    } catch (configError: unknown) {
       console.error(
         `Failed to parse config for ${provider.type} provider:`,
         configError,
@@ -66,7 +66,7 @@ export async function createProvider(
       default:
         throw new Error(`Unsupported provider type: ${provider.type}`);
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error creating provider:`, error);
     throw new Error(
       `Failed to create provider: ${error instanceof Error ? error.message : String(error)}`,

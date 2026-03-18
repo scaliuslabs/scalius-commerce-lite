@@ -86,6 +86,7 @@ export async function getUserPermissions(
       .from(userPermissions)
       .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
       .where(eq(userPermissions.userId, userId)),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any) as [
     { id: string; isSuperAdmin: boolean | null }[],
     { permissionName: string }[],

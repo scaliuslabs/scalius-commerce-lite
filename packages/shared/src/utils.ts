@@ -27,7 +27,7 @@ export function unixToDate(
   try {
     const date = new Date(numTimestamp * multiplier);
     return isNaN(date.getTime()) ? null : date;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error converting timestamp to date:", error);
     return null;
   }
@@ -61,7 +61,7 @@ export function formatDate(
       minute: "2-digit",
       hour12: true,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error formatting date:", error);
     return "Invalid date";
   }

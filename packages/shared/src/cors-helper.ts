@@ -1,4 +1,8 @@
-export const getCorsOriginContext = async (c: any) => {
+interface CorsContext {
+  env: Record<string, unknown>;
+}
+
+export const getCorsOriginContext = async (c: CorsContext) => {
   const allowedOrigins = await getAllowedCorsOrigins(c);
   return (origin: string): string | null => {
     // Allow requests with no origin (like mobile apps or curl)
@@ -21,21 +25,22 @@ export const getCorsOriginContext = async (c: any) => {
   };
 };
 
-async function getAllowedCorsOrigins(c: any): Promise<string[]> {
+async function getAllowedCorsOrigins(c: CorsContext): Promise<string[]> {
   // Try to get from KV, fallback to env
-  let cspAllowed = c.env?.CSP_ALLOWED || "";
+  let cspAllowed = (c.env?.CSP_ALLOWED as string) || "";
   try {
     if (c.env?.CACHE) {
-      const cached = await c.env.CACHE.get("security:csp_allowed_domains");
+      const cache = c.env.CACHE as { get(key: string): Promise<string | null> };
+      const cached = await cache.get("security:csp_allowed_domains");
       if (cached !== null) {
         cspAllowed = cached;
       }
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("Failed to read CSP_ALLOWED from KV Cache", e);
   }
 
-  const cdnDomain = c.env?.CDN_DOMAIN_URL;
+  const cdnDomain = c.env?.CDN_DOMAIN_URL as string | undefined;
 
   // Auto-allow all platform URLs from env
   const origins = [
@@ -47,7 +52,7 @@ async function getAllowedCorsOrigins(c: any): Promise<string[]> {
   // Add platform URLs from env (API, admin, storefront, CDN)
   const envKeys = ["PUBLIC_API_BASE_URL", "BETTER_AUTH_URL", "STOREFRONT_URL"];
   for (const key of envKeys) {
-    const val = (c.env?.[key] || "").trim();
+    const val = ((c.env?.[key] as string) || "").trim();
     if (val) origins.push(val);
   }
 

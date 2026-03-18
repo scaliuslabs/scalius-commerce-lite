@@ -365,7 +365,7 @@ export async function verifyOtp(
             });
             isNewUser = true;
         }
-    } catch (dbError) {
+    } catch (dbError: unknown) {
         // Re-throw typed errors (ValidationError etc.) as-is
         if (dbError instanceof ValidationError) throw dbError;
         console.warn("[CustomerAuth] DB lookup/insert failed (non-critical):", dbError);

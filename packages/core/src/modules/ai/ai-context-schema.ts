@@ -148,7 +148,7 @@ export function parseAiContext(jsonString: string | null | undefined): AiContext
       console.error('Could not recover AI context, using empty context');
       return AiContextSchema.parse({});
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Failed to parse AI context:', error);
     // Return default schema instead of throwing
     return AiContextSchema.parse({});

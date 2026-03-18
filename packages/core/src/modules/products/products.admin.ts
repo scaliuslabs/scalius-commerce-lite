@@ -471,6 +471,7 @@ export async function createProduct(db: DrizzleD1Database<typeof schema>, data: 
     }
 
     // Drizzle D1 batch() requires specific tuple types — safe to cast
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(batchOps as any);
     return { id: productId };
 }
@@ -573,6 +574,7 @@ export async function updateProduct(db: DrizzleD1Database<typeof schema>, id: st
     }
 
     // Drizzle D1 batch() requires specific tuple types — safe to cast
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(batchOps as any);
 }
 
@@ -629,6 +631,7 @@ export async function permanentDeleteProduct(db: DrizzleD1Database<typeof schema
         db.delete(productRichContent).where(eq(productRichContent.productId, id)),
         db.delete(products).where(eq(products.id, id)),
     // Drizzle D1 batch() requires specific tuple types — safe to cast
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ] as any);
 }
 
@@ -697,6 +700,7 @@ export async function bulkUpdateVariants(db: DrizzleD1Database<typeof schema>, p
 
     if (statements.length > 0) {
         // Drizzle D1 batch() requires specific tuple types — safe to cast
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
         await db.batch(statements as any);
     }
 }

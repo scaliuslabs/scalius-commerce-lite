@@ -373,7 +373,7 @@ export async function processPathaoImportChunk(
           try {
             const res = await fetchJson<AreaResponse>(creds, `/aladdin/api/v1/zones/${zone.pathaoId}/area-list`);
             return { zone, areas: res.data?.data || [] };
-          } catch (err) {
+          } catch (err: unknown) {
             console.error(`[pathao-import] Failed to fetch areas for zone ${zone.name}:`, err);
             return { zone, areas: [] };
           }
@@ -418,7 +418,7 @@ export async function processPathaoImportChunk(
       progress: { current: 1, total: 1, label: "Import complete" },
       stats: progress.stats,
     };
-  } catch (err) {
+  } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     const failedPhase = progress.status as string;
     progress.status = "error";

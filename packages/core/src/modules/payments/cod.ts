@@ -123,7 +123,7 @@ export async function recordCODCollection(
     ]);
 
     return { success: true };
-  } catch (err) {
+  } catch (err: unknown) {
     // Re-throw typed errors so the API layer can handle them
     if (err instanceof NotFoundError) throw err;
     const message = err instanceof Error ? err.message : "Failed to record COD collection";
@@ -153,7 +153,7 @@ export async function recordCODFailure(
       .where(eq(codTracking.orderId, params.orderId));
 
     return { success: true };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to record COD failure";
     return { success: false, error: message };
   }
@@ -176,7 +176,7 @@ export async function markCODReturned(
       .where(eq(codTracking.orderId, orderId));
 
     return { success: true };
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to mark COD as returned";
     return { success: false, error: message };
   }

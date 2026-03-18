@@ -13,7 +13,7 @@ export function safeErrorResponse(error: unknown, status = 500): Response {
   const isDev = process.env.NODE_ENV === "development";
 
   // Prepare the response body
-  let body: Record<string, any> = {
+  let body: Record<string, unknown> = {
     status: "error",
     timestamp: new Date().toISOString(),
   };
@@ -72,7 +72,7 @@ export function zodErrorResponse(error: { errors: unknown[] }): Response {
  * @param status Optional HTTP status code (default: 500)
  */
 export function honoSafeError(
-  c: { json: (body: unknown, status?: number) => any },
+  c: { json: (body: unknown, status?: number) => unknown },
   error: unknown,
   status = 500,
 ) {

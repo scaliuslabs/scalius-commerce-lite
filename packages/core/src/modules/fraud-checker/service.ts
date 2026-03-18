@@ -180,7 +180,7 @@ export class FraudCheckerService {
           ? "Connection successful"
           : result.error || "Connection failed",
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         success: false,
         message:
@@ -212,7 +212,7 @@ export class FraudCheckerService {
         riskLevel: result.riskLevel,
         data: result.details as FraudCheckResult["data"],
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ServiceUnavailableError(
         error instanceof Error ? error.message : "Fraud check lookup failed",
       );

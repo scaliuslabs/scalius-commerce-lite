@@ -121,7 +121,7 @@ export class ShipmentTracker {
       }
 
       return null;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error updating order status from shipment:", error);
       return null;
     }
@@ -177,7 +177,7 @@ export class ShipmentTracker {
         newStatus,
         timestamp: new Date(),
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error sending status change notification:", error);
       return null;
     }

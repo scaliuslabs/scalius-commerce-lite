@@ -62,6 +62,7 @@ export async function createPolarCheckout(
                     {
                         amountType: "fixed",
                         priceAmount: params.amount, // Already in cents
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Polar SDK expects PresentmentCurrency enum
                         priceCurrency: params.currency as any, // Cast: Polar SDK expects PresentmentCurrency enum
                     },
                 ],
@@ -88,7 +89,7 @@ export async function createPolarCheckout(
             checkoutUrl: checkout.url,
             checkoutId: checkout.id,
         };
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("[Polar] Error creating checkout session:", error);
         return {
             success: false,
@@ -124,7 +125,7 @@ export async function createPolarRefund(
             success: true,
             refundId: refund.id,
         };
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("[Polar] Error creating refund:", error);
         return {
             success: false,
@@ -153,7 +154,7 @@ export function verifyPolarWebhook(
         const payload = wh.verify(rawBody, headers) as PolarWebhookPayload;
 
         return { verified: true, payload };
-    } catch (error) {
+    } catch (error: unknown) {
         return {
             verified: false,
             error: error instanceof Error ? error.message : "Webhook verification failed",

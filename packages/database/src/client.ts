@@ -18,7 +18,7 @@ let _db: Database | null = null;
  *
  * @param env - Cloudflare Workers env object containing `env.DB: D1Database`
  */
-export function getDb(env?: { DB?: D1Database } | any): Database {
+export function getDb(env?: { DB?: D1Database } & Record<string, unknown>): Database {
   if (_db) return _db;
 
   const d1 = env?.DB as D1Database | undefined;
@@ -50,7 +50,7 @@ export const db = new Proxy({} as Database, {
           "Ensure the Astro middleware has run getDb(env) for this request.",
       );
     }
-    return (_db as any)[prop];
+    return _db[prop as keyof Database];
   },
 });
 

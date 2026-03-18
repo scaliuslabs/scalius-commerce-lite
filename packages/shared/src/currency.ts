@@ -2,6 +2,13 @@
 // Pure currency type and formatting utilities.
 // getCurrencyConfig lives in @scalius/core (settings service) because it requires DB access.
 
+declare global {
+  interface Window {
+    __CURRENCY_SYMBOL__?: string;
+    __CURRENCY_CODE__?: string;
+  }
+}
+
 export interface CurrencyConfig {
   code: string;
   symbol: string;
@@ -24,16 +31,16 @@ export const DEFAULT_CURRENCY: CurrencyConfig = {
 
 /** Get the currency symbol from the global window variable (set by Layout.astro) */
 export function getCurrencySymbol(): string {
-  if (typeof window !== "undefined" && (window as any).__CURRENCY_SYMBOL__) {
-    return (window as any).__CURRENCY_SYMBOL__;
+  if (typeof window !== "undefined" && window.__CURRENCY_SYMBOL__) {
+    return window.__CURRENCY_SYMBOL__;
   }
   return DEFAULT_CURRENCY.symbol;
 }
 
 /** Get the currency code from the global window variable */
 export function getCurrencyCode(): string {
-  if (typeof window !== "undefined" && (window as any).__CURRENCY_CODE__) {
-    return (window as any).__CURRENCY_CODE__;
+  if (typeof window !== "undefined" && window.__CURRENCY_CODE__) {
+    return window.__CURRENCY_CODE__;
   }
   return DEFAULT_CURRENCY.code;
 }
