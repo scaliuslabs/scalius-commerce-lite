@@ -72,6 +72,36 @@ function nextHistoryId(): string {
 // ---------------------------------------------------------------------------
 
 export function ScannerApp({ token }: ScannerAppProps) {
+  // ---- Auth state ----
+  const [authState, setAuthState] = useState<"verifying" | "error" | "ready">(
+    token ? "verifying" : "error",
+  );
+  const [authError, setAuthError] = useState<string>("");
+  const [adminName, setAdminName] = useState<string>("");
+
+  // Verify token on mount
+  useEffect(() => {
+    if (!token) {
+      setAuthState("error");
+      setAuthError("No scanner token provided. Ask an admin to generate a QR code.");
+      return;
+    }
+    fetch(`/api/scanner-token?token=${encodeURIComponent(token)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Invalid or expired token");
+        return res.json();
+      })
+      .then((json) => {
+        const data = json.data && typeof json.data === "object" ? json.data : json;
+        setAdminName(data.adminName || "Admin");
+        setAuthState("ready");
+      })
+      .catch((err: unknown) => {
+        setAuthState("error");
+        setAuthError(err instanceof Error ? err.message : "Token verification failed");
+      });
+  }, [token]);
+
   // ---- Core state ----
   const [mode, setMode] = useState<ScannerMode>("quick");
   const [appState, setAppState] = useState<AppState>("idle");
@@ -395,6 +425,33 @@ export function ScannerApp({ token }: ScannerAppProps) {
     { key: "receiving", label: "Receive", icon: PackageOpen },
     { key: "count", label: "Count", icon: ClipboardList },
   ];
+
+  // ---- Auth gate ----
+  if (authState === "verifying") {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-zinc-950 text-white">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
+          <p className="text-sm text-zinc-400">Verifying scanner token…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authState === "error") {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-zinc-950 text-white p-6">
+        <div className="text-center max-w-sm">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+            <WifiOff className="h-8 w-8 text-red-400" />
+          </div>
+          <h1 className="text-lg font-semibold mb-2">Access Required</h1>
+          <p className="text-sm text-zinc-400 mb-6">{authError}</p>
+          <p className="text-xs text-zinc-500">Ask an admin to generate a new scanner QR code from Settings → Scanner.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-dvh flex-col bg-zinc-950 text-white">
