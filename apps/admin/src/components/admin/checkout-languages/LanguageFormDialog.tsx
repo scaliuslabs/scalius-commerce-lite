@@ -168,6 +168,7 @@ export function LanguageFormDialog({
                   ["customerNamePlaceholder", "Customer Name Placeholder"],
                   ["customerPhoneLabel", "Phone Label"],
                   ["customerPhonePlaceholder", "Phone Placeholder"],
+                  ["customerPhoneHelp", "Phone Help Text"],
                   ["customerEmailLabel", "Email Label"],
                   ["customerEmailPlaceholder", "Email Placeholder"],
                   ["shippingAddressLabel", "Address Label"],
