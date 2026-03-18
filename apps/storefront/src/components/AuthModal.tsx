@@ -42,6 +42,7 @@ export default function AuthModal() {
 
   // Settings injected globally
   const [allowedMethods, setAllowedMethods] = useState<"email" | "phone" | "both" | "email_phone_mandatory" | "whatsapp_otp" | "sms_otp">("both");
+  const [allowedCountries, setAllowedCountries] = useState<string[]>([]);
 
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
 
@@ -74,6 +75,9 @@ export default function AuthModal() {
           } else if (config.authVerificationMethod === "email") {
             setMethod("email");
           }
+        }
+        if (Array.isArray((config as any).allowedCountries) && (config as any).allowedCountries.length > 0) {
+          setAllowedCountries((config as any).allowedCountries);
         }
       });
 
@@ -372,7 +376,8 @@ export default function AuthModal() {
               ) : (
                 <PhoneInput
                   international
-                  defaultCountry="BD"
+                  defaultCountry={(allowedCountries[0] || "BD") as any}
+                  countries={allowedCountries.length > 0 ? allowedCountries as any : undefined}
                   value={identifier}
                   onChange={(value) => { setIdentifier(value || ""); setError(""); }}
                   className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:outline-none [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:h-full"
@@ -385,7 +390,8 @@ export default function AuthModal() {
                 <label className="text-sm font-medium text-foreground">Phone Number (Required)</label>
                 <PhoneInput
                   international
-                  defaultCountry="BD"
+                  defaultCountry={(allowedCountries[0] || "BD") as any}
+                  countries={allowedCountries.length > 0 ? allowedCountries as any : undefined}
                   value={phoneInput}
                   onChange={(value) => { setPhoneInput(value || ""); setError(""); }}
                   className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:outline-none [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:h-full"

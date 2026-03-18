@@ -36,4 +36,5 @@ export interface CheckoutConfig {
   checkoutMode: string;
   partialPaymentEnabled: boolean;
   partialPaymentAmount: number;
+  allowedCountries?: string[];
 }
