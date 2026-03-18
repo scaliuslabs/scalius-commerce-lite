@@ -39,7 +39,7 @@ app.openapi(getAuthRoute, async (c) => {
             partialPaymentEnabled: row.partialPaymentEnabled,
             partialPaymentAmount: row.partialPaymentAmount
         });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -101,7 +101,7 @@ app.openapi(saveAuthRoute, async (c) => {
 
         await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "Auth settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -128,7 +128,7 @@ app.openapi(getSecurityRoute, async (c) => {
             .get();
 
         return ok(c, { cspAllowedDomains: row?.value || "" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -173,7 +173,7 @@ app.openapi(saveSecurityRoute, async (c) => {
         }
 
         return ok(c, { message: "Security settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -202,7 +202,7 @@ app.openapi(getEmailRoute, async (c) => {
             apiKey: apiKeyRow?.value ? MASKED : "",
             sender: senderRow?.value || ""
         });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -245,7 +245,7 @@ app.openapi(saveEmailRoute, async (c) => {
 
         await Promise.all(updates);
         return ok(c, { message: "Email settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -277,7 +277,7 @@ app.openapi(getFirebaseRoute, async (c) => {
         });
 
         return ok(c, config);
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -310,7 +310,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
                         .values({ id: `set_${nanoid(10)}`, key: "service_account", value: serviceAccount, type: "json", category: "firebase" })
                         .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: serviceAccount, updatedAt: new Date() } })
                 );
-            } catch (e) {
+            } catch (e: unknown) {
                 throw new ValidationError("Invalid Service Account JSON");
             }
         }
@@ -329,7 +329,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
         layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);
 
         return ok(c, { message: "Settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });

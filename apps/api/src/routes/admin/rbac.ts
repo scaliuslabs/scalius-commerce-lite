@@ -80,7 +80,7 @@ app.openapi(listRolesRoute, async (c) => {
 
         const rolesWithPermissions = await getAllRolesWithPermissions(db);
         return ok(c, { roles: rolesWithPermissions });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error fetching roles:", error);
         throw error;
     }
@@ -209,7 +209,7 @@ app.openapi(getRoleRoute, async (c) => {
                 permissions: perms
             }
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error fetching role:", error);
         throw error;
     }
@@ -366,7 +366,7 @@ app.openapi(deleteRoleRoute, async (c) => {
         clearAllPermissionCache();
 
         return ok(c, {});
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error deleting role:", error);
         throw error;
     }
@@ -631,7 +631,7 @@ app.openapi(listPermissionsRoute, async (c) => {
             permissions: allPermissions,
             grouped: groupedPermissions
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error fetching permissions:", error);
         throw error;
     }
@@ -669,7 +669,7 @@ app.openapi(myPermissionsRoute, async (c) => {
             permissions: Array.from(context.effectivePermissions),
             overrides: context.overrides
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error fetching user permissions:", error);
         throw error;
     }

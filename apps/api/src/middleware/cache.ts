@@ -87,7 +87,7 @@ export const cacheMiddleware = (
         headers.set("Cache-Control", cacheControl);
         return new Response(cached.body, { status: cached.status, headers });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("[Cache] Error reading from cache:", error);
     }
 
@@ -116,7 +116,7 @@ export const cacheMiddleware = (
       });
 
       await setCache(cacheKey, { status: cloned.status, headers, body }, ttl, kv);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("[Cache] Error writing to cache:", error);
     }
   };

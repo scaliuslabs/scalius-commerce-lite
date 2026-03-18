@@ -10,7 +10,7 @@ async function getAllowedDomainsAsync(c: { env: Env; req: { url: string } }): Pr
         cspAllowed = cached;
       }
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.error(`[Partytown Proxy] Failed to read CSP_ALLOWED from KV`, e);
   }
 
@@ -83,7 +83,7 @@ app.openapi(proxyRoute, async (c) => {
   let targetUrl: URL;
   try {
     targetUrl = new URL(urlParam);
-  } catch (e) {
+  } catch (e: unknown) {
     return c.json({ error: "Invalid url parameter" }, 400, {
       "Access-Control-Allow-Origin": "*"
     });
@@ -149,7 +149,7 @@ app.openapi(proxyRoute, async (c) => {
     });
 
     return proxyResponse;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Proxy error fetching ${targetUrl}:`, error);
     return c.json({ error: "Proxy failed" }, 500, {
       "Access-Control-Allow-Origin": "*"

@@ -39,7 +39,7 @@ app.openapi(getCurrencyRoute, async (c) => {
             currencySymbol: map["currency_symbol"] ?? "\u09F3",
             usdExchangeRate: map["usd_exchange_rate"] ?? "1"
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error fetching currency settings:", error);
         throw error;
     }
@@ -84,7 +84,7 @@ app.openapi(saveCurrencyRoute, async (c) => {
         await kv?.delete("gw:currency");
 
         return ok(c, { message: "Currency settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error saving currency settings:", error);
         throw error;
     }
@@ -114,7 +114,7 @@ app.openapi(getGeneralRoute, async (c) => {
             headerConfig: safeParseJSON(row?.headerConfig),
             footerConfig: safeParseJSON(row?.footerConfig),
         });
-    } catch (error) {
+    } catch (error: unknown) {
         return ok(c, { headerConfig: {}, footerConfig: {} });
     }
 });
@@ -277,7 +277,7 @@ app.openapi(getThemeRoute, async (c) => {
 
         const colors = row?.value ? JSON.parse(row.value) : {};
         return ok(c, { colors });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -306,7 +306,7 @@ app.openapi(saveThemeRoute, async (c) => {
             await deleteCacheByPattern("api:storefront:layout:*", kv);
         }
         return ok(c, { message: "Theme settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -342,7 +342,7 @@ app.openapi(getSeoRoute, async (c) => {
             homepageMetaDescription: row?.homepageMetaDescription || "",
             robotsTxt: row?.robotsTxt || ""
         });
-    } catch (error) {
+    } catch (error: unknown) {
         return ok(c, { siteTitle: "", homepageTitle: "", homepageMetaDescription: "", robotsTxt: "" });
     }
 });
@@ -396,7 +396,7 @@ app.openapi(saveSeoRoute, async (c) => {
         }
         await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "SEO settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -418,7 +418,7 @@ app.openapi(getStorefrontUrlRoute, async (c) => {
         const db = c.get("db");
         const [row] = await db.select({ storefrontUrl: siteSettings.storefrontUrl }).from(siteSettings).limit(1);
         return ok(c, { storefrontUrl: row?.storefrontUrl || "/" });
-    } catch (error) {
+    } catch (error: unknown) {
         return ok(c, { storefrontUrl: "/" });
     }
 });
@@ -461,7 +461,7 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
         layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
         await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "Storefront URL saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });

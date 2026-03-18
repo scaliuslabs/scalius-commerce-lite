@@ -124,7 +124,7 @@ app.use("*", async (c, next) => {
 app.use("*", async (c, next) => {
   try {
     await next();
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("API Error:", error);
 
     if (error instanceof ApiError) {
@@ -226,7 +226,7 @@ app.get("/health", async (c) => {
         uptime: cacheStats.uptime,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error getting health stats:", error);
     return c.json({
       status: "ok",
@@ -324,7 +324,7 @@ app.get("/openapi.json", (c) => {
       servers: [{ url: "/", description: "Default" }],
     });
     return c.json(spec);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("OpenAPI spec generation error:", error);
     throw error;
   }

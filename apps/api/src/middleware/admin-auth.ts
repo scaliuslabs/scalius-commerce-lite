@@ -33,7 +33,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         if (sessionResult?.user) {
             user = sessionResult.user as User;
         }
-    } catch (error) {
+    } catch (error: unknown) {
         // Ignore error, fallback to JWT
     }
 
@@ -52,7 +52,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                     c.header("X-New-Token", refreshedToken);
                 }
             }
-        } catch (error) {
+        } catch (error: unknown) {
             // Ignore error
         }
     }
@@ -128,7 +128,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
         // Passed all authentication and authorization checks
         return next();
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Admin Auth Middleware Error:", error);
         return c.json({ error: "Server error", message: "Failed to verify admin permissions" }, 500);
     }

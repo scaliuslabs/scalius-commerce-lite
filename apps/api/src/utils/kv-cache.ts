@@ -129,7 +129,7 @@ export async function setCache(
     try {
       const expirationTtl = Math.max(MIN_KV_TTL, ttl);
       await ns.put(fullKey, JSON.stringify(value), { expirationTtl });
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(`[KV] setCache error for key "${fullKey}":`, err);
       memCache.set(fullKey, value, ttl);
     }
@@ -154,7 +154,7 @@ export async function getCache<T>(
       const raw = await ns.get(fullKey);
       if (!raw) return null;
       return JSON.parse(raw) as T;
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(`[KV] getCache error for key "${fullKey}":`, err);
       return memCache.get(fullKey) as T | null;
     }
@@ -176,7 +176,7 @@ export async function deleteCache(
   if (ns) {
     try {
       await ns.delete(fullKey);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(`[KV] deleteCache error for key "${fullKey}":`, err);
       memCache.delete(fullKey);
     }
@@ -222,7 +222,7 @@ export async function deleteCacheByPattern(
           `[KV] Deleted ${keysToDelete.length} entries matching prefix "${prefix}"`,
         );
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(
         `[KV] deleteCacheByPattern error for prefix "${prefix}":`,
         err,

@@ -51,7 +51,7 @@ export function generateToken(
   try {
     const secret = getJwtSecret(env);
     return (jwt.sign as (...args: unknown[]) => string)(payload, secret, { expiresIn });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error generating JWT token:", error);
     throw new Error("Failed to generate authentication token");
   }
@@ -71,7 +71,7 @@ export async function verifyToken(
 
     const secret = getJwtSecret(env);
     return (jwt.verify as (...args: unknown[]) => jwt.JwtPayload | string)(token, secret);
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof jwt.JsonWebTokenError) {
       throw new Error("Invalid token");
     }
@@ -85,7 +85,7 @@ export async function verifyToken(
 export function decodeToken(token: string): jwt.JwtPayload | string | null {
   try {
     return jwt.decode(token);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error decoding JWT token:", error);
     throw new Error("Failed to decode token");
   }
@@ -122,7 +122,7 @@ export function refreshTokenIfNeeded(
       return generateToken(payload, DEFAULT_EXPIRATION, env);
     }
     return token;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error refreshing token:", error);
     throw new Error("Failed to refresh token");
   }
@@ -154,7 +154,7 @@ export async function revokeToken(token: string): Promise<void> {
     if (typeof process !== "undefined" && process.env.NODE_ENV === "production") {
       console.log(`Token revoked, expires at ${new Date(expiresAt).toISOString()}`);
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error revoking token:", error);
     throw new Error("Failed to revoke token");
   }
@@ -172,7 +172,7 @@ export async function isTokenBlacklisted(token: string): Promise<boolean> {
       kv,
     );
     return result?.revoked === true;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error checking token blacklist:", error);
     return false; // Fail open to avoid blocking valid requests
   }

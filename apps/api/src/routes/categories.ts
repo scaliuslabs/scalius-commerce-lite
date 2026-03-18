@@ -93,8 +93,7 @@ app.openapi(listCategoriesRoute, async (c) => {
   const formattedCategories = categoriesList.map((category) => ({
     ...category,
     createdAt:
-      unixToDate(category.createdAt as unknown as number)?.toISOString() ||
-      null
+      category.createdAt instanceof Date ? category.createdAt.toISOString() : null
   }));
 
   return ok(c, { categories: formattedCategories });
@@ -376,11 +375,9 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       ? Math.round(product.price * (1 - product.discountPercentage / 100))
       : product.price,
     createdAt:
-      unixToDate(product.createdAt as unknown as number)?.toISOString() ||
-      null,
+      product.createdAt instanceof Date ? product.createdAt.toISOString() : null,
     updatedAt:
-      unixToDate(product.updatedAt as unknown as number)?.toISOString() ||
-      null,
+      product.updatedAt instanceof Date ? product.updatedAt.toISOString() : null,
     category: {
       id: category.id,
       name: category.name,

@@ -54,7 +54,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
                 cod: { configured: true, enabled: true }
             }
         });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -114,7 +114,7 @@ app.openapi(getStripeRoute, async (c) => {
             webhookSecret: map.webhook_secret ? MASKED : "",
             enabled: map.enabled !== "false"
         });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -143,7 +143,7 @@ app.openapi(saveStripeRoute, async (c) => {
         await Promise.all([invalidateStripeCache(kv), invalidatePaymentMethodsCache(kv)]);
 
         return ok(c, { message: "Stripe settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -171,7 +171,7 @@ app.openapi(getSSLCommerzRoute, async (c) => {
             sandbox: map.sandbox !== "false",
             enabled: map.enabled !== "false"
         });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -200,7 +200,7 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         await Promise.all([invalidateSSLCommerzCache(kv), invalidatePaymentMethodsCache(kv)]);
 
         return ok(c, { message: "SSLCommerz settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -229,7 +229,7 @@ app.openapi(getPolarRoute, async (c) => {
             sandbox: map.sandbox !== "false",
             enabled: map.enabled !== "false"
         });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -259,7 +259,7 @@ app.openapi(savePolarRoute, async (c) => {
         await Promise.all([invalidatePolarCache(kv), invalidatePaymentMethodsCache(kv)]);
 
         return ok(c, { message: "Polar settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });

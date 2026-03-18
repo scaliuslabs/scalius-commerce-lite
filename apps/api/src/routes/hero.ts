@@ -20,12 +20,6 @@ app.use(
   }),
 );
 
-// Helper function to convert Unix timestamp to Date
-const unixToDate = (timestamp: number | null): Date | null => {
-  if (!timestamp) return null;
-  return new Date(timestamp * 1000);
-};
-
 // GET /hero/sliders — get all active hero sliders
 const listSlidersRoute = createRoute({
   method: "get",
@@ -40,7 +34,7 @@ const listSlidersRoute = createRoute({
   responses: {
     200: {
       description: "Hero slider data"
-      
+
     },
     500: {
       description: "Server error"
@@ -97,34 +91,13 @@ app.openapi(listSlidersRoute, async (c) => {
   const formatSlider = (slider: (typeof sliders)[0] | undefined) => {
     if (!slider) return null;
 
-    let createdAt = null;
-    let updatedAt = null;
-
-    try {
-      const createdDate = unixToDate(slider.createdAt as unknown as number);
-      if (createdDate instanceof Date && !isNaN(createdDate.getTime())) {
-        createdAt = createdDate.toISOString();
-      }
-    } catch (error) {
-      console.warn(`Invalid createdAt timestamp for slider ${slider.id}`);
-    }
-
-    try {
-      const updatedDate = unixToDate(slider.updatedAt as unknown as number);
-      if (updatedDate instanceof Date && !isNaN(updatedDate.getTime())) {
-        updatedAt = updatedDate.toISOString();
-      }
-    } catch (error) {
-      console.warn(`Invalid updatedAt timestamp for slider ${slider.id}`);
-    }
-
     return {
       id: slider.id,
       type: slider.type,
       images: JSON.parse(slider.images),
       isActive: slider.isActive,
-      createdAt,
-      updatedAt
+      createdAt: slider.createdAt instanceof Date ? slider.createdAt.toISOString() : null,
+      updatedAt: slider.updatedAt instanceof Date ? slider.updatedAt.toISOString() : null,
     };
   };
 
@@ -201,28 +174,6 @@ app.openapi(getSliderByIdRoute, async (c) => {
   // Parse the images JSON
   const images = JSON.parse(slider.images);
 
-  // Handle possible invalid timestamp values
-  let createdAt = null;
-  let updatedAt = null;
-
-  try {
-    const createdDate = unixToDate(slider.createdAt as unknown as number);
-    if (createdDate instanceof Date && !isNaN(createdDate.getTime())) {
-      createdAt = createdDate.toISOString();
-    }
-  } catch (error) {
-    console.warn(`Invalid createdAt timestamp for slider ${slider.id}`);
-  }
-
-  try {
-    const updatedDate = unixToDate(slider.updatedAt as unknown as number);
-    if (updatedDate instanceof Date && !isNaN(updatedDate.getTime())) {
-      updatedAt = updatedDate.toISOString();
-    }
-  } catch (error) {
-    console.warn(`Invalid updatedAt timestamp for slider ${slider.id}`);
-  }
-
   // Format the response
   return ok(c, {
     slider: {
@@ -230,8 +181,8 @@ app.openapi(getSliderByIdRoute, async (c) => {
       type: slider.type,
       images,
       isActive: slider.isActive,
-      createdAt,
-      updatedAt
+      createdAt: slider.createdAt instanceof Date ? slider.createdAt.toISOString() : null,
+      updatedAt: slider.updatedAt instanceof Date ? slider.updatedAt.toISOString() : null,
     }
   });
 });

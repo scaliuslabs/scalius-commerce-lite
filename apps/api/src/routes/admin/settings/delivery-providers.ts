@@ -29,7 +29,7 @@ function unmaskedCredentials(
         if (unmasked.secretKey === MASKED_VALUE && existingCreds.secretKey) unmasked.secretKey = existingCreds.secretKey;
 
         return JSON.stringify(unmasked);
-    } catch (e) {
+    } catch (e: unknown) {
         return newCredentials;
     }
 }
@@ -45,7 +45,7 @@ function maskCredentialsForClient(credentialsJson: string): string {
         if (masked.secretKey) masked.secretKey = MASKED_VALUE;
 
         return JSON.stringify(masked);
-    } catch (e) {
+    } catch (e: unknown) {
         return credentialsJson;
     }
 }
@@ -114,7 +114,7 @@ app.openapi(createProviderRoute, async (c) => {
             config,
         };
 
-        const savedProvider = await deliveryService.saveProvider(provider, (c.env as any)?.CREDENTIAL_ENCRYPTION_KEY);
+        const savedProvider = await deliveryService.saveProvider(provider, (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined);
         const savedCredentials = typeof savedProvider.credentials === 'string'
             ? savedProvider.credentials
             : JSON.stringify(savedProvider.credentials);
@@ -170,7 +170,7 @@ app.openapi(updateProviderRoute, async (c) => {
                 isActive: validated.isActive ?? true,
                 credentials: credentials || "{}",
                 config: config || "{}",
-            }, (c.env as any)?.CREDENTIAL_ENCRYPTION_KEY);
+            }, (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined);
             const newCredentials = typeof savedProvider.credentials === 'string'
                 ? savedProvider.credentials
                 : JSON.stringify(savedProvider.credentials);
@@ -246,7 +246,7 @@ app.openapi(createTestRoute, async (c) => {
         };
 
         try {
-            const providerInstance = await createProvider(mockProvider, (c.env as any)?.CREDENTIAL_ENCRYPTION_KEY);
+            const providerInstance = await createProvider(mockProvider, (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined);
             const result = await providerInstance.testConnection();
 
             return ok(c, {
@@ -309,7 +309,7 @@ app.openapi(testExistingRoute, async (c) => {
         if (!provider) throw new NotFoundError("Provider not found");
 
         try {
-            const providerInstance = await createProvider(provider, (c.env as any)?.CREDENTIAL_ENCRYPTION_KEY);
+            const providerInstance = await createProvider(provider, (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined);
             const result = await providerInstance.testConnection();
             return ok(c, result);
         } catch (testError: unknown) {

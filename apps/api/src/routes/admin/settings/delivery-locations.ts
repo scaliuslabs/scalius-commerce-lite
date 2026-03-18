@@ -293,7 +293,7 @@ import { deliveryProviders } from "@scalius/database/schema";
  */
 app.post("/import-pathao", async (c) => {
     const db = c.get("db");
-    const kv = (c.env as any)?.CACHE as KVNamespace | undefined;
+    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
 
     if (!kv) {
         throw new Error("KV namespace not available");
@@ -329,7 +329,7 @@ app.post("/import-pathao", async (c) => {
  * GET /import-pathao/status — Check current import progress without processing.
  */
 app.get("/import-pathao/status", async (c) => {
-    const kv = (c.env as any)?.CACHE as KVNamespace | undefined;
+    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
     if (!kv) throw new Error("KV not available");
 
     const status = await getPathaoImportStatus(kv);
@@ -340,7 +340,7 @@ app.get("/import-pathao/status", async (c) => {
  * DELETE /import-pathao — Reset import progress (for retrying or re-importing).
  */
 app.delete("/import-pathao", async (c) => {
-    const kv = (c.env as any)?.CACHE as KVNamespace | undefined;
+    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
     if (!kv) throw new Error("KV not available");
 
     await resetPathaoImportProgress(kv);

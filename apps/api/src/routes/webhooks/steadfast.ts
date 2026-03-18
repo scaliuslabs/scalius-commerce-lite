@@ -182,7 +182,7 @@ app.post("/", async (c) => {
 
         // Steadfast expects HTTP 200 with this exact response shape
         return c.json({ status: "success", message: "Webhook received successfully." });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("[steadfast-webhook] Error:", error);
         return c.json({ status: "error", message: "Internal processing error" }, 500);
     }

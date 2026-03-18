@@ -78,7 +78,7 @@ async function expandCollectionsToProductIds(
           config.productIds.forEach((id: string) => allProductIds.add(id));
         }
 
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           `Error parsing collection config for ${collection.id}:`,
           error,
@@ -105,7 +105,7 @@ async function expandCollectionsToProductIds(
 
       productsFromCategories.forEach((p) => productIds.add(p.id));
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error expanding collections to product IDs:", error);
   }
 
@@ -192,7 +192,7 @@ export async function isDiscountValid(
           error: "Discount code has reached its usage limit"
         };
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error checking discount usage count:", error);
     }
   }
@@ -229,7 +229,7 @@ export async function isDiscountValid(
       } else {
         console.log(`No previous usage found for ${customerPhone}`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error checking customer discount usage:", error);
     }
   } else if (discount.limitOnePerCustomer && !customerPhone) {
@@ -430,7 +430,7 @@ app.openapi(validateDiscountRoute, async (c) => {
       cartItems = itemsArray.map((item: unknown) => {
         return cartItemSchema.parse(item);
       });
-    } catch (error) {
+    } catch (error: unknown) {
       const message =
         error instanceof z.ZodError
           ? `Invalid cart items: ${error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`

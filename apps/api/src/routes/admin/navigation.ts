@@ -58,15 +58,25 @@ app.openapi(getConfigRoute, async (c) => {
 
 // ── Save Navigation Config (Create/Update) ──
 
-const navigationItemSchema: z.ZodType<unknown> = z.object({
-    id: z.string(),
-    title: z.string(),
-    href: z.string().optional(),
-    subMenu: z.any().optional(),
-});
+type NavigationItem = {
+    id: string;
+    title: string;
+    href?: string;
+    subMenu?: NavigationItem[];
+};
+
+const navigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() =>
+    z.object({
+        id: z.string(),
+        title: z.string(),
+        href: z.string().optional(),
+        subMenu: z.array(navigationItemSchema).optional(),
+    })
+);
 
 const saveConfigSchema = z.object({
     type: z.enum(["header", "footer"]),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Navigation config is intentionally flexible
     config: z.record(z.string(), z.any()),
 });
 

@@ -73,7 +73,7 @@ app.openapi(searchRoute, async (c) => {
   // Apply rate limiting
   try {
     await limiter.check(c.req.raw);
-  } catch (error) {
+  } catch (error: unknown) {
     throw new RateLimitError("Too many requests. Please try again later.");
   }
 

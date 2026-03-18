@@ -32,7 +32,7 @@ app.openapi(getOpenRouterRoute, async (c) => {
 
         const maskedApiKey = result?.value ? MASKED_VALUE : "";
         return ok(c, { apiKey: maskedApiKey });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -71,7 +71,7 @@ app.openapi(saveOpenRouterRoute, async (c) => {
             });
 
         return ok(c, { message: "API key saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -100,7 +100,7 @@ app.openapi(getEmailRoute, async (c) => {
             apiKey: apiKeyRow?.value ? MASKED_VALUE : "",
             sender: senderRow?.value || ""
         });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -157,7 +157,7 @@ app.openapi(saveEmailRoute, async (c) => {
 
         await Promise.all(updates);
         return ok(c, { message: "Email settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -197,7 +197,7 @@ app.openapi(getFirebaseRoute, async (c) => {
         });
 
         return ok(c, config);
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
@@ -253,7 +253,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
 
         layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);
         return ok(c, { message: "Settings saved successfully" });
-    } catch (error) {
+    } catch (error: unknown) {
         throw error;
     }
 });
