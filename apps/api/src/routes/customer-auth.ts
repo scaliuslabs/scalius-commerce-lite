@@ -26,6 +26,7 @@ import {
   COOKIE_NAME,
   SESSION_TTL_SECONDS
 } from "@scalius/core/modules/customers/customer-auth.service";
+import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import { customers, orders, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError } from "../utils/api-error";
@@ -48,6 +49,14 @@ const sendOtpRoute = createRoute({
             method: z.enum(["email", "phone"]).optional().default("email"),
             identifier: z.string().openapi({ description: "Email or phone number" }),
             name: z.string().optional()
+          }).superRefine((data, ctx) => {
+            if (data.method === "phone" && !isValidPhoneNumber(data.identifier)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Invalid phone number",
+                path: ["identifier"]
+              });
+            }
           })
         }
       }
@@ -109,6 +118,21 @@ const verifyOtpRoute = createRoute({
             code: z.string().openapi({ description: "6-digit OTP code" }),
             name: z.string().optional(),
             phone: z.string().optional()
+          }).superRefine((data, ctx) => {
+            if (data.method === "phone" && !isValidPhoneNumber(data.identifier)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Invalid phone number",
+                path: ["identifier"]
+              });
+            }
+            if (data.phone && !isValidPhoneNumber(data.phone)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Invalid phone number",
+                path: ["phone"]
+              });
+            }
           })
         }
       }

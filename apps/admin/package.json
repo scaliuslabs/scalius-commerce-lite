@@ -85,6 +85,7 @@
     "react-dom": "^19.2.4",
     "react-dropzone": "^14.4.1",
     "react-hook-form": "^7.71.2",
+    "react-phone-number-input": "^3.4.16",
     "react-virtualized-auto-sizer": "^1.0.26",
     "react-window": "^2.2.7",
     "react-window-infinite-loader": "^2.0.1",

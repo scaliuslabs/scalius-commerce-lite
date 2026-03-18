@@ -40,7 +40,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
     const db = getDb(c.env);
     const kv: KVNamespace | undefined = c.env.CACHE;
 
-    const [siteSettingsRow, currencyRows] = await Promise.all([
+    const [siteSettingsRow, currencyRows, allowedCountriesRow] = await Promise.all([
       db.select({
         guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
         authVerificationMethod: siteSettings.authVerificationMethod,
@@ -53,7 +53,21 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
         .where(eq(settings.category, "currency"))
         .all()
         .catch(() => [] as { key: string; value: string }[]),
+      db.select({ value: settings.value })
+        .from(settings)
+        .where(eq(settings.key, "allowedCountries"))
+        .get()
+        .catch(() => null),
     ]);
+
+    let allowedCountries: string[] = [];
+    try {
+      if (allowedCountriesRow?.value) {
+        allowedCountries = JSON.parse(allowedCountriesRow.value);
+      }
+    } catch {
+      // Invalid JSON — default to empty array
+    }
 
     const currencyMap = Object.fromEntries(currencyRows.map((r) => [r.key, r.value]));
     const localCurrencyCode = (currencyMap.currency_code ?? "bdt").toLowerCase();
@@ -91,7 +105,8 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       authVerificationMethod: siteSettingsRow?.authVerificationMethod ?? "email",
       checkoutMode,
       partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
-      partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0
+      partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0,
+      allowedCountries
     });
   } catch (error: unknown) {
     console.error("Error fetching checkout config:", error);
