@@ -259,4 +259,4 @@ Credential masking: `clientSecret`, `password`, `apiKey`, `secretKey` replaced w
 - The `ShipmentList.tsx` component calls `/api/v1/admin/orders/{orderId}/shipments/{id}/refresh` which is not defined in the shipments route file shown -- this endpoint must be defined elsewhere (possibly in the order routes)
 - Credential encryption is only applied on save if `CREDENTIAL_ENCRYPTION_KEY` env var is set -- providers created without the key store plaintext credentials
 - The `delete /all` locations endpoint does a hard DELETE (not soft-delete), permanently removing all records
-- Pathao location import credentials are parsed directly from DB (`JSON.parse(provider.credentials)`) without going through decryption -- will break if credentials are encrypted
+- ~~Pathao location import credentials parsed without decryption~~: Fixed -- import route now uses `decryptCredentialsGraceful()` before `JSON.parse()`

@@ -334,7 +334,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                     <FormItem>
                       <FormLabel>Slug</FormLabel>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">/pages/</span>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">/</span>
                         <FormControl>
                           <Input placeholder="page-url-slug" {...field} className="h-9" />
                         </FormControl>

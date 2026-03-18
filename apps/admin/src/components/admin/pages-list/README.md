@@ -105,5 +105,5 @@ The `usePages` hook converts timestamps from the API response. It handles both I
 
 - **Statistics are partial**: Published/draft counts are computed from the current page of results only, not from all pages. The total count comes from API pagination metadata but published/draft breakdown requires all pages or a dedicated stats endpoint.
 - **No inline publish toggle**: Unlike widgets (which have an inline active/inactive switch), pages require bulk actions to change publish status.
-- **Admin form slug prefix**: The form shows `/pages/` as a slug prefix label, but the actual storefront route is `/{slug}` (top-level). This is cosmetic but potentially confusing.
+- ~~**Admin form slug prefix**~~: Fixed -- slug prefix now shows `/` to match the storefront route `/{slug}`.
 - **Loader split**: The page edit route uses `getPageEditData` from `@/loaders/admin/catalog` (not a pages-specific loader). The list page has no loader -- data is fully client-side fetched.

@@ -899,8 +899,8 @@ export async function bulkDeleteOrders(orderIds: string[], permanent: boolean = 
     }
 
     if (permanent) {
-        await db.delete(orders).where(sql`${orders.id} IN ${orderIds}`);
         await db.delete(orderItems).where(sql`${orderItems.orderId} IN ${orderIds}`);
+        await db.delete(orders).where(sql`${orders.id} IN ${orderIds}`);
     } else {
         await db.update(orders)
             .set({ deletedAt: sql`unixepoch()`, inventoryAction: "restored" })
