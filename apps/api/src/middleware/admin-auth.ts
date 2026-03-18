@@ -57,7 +57,34 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         }
     }
 
-    // If both methods fail, return 401
+    // 3. Try Scanner Token (for warehouse scanner app)
+    if (!user) {
+        const scannerToken = c.req.header("X-Scanner-Token");
+        if (scannerToken) {
+            try {
+                const kv = (c.env as Record<string, unknown>).CACHE as { get: (key: string) => Promise<string | null> } | undefined;
+                if (kv) {
+                    const raw = await kv.get(`scanner:token:${scannerToken}`);
+                    if (raw) {
+                        const payload = JSON.parse(raw);
+                        if (payload.claimed) {
+                            // Scanner token is valid — create a synthetic user with inventory permissions
+                            user = {
+                                id: payload.adminId || "scanner",
+                                email: "scanner@system",
+                                name: payload.adminName || "Scanner",
+                                role: "admin",
+                            };
+                        }
+                    }
+                }
+            } catch {
+                // Ignore scanner token errors
+            }
+        }
+    }
+
+    // If all methods fail, return 401
     if (!user) {
         return c.json(
             {
