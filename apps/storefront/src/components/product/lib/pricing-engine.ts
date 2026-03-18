@@ -12,6 +12,8 @@
  * 5. Final price cannot be negative
  */
 
+import { formatPrice as sharedFormatPrice } from "@/lib/currency";
+
 export type DiscountType = "percentage" | "flat" | null | undefined;
 
 export interface ProductPricing {
@@ -191,22 +193,12 @@ export function calculateProductPrice(
   };
 }
 
-function getSymbol(): string {
-  if (typeof window !== "undefined" && (window as any).__CURRENCY_SYMBOL__) {
-    return (window as any).__CURRENCY_SYMBOL__;
-  }
-  return "৳";
-}
-
 /**
- * Format price for display (e.g., "৳1,234.00")
+ * Format price for display using currency.js with correct ISO 4217 decimals.
+ * Symbol is read from window globals (injected by Layout.astro).
  */
 export function formatPrice(price: number, currencySymbol?: string): string {
-  const sym = currencySymbol ?? getSymbol();
-  return `${sym}${price.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return sharedFormatPrice(price, currencySymbol ? { symbol: currencySymbol } : undefined);
 }
 
 /**
@@ -227,8 +219,7 @@ export function formatDiscountBadge(
   }
 
   if (discountType === "flat" && discountAmount && discountAmount > 0) {
-    const sym = currencySymbol ?? getSymbol();
-    return `-${sym}${discountAmount.toLocaleString()}`;
+    return `-${formatPrice(discountAmount, currencySymbol)}`;
   }
 
   return null;

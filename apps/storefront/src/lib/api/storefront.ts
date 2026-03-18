@@ -55,6 +55,7 @@ export interface CurrencyData {
   code: string;
   symbol: string;
   usdExchangeRate: number;
+  decimalPlaces?: number;
 }
 
 export interface LayoutData {
