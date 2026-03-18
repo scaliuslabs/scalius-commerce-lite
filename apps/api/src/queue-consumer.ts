@@ -20,6 +20,7 @@
 
 import { getDb } from "@scalius/database/client";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
+import { processPolarWebhookRefund } from "@scalius/core/modules/payments/polar";
 import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
@@ -89,6 +90,15 @@ export type PaymentQueueMessage =
     orderId: string;
     checkoutId: string;
     reason?: string;
+  }
+  | {
+    type: "payment.polar.refunded";
+    orderId: string;
+    polarCheckoutId: string;
+    amountRefunded: number; // in smallest currency unit (cents) — cumulative refunded amount from Polar
+    totalAmount: number; // in smallest currency unit (cents) — original total from Polar
+    currency: string;
+    polarStatus: string; // "refunded" (full) or "partially_refunded"
   }
   | {
     type: "order.notification";
@@ -304,6 +314,25 @@ async function processQueueMessage(
     case "payment.polar.failed": {
       await processPaymentFailed(db, payload.orderId, "polar");
       console.log(`[Queue] Polar payment failed for order ${payload.orderId}`);
+      break;
+    }
+
+    case "payment.polar.refunded": {
+      // Unlike Stripe refunds (audit-only, since refunds are admin-initiated),
+      // Polar refunds can originate from the Polar dashboard or Polar's own
+      // dispute auto-refund system. We must update the DB to reflect the refund.
+      const result = await processPolarWebhookRefund(db, {
+        orderId: payload.orderId,
+        amountRefunded: payload.amountRefunded,
+        totalAmount: payload.totalAmount,
+        currency: payload.currency,
+        polarStatus: payload.polarStatus,
+      });
+      if (result.success) {
+        console.log(`[Queue] Polar refund processed for order ${payload.orderId} (status: ${payload.polarStatus})`);
+      } else {
+        console.error(`[Queue] Polar refund failed for order ${payload.orderId}: ${result.error}`);
+      }
       break;
     }
 

@@ -4,6 +4,9 @@
 
 import { Polar } from "@polar-sh/sdk";
 import { Webhook } from "standardwebhooks";
+import { eq, sql } from "drizzle-orm";
+import { orders, PaymentStatus } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
 import type { PolarSettings } from "./gateway-settings";
 import type { CreatePolarCheckoutParams, PolarCheckoutResult, PolarRefundParams, PolarRefundResult } from "./types";
 import type {
@@ -15,6 +18,9 @@ import type {
   WebhookPayload,
 } from "./provider";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { roundPrice } from "@scalius/shared/price-utils";
 
 // ---------------------------------------------------------------------------
 // Client factory (one instance per set of credentials)
@@ -177,6 +183,96 @@ export interface PolarWebhookPayload {
         customer_email?: string;
         [key: string]: unknown;
     };
+}
+
+// ---------------------------------------------------------------------------
+// Webhook-driven refund processing
+// ---------------------------------------------------------------------------
+
+export interface PolarWebhookRefundParams {
+    orderId: string;
+    /** Cumulative refunded amount from Polar, in smallest currency unit (cents). */
+    amountRefunded: number;
+    /** Original total amount from Polar, in smallest currency unit (cents). */
+    totalAmount: number;
+    currency: string;
+    /** Polar order status: "refunded" (full) or "partially_refunded". */
+    polarStatus: string;
+}
+
+/**
+ * Process a Polar `order.refunded` webhook event.
+ *
+ * Unlike admin-initiated refunds (which go through refund-service.ts and call
+ * the Polar API), this handles refunds that originate FROM Polar (e.g. Polar
+ * dashboard refund, dispute auto-refund). The refund has already happened on
+ * Polar's side — we just need to update our DB state.
+ *
+ * 1. Converts the cumulative refunded amount from smallest currency unit to
+ *    major unit.
+ * 2. Updates order.paidAmount and order.paymentStatus.
+ * 3. On full refund: releases inventory via applyInventoryForStatusChange().
+ *
+ * Idempotent: uses the Polar order status to determine the correct state.
+ * If our order is already marked as REFUNDED, this is a no-op.
+ */
+export async function processPolarWebhookRefund(
+    db: Database,
+    params: PolarWebhookRefundParams,
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const order = await db
+            .select({
+                id: orders.id,
+                paidAmount: orders.paidAmount,
+                paymentStatus: orders.paymentStatus,
+                totalAmount: orders.totalAmount,
+            })
+            .from(orders)
+            .where(eq(orders.id, params.orderId))
+            .get();
+
+        if (!order) {
+            return { success: false, error: `Order ${params.orderId} not found` };
+        }
+
+        // Already fully refunded — idempotent no-op
+        if (order.paymentStatus === PaymentStatus.REFUNDED) {
+            return { success: true };
+        }
+
+        // Convert from smallest currency unit (cents) to major unit
+        const decimals = getDecimalPlaces(params.currency);
+        const refundedMajor = roundPrice(params.amountRefunded / Math.pow(10, decimals));
+
+        const isFullRefund = params.polarStatus === "refunded";
+        const newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - refundedMajor));
+        const newPaymentStatus = isFullRefund
+            ? PaymentStatus.REFUNDED
+            : PaymentStatus.PARTIAL;
+
+        await db
+            .update(orders)
+            .set({
+                paidAmount: isFullRefund ? 0 : newPaidAmount,
+                paymentStatus: newPaymentStatus,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(eq(orders.id, params.orderId));
+
+        // On full refund, release inventory (mirrors refund-service.ts behavior).
+        // Partial refunds do NOT restore inventory — a partial refund does not
+        // imply items were returned.
+        if (isFullRefund) {
+            await applyInventoryForStatusChange(db, params.orderId, "cancelled");
+        }
+
+        return { success: true };
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Polar webhook refund processing error";
+        console.error(`[Polar] Webhook refund error for order ${params.orderId}:`, err);
+        return { success: false, error: message };
+    }
 }
 
 // ---------------------------------------------------------------------------
