@@ -20,7 +20,7 @@ let globalLangData: CheckoutLanguageData | null = null;
 let hasTrackedInitiateCheckout = false;
 
 // --- Abandoned Checkout ---
-let abandonedCheckoutTimer: any = null;
+let abandonedCheckoutTimer: ReturnType<typeof setTimeout> | null = null;
 
 function getCheckoutId(): string {
   let checkoutId = sessionStorage.getItem("checkoutId");
@@ -31,12 +31,19 @@ function getCheckoutId(): string {
   return checkoutId;
 }
 
-function getCheckoutFormData(): Record<string, any> {
+interface CheckoutFormData {
+  [key: string]: FormDataEntryValue | { items: unknown[]; totalAmount: number; discount: unknown } | { id: string; fee: number } | undefined;
+  cart?: { items: unknown[]; totalAmount: number; discount: unknown };
+  shipping?: { id: string; fee: number };
+  customerPhone?: FormDataEntryValue;
+}
+
+function getCheckoutFormData(): CheckoutFormData {
   const form = document.getElementById("checkoutForm") as HTMLFormElement;
   if (!form) return {};
 
   const formData = new FormData(form);
-  const data: Record<string, any> = {};
+  const data: CheckoutFormData = {};
   formData.forEach((value, key) => {
     data[key] = value;
   });
@@ -55,7 +62,7 @@ function getCheckoutFormData(): Record<string, any> {
 
 function handleAbandonedCheckout() {
   console.log("[client.ts] handleAbandonedCheckout called.");
-  clearTimeout(abandonedCheckoutTimer);
+  if (abandonedCheckoutTimer !== null) clearTimeout(abandonedCheckoutTimer);
   abandonedCheckoutTimer = setTimeout(() => {
     console.log("[client.ts] Debounced save running...");
     const checkoutData = getCheckoutFormData();
@@ -64,9 +71,10 @@ function handleAbandonedCheckout() {
       return;
     }
 
+    const phone = checkoutData.customerPhone;
     const payload = {
       checkoutId: getCheckoutId(),
-      customerPhone: checkoutData.customerPhone,
+      customerPhone: typeof phone === "string" ? phone : undefined,
       checkoutData: checkoutData,
     };
     console.log("[client.ts] Sending abandoned checkout payload:", payload);
@@ -154,7 +162,7 @@ function processQuickBuy() {
         addToCart(data.cartItem);
 
         // 2. Fire analytics events (override currency with dynamic value)
-        const dynamicCurrency = (window as any).__CURRENCY_CODE__ || "BDT";
+        const dynamicCurrency = window.__CURRENCY_CODE__ || "BDT";
         if (data.addToCartEvent) {
           data.addToCartEvent.currency = dynamicCurrency;
           trackFbAddToCart(data.addToCartEvent);
@@ -223,7 +231,7 @@ function updateDiscountUI() {
     removeButton.style.display = "block";
 
     discountRowEl.style.display = "flex";
-    const sym = (window as any).__CURRENCY_SYMBOL__ || "৳";
+    const sym = window.__CURRENCY_SYMBOL__ || "৳";
     discountAmountEl.textContent = `-${sym}${(discount.discountAmount || 0).toLocaleString()}`;
     appliedDiscountCodeEl.textContent = discount.code;
     appliedDiscountCodeEl.parentElement!.classList.remove("hidden");
@@ -260,7 +268,7 @@ export async function updateTotals() {
 
   if (!subtotalEl || !shippingEl || !totalEl || !discountHiddenInput) return;
 
-  const sym = (window as any).__CURRENCY_SYMBOL__ || "৳";
+  const sym = window.__CURRENCY_SYMBOL__ || "৳";
   subtotalEl.textContent = `${sym}${totalAmount.toLocaleString()}`;
   shippingEl.textContent =
     hasFreeDeliveryItem && shippingFee === 0
@@ -309,7 +317,7 @@ export async function renderCartItems() {
     return;
   }
 
-  const csym = (window as any).__CURRENCY_SYMBOL__ || "৳";
+  const csym = window.__CURRENCY_SYMBOL__ || "৳";
   cartItemsContainer.innerHTML = Object.values(items)
     .map(
       (item) => `
@@ -370,7 +378,7 @@ function attemptToTrackInitiateCheckout() {
         quantity: item.quantity,
         item_price: item.price,
       })),
-      currency: (window as any).__CURRENCY_CODE__ || "BDT",
+      currency: window.__CURRENCY_CODE__ || "BDT",
       num_items: Object.values(items).reduce(
         (sum, item) => sum + item.quantity,
         0,

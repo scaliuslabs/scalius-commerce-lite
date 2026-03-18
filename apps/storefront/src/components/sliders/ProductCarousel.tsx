@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/carousel";
 import type { CollectionWithProducts, Product } from "@/lib/api";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@scalius/shared/utils";
 import { Button } from "@/components/ui/button";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";

@@ -25,7 +25,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
 
 export const cartOpenState = atom<boolean>(false);

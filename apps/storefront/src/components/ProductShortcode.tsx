@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { addToCart } from "@/store/cart";
 import { trackFbAddToCart } from "@/lib/analytics";
 import { Minus, Plus, ShoppingCart, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol, getCurrencyCode } from "@/lib/currency";
 import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
 

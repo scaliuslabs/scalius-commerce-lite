@@ -8,13 +8,7 @@
  */
 import { sendServerEvent } from "@/lib/tracking/meta-capi";
 
-// Augment the Window interface for TypeScript to recognize dataLayer and fbq
-declare global {
-  interface Window {
-    dataLayer: any[];
-    fbq: (...args: any[]) => void;
-  }
-}
+// Window augmentation for dataLayer and fbq is in src/env.d.ts
 
 // Analytics type definition (from database schema)
 interface AnalyticsConfig {
@@ -73,9 +67,9 @@ export function shouldUsePartytown(script: AnalyticsConfig): boolean {
 // --- E-commerce Event Tracking ---
 
 // Helper to ensure dataLayer exists for GA4
-function getGaDataLayer() {
+function getGaDataLayer(): Record<string, unknown>[] {
   window.dataLayer = window.dataLayer || [];
-  return window.dataLayer;
+  return window.dataLayer!;
 }
 
 // --- Event Parameter Interfaces ---
@@ -348,9 +342,12 @@ export function trackFbSearch(data: {
  * Generic GA4 event tracking function.
  * All specific GA4 event functions will use this.
  */
+// GA4 ecommerce parameter values — covers all GA4 e-commerce field types
+type GA4ParamValue = string | number | boolean | undefined | null | ItemParameters | ItemParameters[] | GA4ParamValue[];
+
 function trackGA4Event(
     eventName: string,
-    parameters: Record<string, any>,
+    parameters: Record<string, GA4ParamValue>,
   ): void {
     const dataLayer = getGaDataLayer();
     dataLayer.push({ ecommerce: null }); // Clear previous ecommerce object (recommended by Google)
@@ -368,7 +365,7 @@ function trackGA4Event(
     item_list_id?: string;
     item_list_name?: string;
     items: ItemParameters[];
-    [key: string]: any; // Allow other event-level params
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("view_item_list", data);
   }
@@ -381,7 +378,7 @@ function trackGA4Event(
     item_list_id?: string;
     item_list_name?: string;
     items: ItemParameters[]; // Typically a single item array
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("select_item", data);
   }
@@ -394,7 +391,7 @@ function trackGA4Event(
     currency?: string;
     value?: number; // Total value of the items viewed
     items: ItemParameters[]; // Typically a single item array
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("view_item", data);
   }
@@ -406,7 +403,7 @@ function trackGA4Event(
     currency?: string;
     value?: number; // Total value of items added
     items: ItemParameters[];
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("add_to_cart", data);
   }
@@ -418,7 +415,7 @@ function trackGA4Event(
     currency?: string;
     value?: number; // Total value of items removed
     items: ItemParameters[];
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("remove_from_cart", data);
   }
@@ -430,7 +427,7 @@ function trackGA4Event(
     currency?: string;
     value?: number; // Total value of the cart
     items: ItemParameters[];
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("view_cart", data);
   }
@@ -443,7 +440,7 @@ function trackGA4Event(
     value?: number; // Total value of items in checkout
     coupon?: string;
     items: ItemParameters[];
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("begin_checkout", data);
   }
@@ -457,7 +454,7 @@ function trackGA4Event(
     coupon?: string;
     shipping_tier?: string;
     items: ItemParameters[]; // Items in the cart/checkout
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("add_shipping_info", data);
   }
@@ -471,7 +468,7 @@ function trackGA4Event(
     coupon?: string;
     payment_type?: string;
     items: ItemParameters[]; // Items in the cart/checkout
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("add_payment_info", data);
   }
@@ -488,7 +485,7 @@ function trackGA4Event(
     currency: string;
     coupon?: string;
     items: ItemParameters[];
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("purchase", data);
   }
@@ -502,7 +499,7 @@ function trackGA4Event(
     value?: number; // Total refund amount. If refunding specific items, GA4 calculates this from items array.
     currency?: string;
     items?: ItemParameters[]; // Recommended to include item details for item-level refund reporting
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     trackGA4Event("refund", data);
   }
@@ -512,7 +509,7 @@ function trackGA4Event(
    */
   export function trackGA4Search(data: {
     search_term: string;
-    [key: string]: any; // Allow other custom parameters like number_of_results
+    [key: string]: GA4ParamValue; // Allow other custom parameters like number_of_results
   }): void {
     // GA4 search event does not use the 'ecommerce' object structure typically.
     // It's a direct event with parameters.
@@ -529,7 +526,7 @@ function trackGA4Event(
   export function trackGA4GenerateLead(data?: {
     value?: number;
     currency?: string;
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     const dataLayer = getGaDataLayer();
     dataLayer.push({
@@ -543,7 +540,7 @@ function trackGA4Event(
    */
   export function trackGA4SignUp(data: {
     method?: string; // e.g., "Google", "Email", "Facebook"
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     const dataLayer = getGaDataLayer();
     dataLayer.push({
@@ -558,7 +555,7 @@ function trackGA4Event(
    */
   export function trackGA4Login(data: {
     method?: string;
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     const dataLayer = getGaDataLayer();
     dataLayer.push({
@@ -578,7 +575,7 @@ function trackGA4Event(
     page_title?: string;
     page_location?: string; // Full URL
     page_path?: string; // Path part of the URL
-    [key: string]: any;
+    [key: string]: GA4ParamValue;
   }): void {
     const dataLayer = getGaDataLayer();
     dataLayer.push({

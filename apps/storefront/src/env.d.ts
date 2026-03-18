@@ -130,3 +130,19 @@ interface GlobalEventHandlersEventMap {
   toggle: ToggleEvent;
   beforetoggle: ToggleEvent;
 }
+
+// SSR-only globalThis properties set by middleware for cross-module access
+declare let __SCALIUS_CDN_DOMAIN__: string | undefined;
+
+// Global window properties injected by the storefront layout at runtime.
+// These are set via <script> tags in the base layout and read by client-side code.
+interface Window {
+  __API_BASE_URL__?: string;
+  __CDN_DOMAIN__?: string;
+  __CURRENCY_SYMBOL__?: string;
+  __CURRENCY_CODE__?: string;
+  __CURRENCY_DECIMAL_PLACES__?: number;
+  __BUILD_ID__?: string;
+  dataLayer?: Record<string, unknown>[];
+  fbq?: (...args: unknown[]) => void;
+}

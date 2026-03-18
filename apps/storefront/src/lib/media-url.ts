@@ -26,16 +26,13 @@ export function getCdnBase(): string {
     if (domain) return `https://${domain.replace(/^https?:\/\//, "")}`;
 
     // Fallback: globalThis store set by middleware (survives across the isolate)
-    const globalDomain = (globalThis as any).__SCALIUS_CDN_DOMAIN__ as
-      | string
-      | undefined;
-    if (globalDomain)
-      return `https://${globalDomain.replace(/^https?:\/\//, "")}`;
+    if (__SCALIUS_CDN_DOMAIN__)
+      return `https://${__SCALIUS_CDN_DOMAIN__.replace(/^https?:\/\//, "")}`;
   }
 
   // Client-side: injected by Layout.astro into window
-  if (typeof window !== "undefined" && (window as any).__CDN_DOMAIN__) {
-    const d = (window as any).__CDN_DOMAIN__;
+  if (typeof window !== "undefined" && window.__CDN_DOMAIN__) {
+    const d = window.__CDN_DOMAIN__;
     return d.startsWith("http") ? d : `https://${d}`;
   }
 

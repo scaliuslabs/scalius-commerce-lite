@@ -1,15 +1,7 @@
 // src/lib/utils.ts
-import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-/**
- * A utility function to merge Tailwind CSS classes without conflicts.
- * @param inputs The class values to merge.
- * @returns A string of merged class names.
- */
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+//
+// cn() has been removed — use `import { cn } from "@scalius/shared/utils"` instead.
+// This file retains storefront-specific utilities only.
 
 /**
  * A utility function to debounce function calls.
@@ -17,7 +9,7 @@ export function cn(...inputs: ClassValue[]) {
  * @param wait The delay in milliseconds.
  * @returns A debounced version of the function.
  */
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: Parameters<T>) => void>(
   func: T,
   wait: number,
 ): (...args: Parameters<T>) => void {

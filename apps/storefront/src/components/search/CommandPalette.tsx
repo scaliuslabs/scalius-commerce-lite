@@ -11,7 +11,7 @@ import {
   X,
   ArrowRight,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
 
 interface SearchResultItem {
@@ -113,7 +113,7 @@ export default function CommandPalette() {
 
     const timer = setTimeout(async () => {
       try {
-        const apiBaseUrl = (typeof window !== "undefined" && (window as any).__API_BASE_URL__) || "/api/v1";
+        const apiBaseUrl = (typeof window !== "undefined" && window.__API_BASE_URL__) || "/api/v1";
         const params = new URLSearchParams({
           q: query,
           limit: "8",

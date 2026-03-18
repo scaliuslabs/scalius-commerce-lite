@@ -466,7 +466,7 @@ const analyticsProductData = products.map((p) => ({
         content_name: `Search Results for "${searchQuery}"`,
         content_type: "product_group",
         contents,
-        currency: (window as any).__CURRENCY_CODE__ || "BDT",
+        currency: window.__CURRENCY_CODE__ || "BDT",
         value,
       });
 

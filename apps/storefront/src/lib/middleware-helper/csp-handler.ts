@@ -9,11 +9,19 @@ import { withEdgeCache, CACHE_TTL } from "../edge-cache";
  * so no per-request caching is needed here.
  */
 
+/** Subset of the Cloudflare runtime env used by CSP functions */
+interface CspEnv {
+  CSP_ALLOWED?: string;
+  PUBLIC_API_BASE_URL?: string;
+  CDN_DOMAIN_URL?: string;
+  [key: string]: unknown;
+}
+
 // Empty sentinel — returned on fetch failure so withEdgeCache caches it
 // and doesn't re-fetch on every request
 const EMPTY_CSP_DATA = { cspAllowedDomains: "" };
 
-async function parseAdditionalDomains(env?: any): Promise<string[]> {
+async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
   let additionalDomains = (env?.CSP_ALLOWED || process.env.CSP_ALLOWED)?.trim() || "";
   try {
     const apiUrl = (env?.PUBLIC_API_BASE_URL || "")?.trim();
@@ -122,7 +130,7 @@ const COMMON_THIRD_PARTY_DOMAINS = [
 ];
 
 // Generate script-src directives
-async function getScriptSrcDirectives(env?: any): Promise<string[]> {
+async function getScriptSrcDirectives(env?: CspEnv): Promise<string[]> {
   const additionalDomains = await parseAdditionalDomains(env);
   return [
     ...ESSENTIAL_SCRIPT_SRC,
@@ -132,7 +140,7 @@ async function getScriptSrcDirectives(env?: any): Promise<string[]> {
 }
 
 // Generate connect-src directives
-async function getConnectSrcDirectives(env?: any): Promise<string[]> {
+async function getConnectSrcDirectives(env?: CspEnv): Promise<string[]> {
   const additionalDomains = await parseAdditionalDomains(env);
   const apiUrl = (env?.PUBLIC_API_BASE_URL || import.meta.env.PUBLIC_API_BASE_URL || "")?.trim();
   const directives = [
@@ -156,7 +164,7 @@ async function getConnectSrcDirectives(env?: any): Promise<string[]> {
 }
 
 // Generate frame-src directives
-async function getFrameSrcDirectives(env?: any): Promise<string[]> {
+async function getFrameSrcDirectives(env?: CspEnv): Promise<string[]> {
   const additionalDomains = await parseAdditionalDomains(env);
   return [
     ...ESSENTIAL_FRAME_SRC,
@@ -170,7 +178,7 @@ async function getFrameSrcDirectives(env?: any): Promise<string[]> {
 }
 
 // Generate img-src directives
-async function getImgSrcDirectives(env?: any): Promise<string[]> {
+async function getImgSrcDirectives(env?: CspEnv): Promise<string[]> {
   const additionalDomains = await parseAdditionalDomains(env);
   const cdnUrl = (env?.CDN_DOMAIN_URL || "")?.trim();
   const directives = [
@@ -188,7 +196,7 @@ async function getImgSrcDirectives(env?: any): Promise<string[]> {
 }
 
 // Generate worker-src directives
-async function getWorkerSrcDirectives(env?: any): Promise<string[]> {
+async function getWorkerSrcDirectives(env?: CspEnv): Promise<string[]> {
   const additionalDomains = await parseAdditionalDomains(env);
   return [...ESSENTIAL_WORKER_SRC, ...additionalDomains];
 }
@@ -200,7 +208,7 @@ async function getWorkerSrcDirectives(env?: any): Promise<string[]> {
  * @param env Cloudflare runtime environment object
  * @returns The Response object with CSP headers applied.
  */
-export async function setPageCspHeader(response: Response, env?: any): Promise<Response> {
+export async function setPageCspHeader(response: Response, env?: CspEnv): Promise<Response> {
   const cspDirectives = [
     `script-src ${(await getScriptSrcDirectives(env)).join(" ")}`,
     `connect-src ${(await getConnectSrcDirectives(env)).join(" ")}`,
