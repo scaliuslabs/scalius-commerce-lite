@@ -53,7 +53,7 @@ export async function validateDiscount(
 
     const json: { success: boolean; data: DiscountValidationResponse } = await response.json();
     return json.data as DiscountValidationResponse;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error validating discount code "${code}":`, error);
     return {
       valid: false,
@@ -108,7 +108,7 @@ export async function recordDiscountUsage(
     
     console.log(`Successfully recorded usage for discount ${discountId} on order ${orderId}.`);
     return true;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error recording discount usage for discount ID "${discountId}":`, error);
     return false;
   }

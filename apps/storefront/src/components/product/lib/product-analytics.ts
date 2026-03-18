@@ -53,7 +53,7 @@ export function trackProductAddToCart(data: AddToCartAnalyticsData): void {
   // Track with Facebook Pixel (also sends to Meta CAPI)
   try {
     trackFbAddToCart(fbPixelData);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to track add to cart:", error);
   }
 
@@ -69,7 +69,7 @@ function dispatchCartUpdateEvent(): void {
 
   try {
     document.dispatchEvent(new CustomEvent("cart-updated"));
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to dispatch cart-updated event:", error);
   }
 }

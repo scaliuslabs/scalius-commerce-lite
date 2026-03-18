@@ -99,7 +99,7 @@ export async function getHomepageData(): Promise<HomepageData | null> {
           return json.data;
         }
         return null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching homepage data:", error);
         return null;
       }
@@ -137,7 +137,7 @@ export async function getLayoutData(): Promise<LayoutData | null> {
           return json.data;
         }
         return null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching layout data:", error);
         return null;
       }

@@ -67,7 +67,7 @@ let processedContent = page.content;
 if (page.content) {
   try {
     processedContent = await processShortcodes(page.content);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error processing shortcodes for page "${slug}":`, error);
     processedContent = page.content;
   }

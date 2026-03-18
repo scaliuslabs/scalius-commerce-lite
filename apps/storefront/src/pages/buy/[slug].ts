@@ -159,7 +159,7 @@ export const GET: APIRoute = async ({ params, url }) => {
         <script>
           try {
             sessionStorage.setItem('quickBuyData', JSON.stringify(${JSON.stringify(dataToStore)}));
-          } catch (e) {
+          } catch (e: unknown) {
             console.error('Could not save quick-buy data to session storage.', e);
           } finally {
             setTimeout(() => {
@@ -175,7 +175,7 @@ export const GET: APIRoute = async ({ params, url }) => {
       status: 200,
       headers: { "Content-Type": "text/html" },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error in /buy handler for slug ${slug}:`, error);
     return new Response(null, {
       status: 307,

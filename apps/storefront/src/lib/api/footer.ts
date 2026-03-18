@@ -27,7 +27,7 @@ export async function getFooterData(): Promise<FooterData | null> {
           return json.data;
         }
         return null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching footer data:", error);
         return null;
       }

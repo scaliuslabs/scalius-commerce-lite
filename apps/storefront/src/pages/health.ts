@@ -40,7 +40,7 @@ export async function GET() {
         },
       },
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Health check failed:", error);
 
     return new Response(

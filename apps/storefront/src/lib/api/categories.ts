@@ -23,7 +23,7 @@ export async function getAllCategories(): Promise<Category[] | null> {
 
         const json: { success: boolean; data: { categories: Category[] } } = await response.json();
         return json.data.categories;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching all categories:", error);
         return null;
       }
@@ -60,7 +60,7 @@ export async function getCategoryBySlug(
 
         const json: { success: boolean; data: { category: Category } } = await response.json();
         return json.data.category;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`Error fetching category by slug "${slug}":`, error);
         return null;
       }

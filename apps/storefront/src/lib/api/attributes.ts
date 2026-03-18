@@ -52,7 +52,7 @@ export async function getFilterableAttributes(
 
         const json: { success: boolean; data: { filters: FilterableAttribute[] } } = await response.json();
         return json.data.filters;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching filterable attributes:", error);
         return null;
       }

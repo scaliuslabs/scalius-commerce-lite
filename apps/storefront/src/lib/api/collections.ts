@@ -35,7 +35,7 @@ export async function getAllCollections(): Promise<Collection[] | null> {
 
         const json: { success: boolean; data: { collections: Collection[] } } = await response.json();
         return json.data.collections;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching all collections:", error);
         return null;
       }
@@ -82,7 +82,7 @@ export async function getCollectionById(
         }
 
         return null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`Error fetching collection by ID "${id}":`, error);
         return null;
       }

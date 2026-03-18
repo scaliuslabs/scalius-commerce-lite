@@ -55,7 +55,7 @@ export async function search(
 
     const json: { success: boolean; data: SearchResults } = await response.json();
     return json.data as SearchResults;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error performing search for query "${query}":`, error);
     return null;
   }

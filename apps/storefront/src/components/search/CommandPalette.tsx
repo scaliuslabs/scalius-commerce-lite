@@ -131,7 +131,7 @@ export default function CommandPalette() {
           setSelectedIndex(0);
           setHasSearched(true);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Search error:", error);
       } finally {
         setIsLoading(false);

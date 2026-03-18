@@ -38,7 +38,7 @@ export const POST: APIRoute = async ({ request }) => {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error("[checkout/sslcommerz-session] Proxy error:", errMsg);
     return new Response(JSON.stringify({ error: `Payment gateway error: ${errMsg}` }), {

@@ -70,7 +70,7 @@ export async function createOrder(
 
     // Normal synchronous return
     return { success: true, orderId: data.data?.id || data.data?.orderId };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error creating order:", error);
     return {
       success: false,
@@ -103,7 +103,7 @@ export async function getOrderDetails(orderId: string): Promise<Order | null> {
 
     const json: { success: boolean; data: { order: Order } } = await response.json();
     return json.data.order;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error fetching details for order "${orderId}":`, error);
     return null;
   }

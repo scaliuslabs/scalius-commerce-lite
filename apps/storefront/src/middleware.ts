@@ -114,8 +114,8 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
             KV_TIMEOUT_MS,
           ),
         ),
-      ]).catch((err) => {
-        console.warn("KV lookup timed out or failed:", err.message);
+      ]).catch((err: unknown) => {
+        console.warn("KV lookup timed out or failed:", err instanceof Error ? err.message : String(err));
         return null;
       });
 
@@ -136,7 +136,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         hostname,
         (promise: Promise<unknown>) => locals.cfContext.waitUntil(promise),
       );
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn("Failed to initialize edge cache context:", error);
       // Continue without L2 caching - L1 still works
     }
@@ -220,7 +220,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       }
 
       return response;
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn("Cache error in production:", error);
       // Fallback to regular response if caching fails
       const response = await next();

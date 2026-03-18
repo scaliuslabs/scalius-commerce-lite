@@ -32,7 +32,7 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
 
         const json: { success: boolean; data: { page: Page } } = await response.json();
         return json.success ? json.data.page : null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`Error fetching page by slug "${slug}":`, error);
         return null;
       }
@@ -94,7 +94,7 @@ export async function getAllPages(
           return { data: json.data.pages, pagination: json.data.pagination };
         }
         return null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching all pages:", error);
         return null;
       }

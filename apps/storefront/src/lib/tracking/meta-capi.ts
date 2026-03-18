@@ -23,7 +23,7 @@ function getCookie(name: string): string {
 function getFromSession(key: string): string | null {
   try {
     return sessionStorage.getItem(key);
-  } catch (e) {
+  } catch (e: unknown) {
     console.warn("Could not access sessionStorage:", e);
     return null;
   }
@@ -90,7 +90,7 @@ export function sendServerEvent(
 
   try {
     sendMetaCapiEvent(fullPayload);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(
       `[Meta CAPI] Failed to dispatch event '${event.eventName}':`,
       error,

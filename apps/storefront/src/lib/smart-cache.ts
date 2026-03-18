@@ -97,7 +97,7 @@ export async function withSmartCache<T>(
         smartCache.set(key, data, ttlSeconds);
       }
       return data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn(`[SmartCache] Fetch failed for ${key}`);
       return null;
     } finally {

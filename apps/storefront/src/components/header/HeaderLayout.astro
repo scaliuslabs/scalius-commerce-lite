@@ -311,7 +311,7 @@ const { headerData } = Astro.props;
         iconSuccess.classList.remove("translate-y-full");
         toast.success("Copied to clipboard", { duration: 2000 });
         setTimeout(() => iconSuccess.classList.add("translate-y-full"), 2000);
-      } catch (err) {
+      } catch (err: unknown) {
         window.location.href = `tel:${phone}`;
       }
     });

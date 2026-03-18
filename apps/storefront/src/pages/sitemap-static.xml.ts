@@ -38,7 +38,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
       status: 200,
       headers: getSitemapHeaders(),
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating static sitemap:', error);
     return new Response('Internal Server Error', { status: 500 });
   }

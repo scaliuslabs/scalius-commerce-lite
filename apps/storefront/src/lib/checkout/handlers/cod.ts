@@ -19,8 +19,8 @@ export const codHandler: GatewayHandler = {
     try {
       const orderId = await createOrder(ctx.checkoutData, "cod");
       return { success: true, redirectUrl: `/order-success?orderId=${orderId}` };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   },
 };

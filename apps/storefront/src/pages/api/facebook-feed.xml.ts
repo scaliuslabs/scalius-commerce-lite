@@ -257,7 +257,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
         'Cache-Control': 'public, max-age=3600, stale-while-revalidate=43200',
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating Facebook product feed:', error);
     return new Response('Internal Server Error', { status: 500 });
   }
