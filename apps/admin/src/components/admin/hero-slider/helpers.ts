@@ -1,3 +1,7 @@
+import type { MediaFile } from "@/components/admin/media-manager/types";
+
+export type { MediaFile };
+
 export interface SliderImage {
   id: string;
   url: string;
@@ -10,14 +14,6 @@ export interface HeroSlider {
   type: "desktop" | "mobile";
   images: SliderImage[];
   isActive: boolean;
-}
-
-export interface MediaFile {
-  id: string;
-  url: string;
-  filename: string;
-  size: number;
-  createdAt: Date;
 }
 
 /** Generate a unique image ID using crypto.randomUUID() */

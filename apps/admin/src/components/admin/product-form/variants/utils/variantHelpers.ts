@@ -9,6 +9,8 @@ import type {
 } from "../types";
 import { generateSku } from "./skuGenerator";
 import { generateEAN13 } from "@scalius/shared/barcode-utils";
+import { formatDate } from "@scalius/shared/utils";
+export { formatDate };
 
 /**
  * Filter variants based on search and filter criteria
@@ -215,17 +217,7 @@ export function getStockStatus(stock: number): "out-of-stock" | "low" | "in-stoc
   return "in-stock";
 }
 
-/**
- * Format date for display
- */
-export function formatDate(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+// formatDate imported from @scalius/shared/utils
 
 /**
  * Get discount display string

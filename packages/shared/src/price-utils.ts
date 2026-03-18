@@ -44,3 +44,26 @@ export function calculatePercentageDiscount(
 ): number {
   return Currency(price).multiply(percentage / 100).value;
 }
+
+/**
+ * Calculate the final price after applying a discount.
+ * Supports both percentage and flat discount types.
+ * Returns the original price if no valid discount is provided.
+ */
+export function calculateDiscountedPrice(
+  price: number,
+  discountType: string | null,
+  discountPercentage: number | null,
+  discountAmount: number | null,
+): number {
+  if (!discountType) return price;
+  if (discountType === "percentage" && discountPercentage) {
+    return Currency(price)
+      .subtract(Currency(price).multiply(discountPercentage / 100))
+      .value;
+  }
+  if (discountType === "flat" && discountAmount) {
+    return Math.max(Currency(price).subtract(discountAmount).value, 0);
+  }
+  return price;
+}

@@ -23,34 +23,12 @@ import { sql, desc, eq, inArray, isNull, and } from "drizzle-orm";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
+import { unixToDate } from "@scalius/shared/utils";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "./orders.validation";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { validateTransition } from "./order-state-machine";
 import type { OrderShipmentSummary, OrderDetails } from "./orders.types";
-
-// ─────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────
-
-function normalizeDate(value: unknown): Date | null {
-    if (!value) return null;
-    if (value instanceof Date) return value;
-    if (typeof value === "number") {
-        return value > 1e12 ? new Date(value) : new Date(value * 1000);
-    }
-    const numericValue = Number(value);
-    if (!Number.isNaN(numericValue) && numericValue !== 0) {
-        return numericValue > 1e12
-            ? new Date(numericValue)
-            : new Date(numericValue * 1000);
-    }
-    try {
-        return new Date(String(value));
-    } catch {
-        return null;
-    }
-}
 
 // ─────────────────────────────────────────
 // Service functions
@@ -254,9 +232,9 @@ export async function listOrders(db: Database, options: {
                 rawStatus: shipment.rawStatus,
                 externalId: shipment.externalId,
                 trackingId: shipment.trackingId,
-                lastChecked: normalizeDate(shipment.lastChecked),
-                updatedAt: normalizeDate(shipment.updatedAt) ?? new Date(),
-                createdAt: normalizeDate(shipment.createdAt) ?? new Date(),
+                lastChecked: unixToDate(shipment.lastChecked),
+                updatedAt: unixToDate(shipment.updatedAt) ?? new Date(),
+                createdAt: unixToDate(shipment.createdAt) ?? new Date(),
             });
         }
     }

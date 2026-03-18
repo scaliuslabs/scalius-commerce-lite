@@ -1,32 +1,10 @@
 // src/components/admin/footer-builder/types.ts
 
-/**
- * Social link item - fully custom, user-defined label and optional icon
- */
-export interface SocialLink {
-  id: string;
-  label: string; // User-defined label (e.g., "Twitter/X", "WhatsApp Business")
-  url: string; // Link URL
-  iconUrl?: string; // Optional uploaded icon URL
-}
+import type { SocialLink, LogoConfig } from "@/components/admin/shared/builder-types";
+import type { NavigationItem } from "@/components/admin/navigation/types";
+import type { MediaFile } from "@/components/admin/media-manager/types";
 
-/**
- * Logo configuration
- */
-export interface LogoConfig {
-  src: string;
-  alt: string;
-}
-
-/**
- * Navigation item structure
- */
-export interface NavigationItem {
-  id: string;
-  title: string;
-  href?: string;
-  subMenu?: NavigationItem[];
-}
+export type { SocialLink, LogoConfig, NavigationItem, MediaFile };
 
 /**
  * Footer menu column
@@ -71,14 +49,3 @@ export const defaultFooterConfig: FooterConfig = {
   menus: [],
   social: [],
 };
-
-/**
- * Media file interface for MediaManager
- */
-export interface MediaFile {
-  id: string;
-  url: string;
-  filename: string;
-  size: number;
-  createdAt: Date;
-}
