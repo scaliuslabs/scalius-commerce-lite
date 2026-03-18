@@ -13,7 +13,7 @@ import {
     ServiceUnavailableError,
 } from "@scalius/core/errors";
 import { getOtpTransport, type OtpQueuePayload } from "./otp-transport";
-import { normalizePhone } from "@scalius/shared/customer-utils";
+import { validateAndFormatPhone, isValidPhoneNumber } from "@scalius/shared/customer-utils";
 
 // ─────────────────────────────────────────
 // Constants
@@ -175,12 +175,12 @@ export async function sendOtp(
         throw new ValidationError("Valid email address required");
     }
 
-    if (method === "phone" && !/^\+?[1-9]\d{1,14}$/.test(identifier)) {
+    if (method === "phone" && !isValidPhoneNumber(identifier)) {
         throw new ValidationError("Valid phone number required");
     }
 
     // Normalize phone identifier to E.164 for consistent storage/lookup
-    const normalizedIdentifier = method === "phone" ? normalizePhone(identifier) : identifier;
+    const normalizedIdentifier = method === "phone" ? validateAndFormatPhone(identifier) : identifier;
 
     // Fetch site settings
     const [settings] = await db.select().from(siteSettings).limit(1);
@@ -276,8 +276,8 @@ export async function verifyOtp(
     }
 
     // Normalize phone identifiers to E.164 for consistent KV/DB lookup
-    const normalizedIdentifier = method === "phone" ? normalizePhone(identifier) : identifier;
-    const normalizedPhone = phone ? normalizePhone(phone) : undefined;
+    const normalizedIdentifier = method === "phone" ? validateAndFormatPhone(identifier) : identifier;
+    const normalizedPhone = phone ? validateAndFormatPhone(phone) : undefined;
 
     const otpKey = `${OTP_PREFIX}${normalizedIdentifier}`;
 

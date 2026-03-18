@@ -25,12 +25,13 @@ Customer management (admin CRUD) and OTP-based storefront authentication with pl
 
 ### Phone Normalization
 
-Two distinct normalizations exist:
+All phone numbers are validated and stored in **E.164 format** (e.g. `+8801712345678`, `+14155552671`) using `libphonenumber-js`.
 
-1. **`phoneNumberSchema`** (`@scalius/shared/customer-utils`): Zod transform that calls `standardizePhoneNumber()` -- strips to digits, removes `880` country code, ensures `01XXXXXXXXX` format (Bangladesh local). Used in admin CRUD validation.
-2. **`normalizePhone()`** (`@scalius/shared/customer-utils`): Converts to E.164 format (`+8801XXXXXXXXX`). Used in `customer-auth.service.ts` before all KV and DB lookups.
+- **`phoneNumberSchema`** (`@scalius/shared/customer-utils`): Zod transform that calls `validateAndFormatPhone()` -- validates via `libphonenumber-js` and returns E.164. Used in admin CRUD validation.
+- **`validateAndFormatPhone()`** (`@scalius/shared/customer-utils`): Validates any phone input and returns E.164. Supports all international formats. Optionally restricts to allowed country codes. Used in `customer-auth.service.ts` before all KV and DB lookups.
+- **`formatPhoneForDisplay()`** (`@scalius/shared/customer-utils`): Converts E.164 back to international display format (e.g. `+880 1712-345678`).
 
-These two normalizations produce different formats (`01...` vs `+880...`). Admin-created customers get local format; storefront-created customers (via OTP) get E.164. This is a known inconsistency -- lookups in `customer-auth.service.ts` always use E.164, so admin-created customers may not match during storefront login.
+Both admin-created and storefront-created customers now use the same E.164 format, eliminating the previous format mismatch.
 
 ### Customer Stats Materialization
 
@@ -123,7 +124,7 @@ Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE custom
 ## Dependencies
 
 - `@scalius/database` -- `customers`, `customerHistory`, `deliveryLocations`, `siteSettings`, `orders` (the latter three accessed in route handlers, not the service)
-- `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `normalizePhone`, `calculateCustomerStats`
+- `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `validateAndFormatPhone`, `isValidPhoneNumber`, `formatPhoneForDisplay`, `calculateCustomerStats`
 - `@scalius/core/errors` -- `ValidationError`, `ForbiddenError`, `RateLimitError`, `ServiceUnavailableError`
 - `@scalius/core/search` -- `ftsMatch` for FTS5 search
 - Cloudflare KV (`CACHE` binding) -- OTP storage, session storage, rate limiting
@@ -151,16 +152,14 @@ Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE custom
 
 1. **Duplicate validation schemas**: `createCustomerSchema` is defined identically in both `customers.service.ts` (lines 16-24) and `customers.validation.ts` (lines 9-17). The service imports `phoneNumberSchema` from shared but defines its own schema rather than importing from `customers.validation.ts`.
 
-2. **Phone format inconsistency**: Admin CRUD normalizes to local format (`01XXXXXXXXX`) via `phoneNumberSchema`. Auth service normalizes to E.164 (`+8801XXXXXXXXX`) via `normalizePhone()`. A customer created via admin and one created via storefront OTP will have different phone formats in the DB, potentially preventing storefront login for admin-created customers.
+2. **Soft delete history gap**: The `changeType` enum includes `"deleted"` but no code path writes a `"deleted"` history record. `deleteCustomer()` only sets `deletedAt` without creating a history entry.
 
-3. **Soft delete history gap**: The `changeType` enum includes `"deleted"` but no code path writes a `"deleted"` history record. `deleteCustomer()` only sets `deletedAt` without creating a history entry.
+3. **History route not in service**: The `GET /{id}/history` endpoint contains significant business logic inline in the route handler (batch query for customer + history + orders, location enrichment) rather than delegating to the service layer.
 
-4. **History route not in service**: The `GET /{id}/history` endpoint contains significant business logic inline in the route handler (batch query for customer + history + orders, location enrichment) rather than delegating to the service layer.
+4. **Index barrel omission**: `index.ts` only re-exports `customers.service`. `customer-auth.service.ts` and `otp-transport.ts` must be imported by direct path.
 
-5. **Index barrel omission**: `index.ts` only re-exports `customers.service`. `customer-auth.service.ts` and `otp-transport.ts` must be imported by direct path.
+5. **SMS transport stub**: `SmsOtpTransport.validateConfig()` returns `null` (always valid) but the actual SMS delivery in the queue consumer is noted as pending. Selecting SMS will accept OTPs but delivery may not work.
 
-6. **SMS transport stub**: `SmsOtpTransport.validateConfig()` returns `null` (always valid) but the actual SMS delivery in the queue consumer is noted as pending. Selecting SMS will accept OTPs but delivery may not work.
+6. **Profile update limitations**: `updateCustomerProfile()` (storefront) only syncs `name` back to the KV session. Address/city/zone/cityName/zoneName are updated in DB but not reflected in the session object.
 
-7. **Profile update limitations**: `updateCustomerProfile()` (storefront) only syncs `name` back to the KV session. Address/city/zone/cityName/zoneName are updated in DB but not reflected in the session object.
-
-8. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
+7. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
