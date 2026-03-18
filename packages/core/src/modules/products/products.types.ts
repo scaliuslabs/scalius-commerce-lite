@@ -79,6 +79,8 @@ export interface ProductWithDetails extends Product {
     category: { name: string };
     variants: ProductVariant[];
     images: ProductImage[];
+    additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;
+    attributes: Array<{ attributeId: string; value: string }>;
 }
 
 export interface ProductListItem {

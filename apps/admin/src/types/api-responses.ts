@@ -391,7 +391,7 @@ export interface ProductDetail extends Product {
   variants: ProductVariant[];
   images: ProductImageDetail[];
   attributes: Array<{ attributeId: string; value: string }>;
-  additionalInfo: Array<{ label: string; value: string }>;
+  additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;
 }
 
 export interface ProductStats {
