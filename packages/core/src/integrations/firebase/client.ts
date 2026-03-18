@@ -190,6 +190,21 @@ function setupForegroundMessageListener() {
     audio.play().catch((e: Error) => console.warn("Error playing sound:", e.message));
 
     showCustomFCMToast(title, body, link);
+
+    // Dispatch event for the notification dropdown to pick up
+    window.dispatchEvent(
+      new CustomEvent("admin-notification", {
+        detail: {
+          type: payload.data?.type || "new_order",
+          title,
+          message: body,
+          orderId: payload.data?.orderId,
+          link: payload.data?.orderId
+            ? `/admin/orders/${payload.data.orderId}`
+            : link,
+        },
+      }),
+    );
   });
 }
 
