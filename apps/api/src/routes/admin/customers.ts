@@ -10,7 +10,7 @@ import {
     updateCustomer,
     updateCustomerSchema,
     deleteCustomer,
-    permanentDeleteCustomer,
+    permanentlyDeleteCustomer,
     restoreCustomer,
     bulkDeleteCustomers
 } from "@scalius/core/modules/customers";
@@ -206,7 +206,7 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await permanentDeleteCustomer(db, id);
+    await permanentlyDeleteCustomer(db, id);
     return noContent(c);
 });
 

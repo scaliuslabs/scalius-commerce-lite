@@ -291,7 +291,7 @@ export async function deleteCustomer(db: Database, id: string): Promise<void> {
     });
 }
 
-export async function permanentDeleteCustomer(db: Database, id: string): Promise<void> {
+export async function permanentlyDeleteCustomer(db: Database, id: string): Promise<void> {
     await db.delete(customerHistory).where(eq(customerHistory.customerId, id));
     await db.delete(customers).where(eq(customers.id, id));
 }
