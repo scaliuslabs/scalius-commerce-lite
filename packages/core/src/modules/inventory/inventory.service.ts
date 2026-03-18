@@ -4,7 +4,7 @@ import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
 import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
-import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 
 export const InventoryService = {
     async getInventoryOverview(db: Database, params: {
@@ -176,64 +176,87 @@ export const InventoryService = {
         notes?: string;
         pool?: string;
     }, adminUserId?: string) {
+        const MAX_RETRIES = 3;
+        const BASE_BACKOFF_MS = 50;
         const pool = payload.pool ?? "stock";
         const delta = Math.round(payload.delta);
 
-        const variant = await db
-            .select({
-                id: productVariants.id,
-                stock: productVariants.stock,
-                preorderStock: productVariants.preorderStock,
-            })
-            .from(productVariants)
-            .where(eq(productVariants.id, variantId))
-            .get();
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            const variant = await db
+                .select({
+                    id: productVariants.id,
+                    stock: productVariants.stock,
+                    preorderStock: productVariants.preorderStock,
+                    stockVersion: productVariants.stockVersion,
+                })
+                .from(productVariants)
+                .where(eq(productVariants.id, variantId))
+                .get();
 
-        if (!variant) {
-            throw new NotFoundError("Variant not found");
-        }
-
-        const previousStock = pool === "preorderStock" ? variant.preorderStock : variant.stock;
-
-        const updateSet = pool === "preorderStock"
-            ? {
-                preorderStock: sql`MAX(0, ${productVariants.preorderStock} + ${delta})`,
-                version: sql`${productVariants.version} + 1`,
-                updatedAt: sql`unixepoch()`,
+            if (!variant) {
+                throw new NotFoundError("Variant not found");
             }
-            : {
-                stock: sql`MAX(0, ${productVariants.stock} + ${delta})`,
-                version: sql`${productVariants.version} + 1`,
-                updatedAt: sql`unixepoch()`,
-            };
 
-        await db
-            .update(productVariants)
-            .set(updateSet)
-            .where(eq(productVariants.id, variantId));
+            const previousStock = pool === "preorderStock" ? variant.preorderStock : variant.stock;
 
-        const newStock = Math.max(0, previousStock + delta);
+            const updateSet = pool === "preorderStock"
+                ? {
+                    preorderStock: sql`MAX(0, ${productVariants.preorderStock} + ${delta})`,
+                    stockVersion: sql`${productVariants.stockVersion} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                }
+                : {
+                    stock: sql`MAX(0, ${productVariants.stock} + ${delta})`,
+                    stockVersion: sql`${productVariants.stockVersion} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                };
 
-        await recordMovement(db, {
-            variantId,
-            type: "adjusted",
-            quantity: delta,
-            previousStock,
-            newStock,
-            notes: `Manual adjustment (${payload.reason})${payload.notes ? `: ${payload.notes}` : ""}`,
-            createdBy: adminUserId,
-        });
+            const result = await db
+                .update(productVariants)
+                .set(updateSet)
+                .where(
+                    and(
+                        eq(productVariants.id, variantId),
+                        eq(productVariants.stockVersion, variant.stockVersion)
+                    )
+                )
+                .returning({ id: productVariants.id });
 
-        if (delta < 0 && pool === "stock") {
-            await checkAndAlertLowStock(db, variantId);
+            if (result.length > 0) {
+                const newStock = Math.max(0, previousStock + delta);
+
+                await recordMovement(db, {
+                    variantId,
+                    type: "adjusted",
+                    quantity: delta,
+                    previousStock,
+                    newStock,
+                    notes: `Manual adjustment (${payload.reason})${payload.notes ? `: ${payload.notes}` : ""}`,
+                    createdBy: adminUserId,
+                });
+
+                if (delta < 0 && pool === "stock") {
+                    await checkAndAlertLowStock(db, variantId);
+                }
+
+                return {
+                    success: true,
+                    variantId,
+                    previousStock,
+                    newStock,
+                    delta,
+                };
+            }
+
+            // CAS conflict — retry with backoff
+            if (attempt < MAX_RETRIES - 1) {
+                const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
+                await new Promise((resolve) => setTimeout(resolve, backoff));
+            }
         }
 
-        return {
-            success: true,
-            variantId,
-            previousStock,
-            newStock,
-            delta,
-        };
+        throw new ConflictError(
+            `Failed to adjust inventory after ${MAX_RETRIES} retries due to concurrent modifications`
+        );
     }
 };
