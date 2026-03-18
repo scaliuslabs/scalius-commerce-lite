@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { DeliveryService } from "@scalius/core/modules/delivery/service";
+import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider } from "@scalius/core/modules/delivery/service";
 import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
@@ -7,8 +7,6 @@ import { NotFoundError, ValidationError } from "../../../utils/api-error";
 
 import { ok, created } from "../../../utils/api-response";
 const app = new OpenAPIHono();
-
-const deliveryService = new DeliveryService();
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -68,7 +66,8 @@ const listRoute = createRoute({
 
 app.openapi(listRoute, async (c) => {
     try {
-        const providers = await deliveryService.getProviders();
+        const db = c.get("db");
+        const providers = await getDeliveryProviders(db);
         const maskedProviders = providers.map((provider) => ({
             ...provider,
             credentials: maskCredentialsForClient(provider.credentials)
@@ -103,6 +102,7 @@ const createProviderRoute = createRoute({
 
 app.openapi(createProviderRoute, async (c) => {
     try {
+        const db = c.get("db");
         const validated = c.req.valid("json");
         const credentials = typeof validated.credentials !== "string"
             ? JSON.stringify(validated.credentials)
@@ -120,7 +120,7 @@ app.openapi(createProviderRoute, async (c) => {
             config,
         };
 
-        const savedProvider = await deliveryService.saveProvider(provider, getEncryptionKey(c.env as Record<string, unknown>));
+        const savedProvider = await saveDeliveryProvider(db, provider, getEncryptionKey(c.env as Record<string, unknown>));
         const savedCredentials = typeof savedProvider.credentials === 'string'
             ? savedProvider.credentials
             : JSON.stringify(savedProvider.credentials);
@@ -159,6 +159,7 @@ const updateProviderRoute = createRoute({
 
 app.openapi(updateProviderRoute, async (c) => {
     try {
+        const db = c.get("db");
         const validated = c.req.valid("json");
         const credentials = validated.credentials && typeof validated.credentials !== "string"
             ? JSON.stringify(validated.credentials)
@@ -167,9 +168,9 @@ app.openapi(updateProviderRoute, async (c) => {
             ? JSON.stringify(validated.config)
             : (validated.config as string | undefined);
 
-        const existingProvider = await deliveryService.getProvider(validated.id);
+        const existingProvider = await getDeliveryProvider(db, validated.id);
         if (!existingProvider) {
-            const savedProvider = await deliveryService.saveProvider({
+            const savedProvider = await saveDeliveryProvider(db, {
                 id: validated.id,
                 name: validated.name,
                 type: validated.type,
@@ -193,7 +194,7 @@ app.openapi(updateProviderRoute, async (c) => {
             : JSON.stringify(existingProvider.credentials);
         const unmaskedCreds = unmaskedCredentials(providerCredentials, existingCredentials);
 
-        const savedProvider = await deliveryService.saveProvider({
+        const savedProvider = await saveDeliveryProvider(db, {
             id: validated.id,
             name: validated.name,
             type: validated.type,
@@ -285,8 +286,9 @@ const getProviderRoute = createRoute({
 
 app.openapi(getProviderRoute, async (c) => {
     try {
+        const db = c.get("db");
         const { id } = c.req.valid("param");
-        const provider = await deliveryService.getProvider(id);
+        const provider = await getDeliveryProvider(db, id);
         if (!provider) throw new NotFoundError("Provider not found");
         return ok(c, {
             ...provider,
@@ -313,8 +315,9 @@ const testExistingRoute = createRoute({
 
 app.openapi(testExistingRoute, async (c) => {
     try {
+        const db = c.get("db");
         const { id } = c.req.valid("param");
-        const provider = await deliveryService.getProvider(id);
+        const provider = await getDeliveryProvider(db, id);
         if (!provider) throw new NotFoundError("Provider not found");
 
         try {

@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for fraud checker providers.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { FraudCheckerService } from "@scalius/core/modules/fraud-checker/service";
+import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider } from "@scalius/core/modules/fraud-checker/service";
 
 import { ok, created } from "../../utils/api-response";
 import { ValidationError } from "../../utils/api-error";
@@ -23,8 +23,8 @@ const listRoute = createRoute({
 
 app.openapi(listRoute, async (c) => {
     try {
-        const fraudCheckerService = new FraudCheckerService(c.get("db"));
-        const providers = await fraudCheckerService.getProviders();
+        const db = c.get("db");
+        const providers = await getFraudProviders(db);
 
         const maskedProviders = providers.map((provider) => ({
             ...provider,
@@ -61,10 +61,10 @@ const createProviderRoute = createRoute({
 
 app.openapi(createProviderRoute, async (c) => {
     try {
-        const fraudCheckerService = new FraudCheckerService(c.get("db"));
+        const db = c.get("db");
         const provider = c.req.valid("json");
 
-        const savedProvider = await fraudCheckerService.saveProvider(provider);
+        const savedProvider = await saveFraudProvider(db, provider);
 
         const maskedResponse = {
             ...savedProvider,
@@ -102,18 +102,18 @@ const updateProviderRoute = createRoute({
 
 app.openapi(updateProviderRoute, async (c) => {
     try {
-        const fraudCheckerService = new FraudCheckerService(c.get("db"));
+        const db = c.get("db");
         const validated = c.req.valid("json");
         let apiKey = validated.apiKey;
 
         if (apiKey === MASKED_VALUE) {
-            const existingProvider = await fraudCheckerService.getProvider(validated.id);
+            const existingProvider = await getFraudProvider(db, validated.id);
             if (existingProvider?.apiKey) {
                 apiKey = existingProvider.apiKey;
             }
         }
 
-        const savedProvider = await fraudCheckerService.saveProvider({ ...validated, apiKey });
+        const savedProvider = await saveFraudProvider(db, { ...validated, apiKey });
 
         const maskedResponse = {
             ...savedProvider,
@@ -143,9 +143,9 @@ const deleteProviderRoute = createRoute({
 
 app.openapi(deleteProviderRoute, async (c) => {
     try {
-        const fraudCheckerService = new FraudCheckerService(c.get("db"));
+        const db = c.get("db");
         const { id } = c.req.valid("param");
-        await fraudCheckerService.deleteProvider(id);
+        await deleteFraudProvider(db, id);
         return ok(c, {});
     } catch (error: unknown) {
         throw error;
@@ -169,9 +169,9 @@ const testProviderRoute = createRoute({
 
 app.openapi(testProviderRoute, async (c) => {
     try {
-        const fraudCheckerService = new FraudCheckerService(c.get("db"));
+        const db = c.get("db");
         const { id } = c.req.valid("param");
-        const result = await fraudCheckerService.testProvider(id);
+        const result = await testFraudProvider(db, id);
         return ok(c, result);
     } catch (error: unknown) {
         throw error;

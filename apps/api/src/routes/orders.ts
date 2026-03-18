@@ -12,7 +12,7 @@ import {
 import { isDiscountValid, calculateDiscountAmount } from "./discounts";
 import { eq, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { DeliveryService } from "@scalius/core/modules/delivery/service";
+import { getShipments, getActiveDeliveryProviders } from "@scalius/core/modules/delivery/service";
 import { createStorefrontOrder } from "@scalius/core/modules/orders";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
@@ -20,7 +20,6 @@ import { NotFoundError, ValidationError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const deliveryService = new DeliveryService();
 
 const unixToDate = (timestamp: number | null): Date | null => {
   if (!timestamp) return null;
@@ -113,8 +112,8 @@ app.openapi(getOrderRoute, async (c) => {
     .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
     .where(eq(orderItems.orderId, id));
 
-  const shipments = await deliveryService.getShipments(id);
-  const activeProviders = await deliveryService.getActiveProviders();
+  const shipments = await getShipments(db, id);
+  const activeProviders = await getActiveDeliveryProviders(db);
 
   const formattedOrder = {
     ...order,

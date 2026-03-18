@@ -1,14 +1,13 @@
 // src/server/routes/admin/shipments.ts
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { DeliveryService } from "@scalius/core/modules/delivery/service";
-import { ShipmentTracker } from "@scalius/core/modules/delivery/tracking";
+import { getShipment, deleteShipmentRecord, checkShipmentStatus } from "@scalius/core/modules/delivery/service";
+import { updateOrderStatusFromShipment, notifyShipmentStatusChange } from "@scalius/core/modules/delivery/tracking";
 import { deliveryShipments } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const deliveryService = new DeliveryService();
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 
@@ -27,8 +26,9 @@ const getShipmentRoute = createRoute({
 });
 
 app.openapi(getShipmentRoute, async (c) => {
+    const db = c.get("db");
     const shipmentId = c.req.valid("param").id;
-    const shipment = await deliveryService.getShipment(shipmentId);
+    const shipment = await getShipment(db, shipmentId);
 
     if (!shipment) {
         throw new NotFoundError("Shipment not found");
@@ -53,14 +53,15 @@ const deleteShipmentRoute = createRoute({
 });
 
 app.openapi(deleteShipmentRoute, async (c) => {
+    const db = c.get("db");
     const shipmentId = c.req.valid("param").id;
-    const shipment = await deliveryService.getShipment(shipmentId);
+    const shipment = await getShipment(db, shipmentId);
 
     if (!shipment) {
         throw new NotFoundError("Shipment not found");
     }
 
-    await deliveryService.deleteShipment(shipmentId);
+    await deleteShipmentRecord(db, shipmentId);
     return ok(c, { message: "Shipment deleted successfully" });
 });
 
@@ -94,7 +95,7 @@ app.openapi(checkStatusRoute, async (c) => {
     }
 
     const previousStatus = currentShipment.status;
-    const result = await deliveryService.checkShipmentStatus(shipmentId);
+    const result = await checkShipmentStatus(db, shipmentId);
     const now = new Date();
 
     await db
@@ -103,12 +104,14 @@ app.openapi(checkStatusRoute, async (c) => {
         .where(eq(deliveryShipments.id, shipmentId));
 
     if (result.status !== previousStatus) {
-        const orderStatusUpdate = await ShipmentTracker.updateOrderStatusFromShipment(
+        const orderStatusUpdate = await updateOrderStatusFromShipment(
+            db,
             shipmentId,
             result.status,
         );
 
-        await ShipmentTracker.notifyStatusChange(
+        await notifyShipmentStatusChange(
+            db,
             shipmentId,
             previousStatus,
             result.status,

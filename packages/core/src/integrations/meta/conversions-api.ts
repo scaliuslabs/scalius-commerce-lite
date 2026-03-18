@@ -1,7 +1,7 @@
 // src/lib/meta/conversions-api.ts
 
 import { sha256, hashEmail, hashPhone } from "./crypto-utils";
-import { MetaService } from "../../modules/analytics/meta.service";
+import { getCapiSettings, logCapiEvent } from "../../modules/analytics/meta.service";
 import { type Database } from "@scalius/database/client";
 
 // --- CONFIGURABLE LOG RETENTION ---
@@ -138,7 +138,7 @@ export async function sendCapiEvent(
   db: Database,
   event: Omit<ServerEvent, "user_data"> & { user_data: Record<string, unknown> },
 ) {
-  const settings = await MetaService.getCapiSettings(db);
+  const settings = await getCapiSettings(db);
   if (!settings || !settings.isEnabled || !settings.pixelId || !settings.accessToken) {
     // FIX: Write a diagnostic log so admin can see skipped events
     let errorMessage = "CAPI integration is disabled in settings.";
@@ -148,7 +148,7 @@ export async function sendCapiEvent(
       errorMessage = "Missing Pixel ID or Access Token in CAPI settings.";
     }
 
-    await MetaService.logCapiEvent(db, {
+    await logCapiEvent(db, {
       eventId: event.event_id,
       eventName: event.event_name,
       status: "failed",
@@ -189,7 +189,7 @@ export async function sendCapiEvent(
       const errorMessage = String(errorObj?.message || `HTTP Error: ${response.status}`);
       throw new Error(errorMessage);
     }
-    await MetaService.logCapiEvent(db, {
+    await logCapiEvent(db, {
       ...logPayload,
       status: "success",
       responsePayload: JSON.stringify(responseData, null, 2),
@@ -201,7 +201,7 @@ export async function sendCapiEvent(
       `Failed to send '${event.event_name}' event to Meta CAPI:`,
       error,
     );
-    await MetaService.logCapiEvent(db, {
+    await logCapiEvent(db, {
       ...logPayload,
       status: "failed",
       errorMessage: error instanceof Error ? error.message : String(error),

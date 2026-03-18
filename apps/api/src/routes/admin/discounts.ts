@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for discounts.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { DiscountService, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
+import { listDiscounts, getDiscountById, createDiscount, updateDiscount, deleteDiscount, bulkDeleteDiscounts, restoreDiscounts, permanentlyDeleteDiscount, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
 import { discounts } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { NotFoundError, ApiError, ValidationError } from "../../utils/api-error";
@@ -35,7 +35,7 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
-    const result = await DiscountService.list(db, {
+    const result = await listDiscounts(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || "",
@@ -65,7 +65,7 @@ app.openapi(createDiscountRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     try {
-        const result = await DiscountService.create(db, data);
+        const result = await createDiscount(db, data);
         return created(c, result);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
@@ -101,7 +101,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { discountIds, permanent } = c.req.valid("json");
     if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
-    await DiscountService.bulkDelete(db, discountIds, permanent);
+    await bulkDeleteDiscounts(db, discountIds, permanent);
     return noContent(c);
 });
 
@@ -130,7 +130,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { discountIds } = c.req.valid("json");
     if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
-    await DiscountService.restore(db, discountIds);
+    await restoreDiscounts(db, discountIds);
     return noContent(c);
 });
 
@@ -152,7 +152,7 @@ const getByIdRoute = createRoute({
 app.openapi(getByIdRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const discount = await DiscountService.getById(db, id);
+    const discount = await getDiscountById(db, id);
     if (!discount) throw new NotFoundError("Discount not found");
     return ok(c, discount);
 });
@@ -178,7 +178,7 @@ app.openapi(updateDiscountRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const result = await DiscountService.update(db, id, data);
+        const result = await updateDiscount(db, id, data);
         return ok(c, result);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
@@ -204,7 +204,7 @@ const deleteDiscountRoute = createRoute({
 app.openapi(deleteDiscountRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await DiscountService.delete(db, id);
+    await deleteDiscount(db, id);
     return noContent(c);
 });
 
@@ -226,7 +226,7 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await DiscountService.permanentlyDelete(db, id);
+    await permanentlyDeleteDiscount(db, id);
     return noContent(c);
 });
 
@@ -258,7 +258,7 @@ app.openapi(toggleStatusRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { isActive } = c.req.valid("json");
-    const discount = await DiscountService.getById(db, id);
+    const discount = await getDiscountById(db, id);
     if (!discount) throw new NotFoundError("Discount not found");
     await db.update(discounts).set({ isActive, updatedAt: sql`unixepoch()` }).where(eq(discounts.id, id));
     return ok(c, { id, isActive });
@@ -282,7 +282,7 @@ const restoreDiscountRoute = createRoute({
 app.openapi(restoreDiscountRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await DiscountService.restore(db, [id]);
+    await restoreDiscounts(db, [id]);
     return ok(c, {});
 });
 

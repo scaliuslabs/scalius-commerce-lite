@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for navigation.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { NavigationService } from "@scalius/core/modules/navigation";
+import { getNavigationItems } from "@scalius/core/modules/navigation";
 import { siteSettings } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -27,7 +27,7 @@ const listItemsRoute = createRoute({
 
 app.openapi(listItemsRoute, async (c) => {
     const db = c.get("db");
-    const items = await NavigationService.getNavigationItems(db);
+    const items = await getNavigationItems(db);
     return ok(c, { items });
 });
 
