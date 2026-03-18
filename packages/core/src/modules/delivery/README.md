@@ -6,8 +6,8 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 
 | File | Purpose |
 |------|---------|
-| `provider.ts` | `DeliveryProviderInterface` -- contract all providers implement (`getName`, `getType`, `testConnection`, `createShipment`, `checkShipmentStatus`) |
-| `factory.ts` | `createProvider()` -- factory switch that parses credentials (with optional AES-GCM decryption) and returns a `PathaoProvider` or `SteadfastProvider` |
+| `provider.ts` | `DeliveryProviderInterface` -- contract all providers implement. Extends `ProviderLifecycle` from `@scalius/core/providers/types`. Methods: `getName`, `getType`, `testConnection`, `createShipment`, `checkShipmentStatus`. |
+| `factory.ts` | `createProvider()` -- factory that parses credentials (with optional AES-GCM decryption via `decryptCredentialsGraceful()`) and config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. |
 | `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
 | `providers/pathao.ts` | `PathaoProvider` -- OAuth2 password-grant auth, lazy token caching (1hr safety margin), location ID mapping via `getExternalLocationIds()`, COD amount calculation from `order.balanceDue` |
 | `providers/steadfast.ts` | `SteadfastProvider` -- API key + secret key auth (`Api-Key` / `Secret-Key` headers), full-text address construction from order fields, COD amount from `order.balanceDue` |
@@ -77,12 +77,13 @@ dispose()            -> void   // No-op
 
 `DeliveryService.createShipment()` guarantees a DB record exists even if the provider API succeeds but the subsequent DB write fails (e.g. worker timeout):
 
-1. Load order + order items (with product names for item descriptions)
-2. INSERT a `"creating"` placeholder shipment record
-3. Call `provider.createShipment(order, enrichedOptions)`
-4. On success: UPDATE record with `externalId`, `trackingId`, normalized `status`, raw metadata
-5. On provider rejection: UPDATE record to `status: "failed"`, `rawStatus: "provider_rejected"`
-6. On exception: UPDATE record to `status: "failed"`, `rawStatus: "exception"`
+1. Load order + order items (with product names for item descriptions and count)
+2. Enrich options with `itemCount` (sum of quantities) and `itemDescription` (product names x qty)
+3. INSERT a `"creating"` placeholder shipment record with `metadata: { initiatedAt }`
+4. Call `provider.createShipment(order, enrichedOptions)`
+5. On success: UPDATE record with `externalId`, `trackingId`, normalized `status`, raw metadata
+6. On provider rejection: UPDATE record to `status: "failed"`, `rawStatus: "provider_rejected"`
+7. On exception: UPDATE record to `status: "failed"`, `rawStatus: "exception"`
 
 COD amount logic (both providers): `options.codAmount ?? order.balanceDue ?? (order.totalAmount - order.paidAmount)`
 
@@ -105,8 +106,10 @@ Handles two formats:
 - Webhook events: `order.created`, `order.picked`, `order.delivered`, `order.returned`, etc. (20 mappings)
 - API status strings: `Pending`, `Pickup Cancel`, `Pickup_Cancelled`, `Delivered`, etc. (normalized to lowercase with spaces replaced by underscores; 19 mappings)
 
+Normalization: exact match first, then `toLowerCase().replace(/\s+/g, "_")`. Unmapped statuses log a warning and default to `unknown`.
+
 ### Steadfast Status Map
-Single format: `pending`, `in_review`, `hold`, `delivered`, `delivered_approval_pending`, `partial_delivered`, `partial_delivered_approval_pending`, `cancelled`, `cancelled_approval_pending`, `unknown`, `unknown_approval_pending` (11 mappings)
+Single format: `pending`, `in_review`, `hold`, `delivered`, `delivered_approval_pending`, `partial_delivered`, `partial_delivered_approval_pending`, `cancelled`, `cancelled_approval_pending`, `unknown`, `unknown_approval_pending` (11 mappings). Normalized to lowercase before lookup.
 
 ## Shipment-to-Order Status Sync
 
@@ -136,7 +139,7 @@ File: `packages/core/src/utils/credential-encryption.ts`
 - `decryptCredentials(encrypted, keyBase64)` -- reverses the encryption.
 - `decryptCredentialsGraceful(value, keyBase64)` -- tries to decrypt; if it fails (plaintext data), returns as-is. Enables gradual migration.
 - Key comes from `CREDENTIAL_ENCRYPTION_KEY` Cloudflare secret (base64-encoded 256-bit key).
-- Used in `factory.ts` (decryption) and `service.ts` (encryption on save).
+- Used in `factory.ts` (decryption before provider instantiation) and `service.ts` (encryption on save).
 
 ## Webhook Replay Protection
 
@@ -160,6 +163,21 @@ File: `apps/api/src/middleware/webhook-auth.ts`
 2. **IP allowlist** (if `config.allowedWebhookIps` is set): checks `CF-Connecting-IP` or `X-Forwarded-For`
 3. **No security** (backward compat): logs a security warning and allows the request
 
+### Pathao Webhook Handler Details
+
+- Returns HTTP 202 (not 200) with `X-Pathao-Merchant-Webhook-Integration-Secret` header on every response
+- Handles `event: "webhook_integration"` test event from Pathao by returning 202 + secret header
+- Ignores `store.*` events (no shipment mapping)
+- Builds updated metadata merging existing + `lastWebhookPayload`, `lastWebhookAt`, `collectedAmount`, `deliveryFee`, `lastReason`
+- Records webhook event via `recordWebhookEvent()` for audit trail
+
+### Steadfast Webhook Handler Details
+
+- Returns `{ status: "success", message: "Webhook received successfully." }` (Steadfast's expected response)
+- Handles two `notification_type` values: `tracking_update` (metadata update only, no status change) and `delivery_status` (full status update)
+- Looks up shipment by `externalId` (consignment_id) first, falls back to `trackingId` (invoice)
+- Builds updated metadata with `codAmount`, `deliveryCharge`, `lastTrackingMessage`
+
 ## Pathao Location Import
 
 File: `pathao-location-import.ts`
@@ -172,6 +190,9 @@ Chunked import optimized for Cloudflare Workers limits:
 
 Upsert logic: match by Pathao external ID first, then by `name+parentId`. Creates new if no match.
 Progress stored in KV key `location_import:pathao` with 24h expiry.
+Token cached in-memory with 10-minute safety margin before expiry.
+
+Import credentials are obtained from the active Pathao provider record in the database, decrypted via `decryptCredentialsGraceful()` in the API route handler before being passed to `processPathaoImportChunk()`.
 
 Total import time: ~60-90 seconds for all of Bangladesh.
 
@@ -182,20 +203,20 @@ Total import time: ~60-90 seconds for all of Bangladesh.
 |--------|------|---------|
 | GET | `/admin/shipments/{id}` | Get shipment by ID |
 | DELETE | `/admin/shipments/{id}` | Delete a shipment |
-| POST | `/admin/shipments/{id}/check-status` | Poll provider for status update, sync order status, update `lastChecked` |
+| POST | `/admin/shipments/{id}/check-status` | Poll provider for status update, sync order status via `ShipmentTracker`, update `lastChecked` |
 
 ### Admin Delivery Provider Routes (`apps/api/src/routes/admin/settings/delivery-providers.ts`)
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/admin/settings/delivery-providers` | List all providers (credentials masked) |
-| POST | `/admin/settings/delivery-providers` | Create provider (encrypts credentials if key available) |
+| POST | `/admin/settings/delivery-providers` | Create provider (encrypts credentials if `CREDENTIAL_ENCRYPTION_KEY` available) |
 | PUT | `/admin/settings/delivery-providers` | Update provider (unmasks credentials, merges with existing) |
 | GET | `/admin/settings/delivery-providers/{id}` | Get provider by ID |
 | POST | `/admin/settings/delivery-providers/{id}` | Test existing provider connection |
 | DELETE | `/admin/settings/delivery-providers/{id}` | Delete provider |
-| POST | `/admin/settings/delivery-providers/create-test` | Test credentials before saving (creates ephemeral provider) |
+| POST | `/admin/settings/delivery-providers/create-test` | Test credentials before saving (creates ephemeral provider instance) |
 
-Credential masking: `clientSecret`, `password`, `apiKey`, `secretKey` replaced with `"xxxxxxxxxxxx"` in responses.
+Credential masking: `clientSecret`, `password`, `apiKey`, `secretKey` replaced with `"xxxxxxxxxxxx"` in responses. `unmaskedCredentials()` function preserves real values when masked placeholder is sent back on update.
 
 ### Admin Delivery Location Routes (`apps/api/src/routes/admin/settings/delivery-locations.ts`)
 | Method | Path | Purpose |
@@ -207,7 +228,7 @@ Credential masking: `clientSecret`, `password`, `apiKey`, `secretKey` replaced w
 | DELETE | `/admin/settings/delivery-locations/{id}` | Soft-delete a location |
 | DELETE | `/admin/settings/delivery-locations` | Bulk soft-delete (body: `{ ids: [...] }`) |
 | DELETE | `/admin/settings/delivery-locations/all` | Hard-delete ALL locations (permanent) |
-| POST | `/admin/settings/delivery-locations/import-pathao` | Process one chunk of Pathao import |
+| POST | `/admin/settings/delivery-locations/import-pathao` | Process one chunk of Pathao import (decrypts provider credentials before calling import) |
 | GET | `/admin/settings/delivery-locations/import-pathao/status` | Check import progress |
 | DELETE | `/admin/settings/delivery-locations/import-pathao` | Reset import progress |
 
@@ -217,6 +238,22 @@ Credential masking: `clientSecret`, `password`, `apiKey`, `secretKey` replaced w
 | GET | `/locations/cities` | Get all active cities (10-min cache) |
 | GET | `/locations/zones?cityId=X` | Get active zones for a city |
 | GET | `/locations/areas?zoneId=X` | Get active areas for a zone |
+
+### Public Shipping Methods Route (`apps/api/src/routes/shipping-methods.ts`)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/shipping-methods` | Get active, non-deleted shipping methods ordered by sortOrder then name (5-min cache) |
+
+### Admin Shipping Methods Routes (`apps/api/src/routes/admin/settings/shipping.ts`)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/admin/settings/shipping-methods` | List (paginated, searchable, sortable, trash filter) |
+| POST | `/admin/settings/shipping-methods` | Create (validates name uniqueness among non-deleted) |
+| GET | `/admin/settings/shipping-methods/{id}` | Get by ID |
+| PUT | `/admin/settings/shipping-methods/{id}` | Update (validates name uniqueness excluding self among non-deleted) |
+| DELETE | `/admin/settings/shipping-methods/{id}` | Soft-delete |
+| POST | `/admin/settings/shipping-methods/{id}/restore` | Restore from soft-delete |
+| DELETE | `/admin/settings/shipping-methods/{id}/permanent-delete` | Hard delete from DB |
 
 ### Webhook Routes
 | Method | Path | Purpose |
@@ -241,11 +278,12 @@ Credential masking: `clientSecret`, `password`, `apiKey`, `secretKey` replaced w
 
 ## Dependencies
 
-- `@scalius/database` -- `deliveryProviders`, `deliveryShipments`, `deliveryLocations`, `orders`, `orderItems`, `products`
+- `@scalius/database` -- `deliveryProviders`, `deliveryShipments`, `deliveryLocations`, `orders`, `orderItems`, `products`, `shippingMethods`
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ServiceUnavailableError`
 - `@scalius/core/utils/credential-encryption` -- `encryptCredentials`, `decryptCredentialsGraceful`
 - `@scalius/core/modules/inventory/inventory-transitions` -- `applyInventoryForStatusChange`
 - `@scalius/core/modules/payments/process-payment` -- `recordWebhookEvent` (webhook audit trail)
+- `@scalius/core/providers/types` -- `ProviderLifecycle`, `HealthCheckResult`
 - `@paralleldrive/cuid2` -- ID generation for locations
 - `nanoid` -- ID generation for providers and shipments
 
@@ -256,7 +294,5 @@ Credential masking: `clientSecret`, `password`, `apiKey`, `secretKey` replaced w
 - `isFinalShipment` is defaulted to `false` but never set to `true` by any code path
 - `trackingUrl` column on `delivery_shipments` is never populated -- tracking URLs are computed on-the-fly by `ShipmentTracker.getTrackingUrl()`
 - `courierName` column on `delivery_shipments` is never populated during provider-based creation
-- The `ShipmentList.tsx` component calls `/api/v1/admin/orders/{orderId}/shipments/{id}/refresh` which is not defined in the shipments route file shown -- this endpoint must be defined elsewhere (possibly in the order routes)
 - Credential encryption is only applied on save if `CREDENTIAL_ENCRYPTION_KEY` env var is set -- providers created without the key store plaintext credentials
-- The `delete /all` locations endpoint does a hard DELETE (not soft-delete), permanently removing all records
-- ~~Pathao location import credentials parsed without decryption~~: Fixed -- import route now uses `decryptCredentialsGraceful()` before `JSON.parse()`
+- The `DELETE /all` locations endpoint does a hard DELETE (not soft-delete), permanently removing all records

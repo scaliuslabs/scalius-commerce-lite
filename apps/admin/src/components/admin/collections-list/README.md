@@ -106,6 +106,8 @@ Astro page (index.astro / trash.astro)
 | `index.astro` | `/admin/collections` | Header with title, New/Trash buttons, `CollectionsList showTrashed={false}` |
 | `trash.astro` | `/admin/collections/trash` | Header with title, View Active button, `CollectionsList showTrashed={true}` |
 
+No storefront preview link in collection rows -- there is no dedicated `/collections/[id]` storefront page.
+
 ## Dependencies
 
 - `@hello-pangea/dnd` -- drag-and-drop

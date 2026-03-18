@@ -63,9 +63,10 @@ The admin widget form calls API routes which proxy requests to OpenRouter. The c
   - `UI_CONFIG` -- Preview device widths, model selector settings, context manager pagination
   - `ERROR_MESSAGES` / `SUCCESS_MESSAGES` -- All user-facing strings
   - Helper functions: `getProviderFromModel()`, `getMinCacheTokens()`, `getMaxCacheBreakpoints()`, `getCacheTTL()`, `getMaxImages()`, `getRetryDelay()`, `isRetryableStatus()`, `isPromptTooLarge()`, `shouldUseStagedGeneration()`, `getTimeout()`
+  - Type exports: `PromptType`, `ModelProvider`, `OperationType`
 
 - **`prompt-helper-v2.ts`** -- Structured prompt construction:
-  - `generateStructuredPrompt()` -- Main function. Returns `{ messages, metadata }`. Builds a structured messages array with cache_control breakpoints for Anthropic models only (other providers use automatic caching). Handles multimodal image content for vision-capable models. Separates static (cacheable) and dynamic (per-request) content.
+  - `generateStructuredPrompt()` -- Main function. Returns `{ messages, metadata }`. Builds a structured messages array with cache_control breakpoints for Anthropic models only (other providers use automatic caching). Handles multimodal image content for vision-capable models. Separates static (cacheable) and dynamic (per-request) content. All catch blocks use typed `error: unknown`.
   - `generateCompletePrompt()` -- Legacy wrapper that flattens structured messages to a single string for clipboard/external-AI use
   - `processImagesWithDimensions()` -- Fetches image dimensions via `Image()` API, calculates aspect ratios
   - `prepareImagesForMultimodal()` -- Converts image files to OpenRouter vision content objects
@@ -73,43 +74,17 @@ The admin widget form calls API routes which proxy requests to OpenRouter. The c
 
 - **`ai-context-schema.ts`** -- Zod schemas for persisting AI context in the widget's `aiContext` DB column:
   - `AiContextSchema` -- Main schema: promptType, preferredAiModel, useStagedMode, savedImages, savedProducts, savedCategories, allCategoriesSelected, stagedPlan, stagedSections, improvementHistory, timestamps
-  - `parseAiContext()` -- Parses JSON from DB with double-stringified legacy data handling and graceful recovery
+  - `parseAiContext()` -- Parses JSON from DB with double-stringified legacy data handling and graceful recovery. Typed `error: unknown` in catch blocks.
   - `serializeAiContext()` -- Validates and stringifies for DB storage
   - `mergeAiContext()` -- Merges partial updates with existing context
 
 ### Admin Hooks (`apps/admin/src/components/admin/widgets/widget-form/`)
 
-- **`useAiGenerator.ts`** -- Main generation orchestrator hook:
-  - On mount: checks API key status, fetches model list, restores model preference (widget aiContext > localStorage global)
-  - `handleAiRequest()`: Orchestrates system prompt fetch, context fetch, prompt building, and delegates to staged or simple generation
-  - `handleSimpleGeneration()`: Streams response via SSE, parses with tag-based parser (primary) then JSON fallback
-  - `handleCopyPrompt()`: Builds standalone prompt and copies to clipboard
-  - Model preference is saved to `localStorage` as `global_preferred_ai_model` and persisted in widget's aiContext
-
-- **`useAiImprover.ts`** -- Improvement workflow:
-  - `improve()`: Handles whole-widget and section-specific improvements
-  - Section-specific: extracts target section, includes other-section context for consistency, merges result back
-  - Tracks improvement history (prompt, section index, timestamp, model used)
-  - Same streaming/parsing pipeline as generator
-
-- **`useStagedGeneration.ts`** -- Multi-section generation state machine:
-  - States: idle -> planning -> generating -> complete | error
-  - `createPlan()`: Asks LLM for JSON plan with section count and descriptions
-  - `generateSection()`: Generates one section, passing all previous sections as context
-  - Progressive rendering via callback on each section completion
-  - 500ms delay between sections to avoid rate limits
-  - Up to 3 retries per section with exponential backoff
-
-- **`useAiContext.ts`** -- Context selection manager:
-  - Manages selected images, products, categories, and allCategoriesSelected toggle
-  - Product search with debounced query (300ms), paginated latest products (10 per page)
-  - Fetches all categories on mount (limit: 200)
-
-- **`AiAssistant.tsx`** -- React UI component:
-  - Collapsible card with 3-step workflow: content type selection, context manager, prompt textarea
-  - Model selector with vision/audio capability indicators
-  - Staged generation toggle and progress bar with section descriptions
-  - Copy Prompt and Generate buttons
+- **`useAiGenerator.ts`** -- Main generation orchestrator hook
+- **`useAiImprover.ts`** -- Improvement workflow
+- **`useStagedGeneration.ts`** -- Multi-section generation state machine
+- **`useAiContext.ts`** -- Context selection manager
+- **`AiAssistant.tsx`** -- React UI component
 
 ### API Routes (`apps/api/src/routes/admin/`)
 

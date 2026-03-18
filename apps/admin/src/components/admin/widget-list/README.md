@@ -1,12 +1,12 @@
 # Widget List
 
-Admin component for managing content widgets with status toggles, shortcode copy, placement display, OpenRouter API key configuration, and bulk operations.
+Admin component for managing content widgets with status toggles, shortcode copy, placement display, OpenRouter API key configuration, trash view, and bulk operations.
 
 ## Architecture
 
 ```
 widget-list/
-  WidgetsList.tsx              -- main orchestrator (state, pagination, settings dialog)
+  WidgetsList.tsx              -- main orchestrator (state, pagination, search, settings dialog)
   index.ts                     -- barrel export (WidgetsList + types)
   components/
     WidgetRow.tsx               -- table row: status toggle, edit link, shortcode copy, placement label
@@ -39,6 +39,12 @@ widget-list/
 - Actions per row: edit (link to `/admin/widgets/{id}`), copy shortcode, soft-delete
 - Trash view: restore button, permanent delete button (no edit/shortcode)
 
+### Trash View
+Accessed via `?trashed=true` (typically `/admin/widgets/trash`). The API list endpoint passes `trashed=true` to the service's `showTrashed` option, which filters for `deletedAt IS NOT NULL`. Trash view:
+- Hides statistics cards
+- Shows restore and permanent delete actions instead of edit/shortcode/trash
+- Bulk actions: restore, delete permanently (instead of activate/deactivate/trash)
+
 ### Shortcode Copy
 Copies `[widget id="wid_xxx"]` to clipboard. Available from the row actions in the widget table.
 
@@ -67,6 +73,27 @@ Three stat cards (total, active, inactive) shown above the table in the active v
 
 The `[id].astro` page handles both create and edit. When `id === "create"`, `getWidgetFormPageData` returns create-mode defaults. Otherwise, it fetches the widget by ID.
 
+## Widget Form (`apps/admin/src/components/admin/widgets/WidgetForm.tsx`)
+
+Handles both create and edit modes with:
+- Zod-validated form fields (name, htmlContent, cssContent, isActive, displayTarget, placementRule, referenceCollectionId, sortOrder)
+- AI-assisted generation via `useAiGenerator` + `useAiImprover` hooks
+- AI context persistence (saves/loads full AI state to widget's `aiContext` column)
+- Version history: Save Version dialog, Version History modal (`WidgetHistoryModal`) with preview iframe, restore, and delete
+- Paste modal (`WidgetPasteModal`): accepts tag-based (`<htmljs>/<css>`) or JSON format from external AI chatbots
+- FullScreenEditor: unified preview/improvement editor with three modes (generation-preview, improvement, live-preview)
+- History operations use `clientGet`/`clientPost`/`clientDelete` helpers (not raw fetch)
+
+Sub-components in `widget-form/`:
+- `WidgetDetails.tsx` -- name, HTML, CSS inputs + preview/paste/improve buttons
+- `WidgetPlacement.tsx` -- placement rule selector, collection selector (conditional), sort order, active toggle
+- `WidgetHistoryModal.tsx` -- dialog with history list (left panel) + preview iframe (right panel), restore and delete buttons
+- `WidgetPasteModal.tsx` -- dialog for pasting AI-generated content (tag or JSON format)
+- `AiAssistant.tsx` / `AiContextManager.tsx` -- AI generation controls
+- `FullScreenEditor.tsx` -- full-screen preview/improvement editor
+- `useAiContext.ts` / `useAiGenerator.ts` / `useAiImprover.ts` / `useStagedGeneration.ts` -- AI hooks
+- `types.ts` -- `MediaFile`, `ProductSearchResult`, `Category` types
+
 ## Loader
 
 `apps/admin/src/loaders/admin/widgets.ts` provides:
@@ -79,10 +106,10 @@ The `[id].astro` page handles both create and edit. When `id === "create"`, `get
 - Shared `AdminListPagination` from `@/components/admin/shared/AdminListPagination`
 - `@scalius/shared/utils` -- `cn` utility
 - `@/lib/client/navigate` -- `navigateTo` for Astro View Transitions-compatible navigation
+- `@/lib/api-client-fetch` -- `clientGet`, `clientPost`, `clientDelete` for typed API calls (used in WidgetForm)
 
 ## Known Gaps
 
 - **Search is client-side only**: Filters the in-memory widget array by name substring. No FTS5 or server-side search. Works for small widget counts but would not scale.
 - **No server-side pagination**: All widgets are fetched in one request, then paginated client-side.
 - **Stats not dynamic**: Statistics are computed once from the initial data and do not update after mutations (activate/deactivate/delete). A full page reload updates them.
-- **Trash view data issue**: See widgets service README -- the `listWidgets` service always filters `deletedAt IS NULL`, so trashed widgets may not appear.

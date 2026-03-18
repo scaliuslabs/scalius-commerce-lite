@@ -45,7 +45,7 @@ Indexes: `media_folder_id_idx`, `media_deleted_at_idx`
 | Method        | Signature                                                             | Behavior                                                                                        |
 |---------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
 | `listFiles`   | `(db, page, limit, searchQuery, folderId?) => {files, pagination}`   | Paginated list. `folderId` of `"all"` returns all, `"root"`/`"null"`/`""` returns root (no folder), else filters by folder ID. Filters by `deletedAt IS NULL`, optional LIKE search on filename. |
-| `uploadFiles` | `(db, files: File[], folderId) => response`                         | Validates each file (max 20MB, max 50 files). Uploads in batches of 5 with 100ms inter-batch delay. Calls `uploadFile()` from `@scalius/core/integrations/storage`. Returns `{files, summary}` with status 201/207/400. On total failure throws `ValidationError`. |
+| `uploadFiles` | `(db, files: File[], folderId) => response`                         | Validates each file (max 20MB, max 50 files). Uploads in batches of 5 with 100ms inter-batch delay. Calls `uploadFile()` from `@scalius/core/integrations/storage`. Returns `{files, summary}` with status 201/207/400. On total failure throws `ValidationError`. All catch blocks use typed `error: unknown` with `instanceof Error` checks. |
 | `updateFile`  | `(db, id, {filename?, folderId?}) => file`                          | Updates metadata only (filename, folder). Throws `NotFoundError` if missing.                   |
 | `deleteFile`  | `(db, id) => void`                                                   | Extracts R2 key from URL (last path segment), calls `deleteFile()` from storage, then hard-deletes DB row. Throws `NotFoundError` if missing. |
 | `moveFiles`   | `(db, fileIds[], folderId) => void`                                  | Bulk update `folderId` using `inArray`.                                                         |
@@ -58,8 +58,8 @@ Indexes: `media_folder_id_idx`, `media_deleted_at_idx`
 File: `packages/core/src/integrations/storage.ts`
 
 - **`initStorage(bucket, publicUrl)`** -- called once per Worker isolate from middleware to register the R2 binding and public URL.
-- **`uploadFile(file, bucket?, publicUrl?)`** -- validates file (10MB limit, image-only MIME types: JPEG/PNG/GIF/WebP/SVG/BMP/TIFF), generates `nanoid().ext` key, uploads to R2 with `PUT`. Sets `Cache-Control: public, max-age=31536000, immutable` and `customMetadata` with original filename + timestamp. 30s upload timeout via `Promise.race`.
-- **`deleteFile(key, bucket?)`** -- deletes object from R2 by key.
+- **`uploadFile(file, bucket?, publicUrl?)`** -- validates file (10MB limit, image-only MIME types: JPEG/PNG/GIF/WebP/SVG/BMP/TIFF), generates `nanoid().ext` key, uploads to R2 with `PUT`. Sets `Cache-Control: public, max-age=31536000, immutable` and `customMetadata` with original filename + timestamp. 30s upload timeout via `Promise.race`. All catch blocks use typed `error: unknown`.
+- **`deleteFile(key, bucket?)`** -- deletes object from R2 by key. Typed `error: unknown` in catch.
 - **`getBucket()`** -- returns the registered R2 bucket binding.
 - **`extractKeyFromUrl(url)`** -- extracts R2 object key from a full URL.
 

@@ -7,10 +7,10 @@ Settings UI split across three tab-based pages: General Settings, Checkout Setti
 | File | Description |
 |------|-------------|
 | `GeneralSettingsPage.tsx` | Top-level tabbed container for general settings. 9 lazy-loaded tabs: Header, Footer, SEO, Storefront, Email, Currency, Countries, Auth & Access, Security |
-| `AllowedCountriesBuilder.tsx` | Allowed countries multi-select. Searchable list of all countries from `react-phone-number-input`. Saves JSON array to `PUT /admin/settings/site` as `allowedCountries`. Used to restrict phone number countries at checkout and customer registration |
+| `CurrencySettingsBuilder.tsx` | Searchable currency picker with 160+ currencies organized by region (Major/Global, South Asia, Southeast Asia, East Asia, Middle East, Central Asia, Europe, Americas, Africa, Pacific, Special). Each entry includes ISO 4217 `decimalPlaces` (0, 2, or 3). Symbol override input. USD exchange rate input. Fetches/saves via `/admin/settings/currency` |
+| `AllowedCountriesBuilder.tsx` | Allowed countries multi-select with include/exclude mode. Uses `react-phone-number-input` for full country list with calling codes. RadioGroup for mode selection (only allow selected / allow all except selected). Searchable by name, code, or calling code. Badge chips for selected countries with remove buttons. Saves to `PUT /admin/settings/allowed-countries` |
 | `CheckoutSettingsPage.tsx` | Top-level tabbed container for checkout settings. 5 lazy-loaded tabs: Checkout Flow, Payment Gateways, Languages, Shipping Methods, Delivery Locations |
 | `ThemeSettingsPage.tsx` | Storefront theme color editor. 17 semantic color tokens with hex input + native color picker. 5 predefined palettes (Zinc, Ocean Blue, Eco Emerald, Rose Blush, Midnight Dark). Live preview panel with sticky sidebar showing product card, buttons, alert mockups |
-| `CurrencySettingsBuilder.tsx` | Currency selector (43 currencies), symbol override, USD exchange rate input. Fetches/saves via `/admin/settings/currency` |
 | `AuthSettingsBuilder.tsx` | Account verification method selector (email/phone/both/sms_otp). Conditional WhatsApp Cloud API config (access token, phone number ID, template name). Masks configured tokens |
 | `CheckoutFlowSettings.tsx` | Guest checkout toggle, checkout mode selector (all/guest_cod_only/gateways_only), partial payment toggle + amount input. Reads/writes via `/admin/settings/auth` endpoint |
 | `PaymentMethodSettings.tsx` | Toggle Stripe/SSLCommerz/COD with gateway configuration status badges. Default method selector. Shows "No Credentials" warning for unconfigured gateways |
@@ -21,6 +21,25 @@ Settings UI split across three tab-based pages: General Settings, Checkout Setti
 | `PolarSettingsForm.tsx` | Polar access token, webhook secret, product ID, sandbox toggle. Includes PolarSetupGuide dialog |
 | `EmailSettingsForm.tsx` | Resend API key (masked) + sender email. Lazy-loaded from GeneralSettingsPage |
 | `FirebaseSettingsForm.tsx` | (loaded via integrations tab) Firebase service account JSON + public config |
+
+## CurrencySettingsBuilder Details
+
+The currency picker contains 160+ currencies organized by geographic region:
+- Each `CurrencyEntry` has `{ code, symbol, name, decimalPlaces }`
+- Searchable by code, name, or symbol via a filtered list
+- Selecting a currency auto-fills the symbol field
+- Shows decimal places count next to the selected currency badge
+- The `decimalPlaces` value controls price formatting precision throughout the system (via `getDecimalPlaces()` in `@scalius/shared/currency`)
+- Zero-decimal currencies: JPY, KRW, VND, CLP, ISK, etc.
+- Three-decimal currencies: KWD, BHD, OMR, JOD, IQD, LYD, TND
+
+## AllowedCountriesBuilder Details
+
+- Uses `getCountries()` and `getCountryCallingCode()` from `react-phone-number-input`
+- Mode toggle: "Only allow selected countries" (include) vs "Allow all except selected countries" (exclude)
+- Empty selection means no restrictions -- all countries accepted
+- Saves as `{ allowedCountries: string[], mode: "include" | "exclude" }` to `PUT /admin/settings/allowed-countries`
+- Backward-compatible read: handles old format (plain array) and new format with mode
 
 ## Lazy Loading Pattern
 
@@ -42,19 +61,19 @@ This pattern appears in every `fetch` response handler because dev mode (Vite pr
 
 ## API Endpoints Used
 
-| Component | GET | POST |
+| Component | GET | POST/PUT |
 |-----------|-----|------|
-| CurrencySettingsBuilder | `/admin/settings/currency` | `/admin/settings/currency` |
-| AuthSettingsBuilder | `/admin/settings/auth` | `/admin/settings/auth` |
-| CheckoutFlowSettings | `/admin/settings/auth` | `/admin/settings/auth` |
-| ThemeSettingsPage | `/admin/settings/theme` | `/admin/settings/theme` |
-| PaymentMethodSettings | `/admin/settings/payment-methods` | `/admin/settings/payment-methods` |
-| PaymentGatewaysManager | `/admin/settings/payment-methods`, `/admin/settings/{gw}` | `/admin/settings/payment-methods`, `/admin/settings/{gw}` |
-| AllowedCountriesBuilder | `/admin/settings/site` | `/admin/settings/site` (PUT) |
+| CurrencySettingsBuilder | `/admin/settings/currency` | `POST /admin/settings/currency` |
+| AllowedCountriesBuilder | `/admin/settings/allowed-countries` | `PUT /admin/settings/allowed-countries` |
+| AuthSettingsBuilder | `/admin/settings/auth` | `POST /admin/settings/auth` |
+| CheckoutFlowSettings | `/admin/settings/auth` | `POST /admin/settings/auth` |
+| ThemeSettingsPage | `/admin/settings/theme` | `POST /admin/settings/theme` |
+| PaymentMethodSettings | `/admin/settings/payment-methods` | `POST /admin/settings/payment-methods` |
+| PaymentGatewaysManager | `/admin/settings/payment-methods`, `/admin/settings/{gw}` | `POST /admin/settings/payment-methods`, `POST /admin/settings/{gw}` |
 
 ## Dependencies
 
-- shadcn/ui components (Card, Tabs, Input, Select, Switch, Button, Badge, Alert, Accordion, Dialog)
+- shadcn/ui components (Card, Tabs, Input, Select, Switch, Button, Badge, Alert, Accordion, Dialog, RadioGroup)
 - `sonner` for toast notifications
 - `lucide-react` for icons
 - `react-phone-number-input` -- country list, calling codes, locale labels (used by AllowedCountriesBuilder)

@@ -57,6 +57,7 @@ Response parsing: all API helpers unwrap `json.data` if present and is a non-arr
 - `handleCredentialChange()` and `handleConfigChange()` parse, mutate, re-stringify
 - Type change resets credentials and config to `DEFAULT_CREDENTIALS[type]` / `DEFAULT_CONFIG[type]`
 - New provider ID generated via `crypto.randomUUID()`
+- Server-side: credentials are encrypted with AES-GCM if `CREDENTIAL_ENCRYPTION_KEY` is available. API responses mask sensitive fields (`clientSecret`, `password`, `apiKey`, `secretKey`) with `"xxxxxxxxxxxx"`.
 
 ### Default Credentials
 
@@ -93,7 +94,6 @@ Icon sizes: `sm` (14px), `md` (20px), `lg` (28px)
 
 ## Known Gaps
 
-- No delivery locations Astro page exists -- the `DeliveryLocationsContainer` component is referenced in integration guide links (`/admin/settings/delivery-locations`) but that page is not implemented as a standalone route
 - Credential fields use HTML `type="password"` but the API returns masked values (`"xxxxxxxxxxxx"`) -- the API route's `unmaskedCredentials()` function handles preserving real credentials when masked values are sent back
 - No validation that the credential fields are non-empty before save (only checks `formData.name`)
 - Config fields are not validated (e.g. storeId could be empty for Pathao)

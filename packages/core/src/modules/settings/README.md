@@ -1,6 +1,6 @@
 # Settings
 
-Central store configuration: site settings (singleton row), key-value settings, storefront URL, and currency.
+Central store configuration: site settings (singleton row), key-value settings, storefront URL, currency, and allowed countries.
 
 ## Files
 
@@ -13,9 +13,36 @@ Central store configuration: site settings (singleton row), key-value settings, 
 |----------|-------------|
 | `getStorefrontPath(db, path, kv?)` | Builds a full storefront URL by fetching the base URL from DB, delegates to `@scalius/shared/storefront-url.buildStorefrontPath()` |
 | `getStorefrontBaseUrl(db, kv?)` | Returns the storefront base URL from `siteSettings.storefrontUrl`. Falls back to `"/"`. KV-cached at `gw:storefront_url` (300s TTL) |
-| `getCurrencyConfig(db, kv?)` | Returns `{ code, symbol, usdExchangeRate, decimalPlaces }` from the `settings` table (`category = "currency"`). `decimalPlaces` is derived from ISO 4217 via `getDecimalPlaces()` from `@scalius/shared/currency`. Defaults to `BDT / ৳ / 1 / 2`. KV-cached at `gw:currency` (300s TTL) |
+| `getCurrencyConfig(db, kv?)` | Returns `CurrencyConfig { code, symbol, usdExchangeRate, decimalPlaces }` from the `settings` table (`category = "currency"`). `decimalPlaces` is derived from ISO 4217 via `getDecimalPlaces()` from `@scalius/shared/currency`. Defaults to `BDT / ৳ / 1 / 2`. KV-cached at `gw:currency` (300s TTL) |
 | `getSiteSettings(db, kv?)` | Returns the full `siteSettings` singleton row (headerConfig, footerConfig, storefrontUrl, etc.). KV-cached at `gw:site_settings` (300s TTL) |
 | `invalidateSiteSettingsCache(kv?)` | Deletes the `gw:site_settings` KV key. Called by admin settings routes after any update to the siteSettings table |
+
+## CurrencyConfig Type
+
+```typescript
+interface CurrencyConfig {
+    code: string;          // ISO 4217 code (e.g. "BDT", "USD", "JPY")
+    symbol: string;        // Display symbol (e.g. "৳", "$", "¥")
+    usdExchangeRate: number; // How many units equal 1 USD
+    decimalPlaces: number; // ISO 4217 decimal places (0, 2, or 3)
+}
+```
+
+`decimalPlaces` is computed from the currency code by `getDecimalPlaces()` in `@scalius/shared/currency`, which uses an ISO 4217 lookup table. Most currencies use 2, zero-decimal currencies (JPY, KRW, VND, etc.) use 0, and 3-decimal currencies (KWD, BHD, OMR, etc.) use 3.
+
+## Currency Formatting Stack
+
+```
+@scalius/shared/currency.ts              -- formatPrice(), formatPriceShort(), getDecimalPlaces(), getCurrencySymbol(), getCurrencyCode()
+@scalius/shared/price-utils.ts           -- roundPrice(), addPrices(), subtractPrice(), calculatePercentageDiscount()
+@scalius/core/modules/settings           -- getCurrencyConfig() (DB + KV cache)
+apps/admin/src/hooks/useCurrency.ts      -- React hook that fetches config and delegates to shared formatPrice()
+```
+
+- `currency.js` library powers all price formatting with precision arithmetic
+- `formatPrice(price, opts?)` reads symbol/code from window globals (storefront) or passed options (admin). Uses `getDecimalPlaces()` to determine precision per currency code
+- `formatPriceShort()` strips trailing zeros for whole numbers
+- `useCurrency()` hook in admin fetches from API, caches in localStorage, delegates to `formatPrice()` from `@scalius/shared/currency`
 
 ## Data Model
 
@@ -23,7 +50,7 @@ Central store configuration: site settings (singleton row), key-value settings, 
 Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, whatsapp OTP fields.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (resend_api_key, email_sender), `firebase` (service_account, public_config), `integrations` (openrouter_api_key), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (resend_api_key, email_sender), `firebase` (service_account, public_config), `integrations` (openrouter_api_key), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
 ## API Endpoints (Admin)
 
@@ -43,6 +70,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/seo` | Save SEO fields on siteSettings singleton |
 | GET | `/storefront-url` | Get storefrontUrl from siteSettings |
 | POST | `/storefront-url` | Save storefrontUrl. Invalidates layout cache + site settings KV |
+| GET | `/allowed-countries` | Get allowed countries list and mode (include/exclude). Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |
+| PUT | `/allowed-countries` | Save allowed countries with mode. Stores as JSON `{ countries: string[], mode: "include" | "exclude" }` in settings table (category=phone, key=allowed_countries) |
 
 ### `system.ts` -- System integrations & auth
 | Method | Path | Description |
@@ -61,10 +90,6 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 |--------|------|-------------|
 | GET | `/openrouter` | Get OpenRouter API key status (masked) |
 | POST | `/openrouter` | Save OpenRouter API key |
-| GET | `/email` | Get email settings (duplicate of system.ts, same logic) |
-| POST | `/email` | Save email settings (duplicate of system.ts) |
-| GET | `/firebase` | Get Firebase settings (duplicate of system.ts, same logic) |
-| POST | `/firebase` | Save Firebase settings (duplicate of system.ts) |
 
 ### `payments.ts` -- Payment gateway settings
 | Method | Path | Description |
@@ -87,16 +112,23 @@ List, create, update, soft-delete, bulk-delete, delete-all, Pathao location impo
 ### `delivery-providers.ts` -- Delivery provider management
 List, create, update, test connection, delete. Masks sensitive credential fields.
 
+## Checkout Config (Storefront)
+
+The storefront checkout endpoint returns:
+- `allowedCountries: string[]` -- country codes for phone validation
+- `allowedCountriesMode: "include" | "exclude"` -- whether the list is allowlist or blocklist
+- `currency.decimalPlaces: number` -- ISO 4217 decimal places for the configured currency
+
 ## Dependencies
 
 - `@scalius/database` -- `siteSettings`, `settings` tables
 - `@scalius/shared/storefront-url` -- URL path builder
+- `@scalius/shared/currency` -- `getDecimalPlaces()` for ISO 4217 lookup
 - `@scalius/shared/layout-cache` -- in-memory layout cache
 - `@scalius/core/modules/payments/gateway-settings` -- `upsertSetting()`, gateway-specific getters/invalidators
 - Cloudflare KV -- optional caching layer (300s TTL for currency, storefront URL, site settings)
 
 ## Known Gaps
 
-- `integrations.ts` duplicates the email and Firebase routes from `system.ts` (both files define GET/POST `/email` and GET/POST `/firebase`). The route that wins depends on mount order in the app.
 - Hero slider admin route (`hero-sliders.ts`) imports `db` directly from `@scalius/database/client` instead of using `c.get("db")` from the Hono context.
 - No validation that currencyCode is a valid ISO 4217 code on save.

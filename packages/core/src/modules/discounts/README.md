@@ -16,8 +16,8 @@ Three types defined in `@scalius/database/schema/enums.ts`:
 
 | Value Type | Enum Value | Description |
 |------------|-----------|-------------|
-| Percentage | `percentage` | Percentage off (e.g., 15% off) |
-| Fixed Amount | `fixed_amount` | Fixed currency amount off (e.g., 500 BDT off) |
+| Percentage | `percentage` | Percentage off (e.g., 15% off). Capped at 100% via schema validation. |
+| Fixed Amount | `fixed_amount` | Fixed currency amount off (dynamic symbol from store settings) |
 | Free | `free` | Used exclusively by `free_shipping` type (value field is ignored) |
 
 ## Schema
@@ -48,8 +48,8 @@ All methods accept a `db: Database` instance (no module-level singleton).
 
 `discounts.schema.ts` defines Zod schemas:
 
-- **`createDiscountSchema`** -- Validates all discount fields. Date handling is flexible: accepts Date, string, or unix timestamp (auto-detects seconds vs milliseconds). `appliesToProducts` and `appliesToCollections` are optional string arrays.
-- **`updateDiscountSchema`** -- Extends create schema with required `id` field.
+- **`createDiscountSchema`** -- Validates all discount fields. Date handling is flexible: accepts Date, string, or unix timestamp (auto-detects seconds vs milliseconds). `appliesToProducts` and `appliesToCollections` are optional string arrays. Includes a refine check: percentage discounts cannot exceed 100%.
+- **`updateDiscountSchema`** -- Extends create schema with required `id` field. Same percentage cap validation.
 
 ## FTS5 Search
 
@@ -102,11 +102,11 @@ Discount usage is NOT recorded by this service. It happens in two places:
 |------|-------------|
 | `index.ts` | Barrel exports for schema and service |
 | `discounts.service.ts` | `DiscountService` object with all CRUD methods |
-| `discounts.schema.ts` | Zod validation schemas (createDiscountSchema, updateDiscountSchema) |
+| `discounts.schema.ts` | Zod validation schemas (createDiscountSchema, updateDiscountSchema) with percentage cap refine |
 
 ## Dependencies
 
-- `@scalius/database` -- `discounts`, `discountProducts`, `discountCollections`, `discountUsage` tables, `DiscountType` enum
+- `@scalius/database` -- `discounts`, `discountProducts`, `discountCollections`, `discountUsage` tables, `DiscountType`, `DiscountValueType` enums
 - `@scalius/core/search` -- `ftsMatch()` for FTS5 code search
 - `@scalius/core/errors` -- `NotFoundError`, `ConflictError`
 - `nanoid` -- ID generation with prefixes (`disc_`, `dp_`, `dc_`)
@@ -114,9 +114,6 @@ Discount usage is NOT recorded by this service. It happens in two places:
 ## Known Gaps
 
 1. **`POST /discounts/usage` endpoint missing**: The storefront's `recordDiscountUsage()` calls this endpoint, but it does not exist in `apps/api/src/routes/discounts.ts`. Usage recording works via the queue path only.
-2. **`POST /admin/discounts/{id}/toggle-status` endpoint missing**: The admin UI calls this to activate/deactivate discounts inline, but no such route exists in `apps/api/src/routes/admin/discounts.ts`. The call will 404.
-3. **Combination flags not enforced**: combineWith* flags are stored and returned but never checked. Only one discount code per order is supported.
-4. **`applicationType` always `"get"`**: The `discountProducts` and `discountCollections` tables have an `applicationType` enum with only `"get"`. The service always writes `"get"`. The list method casts to `'buy' | 'get'` and initializes both buckets, but `"buy"` is never written. This is a vestige of planned buy-X-get-Y support.
-5. **`customerSegment` field unused**: The schema has a `customerSegment` text field. It's stored and passed through but never checked during validation or filtering.
-6. **Marketing module is a dead duplicate**: `packages/core/src/modules/marketing/discounts.service.ts` contains a full duplicate `getDiscounts()` function that imports `db` as a module-level singleton (not dependency-injected). The `marketing/index.ts` re-exports from `../discounts`, so the dead service file is never imported. Should be deleted.
-7. **Collection search URL bug**: `CollectionSelector.tsx` searches via `/api/collections?search=...` (missing `/v1/admin` prefix). Initial load correctly uses `/api/v1/admin/collections`.
+2. **Combination flags not enforced**: combineWith* flags are stored and returned but never checked. Only one discount code per order is supported.
+3. **`applicationType` always `"get"`**: The `discountProducts` and `discountCollections` tables have an `applicationType` enum with only `"get"`. The service always writes `"get"`. The list method casts to `'buy' | 'get'` and initializes both buckets, but `"buy"` is never written. This is a vestige of planned buy-X-get-Y support.
+4. **`customerSegment` field unused**: The schema has a `customerSegment` text field. It's stored and passed through but never checked during validation or filtering.

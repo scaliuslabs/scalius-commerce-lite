@@ -10,7 +10,7 @@ Admin account management UI: profile editing, password change, 2FA setup, team m
 | `AccountSettingsContainer.tsx` | Main container with tabbed UI: Security, Password, Team, Roles (conditional on `team.manage_roles` permission) |
 | `ProfileHeader.tsx` | User avatar (via MediaManager) + name editing + profile save. Calls `POST /api/v1/admin/auth/update-profile`. |
 | `ChangePasswordForm.tsx` | Current/new/confirm password form with strength meter. Calls `POST /api/v1/admin/auth/change-password`. Enforces 12-char minimum client-side. |
-| `TwoFactorSetup.tsx` | Full 2FA lifecycle: enable (TOTP or email), verify, backup codes, change method, disable. Uses `authClient.twoFactor.*` + custom API endpoints. |
+| `TwoFactorSetup.tsx` | Full 2FA lifecycle: enable (TOTP or email), verify, backup codes, change method, disable. Uses `authClient.twoFactor.*` + custom API endpoints. QR codes generated locally via `qrcode` library (no external API calls). |
 | `AdminUsersManager.tsx` | Team member list with add/delete. Shows 2FA status badges, role badges, super admin badge. Permissions button opens `UserPermissionEditor`. |
 | `hooks/useAdminUsers.ts` | Data hook: fetches admin users (`GET /api/v1/admin/auth/users`) and roles (`GET /api/v1/admin/rbac/roles`), provides `addUser`/`deleteUser` actions. |
 
@@ -53,7 +53,7 @@ Super admin always returns `true` for all permission checks.
 1. User selects method (TOTP authenticator app or email OTP)
 2. User confirms with current password
 3. `authClient.twoFactor.enable({ password })` -- returns `totpURI` + backup codes
-4. For TOTP: shows QR code (via external `api.qrserver.com`), user scans and enters 6-digit code
+4. For TOTP: shows QR code generated locally via `qrcode` library (`QRCode.toDataURL()`), user scans and enters 6-digit code
 5. For email: `authClient.twoFactor.sendOtp()`, user enters emailed code
 6. Verification: `authClient.twoFactor.verifyTotp({ code })` or `authClient.twoFactor.verifyOtp({ code })`
 7. On success: calls `POST /api/v1/admin/auth/2fa/method` to save method preference, then `POST /api/v1/admin/auth/2fa/mark-verified` to mark session
@@ -99,12 +99,10 @@ When a user with 2FA enabled logs in, Better Auth's `twoFactorClient` redirects 
 
 1. **2FA is not enforced as mandatory.** The `TwoFactorSetup` component shows "2FA Required" UI text and an amber warning when disabled, but no middleware prevents admin access without 2FA. The `/auth/setup-2fa` page exists but is never redirected to by middleware. Users can dismiss the warning and use the admin dashboard with only a password.
 
-2. **QR code generation uses external service.** TOTP QR codes are generated via `https://api.qrserver.com/v1/create-qr-code/`. This leaks the TOTP secret URI to a third-party service. Should use a client-side QR library instead.
+2. **Response envelope handling inconsistency.** `useAdminUsers` manually unwraps `json.data` with a heuristic (`json.data && typeof json.data === "object" && !Array.isArray(json.data)`). `RolesManagement` accesses `data.roles` directly without unwrapping in some cases and with unwrapping in others. This is fragile -- depends on whether the request goes through the admin proxy (which unwraps) or the Vite dev proxy (which does not).
 
-3. **Response envelope handling inconsistency.** `useAdminUsers` manually unwraps `json.data` with a heuristic (`json.data && typeof json.data === "object" && !Array.isArray(json.data)`). `RolesManagement` accesses `data.roles` directly without unwrapping in some cases and with unwrapping in others. This is fragile -- depends on whether the request goes through the admin proxy (which unwraps) or the Vite dev proxy (which does not).
+3. **No password change confirmation email.** When a user changes their password, no notification email is sent. The `revokeOtherSessions: true` flag is set though, which invalidates other active sessions.
 
-4. **No password change confirmation email.** When a user changes their password, no notification email is sent. The `revokeOtherSessions: true` flag is set though, which invalidates other active sessions.
+4. **Admin invite fallback logs password.** If email delivery fails when creating a new admin user, the temp password is logged to `console.log` with the message `IMPORTANT: Temp password for {email}: {password}`. This is a security risk in production.
 
-5. **Admin invite fallback logs password.** If email delivery fails when creating a new admin user, the temp password is logged to `console.log` with the message `IMPORTANT: Temp password for {email}: {password}`. This is a security risk in production.
-
-6. **Delete protection is role-check only.** The delete endpoint checks `userToDelete.role !== "admin"` but does not prevent deleting super admins specifically. The UI hides the delete button for super admins, but the API does not enforce it.
+5. **Delete protection is role-check only.** The delete endpoint checks `userToDelete.role !== "admin"` but does not prevent deleting super admins specifically. The UI hides the delete button for super admins, but the API does not enforce it.

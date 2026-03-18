@@ -7,17 +7,19 @@ React component suite for creating and editing products in the admin dashboard. 
 - Two-column responsive layout: main content (title, description, images) left, settings (status, organization, pricing, SEO, attributes) right
 - Sticky header with breadcrumb navigation, unsaved changes indicator, save/discard/new-product actions
 - TipTap rich text editor for product description (lazy-loaded via `React.lazy`)
-- Additional info sections: arbitrary titled rich content blocks with drag-and-drop reordering (dnd-kit), add/remove/collapse
+- Additional info sections: arbitrary titled rich content blocks with drag-and-drop reordering (dnd-kit), add/remove/collapse. Items use `{id, title, content, sortOrder}` shape matching the API and database schema.
 - Product images via MediaManager with drag-and-drop reordering (DraggableImageGallery), duplicate detection
 - Variant-specific image mapping: optional toggle that maps images to variant colors by position order, stored as HTML comment `<!--variant_images:enabled-->` in metaDescription
 - Auto-slug generation from product name (new products only, stops when user edits slug manually)
 - Category combobox with inline category creation (POST to /api/v1/admin/categories)
-- Discount support: percentage or flat amount, with automatic clearing of the unused discount field on type switch
+- Discount support: percentage (capped 0-100) or flat amount, with automatic clearing of the unused discount field on type switch
 - SEO section with meta title/description fields and character counters (recommended 60/160, max 70/200)
 - Product attributes: searchable combobox for adding global attributes, inline value selector with pagination and search, inline attribute creation
 - Form submission via fetch to `/api/v1/admin/products` (POST for create, PUT for update), with server-side validation error mapping back to form fields
 - Post-create redirect to edit page with `?new=true` query param
 - Variant manager (edit mode only): full CRUD, bulk create/delete/update, import/export, duplicate, sort order modal, stats display, inline editing, bulk edit mode
+- All catch blocks typed with `: unknown`
+- Form `defaultValues` accepts `attributes` (`{attributeId, value}[]`) and `additionalInfo` (`{id, title, content}[]`) passed through from the loader without remapping
 
 ## Data Flow
 
@@ -25,13 +27,14 @@ React component suite for creating and editing products in the admin dashboard. 
 ProductForm.tsx
   |-- useForm<ProductFormValues> (react-hook-form + zodResolver)
   |-- useProductSubmit hook
-  |     |--> formatFormValuesForSubmission() -- cleans discount fields, adds variant images marker, serializes dates
+  |     |--> formatFormValuesForSubmission() -- cleans discount fields, adds variant images marker, serializes dates, adds sortOrder from array index
   |     |--> fetch(POST|PUT /api/v1/admin/products[/:id])
   |     |--> On success: toast + redirect (create) or reset form dirty state (edit)
   |     |--> On slug conflict: setError on slug field + alert dialog
   |
   |-- useProductVariants hook (edit mode)
   |     |--> fetch(GET /api/v1/admin/products/:id/variants)
+  |     |--> Unwraps response envelope: checks json.data if present
   |     |--> Extracts unique color options for image mapping
   |     |--> Refreshes on "variantChanged" CustomEvent
   |
@@ -39,6 +42,18 @@ ProductForm.tsx
         |--> useVariantOperations hook -- all variant API calls
         |--> Local state management with optimistic updates + rollback on failure
         |--> Dispatches "variantChanged" CustomEvent on mutations
+
+Admin Loader (loaders/admin/products.ts)
+  |-- getProductEditData(id)
+  |     |--> apiGet(/products/:id) -> ProductDetail
+  |     |--> Maps images: altText -> filename
+  |     |--> Passes attributes and additionalInfo through as-is from API response
+  |     |--> Filters out soft-deleted variants client-side
+  |
+  |-- getProductViewData(id)
+        |--> apiGet(/products/:id) -> ProductDetail
+        |--> Maps images: altText -> alt
+        |--> Passes additionalInfo through as-is from API response
 ```
 
 ## Files
@@ -48,8 +63,8 @@ ProductForm.tsx
 | File | Description |
 |------|-------------|
 | `index.ts` | Barrel exports for all components, hooks, types, and utils |
-| `types.ts` | `productFormSchema` (Zod), `ProductFormValues` type, `Category` and `ProductImage` interfaces |
-| `utils.ts` | `extractUniqueColors`, `cleanMetaDescription`, `hasVariantImagesEnabled`, `addVariantImagesMarker`, `formatFormValuesForSubmission`, `generateSlug` |
+| `types.ts` | `productFormSchema` (Zod), `ProductFormValues` type, `Category` and `ProductImage` interfaces. Schema includes `attributes` (`{attributeId, value}[]`) and `additionalInfo` (`{id, title, content}[]`). Discount percentage capped at 0-100. |
+| `utils.ts` | `extractUniqueColors`, `cleanMetaDescription`, `hasVariantImagesEnabled`, `addVariantImagesMarker`, `formatFormValuesForSubmission` (cleans discount fields based on type, adds sortOrder to additionalInfo from array index), `generateSlug` |
 
 ### Section Components
 
@@ -86,8 +101,8 @@ ProductForm.tsx
 
 | File | Description |
 |------|-------------|
-| `hooks/useProductSubmit.ts` | Form submission logic: formats values, POSTs/PUTs to API, handles slug conflicts, Zod errors, redirects |
-| `hooks/useProductVariants.ts` | Fetches variants for edit mode, extracts unique colors for image mapping, refreshes on variantChanged event |
+| `hooks/useProductSubmit.ts` | Form submission logic: formats values, POSTs/PUTs to API, handles slug conflicts, Zod errors, redirects. Catch blocks typed `: unknown`. |
+| `hooks/useProductVariants.ts` | Fetches variants for edit mode, unwraps response envelope (`json.data`), extracts unique colors for image mapping, refreshes on variantChanged event. Catch blocks typed `: unknown`. |
 
 ### Variants Subsystem
 
@@ -120,15 +135,15 @@ ProductForm.tsx
 
 ## Known Gaps
 
-1. **`additionalInfo` missing `sortOrder` in form schema**: The `productFormSchema` in `types.ts:62-67` defines additionalInfo items with `id`, `title`, `content` but no `sortOrder`. The `formatFormValuesForSubmission` util adds `sortOrder` from array index at submit time (`utils.ts:94`). If items are reordered via drag-and-drop, the sortOrder is derived from position, which is correct -- but the schema doesn't validate it.
+1. **`additionalInfo` missing `sortOrder` in form schema**: The `productFormSchema` in `types.ts` defines additionalInfo items with `id`, `title`, `content` but no `sortOrder`. The `formatFormValuesForSubmission` util adds `sortOrder` from array index at submit time (`utils.ts:94`). If items are reordered via drag-and-drop, the sortOrder is derived from position, which is correct -- but the schema doesn't validate it.
 
 2. **`BasicInfoSection` and `PricingAvailabilitySection` are exported but unused**: These components are listed in `index.ts` but the current `ProductForm.tsx` uses `TitleDescriptionSection`, `PricingCard`, `StatusCard`, and `OrganizationCard` instead. They appear to be legacy components from a previous layout.
 
-3. **Variant images marker in metaDescription**: The feature flag for variant-specific images is stored by appending `<!--variant_images:enabled-->` to the product's `metaDescription` field (`utils.ts:47-54`). This means the SEO field carries non-SEO data. Both admin (`cleanMetaDescription` in `utils.ts:26-33`) and storefront (`[slug].astro:28-32`) must strip this marker before displaying.
+3. **Variant images marker in metaDescription**: The feature flag for variant-specific images is stored by appending `<!--variant_images:enabled-->` to the product's `metaDescription` field. This means the SEO field carries non-SEO data. Both admin (`cleanMetaDescription`) and storefront must strip this marker before displaying.
 
-4. **Admin form submits directly to `/api/v1/admin/products`**: The `useProductSubmit` hook (`hooks/useProductSubmit.ts:37`) constructs the API URL as `/api/v1/admin/products/${values.id}`. In dev mode this goes through Vite proxy; in production it goes through the admin worker proxy which unwraps the response envelope. The hook checks `response.ok` but parses the response body without accounting for the `{ success, data }` envelope difference between dev and prod.
+4. **Admin form submits directly to `/api/v1/admin/products`**: The `useProductSubmit` hook constructs the API URL as `/api/v1/admin/products/${values.id}`. In dev mode this goes through Vite proxy; in production it goes through the admin worker proxy which unwraps the response envelope. The hook checks `response.ok` but parses the response body without accounting for the `{ success, data }` envelope difference between dev and prod.
 
-5. **Attribute value creation fires-and-forgets**: `AttributeManager.tsx:411-416` -- when creating a new attribute value, the `POST /api/v1/admin/attributes/:id/values` call has an empty catch block. If the API call fails, the value is still set locally in the form but won't persist as a preset option.
+5. **Attribute value creation fires-and-forgets**: In `AttributeManager.tsx`, when creating a new attribute value, the POST call to the attributes API has an empty catch block. If the API call fails, the value is still set locally in the form but won't persist as a preset option.
 
 ## Dependencies
 
