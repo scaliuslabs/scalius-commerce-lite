@@ -80,7 +80,7 @@ Table `categories` in `packages/database/src/schema/products.ts`:
 | `deleteCategory()` | `(db, id)` | Soft-delete, rejects if products assigned |
 | `bulkDeleteCategories()` | `(db, categoryIds, permanent?)` | Soft or permanent; permanent cleans collection configs |
 | `restoreCategories()` | `(db, categoryIds)` | Sets `deletedAt = null` |
-| `permanentlyDeleteCategory()` | `(db, id)` | Hard delete, no guards (called from admin trash view) |
+| `permanentlyDeleteCategory()` | `(db, id)` | Hard delete, rejects if products assigned (throws `ConflictError`) |
 
 ## API Endpoints
 
@@ -142,4 +142,3 @@ The form component is at `apps/admin/src/components/admin/CategoryForm.tsx`:
 - **Loader fetches all categories for edit**: `getCategoryEditData()` in `apps/admin/src/loaders/admin/catalog.ts` fetches up to 999 categories to find one by ID, instead of using `getCategoryById()` directly
 - **No dedicated trash page**: Categories trash view reuses the index page with `?trashed=true` query param (collections has a separate `/trash` page)
 - **Public routes use singleton `db`**: The public category routes in `apps/api/src/routes/categories.ts` import `db` directly from `@scalius/database/client` instead of using `c.get("db")` from context
-- **`permanentlyDeleteCategory()` has no product guard**: Unlike `deleteCategory()` and `bulkDeleteCategories()`, the single permanent-delete has no check for assigned products

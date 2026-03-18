@@ -372,7 +372,12 @@ export async function restoreCategories(db: Database, categoryIds: string[]): Pr
 
 /**
  * Permanently deletes a single category.
+ * Throws ConflictError if products still reference this category.
  */
 export async function permanentlyDeleteCategory(db: Database, id: string): Promise<void> {
+    const productCount = await db.select({ count: sql<number>`count(*)` }).from(products).where(eq(products.categoryId, id)).get();
+    if (productCount && productCount.count > 0) {
+        throw new ConflictError(`Cannot permanently delete: ${productCount.count} products still use this category`);
+    }
     await db.delete(categories).where(eq(categories.id, id));
 }

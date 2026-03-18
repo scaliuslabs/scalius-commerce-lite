@@ -127,5 +127,4 @@ This accounts for the admin proxy unwrapping `{ success, data }` to `{ success, 
 ## Known Gaps
 
 - **No SSR data loading**: Unlike the categories list (which uses a loader for SSR initial data), `CollectionsList` fetches all data client-side on mount -- causes a loading spinner flash
-- **Preview link points to homepage**: The "Preview" button links to `/?preview=collection&id={id}`, which requires the storefront homepage to support a preview query param (not verified)
 - **Search not debounced in hook**: Debouncing is done at the `CollectionsList` level via `useDebounce(searchQuery, 300)`, but `useCollections` refetches on every change of the debounced value (correct behavior, just noting the debounce lives outside the hook)

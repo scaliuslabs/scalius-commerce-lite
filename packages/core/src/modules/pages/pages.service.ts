@@ -84,7 +84,7 @@ export async function listPages(
 }
 
 export async function getPageById(db: Database, id: string) {
-    return db.select().from(pages).where(eq(pages.id, id)).get() ?? null;
+    return db.select().from(pages).where(and(eq(pages.id, id), isNull(pages.deletedAt))).get() ?? null;
 }
 
 export async function getPageBySlug(db: Database, slug: string) {
