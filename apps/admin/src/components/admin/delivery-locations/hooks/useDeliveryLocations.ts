@@ -118,7 +118,7 @@ export function useDeliveryLocations() {
         );
         if (!res.ok) return;
         const json = await res.json();
-        const data = json.data || json;
+        const data = unwrapEnvelope(json);
         if (data.status === "importing") {
           setImportProgress(data);
           setImporting(true);
@@ -199,7 +199,7 @@ export function useDeliveryLocations() {
           throw new Error(errJson.error || "Import request failed");
         }
         const json = await res.json();
-        const data: PathaoImportProgress = json.data || json;
+        const data: PathaoImportProgress = unwrapEnvelope(json);
         setImportProgress(data);
 
         if (data.status === "complete") {

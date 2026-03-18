@@ -257,8 +257,9 @@ export function useOrderListApi(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ providerId, options: {} }),
         });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || result.message);
+        const rawResult = await response.json();
+        if (!response.ok) throw new Error(rawResult.error || rawResult.message);
+        const result = unwrapEnvelope(rawResult);
 
         successCount++;
         setShipmentStatuses((prev) => ({ ...prev, [orderId]: result }));
@@ -360,7 +361,7 @@ export function useOrderListApi(
 
           if (!response.ok) throw new Error("Failed to refresh");
 
-          const updatedShipment = await response.json();
+          const updatedShipment = unwrapEnvelope(await response.json());
           successCount++;
           return { orderId: order.id, shipment: updatedShipment };
         } catch (error) {

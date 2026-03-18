@@ -38,7 +38,7 @@ export function initShipmentActions(): void {
       orderId = cleanOrderId(orderId);
 
       try {
-        const response = await fetch(`/api/orders/${orderId}/shipments`, {
+        const response = await fetch(`/api/v1/admin/orders/${orderId}/shipments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ providerId, options }),
@@ -86,7 +86,7 @@ export function initShipmentActions(): void {
         orderId = cleanOrderId(orderId);
 
         const response = await fetch(
-          `/api/orders/${orderId}/shipments/${shipmentId}/refresh`,
+          `/api/v1/admin/orders/${orderId}/shipments/${shipmentId}/refresh`,
           {
             method: "POST",
           }
@@ -125,7 +125,7 @@ export function initShipmentActions(): void {
 
     async deleteShipment(shipmentId) {
       try {
-        const response = await fetch(`/api/shipments/${shipmentId}`, {
+        const response = await fetch(`/api/v1/admin/shipments/${shipmentId}`, {
           method: "DELETE",
         });
 

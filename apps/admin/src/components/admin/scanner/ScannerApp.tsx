@@ -213,9 +213,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         );
       }
       const json = await res.json();
-      // Admin proxy unwraps envelope: { success, variant: {...}, product: {...} }
-      // Or raw API: { success, data: { variant, product } }
-      const raw = json.data ?? json;
+      const raw = unwrapEnvelope(json);
       const v = raw.variant;
       const p = raw.product;
       if (!v || !p) return null;
@@ -417,7 +415,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         }
 
         const json = await res.json();
-        const data = json.data ?? json;
+        const data = unwrapEnvelope(json);
         const newStock = data.stock ?? (isAbsolute ? adjustment : product.stock + adjustment);
         const oldStock = product.stock;
 
