@@ -1,4 +1,5 @@
 import { apiGet } from "@/lib/api-fetch";
+import type { Widget, WidgetListResponse } from "@/types/api-responses";
 
 // Placement rule values inlined from @scalius/database schema (avoids DB dependency)
 const WidgetPlacementRule = {
@@ -17,26 +18,21 @@ export async function getWidgetsListPageData(options: {
   if (options.search) params.search = options.search;
   if (options.showTrashed) params.trashed = "true";
 
-  // The API listWidgets endpoint returns { widgets, availableCollections }
-  // The old loader returned { widgets, collections, stats } with different
-  // field names and extra stats computation.
-  const result = await apiGet<any>("/widgets", params);
+  const result = await apiGet<WidgetListResponse>("/widgets", params);
 
-  // Map the API field names to what the admin pages expect
-  const widgets = (result.widgets || []).map((widget: any) => ({
+  const widgets = (result.widgets || []).map((widget) => ({
     ...widget,
     createdAt: widget.createdAt ? new Date(widget.createdAt).toISOString() : null,
     updatedAt: widget.updatedAt ? new Date(widget.updatedAt).toISOString() : null,
     deletedAt: widget.deletedAt ? new Date(widget.deletedAt).toISOString() : null,
   }));
 
-  const collections = result.availableCollections || result.collections || [];
+  const collections = result.availableCollections || [];
 
-  // Compute stats from the widget list if not provided by API
-  const statsResult = result.stats || {
+  const statsResult = {
     total: widgets.length,
-    active: widgets.filter((w: any) => w.isActive).length,
-    inactive: widgets.filter((w: any) => !w.isActive).length,
+    active: widgets.filter((w) => w.isActive).length,
+    inactive: widgets.filter((w) => !w.isActive).length,
   };
 
   return {
@@ -48,12 +44,12 @@ export async function getWidgetsListPageData(options: {
 
 export async function getWidgetFormPageData(id: string | undefined) {
   const isCreateMode = id === "create";
-  let widgetProp: any = null;
+  let widgetProp: (Widget & { createdAt: Date; updatedAt: Date; deletedAt: Date | null }) | null = null;
   let pageTitle = "Create New Widget";
   let submitButtonText = "Create Widget";
 
   if (!isCreateMode && id) {
-    const dbWidget = await apiGet<any>("/widgets/" + id).catch(() => null);
+    const dbWidget = await apiGet<Widget>("/widgets/" + id).catch(() => null);
 
     if (dbWidget) {
       pageTitle = `Edit Widget: ${dbWidget.name}`;
@@ -68,9 +64,8 @@ export async function getWidgetFormPageData(id: string | undefined) {
     }
   }
 
-  // Fetch collections from the widgets list endpoint
-  const listData = await apiGet<any>("/widgets");
-  const availableCollections = listData.availableCollections || listData.collections || [];
+  const listData = await apiGet<WidgetListResponse>("/widgets");
+  const availableCollections = listData.availableCollections || [];
 
   return {
     widget: widgetProp,

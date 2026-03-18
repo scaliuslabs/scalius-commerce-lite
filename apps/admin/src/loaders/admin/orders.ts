@@ -1,4 +1,15 @@
 import { apiGet } from "@/lib/api-fetch";
+import type {
+  Order,
+  PaginationResponse,
+  ProductListItem,
+  OrderDetail,
+  OrderFormData,
+  ProductDetail,
+  ProductVariant,
+  EnhancedShipment,
+  DeliveryProviderRecord,
+} from "@/types/api-responses";
 
 export async function getOrdersIndexData(options: {
   page: number;
@@ -19,11 +30,9 @@ export async function getOrdersIndexData(options: {
   if (options.status) params.status = options.status;
   if (options.showTrashed) params.trashed = "true";
 
-  const result = await apiGet<{ orders: any[]; pagination: any }>("/orders", params);
+  const result = await apiGet<{ orders: Order[]; pagination: PaginationResponse }>("/orders", params);
 
-  // The API already enriches orders with location names and timestamps.
-  // Convert timestamps to Date objects for admin pages.
-  const ordersWithDates = result.orders.map((order: any) => ({
+  const ordersWithDates = result.orders.map((order) => ({
     ...order,
     createdAt:
       order.createdAt instanceof Date
@@ -39,30 +48,24 @@ export async function getOrdersIndexData(options: {
 }
 
 export async function getOrderFormProducts() {
-  // Fetch all products with variants for the order form product picker.
-  // Uses the products list endpoint (high limit to get all) since there's
-  // no dedicated form-options endpoint for orders.
   try {
-    const result = await apiGet<{ products: any[]; pagination: any }>("/products", {
+    const result = await apiGet<{ products: ProductListItem[]; pagination: PaginationResponse }>("/products", {
       page: "1",
       limit: "999",
     });
 
-    // The order form expects products with { id, name, price, discountPercentage, variants[] }.
-    // The products list endpoint returns products with basic fields.
-    // Fetch each product's detail for variant data.
     const productsWithVariants = await Promise.all(
-      (result.products || []).map(async (product: any) => {
+      (result.products || []).map(async (product) => {
         try {
-          const detail = await apiGet<any>("/products/" + product.id);
+          const detail = await apiGet<ProductDetail>("/products/" + product.id);
           return {
             id: product.id,
             name: product.name,
             price: product.price,
             discountPercentage: product.discountPercentage ?? null,
             variants: (detail.variants || [])
-              .filter((v: any) => !v.deletedAt)
-              .map((v: any) => ({
+              .filter((v: ProductVariant) => !v.deletedAt)
+              .map((v: ProductVariant) => ({
                 id: v.id,
                 size: v.size,
                 color: v.color,
@@ -91,12 +94,9 @@ export async function getOrderFormProducts() {
 }
 
 export async function getOrderViewData(id: string) {
-  const result = await apiGet<any>("/orders/" + id).catch(() => null);
+  const result = await apiGet<OrderDetail>("/orders/" + id).catch(() => null);
   if (!result) return null;
 
-  // The API returns a flat object with all fields at top level.
-  // The page expects { order, items, totalAmount, cityName, zoneName, areaName }.
-  // Transform API shape back to what the page destructures.
   const {
     items,
     cityName,
@@ -119,7 +119,7 @@ export async function getOrderViewData(id: string) {
 }
 
 export async function getOrderEditData(id: string) {
-  const result = await apiGet<any>("/orders/" + id + "/form-data").catch(() => null);
+  const result = await apiGet<OrderFormData>("/orders/" + id + "/form-data").catch(() => null);
   if (!result) return null;
 
   return result;
@@ -127,9 +127,7 @@ export async function getOrderEditData(id: string) {
 
 export async function getOrderShipments(orderId: string) {
   try {
-    const result = await apiGet<any>("/orders/" + orderId + "/shipments");
-    // API returns ok(c, enhancedShipments) where enhancedShipments is an array.
-    // apiGet unwraps the envelope — result is the array directly.
+    const result = await apiGet<EnhancedShipment[]>("/orders/" + orderId + "/shipments");
     return Array.isArray(result) ? result : [];
   } catch {
     return [];
@@ -138,12 +136,9 @@ export async function getOrderShipments(orderId: string) {
 
 export async function getDeliveryProviders() {
   try {
-    const result = await apiGet<any>("/settings/delivery-providers");
-    // API returns ok(c, maskedProviders) — an array.
-    // apiGet unwraps the envelope — result is the array directly.
-    // Filter to active providers only (matches old getActiveProviders() behavior).
+    const result = await apiGet<DeliveryProviderRecord[]>("/settings/delivery-providers");
     const all = Array.isArray(result) ? result : [];
-    return all.filter((p: any) => p.isActive);
+    return all.filter((p) => p.isActive);
   } catch {
     return [];
   }

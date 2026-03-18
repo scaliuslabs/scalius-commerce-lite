@@ -1,4 +1,12 @@
 import { apiGet } from "@/lib/api-fetch";
+import type {
+  PaginationResponse,
+  ProductStats,
+  ProductListItem,
+  ProductDetail,
+  ProductVariant,
+  ProductImageDetail,
+} from "@/types/api-responses";
 
 export async function getActiveCategories() {
   const result = await apiGet<{ categories: Array<{ id: string; name: string }> }>(
@@ -28,12 +36,12 @@ export async function getProductsIndexData(options: {
 
   const [categoryOptions, productsResult, stats] = await Promise.all([
     getActiveCategories(),
-    apiGet<{ products: any[]; pagination: any }>("/products", params),
-    apiGet<any>("/products/stats"),
+    apiGet<{ products: ProductListItem[]; pagination: PaginationResponse }>("/products", params),
+    apiGet<ProductStats>("/products/stats"),
   ]);
 
   // The API returns products with timestamp values — convert to Date for admin pages
-  const formattedProducts = productsResult.products.map((product: any) => ({
+  const formattedProducts = productsResult.products.map((product) => ({
     ...product,
     createdAt: new Date(product.createdAt),
     updatedAt: new Date(product.updatedAt),
@@ -49,7 +57,7 @@ export async function getProductsIndexData(options: {
 
 export async function getProductEditData(id: string) {
   // GET /products/:id returns full product details
-  const product = await apiGet<any>("/products/" + id).catch(() => null);
+  const product = await apiGet<ProductDetail>("/products/" + id).catch(() => null);
   if (!product) return null;
 
   const allCategories = await getActiveCategories();
@@ -70,10 +78,10 @@ export async function getProductEditData(id: string) {
     discountAmount: product.discountAmount || 0,
     freeDelivery: product.freeDelivery,
     slugEdited: true,
-    images: (product.images || []).map((img: any) => ({
+    images: (product.images || []).map((img: ProductImageDetail) => ({
       id: img.id,
       url: img.url,
-      filename: img.alt || img.url.split("/").pop() || "",
+      filename: img.altText || img.url.split("/").pop() || "",
       size: 0,
       createdAt: new Date(img.createdAt),
     })),
@@ -82,8 +90,8 @@ export async function getProductEditData(id: string) {
   };
 
   const formattedVariants = (product.variants || [])
-    .filter((v: any) => !v.deletedAt)
-    .map((variant: any) => ({
+    .filter((v: ProductVariant) => !v.deletedAt)
+    .map((variant: ProductVariant) => ({
       id: variant.id,
       productId: variant.productId,
       size: variant.size,
@@ -126,7 +134,7 @@ export async function getProductEditData(id: string) {
 }
 
 export async function getProductViewData(id: string) {
-  const product = await apiGet<any>("/products/" + id).catch(() => null);
+  const product = await apiGet<ProductDetail>("/products/" + id).catch(() => null);
   if (!product) return null;
 
   return {
@@ -137,13 +145,13 @@ export async function getProductViewData(id: string) {
     category: {
       name: product.category?.name || "Uncategorized",
     },
-    variants: (product.variants || []).map((variant: any) => ({
+    variants: (product.variants || []).map((variant: ProductVariant) => ({
       ...variant,
       createdAt: new Date(variant.createdAt),
       updatedAt: new Date(variant.updatedAt),
       deletedAt: variant.deletedAt ? new Date(variant.deletedAt) : null,
     })),
-    images: (product.images || []).map((image: any) => ({
+    images: (product.images || []).map((image: ProductImageDetail) => ({
       ...image,
       createdAt: new Date(image.createdAt),
     })),
