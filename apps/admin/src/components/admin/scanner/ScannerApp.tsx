@@ -212,7 +212,24 @@ export function ScannerApp({ token }: ScannerAppProps) {
         );
       }
       const json = await res.json();
-      return (json.data ?? json) as ScannedProduct;
+      // Admin proxy unwraps envelope: { success, variant: {...}, product: {...} }
+      // Or raw API: { success, data: { variant, product } }
+      const raw = json.data ?? json;
+      const v = raw.variant;
+      const p = raw.product;
+      if (!v || !p) return null;
+      return {
+        productName: p.name,
+        variantId: v.id,
+        sku: v.sku ?? "",
+        barcode: v.barcode ?? "",
+        stock: v.stock ?? 0,
+        reserved: v.reservedStock ?? 0,
+        productImage: p.imageUrl ?? null,
+        size: v.size ?? null,
+        color: v.color ?? null,
+        weight: null,
+      } satisfies ScannedProduct;
     },
     [token],
   );
