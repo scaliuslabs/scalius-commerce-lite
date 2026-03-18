@@ -27,8 +27,7 @@ import {
   SESSION_TTL_SECONDS
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
-import { customers, orders, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
 import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
 
@@ -361,125 +360,32 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
     throw new UnauthorizedError("Session expired. Please log in again.");
   }
 
-  const db = c.get("db");
-
-  // Fetch full customer profile from DB
-  let customerProfile: {
-    id?: string;
-    name: string;
-    email: string;
-    phone?: string;
-    address?: string | null;
-    cityName?: string | null;
-    zoneName?: string | null;
-    city?: string | null;
-    zone?: string | null;
-  } = {
+  // Build a fallback customer profile from session data
+  const sessionProfile = {
     name: session.name || "Customer",
     email: session.email,
     phone: session.phone
   };
 
-  if (session.customerId) {
-    const dbCustomer = await db
-      .select()
-      .from(customers)
-      .where(eq(customers.id, session.customerId))
-      .get();
-
-    if (dbCustomer) {
-      customerProfile = {
-        id: dbCustomer.id,
-        name: dbCustomer.name || session.name || "Customer",
-        email: dbCustomer.email || session.email,
-        phone: dbCustomer.phone || session.phone,
-        address: dbCustomer.address,
-        cityName: dbCustomer.cityName,
-        zoneName: dbCustomer.zoneName,
-        city: dbCustomer.city,
-        zone: dbCustomer.zone
-      };
-    }
-  }
-
   // Match orders EXCLUSIVELY by customerId
   if (!session.customerId) {
-    return ok(c, { orders: [], customer: customerProfile });
+    return ok(c, { orders: [], customer: sessionProfile });
   }
 
-  const whereClause = eq(orders.customerId, session.customerId);
+  const db = c.get("db");
+  const result = await getCustomerOrders(db, session.customerId);
 
-  const customerOrders = await db
-    .select({
-      id: orders.id,
-      status: orders.status,
-      totalAmount: orders.totalAmount,
-      paidAmount: orders.paidAmount,
-      shippingCharge: orders.shippingCharge,
-      discountAmount: orders.discountAmount,
-      paymentStatus: orders.paymentStatus,
-      paymentMethod: orders.paymentMethod,
-      fulfillmentStatus: orders.fulfillmentStatus,
-      shippingAddress: orders.shippingAddress,
-      cityName: orders.cityName,
-      zoneName: orders.zoneName,
-      notes: orders.notes,
-      createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`
-    })
-    .from(orders)
-    .where(whereClause)
-    .orderBy(desc(orders.createdAt))
-    .limit(50);
+  // Merge session data into profile (DB profile wins, session fills gaps)
+  const customer = result.customerProfile
+    ? {
+        ...result.customerProfile,
+        name: result.customerProfile.name || session.name || "Customer",
+        email: result.customerProfile.email || session.email,
+        phone: result.customerProfile.phone || session.phone,
+      }
+    : sessionProfile;
 
-  // Fetch items for all orders in one batch
-  const orderIds = customerOrders.map((o) => o.id);
-  let itemsByOrder = new Map<string, Array<Record<string, unknown>>>();
-
-  if (orderIds.length > 0) {
-    const allItems = await db
-      .select({
-        orderId: orderItems.orderId,
-        productId: orderItems.productId,
-        variantId: orderItems.variantId,
-        quantity: orderItems.quantity,
-        price: orderItems.price,
-        productName: products.name,
-        productSlug: products.slug,
-        productImage: sql<string>`(
-          SELECT ${productImages.url}
-          FROM ${productImages}
-          WHERE ${productImages.productId} = ${products.id}
-          AND ${productImages.isPrimary} = 1
-          LIMIT 1
-        )`.as("productImage"),
-        variantSize: productVariants.size,
-        variantColor: productVariants.color
-      })
-      .from(orderItems)
-      .leftJoin(products, eq(products.id, orderItems.productId))
-      .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
-      .where(sql`${orderItems.orderId} IN ${orderIds}`);
-
-    for (const item of allItems) {
-      const list = itemsByOrder.get(item.orderId) || [];
-      list.push(item);
-      itemsByOrder.set(item.orderId, list);
-    }
-  }
-
-  // Format response
-  const formattedOrders = customerOrders.map((order) => ({
-    ...order,
-    createdAt: order.createdAt
-      ? new Date(order.createdAt * 1000).toISOString()
-      : null,
-    items: itemsByOrder.get(order.id) || []
-  }));
-
-  return ok(c, {
-    orders: formattedOrders,
-    customer: customerProfile
-  });
+  return ok(c, { orders: result.orders, customer });
 });
 
 export { app as customerAuthRoutes };

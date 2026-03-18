@@ -1,14 +1,24 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { settings, siteSettings } from "@scalius/database/schema";
-import { eq, and, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { getKv, deleteCacheByPattern } from "../../../utils/kv-cache";
-import { upsertSetting } from "@scalius/core/modules/payments/gateway-settings";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
+import {
+    getCurrencySettings,
+    saveCurrencySettings,
+    getGeneralSettings,
+    saveHeaderConfig,
+    saveFooterConfig,
+    getThemeSettings,
+    saveThemeSettings,
+    getSeoSettings,
+    saveSeoSettings,
+    getStorefrontUrlSetting,
+    saveStorefrontUrl,
+    getAllowedCountries,
+    saveAllowedCountries,
+} from "@scalius/core/modules/settings/site-settings.service";
 
 import { ok } from "../../../utils/api-response";
-import { ValidationError } from "../../../utils/api-error";
 const app = new OpenAPIHono();
 
 // ─────────────────────────────────────────
@@ -24,25 +34,9 @@ const getCurrencyRoute = createRoute({
 });
 
 app.openapi(getCurrencyRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const rows = await db
-            .select({ key: settings.key, value: settings.value })
-            .from(settings)
-            .where(eq(settings.category, "currency"))
-            .all();
-
-        const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-
-        return ok(c, {
-            currencyCode: map["currency_code"] ?? "BDT",
-            currencySymbol: map["currency_symbol"] ?? "\u09F3",
-            usdExchangeRate: map["usd_exchange_rate"] ?? "1"
-        });
-    } catch (error: unknown) {
-        console.error("Error fetching currency settings:", error);
-        throw error;
-    }
+    const db = c.get("db");
+    const result = await getCurrencySettings(db);
+    return ok(c, result);
 });
 
 const saveCurrencySchema = z.object({
@@ -61,33 +55,14 @@ const saveCurrencyRoute = createRoute({
 });
 
 app.openapi(saveCurrencyRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const body = c.req.valid("json");
-        const ops: Promise<void>[] = [];
+    const db = c.get("db");
+    const body = c.req.valid("json");
+    await saveCurrencySettings(db, body);
 
-        if (typeof body.currencyCode === "string" && body.currencyCode.trim()) {
-            ops.push(upsertSetting(db, "currency", "currency_code", body.currencyCode.trim()));
-        }
-        if (typeof body.currencySymbol === "string" && body.currencySymbol.trim()) {
-            ops.push(upsertSetting(db, "currency", "currency_symbol", body.currencySymbol.trim()));
-        }
-        if (typeof body.usdExchangeRate === "string" && body.usdExchangeRate.trim()) {
-            const rate = parseFloat(body.usdExchangeRate.trim());
-            if (!isNaN(rate) && rate > 0) {
-                ops.push(upsertSetting(db, "currency", "usd_exchange_rate", String(rate)));
-            }
-        }
-        await Promise.all(ops);
+    const kv = getKv();
+    await kv?.delete("gw:currency");
 
-        const kv = getKv();
-        await kv?.delete("gw:currency");
-
-        return ok(c, { message: "Currency settings saved successfully" });
-    } catch (error: unknown) {
-        console.error("Error saving currency settings:", error);
-        throw error;
-    }
+    return ok(c, { message: "Currency settings saved successfully" });
 });
 
 // ─────────────────────────────────────────
@@ -105,15 +80,8 @@ const getGeneralRoute = createRoute({
 app.openapi(getGeneralRoute, async (c) => {
     try {
         const db = c.get("db");
-        const [row] = await db.select().from(siteSettings).limit(1);
-        const safeParseJSON = (val: string | null | undefined) => {
-            if (!val) return {};
-            try { return JSON.parse(val); } catch { return {}; }
-        };
-        return ok(c, {
-            headerConfig: safeParseJSON(row?.headerConfig),
-            footerConfig: safeParseJSON(row?.footerConfig),
-        });
+        const result = await getGeneralSettings(db);
+        return ok(c, result);
     } catch (error: unknown) {
         return ok(c, { headerConfig: {}, footerConfig: {} });
     }
@@ -165,35 +133,11 @@ const saveHeaderRoute = createRoute({
 });
 
 app.openapi(saveHeaderRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const validatedConfig = c.req.valid("json");
-        const [existingSettings] = await db.select().from(siteSettings).limit(1);
-
-        if (existingSettings) {
-            await db
-                .update(siteSettings)
-                .set({
-                    headerConfig: JSON.stringify(validatedConfig),
-                    updatedAt: sql`unixepoch()`
-                })
-                .where(eq(siteSettings.id, existingSettings.id));
-        } else {
-            await db.insert(siteSettings).values({
-                id: "settings_" + nanoid(),
-                siteName: "My Store",
-                siteDescription: "",
-                headerConfig: JSON.stringify(validatedConfig),
-                footerConfig: JSON.stringify({}),
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`
-            });
-        }
-        await invalidateSiteSettingsCache(getKv());
-        return ok(c, {});
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const validatedConfig = c.req.valid("json");
+    await saveHeaderConfig(db, validatedConfig as unknown as Record<string, unknown>);
+    await invalidateSiteSettingsCache(getKv());
+    return ok(c, {});
 });
 
 // ─────────────────────────────────────────
@@ -223,35 +167,11 @@ const saveFooterRoute = createRoute({
 });
 
 app.openapi(saveFooterRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const validatedConfig = c.req.valid("json");
-        const [existingSettings] = await db.select().from(siteSettings).limit(1);
-
-        if (existingSettings) {
-            await db
-                .update(siteSettings)
-                .set({
-                    footerConfig: JSON.stringify(validatedConfig),
-                    updatedAt: sql`unixepoch()`
-                })
-                .where(eq(siteSettings.id, existingSettings.id));
-        } else {
-            await db.insert(siteSettings).values({
-                id: "settings_" + nanoid(),
-                siteName: "My Store",
-                siteDescription: "",
-                headerConfig: JSON.stringify({}),
-                footerConfig: JSON.stringify(validatedConfig),
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`
-            });
-        }
-        await invalidateSiteSettingsCache(getKv());
-        return ok(c, {});
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const validatedConfig = c.req.valid("json");
+    await saveFooterConfig(db, validatedConfig as unknown as Record<string, unknown>);
+    await invalidateSiteSettingsCache(getKv());
+    return ok(c, {});
 });
 
 // ─────────────────────────────────────────
@@ -267,19 +187,9 @@ const getThemeRoute = createRoute({
 });
 
 app.openapi(getThemeRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const row = await db
-            .select({ value: settings.value })
-            .from(settings)
-            .where(and(eq(settings.category, "theme"), eq(settings.key, "storefront_colors")))
-            .get();
-
-        const colors = row?.value ? JSON.parse(row.value) : {};
-        return ok(c, { colors });
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const result = await getThemeSettings(db);
+    return ok(c, result);
 });
 
 const saveThemeSchema = z.object({
@@ -296,19 +206,15 @@ const saveThemeRoute = createRoute({
 });
 
 app.openapi(saveThemeRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const body = c.req.valid("json");
+    const db = c.get("db");
+    const body = c.req.valid("json");
+    await saveThemeSettings(db, body.colors);
 
-        await upsertSetting(db, "theme", "storefront_colors", JSON.stringify(body.colors));
-        const kv = getKv();
-        if (kv) {
-            await deleteCacheByPattern("api:storefront:layout:*", kv);
-        }
-        return ok(c, { message: "Theme settings saved successfully" });
-    } catch (error: unknown) {
-        throw error;
+    const kv = getKv();
+    if (kv) {
+        await deleteCacheByPattern("api:storefront:layout:*", kv);
     }
+    return ok(c, { message: "Theme settings saved successfully" });
 });
 
 // ─────────────────────────────────────────
@@ -326,22 +232,8 @@ const getSeoRoute = createRoute({
 app.openapi(getSeoRoute, async (c) => {
     try {
         const db = c.get("db");
-        const [row] = await db
-            .select({
-                siteTitle: siteSettings.siteTitle,
-                homepageTitle: siteSettings.homepageTitle,
-                homepageMetaDescription: siteSettings.homepageMetaDescription,
-                robotsTxt: siteSettings.robotsTxt
-            })
-            .from(siteSettings)
-            .limit(1);
-
-        return ok(c, {
-            siteTitle: row?.siteTitle || "",
-            homepageTitle: row?.homepageTitle || "",
-            homepageMetaDescription: row?.homepageMetaDescription || "",
-            robotsTxt: row?.robotsTxt || ""
-        });
+        const result = await getSeoSettings(db);
+        return ok(c, result);
     } catch (error: unknown) {
         return ok(c, { siteTitle: "", homepageTitle: "", homepageMetaDescription: "", robotsTxt: "" });
     }
@@ -364,41 +256,11 @@ const saveSeoRoute = createRoute({
 });
 
 app.openapi(saveSeoRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt } = c.req.valid("json");
-        const [existing] = await db.select().from(siteSettings).limit(1);
-
-        if (existing) {
-            await db
-                .update(siteSettings)
-                .set({
-                    siteTitle,
-                    homepageTitle,
-                    homepageMetaDescription,
-                    robotsTxt,
-                    updatedAt: sql`unixepoch()`
-                })
-                .where(eq(siteSettings.id, existing.id));
-        } else {
-            await db.insert(siteSettings).values({
-                id: "settings_" + nanoid(),
-                siteName: "My Store",
-                headerConfig: JSON.stringify({}),
-                footerConfig: JSON.stringify({}),
-                siteTitle,
-                homepageTitle,
-                homepageMetaDescription,
-                robotsTxt,
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`
-            });
-        }
-        await invalidateSiteSettingsCache(getKv());
-        return ok(c, { message: "SEO settings saved successfully" });
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const data = c.req.valid("json");
+    await saveSeoSettings(db, data);
+    await invalidateSiteSettingsCache(getKv());
+    return ok(c, { message: "SEO settings saved successfully" });
 });
 
 // ─────────────────────────────────────────
@@ -416,8 +278,8 @@ const getStorefrontUrlRoute = createRoute({
 app.openapi(getStorefrontUrlRoute, async (c) => {
     try {
         const db = c.get("db");
-        const [row] = await db.select({ storefrontUrl: siteSettings.storefrontUrl }).from(siteSettings).limit(1);
-        return ok(c, { storefrontUrl: row?.storefrontUrl || "/" });
+        const result = await getStorefrontUrlSetting(db);
+        return ok(c, result);
     } catch (error: unknown) {
         return ok(c, { storefrontUrl: "/" });
     }
@@ -437,33 +299,12 @@ const saveStorefrontUrlRoute = createRoute({
 });
 
 app.openapi(saveStorefrontUrlRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const { storefrontUrl } = c.req.valid("json");
-        const [existing] = await db.select().from(siteSettings).limit(1);
-
-        if (existing) {
-            await db
-                .update(siteSettings)
-                .set({ storefrontUrl: storefrontUrl || "/", updatedAt: sql`unixepoch()` })
-                .where(eq(siteSettings.id, existing.id));
-        } else {
-            await db.insert(siteSettings).values({
-                id: "settings_" + nanoid(),
-                siteName: "My Store",
-                headerConfig: JSON.stringify({}),
-                footerConfig: JSON.stringify({}),
-                storefrontUrl: storefrontUrl || "/",
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`
-            });
-        }
-        layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
-        await invalidateSiteSettingsCache(getKv());
-        return ok(c, { message: "Storefront URL saved successfully" });
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const { storefrontUrl } = c.req.valid("json");
+    await saveStorefrontUrl(db, storefrontUrl);
+    layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
+    await invalidateSiteSettingsCache(getKv());
+    return ok(c, { message: "Storefront URL saved successfully" });
 });
 
 // ── Allowed Countries ──
@@ -478,28 +319,8 @@ const getAllowedCountriesRoute = createRoute({
 
 app.openapi(getAllowedCountriesRoute, async (c) => {
     const db = c.get("db");
-    const row = await db
-        .select({ value: settings.value })
-        .from(settings)
-        .where(and(eq(settings.category, "phone"), eq(settings.key, "allowed_countries")))
-        .get();
-    let allowedCountries: string[] = [];
-    let allowedCountriesMode: "include" | "exclude" = "include";
-    if (row?.value) {
-        try {
-            const parsed = JSON.parse(row.value);
-            if (Array.isArray(parsed)) {
-                // Backward compat: old format was just an array
-                allowedCountries = parsed;
-            } else if (parsed && typeof parsed === "object") {
-                allowedCountries = Array.isArray(parsed.countries) ? parsed.countries : [];
-                allowedCountriesMode = parsed.mode === "exclude" ? "exclude" : "include";
-            }
-        } catch {
-            // Invalid JSON — defaults
-        }
-    }
-    return ok(c, { allowedCountries, allowedCountriesMode });
+    const result = await getAllowedCountries(db);
+    return ok(c, result);
 });
 
 const saveAllowedCountriesRoute = createRoute({
@@ -525,9 +346,8 @@ const saveAllowedCountriesRoute = createRoute({
 app.openapi(saveAllowedCountriesRoute, async (c) => {
     const db = c.get("db");
     const { allowedCountries, mode } = c.req.valid("json");
-    const stored = JSON.stringify({ countries: allowedCountries, mode: mode || "include" });
-    await upsertSetting(db, "phone", "allowed_countries", stored);
-    return ok(c, { message: "Allowed countries saved", allowedCountries, allowedCountriesMode: mode || "include" });
+    const result = await saveAllowedCountries(db, allowedCountries, mode || "include");
+    return ok(c, { message: "Allowed countries saved", ...result });
 });
 
 export { app as siteSettingsRoutes };
