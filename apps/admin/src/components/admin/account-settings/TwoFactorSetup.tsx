@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import QRCode from "qrcode";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -233,9 +234,18 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     toast.success("Backup codes copied to clipboard");
   };
 
-  const getQrCodeUrl = (uri: string) => {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uri)}`;
-  };
+  // Generate QR code locally as data URI
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (totpUri) {
+      QRCode.toDataURL(totpUri, { width: 200, margin: 2 })
+        .then(setQrDataUrl)
+        .catch(() => setQrDataUrl(null));
+    } else {
+      setQrDataUrl(null);
+    }
+  }, [totpUri]);
 
   const resetState = () => {
     setStep("method");
@@ -412,11 +422,17 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                 </p>
                 <div className="flex justify-center">
                   <div className="bg-white p-4 rounded-xl shadow-sm">
-                    <img
-                      src={getQrCodeUrl(totpUri)}
-                      alt="2FA QR Code"
-                      className="w-48 h-48"
-                    />
+                    {qrDataUrl ? (
+                      <img
+                        src={qrDataUrl}
+                        alt="2FA QR Code"
+                        className="w-48 h-48"
+                      />
+                    ) : (
+                      <div className="w-48 h-48 flex items-center justify-center">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

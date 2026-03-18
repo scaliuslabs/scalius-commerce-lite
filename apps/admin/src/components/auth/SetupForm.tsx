@@ -1,5 +1,6 @@
 // src/components/auth/SetupForm.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import QRCode from "qrcode";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,8 +37,8 @@ export function SetupForm() {
       return;
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+    if (password.length < 12) {
+      setError("Password must be at least 12 characters");
       return;
     }
 
@@ -145,10 +146,18 @@ export function SetupForm() {
     window.location.href = "/admin";
   };
 
-  // Generate QR code URL from TOTP URI
-  const getQrCodeUrl = (uri: string) => {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uri)}`;
-  };
+  // Generate QR code locally as data URI
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (totpUri) {
+      QRCode.toDataURL(totpUri, { width: 200, margin: 2 })
+        .then(setQrDataUrl)
+        .catch(() => setQrDataUrl(null));
+    } else {
+      setQrDataUrl(null);
+    }
+  }, [totpUri]);
 
   if (step === "account") {
     return (
@@ -217,7 +226,7 @@ export function SetupForm() {
                   className="pl-10"
                   required
                   disabled={isLoading}
-                  minLength={8}
+                  minLength={12}
                 />
               </div>
             </div>
@@ -235,7 +244,7 @@ export function SetupForm() {
                   className="pl-10"
                   required
                   disabled={isLoading}
-                  minLength={8}
+                  minLength={12}
                 />
               </div>
             </div>
@@ -328,11 +337,17 @@ export function SetupForm() {
             )}
 
             <div className="flex justify-center">
-              <img
-                src={getQrCodeUrl(totpUri)}
-                alt="2FA QR Code"
-                className="w-48 h-48 rounded-lg border bg-white p-2"
-              />
+              {qrDataUrl ? (
+                <img
+                  src={qrDataUrl}
+                  alt="2FA QR Code"
+                  className="w-48 h-48 rounded-lg border bg-white p-2"
+                />
+              ) : (
+                <div className="w-48 h-48 rounded-lg border bg-white p-2 flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
