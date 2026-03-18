@@ -1,6 +1,6 @@
 // src/components/product/ProductImageZoom.tsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@scalius/shared/utils";
 
 interface ProductImageZoomProps {
   initialImage: string;

@@ -174,7 +174,7 @@ const layoutData = await getLayoutData();
   }
 
   function formatCurrency(amount: number): string {
-    const sym = (window as any).__CURRENCY_SYMBOL__ || "৳";
+    const sym = window.__CURRENCY_SYMBOL__ || "৳";
     return sym + amount.toFixed(0);
   }
 

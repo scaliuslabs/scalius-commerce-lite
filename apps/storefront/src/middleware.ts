@@ -181,7 +181,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         response.headers.set("Expires", "0");
         const cacheStatus = `HIT; v=${cacheVersion}; build=${BUILD_ID}; project=${hostname}`;
         response.headers.set("X-Cache-Status", cacheStatus);
-        return await setPageCspHeader(response, env);
+        return await setPageCspHeader(response, env ?? undefined);
       }
 
       const response = await next();
@@ -203,7 +203,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
           "X-Cache-Status",
           `MISS; v=${cacheVersion}; build=${BUILD_ID}; project=${hostname}`,
         );
-        await setPageCspHeader(response, env);
+        await setPageCspHeader(response, env ?? undefined);
 
         const responseToCache = response.clone();
         // CRITICAL FIX: Override Cache-Control for the internal Cache API storage
@@ -225,7 +225,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       // Fallback to regular response if caching fails
       const response = await next();
       response.headers.set("X-Cache-Status", "ERROR");
-      return await setPageCspHeader(response, env);
+      return await setPageCspHeader(response, env ?? undefined);
     }
   }
 
@@ -261,7 +261,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       );
     }
   }
-  return await setPageCspHeader(response, env);
+  return await setPageCspHeader(response, env ?? undefined);
 });
 
 const apiContextMiddleware = defineMiddleware((context, next) => {
@@ -286,10 +286,11 @@ const apiContextMiddleware = defineMiddleware((context, next) => {
   // Also set on globalThis as a last-resort fallback for media-url.ts
   // (in case the module-level store is somehow stale/empty during SSR rendering)
   if (cdnDomain) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- globalThis assignment for SSR cross-module access
     (globalThis as any).__SCALIUS_CDN_DOMAIN__ = cdnDomain;
   }
   return apiContext.run({
-    BACKEND_API: env?.BACKEND_API as any,
+    BACKEND_API: env?.BACKEND_API as Fetcher | undefined,
     PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,
     CDN_DOMAIN_URL: env?.CDN_DOMAIN_URL as string | undefined,
   }, next);

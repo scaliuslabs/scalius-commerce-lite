@@ -65,7 +65,7 @@ const headerData: HeaderData = {
   function initializeHeader() {
     function updateCartDisplay() {
       const { totalItems, totalAmount } = cartStore.get();
-      const sym = (window as any).__CURRENCY_SYMBOL__ || "৳";
+      const sym = window.__CURRENCY_SYMBOL__ || "৳";
       const formattedTotal = `${sym}${totalAmount.toLocaleString()}`;
 
       const countElements = document.querySelectorAll(

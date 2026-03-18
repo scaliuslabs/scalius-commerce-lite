@@ -293,7 +293,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? "৳";
                 quantity: item.quantity,
                 item_price: item.price,
               })),
-              currency: (window as any).__CURRENCY_CODE__ || "BDT",
+              currency: window.__CURRENCY_CODE__ || "BDT",
               num_items: orderItems.reduce(
                 (sum, item) => sum + item.quantity,
                 0

@@ -490,7 +490,7 @@ const analyticsProductData = products.map((p) => ({
         content_type: "product_group",
         content_category: categoryName,
         contents,
-        currency: (window as any).__CURRENCY_CODE__ || "BDT",
+        currency: window.__CURRENCY_CODE__ || "BDT",
         value,
       });
 

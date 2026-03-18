@@ -62,7 +62,7 @@ export interface ApiResponse<T> {
   error?: {
     code: string;
     message: string;
-    details?: any[];
+    details?: Array<{ field?: string; message: string }>;
   };
 }
 
@@ -353,8 +353,24 @@ export interface Order {
   createdAt: string | null;
   updatedAt: string | null;
   items: OrderItem[];
-  shipments: any[];
-  deliveryProviders: any[];
+  shipments: OrderShipment[];
+  deliveryProviders: OrderDeliveryProvider[];
+}
+
+export interface OrderShipment {
+  id: string;
+  status: string;
+  trackingId?: string;
+  providerType?: string;
+  consignmentId?: string;
+  createdAt?: string;
+}
+
+export interface OrderDeliveryProvider {
+  id: string;
+  name: string;
+  type: string;
+  isActive?: boolean;
 }
 
 // CreateOrderPayload extends the SDK's OrderPostRequest with storefront-specific

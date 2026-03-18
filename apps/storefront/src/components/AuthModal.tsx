@@ -20,7 +20,7 @@ import type { Country } from "react-phone-number-input";
  */
 async function fetchCheckoutConfigClient(): Promise<CheckoutConfig | null> {
   try {
-    const apiBase = (window as any).__API_BASE_URL__ || "/api/v1";
+    const apiBase = window.__API_BASE_URL__ || "/api/v1";
     const res = await fetch(`${apiBase}/checkout/config`);
     if (!res.ok) return null;
     const json = await res.json() as { success: boolean; data: CheckoutConfig };
@@ -95,11 +95,11 @@ export default function AuthModal() {
             setMethod("email");
           }
         }
-        if (Array.isArray((config as any).allowedCountries) && (config as any).allowedCountries.length > 0) {
-          setAllowedCountries((config as any).allowedCountries);
+        if (Array.isArray(config.allowedCountries) && config.allowedCountries.length > 0) {
+          setAllowedCountries(config.allowedCountries);
         }
-        if ((config as any).allowedCountriesMode) {
-          setAllowedCountriesMode((config as any).allowedCountriesMode);
+        if (config.allowedCountriesMode) {
+          setAllowedCountriesMode(config.allowedCountriesMode);
         }
       });
 
@@ -139,7 +139,7 @@ export default function AuthModal() {
     if (step === "profile_setup") {
       fetch(createApiUrl("/locations/cities"))
         .then((res) => res.json())
-        .then((data: any) => {
+        .then((data: { success: boolean; data: { id: string; name: string }[] }) => {
           if (data.success) setCities(data.data);
         })
         .catch(console.error);
@@ -151,7 +151,7 @@ export default function AuthModal() {
     if (profileCity && step === "profile_setup") {
       fetch(createApiUrl(`/locations/zones?cityId=${profileCity}`))
         .then((res) => res.json())
-        .then((data: any) => {
+        .then((data: { success: boolean; data: { id: string; name: string }[] }) => {
           if (data.success) {
             setZones(data.data);
             setProfileZone("");
@@ -398,7 +398,9 @@ export default function AuthModal() {
               ) : (
                 <PhoneInput
                   international
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input Country type is narrower than our string union
                   defaultCountry={effectiveDefaultCountry as any}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input countries prop expects exact Country[] tuple
                   countries={effectiveCountries as any}
                   value={identifier}
                   onChange={(value) => { setIdentifier(value || ""); setError(""); }}
@@ -412,7 +414,9 @@ export default function AuthModal() {
                 <label className="text-sm font-medium text-foreground">Phone Number (Required)</label>
                 <PhoneInput
                   international
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input Country type is narrower than our string union
                   defaultCountry={effectiveDefaultCountry as any}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input countries prop expects exact Country[] tuple
                   countries={effectiveCountries as any}
                   value={phoneInput}
                   onChange={(value) => { setPhoneInput(value || ""); setError(""); }}

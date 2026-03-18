@@ -25,8 +25,8 @@ function getApiBaseUrl(): string {
   }
 
   // Client-side: read from injected window var (set by Layout.astro from runtime env)
-  if (typeof window !== "undefined" && (window as any).__API_BASE_URL__) {
-    return (window as any).__API_BASE_URL__;
+  if (typeof window !== "undefined" && window.__API_BASE_URL__) {
+    return window.__API_BASE_URL__;
   }
 
   // Fallback: same-origin relative path (works for both dev proxy and production)
@@ -146,7 +146,7 @@ export async function fetchWithRetry(
     // Use Cloudflare Service Bindings if available during SSR for 0ms latency.
     // Skip in local dev — each worker runs in a separate miniflare process,
     // so the BACKEND_API Fetcher proxy can't reach the standalone API worker.
-    let backendApi: any = undefined;
+    let backendApi: Fetcher | undefined = undefined;
     if (import.meta.env.SSR && !import.meta.env.DEV) {
       try {
         const { apiContext } = await import("./context");

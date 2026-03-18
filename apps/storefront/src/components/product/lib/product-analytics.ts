@@ -46,7 +46,7 @@ export function trackProductAddToCart(data: AddToCartAnalyticsData): void {
         item_price: data.variant?.price || data.product.price,
       },
     ],
-    currency: typeof window !== "undefined" && (window as any).__CURRENCY_CODE__ ? (window as any).__CURRENCY_CODE__ : "BDT",
+    currency: typeof window !== "undefined" && window.__CURRENCY_CODE__ ? window.__CURRENCY_CODE__ : "BDT",
     value: (data.variant?.price || data.product.price) * data.quantity,
   };
 

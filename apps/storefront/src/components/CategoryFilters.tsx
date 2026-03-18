@@ -11,7 +11,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import type { FilterableAttribute } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
 
 interface CategoryFiltersProps {

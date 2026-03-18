@@ -170,7 +170,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? "৳";
               content_name: product.name,
               content_category: category?.name,
               content_type: "product",
-              currency: (window as any).__CURRENCY_CODE__ || "BDT",
+              currency: window.__CURRENCY_CODE__ || "BDT",
               value: product.discountedPrice,
               contents: variants.map((v: ProductVariant) => ({
                 id: v.id && v.id !== "default" ? v.id : product.id,

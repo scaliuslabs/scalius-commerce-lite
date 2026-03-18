@@ -6,6 +6,41 @@
 // Cross-origin Set-Cookie is silently dropped
 // by modern browsers.
 
+// ---------------------------------------------------------------------------
+// Response shapes for customer auth API endpoints
+// ---------------------------------------------------------------------------
+
+/** Envelope for send-otp / verify-otp / profile responses */
+interface AuthApiEnvelope<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string | { message?: string };
+}
+
+interface SendOtpData {
+  retryAfter?: number;
+}
+
+interface VerifyOtpData {
+  customer?: CustomerInfo;
+  isNewUser?: boolean;
+  attemptsLeft?: number;
+}
+
+interface ProfileData {
+  customer?: CustomerInfo;
+}
+
+interface OrdersData {
+  orders: CustomerOrder[];
+  customer?: CustomerInfo;
+}
+
+interface SessionData {
+  authenticated: boolean;
+  customer?: CustomerInfo;
+}
+
 /**
  * Build a same-origin customer auth URL.
  * On the client, uses a relative path (same-origin proxy).
@@ -13,6 +48,12 @@
  */
 function authUrl(subpath: string): string {
   return `/api/customer-auth/${subpath}`;
+}
+
+/** Extract a human-readable error message from the API envelope */
+function extractError(raw: AuthApiEnvelope): string | undefined {
+  if (!raw.error) return undefined;
+  return typeof raw.error === "object" ? raw.error.message : raw.error;
 }
 
 export interface CustomerInfo {
@@ -47,11 +88,10 @@ export async function sendCustomerOtp(
       credentials: "include",
       body: JSON.stringify({ method, identifier, name }),
     });
-    const raw = await res.json() as any;
-    const data = raw.data ?? raw; // Unwrap { success, data: T } envelope
+    const raw = (await res.json()) as AuthApiEnvelope<SendOtpData>;
+    const data = raw.data ?? (raw as unknown as SendOtpData); // Unwrap { success, data: T } envelope
     if (!res.ok) {
-      const errMsg = typeof data.error === "object" ? data.error?.message : data.error;
-      return { success: false, error: errMsg, retryAfter: data.retryAfter };
+      return { success: false, error: extractError(raw), retryAfter: data.retryAfter };
     }
     return { success: true };
   } catch {
@@ -76,11 +116,10 @@ export async function verifyCustomerOtp(
       credentials: "include",
       body: JSON.stringify({ method, identifier, code, name, phone }),
     });
-    const raw = await res.json() as any;
-    const data = raw.data ?? raw; // Unwrap { success, data: T } envelope
+    const raw = (await res.json()) as AuthApiEnvelope<VerifyOtpData>;
+    const data = raw.data ?? (raw as unknown as VerifyOtpData); // Unwrap { success, data: T } envelope
     if (!res.ok) {
-      const errMsg = typeof raw.error === "object" ? raw.error?.message : raw.error;
-      return { success: false, error: errMsg, attemptsLeft: data.attemptsLeft };
+      return { success: false, error: extractError(raw), attemptsLeft: data.attemptsLeft };
     }
     return { success: true, customer: data.customer, isNewUser: data.isNewUser };
   } catch {
@@ -98,7 +137,7 @@ export async function getCustomerSession(): Promise<AuthState> {
       cache: "no-store",
     });
     if (!res.ok) return { authenticated: false };
-    const raw = await res.json() as any;
+    const raw = (await res.json()) as AuthApiEnvelope<SessionData>;
     return (raw.data ?? raw) as AuthState;
   } catch {
     return { authenticated: false };
@@ -179,11 +218,10 @@ export async function updateCustomerProfile(data: ProfileUpdateData): Promise<{
       credentials: "include",
       body: JSON.stringify(data),
     });
-    const raw = await res.json() as any;
-    const result = raw.data ?? raw; // Unwrap envelope
+    const raw = (await res.json()) as AuthApiEnvelope<ProfileData>;
+    const result = raw.data ?? (raw as unknown as ProfileData); // Unwrap envelope
     if (!res.ok) {
-      const errMsg = typeof raw.error === "object" ? raw.error?.message : raw.error;
-      return { success: false, error: errMsg };
+      return { success: false, error: extractError(raw) };
     }
     return { success: true, customer: result.customer };
   } catch {
@@ -205,12 +243,11 @@ export async function getCustomerOrders(): Promise<{
       credentials: "include",
     });
     if (!res.ok) {
-      const raw = await res.json() as any;
-      const errMsg = typeof raw.error === "object" ? raw.error?.message : raw.error;
-      return { success: false, orders: [], error: errMsg };
+      const raw = (await res.json()) as AuthApiEnvelope;
+      return { success: false, orders: [], error: extractError(raw) };
     }
-    const raw = await res.json() as any;
-    const data = raw.data ?? raw; // Unwrap envelope
+    const raw = (await res.json()) as AuthApiEnvelope<OrdersData>;
+    const data = raw.data ?? (raw as unknown as OrdersData); // Unwrap envelope
     return { success: true, orders: data.orders || [], customer: data.customer };
   } catch {
     return { success: false, orders: [], error: "Network error" };
