@@ -42,8 +42,32 @@ export const rbacMiddleware = defineMiddleware(async (context, next) => {
     return (await next()) || new Response();
   }
 
-  // Skip RBAC for scanner token requests — the API worker handles scanner auth itself
-  if (context.request.headers.get("X-Scanner-Token") && pathname.startsWith("/api/v1/admin/inventory/")) {
+  // Scanner token requests: validate device binding before forwarding to API worker
+  const scannerToken = context.request.headers.get("X-Scanner-Token");
+  if (scannerToken && pathname.startsWith("/api/v1/admin/inventory/")) {
+    const env = context.locals._env;
+    const kv = env?.CACHE as KVNamespace | undefined;
+    if (kv) {
+      try {
+        const raw = await kv.get(`scanner:token:${scannerToken}`);
+        if (!raw) {
+          return jsonError(401, { error: "Unauthorized", message: "Scanner token invalid or expired" });
+        }
+        const payload = JSON.parse(raw);
+        if (!payload.claimed || !payload.sessionId) {
+          return jsonError(401, { error: "Unauthorized", message: "Scanner token not yet claimed" });
+        }
+        // Validate device binding via cookie
+        const cookieHeader = context.request.headers.get("Cookie") || "";
+        const sidMatch = cookieHeader.match(/(?:^|;\s*)scanner_sid=([^;]*)/);
+        const cookieSid = sidMatch ? decodeURIComponent(sidMatch[1]) : undefined;
+        if (cookieSid !== payload.sessionId) {
+          return jsonError(403, { error: "Forbidden", message: "Scanner session does not match this device" });
+        }
+      } catch {
+        return jsonError(401, { error: "Unauthorized", message: "Scanner token validation failed" });
+      }
+    }
     return (await next()) || new Response();
   }
 
