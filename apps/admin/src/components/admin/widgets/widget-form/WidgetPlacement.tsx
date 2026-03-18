@@ -6,13 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Controller } from 'react-hook-form';
+import type { Control, UseFormRegister, UseFormWatch, FieldErrors } from 'react-hook-form';
 import { WidgetPlacementRule, type Collection } from '@/types/api-responses';
+import type { WidgetFormValues } from '../WidgetForm';
 
 interface WidgetPlacementProps {
-  control: any;
-  errors: any;
-  watch: any;
-  register: any;
+  control: Control<WidgetFormValues>;
+  errors: FieldErrors<WidgetFormValues>;
+  watch: UseFormWatch<WidgetFormValues>;
+  register: UseFormRegister<WidgetFormValues>;
   availableCollections: Pick<Collection, "id" | "name" | "type">[];
   placementRules: WidgetPlacementRule[];
 }

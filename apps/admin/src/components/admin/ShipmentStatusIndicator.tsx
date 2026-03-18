@@ -11,7 +11,7 @@ interface ShipmentStatusIndicatorProps {
     lastChecked?: string;
     orderId: string;
   };
-  onStatusUpdated?: (updatedShipment: { orderId: string; [key: string]: unknown }) => void;
+  onStatusUpdated?: (updatedShipment: { id: string; orderId: string; status: string; lastChecked: string | null; [key: string]: unknown }) => void;
 }
 
 export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({

@@ -5,6 +5,13 @@ import { useDebounce } from '@/hooks/use-debounce';
 import type { Category } from '@/types/api-responses';
 import type { MediaFile, ProductSearchResult } from './types';
 
+interface RawProduct {
+  id: string;
+  name: string;
+  slug: string;
+  primaryImage: string | null;
+}
+
 export const useAiContext = (
   initialContext?: {
     images?: MediaFile[];
@@ -36,7 +43,7 @@ export const useAiContext = (
       if (response.ok) {
         const json = await response.json();
         const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
-        const newProducts: ProductSearchResult[] = (data.products || []).map((p: any) => ({
+        const newProducts: ProductSearchResult[] = (data.products || []).map((p: RawProduct) => ({
           id: p.id,
           name: p.name,
           slug: p.slug,
@@ -88,7 +95,7 @@ export const useAiContext = (
         if (response.ok) {
           const json = await response.json();
           const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
-          const newProducts: ProductSearchResult[] = (data.products || []).map((p: any) => ({
+          const newProducts: ProductSearchResult[] = (data.products || []).map((p: RawProduct) => ({
             id: p.id,
             name: p.name,
             slug: p.slug,

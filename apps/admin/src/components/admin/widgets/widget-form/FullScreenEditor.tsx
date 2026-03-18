@@ -39,6 +39,7 @@ import { cn } from '@scalius/shared/utils';
 import { toast } from 'sonner';
 import { AiContextManager } from './AiContextManager';
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
+import type { useAiContext } from './useAiContext';
 
 export type EditorMode = 'generation-preview' | 'improvement' | 'live-preview';
 
@@ -66,7 +67,7 @@ interface FullScreenEditorProps {
     totalSections?: number;
   };
   // Improvement mode props
-  aiContext?: any;
+  aiContext?: ReturnType<typeof useAiContext>;
   promptType?: 'widget' | 'landing-page' | 'collection';
   setPromptType?: (type: 'widget' | 'landing-page' | 'collection') => void;
   sections?: Section[];
@@ -462,7 +463,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
               {setPromptType && (
                 <div className="space-y-3">
                   <Label className="text-base font-semibold">Content Type</Label>
-                  <RadioGroup value={promptType} onValueChange={(v: any) => setPromptType(v)} className="space-y-2">
+                  <RadioGroup value={promptType} onValueChange={(v: string) => setPromptType(v as 'widget' | 'landing-page' | 'collection')} className="space-y-2">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="widget" id="imp-widget" />
                       <Label htmlFor="imp-widget" className="font-normal cursor-pointer">Homepage Widget</Label>

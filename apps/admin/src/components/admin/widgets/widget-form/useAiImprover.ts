@@ -15,11 +15,23 @@ import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@scalius/core/modules/ai/ai-config';
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
+import type { useAiContext } from './useAiContext';
+import type { useAiGenerator } from './useAiGenerator';
+import type { SectionContent } from './useStagedGeneration';
+import type { ProductSearchResult, Category } from './types';
+
+interface ModelInfo {
+  id: string;
+  name: string;
+  supportsVision?: boolean;
+  supportsAudio?: boolean;
+  modality?: string;
+}
 
 
 interface UseAiImproverProps {
-  aiContext: any;
-  aiGenerator: any;
+  aiContext: ReturnType<typeof useAiContext>;
+  aiGenerator: ReturnType<typeof useAiGenerator>;
 }
 
 export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
@@ -54,10 +66,10 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productIds: aiContext.selectedProducts.map((p: any) => p.id),
+          productIds: aiContext.selectedProducts.map((p: ProductSearchResult) => p.id),
           categoryIds: aiContext.allCategoriesSelected
             ? undefined
-            : aiContext.selectedCategories.map((c: any) => c.id),
+            : aiContext.selectedCategories.map((c: Category) => c.id),
           allCategories: aiContext.allCategoriesSelected,
         }),
       });
@@ -93,7 +105,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       let otherSectionsContext = '';
       if (targetSection !== undefined && sections.length > 1) {
         const otherSections = sections
-          .map((s: any, idx: number) => {
+          .map((s: SectionContent, idx: number) => {
             if (idx === targetSection) return null; // Skip the target section
             return `Section ${idx + 1}${s.description ? ` (${s.description})` : ''}:\n\`\`\`html\n${s.html}\n\`\`\`\n\`\`\`css\n${s.css || '/* No CSS */'}\n\`\`\``;
           })
@@ -105,7 +117,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       }
 
       // Generate structured prompt for improvement
-      const currentModel = aiGenerator.openRouterModels.find((m: any) => m.id === aiGenerator.selectedModel);
+      const currentModel = aiGenerator.openRouterModels.find((m: ModelInfo) => m.id === aiGenerator.selectedModel);
       const isVisionModel = currentModel?.supportsVision || false;
 
       const promptResult = await generateStructuredPrompt({
@@ -163,7 +175,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
               console.error('Parsed data:', tagResult.data);
               throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
             }
-            improvedContent = tagResult.data;
+            improvedContent = tagResult.data as { html: string; css: string };
           } else {
             // Fallback to JSON parsing
             const parsed = parseJSONSafely(accumulatedJson);
@@ -180,7 +192,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
               console.error('Parsed data:', parsed.data);
               throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
             }
-            improvedContent = parsed.data;
+            improvedContent = parsed.data as { html: string; css: string };
           }
 
           // Section-specific improvement: merge back into full widget
@@ -198,7 +210,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
 
               // Reconstruct full widget using consistent section reconstruction logic
               const combinedHtml = `<div class="widget-container">\n${updatedSections
-                .map((s: any, idx: number) => {
+                .map((s: SectionContent, idx: number) => {
                   const sectionHtml = s.html.split('\n').map((line: string) => '    ' + line).join('\n');
                   return `  <div class="widget-section widget-section-${idx + 1}" data-section="${idx + 1}">\n${sectionHtml}\n  </div>`;
                 }).join('\n')}\n</div>`;
@@ -243,7 +255,7 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
               }]);
 
               toast.success(SUCCESS_MESSAGES.sectionImproved(targetSection, sections.length));
-            } catch (mergeError: any) {
+            } catch (mergeError: unknown) {
               console.error('Failed to merge section:', mergeError);
               toast.error(ERROR_MESSAGES.sectionMergeFailed);
               // Fallback: just show the improved section

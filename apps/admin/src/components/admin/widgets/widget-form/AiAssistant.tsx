@@ -13,9 +13,10 @@ import { useAiContext } from './useAiContext';
 import { useAiGenerator } from './useAiGenerator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import type { Widget } from '@/types/api-responses';
 
 interface AiAssistantProps {
-  widget: any;
+  widget: Widget | undefined | null;
   aiContext: ReturnType<typeof useAiContext>;
   aiGenerator: ReturnType<typeof useAiGenerator>;
 }

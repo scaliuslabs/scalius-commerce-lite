@@ -2,6 +2,9 @@ import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
+import type { StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
+
+type PromptMessage = StructuredPromptResult['messages'][number];
 
 interface GenerationPlan {
   totalSections: number;
@@ -9,7 +12,7 @@ interface GenerationPlan {
   estimatedTokens?: number;
 }
 
-interface SectionContent {
+export interface SectionContent {
   html: string;
   css: string;
   sectionIndex: number;
@@ -49,7 +52,7 @@ export function useStagedGeneration() {
    */
   const createPlan = useCallback(async (
     model: string,
-    messages: any[]
+    messages: PromptMessage[]
   ): Promise<GenerationPlan | null> => {
     const planningPrompt = {
       role: "user",
@@ -98,7 +101,7 @@ Respond ONLY with the JSON object, no markdown formatting.`,
         throw new Error(parsed.error || "Failed to parse plan JSON");
       }
 
-      const plan = parsed.data;
+      const plan = parsed.data as GenerationPlan;
 
       // Validate plan structure
       if (!plan.totalSections || !Array.isArray(plan.sectionDescriptions)) {
@@ -122,7 +125,7 @@ Respond ONLY with the JSON object, no markdown formatting.`,
    */
   const generateSection = useCallback(async (
     model: string,
-    messages: any[],
+    messages: PromptMessage[],
     sectionIndex: number,
     sectionDescription: string,
     totalSections: number,
@@ -191,7 +194,7 @@ Respond with the section code in tag format.`,
         if (!validation.valid) {
           throw new Error(validation.error || "Invalid widget structure");
         }
-        widgetData = tagResult.data;
+        widgetData = tagResult.data as { html: string; css: string };
       } else {
         // Fallback to JSON parsing
         const parsed = parseJSONSafely(content);
@@ -203,7 +206,7 @@ Respond with the section code in tag format.`,
         if (!validation.valid) {
           throw new Error(validation.error || "Invalid widget structure");
         }
-        widgetData = parsed.data;
+        widgetData = parsed.data as { html: string; css: string };
       }
 
       return {
@@ -235,7 +238,7 @@ Respond with the section code in tag format.`,
    */
   const startStagedGeneration = useCallback(async (
     model: string,
-    messages: any[],
+    messages: PromptMessage[],
     onSectionComplete?: (section: SectionContent, index: number, total: number) => void
   ): Promise<{ html: string; css: string } | null> => {
     setState({

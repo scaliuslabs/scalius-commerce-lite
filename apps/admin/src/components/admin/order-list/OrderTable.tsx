@@ -52,7 +52,7 @@ interface OrderTableProps {
   onPermanentDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
-  onShipmentStatusUpdated: (updatedShipment: { orderId: string; [key: string]: unknown }) => void;
+  onShipmentStatusUpdated: (updatedShipment: { id: string; orderId: string; [key: string]: unknown }) => void;
   onRefreshAllShipments?: () => void;
 }
 
