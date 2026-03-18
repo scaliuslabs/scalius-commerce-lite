@@ -1,12 +1,16 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { generateCompletePrompt, generateStructuredPrompt } from '@scalius/core/modules/ai/prompt-helper-v2';
+import { generateCompletePrompt, generateStructuredPrompt, type StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
+import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
+import type { Widget } from '@/types/api-responses';
+
+type PromptMessage = StructuredPromptResult['messages'][number];
 
 interface ModelInfo {
   id: string;
@@ -16,7 +20,7 @@ interface ModelInfo {
   modality?: string;
 }
 
-export const useAiGenerator = (aiContext: any, widget: any) => {
+export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widget: Widget | undefined | null) => {
   const [promptType, setPromptType] = useState<
     "widget" | "landing-page" | "collection"
   >("widget");
@@ -54,9 +58,9 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
               const widgetModel = widget?.aiContext ? JSON.parse(widget.aiContext as string).preferredAiModel : null;
               const globalModel = localStorage.getItem('global_preferred_ai_model');
 
-              if (widgetModel && models.some((m: any) => m.id === widgetModel)) {
+              if (widgetModel && models.some((m: ModelInfo) => m.id === widgetModel)) {
                 setSelectedModel(widgetModel);
-              } else if (globalModel && models.some((m: any) => m.id === globalModel)) {
+              } else if (globalModel && models.some((m: ModelInfo) => m.id === globalModel)) {
                 setSelectedModel(globalModel);
               }
               // If still no model selected, user must choose
@@ -159,7 +163,7 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
     }
   };
 
-  const handleSimpleGeneration = async (messages: any[]) => {
+  const handleSimpleGeneration = async (messages: PromptMessage[]) => {
     try {
       const response = await fetch("/api/openrouter/generate", {
         method: "POST",
@@ -190,7 +194,7 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
           if (tagResult.success && tagResult.data) {
             const validation = validateParsedWidget(tagResult.data);
             if (validation.valid) {
-              setGeneratedContent(tagResult.data);
+              setGeneratedContent(tagResult.data as { html: string; css: string });
             } else {
               console.error("Invalid widget structure:", validation.error);
               toast.error(`Invalid response: ${validation.error}`);
@@ -202,7 +206,7 @@ export const useAiGenerator = (aiContext: any, widget: any) => {
             if (jsonParsed.success) {
               const validation = validateWidgetJSON(jsonParsed.data);
               if (validation.valid) {
-                setGeneratedContent(jsonParsed.data);
+                setGeneratedContent(jsonParsed.data as { html: string; css: string });
               } else {
                 console.error("Invalid widget structure:", validation.error);
                 toast.error(`Invalid response: ${validation.error}`);

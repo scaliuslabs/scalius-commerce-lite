@@ -6,10 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Eye, ClipboardPaste, Sparkles } from 'lucide-react';
+import type { UseFormRegister, FieldErrors } from 'react-hook-form';
+import type { WidgetFormValues } from '../WidgetForm';
 
 interface WidgetDetailsProps {
-  register: any;
-  errors: any;
+  register: UseFormRegister<WidgetFormValues>;
+  errors: FieldErrors<WidgetFormValues>;
   handleShowPreview: () => void;
   onPaste: () => void;
   onImproveExisting?: () => void; // New prop for improving existing content
