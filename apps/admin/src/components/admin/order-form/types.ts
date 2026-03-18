@@ -42,12 +42,10 @@ export interface Product {
   // We need to import z and define the schema here to use it in OrderFormProps
   // This avoids circular dependencies later.
   import { z } from "zod";
-  
-  export const phoneNumberSchema = z
-    .string()
-    .min(7, "Phone number too short")
-    .max(16, "Phone number too long");
-  
+  import { phoneNumberSchema } from "@scalius/shared/customer-utils";
+
+  export { phoneNumberSchema };
+
   export const orderFormSchema = z.object({
     id: z.string().optional(),
     customerName: z

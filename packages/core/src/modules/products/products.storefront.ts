@@ -13,16 +13,13 @@ import {
 } from "@scalius/database/schema";
 import { and, sql, desc, eq, asc, isNull, inArray, or, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
+import { unixToDate } from "@scalius/shared/utils";
+import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import type { StorefrontProductFilterInput } from "./products.types";
 
 // ─────────────────────────────────────────
 // Private helpers
 // ─────────────────────────────────────────
-
-const unixToDate = (timestamp: number | null): Date | null => {
-    if (timestamp === null || timestamp === undefined) return null;
-    return new Date(timestamp * 1000);
-};
 
 function extractFeatures(description: string | null): string[] {
     if (!description) return [];
@@ -34,20 +31,6 @@ function extractFeatures(description: string | null): string[] {
         }
     }
     return features;
-}
-
-function calculateDiscountedPrice(
-    price: number,
-    discountType: string | null,
-    discountPercentage: number | null,
-    discountAmount: number | null,
-): number {
-    if (discountType === "flat" && discountAmount) {
-        return Math.max(0, Math.round(price - discountAmount));
-    } else if (discountType === "percentage" && discountPercentage) {
-        return Math.round(price * (1 - discountPercentage / 100));
-    }
-    return price;
 }
 
 // ─────────────────────────────────────────

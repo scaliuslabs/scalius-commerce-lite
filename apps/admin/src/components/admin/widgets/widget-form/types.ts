@@ -1,13 +1,8 @@
 
 import type { Product, Category } from '@/types/api-responses';
+import type { MediaFile } from "@/components/admin/media-manager/types";
 
-export interface MediaFile {
-  id: string;
-  url: string;
-  filename: string;
-  size: number;
-  createdAt: Date;
-}
+export type { MediaFile };
 
 export type ProductSearchResult = Pick<Product, "id" | "name" | "slug"> & {
   primaryImage: string | null;

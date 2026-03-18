@@ -33,14 +33,7 @@ import {
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-
-interface MediaFile {
-  id: string;
-  url: string;
-  filename: string;
-  size: number;
-  createdAt: Date;
-}
+import type { MediaFile } from "@/components/admin/media-manager/types";
 
 interface DraggableImageGalleryProps {
   images: MediaFile[];
