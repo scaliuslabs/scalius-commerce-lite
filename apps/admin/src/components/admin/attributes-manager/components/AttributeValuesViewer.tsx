@@ -21,7 +21,7 @@ import {
 import { Loader2, Search, Package, X } from "lucide-react";
 import { toast } from "sonner";
 import type { AttributeValuesViewerProps, AttributeValue } from "../types";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 export function AttributeValuesViewer({
   attributeId,
@@ -50,7 +50,10 @@ export function AttributeValuesViewer({
         const response = await fetch(
           `/api/v1/admin/attributes/${attributeId}/values`,
         );
-        if (!response.ok) throw new Error("Failed to fetch attribute values");
+        if (!response.ok) {
+          const errorJson = await response.json().catch(() => ({}));
+          throw new Error(extractApiError(errorJson, "Failed to fetch attribute values"));
+        }
         const json = await response.json();
         const data = unwrapEnvelope(json);
         setValues(data.values || []);

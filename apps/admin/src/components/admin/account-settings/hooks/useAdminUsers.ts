@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 export interface AdminUser {
   id: string;
@@ -74,7 +74,7 @@ export function useAdminUsers() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Failed to create admin user");
+        throw new Error(extractApiError(result, "Failed to create admin user"));
       }
 
       toast.success("Admin user created. An email has been sent with login instructions.");
@@ -94,7 +94,7 @@ export function useAdminUsers() {
       const result = await response.json();
 
       if (!response.ok) {
-        toast.error(result.message || "Failed to delete admin user");
+        toast.error(extractApiError(result, "Failed to delete admin user"));
         return;
       }
 

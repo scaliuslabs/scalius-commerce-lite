@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
 import { useCurrency } from "@/hooks/use-currency";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 export interface ProductListItem {
   id: string;
@@ -368,7 +368,10 @@ export function useProductList({
         `/api/v1/admin/products/${idToDelete}`,
         { method: "DELETE" },
       );
-      if (!response.ok) throw new Error("Failed to move product to trash");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to move product to trash"));
+      }
 
       toast.success("Product moved to trash.");
       setProducts((prev) => prev.filter((p) => p.id !== idToDelete));
@@ -418,11 +421,8 @@ export function useProductList({
           return newSet;
         });
       } else {
-        const errorData = await response.json();
-        throw new Error(
-          (errorData as { error?: string }).error ||
-            "Failed to permanently delete product.",
-        );
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorData, "Failed to permanently delete product"));
       }
     } catch (error: unknown) {
       console.error("Error permanently deleting product:", error);
@@ -443,7 +443,10 @@ export function useProductList({
         `/api/v1/admin/products/${id}/restore`,
         { method: "POST" },
       );
-      if (!response.ok) throw new Error("Failed to restore product");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to restore product"));
+      }
 
       toast.success("Product restored successfully.");
       setProducts((prev) => prev.filter((p) => p.id !== id));
@@ -499,11 +502,8 @@ export function useProductList({
         }));
         setSelectedProducts(new Set());
       } else {
-        const errorData = await response.json();
-        throw new Error(
-          (errorData as { error?: string }).error ||
-            "Failed to process bulk delete.",
-        );
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorData, "Failed to process bulk delete"));
       }
     } catch (error: unknown) {
       console.error("Error bulk deleting products:", error);

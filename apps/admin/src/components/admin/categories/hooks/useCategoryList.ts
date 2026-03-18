@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface Category {
   id: string;
@@ -302,18 +302,10 @@ export function useCategoryList({
       );
 
       if (!response.ok) {
-        let errorData: Record<string, unknown> = {};
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
-          console.error("Failed to parse error response:", parseError);
-        }
-
-        if (errorData.error && errorData.suggestion) {
-          toast.error(`Cannot Delete Category: ${errorData.error} ${errorData.suggestion}`);
-        } else {
-          toast.error("Failed to move category to trash.");
-        }
+        const errorData = await response.json().catch(() => ({}));
+        const suggestion = errorData.details?.suggestion || errorData.suggestion;
+        const message = extractApiError(errorData, "Failed to move category to trash");
+        toast.error(suggestion ? `${message}\n${suggestion}` : message);
         return;
       }
 
@@ -349,21 +341,10 @@ export function useCategoryList({
       );
 
       if (!response.ok) {
-        let errorData: Record<string, unknown> = {};
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
-          console.error(
-            "Failed to parse permanent delete error response:",
-            parseError,
-          );
-        }
-
-        if (errorData.error && errorData.suggestion) {
-          toast.error(`Cannot Delete Category: ${errorData.error} ${errorData.suggestion}`);
-        } else {
-          toast.error("Failed to permanently delete category.");
-        }
+        const errorData = await response.json().catch(() => ({}));
+        const suggestion = errorData.details?.suggestion || errorData.suggestion;
+        const message = extractApiError(errorData, "Failed to permanently delete category");
+        toast.error(suggestion ? `${message}\n${suggestion}` : message);
         return;
       }
 
@@ -393,7 +374,10 @@ export function useCategoryList({
         `/api/v1/admin/categories/${id}/restore`,
         { method: "POST" },
       );
-      if (!response.ok) throw new Error("Failed to restore category");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to restore category"));
+      }
 
       toast.success("Category restored successfully.");
       setCategories((prev) => prev.filter((p) => p.id !== id));
@@ -437,35 +421,25 @@ export function useCategoryList({
       });
 
       if (!response.ok) {
-        let errorData: Record<string, unknown> = {};
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
-          console.error(
-            "Failed to parse bulk delete error response:",
-            parseError,
-          );
-        }
+        const errorData = await response.json().catch(() => ({}));
+        const suggestion = errorData.details?.suggestion || errorData.suggestion;
+        const message = extractApiError(errorData, "Failed to process bulk delete");
 
-        if (errorData.error && errorData.suggestion) {
-          const affectedProducts = errorData.affectedProducts as
-            | Array<{ name: string }>
-            | undefined;
-          const productList = affectedProducts
-            ? affectedProducts
-                .slice(0, 3)
-                .map((p) => p.name)
-                .join(", ")
-            : "";
+        const affectedProducts = (errorData.details?.affectedProducts || errorData.affectedProducts) as
+          | Array<{ name: string }>
+          | undefined;
+        const productList = affectedProducts
+          ? affectedProducts
+              .slice(0, 3)
+              .map((p) => p.name)
+              .join(", ")
+          : "";
 
-          const fullMessage = productList
-            ? `${errorData.error} ${errorData.suggestion} Affected products: ${productList}${(affectedProducts?.length ?? 0) > 3 ? "..." : ""}`
-            : `${errorData.error} ${errorData.suggestion}`;
+        let fullMessage = message;
+        if (suggestion) fullMessage += ` ${suggestion}`;
+        if (productList) fullMessage += ` Affected products: ${productList}${(affectedProducts?.length ?? 0) > 3 ? "..." : ""}`;
 
-          toast.error(`Cannot Delete Categories: ${fullMessage}`);
-        } else {
-          toast.error("Failed to process bulk delete.");
-        }
+        toast.error(fullMessage);
         return;
       }
 
@@ -500,7 +474,10 @@ export function useCategoryList({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ categoryIds: idsToRestore }),
       });
-      if (!response.ok) throw new Error("Failed to restore categories");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to restore categories"));
+      }
 
       toast.success(
         `Restored ${idsToRestore.length} categories successfully`,

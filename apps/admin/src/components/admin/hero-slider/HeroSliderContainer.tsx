@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { SliderTab } from "./SliderTab";
 import type { HeroSlider, SliderImage } from "./helpers";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 export function HeroSliderContainer() {
   const [desktopSlider, setDesktopSlider] = useState<HeroSlider | null>(null);
@@ -57,17 +57,18 @@ export function HeroSliderContainer() {
       });
 
       const json = await response.json();
-      const updatedSlider = unwrapEnvelope(json);
-      if (json.success !== false) {
-        if (type === "desktop") setDesktopSlider(updatedSlider);
-        else setMobileSlider(updatedSlider);
-
-        if (updates.isActive !== undefined) {
-          toast.success(`Slider ${updates.isActive ? "activated" : "deactivated"}`);
-        }
+      if (!response.ok || json.success === false) {
+        throw new Error(extractApiError(json, "Failed to update slider"));
       }
-    } catch {
-      toast.error("Failed to update slider");
+      const updatedSlider = unwrapEnvelope(json);
+      if (type === "desktop") setDesktopSlider(updatedSlider);
+      else setMobileSlider(updatedSlider);
+
+      if (updates.isActive !== undefined) {
+        toast.success(`Slider ${updates.isActive ? "activated" : "deactivated"}`);
+      }
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to update slider");
     }
   };
 
@@ -107,15 +108,16 @@ export function HeroSliderContainer() {
       });
 
       const json = await response.json();
-      const slider = unwrapEnvelope(json);
-      if (json.success !== false) {
-        if (type === "desktop") setDesktopSlider(slider);
-        else setMobileSlider(slider);
-
-        toast.success("Slider created successfully");
+      if (!response.ok || json.success === false) {
+        throw new Error(extractApiError(json, "Failed to create slider"));
       }
-    } catch {
-      toast.error("Failed to create slider");
+      const slider = unwrapEnvelope(json);
+      if (type === "desktop") setDesktopSlider(slider);
+      else setMobileSlider(slider);
+
+      toast.success("Slider created successfully");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to create slider");
     }
   };
 

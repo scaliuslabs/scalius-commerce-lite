@@ -1,6 +1,7 @@
 // src/components/admin/collections-list/hooks/useCollectionActions.ts
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/api-helpers";
 import type { CollectionItem } from "../types";
 
 export function useCollectionActions(
@@ -54,10 +55,7 @@ export function useCollectionActions(
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const errorMessage =
-            errorData.message ||
-            `Failed to delete collection. Status: ${response.status}`;
-          throw new Error(errorMessage);
+          throw new Error(extractApiError(errorData, "Failed to delete collection"));
         }
 
         toast.success(successMessage);
@@ -81,7 +79,10 @@ export function useCollectionActions(
         const response = await fetch(`/api/v1/admin/collections/${id}/restore`, {
           method: "POST",
         });
-        if (!response.ok) throw new Error("Failed to restore collection");
+        if (!response.ok) {
+          const errorJson = await response.json().catch(() => ({}));
+          throw new Error(extractApiError(errorJson, "Failed to restore collection"));
+        }
         toast.success("Collection restored.");
         onRefresh();
       } catch (error: unknown) {
@@ -103,7 +104,8 @@ export function useCollectionActions(
         });
 
         if (!response.ok) {
-          throw new Error("Failed to update collection order");
+          const errorJson = await response.json().catch(() => ({}));
+          throw new Error(extractApiError(errorJson, "Failed to update collection order"));
         }
 
         toast.success("Collection order updated.");

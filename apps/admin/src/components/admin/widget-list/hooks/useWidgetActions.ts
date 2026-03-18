@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { WidgetItem } from "../types";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 export function useWidgetActions(
   _fetchWidgets: () => Promise<void>,
@@ -22,7 +22,10 @@ export function useWidgetActions(
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) throw new Error("Failed to update widget");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to update widget"));
+      }
 
       const json = await response.json();
       const updatedWidget = unwrapEnvelope(json);
@@ -33,7 +36,7 @@ export function useWidgetActions(
       toast.success("Success", { description: "Widget updated successfully." });
     } catch (error: unknown) {
       console.error("Error updating widget:", error);
-      toast.error("Error", { description: "Failed to update widget." });
+      toast.error("Error", { description: error instanceof Error ? error.message : "Failed to update widget." });
     } finally {
       setSavingStates((prev) => ({ ...prev, [widgetId]: false }));
     }
@@ -52,7 +55,10 @@ export function useWidgetActions(
 
       const response = await fetch(url, { method: "DELETE" });
 
-      if (!response.ok) throw new Error("Failed to delete widget");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to delete widget"));
+      }
 
       setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
 
@@ -61,7 +67,7 @@ export function useWidgetActions(
           : "Widget moved to trash." });
     } catch (error: unknown) {
       console.error("Error deleting widget:", error);
-      toast.error("Error", { description: "Failed to delete widget." });
+      toast.error("Error", { description: error instanceof Error ? error.message : "Failed to delete widget." });
     } finally {
       setIsActionLoading(false);
     }
@@ -75,14 +81,17 @@ export function useWidgetActions(
         method: "POST",
       });
 
-      if (!response.ok) throw new Error("Failed to restore widget");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to restore widget"));
+      }
 
       setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
 
       toast.success("Success", { description: "Widget restored successfully." });
     } catch (error: unknown) {
       console.error("Error restoring widget:", error);
-      toast.error("Error", { description: "Failed to restore widget." });
+      toast.error("Error", { description: error instanceof Error ? error.message : "Failed to restore widget." });
     } finally {
       setIsActionLoading(false);
       setSavingStates((prev) => ({ ...prev, [widgetId]: false }));

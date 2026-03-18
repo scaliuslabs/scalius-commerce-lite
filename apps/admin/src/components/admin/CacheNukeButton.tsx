@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Eraser } from "lucide-react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/api-helpers";
 import { Button } from "../ui/button";
 import {
   Tooltip,
@@ -30,13 +31,14 @@ export function CacheNukeButton() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to clear cache");
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to clear cache"));
       }
 
       toast.success("All cache cleared successfully");
     } catch (error: unknown) {
       console.error("Error clearing cache:", error);
-      toast.error("Failed to clear cache");
+      toast.error(error instanceof Error ? error.message : "Failed to clear cache");
     } finally {
       setClearing(false);
     }

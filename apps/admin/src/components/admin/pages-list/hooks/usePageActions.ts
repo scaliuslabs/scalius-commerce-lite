@@ -1,6 +1,7 @@
 // src/components/admin/pages-list/hooks/usePageActions.ts
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/api-helpers";
 
 export function usePageActions(fetchPages: () => void) {
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -19,10 +20,7 @@ export function usePageActions(fetchPages: () => void) {
         const response = await fetch(apiEndpoint, { method: "DELETE" });
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const errorMessage =
-            errorData.message ||
-            `Failed to delete page. Status: ${response.status}`;
-          throw new Error(errorMessage);
+          throw new Error(extractApiError(errorData, "Failed to delete page"));
         }
         toast.success(successMessage);
         fetchPages();
@@ -46,7 +44,8 @@ export function usePageActions(fetchPages: () => void) {
           method: "POST",
         });
         if (!response.ok) {
-          throw new Error("Failed to restore page");
+          const errorJson = await response.json().catch(() => ({}));
+          throw new Error(extractApiError(errorJson, "Failed to restore page"));
         }
         toast.success("Page restored.");
         fetchPages();

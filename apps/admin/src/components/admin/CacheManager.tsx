@@ -30,7 +30,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Separator } from "../ui/separator";
 import {
@@ -145,7 +145,10 @@ export function CacheManager() {
         method: "POST",
       });
 
-      if (!response.ok) throw new Error(`Failed to clear ${groupName} cache`);
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, `Failed to clear ${groupName} cache`));
+      }
 
       const groupDef = groups[groupName];
       toast.success(`${groupDef?.label || groupName} cache cleared`);
@@ -154,7 +157,7 @@ export function CacheManager() {
       setTimestamps(prev => ({ ...prev, [groupName]: Date.now() }));
     } catch (error: unknown) {
       console.error(`Error clearing ${groupName} cache:`, error);
-      toast.error(`Failed to clear ${groupName} cache`);
+      toast.error(error instanceof Error ? error.message : `Failed to clear ${groupName} cache`);
     } finally {
       setClearingGroup(null);
     }
@@ -167,7 +170,10 @@ export function CacheManager() {
         method: "POST",
       });
 
-      if (!response.ok) throw new Error("Failed to clear all cache");
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(extractApiError(errorJson, "Failed to clear all cache"));
+      }
 
       toast.success("All cache cleared successfully");
 
@@ -182,7 +188,7 @@ export function CacheManager() {
       });
     } catch (error: unknown) {
       console.error("Error clearing all cache:", error);
-      toast.error("Failed to clear all cache");
+      toast.error(error instanceof Error ? error.message : "Failed to clear all cache");
     } finally {
       setClearingAll(false);
     }
