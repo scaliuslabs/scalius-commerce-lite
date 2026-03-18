@@ -21,8 +21,12 @@ const orderStatuses = [
   "Confirmed",
   "Shipped",
   "Delivered",
+  "Completed",
   "Cancelled",
+  "Refunded",
   "Returned",
+  "Partially Refunded",
+  "Incomplete",
 ];
 
 export function OrderStatusSelector({
@@ -81,6 +85,31 @@ export function OrderStatusSelector({
         "bg-rose-50 text-rose-700 border-rose-200/50 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800/50 hover:bg-rose-100";
       iconColor = "text-rose-500 dark:text-rose-400";
       dotColor = "bg-rose-500 dark:bg-rose-400";
+      break;
+    case "completed":
+      variantClasses =
+        "bg-teal-50 text-teal-700 border-teal-200/50 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800/50 hover:bg-teal-100";
+      iconColor = "text-teal-500 dark:text-teal-400";
+      dotColor = "bg-teal-500 dark:bg-teal-400";
+      break;
+    case "refunded":
+      variantClasses =
+        "bg-orange-50 text-orange-700 border-orange-200/50 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/50 hover:bg-orange-100";
+      iconColor = "text-orange-500 dark:text-orange-400";
+      dotColor = "bg-orange-500 dark:bg-orange-400";
+      break;
+    case "partially refunded":
+    case "partially_refunded":
+      variantClasses =
+        "bg-amber-50 text-amber-700 border-amber-200/50 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/50 hover:bg-amber-100";
+      iconColor = "text-amber-500 dark:text-amber-400";
+      dotColor = "bg-amber-500 dark:bg-amber-400";
+      break;
+    case "incomplete":
+      variantClasses =
+        "bg-slate-50 text-slate-700 border-slate-200/50 dark:bg-slate-900/30 dark:text-slate-400 dark:border-slate-800/50 hover:bg-slate-100";
+      iconColor = "text-slate-500 dark:text-slate-400";
+      dotColor = "bg-slate-500 dark:bg-slate-400";
       break;
     default:
       variantClasses =

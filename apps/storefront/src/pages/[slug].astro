@@ -85,78 +85,44 @@ const hasProductShortcode = processedContent.includes(
   hideFooter={page.hideFooter}
   layoutData={layoutData}
 >
-  {
-    /* 
-  Layout Logic:
-  - If widgets exist → Full Width Layout (widgets control their own width, content is constrained).
-  - If no widgets → Contained Layout (everything is constrained).
-*/
-  }
-  {
-    (() => {
-      const widgets = page.widgets || [];
-      const isFullWidth = widgets.length > 0;
+  <div class="w-full max-w-7xl mx-auto px-4 py-8">
+    <div class="text-center mb-8">
+      {!page.hideTitle && (
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-3 tracking-tight">
+          {page.title}
+        </h1>
+      )}
+    </div>
 
-      return (
-        <div
-          class={isFullWidth ? "w-full" : "w-full max-w-7xl mx-auto px-4 py-8"}
+    <div class="w-full">
+      <RichContent
+        content={processedContent}
+        className="prose prose-lg prose-gray max-w-none w-full prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl"
+      />
+    </div>
+
+    <div class="text-center mt-10 pt-6 border-t border-gray-100">
+      <a
+        href="/"
+        class="inline-flex items-center px-4 py-2 text-gray-500 hover:text-gray-900 transition-colors text-sm font-medium"
+      >
+        <svg
+          class="w-4 h-4 mr-2"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          <div class={isFullWidth ? "max-w-7xl mx-auto px-4" : ""}>
-            <div class="text-center mb-8">
-              {/* Conditionally render the title based on the new flag */}
-              {!page.hideTitle && (
-                <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-3 tracking-tight">
-                  {page.title}
-                </h1>
-              )}
-            </div>
-
-            {/* Rich Content - Always Contained */}
-            <div class="w-full">
-              <RichContent
-                content={processedContent}
-                className="prose prose-lg prose-gray max-w-none w-full prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl"
-              />
-            </div>
-
-            <div class="text-center mt-10 pt-6 border-t border-gray-100">
-              <a
-                href="/"
-                class="inline-flex items-center px-4 py-2 text-gray-500 hover:text-gray-900 transition-colors text-sm font-medium"
-              >
-                <svg
-                  class="w-4 h-4 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                  />
-                </svg>
-                Back to Home
-              </a>
-            </div>
-          </div>
-
-          {/* Widgets - Full Width if Layout is Full Width */}
-          {widgets.length > 0 && (
-            <div class="w-full mt-12">
-              {widgets.map((widget) => (
-                <div class="widget-container mb-2">
-                  {widget.cssContent && <style set:html={widget.cssContent} />}
-                  <div set:html={widget.htmlContent} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    })()
-  }
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M10 19l-7-7m0 0l7-7m-7 7h18"
+          />
+        </svg>
+        Back to Home
+      </a>
+    </div>
+  </div>
   {
     hasProductShortcode && (
       <script>import "../scripts/hydrateProductShortcodes.ts";</script>

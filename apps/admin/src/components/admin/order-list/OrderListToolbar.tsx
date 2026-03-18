@@ -52,8 +52,12 @@ const statusFilters = [
   { value: "confirmed", label: "Confirmed" },
   { value: "shipped", label: "Shipped" },
   { value: "delivered", label: "Delivered" },
+  { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "refunded", label: "Refunded" },
   { value: "returned", label: "Returned" },
+  { value: "partially_refunded", label: "Partially Refunded" },
+  { value: "incomplete", label: "Incomplete" },
 ];
 
 export function OrderListToolbar({
