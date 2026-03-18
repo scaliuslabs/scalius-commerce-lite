@@ -8,6 +8,7 @@ import "@scalius/core/modules/payments/gateway-settings";
 import { getDb } from "@scalius/database/client";
 import { siteSettings, settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { cacheMiddleware } from "../middleware/cache";
 
 import { ok } from "../utils/api-response";
@@ -71,6 +72,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
 
     const currencyMap = Object.fromEntries(currencyRows.map((r) => [r.key, r.value]));
     const localCurrencyCode = (currencyMap.currency_code ?? "bdt").toLowerCase();
+    const currencyDecimalPlaces = getDecimalPlaces(localCurrencyCode);
 
     const checkoutMode = siteSettingsRow?.checkoutMode ?? "all";
 
@@ -106,7 +108,12 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       checkoutMode,
       partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
       partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0,
-      allowedCountries
+      allowedCountries,
+      currency: {
+        code: localCurrencyCode,
+        symbol: currencyMap.currency_symbol ?? "\u09F3",
+        decimalPlaces: currencyDecimalPlaces,
+      },
     });
   } catch (error: unknown) {
     console.error("Error fetching checkout config:", error);

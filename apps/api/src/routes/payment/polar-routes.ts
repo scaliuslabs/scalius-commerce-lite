@@ -9,6 +9,7 @@ import { getPolarSettings } from "@scalius/core/modules/payments/gateway-setting
 import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
 import { getKv } from "../../utils/kv-cache";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
@@ -98,7 +99,10 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         }
     }
 
-    const amountInCents = Math.round(paymentAmount * 100);
+    // Convert major-unit amount to smallest currency unit using ISO 4217 decimals.
+    // e.g. USD/BDT: ×100, JPY: ×1, BHD: ×1000
+    const decimals = getDecimalPlaces(currency);
+    const amountInCents = Math.round(paymentAmount * Math.pow(10, decimals));
 
     const baseUrl = (c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin).trim();
     const successUrl = body.successUrl || `${baseUrl}/api/v1/payment/polar/success?order_id=${orderId}`;
