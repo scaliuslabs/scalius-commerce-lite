@@ -20,7 +20,7 @@
 
 import { getDb } from "@scalius/database/client";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
-import { sendOrderNotificationEmail } from "@scalius/core/modules/notifications/notifications.service";
+import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 
@@ -131,7 +131,7 @@ export async function handleQueueBatch(
 
   // Process each payment/notification/OTP message independently
   const results = await Promise.allSettled(
-    batch.messages.map((msg) => processQueueMessage(msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage>, db)),
+    batch.messages.map((msg) => processQueueMessage(msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage>, db, env)),
   );
 
   // Ack successful, retry failed with backoff
@@ -156,6 +156,7 @@ export async function handleQueueBatch(
 async function processQueueMessage(
   msg: Message<PaymentQueueMessage | AuthOtpQueueMessage>,
   db: ReturnType<typeof getDb>,
+  env: Env,
 ): Promise<void> {
   const payload = msg.body;
   console.log(`[Queue] Processing message type=${payload.type} id=${msg.id}`);
@@ -310,6 +311,17 @@ async function processQueueMessage(
           payload.notificationType,
           payload.data,
         );
+      }
+
+      // FCM push to admin devices — supplementary, must not break email delivery
+      try {
+        const requestUrl = env.PUBLIC_API_BASE_URL || "https://api.scalius.com";
+        await sendOrderNotification(db, {
+          id: payload.orderId,
+          customerName: payload.customerName,
+        }, env, requestUrl);
+      } catch (fcmError) {
+        console.error(`[Queue] FCM push failed for order ${payload.orderId} (non-fatal):`, fcmError);
       }
       break;
     }
