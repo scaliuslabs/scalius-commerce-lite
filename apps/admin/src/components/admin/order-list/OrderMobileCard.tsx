@@ -31,6 +31,7 @@ import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { FraudCheckIndicator } from "./FraudCheckIndicator";
 import { useCurrency } from "@/hooks/use-currency";
 import { navigateTo } from "@/lib/client/navigate";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 interface OrderMobileCardProps {
   order: OrderListItem;
@@ -182,7 +183,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
         <div className="space-y-1.5 mb-3">
           <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
             <Phone className="h-3.5 w-3.5 shrink-0" />
-            <span>{order.customerPhone}</span>
+            <span>{formatPhoneForDisplay(order.customerPhone)}</span>
             <FraudCheckIndicator
               phone={order.customerPhone}
               orderId={order.id}

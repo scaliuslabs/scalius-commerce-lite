@@ -2,6 +2,7 @@
 import Layout from "@/layouts/Layout.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
 import { getOrderDetails, getLayoutData, type Order, type OrderItem, type LayoutData } from "@/lib/api";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 
 const orderId = Astro.url.searchParams.get("orderId");
@@ -155,7 +156,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? "৳";
           </p>
           <p>
             <span class="text-gray-600">Phone:</span>{" "}
-            <span class="font-medium">{order.customerPhone}</span>
+            <span class="font-medium">{formatPhoneForDisplay(order.customerPhone)}</span>
           </p>
           {
             order.customerEmail && (

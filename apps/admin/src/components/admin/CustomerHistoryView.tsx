@@ -40,6 +40,7 @@ import { useCurrency } from "@/hooks/use-currency";
 import { Separator } from "../ui/separator";
 import { ScrollArea } from "../ui/scroll-area";
 import { Avatar, AvatarFallback } from "../ui/avatar";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 // --- Interfaces ---
 interface Customer {
@@ -314,7 +315,7 @@ export function CustomerHistoryView({
                   href={`tel:${customer.phone}`}
                   className="font-medium hover:text-primary transition-colors break-all"
                 >
-                  {customer.phone}
+                  {formatPhoneForDisplay(customer.phone)}
                 </a>
               </div>
               {customer.email && (
@@ -588,7 +589,7 @@ export function CustomerHistoryView({
                             {record.phone && (
                               <div className="flex items-center gap-1.5">
                                 <Phone className="h-3 w-3 shrink-0" />
-                                <span>{record.phone}</span>
+                                <span>{formatPhoneForDisplay(record.phone)}</span>
                               </div>
                             )}
                             {record.email && (
