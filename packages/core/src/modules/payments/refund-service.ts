@@ -13,6 +13,8 @@ import { applyInventoryForStatusChange } from "../inventory/inventory-transition
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { roundPrice } from "@scalius/shared/price-utils";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { getCurrencyConfig } from "../settings/settings.service";
 
 export interface RefundRequest {
     orderId: string;
@@ -122,6 +124,10 @@ export async function processRefund(
 
     const gateway = params.gateway ?? payment.paymentMethod;
 
+    // Get currency decimals for smallest-unit conversion (Stripe/Polar)
+    const currencyConfig = await getCurrencyConfig(db, kv);
+    const currencyDecimals = getDecimalPlaces(currencyConfig.code);
+
     // 3. Dispatch to gateway
     let refundId: string | undefined;
 
@@ -138,7 +144,7 @@ export async function processRefund(
         const result = await stripeRefund(
             stripe.secretKey,
             payment.stripeChargeId,
-            isFullRefund ? undefined : Math.round(refundAmount * 100), // Stripe uses smallest unit
+            isFullRefund ? undefined : Math.round(refundAmount * Math.pow(10, currencyDecimals)), // Stripe uses smallest unit
             params.reason === "duplicate" ? "duplicate"
                 : params.reason === "fraudulent" ? "fraudulent"
                     : "requested_by_customer"
@@ -189,7 +195,7 @@ export async function processRefund(
             polar,
             {
                 polarOrderId: payment.polarCheckoutId,
-                amount: Math.round(refundAmount * 100),
+                amount: Math.round(refundAmount * Math.pow(10, currencyDecimals)),
                 reason: params.reason === "duplicate" ? "duplicate"
                     : params.reason === "fraudulent" ? "fraudulent"
                         : "customer_request"

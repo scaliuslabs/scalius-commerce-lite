@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
+import { formatPrice } from "@scalius/shared/currency";
 
 export type SortField =
   | "code"
@@ -395,7 +396,7 @@ export function useDiscountListFilters(
       case "percentage":
         return `${discount.discountValue}% off`;
       case "fixed_amount":
-        return `${symbol}${discount.discountValue.toFixed(2)} off`;
+        return `${formatPrice(discount.discountValue, { symbol })} off`;
       case "free":
         return "Free";
       default:

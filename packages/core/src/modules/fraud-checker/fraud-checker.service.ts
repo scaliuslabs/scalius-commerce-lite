@@ -174,7 +174,7 @@ export async function testFraudProvider(
   }
 
   try {
-    const result = await fraudLookup(provider, "01700000000");
+    const result = await fraudLookup(provider, "+8801700000000");
     return {
       success: result.success,
       message: result.success

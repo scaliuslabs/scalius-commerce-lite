@@ -36,10 +36,14 @@ function escapeXml(text: string | null | undefined): string {
 }
 
 /**
- * Formats price for Facebook feed (number + space + currency)
+ * Formats price for Facebook feed (number + space + currency).
+ * Uses ISO 4217 decimal places per currency (e.g., JPY=0, BDT/USD=2, BHD=3).
  */
 function formatFeedPrice(price: number, currencyCode: string): string {
-  return `${price.toFixed(2)} ${currencyCode}`;
+  const decimals = currencyCode === "JPY" || currencyCode === "KRW" || currencyCode === "VND" ? 0
+    : currencyCode === "BHD" || currencyCode === "KWD" || currencyCode === "OMR" ? 3
+    : 2; // Most currencies use 2 decimals
+  return `${price.toFixed(decimals)} ${currencyCode}`;
 }
 
 /**
