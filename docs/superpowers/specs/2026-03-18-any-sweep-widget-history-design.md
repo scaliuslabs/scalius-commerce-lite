@@ -8,7 +8,7 @@
 
 Three hardening sessions (33 + Phase 1+2 + Phase 3 commits) left the codebase functionally correct with all 23 admin pages verified. Two cleanup priorities remain:
 
-1. **~216 explicit `any` instances** across admin (180), core (28), shared (4), database (4) plus **~239 untyped catch blocks** across admin (~50) and API (164). Of the explicit instances, ~156 are fixable; ~60 are legitimate (Drizzle batch, Astro middleware locals, zodResolver, external libs).
+1. **~228 explicit `any` instances** across admin (~182), core (~35), shared (~9), database (~2) plus **~384 untyped catch blocks** across admin (~192), API (~110), and core (~82). Of the explicit instances, ~170 are fixable; ~58 are legitimate (Drizzle batch, Astro middleware locals, zodResolver, external libs). Note: catch block variable names include `error`, `e`, and `err`; ~12 empty `catch {}` blocks in the API are already valid.
 
 2. **Widget History write-side missing** — the `widgetHistory` table, read/restore/delete API endpoints, and admin UI all exist, but nothing ever creates history entries. The table is always empty.
 
@@ -81,7 +81,7 @@ interface WidgetHistoryEntry {
   htmlContent: string;
   cssContent: string | null;
   reason: string;
-  createdAt: string | number | Date;
+  createdAt: number; // Unix timestamp — Drizzle Date goes through JSON.stringify → arrives as number via admin proxy
 }
 
 // Categories domain
@@ -155,7 +155,7 @@ Some of these may already exist in `window.d.ts` — verify before adding duplic
 
 All in `apps/admin/src/loaders/admin/`. Every loader uses `apiGet<any>` — replace with proper generic types.
 
-**Files**: `products.ts` (12), `orders.ts` (9), `customers.ts` (6), `catalog.ts` (5), `settings.ts` (5), `widgets.ts` (4), `analytics.ts` (3), `dashboard.ts` (3), `layout.ts` (2)
+**Files**: `products.ts` (~10), `orders.ts` (~12), `catalog.ts` (~8), `widgets.ts` (~7), `customers.ts` (~6), `discounts.ts` (~4), `settings.ts` (~5), `analytics.ts` (~3), `dashboard.ts` (~3), `layout.ts` (~2). Counts include all `any` usage (not just `apiGet<any>`).
 
 **Pattern**:
 ```typescript
@@ -170,13 +170,16 @@ data.products.map((product) => ({ ... })); // type inferred
 
 #### B. Widget AI Hooks — 16 instances (HIGH PRIORITY)
 
-Files: `useAiGenerator.ts` (4), `useAiImprover.ts` (8), `useAiContext.ts` (2), `useStagedGeneration.ts` (3)
+Files: `useAiGenerator.ts` (4), `useAiImprover.ts` (8), `useAiContext.ts` (2), `useStagedGeneration.ts` (3), `FullScreenEditor.tsx` (1), `AiAssistant.tsx` (1)
 
 **Key fixes**:
-- `useAiGenerator(aiContext: any, widget: any)` → `(aiContext: ReturnType<typeof useAiContext>, widget: Widget | undefined | null)`
+- `useAiGenerator(aiContext: any, widget: any)` → `(aiContext: ReturnType<typeof useAiContext>, widget: Widget | undefined | null)`. Note: `ModelInfo` interface already exists locally in useAiGenerator.ts (lines 11-17) — reuse it, don't duplicate.
 - `(m: any) => m.id === ...` → `(m: ModelInfo) => ...`
 - `messages: any[]` → `messages: OpenRouterMessage[]`
-- `(p: any) =>` and `(c: any) =>` → `(p: ProductSearchResult)`, `(c: Category)`
+- `(p: any) =>` and `(c: any) =>` → `(p: ProductSearchResult)`, `(c: Category)`. Note: `useAiImprover.ts` needs `ProductSearchResult` and `Category` imports added (already imported in `useAiContext.ts` but not in `useAiImprover.ts`).
+- `FullScreenEditor.tsx`: `aiContext?: any` → typed aiContext prop
+- `AiAssistant.tsx`: `widget: any` → `Widget | undefined | null`
+- `useAiImprover.ts` line 246: `catch (mergeError: any)` → `catch (mergeError: unknown)`
 
 #### C. Component Props — 15 instances (MEDIUM PRIORITY)
 
@@ -193,11 +196,11 @@ Files: `useAiGenerator.ts` (4), `useAiImprover.ts` (8), `useAiContext.ts` (2), `
 
 All `(context.locals as any)._env` patterns eliminated by extending `App.Locals`.
 
-#### E. API Catch Blocks — 164 instances (HIGH PRIORITY, MECHANICAL)
+#### E. API Catch Blocks — ~110 instances (HIGH PRIORITY, MECHANICAL)
 
-All in `apps/api/src/`. Pattern: `catch (error) {` → `catch (error: unknown) {`.
+All in `apps/api/src/`. Pattern: `catch (error) {` → `catch (error: unknown) {` (also `catch (e)` and `catch (err)` variants).
 
-39 are already typed correctly. The remaining 164 need the `: unknown` annotation. The error handling patterns downstream already use `instanceof Error` checks, so no logic changes needed.
+~88 are already typed correctly. The remaining ~110 need the `: unknown` annotation. ~12 empty `catch {}` blocks are already valid and need no change. The error handling patterns downstream already use `instanceof Error` checks, so no logic changes needed.
 
 #### F. Core Firebase — 8 instances (MEDIUM PRIORITY)
 
@@ -223,7 +226,7 @@ interface FirebaseClientConfig {
 
 #### G. Shared Package — 8 instances (LOW PRIORITY)
 
-- `currency.ts` (4): Fixed by Window interface extension (1.3)
+- `currency.ts` (4): Fixed by adding `declare global { interface Window }` in currency.ts itself (admin `window.d.ts` already has these globals — only shared needs the fix)
 - `cors-helper.ts` (2): `(c: any)` → define minimal Hono context type or use `unknown` with type guard
 - `json-repair.ts` (3): `any` → `unknown` for parse return types
 - `error-utils.ts` (1): `Record<string, any>` → `Record<string, unknown>`
@@ -240,11 +243,11 @@ interface FirebaseClientConfig {
 - 1 `as unknown as boolean` in `shipping-methods.ts` — remove
 - 2 `z.any()` in navigation route — replace with `z.lazy()` for recursive schema
 
-#### J. Admin Catch Blocks — ~50 instances (MECHANICAL)
+#### J. Admin Catch Blocks — ~192 instances (MECHANICAL)
 
-Same pattern as API: `catch (error) {` → `catch (error: unknown) {`
+Same pattern as API: `catch (error) {` → `catch (error: unknown) {` (also `e`, `err` variants).
 
-#### K. Core Catch Blocks — ~25 instances (MECHANICAL)
+#### K. Core Catch Blocks — ~82 instances (MECHANICAL)
 
 Same pattern across `packages/core/`.
 
@@ -286,11 +289,11 @@ Add 4 new functions:
 ```typescript
 import { widgetHistory } from "@scalius/database/schema";
 
+// Snapshots the widget's CURRENT content into history.
+// The API handler calls this without content params — the function reads current state.
 export async function createHistoryEntry(
   db: Database,
   widgetId: string,
-  htmlContent: string,
-  cssContent: string | null,
   reason: string = "Manual save",
 ): Promise<WidgetHistory> {
   const widget = await getWidgetById(db, widgetId);
@@ -301,8 +304,8 @@ export async function createHistoryEntry(
     .values({
       id: "whist_" + nanoid(),
       widgetId,
-      htmlContent,
-      cssContent,
+      htmlContent: widget.htmlContent,
+      cssContent: widget.cssContent,
       reason,
     })
     .returning()
@@ -335,13 +338,7 @@ export async function restoreFromHistory(
   if (!entry) throw new NotFoundError("History entry not found");
 
   // Auto-snapshot current state before overwriting
-  await db.insert(widgetHistory).values({
-    id: "whist_" + nanoid(),
-    widgetId,
-    htmlContent: widget.htmlContent,
-    cssContent: widget.cssContent,
-    reason: "Auto-saved before restore",
-  });
+  await createHistoryEntry(db, widgetId, "Auto-saved before restore");
 
   // Overwrite widget with history entry content
   await db
@@ -377,7 +374,7 @@ export async function deleteHistoryEntry(
 
 1. **Add** `POST /{id}/history` — new endpoint:
    - Request: `{ reason?: string }` (defaults to "Manual save")
-   - Calls `createHistoryEntry(db, id, widget.htmlContent, widget.cssContent, reason)`
+   - Calls `createHistoryEntry(db, id, reason)` — function reads current widget content internally
    - Returns: `201 Created` with the history entry
 
 2. **Refactor** existing `GET /{id}/history` to use `getWidgetHistory(db, id)`
@@ -544,7 +541,7 @@ The storefront only reads active widgets (`GET /widgets/active/homepage`, `GET /
 | # | Criterion | Verification |
 |---|-----------|-------------|
 | 1 | `pnpm typecheck` passes (0 errors, excluding SDK) | Run after each agent completes |
-| 2 | Remaining `any` count matches eslint-disabled list (~15) | `grep -r ': any\|as any' apps/admin/ \| grep -v eslint-disable \| wc -l` |
+| 2 | Remaining `any` count matches eslint-disabled list (~15) | `grep -rn ': any\|as any' apps/admin/ packages/core/ packages/shared/ packages/database/ \| grep -v eslint-disable \| grep -v node_modules \| wc -l` |
 | 3 | All 23 admin pages return 200 | Spot-check after priority 1 |
 | 4 | Widget "Save Version" creates history entry | Manual test |
 | 5 | Widget "Restore" auto-snapshots current state | Manual test |
