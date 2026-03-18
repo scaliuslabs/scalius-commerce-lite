@@ -45,8 +45,8 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
     customerNameLabel: "Full Name",
     customerNamePlaceholder: "Enter your full name",
     customerPhoneLabel: "Phone Number",
-    customerPhonePlaceholder: "01XXXXXXXXX",
-    customerPhoneHelp: "Example: 01712345678",
+    customerPhonePlaceholder: "Phone number",
+    customerPhoneHelp: "Enter your phone number with country code",
     customerEmailLabel: "Email (Optional)",
     customerEmailPlaceholder: "Enter your email address",
     shippingAddressLabel: "Delivery Address",
@@ -499,12 +499,10 @@ const submitLabel = codOnly
 
   // ── Customer login pre-fill ───────────────────────────────────────────────
   
-  // Helper to normalize phone numbers
+  // Helper to normalize phone numbers — pass through E.164 or raw value
   const normalizePhone = (phone: string | undefined | null) => {
     if (!phone) return "";
-    let p = phone.replace(/^\+?880/, "");
-    if (p.startsWith("1")) p = "0" + p;
-    return p;
+    return phone.trim();
   };
 
   // Helper to fill basic fields

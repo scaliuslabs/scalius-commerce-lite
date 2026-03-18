@@ -7,6 +7,9 @@ import { User, Mail, Smartphone, X } from "lucide-react";
 import { sendCustomerOtp, verifyCustomerOtp, getCustomerSession, logoutCustomer, updateCustomerProfile, type CustomerInfo } from "@/lib/api/customer-auth";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/client";
+import PhoneInput from "react-phone-number-input";
+import "react-phone-number-input/style.css";
+import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
 
 /**
  * Lightweight client-side fetch for checkout config.
@@ -159,10 +162,10 @@ export default function AuthModal() {
   const validateIdentifier = () => {
     if (method === "email") {
       const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.trim());
-      const phoneValid = /^\+?[0-9]{10,15}$/.test(phoneInput.trim());
+      const phoneValid = !!phoneInput && isValidPhoneNumber(phoneInput);
       return emailValid && phoneValid;
     } else {
-      const phoneValid = /^\+?[0-9]{10,15}$/.test(identifier.trim());
+      const phoneValid = !!identifier && isValidPhoneNumber(identifier);
       if (allowedMethods === "email_phone_mandatory") {
         const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(phoneInput.trim());
         return phoneValid && emailValid;
@@ -356,27 +359,36 @@ export default function AuthModal() {
               <label className="text-sm font-medium text-foreground">
                 {method === "email" ? "Email address" : (allowedMethods === "sms_otp" ? "Phone Number" : "WhatsApp Number")}
               </label>
-              <input
-                type={method === "email" ? "email" : "tel"}
-                value={identifier}
-                onChange={(e) => { setIdentifier(e.target.value); setError(""); }}
-                onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                placeholder={method === "email" ? "you@example.com" : "+8801700000000"}
-                className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all"
-                autoFocus
-              />
+              {method === "email" ? (
+                <input
+                  type="email"
+                  value={identifier}
+                  onChange={(e) => { setIdentifier(e.target.value); setError(""); }}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                  placeholder="you@example.com"
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all"
+                  autoFocus
+                />
+              ) : (
+                <PhoneInput
+                  international
+                  defaultCountry="BD"
+                  value={identifier}
+                  onChange={(value) => { setIdentifier(value || ""); setError(""); }}
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:outline-none [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:h-full"
+                />
+              )}
             </div>
 
             {method === "email" && (
               <div className="space-y-1.5 mt-2">
                 <label className="text-sm font-medium text-foreground">Phone Number (Required)</label>
-                <input
-                  type="tel"
+                <PhoneInput
+                  international
+                  defaultCountry="BD"
                   value={phoneInput}
-                  onChange={(e) => { setPhoneInput(e.target.value); setError(""); }}
-                  onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                  placeholder="+8801700000000"
-                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all"
+                  onChange={(value) => { setPhoneInput(value || ""); setError(""); }}
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:outline-none [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:h-full"
                 />
               </div>
             )}
