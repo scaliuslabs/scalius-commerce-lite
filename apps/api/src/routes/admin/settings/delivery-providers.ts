@@ -288,7 +288,10 @@ app.openapi(getProviderRoute, async (c) => {
         const { id } = c.req.valid("param");
         const provider = await deliveryService.getProvider(id);
         if (!provider) throw new NotFoundError("Provider not found");
-        return ok(c, provider);
+        return ok(c, {
+            ...provider,
+            credentials: maskCredentialsForClient(provider.credentials),
+        });
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
         throw error;

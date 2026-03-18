@@ -59,7 +59,7 @@ function showCustomFCMToast(title: string, body: string, link?: string) {
   bodyElement.textContent = body;
   toastElement.appendChild(bodyElement);
 
-  if (link) {
+  if (link && (link.startsWith("/") || link.startsWith("https://"))) {
     const actionElement = document.createElement("a");
     actionElement.className = "custom-fcm-toast-action";
     actionElement.textContent = "View Order";
@@ -72,7 +72,7 @@ function showCustomFCMToast(title: string, body: string, link?: string) {
 
   const closeButton = document.createElement("button");
   closeButton.className = "custom-fcm-toast-close";
-  closeButton.innerHTML = "×";
+  closeButton.textContent = "×";
   closeButton.onclick = closeToast;
   toastElement.appendChild(closeButton);
 

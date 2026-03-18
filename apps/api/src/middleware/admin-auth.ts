@@ -68,12 +68,14 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                     if (raw) {
                         const payload = JSON.parse(raw);
                         if (payload.claimed) {
-                            // Scanner token is valid — create a synthetic user with inventory permissions
+                            // Scanner token is valid — create a synthetic user with LIMITED permissions
+                            // Use a fixed non-admin ID so it doesn't inherit the creating admin's super-admin status
                             user = {
-                                id: payload.adminId || "scanner",
+                                id: `scanner:${payload.adminId || "unknown"}`,
                                 email: "scanner@system",
                                 name: payload.adminName || "Scanner",
-                                role: "admin",
+                                role: "scanner", // NOT "admin" — prevents full admin access
+                                _isScannerToken: true,
                             };
                         }
                     }
@@ -99,7 +101,21 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // Inject user into Hono context
     c.set("user", user);
 
-    // 3. Admin & RBAC Validation
+    // 3. Scanner token — restrict to inventory endpoints only
+    if ((user as Record<string, unknown>)._isScannerToken) {
+        const pathname = new URL(c.req.url).pathname;
+        if (!pathname.includes("/inventory/")) {
+            return c.json(
+                { success: false, error: "Forbidden", message: "Scanner tokens can only access inventory endpoints" },
+                403,
+            );
+        }
+        // Skip full RBAC check — scanner has implicit inventory permission
+        await next();
+        return;
+    }
+
+    // 4. Admin & RBAC Validation
     try {
         const db = getDb(c.env);
         const userIsSuperAdmin = await isSuperAdmin(db, user.id);
