@@ -7,3 +7,4 @@ export * from "./helpers";
 export * from "./api-protection";
 export * from "./route-permissions";
 export * from "./auto-seed";
+export * from "./page-permissions";
