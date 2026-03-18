@@ -6,6 +6,7 @@ import { verifyPolarWebhook } from "@scalius/core/modules/payments/polar";
 import { getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { type Database } from "@scalius/database/client";
 import { getKv } from "../../utils/kv-cache";
+import type { PaymentQueueMessage } from "../../queue-consumer";
 
 export const polarWebhookRoutes = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -97,7 +98,30 @@ polarWebhookRoutes.post("/", async (c) => {
             }
 
             case "order.refunded": {
-                console.log(`[Polar Webhook] Refund event for checkout ${eventId}, order ${orderId}`);
+                // Polar order.refunded webhook data is a full Order object (snake_case).
+                // Fields: id, status ("refunded"|"partially_refunded"), refunded_amount (cents),
+                //         total_amount (cents), currency, metadata.orderId, checkout_id.
+                const polarData = payload.data as Record<string, unknown>;
+                const polarStatus = polarData.status as string | undefined;
+                const refundedAmountCents = (polarData.refunded_amount as number) ?? 0;
+                const totalAmountCents = (polarData.total_amount as number) ?? 0;
+                const polarCurrency = (polarData.currency as string) ?? "usd";
+                const polarCheckoutId = (polarData.checkout_id as string) ?? eventId;
+
+                if (orderId && refundedAmountCents > 0) {
+                    await queue.send({
+                        type: "payment.polar.refunded",
+                        orderId,
+                        polarCheckoutId,
+                        amountRefunded: refundedAmountCents,
+                        totalAmount: totalAmountCents,
+                        currency: polarCurrency,
+                        polarStatus: polarStatus ?? "refunded",
+                    } satisfies PaymentQueueMessage);
+                    console.log(`[Polar Webhook] Enqueued payment.polar.refunded for order ${orderId} (${refundedAmountCents} ${polarCurrency} cents, status: ${polarStatus})`);
+                } else {
+                    console.warn(`[Polar Webhook] order.refunded missing orderId or refundedAmount, skipping. orderId=${orderId}, refundedAmount=${refundedAmountCents}`);
+                }
                 break;
             }
 

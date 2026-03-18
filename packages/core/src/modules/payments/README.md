@@ -129,6 +129,7 @@ Dispatches `PaymentQueueMessage` types:
 | `payment.sslcommerz.failed` | `processPaymentFailed()` | Marks order as failed |
 | `payment.polar.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`) |
 | `payment.polar.failed` | `processPaymentFailed()` | Marks order as failed |
+| `payment.polar.refunded` | `processPolarWebhookRefund()` | Updates payment status (refunded/partial), releases inventory on full refund |
 
 ## Provider Details
 
@@ -166,7 +167,7 @@ Dispatches `PaymentQueueMessage` types:
 - **Client singleton**: Module-level `_cachedClient` with token change detection
 - **Session creation**: `createPolarCheckout()` uses ad-hoc pricing -- a Polar Product must exist but the actual amount is set per-checkout via `prices` override. Returns `checkoutUrl` (redirect) + `checkoutId`.
 - **Webhook verification**: `verifyPolarWebhook()` base64-encodes the webhook secret before passing to `standardwebhooks`. Synchronous verification (not async).
-- **Webhook events handled**: `checkout.updated` (status failed/expired -> enqueue failed), `order.paid` (enqueue confirmed), `order.refunded` (logged only)
+- **Webhook events handled**: `checkout.updated` (status failed/expired -> enqueue failed), `order.paid` (enqueue confirmed), `order.refunded` (enqueue refund -> update payment status + inventory)
 - **Replay protection**: KV key `polar_webhook:{eventId}:{eventType}` with 24h TTL
 - **Refund**: `createPolarRefund()` refunds by Polar order ID. Reason codes: `fraudulent`, `customer_request`, `duplicate`, `other`, `service_disruption`, `satisfaction_guarantee`, `dispute_prevention`.
 - **Settings**: `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` (stored in `settings` table, category `polar`)
@@ -344,13 +345,12 @@ Mirrors the server-side pattern. `apps/storefront/src/lib/checkout/` has:
 
 ## Known Gaps
 
-1. **Polar webhook `order.refunded`**: Logged but not processed (no queue message enqueued, no DB update). Refunds are handled synchronously via the admin refund endpoint.
-2. **Stripe `charge.refunded` queue message**: Exists in the queue consumer but is audit-only (no DB mutation). Refunds are handled synchronously via the admin refund endpoint.
-3. **`PaymentMethodSettings.tsx`**: Older component that lists only Stripe + SSLCommerz + COD (no Polar support). `PaymentGatewaysManager.tsx` is the current component with all 4 gateways.
-4. **SSLCommerz refund IP whitelisting**: Production refunds require the server's public IP to be registered with SSLCommerz. Sandbox works without this.
-5. **COD refund**: `CODProvider.createRefund()` returns a marker ID only. Actual cash refund is a manual operational process.
-6. **No capture endpoint exposed**: `capturePaymentIntent()` and `cancelPaymentIntent()` exist in `stripe.ts` but have no API route. They would need to be called from an admin fulfillment flow.
-7. **processPaymentFailed**: Does not record `polarCheckoutId` on the failed payment entry (only handles stripe/sslcommerz gateway-specific IDs).
-8. **Partial payment COD exclusion**: When `partialPaymentEnabled` is true on the storefront, COD is hidden from the payment method list. However, the API routes do not enforce this -- a direct API call could still create a COD order with partial payment config active.
-9. **Factory not used by API routes**: API routes call legacy wrapper functions (`createPaymentIntent()`, `initSSLCommerzSession()`, etc.) directly rather than going through `createPaymentProvider()` factory. The factory/provider pattern is implemented but not yet the primary code path for session creation.
-10. **SSLCommerz refund amount hardcoded to 2 decimals**: `initiateSSLCommerzRefund()` uses `toFixed(2)` for the refund amount because the currency is not passed to the refund function and SSLCommerz only supports BDT refunds (which has 2 decimals).
+1. **Stripe `charge.refunded` queue message**: Exists in the queue consumer but is audit-only (no DB mutation). Refunds are handled synchronously via the admin refund endpoint.
+2. **`PaymentMethodSettings.tsx`**: Older component that lists only Stripe + SSLCommerz + COD (no Polar support). `PaymentGatewaysManager.tsx` is the current component with all 4 gateways.
+3. **SSLCommerz refund IP whitelisting**: Production refunds require the server's public IP to be registered with SSLCommerz. Sandbox works without this.
+4. **COD refund**: `CODProvider.createRefund()` returns a marker ID only. Actual cash refund is a manual operational process.
+5. **No capture endpoint exposed**: `capturePaymentIntent()` and `cancelPaymentIntent()` exist in `stripe.ts` but have no API route. They would need to be called from an admin fulfillment flow.
+6. **processPaymentFailed**: Does not record `polarCheckoutId` on the failed payment entry (only handles stripe/sslcommerz gateway-specific IDs).
+7. **Partial payment COD exclusion**: When `partialPaymentEnabled` is true on the storefront, COD is hidden from the payment method list. However, the API routes do not enforce this -- a direct API call could still create a COD order with partial payment config active.
+8. **Factory not used by API routes**: API routes call legacy wrapper functions (`createPaymentIntent()`, `initSSLCommerzSession()`, etc.) directly rather than going through `createPaymentProvider()` factory. The factory/provider pattern is implemented but not yet the primary code path for session creation.
+9. **SSLCommerz refund amount hardcoded to 2 decimals**: `initiateSSLCommerzRefund()` uses `toFixed(2)` for the refund amount because the currency is not passed to the refund function and SSLCommerz only supports BDT refunds (which has 2 decimals).
