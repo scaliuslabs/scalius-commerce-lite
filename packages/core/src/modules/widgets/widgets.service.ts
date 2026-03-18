@@ -1,7 +1,8 @@
 // src/modules/widgets/widgets.service.ts
 // All DB queries and business logic for the widgets domain.
 
-import { widgets, collections } from "@scalius/database/schema";
+import { widgets, widgetHistory, collections } from "@scalius/database/schema";
+import type { WidgetHistory } from "@scalius/database/schema";
 import { isNull, asc, and, sql, inArray, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
@@ -131,4 +132,84 @@ export async function bulkDeactivateWidgets(db: Database, ids: string[]): Promis
 
 export async function restoreWidgets(db: Database, ids: string[]): Promise<void> {
     await db.update(widgets).set({ deletedAt: null }).where(inArray(widgets.id, ids));
+}
+
+// ─────────────────────────────────────────
+// History
+// ─────────────────────────────────────────
+
+export async function createHistoryEntry(
+    db: Database,
+    widgetId: string,
+    reason: string = "Manual save",
+): Promise<WidgetHistory> {
+    const widget = await getWidgetById(db, widgetId);
+    if (!widget) throw new NotFoundError("Widget not found");
+
+    return db
+        .insert(widgetHistory)
+        .values({
+            id: "whist_" + nanoid(),
+            widgetId,
+            htmlContent: widget.htmlContent,
+            cssContent: widget.cssContent,
+            reason,
+        })
+        .returning()
+        .get();
+}
+
+export async function getWidgetHistory(db: Database, widgetId: string) {
+    const widget = await getWidgetById(db, widgetId);
+    if (!widget) throw new NotFoundError("Widget not found");
+
+    return db
+        .select()
+        .from(widgetHistory)
+        .where(eq(widgetHistory.widgetId, widgetId))
+        .orderBy(sql`${widgetHistory.createdAt} DESC`);
+}
+
+export async function restoreFromHistory(
+    db: Database,
+    widgetId: string,
+    historyId: string,
+) {
+    const widget = await getWidgetById(db, widgetId);
+    if (!widget) throw new NotFoundError("Widget not found");
+
+    const [entry] = await db
+        .select()
+        .from(widgetHistory)
+        .where(and(eq(widgetHistory.id, historyId), eq(widgetHistory.widgetId, widgetId)));
+    if (!entry) throw new NotFoundError("History entry not found");
+
+    // Auto-snapshot current state before overwriting
+    await createHistoryEntry(db, widgetId, "Auto-saved before restore");
+
+    // Overwrite widget with history entry content
+    await db
+        .update(widgets)
+        .set({
+            htmlContent: entry.htmlContent,
+            cssContent: entry.cssContent,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(widgets.id, widgetId));
+
+    return { message: "Widget restored from history" };
+}
+
+export async function deleteHistoryEntry(
+    db: Database,
+    widgetId: string,
+    historyId: string,
+): Promise<void> {
+    const [entry] = await db
+        .select()
+        .from(widgetHistory)
+        .where(and(eq(widgetHistory.id, historyId), eq(widgetHistory.widgetId, widgetId)));
+    if (!entry) throw new NotFoundError("History entry not found");
+
+    await db.delete(widgetHistory).where(eq(widgetHistory.id, historyId));
 }
