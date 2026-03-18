@@ -26,6 +26,7 @@ import { OrderFormProvider } from "./order-form/OrderFormContext";
 import { CustomerInfoSection } from "./order-form/CustomerInfoSection";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export function OrderForm({
   products,
@@ -103,7 +104,7 @@ export function OrderForm({
       const res = await fetch("/api/v1/admin/settings/delivery-locations?type=city");
       if (!res.ok) throw new Error("Failed to load cities");
       const json = await res.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setLocations((prev) => ({ ...prev, cities: data.locations || [] }));
     } catch (error: unknown) {
       console.error("Error loading cities:", error);
@@ -125,7 +126,7 @@ export function OrderForm({
       );
       if (!res.ok) throw new Error("Failed to load zones");
       const json = await res.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setLocations((prev) => ({ ...prev, zones: data.locations || [], areas: [] }));
       form.setValue("area", null);
     } catch (error: unknown) {
@@ -149,7 +150,7 @@ export function OrderForm({
       );
       if (!res.ok) throw new Error("Failed to load areas");
       const json = await res.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setLocations((prev) => ({ ...prev, areas: data.locations || [] }));
     } catch (error: unknown) {
       console.error("Error loading areas:", error);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import type { MetaConversionsSettings, FormData } from "../MetaConversionsSettingsForm";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 const DEFAULT_FORM_DATA: FormData = {
   pixelId: "",
@@ -50,7 +51,7 @@ export function useMetaConversionsSettings(initialSettings?: MetaConversionsSett
       const response = await fetch("/api/v1/admin/settings/meta-conversions");
       if (response.ok) {
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         setSettings(data.settings);
         setFormData(
           data.settings
@@ -86,7 +87,7 @@ export function useMetaConversionsSettings(initialSettings?: MetaConversionsSett
       }
 
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setSettings(data);
       setHasUnsavedChanges(false);
       toast.success("Settings saved successfully");

@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useOrderForm } from "./OrderFormContext";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export function CustomerInfoSection() {
   const { form, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
@@ -43,7 +44,7 @@ export function CustomerInfoSection() {
     fetch("/api/v1/admin/settings/allowed-countries")
       .then(res => res.json())
       .then(json => {
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         if (Array.isArray(data.allowedCountries) && data.allowedCountries.length > 0) {
           setAllowedCountries(data.allowedCountries);
         }

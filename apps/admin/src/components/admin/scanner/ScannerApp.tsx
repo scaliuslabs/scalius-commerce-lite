@@ -15,6 +15,7 @@ import { ManualSheet } from "./ManualSheet";
 import { ScanFlash, type FlashState } from "./ScanFlash";
 import { ScanHistory } from "./ScanHistory";
 import { LastScanBar } from "./LastScanBar";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -142,7 +143,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         return res.json();
       })
       .then((json) => {
-        const data = json.data && typeof json.data === "object" ? json.data : json;
+        const data = unwrapEnvelope<Record<string, string>>(json);
         setAdminName(data.adminName || "Admin");
         setAuthState("ready");
       })

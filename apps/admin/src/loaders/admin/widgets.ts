@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api-fetch";
+import { apiGet } from "@/lib/api-server";
 import type { Widget, WidgetListResponse } from "@/types/api-responses";
 
 // Placement rule values inlined from @scalius/database schema (avoids DB dependency)

@@ -6,6 +6,7 @@ import {
 } from "./ProviderIcon";
 import { ProviderListSidebar } from "./ProviderListSidebar";
 import { ProviderDetailPanel } from "./ProviderDetailPanel";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // Default credentials structure per provider type
 const DEFAULT_CREDENTIALS = {
@@ -50,7 +51,7 @@ async function apiSaveProvider(provider: Omit<DeliveryProviderRecord, "createdAt
     throw new Error(errorData.error || "Failed to save provider");
   }
   const json = await response.json();
-  return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+  return unwrapEnvelope(json);
 }
 
 async function apiDeleteProvider(id: string) {
@@ -78,7 +79,7 @@ async function apiTestProvider(id: string) {
     };
   }
   const json = await response.json();
-  return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+  return unwrapEnvelope(json);
 }
 
 async function apiTestCredentials(
@@ -100,7 +101,7 @@ async function apiTestCredentials(
     },
   );
   const json = await response.json();
-  const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+  const result = unwrapEnvelope(json);
   if (!response.ok) {
     return {
       success: false,

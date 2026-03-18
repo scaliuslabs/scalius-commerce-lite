@@ -7,6 +7,7 @@ import type {
   MediaFoldersApiResponse,
   MediaFilterOptions,
 } from "../types";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 /** Shape of the upload response JSON — varies between success, partial, and error */
 interface UploadResponseData {
@@ -54,11 +55,7 @@ export class MediaApiClient {
     }
 
     const json = await response.json();
-    // Handle both raw API envelope { success, data: T } and proxy-unwrapped { success, ...T }
-    if (json.data && typeof json.data === "object" && !Array.isArray(json.data) && json.data.files) {
-      return json.data as MediaApiResponse;
-    }
-    return json as MediaApiResponse;
+    return unwrapEnvelope<MediaApiResponse>(json);
   }
 
   /**

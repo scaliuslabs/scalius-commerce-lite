@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2, AlertCircle, KeyRound, Mail, Smartphone, Shield, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 type VerifyMethod = "totp" | "email" | "backup";
 
@@ -45,7 +46,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
         const response = await fetch("/api/v1/admin/auth/2fa/info");
         if (response.ok) {
           const json = await response.json();
-          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+          const data = unwrapEnvelope(json);
           if (data.method) {
             setMethod(data.method);
             setUserEmail(data.email || "");

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export interface Location {
   id: string;
@@ -149,7 +150,7 @@ export function useDeliveryLocations() {
       if (!response.ok) throw new Error("Failed to load locations");
 
       const json = await response.json();
-      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const result = unwrapEnvelope(json);
       setFilteredLocations(result.locations);
       setPagination({
         page: result.pagination.page,
@@ -174,7 +175,7 @@ export function useDeliveryLocations() {
       if (!response.ok) throw new Error(`Failed to load ${parentType}s`);
 
       const json = await response.json();
-      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const result = unwrapEnvelope(json);
       setParentLocations(result.locations);
     } catch (error: unknown) {
       console.error(`Error loading ${parentType}s:`, error);

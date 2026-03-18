@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export interface AdminUser {
   id: string;
@@ -31,7 +32,7 @@ export function useAdminUsers() {
     try {
       const response = await fetch("/api/v1/admin/auth/users");
       const json = await response.json();
-      const result = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const result = unwrapEnvelope(json);
       if (response.ok) setAdminUsers(result.users);
     } catch {
       console.error("Failed to fetch admin users");
@@ -44,7 +45,7 @@ export function useAdminUsers() {
     try {
       const response = await fetch("/api/v1/admin/rbac/roles");
       const json2 = await response.json();
-      const result = json2.data && typeof json2.data === "object" && !Array.isArray(json2.data) ? json2.data : json2;
+      const result = unwrapEnvelope(json2);
       if (response.ok) {
         setAvailableRoles(result.roles.filter((r: Role) => r.name !== "super_admin"));
       }

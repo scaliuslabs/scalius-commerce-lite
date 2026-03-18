@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export function SecuritySettingsBuilder() {
     const [cspAllowedDomains, setCspAllowedDomains] = useState("");
@@ -16,7 +17,7 @@ export function SecuritySettingsBuilder() {
                 const response = await fetch("/api/v1/admin/settings/security");
                 if (response.ok) {
                     const json = await response.json();
-                    const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+                    const data = unwrapEnvelope(json);
                     setCspAllowedDomains(data.cspAllowedDomains || "");
                 }
             } catch (error: unknown) {

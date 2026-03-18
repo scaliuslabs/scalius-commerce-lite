@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Loader2, Save, CheckCircle2, ExternalLink, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -39,7 +40,7 @@ export default function StripeSettingsForm() {
       const res = await fetch("/api/v1/admin/settings/stripe");
       if (res.ok) {
         const json = await res.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         setSecretKey(data.secretKey || "");
         setPublishableKey(data.publishableKey || "");
         setWebhookSecret(data.webhookSecret || "");

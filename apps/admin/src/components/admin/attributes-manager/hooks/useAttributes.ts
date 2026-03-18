@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import type { Attribute, Pagination, SortField, SortOrder } from "../types";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export function useAttributes(
   showTrashed: boolean,
@@ -36,7 +37,7 @@ export function useAttributes(
       if (!response.ok) throw new Error("Failed to fetch attributes");
       const json = await response.json();
       // Handle both raw API envelope { success, data: T } and proxy-unwrapped { success, ...T }
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setAttributes(data.attributes);
       setPagination(data.pagination);
     } catch (error: unknown) {

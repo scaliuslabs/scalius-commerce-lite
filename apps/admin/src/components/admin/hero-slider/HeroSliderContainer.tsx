@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import { SliderTab } from "./SliderTab";
 import type { HeroSlider, SliderImage } from "./helpers";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export function HeroSliderContainer() {
   const [desktopSlider, setDesktopSlider] = useState<HeroSlider | null>(null);
@@ -18,7 +19,7 @@ export function HeroSliderContainer() {
     try {
       const response = await fetch("/api/v1/admin/settings/hero-sliders");
       const json = await response.json();
-      const data = json.data !== undefined ? json.data : json;
+      const data = unwrapEnvelope(json);
       if (json.success || Array.isArray(data)) {
         const items = Array.isArray(data) ? data : [];
         const desktop = items.find((s: HeroSlider) => s.type === "desktop");
@@ -56,7 +57,7 @@ export function HeroSliderContainer() {
       });
 
       const json = await response.json();
-      const updatedSlider = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const updatedSlider = unwrapEnvelope(json);
       if (json.success !== false) {
         if (type === "desktop") setDesktopSlider(updatedSlider);
         else setMobileSlider(updatedSlider);
@@ -106,7 +107,7 @@ export function HeroSliderContainer() {
       });
 
       const json = await response.json();
-      const slider = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const slider = unwrapEnvelope(json);
       if (json.success !== false) {
         if (type === "desktop") setDesktopSlider(slider);
         else setMobileSlider(slider);

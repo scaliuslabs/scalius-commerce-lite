@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import type { Order } from "./types";
 import { navigateTo } from "@/lib/client/navigate";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface OrderPayment {
   id: string;
@@ -144,12 +145,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
       const [paymentsRes, codRes] = responses;
 
       if (paymentsRes.ok) {
-        const data = await paymentsRes.json() as { payments: OrderPayment[]; plan: PaymentPlan | null };
+        const data = unwrapEnvelope<{ payments: OrderPayment[]; plan: PaymentPlan | null }>(await paymentsRes.json());
         setPayments(data.payments);
         setPlan(data.plan);
       }
       if (codRes?.ok) {
-        const data = await codRes.json() as { tracking: CODTracking | null };
+        const data = unwrapEnvelope<{ tracking: CODTracking | null }>(await codRes.json());
         setCodTracking(data.tracking);
       }
     } catch {

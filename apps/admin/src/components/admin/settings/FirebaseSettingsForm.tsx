@@ -19,6 +19,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface FirebaseConfig {
   serviceAccount: string;
@@ -58,7 +59,7 @@ export default function FirebaseSettingsForm() {
       const res = await fetch("/api/v1/admin/settings/firebase");
       if (res.ok) {
         const json = await res.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         if (data.serviceAccount && data.serviceAccount.includes("••••")) {
           setServiceAccountStatus("configured");
         }

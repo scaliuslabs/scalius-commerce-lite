@@ -33,6 +33,7 @@ import type {
   DeleteDialogState,
 } from "./types";
 import { navigateTo } from "@/lib/client/navigate";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface WidgetsListProps extends WidgetsManagerProps {
   initialWidgets: WidgetItem[];
@@ -106,7 +107,7 @@ export function WidgetsList({
       fetch("/api/v1/admin/settings/openrouter")
         .then((res) => res.json())
         .then((json) => {
-          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+          const data = unwrapEnvelope(json);
           setOpenRouterApiKey(data.apiKey || "");
         })
         .catch(() => {});

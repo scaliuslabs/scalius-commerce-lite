@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, RotateCcw, Save, Palette } from "lucide-react";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // ---------------------------------------------------------------------------
 // Default storefront colors (must match global.css :root vars in storefront).
@@ -180,7 +181,7 @@ export default function ThemeSettingsPage() {
             const res = await fetch("/api/v1/admin/settings/theme");
             if (!res.ok) throw new Error("Failed to load");
             const json = await res.json();
-            const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+            const data = unwrapEnvelope(json);
             setColors(data.colors || {});
         } catch {
             setMessage({ type: "error", text: "Failed to load theme settings." });

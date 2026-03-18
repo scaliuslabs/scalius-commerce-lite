@@ -9,6 +9,7 @@ import { useStagedGeneration } from './useStagedGeneration';
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 
@@ -43,7 +44,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
     fetch("/api/v1/admin/settings/openrouter")
       .then(res => res.json())
       .then(json => {
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         if (data.apiKey) {
           setIsApiKeySet(true);
           fetch("/api/openrouter/models")
@@ -107,7 +108,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
       });
       if (!contextRes.ok) throw new Error(ERROR_MESSAGES.contextFetchFailed);
       const contextJson = await contextRes.json();
-      const contextData = contextJson.data && typeof contextJson.data === "object" && !Array.isArray(contextJson.data) ? contextJson.data : contextJson;
+      const contextData = unwrapEnvelope(contextJson);
 
       // 3. Generate structured prompt with caching support
       const currentModel = openRouterModels.find(m => m.id === selectedModel);
@@ -279,7 +280,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
       });
       if (!contextRes.ok) throw new Error("Could not fetch context details.");
       const contextJson2 = await contextRes.json();
-      const contextData = contextJson2.data && typeof contextJson2.data === "object" && !Array.isArray(contextJson2.data) ? contextJson2.data : contextJson2;
+      const contextData = unwrapEnvelope(contextJson2);
 
       const combinedPrompt = await generateCompletePrompt({
         systemPrompt,

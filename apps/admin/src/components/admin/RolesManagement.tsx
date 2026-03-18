@@ -52,6 +52,7 @@ import { toast } from "sonner";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PermissionGate } from "./PermissionGate";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface Role {
   id: string;
@@ -138,7 +139,7 @@ export function RolesManagement() {
         return false;
       }
 
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setRoles([...roles, data.role]);
       toast.success("Role created successfully");
       return true;
@@ -171,7 +172,7 @@ export function RolesManagement() {
         return false;
       }
 
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setRoles(roles.map((r) => (r.id === roleId ? data.role : r)));
       toast.success("Role updated successfully");
       return true;

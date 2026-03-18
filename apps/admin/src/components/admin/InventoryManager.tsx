@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@scalius/shared/utils";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // ---------- Types ----------
 
@@ -152,7 +153,7 @@ export function InventoryManager() {
         });
         const res = await fetch(`/api/v1/admin/inventory?${params}`);
         const json = await res.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         setVariants(data.variants || []);
         setStats(data.stats || null);
         setPagination(data.pagination || null);
@@ -164,7 +165,7 @@ export function InventoryManager() {
         });
         const res = await fetch(`/api/v1/admin/inventory?${params}`);
         const json2 = await res.json();
-        const data = json2.data && typeof json2.data === "object" && !Array.isArray(json2.data) ? json2.data : json2;
+        const data = unwrapEnvelope(json2);
         setMovements(data.movements || []);
         setMovementsPagination(data.pagination || null);
       }

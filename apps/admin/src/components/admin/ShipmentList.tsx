@@ -2,6 +2,7 @@ import { useState, useEffect, type FC } from "react";
 import { ShipmentStatusBadge } from "./ShipmentStatusBadge";
 import { ShipmentMetadataDisplay } from "../ui/ShipmentMetadataDisplay";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface Shipment {
   id: string;
@@ -41,7 +42,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
       }
 
       const json = await response.json();
-      const data = json.data !== undefined ? json.data : json;
+      const data = unwrapEnvelope(json);
       // Initialize lastChecked to updatedAt for existing shipments
       const enhancedData = (Array.isArray(data) ? data : []).map((shipment: Shipment) => ({
         ...shipment,

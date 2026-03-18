@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, ExternalLink } from "lucide-react";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface StorefrontUrlBuilderProps {
   initialUrl?: string;
@@ -21,7 +22,7 @@ export function StorefrontUrlBuilder({
         const response = await fetch("/api/v1/admin/settings/storefront-url");
         if (response.ok) {
           const json = await response.json();
-          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+          const data = unwrapEnvelope(json);
           setStorefrontUrl(data.storefrontUrl || "/");
         }
       } catch (error: unknown) {

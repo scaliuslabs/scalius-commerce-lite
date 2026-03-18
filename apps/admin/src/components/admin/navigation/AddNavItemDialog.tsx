@@ -38,6 +38,7 @@ import {
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
 import type { NavigationItem, NavigationSource } from "./types";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 type NavItemType = "category" | "page" | "dynamic" | "custom" | "label";
 
@@ -163,7 +164,7 @@ export function AddNavItemDialog({
         const res = await fetch(`/api/v1/admin/attributes/${attributeId}/values`);
         if (res.ok) {
           const json = await res.json();
-          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+          const data = unwrapEnvelope(json);
           setAttributeValues((prev) => ({
             ...prev,
             [attributeId]: data.values || [],
@@ -201,7 +202,7 @@ export function AddNavItemDialog({
         );
         if (res.ok) {
           const json = await res.json();
-          const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+          const data = unwrapEnvelope(json);
           setPreviewCount(data.count);
         }
       } catch (error: unknown) {

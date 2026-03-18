@@ -7,6 +7,7 @@ import type {
   SortField,
   SortOrder,
 } from "../types";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export function useCollections(
   showTrashed: boolean,
@@ -38,7 +39,7 @@ export function useCollections(
       const response = await fetch(`/api/v1/admin/collections?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch collections");
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setCollections(data.collections || []);
       if (data.pagination) {
         setPagination(data.pagination);

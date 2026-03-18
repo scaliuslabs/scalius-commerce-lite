@@ -2,6 +2,7 @@ import React from "react";
 import { toast } from "sonner";
 import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { UseOrderListStateReturn } from "./useOrderListState";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface ShipmentStatus {
   id: string;
@@ -71,7 +72,7 @@ export function useOrderListApi(
         if (!response.ok) throw new Error("Failed to fetch orders");
 
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
         const parsedOrders = data.orders.map((order: Record<string, unknown>) => ({
           ...order,
           createdAt: new Date(order.createdAt as string),

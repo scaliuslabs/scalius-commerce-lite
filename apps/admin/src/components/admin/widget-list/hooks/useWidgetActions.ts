@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { WidgetItem } from "../types";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export function useWidgetActions(
   _fetchWidgets: () => Promise<void>,
@@ -24,7 +25,7 @@ export function useWidgetActions(
       if (!response.ok) throw new Error("Failed to update widget");
 
       const json = await response.json();
-      const updatedWidget = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const updatedWidget = unwrapEnvelope(json);
       setWidgets((prev) =>
         prev.map((w) => (w.id === widgetId ? { ...w, ...updatedWidget } : w)),
       );

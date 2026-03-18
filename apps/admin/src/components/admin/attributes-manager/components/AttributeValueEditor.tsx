@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AttributeValue } from "../types";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface AttributeValueEditorProps {
   attributeId: string | null;
@@ -72,7 +73,7 @@ export function AttributeValueEditor({
       );
       if (!response.ok) throw new Error("Failed to fetch values");
       const json = await response.json();
-      const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+      const data = unwrapEnvelope(json);
       setValues(data.values || []);
     } catch (error: unknown) {
       console.error("Error fetching values:", error);

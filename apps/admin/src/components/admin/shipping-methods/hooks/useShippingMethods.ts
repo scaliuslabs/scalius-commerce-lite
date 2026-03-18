@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // Local type replacing @scalius/database/schema import
 export interface ShippingMethod {
@@ -75,7 +76,7 @@ export function useShippingMethods() {
         );
         if (!response.ok) throw new Error("Failed to fetch shipping methods");
         const json = await response.json();
-        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        const data = unwrapEnvelope(json);
 
         setMethods(data.shippingMethods || []);
         setPagination(

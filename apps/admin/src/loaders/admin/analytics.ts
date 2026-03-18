@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api-fetch";
+import { apiGet } from "@/lib/api-server";
 import type { AnalyticsScript } from "@/types/api-responses";
 
 export async function getAnalyticsListData() {
