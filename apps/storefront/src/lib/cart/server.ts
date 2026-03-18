@@ -14,6 +14,7 @@ import {
   deleteAbandonedCheckout,
 } from "@/lib/api";
 import { roundPrice, addPrices } from "@scalius/shared/price-utils";
+import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 
 export async function getCities(): Promise<LocationData[]> {
   try {
@@ -28,11 +29,15 @@ export async function getCities(): Promise<LocationData[]> {
 export async function processOrder(formData: FormData) {
   try {
     const customerName = formData.get("customerName") as string;
-    let customerPhone = (formData.get("customerPhone") as string)
-      .replace(/^\+?880/, "")
-      .trim();
-    if (customerPhone.startsWith("1")) {
-      customerPhone = "0" + customerPhone;
+    const rawPhone = (formData.get("customerPhone") as string)?.trim();
+    let customerPhone: string;
+    try {
+      customerPhone = validateAndFormatPhone(rawPhone);
+    } catch {
+      return {
+        success: false,
+        error: { message: "Please enter a valid phone number" },
+      };
     }
     const customerEmail = (formData.get("customerEmail") as string) || null;
     const shippingAddress = formData.get("shippingAddress") as string;
@@ -60,9 +65,6 @@ export async function processOrder(formData: FormData) {
       throw new Error(
         "Please fill in all required fields and add items to your cart.",
       );
-    }
-    if (!/^01[3-9]\d{8}$/.test(customerPhone)) {
-      throw new Error("Please enter a valid Bangladeshi phone number");
     }
 
     let cityName: string | undefined = undefined;

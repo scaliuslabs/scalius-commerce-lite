@@ -98,8 +98,8 @@ async function getLanguageData(): Promise<CheckoutLanguageData> {
       customerNameLabel: "Full Name",
       customerNamePlaceholder: "Enter your full name",
       customerPhoneLabel: "Phone Number",
-      customerPhonePlaceholder: "01XXXXXXXXX",
-      customerPhoneHelp: "Example: 01712345678",
+      customerPhonePlaceholder: "Phone number",
+      customerPhoneHelp: "Enter your phone number with country code",
       customerEmailLabel: "Email (Optional)",
       customerEmailPlaceholder: "Enter your email address",
       shippingAddressLabel: "Delivery Address",
@@ -357,8 +357,7 @@ function attemptToTrackInitiateCheckout() {
     "customerPhone",
   ) as HTMLInputElement;
   const phone = customerPhoneInput?.value;
-  const isPhoneValid =
-    phone && /^01[3-9]\d{8}$/.test(phone.replace(/^\+?88/, ""));
+  const isPhoneValid = phone && phone.trim().length >= 7;
 
   // The checkout is considered "initiated" once we have items and a valid phone number.
   if (Object.keys(items).length > 0 && isPhoneValid) {
@@ -410,10 +409,7 @@ async function handleApplyDiscount() {
     "customerPhone",
   ) as HTMLInputElement;
   const customerPhone = customerPhoneInput?.value;
-  if (
-    !customerPhone ||
-    !/^01[3-9]\d{8}$/.test(customerPhone.replace(/^\+?88/, ""))
-  ) {
+  if (!customerPhone || customerPhone.trim().length < 7) {
     showDiscountMessage(
       "Please enter a valid phone number before applying a discount.",
       "info",
