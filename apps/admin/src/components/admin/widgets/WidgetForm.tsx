@@ -15,7 +15,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { WidgetPlacementRule, type Widget, type Collection, type WidgetHistoryEntry } from '@/types/api-responses';
+import { WidgetPlacementRule, type Widget, type Collection, type WidgetHistoryEntry, type Category } from '@/types/api-responses';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { ArrowLeft, Clock, Save } from 'lucide-react';
@@ -23,8 +23,9 @@ import { clientGet, clientPost, clientDelete } from '@/lib/api-client-fetch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { parseAiContext, serializeAiContext, type AiContext } from '@scalius/core/modules/ai/ai-context-schema';
+import { parseAiContext, serializeAiContext, type AiContext, type ProductReference, type CategoryReference } from '@scalius/core/modules/ai/ai-context-schema';
 import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
+import type { ProductSearchResult } from './widget-form/types';
 import { useAiContext } from './widget-form/useAiContext';
 import { useAiGenerator } from './widget-form/useAiGenerator';
 import { useAiImprover } from './widget-form/useAiImprover';
@@ -147,10 +148,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         if (context.preferredAiModel) aiGenerator.setSelectedModel(context.preferredAiModel);
         if (typeof context.useStagedMode === 'boolean') aiGenerator.setUseStagedMode(context.useStagedMode);
         if (context.savedImages) aiContext.handleMultiImageSelect(context.savedImages);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI context saved data shapes are loosely typed from serialization
-        if (context.savedProducts) context.savedProducts.forEach((p: any) => aiContext.handleProductSelect(p));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI context saved data shapes are loosely typed from serialization
-        if (context.savedCategories) context.savedCategories.forEach((c: any) => aiContext.handleCategorySelect(c));
+        if (context.savedProducts) context.savedProducts.forEach((p: ProductReference) => aiContext.handleProductSelect(p as ProductSearchResult));
+        if (context.savedCategories) context.savedCategories.forEach((c: CategoryReference) => aiContext.handleCategorySelect(c as unknown as Category));
         if (typeof context.allCategoriesSelected === 'boolean') {
           aiContext.handleToggleAllCategories(context.allCategoriesSelected);
         }

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { z } from "zod";
-import { useForm } from "react-hook-form";
+import { useForm, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Form,
@@ -139,8 +139,7 @@ const CheckboxFormItem = ({
   name: keyof FormValues;
   label: string;
   description: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-hook-form Control type requires generic parameter that varies per usage
-  control: any;
+  control: Control<FormValues>;
 }) => (
   <FormField
     control={control}

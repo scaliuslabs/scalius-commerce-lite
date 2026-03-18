@@ -16,35 +16,42 @@ import type {
   FooterBuilderProps,
   FooterMenu,
   SocialLink,
+  LogoConfig,
 } from "./types";
 import { defaultFooterConfig } from "./types";
 
 /**
  * Migrate legacy config formats to the new structure
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy config migration accepts arbitrary shapes
-function migrateConfig(config: any): FooterConfig {
+function migrateConfig(config: unknown): FooterConfig {
+  const cfg = config as Record<string, unknown>;
   // Ensure menu items have IDs
-  const ensureMenuIds = (menus: any[]): FooterMenu[] => {
-    return (menus || []).map((menu) => ({
-      ...menu,
-      id: menu.id || nanoid(),
-      links: menu.links || [],
-    }));
+  const ensureMenuIds = (menus: unknown[]): FooterMenu[] => {
+    return (menus || []).map((menu) => {
+      const m = menu as Record<string, unknown>;
+      return {
+        ...m,
+        id: (m.id as string) || nanoid(),
+        links: (m.links as unknown[]) || [],
+      } as FooterMenu;
+    });
   };
 
   // Migrate old social object format to array
   let socialLinks: SocialLink[] = [];
-  if (Array.isArray(config.social)) {
-    socialLinks = config.social.map((link: any) => ({
-      id: link.id || nanoid(),
-      label: link.label || link.platform || "",
-      url: link.url || "",
-      iconUrl: link.iconUrl || link.icon,
-    }));
-  } else if (config.social && typeof config.social === "object") {
+  if (Array.isArray(cfg.social)) {
+    socialLinks = cfg.social.map((link: unknown) => {
+      const l = link as Record<string, unknown>;
+      return {
+        id: (l.id as string) || nanoid(),
+        label: (l.label as string) || (l.platform as string) || "",
+        url: (l.url as string) || "",
+        iconUrl: (l.iconUrl as string) || (l.icon as string),
+      };
+    });
+  } else if (cfg.social && typeof cfg.social === "object") {
     // Legacy format: { facebook: "url", twitter: "url" }
-    Object.entries(config.social).forEach(([platform, url]) => {
+    Object.entries(cfg.social as Record<string, unknown>).forEach(([platform, url]) => {
       if (url && typeof url === "string") {
         socialLinks.push({
           id: nanoid(),
@@ -56,11 +63,11 @@ function migrateConfig(config: any): FooterConfig {
   }
 
   return {
-    logo: config.logo || defaultFooterConfig.logo,
-    tagline: config.tagline || "",
-    description: config.description || "",
-    copyrightText: config.copyrightText || defaultFooterConfig.copyrightText,
-    menus: ensureMenuIds(config.menus),
+    logo: (cfg.logo as LogoConfig) || defaultFooterConfig.logo,
+    tagline: (cfg.tagline as string) || "",
+    description: (cfg.description as string) || "",
+    copyrightText: (cfg.copyrightText as string) || defaultFooterConfig.copyrightText,
+    menus: ensureMenuIds(cfg.menus as unknown[]),
     social: socialLinks,
   };
 }
