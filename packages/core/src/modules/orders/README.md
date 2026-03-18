@@ -200,9 +200,9 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 
 2. **Admin create sets `inventoryAction: "deducted"` but does not actually deduct**: `createOrder()` sets the flag to "deducted" and does NOT call any inventory functions. Stock is not reserved or deducted. This means admin-created orders do not affect inventory at all until a status change.
 
-3. **`bulkDeleteOrders()` permanent delete ordering**: Deletes orders before order items when `permanent: true`. The cascade should handle this via FK `onDelete: cascade`, but the explicit delete of items runs after the orders delete, which means it operates on already-cascaded data.
+3. ~~**`bulkDeleteOrders()` permanent delete ordering**~~: Fixed — order items are now deleted before orders.
 
-4. **No payment status update on status change**: `updateOrderStatus()` changes order status and inventory but does not update `paymentStatus`. Payment status is only changed by queue payment handlers.
+4. ~~**No payment status update on status change**~~: Fixed — `updateOrderStatus()` now auto-updates `paymentStatus` to "paid" for COD orders when status changes to DELIVERED or COMPLETED. Non-COD orders (gateway payments) are not touched.
 
 5. **Notification types limited**: Only `shipped` and `delivered` trigger customer notifications from `updateOrderStatus()`. Other transitions (confirmed, completed, etc.) do not.
 

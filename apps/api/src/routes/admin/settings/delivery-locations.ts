@@ -284,6 +284,7 @@ import {
     resetPathaoImportProgress,
     getPathaoImportStatus,
 } from "@scalius/core/modules/delivery/pathao-location-import";
+import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
 import { deliveryProviders } from "@scalius/database/schema";
 
 /**
@@ -312,7 +313,9 @@ app.post("/import-pathao", async (c) => {
 
     let creds: { baseUrl: string; clientId: string; clientSecret: string; username: string; password: string };
     try {
-        creds = JSON.parse(provider.credentials);
+        const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined;
+        const rawCreds = await decryptCredentialsGraceful(provider.credentials, encryptionKey);
+        creds = JSON.parse(rawCreds);
     } catch {
         throw new ValidationError("Invalid Pathao credentials. Check your provider settings.");
     }

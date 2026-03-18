@@ -9,6 +9,8 @@ import {
     OrderStatus,
     FulfillmentStatus,
     ItemFulfillmentStatus,
+    PaymentMethod,
+    PaymentStatus,
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { markCODReturned, recordCODCollection, recordCODFailure } from "../payments/cod";
@@ -132,12 +134,19 @@ export async function updateOrderStatus(orderId: string, status: string): Promis
         version: orders.version,
         customerName: orders.customerName,
         customerEmail: orders.customerEmail,
+        paymentMethod: orders.paymentMethod,
+        paymentStatus: orders.paymentStatus,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (existingOrder.status === status) return { message: "Status unchanged" };
 
     // Validate the status transition before applying any side effects
     validateTransition("order", existingOrder.status, status);
+
+    // Auto-sync payment status for COD orders when delivered/completed
+    const isCod = existingOrder.paymentMethod === PaymentMethod.COD;
+    const isDeliveredOrCompleted = status === OrderStatus.DELIVERED || status === OrderStatus.COMPLETED;
+    const shouldMarkPaid = isCod && isDeliveredOrCompleted && existingOrder.paymentStatus !== PaymentStatus.PAID;
 
     // Optimistic locking: CAS update FIRST — only proceed with side effects
     // if we win the version check. This prevents the race condition where two
@@ -147,6 +156,7 @@ export async function updateOrderStatus(orderId: string, status: string): Promis
         status,
         version: existingOrder.version + 1,
         updatedAt: sql`unixepoch()`,
+        ...(shouldMarkPaid ? { paymentStatus: PaymentStatus.PAID } : {}),
     }).where(and(
         eq(orders.id, orderId),
         eq(orders.version, existingOrder.version),

@@ -95,7 +95,7 @@ Nice-to-haves documented by the audit. NOT blocking — track for future session
 - [ ] `ShipmentTracker.notifyStatusChange()` is placeholder (no webhook to admin)
 - [ ] `shipmentItems`, `shipmentAmount`, `isFinalShipment`, `trackingUrl`, `courierName` never populated
 - [ ] Credential encryption only works if `CREDENTIAL_ENCRYPTION_KEY` is set
-- [ ] Pathao import doesn't decrypt credentials before use
+- [x] Pathao import doesn't decrypt credentials before use
 
 ### Media
 - [ ] No `alt` field on media table
@@ -133,8 +133,8 @@ Nice-to-haves documented by the audit. NOT blocking — track for future session
 
 ### Orders
 - [ ] Notification types limited (only shipped/delivered emails)
-- [ ] No payment status sync on order status change
-- [ ] Bulk permanent delete ordering issue
+- [x] No payment status sync on order status change
+- [x] Bulk permanent delete ordering issue
 
 ### Widgets
 - [ ] `displayTarget` enum only has "homepage" (no other targets)
@@ -151,7 +151,7 @@ Nice-to-haves documented by the audit. NOT blocking — track for future session
 - [ ] SMS transport stub (not implemented)
 - [ ] `clearAllPermissionCache()` only clears current Worker isolate
 - [ ] Abandoned checkout save requires no auth but cleanup requires auth
-- [ ] Admin form slug prefix shows `/pages/` but storefront serves `/{slug}`
+- [x] Admin form slug prefix shows `/pages/` but storefront serves `/{slug}`
 - [ ] Collections-list has no SSR data loading
 - [ ] Preview link in collections points to homepage
 
