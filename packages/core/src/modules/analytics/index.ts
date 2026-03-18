@@ -1,4 +1,4 @@
 // src/modules/analytics/index.ts
 export * from "./dashboard.service";
-export * from "./analytics.schema";
+export * from "./analytics.validation";
 export * from "./analytics.service";

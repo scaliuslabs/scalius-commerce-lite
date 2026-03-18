@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider } from "@scalius/core/modules/delivery/service";
+import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider } from "@scalius/core/modules/delivery/delivery.service";
 import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";

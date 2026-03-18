@@ -28,7 +28,7 @@ import {
   Package, // For Empty State
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns"; // For relative dates
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 // Refined Order Interface (assuming createdAt is a Date object or string that can be parsed)
 interface Order {

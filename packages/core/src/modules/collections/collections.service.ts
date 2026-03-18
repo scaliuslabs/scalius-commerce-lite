@@ -4,7 +4,7 @@
 import { collections } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { CreateCollectionInput, UpdateCollectionInput } from "./collections.schema";
+import type { CreateCollectionInput, UpdateCollectionInput } from "./collections.validation";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 

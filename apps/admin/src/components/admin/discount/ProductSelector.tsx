@@ -13,7 +13,7 @@ import { Button } from "../../ui/button";
 import { Check, ChevronsUpDown, Loader2, Tag, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { unwrapEnvelope } from "@/lib/api-helpers";
 
 // Product interface based on what's used in OrderForm

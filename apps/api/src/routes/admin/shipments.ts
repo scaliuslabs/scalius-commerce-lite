@@ -1,6 +1,6 @@
 // src/server/routes/admin/shipments.ts
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getShipment, deleteShipmentRecord, checkShipmentStatus } from "@scalius/core/modules/delivery/service";
+import { getShipment, deleteShipmentRecord, checkShipmentStatus } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment, notifyShipmentStatusChange } from "@scalius/core/modules/delivery/tracking";
 import { deliveryShipments } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";

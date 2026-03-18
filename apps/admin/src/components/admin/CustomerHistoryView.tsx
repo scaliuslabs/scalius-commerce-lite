@@ -36,7 +36,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { Separator } from "../ui/separator";
 import { ScrollArea } from "../ui/scroll-area";
 import { Avatar, AvatarFallback } from "../ui/avatar";

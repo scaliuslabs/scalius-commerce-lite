@@ -1,7 +1,7 @@
 // src/components/admin/ProductForm/variants/VariantManager.tsx
 
 import { useState, useEffect, useMemo } from "react";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import {
   Card,
   CardContent,

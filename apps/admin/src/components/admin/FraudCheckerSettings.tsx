@@ -1,5 +1,5 @@
 import { type FC, useState } from "react";
-import type { FraudCheckerProvider } from "@scalius/core/modules/fraud-checker/service";
+import type { FraudCheckerProvider } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
 
 import { toast } from "sonner";
 

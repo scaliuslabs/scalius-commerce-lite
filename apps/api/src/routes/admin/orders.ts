@@ -7,7 +7,7 @@ import {
     bulkShipOrderSchema
 } from "@scalius/core/modules/orders/orders.validation";
 import { processReturn, processRefund } from "@scalius/core/modules/payments/refund-service";
-import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, createShipment, getLatestShipment } from "@scalius/core/modules/delivery/service";
+import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, createShipment, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
 import { orderPayments, paymentPlans, deliveryShipments, orderItems, products, productVariants, productImages, orders } from "@scalius/database/schema";
 import { eq, and, isNull } from "drizzle-orm";

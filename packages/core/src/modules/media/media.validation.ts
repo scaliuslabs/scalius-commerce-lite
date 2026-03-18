@@ -1,4 +1,4 @@
-// src/modules/media/media.schema.ts
+// src/modules/media/media.validation.ts
 import { z } from "zod";
 
 export const updateMediaSchema = z.object({

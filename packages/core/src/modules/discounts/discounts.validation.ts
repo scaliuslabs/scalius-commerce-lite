@@ -1,4 +1,4 @@
-// src/modules/discounts/discounts.schema.ts
+// src/modules/discounts/discounts.validation.ts
 import { z } from "zod";
 import { DiscountType, DiscountValueType } from "@scalius/database/schema";
 

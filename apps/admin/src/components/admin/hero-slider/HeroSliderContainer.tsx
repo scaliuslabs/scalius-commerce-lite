@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Image as ImageIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
+import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { SliderTab } from "./SliderTab";
 import type { HeroSlider, SliderImage } from "./helpers";
 import { unwrapEnvelope } from "@/lib/api-helpers";

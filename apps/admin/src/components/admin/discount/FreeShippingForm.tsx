@@ -35,7 +35,7 @@ import {
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
 import { toast } from "sonner";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { navigateTo } from "@/lib/client/navigate";
 import { generateDiscountCode } from "./utils";
 

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { Order } from "./types";
 import { getStatusBadgeClass, formatDate } from "@scalius/shared/utils";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 interface OrderViewHeaderProps {
   order: Order;

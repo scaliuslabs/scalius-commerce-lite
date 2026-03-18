@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import type { ProductFormValues } from "./types";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 interface PricingCardProps {
   form: UseFormReturn<ProductFormValues>;

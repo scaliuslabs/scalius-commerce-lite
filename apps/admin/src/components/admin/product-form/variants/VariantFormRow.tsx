@@ -15,7 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Loader2, X, Save, Sparkles } from "lucide-react";
 import { variantFormSchema, type VariantFormValues, type ProductVariant } from "./types";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { generateEAN13 } from "@scalius/shared/barcode-utils";
 
 interface VariantFormRowProps {

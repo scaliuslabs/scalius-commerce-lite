@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

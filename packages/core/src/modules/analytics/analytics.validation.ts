@@ -1,4 +1,4 @@
-// src/modules/analytics/analytics.schema.ts
+// src/modules/analytics/analytics.validation.ts
 import { z } from "zod";
 
 export const createAnalyticsSchema = z.object({

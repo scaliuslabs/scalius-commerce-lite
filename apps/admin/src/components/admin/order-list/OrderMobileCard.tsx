@@ -29,7 +29,7 @@ import { OrderStatusSelector } from "./OrderStatusSelector";
 import { OrderItemsPopover } from "./OrderItemsPopover";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { FraudCheckIndicator } from "./FraudCheckIndicator";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { navigateTo } from "@/lib/client/navigate";
 
 interface OrderMobileCardProps {

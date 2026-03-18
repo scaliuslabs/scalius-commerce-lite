@@ -7,8 +7,8 @@ export {
   testFraudProvider,
   fraudLookup,
   fraudLookupWithActiveProvider,
-} from "./service";
-export type { FraudCheckerProvider, FraudCheckResult } from "./service";
+} from "./fraud-checker.service";
+export type { FraudCheckerProvider, FraudCheckResult } from "./fraud-checker.service";
 export type {
   FraudCheckProvider,
   FraudCheckResult as ProviderFraudCheckResult,

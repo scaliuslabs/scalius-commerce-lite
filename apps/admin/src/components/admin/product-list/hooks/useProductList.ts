@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { unwrapEnvelope } from "@/lib/api-helpers";
 
 export interface ProductListItem {

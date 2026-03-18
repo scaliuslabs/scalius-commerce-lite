@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for fraud checker providers.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider } from "@scalius/core/modules/fraud-checker/service";
+import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
 
 import { ok, created } from "../../utils/api-response";
 import { ValidationError } from "../../utils/api-error";

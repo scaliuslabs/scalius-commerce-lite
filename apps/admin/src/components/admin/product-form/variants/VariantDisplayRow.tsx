@@ -19,7 +19,7 @@ import {
   getStockStatus,
   hasDiscount,
 } from "./utils/variantHelpers";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 import { cn } from "@scalius/shared/utils";
 import { generateBarcodeSvg } from "@scalius/shared/barcode-svg";
 

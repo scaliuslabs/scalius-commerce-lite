@@ -11,7 +11,7 @@ import { Trash, ShoppingBag } from "lucide-react";
 import type { OrderItem } from "./types";
 import { useOrderForm } from "./OrderFormContext";
 import { updateOrderItems } from "@/store/orderStore";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 export function OrderItemsTable() {
   const { form, products } = useOrderForm();

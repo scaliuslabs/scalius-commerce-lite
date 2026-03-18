@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, ArrowRight } from "lucide-react";
 import type { Order, OrderItem } from "./types";
-import { useCurrency } from "@/hooks/useCurrency";
+import { useCurrency } from "@/hooks/use-currency";
 
 interface OrderItemsCardProps {
   order: Order;

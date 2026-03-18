@@ -1,3 +1,3 @@
 // src/modules/discounts/index.ts
-export * from "./discounts.schema";
+export * from "./discounts.validation";
 export * from "./discounts.service";

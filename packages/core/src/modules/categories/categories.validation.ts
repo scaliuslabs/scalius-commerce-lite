@@ -1,4 +1,4 @@
-// src/modules/categories/categories.schema.ts
+// src/modules/categories/categories.validation.ts
 import { z } from "zod";
 
 const imageSchema = z
