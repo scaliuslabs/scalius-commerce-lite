@@ -466,4 +466,49 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
     }
 });
 
+// ── Allowed Countries ──
+
+const getAllowedCountriesRoute = createRoute({
+    method: "get",
+    path: "/allowed-countries",
+    tags: ["Admin - Settings"],
+    summary: "Get allowed countries for phone numbers",
+    responses: { 200: { description: "Allowed countries list" } }
+});
+
+app.openapi(getAllowedCountriesRoute, async (c) => {
+    const db = c.get("db");
+    const row = await db
+        .select({ value: settings.value })
+        .from(settings)
+        .where(and(eq(settings.category, "phone"), eq(settings.key, "allowed_countries")))
+        .get();
+    const allowedCountries = row?.value ? JSON.parse(row.value) : [];
+    return ok(c, { allowedCountries });
+});
+
+const saveAllowedCountriesRoute = createRoute({
+    method: "put",
+    path: "/allowed-countries",
+    tags: ["Admin - Settings"],
+    summary: "Save allowed countries for phone numbers",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({ allowedCountries: z.array(z.string()) })
+                }
+            }
+        }
+    },
+    responses: { 200: { description: "Countries saved" } }
+});
+
+app.openapi(saveAllowedCountriesRoute, async (c) => {
+    const db = c.get("db");
+    const { allowedCountries } = c.req.valid("json");
+    await upsertSetting(db, "phone", "allowed_countries", JSON.stringify(allowedCountries));
+    return ok(c, { message: "Allowed countries saved", allowedCountries });
+});
+
 export { app as siteSettingsRoutes };
