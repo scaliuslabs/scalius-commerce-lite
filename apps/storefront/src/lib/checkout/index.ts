@@ -4,6 +4,7 @@ import { codHandler } from "./handlers/cod";
 import { stripeHandler } from "./handlers/stripe";
 import { sslcommerzHandler } from "./handlers/sslcommerz";
 import { polarHandler } from "./handlers/polar";
+import { formatPrice } from "@scalius/shared/currency";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -41,9 +42,8 @@ function setPayButton(text: string, disabled = false): void {
   if (span) span.textContent = text;
 }
 
-function currencyFmt(amount: number): string {
-  const sym = (window as unknown as Record<string, string>).__CURRENCY_SYMBOL__ || "\u09F3";
-  return sym + Number(amount).toFixed(0);
+function currencyFmt(amount: number | string): string {
+  return formatPrice(amount);
 }
 
 // ── Load checkout data ────────────────────────────────────────────────────────

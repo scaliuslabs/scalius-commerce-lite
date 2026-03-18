@@ -55,6 +55,7 @@ const faviconUrl = headerData?.favicon?.src || "/favicon.svg";
 
 const currencySymbol = layoutData?.currency?.symbol ?? "৳";
 const currencyCode = layoutData?.currency?.code ?? "BDT";
+const currencyDecimalPlaces = layoutData?.currency?.decimalPlaces ?? 2;
 
 // Build dynamic CSS overrides from admin-configured theme colors.
 // Only non-empty color values are included.
@@ -101,7 +102,7 @@ const cdnDomain = cdnDomainUrl || null;
 
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
-    <script is:inline set:html={`window.__API_BASE_URL__=${JSON.stringify(publicApiUrl || "/api/v1")};window.__CDN_DOMAIN__=${JSON.stringify(cdnDomainUrl || "")};window.__CURRENCY_SYMBOL__=${JSON.stringify(currencySymbol)};window.__CURRENCY_CODE__=${JSON.stringify(currencyCode)};`}></script>
+    <script is:inline set:html={`window.__API_BASE_URL__=${JSON.stringify(publicApiUrl || "/api/v1")};window.__CDN_DOMAIN__=${JSON.stringify(cdnDomainUrl || "")};window.__CURRENCY_SYMBOL__=${JSON.stringify(currencySymbol)};window.__CURRENCY_CODE__=${JSON.stringify(currencyCode)};window.__CURRENCY_DECIMAL_PLACES__=${currencyDecimalPlaces};`}></script>
 
     <!-- Stale Asset Detector -->
     <script is:inline>

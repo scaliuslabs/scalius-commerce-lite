@@ -3,6 +3,7 @@
 export {
   getCurrencySymbol,
   getCurrencyCode,
+  getDecimalPlaces,
   formatPrice,
   formatPriceShort,
   type CurrencyConfig,
