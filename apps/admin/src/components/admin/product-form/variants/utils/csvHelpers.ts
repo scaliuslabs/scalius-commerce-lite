@@ -156,7 +156,7 @@ export function parseCsvToVariants(csvText: string): CsvImportResult {
         }) satisfies CsvVariantRow;
 
         result.imported++;
-      } catch (error) {
+      } catch (error: unknown) {
         result.failed++;
         result.errors.push({
           row: rowNumber,
@@ -168,7 +168,7 @@ export function parseCsvToVariants(csvText: string): CsvImportResult {
     if (result.failed > 0) {
       result.success = false;
     }
-  } catch (error) {
+  } catch (error: unknown) {
     result.success = false;
     result.errors.push({
       row: 0,

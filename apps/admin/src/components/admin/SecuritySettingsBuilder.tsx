@@ -19,7 +19,7 @@ export function SecuritySettingsBuilder() {
                     const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
                     setCspAllowedDomains(data.cspAllowedDomains || "");
                 }
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error("Error fetching security settings:", error);
             } finally {
                 setIsFetching(false);
@@ -47,7 +47,7 @@ export function SecuritySettingsBuilder() {
             }
 
             toast.success("Success!", { description: "Security settings saved successfully." });
-        } catch (error) {
+        } catch (error: unknown) {
             console.error("Error saving security settings:", error);
             toast.error("Save Failed", { description: error instanceof Error
                         ? error.message

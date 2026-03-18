@@ -108,7 +108,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
       }
 
       toast.success("Success!", { description: "Header configuration saved successfully." });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error saving header:", error);
       toast.error("Save Failed", { description: error instanceof Error
             ? error.message

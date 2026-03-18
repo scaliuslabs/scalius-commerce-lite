@@ -212,7 +212,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
       if (codAction === "collected" || codAction === "returned") {
         void navigateTo(window.location.pathname);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       toast.error("Error", { description: err instanceof Error ? err.message : "Failed to record COD action" });
     } finally {
       setCodLoading(false);
@@ -251,7 +251,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
       setIsRefundDialogOpen(false);
       await fetchPaymentData();
       void navigateTo(window.location.pathname);
-    } catch (err) {
+    } catch (err: unknown) {
       toast.error("Error", { description: err instanceof Error ? err.message : "Failed to issue refund" });
     } finally {
       setRefundLoading(false);

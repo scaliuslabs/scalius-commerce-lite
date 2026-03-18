@@ -107,7 +107,7 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
 
       toast.success("Deleted", { description: "Analytics script has been deleted." });
       void navigateTo(window.location.pathname);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting analytics script:", error);
       toast.error("Error", { description: "Failed to delete analytics script. Please try again." });
     } finally {
@@ -131,7 +131,7 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
 
       toast.success("Updated", { description: "Analytics script status has been updated." });
       void navigateTo(window.location.pathname);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error toggling analytics script status:", error);
       toast.error("Error", { description: "Failed to update analytics script status. Please try again." });
     }

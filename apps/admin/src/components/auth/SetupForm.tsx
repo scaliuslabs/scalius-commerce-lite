@@ -78,7 +78,7 @@ export function SetupForm() {
       // Redirect directly to admin (2FA is optional, can be enabled from dashboard)
       window.location.href = "/admin";
       return;
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Setup error:", err);
       setError("An unexpected error occurred. Please try again.");
       setIsLoading(false);
@@ -107,7 +107,7 @@ export function SetupForm() {
       }
 
       setIsLoading(false);
-    } catch (err) {
+    } catch (err: unknown) {
       setError("Failed to enable 2FA. Please try again.");
       setIsLoading(false);
     }
@@ -131,7 +131,7 @@ export function SetupForm() {
 
       setStep("complete");
       setIsLoading(false);
-    } catch (err) {
+    } catch (err: unknown) {
       setError("Verification failed. Please try again.");
       setIsLoading(false);
     }

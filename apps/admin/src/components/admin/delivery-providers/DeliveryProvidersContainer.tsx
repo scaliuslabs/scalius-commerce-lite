@@ -236,7 +236,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       setIsEditing(false);
       setIsCreating(false);
       toast.success("Provider saved successfully");
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(
         `Error: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -255,7 +255,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       );
       toast.success("Provider deleted");
       setSelectedProvider(null);
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(
         `Error: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -274,7 +274,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       } else {
         toast.error(result.message || "Connection failed");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(
         `Error: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -304,7 +304,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       } else {
         toast.error(result.message || "Connection failed");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(
         `Error: ${error instanceof Error ? error.message : String(error)}`,
       );

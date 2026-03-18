@@ -109,7 +109,7 @@ export function UserPermissionEditor({
           const data = await permsRes.json();
           setGroupedPermissions(data.grouped);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching RBAC data:", error);
         toast.error("Failed to load roles and permissions");
       } finally {
@@ -150,7 +150,7 @@ export function UserPermissionEditor({
 
       setAssignedRoleIds((prev) => new Set([...prev, roleId]));
       toast.success("Role assigned successfully");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error assigning role:", error);
       toast.error("An unexpected error occurred");
     }
@@ -176,7 +176,7 @@ export function UserPermissionEditor({
         return newSet;
       });
       toast.success("Role removed successfully");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error removing role:", error);
       toast.error("An unexpected error occurred");
     }
@@ -215,7 +215,7 @@ export function UserPermissionEditor({
       });
 
       toast.success("Permission override set");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error setting permission:", error);
       toast.error("An unexpected error occurred");
     }
@@ -244,7 +244,7 @@ export function UserPermissionEditor({
       });
 
       toast.success("Permission override removed");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error removing override:", error);
       toast.error("An unexpected error occurred");
     }

@@ -15,7 +15,7 @@ export function useFolders(autoLoad: boolean = false) {
     try {
       const loadedFolders = await MediaApiClient.fetchFolders();
       setFolders(loadedFolders);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading folders:", error);
       toast.error("Error Loading Folders", { description: "Could not load folders. Please try again." });
     } finally {

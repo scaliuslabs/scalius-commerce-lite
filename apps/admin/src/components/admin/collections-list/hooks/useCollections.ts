@@ -43,7 +43,7 @@ export function useCollections(
       if (data.pagination) {
         setPagination(data.pagination);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Failed to load collections.");
       console.error("Error fetching collections:", error);
     } finally {

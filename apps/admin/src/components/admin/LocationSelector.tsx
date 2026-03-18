@@ -78,19 +78,19 @@ export function LocationSelector() {
                 if (!areaResponse.ok) throw new Error("Failed to load areas");
                 const areaResult = await areaResponse.json();
                 setAreas(areaResult.locations);
-              } catch (error) {
+              } catch (error: unknown) {
                 console.error("Error loading initial areas:", error);
               } finally {
                 setLoadingAreas(false);
               }
             }
-          } catch (error) {
+          } catch (error: unknown) {
             console.error("Error loading initial zones:", error);
           } finally {
             setLoadingZones(false);
           }
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error loading initial cities:", error);
       } finally {
         setLoadingCities(false);
@@ -194,7 +194,7 @@ export function LocationSelector() {
 
       const result = await response.json();
       setZones(result.locations);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading zones:", error);
     } finally {
       setLoadingZones(false);
@@ -214,7 +214,7 @@ export function LocationSelector() {
 
       const result = await response.json();
       setAreas(result.locations);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading areas:", error);
     } finally {
       setLoadingAreas(false);

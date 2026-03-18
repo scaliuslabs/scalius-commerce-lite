@@ -37,7 +37,7 @@ export function initProductNewPage(): void {
       }
 
       await win.navigateToProductEdit(destination);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error creating product:", error);
       alert("Failed to create product. Please try again.");
     }

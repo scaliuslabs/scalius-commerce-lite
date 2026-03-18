@@ -88,7 +88,7 @@ export function useShippingMethods() {
             hasPrevPage: false,
           },
         );
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching shipping methods:", error);
         toast.error("Could not load shipping methods.");
       } finally {

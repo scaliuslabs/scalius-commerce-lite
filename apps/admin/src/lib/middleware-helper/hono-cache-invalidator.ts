@@ -82,7 +82,7 @@ async function triggerStorefrontCachePurge(
         `[Storefront Cache] Purge failed with status ${response.status}: ${errorText}`,
       );
     }
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof Error && error.name === "AbortError") {
       console.error("[Storefront Cache] Purge request timed out.");
     } else {

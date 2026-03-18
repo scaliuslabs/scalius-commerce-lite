@@ -65,7 +65,7 @@ export default function FirebaseSettingsForm() {
         setServiceAccountJson(data.serviceAccount || "");
         setPublicConfig(data.publicConfig || {});
       }
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Failed to load Firebase settings");
     } finally {
       setLoading(false);
@@ -85,7 +85,7 @@ export default function FirebaseSettingsForm() {
       if (!parsed.project_id)
         return { valid: false, error: "Missing 'project_id' field" };
       return { valid: true };
-    } catch (e) {
+    } catch (e: unknown) {
       return { valid: false, error: "Invalid JSON format" };
     }
   };
@@ -144,7 +144,7 @@ export default function FirebaseSettingsForm() {
       setShowRawPaste(false);
       setRawPublicConfig("");
       toast.success("Config parsed successfully!");
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("Parse error:", e);
       toast.error("Could not parse config. Please check format.");
     }
@@ -182,7 +182,7 @@ export default function FirebaseSettingsForm() {
         const err = await res.json();
         toast.error(err.error || "Failed to save settings");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("An error occurred while saving");
     } finally {
       setSaving(false);

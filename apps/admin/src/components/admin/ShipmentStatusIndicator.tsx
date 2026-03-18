@@ -11,7 +11,7 @@ interface ShipmentStatusIndicatorProps {
     lastChecked?: string;
     orderId: string;
   };
-  onStatusUpdated?: (updatedShipment: any) => void;
+  onStatusUpdated?: (updatedShipment: Record<string, unknown>) => void;
 }
 
 export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
@@ -101,7 +101,7 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
         hour12: true,
         timeZoneName: "short",
       });
-    } catch (error) {
+    } catch (error: unknown) {
       return "Invalid date";
     }
   };

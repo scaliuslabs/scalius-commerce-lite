@@ -115,7 +115,7 @@ export function BulkVariantGenerator({
       setBaseWeight(null);
       setDiscountValue(null);
       setOpen(false);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to generate variants:", error);
     } finally {
       setIsGenerating(false);

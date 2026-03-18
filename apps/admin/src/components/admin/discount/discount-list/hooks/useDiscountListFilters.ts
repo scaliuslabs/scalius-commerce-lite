@@ -172,7 +172,7 @@ export function useDiscountListFilters(
         total: Math.max(0, prev.total - 1),
         totalPages: Math.ceil((prev.total - 1) / prev.limit),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting discount:", error);
       toast.error(error instanceof Error ? error.message : "Failed to delete discount");
     }
@@ -202,7 +202,7 @@ export function useDiscountListFilters(
         total: Math.max(0, prev.total - 1),
         totalPages: Math.ceil((prev.total - 1) / prev.limit),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error permanently deleting discount:", error);
       toast.error(error instanceof Error ? error.message : "Failed to delete discount permanently");
     }
@@ -224,7 +224,7 @@ export function useDiscountListFilters(
         total: Math.max(0, prev.total - 1),
         totalPages: Math.ceil((prev.total - 1) / prev.limit),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error restoring discount:", error);
       toast.error(error instanceof Error ? error.message : "Failed to restore discount");
     }
@@ -292,7 +292,7 @@ export function useDiscountListFilters(
         totalPages: Math.ceil((prev.total - idsToDelete.length) / prev.limit),
       }));
       setSelectedDiscounts(new Set());
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error processing bulk discount action:", error);
       toast.error(
         error instanceof Error
@@ -323,7 +323,7 @@ export function useDiscountListFilters(
             : discount,
         ),
       );
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error toggling discount status:", error);
       toast.error(error instanceof Error ? error.message : "Failed to update discount status");
     }

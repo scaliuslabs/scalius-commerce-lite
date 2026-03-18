@@ -34,7 +34,7 @@ export function CacheNukeButton() {
       }
 
       toast.success("All cache cleared successfully");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error clearing cache:", error);
       toast.error("Failed to clear cache");
     } finally {

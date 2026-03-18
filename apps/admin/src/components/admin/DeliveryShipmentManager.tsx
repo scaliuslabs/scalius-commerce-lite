@@ -118,7 +118,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
       void navigateTo(window.location.pathname);
 
       setSelectedProviderId("");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error creating shipment:", error);
       toast.error(
         `Error creating shipment: ${error instanceof Error ? error.message : String(error)}`,
@@ -170,7 +170,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
       } else {
         toast.info("Shipment status is up to date");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(
         `Error checking status: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -195,7 +195,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
       await window.shipmentActions.deleteShipment(shipmentId);
       setShipments((prev) => prev.filter((s) => s.id !== shipmentId));
       toast.success("Shipment deleted");
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(
         `Error deleting shipment: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -211,7 +211,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
       return Object.entries(data)
         .map(([key, value]) => `${key}: ${value}`)
         .join(", ");
-    } catch (error) {
+    } catch (error: unknown) {
       return metadata;
     }
   };

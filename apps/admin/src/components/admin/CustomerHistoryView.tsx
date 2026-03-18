@@ -149,7 +149,7 @@ const formatDate = (
     const mergedOptions = { ...defaultOptions, ...options };
 
     return dateObj.toLocaleString("en-US", mergedOptions);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error formatting date:", date, error);
     return "Invalid date";
   }

@@ -142,7 +142,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
 
       toast.success(`Discount ${discountId ? "updated" : "created"} successfully!`);
       await navigateTo("/admin/discounts");
-    } catch (error) {
+    } catch (error: unknown) {
       const action = defaultValues?.id ? "updating" : "creating";
       console.error(`Error ${action} Free Shipping discount:`, error);
       toast.error("Error", { description: error instanceof Error ? error.message : "An unknown error occurred" });

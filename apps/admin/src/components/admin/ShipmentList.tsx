@@ -48,7 +48,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
         lastChecked: shipment.lastChecked || shipment.updatedAt,
       }));
       setShipments(enhancedData);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error fetching shipments:", error);
       toast.error("Failed to load shipments");
     } finally {
@@ -111,7 +111,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
       if (onRefresh) {
         onRefresh();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error refreshing shipment status:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to refresh status",
@@ -155,7 +155,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
       if (onRefresh) {
         onRefresh();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting shipment:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to delete shipment",

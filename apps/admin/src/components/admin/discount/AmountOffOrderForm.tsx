@@ -267,7 +267,7 @@ export function AmountOffOrderForm({
       // Example: navigate to the list page
       await navigateTo("/admin/discounts");
       // Or if using a router: router.push('/admin/discounts');
-    } catch (error) {
+    } catch (error: unknown) {
       const action = defaultValues?.id ? "updating" : "creating";
       console.error(`Error ${action} Amount Off Order discount:`, error);
       toast.error("Operation Failed", { description: error instanceof Error

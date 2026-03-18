@@ -96,7 +96,7 @@ export function CollectionForm({
         `Collection ${isEdit ? "updated" : "created"} successfully`,
       );
       await navigateTo("/admin/collections");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save collection", {
         description:

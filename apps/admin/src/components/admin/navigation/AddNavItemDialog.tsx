@@ -128,7 +128,7 @@ export function AddNavItemDialog({
               })) || [],
           );
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching data:", error);
       } finally {
         setIsLoading(false);
@@ -169,7 +169,7 @@ export function AddNavItemDialog({
             [attributeId]: data.values || [],
           }));
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching attribute values:", error);
       } finally {
         setLoadingAttrValues((prev) => ({ ...prev, [attributeId]: false }));
@@ -204,7 +204,7 @@ export function AddNavItemDialog({
           const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
           setPreviewCount(data.count);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching preview:", error);
       } finally {
         setIsLoadingPreview(false);

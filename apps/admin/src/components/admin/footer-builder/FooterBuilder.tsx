@@ -104,7 +104,7 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
       }
 
       toast.success("Saved", { description: "Footer configuration updated." });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error saving footer:", error);
       toast.error("Error", { description: error instanceof Error ? error.message : "Failed to save." });
     } finally {

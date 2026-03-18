@@ -37,7 +37,7 @@ export function NavigationMenusSection({
     if (saved) {
       try {
         setOpenItems(JSON.parse(saved));
-      } catch (e) {
+      } catch (e: unknown) {
         setOpenItems([]);
       }
     }

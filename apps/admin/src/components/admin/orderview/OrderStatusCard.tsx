@@ -66,7 +66,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
 
       void navigateTo(window.location.pathname);
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error updating status:", error);
       toast.error("Error", {
         description: error instanceof Error
@@ -100,7 +100,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
 
       setIsReturnDialogOpen(false);
       void navigateTo(window.location.pathname);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error processing return:", error);
       toast.error("Error", {
         description: error instanceof Error ? error.message : "Failed to process return.",

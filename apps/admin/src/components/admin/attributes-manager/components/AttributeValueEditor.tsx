@@ -74,7 +74,7 @@ export function AttributeValueEditor({
       const json = await response.json();
       const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setValues(data.values || []);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error fetching values:", error);
       toast.error("Failed to load attribute values");
     } finally {
@@ -125,7 +125,7 @@ export function AttributeValueEditor({
       setEditingValue(null);
       setEditedValue("");
       fetchValues();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error updating value:", error);
       toast.error("Failed to update value");
     } finally {
@@ -155,7 +155,7 @@ export function AttributeValueEditor({
       setNewValue("");
       setIsAddingNew(false);
       fetchValues();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error adding value:", error);
       toast.error("Failed to add value");
     } finally {
@@ -182,7 +182,7 @@ export function AttributeValueEditor({
       toast.success(`Value "${value}" deleted from all products`);
       setDeleteConfirm(null);
       fetchValues();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting value:", error);
       toast.error("Failed to delete value");
     } finally {

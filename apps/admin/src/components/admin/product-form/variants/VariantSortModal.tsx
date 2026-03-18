@@ -58,7 +58,7 @@ export function VariantSortModal({
         setColors(data.colors || []);
         setSizes(data.sizes || []);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to fetch sort order:", error);
       toast.error("Error", { description: "Failed to load variant sort order" });
     } finally {
@@ -122,7 +122,7 @@ export function VariantSortModal({
       } else {
         throw new Error("Failed to update sort order");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to save sort order:", error);
       toast.error("Error", { description: "Failed to update variant sort order" });
     } finally {

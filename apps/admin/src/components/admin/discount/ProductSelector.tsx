@@ -124,7 +124,7 @@ export function ProductSelector({
         setTotalProducts(data.pagination?.total || 0);
         setCurrentPage(page);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading products:", error);
     } finally {
       setIsSearching(false);

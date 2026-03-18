@@ -46,7 +46,7 @@ export function SeoSettingsBuilder() {
             defaultConfig.homepageMetaDescription,
           robotsTxt: data.robotsTxt || defaultConfig.robotsTxt,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching SEO config:", error);
         toast.error("Fetch Error", { description: error instanceof Error
               ? error.message
@@ -76,7 +76,7 @@ export function SeoSettingsBuilder() {
       }
 
       toast.success("Success!", { description: "SEO settings saved successfully." });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error saving SEO settings:", error);
       toast.error("Save Failed", { description: error instanceof Error
             ? error.message

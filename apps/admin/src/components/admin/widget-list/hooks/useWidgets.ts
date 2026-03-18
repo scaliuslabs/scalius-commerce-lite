@@ -22,7 +22,7 @@ export function useWidgets(
     setIsLoading(true);
     try {
       void navigateTo(window.location.pathname + window.location.search);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error fetching widgets:", error);
       setIsLoading(false);
     }

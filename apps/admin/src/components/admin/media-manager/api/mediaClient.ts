@@ -169,7 +169,7 @@ export class MediaApiClient {
       try {
         await this.deleteFile(fileId);
         success++;
-      } catch (error) {
+      } catch (error: unknown) {
         failed++;
         console.error(`Failed to delete file ${fileId}:`, error);
       }

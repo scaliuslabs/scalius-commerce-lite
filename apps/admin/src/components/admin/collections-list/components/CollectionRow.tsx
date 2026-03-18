@@ -116,7 +116,7 @@ export const CollectionRow = forwardRef<
         return (
           <span className="text-sm text-muted-foreground">No products</span>
         );
-      } catch (e) {
+      } catch (e: unknown) {
         return <span className="text-sm text-muted-foreground">N/A</span>;
       }
     };

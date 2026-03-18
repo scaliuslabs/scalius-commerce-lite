@@ -14,7 +14,7 @@ export function useCurrency() {
       if (stored) {
         _cached = JSON.parse(stored);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       // Ignore parse errors
     }
   }
@@ -28,7 +28,7 @@ export function useCurrency() {
     if (typeof window !== "undefined") {
       try {
         hasFetchedThisSession = !!sessionStorage.getItem("scalius_currency_fetched");
-      } catch (err) { }
+      } catch (err: unknown) { }
     }
 
     // Only fetch if we haven't fetched in this tab session yet
@@ -44,7 +44,7 @@ export function useCurrency() {
             try {
               localStorage.setItem("scalius_currency_cache", JSON.stringify(_cached));
               sessionStorage.setItem("scalius_currency_fetched", "true");
-            } catch (e) {
+            } catch (e: unknown) {
               // Ignore standard storage errors
             }
           }

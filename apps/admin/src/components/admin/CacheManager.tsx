@@ -125,7 +125,7 @@ export function CacheManager() {
         setPathMapping(data.pathMapping || {});
       }
       setLastUpdated(new Date());
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error fetching cache data:", error);
       toast.error("Failed to fetch cache data");
     } finally {
@@ -151,7 +151,7 @@ export function CacheManager() {
 
       // Update the timestamp locally for instant feedback
       setTimestamps(prev => ({ ...prev, [groupName]: Date.now() }));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`Error clearing ${groupName} cache:`, error);
       toast.error(`Failed to clear ${groupName} cache`);
     } finally {
@@ -179,7 +179,7 @@ export function CacheManager() {
         }
         return updated;
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error clearing all cache:", error);
       toast.error("Failed to clear all cache");
     } finally {

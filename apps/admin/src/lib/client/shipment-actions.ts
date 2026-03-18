@@ -53,7 +53,7 @@ export function initShipmentActions(): void {
         }
 
         return { success: true, data: result };
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error creating shipment:", error);
         return {
           success: false,
@@ -114,7 +114,7 @@ export function initShipmentActions(): void {
             metadata: result.metadata ? JSON.parse(result.metadata) : {},
           },
         };
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error checking shipment status:", error);
         return {
           success: false,
@@ -135,7 +135,7 @@ export function initShipmentActions(): void {
         }
 
         return true;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error deleting shipment:", error);
         throw error;
       }

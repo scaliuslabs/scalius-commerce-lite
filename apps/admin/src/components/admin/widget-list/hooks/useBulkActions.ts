@@ -76,7 +76,7 @@ export function useBulkActions(fetchWidgets: () => Promise<void>) {
       setSelectedIds(new Set());
       setBulkAction(null);
       await fetchWidgets();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`Error performing bulk ${action}:`, error);
       toast.error("Error", { description: `Failed to ${action} widgets.` });
     } finally {

@@ -41,7 +41,7 @@ export async function GET() {
         },
       },
     );
-  } catch (error) {
+  } catch (error: unknown) {
     return safeErrorResponse(error, 500);
   }
 }

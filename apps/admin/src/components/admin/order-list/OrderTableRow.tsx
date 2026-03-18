@@ -1,5 +1,12 @@
 import React from "react";
 import type { OrderListItem } from "@scalius/core/modules/orders";
+
+/** Minimal shipment shape used in the order list — compatible with ShipmentStatus */
+interface OrderShipment {
+  id: string;
+  orderId: string;
+  [key: string]: unknown;
+}
 import { TableCell, TableRow } from "../../ui/table";
 import { Checkbox } from "../../ui/checkbox";
 import {
@@ -28,7 +35,7 @@ import { useCurrency } from "@/hooks/useCurrency";
 
 interface OrderTableRowProps {
   order: OrderListItem;
-  shipment: any; // The specific shipment for this order
+  shipment: OrderShipment | undefined;
   isSelected: boolean;
   isUpdatingStatus: boolean;
   showTrashed: boolean;
@@ -38,7 +45,7 @@ interface OrderTableRowProps {
   onPermanentDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
-  onShipmentStatusUpdated: (updatedShipment: any) => void;
+  onShipmentStatusUpdated: (updatedShipment: Record<string, unknown>) => void;
 }
 
 const formatDate = (date: Date) => {

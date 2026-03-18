@@ -105,7 +105,7 @@ export function OrderForm({
       const json = await res.json();
       const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setLocations((prev) => ({ ...prev, cities: data.locations || [] }));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading cities:", error);
       toast.error("Could not load city list. Please refresh the page.");
     }
@@ -128,7 +128,7 @@ export function OrderForm({
       const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setLocations((prev) => ({ ...prev, zones: data.locations || [], areas: [] }));
       form.setValue("area", null);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading zones:", error);
       toast.error("Could not load zone list. Please refresh the page.");
     } finally {
@@ -151,7 +151,7 @@ export function OrderForm({
       const json = await res.json();
       const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
       setLocations((prev) => ({ ...prev, areas: data.locations || [] }));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading areas:", error);
       toast.error("Could not load area list. Please refresh the page.");
     } finally {
@@ -206,7 +206,7 @@ export function OrderForm({
 
       toast.success(isEdit ? "Order updated successfully" : "Order created successfully");
       await navigateTo("/admin/orders");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save order", {
         description: error instanceof Error ? error.message : String(error),

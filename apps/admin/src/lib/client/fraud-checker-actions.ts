@@ -39,7 +39,7 @@ export function initFraudCheckerActions(): void {
 
         const json = await response.json();
         return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error in saveProvider:", error);
         throw error;
       }
@@ -60,7 +60,7 @@ export function initFraudCheckerActions(): void {
         }
 
         return true;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error in deleteProvider:", error);
         throw error;
       }
@@ -88,7 +88,7 @@ export function initFraudCheckerActions(): void {
 
         const json = await response.json();
         return json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error in testProvider:", error);
         return {
           success: false,
