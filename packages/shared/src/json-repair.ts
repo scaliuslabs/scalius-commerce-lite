@@ -157,12 +157,13 @@ export function validateWidgetJSON(data: unknown): {
     };
   }
 
-  // Normalize the data object to always have "html" field
-  if (record.htmljs && !record.html) {
-    record.html = record.htmljs;
+  // Normalize to always have "html" field without mutating the input
+  const normalized = { ...record };
+  if (normalized.htmljs && !normalized.html) {
+    normalized.html = normalized.htmljs;
   }
 
-  if (record.css !== undefined && typeof record.css !== "string") {
+  if (normalized.css !== undefined && typeof normalized.css !== "string") {
     return { valid: false, error: 'Invalid "css" field type' };
   }
 

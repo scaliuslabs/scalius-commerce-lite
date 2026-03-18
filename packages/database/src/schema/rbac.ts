@@ -1,10 +1,10 @@
 // src/db/schema/rbac.ts
 // Role-Based Access Control tables: permissions, roles, rolePermissions, userRoles, userPermissions.
 
-import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, unique, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { user } from "./auth";
+import { UNIX_NOW } from "./shared";
 
 export const permissions = sqliteTable("permissions", {
     id: text("id").primaryKey(),
@@ -17,9 +17,9 @@ export const permissions = sqliteTable("permissions", {
     isSensitive: integer("is_sensitive", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 });
 
 export const roles = sqliteTable("roles", {
@@ -30,10 +30,10 @@ export const roles = sqliteTable("roles", {
     isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 });
 
 export const rolePermissions = sqliteTable(
@@ -48,7 +48,7 @@ export const rolePermissions = sqliteTable(
             .references(() => permissions.id, { onDelete: "cascade" }),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`(cast(strftime('%s','now') as int))`),
+            .default(UNIX_NOW),
     },
     (table) => [
         unique("role_permission_unique").on(table.roleId, table.permissionId),
@@ -70,7 +70,7 @@ export const userRoles = sqliteTable(
         assignedBy: text("assigned_by").references(() => user.id, { onDelete: "set null" }),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`(cast(strftime('%s','now') as int))`),
+            .default(UNIX_NOW),
     },
     (table) => [
         unique("user_role_unique").on(table.userId, table.roleId),
@@ -93,7 +93,7 @@ export const userPermissions = sqliteTable(
         assignedBy: text("assigned_by").references(() => user.id, { onDelete: "set null" }),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`(cast(strftime('%s','now') as int))`),
+            .default(UNIX_NOW),
     },
     (table) => [
         unique("user_permission_unique").on(table.userId, table.permissionId),

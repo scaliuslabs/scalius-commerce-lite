@@ -2,11 +2,11 @@
 // Order domain tables: orders, orderItems, orderPayments, paymentPlans,
 // codTracking, webhookEvents, abandonedCheckouts.
 
-import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, unique, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { customers } from "./customers";
 import { products, productVariants } from "./products";
+import { UNIX_NOW } from "./shared";
 import {
     OrderStatus,
     PaymentMethod,
@@ -46,10 +46,10 @@ export const orders = sqliteTable("orders", {
     customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("orders_status_idx").on(table.status),
@@ -74,7 +74,7 @@ export const orderItems = sqliteTable("order_items", {
     fulfillmentStatus: text("fulfillment_status").notNull().default(ItemFulfillmentStatus.PENDING),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("order_items_order_id_idx").on(table.orderId),
     index("order_items_product_id_idx").on(table.productId),
@@ -103,10 +103,10 @@ export const orderPayments = sqliteTable("order_payments", {
     metadata: text("metadata"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("order_payments_order_id_idx").on(table.orderId),
     index("order_payments_stripe_pi_idx").on(table.stripePaymentIntentId),
@@ -129,10 +129,10 @@ export const paymentPlans = sqliteTable("payment_plans", {
     status: text("status").notNull().default("pending"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 });
 
 export const codTracking = sqliteTable("cod_tracking", {
@@ -151,10 +151,10 @@ export const codTracking = sqliteTable("cod_tracking", {
     receiptUrl: text("receipt_url"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 });
 
 export const webhookEvents = sqliteTable("webhook_events", {
@@ -166,7 +166,7 @@ export const webhookEvents = sqliteTable("webhook_events", {
     result: text("result"),
     processedAt: integer("processed_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("webhook_events_provider_idx").on(table.provider),
     index("webhook_events_order_id_idx").on(table.orderId),
@@ -181,10 +181,10 @@ export const abandonedCheckouts = sqliteTable(
         checkoutData: text("checkout_data").notNull(),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`(cast(strftime('%s','now') as int))`),
+            .default(UNIX_NOW),
         updatedAt: integer("updated_at", { mode: "timestamp" })
             .notNull()
-            .default(sql`(cast(strftime('%s','now') as int))`),
+            .default(UNIX_NOW),
     },
     (table) => [unique("ab_checkout_id_unique").on(table.checkoutId)],
 );

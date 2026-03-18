@@ -14,7 +14,6 @@ export const products = sqliteTable(
         description: text("description"),
         price: real("price").notNull(),
         categoryId: text("category_id")
-            .notNull()
             .references(() => categories.id, { onDelete: "set null" }),
         slug: text("slug").notNull(),
         metaTitle: text("meta_title"),
@@ -200,7 +199,7 @@ export const productRichContent = sqliteTable("product_rich_content", {
 export const mediaFolders = sqliteTable("media_folders", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    parentId: text("parent_id"),
+    parentId: text("parent_id").references((): any => mediaFolders.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),

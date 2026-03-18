@@ -84,6 +84,47 @@ packages/
 - **SDK types**: Both admin and storefront use `@scalius/api-client` for API types
 - **Storefront shared imports**: Storefront imports `@scalius/shared` (utilities) and `@scalius/api-client` (types). It does NOT import `@scalius/core` or `@scalius/database` directly.
 
+## Settings Storage Patterns
+
+- **`siteSettings` table**: Singleton row for site-wide typed config (guestCheckoutEnabled, checkoutMode, headerConfig JSON, footerConfig JSON, storefrontUrl, SEO fields). Use for always-present, typed boolean/string fields.
+- **`settings` table**: Key-value store with `category` + `key` + `value` columns for extensible config (payment gateways, currency, email, Firebase, OpenRouter, fraud checker, theme, phone). Use for optional, category-grouped, provider-specific config.
+
+## How-To Recipes
+
+### Add a New Field to an Entity
+1. Schema: `packages/database/src/schema/{domain}.ts` — add column
+2. Migration: `pnpm db:generate` to create SQL migration
+3. Validation: `packages/core/src/modules/{domain}/{domain}.validation.ts` — add to Zod schema
+4. Service: `packages/core/src/modules/{domain}/{domain}.admin.ts` — add to select/insert/update
+5. API route: `apps/api/src/routes/admin/{domain}.ts` — usually no change (passes validated data through)
+6. Admin form: `apps/admin/src/components/admin/{domain}-form/types.ts` — add to form schema
+7. Admin component: Add input field in the appropriate section component
+8. Storefront (if displayed): `packages/core/src/modules/{domain}/{domain}.storefront.ts` — add to select
+
+### Add a New Payment Gateway
+See the 12-step guide in `packages/core/src/modules/payments/README.md` under "Adding a New Provider".
+
+### Add a Notification Type
+1. Template: `packages/core/src/modules/notifications/notifications.service.ts` — add case to `sendOrderNotificationEmail()`
+2. Queue: The queue consumer at `apps/api/src/queue-consumer.ts` already dispatches generically by `order.notification` type
+3. Trigger: In the API route that changes status, enqueue `{ type: "order.notification", ... }` to `ORDER_NOTIFICATIONS_QUEUE`
+
+### Add a New Admin Settings Tab
+1. Component: Create `apps/admin/src/components/admin/settings/MySettingsBuilder.tsx`
+2. Tab: In `apps/admin/src/components/admin/settings/GeneralSettingsPage.tsx`, add to the tabs array with `React.lazy(() => import("./MySettingsBuilder"))`
+3. API route: Create or extend a route in `apps/api/src/routes/admin/settings/`
+4. Storage: Use `siteSettings` for typed fields, `settings` table for KV config (see Settings Storage Patterns above)
+
+## Queue Bindings
+
+| Queue | Binding | Message Types | Handler |
+|-------|---------|---------------|---------|
+| `ORDER_INGEST_QUEUE` | Cloudflare Queue | `order.ingest` | `handleOrderIngestBatch()` in `orders.queue.ts` |
+| `PAYMENT_EVENTS_QUEUE` | Cloudflare Queue | `payment.stripe.confirmed/failed/canceled/refunded`, `payment.sslcommerz.confirmed/failed`, `payment.polar.confirmed/failed/refunded` | `processPaymentConfirmed()`, `processPaymentFailed()`, `releaseOrderInventory()` in `process-payment.ts` |
+| `ORDER_NOTIFICATIONS_QUEUE` | Cloudflare Queue | `order.notification`, `auth.send_otp` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) in `notifications.service.ts` |
+
+All queues are consumed by `apps/api/src/queue-consumer.ts`.
+
 ## Import Conventions
 
 ```typescript
@@ -169,7 +210,7 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 
 - **Codebase Hardening** (15 commits): Full spec at `docs/superpowers/specs/2026-03-16-codebase-hardening-design.md`
 - **Payments**: atomic `processPaymentConfirmed()` via `db.batch()`, COD idempotency, refund amount validation, SSLCommerz redirect validation
-- **Orders**: queue batch orderId bug fixed (per-item tracking), CANCELLED is terminal (no reactivation), order-notifications DLQ added
+- **Orders**: queue batch orderId bug fixed (per-item tracking), CANCELLED allows admin reactivation to pending/confirmed (order-state-machine.ts). When reactivated, inventory-transitions.ts re-reserves stock, order-notifications DLQ added
 - **Inventory**: `stockVersion` column (separate from `version`) for stock-specific CAS, discount usage race condition narrowed
 - **Delivery**: KV-based webhook replay protection (Pathao/Steadfast), insert-first shipment creation, AES-GCM credential encryption, unified provider interface
 - **Customers**: phone normalization (E.164 format), OTP logging removed, stale discount applicability cache removed
