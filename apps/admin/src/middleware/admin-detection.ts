@@ -14,7 +14,7 @@ async function hasAdminUsers(env?: Env | NodeJS.ProcessEnv): Promise<boolean> {
     const db = getDb(env);
 
     // Check KV cache first if available
-    const kv = (env as any)?.CACHE as KVNamespace | undefined;
+    const kv = (env as Env | undefined)?.CACHE as KVNamespace | undefined;
     if (kv) {
       const cached = await kv.get("app:setup:hasAdminUsers");
       if (cached === "true") {
@@ -38,7 +38,7 @@ async function hasAdminUsers(env?: Env | NodeJS.ProcessEnv): Promise<boolean> {
     }
 
     return hasAdmins;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error checking for admin users:", error);
     return false;
   }
@@ -60,7 +60,7 @@ export const adminDetectionMiddleware = defineMiddleware(async (context, next) =
     return (await next()) || new Response();
   }
 
-  const env = (context.locals as any)._env as Env | undefined;
+  const env = context.locals._env;
   const session = context.locals.session;
   const sessionUser = context.locals.user;
 
@@ -71,7 +71,7 @@ export const adminDetectionMiddleware = defineMiddleware(async (context, next) =
       if (!adminExists) return context.redirect("/auth/setup");
 
       if (session && sessionUser) {
-        const twoFactorVerified = (session as any).twoFactorVerified === true;
+        const twoFactorVerified = session.twoFactorVerified === true;
         if (!sessionUser.twoFactorEnabled || twoFactorVerified) {
           return context.redirect("/admin");
         }
@@ -87,7 +87,7 @@ export const adminDetectionMiddleware = defineMiddleware(async (context, next) =
     if (!adminExists) return context.redirect("/auth/setup");
     if (!session || !sessionUser) return context.redirect("/auth/login");
 
-    const sessionTwoFactorVerified = (session as any).twoFactorVerified;
+    const sessionTwoFactorVerified = session.twoFactorVerified;
     if (sessionUser.twoFactorEnabled && !sessionTwoFactorVerified) {
       return context.redirect("/auth/two-factor");
     }

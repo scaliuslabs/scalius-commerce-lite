@@ -21,11 +21,8 @@ export const authMiddleware = defineMiddleware(async (context, next) => {
   // NOTE: Do NOT use Object.keys(cfEnv) — it returns [] on CF Workers proxy objects.
   const isCfEnv = (() => {
     try {
-      return (
-        !!(cfEnv as any)?.ASSETS ||
-        !!(cfEnv as any)?.DB ||
-        !!(cfEnv as any)?.PUBLIC_API_BASE_URL
-      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Cloudflare env is a Proxy; property detection requires any
+      return !!(cfEnv as any)?.ASSETS || !!(cfEnv as any)?.DB || !!(cfEnv as any)?.PUBLIC_API_BASE_URL;
     } catch {
       return false;
     }
@@ -74,16 +71,16 @@ export const authMiddleware = defineMiddleware(async (context, next) => {
       session = sessionResult.session;
       sessionUser = sessionResult.user;
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error getting session:", error);
   }
 
   context.locals.session = session;
   context.locals.user = sessionUser;
-  context.locals.apiBaseUrl = (env as any)?.PUBLIC_API_BASE_URL || "";
+  context.locals.apiBaseUrl = (env?.PUBLIC_API_BASE_URL as string) || "";
 
   // Store env reference for downstream middleware
-  (context.locals as any)._env = env;
+  context.locals._env = env;
 
   const response = await next();
   return response || new Response();

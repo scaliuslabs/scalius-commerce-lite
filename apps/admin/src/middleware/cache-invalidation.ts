@@ -12,7 +12,7 @@ export const cacheInvalidationMiddleware = defineMiddleware(
 
     try {
       await invalidateHonoCacheIfNeeded(context, response);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("[Cache Invalidation] Error:", error);
       // Don't crash the response — cache invalidation is best-effort
     }

@@ -14,9 +14,25 @@ const sort = (searchParams.get("sort") || "updatedAt") as
   | "updatedAt";
 const order = (searchParams.get("order") || "desc") as "asc" | "desc";
 
-let formattedCategories: any[] = [];
-let data: any = { pagination: { total: 0, page, limit, totalPages: 0 } };
-let stats: any = null;
+interface CategoryItem {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  deletedAt: Date | null;
+  productCount: number;
+}
+interface PaginationInfo { total: number; page: number; limit: number; totalPages: number; }
+interface CategoryStats { totalCategories: number; categoriesWithImages: number; totalProducts: number; }
+
+let formattedCategories: CategoryItem[] = [];
+let data: { pagination: PaginationInfo } = { pagination: { total: 0, page, limit, totalPages: 0 } };
+let stats: CategoryStats | null = null;
 
 try {
   const result = await getCategoriesIndexData({
