@@ -41,3 +41,4 @@ tests/
 /.agents
 /.claude
 skills-lock.json
+/temp-doc
