@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import type { DeliveryProviderInterface } from "../provider";
 import { mapProviderStatus } from "../status-mapper";
+import { db } from "@scalius/database/client";
 import { getExternalLocationIds } from "../locations";
 
 /**
@@ -179,6 +180,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       }
 
       const externalLocationIds = await getExternalLocationIds(
+        db,
         {
           city: order.city,
           zone: order.zone,

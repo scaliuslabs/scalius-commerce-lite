@@ -1,7 +1,7 @@
 // src/modules/orders/orders.fulfillment.ts
 // Fulfillment and status update functions for orders.
 
-import { db } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import {
     orders,
     orderItems,
@@ -23,7 +23,7 @@ import type { StatusUpdateResult } from "./orders.types";
 
 const deliveryService = new DeliveryService();
 
-export async function bulkShipOrders(orderIds: string[], providerId: string, options: Record<string, unknown>) {
+export async function bulkShipOrders(db: Database, orderIds: string[], providerId: string, options: Record<string, unknown>) {
     const results = [];
     for (const orderId of orderIds) {
         try {
@@ -45,7 +45,7 @@ export async function bulkShipOrders(orderIds: string[], providerId: string, opt
     return results;
 }
 
-export async function processCodAction(orderId: string, body: Record<string, unknown>) {
+export async function processCodAction(db: Database, orderId: string, body: Record<string, unknown>) {
     switch (body.action) {
         case "collected": {
             const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy as string, collectedAmount: body.collectedAmount as number, receiptUrl: body.receiptUrl as string | undefined });
@@ -70,11 +70,11 @@ export async function processCodAction(orderId: string, body: Record<string, unk
     }
 }
 
-export async function getOrderShipments(orderId: string) {
+export async function getOrderShipments(db: Database, orderId: string) {
     return db.select().from(deliveryShipments).where(eq(deliveryShipments.orderId, orderId)).all();
 }
 
-export async function createFulfillmentShipment(orderId: string, body: Record<string, unknown>) {
+export async function createFulfillmentShipment(db: Database, orderId: string, body: Record<string, unknown>) {
     const order = await db.select({ id: orders.id, status: orders.status, fulfillmentStatus: orders.fulfillmentStatus }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
@@ -127,7 +127,7 @@ const NOTIFICATION_STATUSES: Record<string, "order_shipped" | "order_delivered">
     delivered: "order_delivered",
 };
 
-export async function updateOrderStatus(orderId: string, status: string): Promise<StatusUpdateResult> {
+export async function updateOrderStatus(db: Database, orderId: string, status: string): Promise<StatusUpdateResult> {
     const existingOrder = await db.select({
         status: orders.status,
         inventoryAction: orders.inventoryAction,

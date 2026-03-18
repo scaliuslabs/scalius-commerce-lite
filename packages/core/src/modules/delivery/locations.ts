@@ -1,4 +1,4 @@
-import { db } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import { deliveryLocations } from "@scalius/database/schema";
 import { and, eq, isNull, like, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
@@ -23,7 +23,7 @@ export interface LocationData {
 // ─────────────────────────────────────────
 
 /** Get all active cities */
-export async function getCities() {
+export async function getCities(db: Database) {
   return db
     .select()
     .from(deliveryLocations)
@@ -38,7 +38,7 @@ export async function getCities() {
 }
 
 /** Get active zones for a city */
-export async function getZones(cityId: string) {
+export async function getZones(db: Database, cityId: string) {
   return db
     .select()
     .from(deliveryLocations)
@@ -54,7 +54,7 @@ export async function getZones(cityId: string) {
 }
 
 /** Get active areas for a zone */
-export async function getAreas(zoneId: string) {
+export async function getAreas(db: Database, zoneId: string) {
   return db
     .select()
     .from(deliveryLocations)
@@ -71,6 +71,7 @@ export async function getAreas(zoneId: string) {
 
 /** Search locations by name */
 export async function searchLocations(
+  db: Database,
   query: string,
   type?: "city" | "zone" | "area",
 ) {
@@ -92,7 +93,7 @@ export async function searchLocations(
 }
 
 /** Create a new location */
-export async function createLocation(data: LocationData) {
+export async function createLocation(db: Database, data: LocationData) {
   const id = data.id || createId();
 
   await db.insert(deliveryLocations).values({
@@ -112,7 +113,7 @@ export async function createLocation(data: LocationData) {
 }
 
 /** Update an existing location */
-export async function updateLocation(id: string, data: Partial<LocationData>) {
+export async function updateLocation(db: Database, id: string, data: Partial<LocationData>) {
   const updateData: Record<string, unknown> = {
     updatedAt: sql`CURRENT_TIMESTAMP`,
   };
@@ -135,11 +136,11 @@ export async function updateLocation(id: string, data: Partial<LocationData>) {
     .set(updateData)
     .where(eq(deliveryLocations.id, id));
 
-  return getLocationById(id);
+  return getLocationById(db, id);
 }
 
 /** Soft-delete a location */
-export async function deleteLocation(id: string) {
+export async function deleteLocation(db: Database, id: string) {
   await db
     .update(deliveryLocations)
     .set({
@@ -152,7 +153,7 @@ export async function deleteLocation(id: string) {
 }
 
 /** Get a location by ID */
-export async function getLocationById(id: string) {
+export async function getLocationById(db: Database, id: string) {
   const [location] = await db
     .select()
     .from(deliveryLocations)
@@ -180,6 +181,7 @@ export async function getLocationById(id: string) {
  * @returns The external ID for the provider, or undefined if not found
  */
 export async function getExternalLocationId(
+  db: Database,
   locationId: string,
   providerType: string,
 ): Promise<string | number | undefined> {
@@ -239,6 +241,7 @@ export async function getExternalLocationId(
  * @returns Object with the external IDs
  */
 export async function getExternalLocationIds(
+  db: Database,
   locations: {
     city?: string;
     zone?: string;
@@ -257,15 +260,15 @@ export async function getExternalLocationIds(
   } = {};
 
   if (locations.city) {
-    result.city = await getExternalLocationId(locations.city, providerType);
+    result.city = await getExternalLocationId(db, locations.city, providerType);
   }
 
   if (locations.zone) {
-    result.zone = await getExternalLocationId(locations.zone, providerType);
+    result.zone = await getExternalLocationId(db, locations.zone, providerType);
   }
 
   if (locations.area) {
-    result.area = await getExternalLocationId(locations.area, providerType);
+    result.area = await getExternalLocationId(db, locations.area, providerType);
   }
 
   return result;

@@ -1,7 +1,7 @@
 // src/modules/orders/orders.admin.ts
 // Admin order service: queries and CRUD mutations.
 
-import { db } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import { roundPrice, addPrices, subtractPrice } from "@scalius/shared/price-utils";
 import {
     orders,
@@ -60,7 +60,7 @@ function normalizeDate(value: unknown): Date | null {
  * Returns a paginated, searchable list of orders for the admin dashboard.
  * Includes item counts and the latest shipment per order.
  */
-export async function getOrders(options: {
+export async function listOrders(db: Database, options: {
     search?: string;
     status?: string;
     page?: number;
@@ -286,6 +286,7 @@ export async function getOrders(options: {
  * Returns null if the order does not exist.
  */
 export async function getOrderDetails(
+    db: Database,
     id: string,
 ): Promise<OrderDetails | null> {
     const order = await db
@@ -388,7 +389,7 @@ export async function getOrderDetails(
  *   3. Convert reservations to permanent deductions (admin orders are immediately active)
  *   4. If batch fails, release all reservations (no orphaned holds)
  */
-export async function createOrder(data: CreateOrderInput): Promise<{ id: string }> {
+export async function createOrder(db: Database, data: CreateOrderInput): Promise<{ id: string }> {
     // Calculate total amount
     const totalAmount = subtractPrice(
         addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
@@ -625,7 +626,7 @@ interface UpdateOrderData {
     status: string;
 }
 
-export async function updateOrder(id: string, data: UpdateOrderData): Promise<{ id: string }> {
+export async function updateOrder(db: Database, id: string, data: UpdateOrderData): Promise<{ id: string }> {
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
     const locationMap = new Map<string, string>();
     if (locationIds.length > 0) {
@@ -798,16 +799,16 @@ export async function updateOrder(id: string, data: UpdateOrderData): Promise<{ 
     }
 
     if (existingOrder.customerId) {
-        await updateCustomerStatsService(existingOrder.customerId);
+        await updateCustomerStatsService(db, existingOrder.customerId);
     }
     if (customerId && customerId !== existingOrder.customerId) {
-        await updateCustomerStatsService(customerId);
+        await updateCustomerStatsService(db, customerId);
     }
 
     return { id: order.id };
 }
 
-async function updateCustomerStatsService(customerId: string) {
+async function updateCustomerStatsService(db: Database, customerId: string) {
     const customerOrders = await db.select({ totalAmount: orders.totalAmount, createdAt: orders.createdAt })
         .from(orders).where(eq(orders.customerId, customerId));
     const stats = calculateCustomerStats(customerOrders);
@@ -819,7 +820,7 @@ async function updateCustomerStatsService(customerId: string) {
     }).where(eq(customers.id, customerId));
 }
 
-export async function deleteOrder(id: string) {
+export async function deleteOrder(db: Database, id: string) {
     const orderToDelete = await db.select({ id: orders.id, inventoryAction: orders.inventoryAction }).from(orders).where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`).get();
     if (!orderToDelete) throw new NotFoundError("Order not found");
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
@@ -828,7 +829,7 @@ export async function deleteOrder(id: string) {
     await db.update(orders).set({ deletedAt: sql`unixepoch()`, inventoryAction: "restored" }).where(eq(orders.id, id));
 }
 
-export async function restoreOrder(id: string) {
+export async function restoreOrder(db: Database, id: string) {
     // Load the order to check its current inventory state
     const order = await db
         .select({
@@ -880,7 +881,7 @@ export async function restoreOrder(id: string) {
     }
 }
 
-export async function permanentlyDeleteOrder(id: string) {
+export async function permanentlyDeleteOrder(db: Database, id: string) {
     const orderToDelete = await db.select({ inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, id)).get();
     if (orderToDelete && (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted")) {
         await applyInventoryForStatusChange(db, id, "cancelled");
@@ -889,7 +890,7 @@ export async function permanentlyDeleteOrder(id: string) {
     await db.delete(orders).where(eq(orders.id, id));
 }
 
-export async function bulkDeleteOrders(orderIds: string[], permanent: boolean = false) {
+export async function bulkDeleteOrders(db: Database, orderIds: string[], permanent: boolean = false) {
     for (const orderId of orderIds) {
         const order = await db.select({ id: orders.id, inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, orderId)).get();
         if (!order) continue;

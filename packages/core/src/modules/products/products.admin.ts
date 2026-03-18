@@ -29,7 +29,7 @@ type Database = DrizzleD1Database<typeof schema>;
  * Returns a paginated, searchable list of products for the admin dashboard.
  * Includes variant counts, image counts, and primary image URLs.
  */
-export async function getProducts(db: DrizzleD1Database<typeof schema>, options: {
+export async function listProducts(db: DrizzleD1Database<typeof schema>, options: {
     search?: string;
     categoryId?: string;
     page?: number;
@@ -634,7 +634,7 @@ export async function restoreProduct(db: DrizzleD1Database<typeof schema>, id: s
  * Permanently deletes a product and all of its related data (variants, images, attributes, rich content).
  * Throws an error if the product is linked to any existing orders or discounts.
  */
-export async function permanentDeleteProduct(db: DrizzleD1Database<typeof schema>, id: string): Promise<void> {
+export async function permanentlyDeleteProduct(db: DrizzleD1Database<typeof schema>, id: string): Promise<void> {
     const orderCheckArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(orderItems)

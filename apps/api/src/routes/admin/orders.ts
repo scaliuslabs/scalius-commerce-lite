@@ -42,8 +42,9 @@ const listOrdersRoute = createRoute({
 });
 
 app.openapi(listOrdersRoute, async (c) => {
+    const db = c.get("db");
     const query = c.req.valid("query");
-    const result = await OrdersService.getOrders({
+    const result = await OrdersService.listOrders(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || "",
@@ -73,8 +74,9 @@ const createOrderRoute = createRoute({
 });
 
 app.openapi(createOrderRoute, async (c) => {
+    const db = c.get("db");
     const data = c.req.valid("json");
-    const result = await OrdersService.createOrder(data);
+    const result = await OrdersService.createOrder(db, data);
     return created(c, result);
 });
 
@@ -94,8 +96,9 @@ const bulkDeleteRoute = createRoute({
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
+    const db = c.get("db");
     const data = c.req.valid("json");
-    await OrdersService.bulkDeleteOrders(data.orderIds, data.permanent);
+    await OrdersService.bulkDeleteOrders(db, data.orderIds, data.permanent);
     return noContent(c);
 });
 
@@ -115,8 +118,9 @@ const bulkShipRoute = createRoute({
 });
 
 app.openapi(bulkShipRoute, async (c) => {
+    const db = c.get("db");
     const data = c.req.valid("json");
-    const results = await OrdersService.bulkShipOrders(data.orderIds, data.providerId, data.options);
+    const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options);
     const successCount = results.filter((r) => r.success).length;
     return ok(c, {
         totalProcessed: results.length,
@@ -143,8 +147,9 @@ const getOrderRoute = createRoute({
 });
 
 app.openapi(getOrderRoute, async (c) => {
+    const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await OrdersService.getOrderDetails(orderId);
+    const result = await OrdersService.getOrderDetails(db, orderId);
     if (!result) throw new NotFoundError("Order not found");
     return ok(c, result);
 });
@@ -166,9 +171,10 @@ const updateOrderRoute = createRoute({
 });
 
 app.openapi(updateOrderRoute, async (c) => {
+    const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const result = await OrdersService.updateOrder(orderId, {
+    const result = await OrdersService.updateOrder(db, orderId, {
         ...data,
         areaName: data.areaName ?? undefined,
         discountAmount: data.discountAmount ?? 0,
@@ -192,8 +198,9 @@ const deleteOrderRoute = createRoute({
 });
 
 app.openapi(deleteOrderRoute, async (c) => {
+    const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    await OrdersService.deleteOrder(orderId);
+    await OrdersService.deleteOrder(db, orderId);
     return noContent(c);
 });
 
@@ -213,8 +220,9 @@ const restoreOrderRoute = createRoute({
 });
 
 app.openapi(restoreOrderRoute, async (c) => {
+    const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    await OrdersService.restoreOrder(orderId);
+    await OrdersService.restoreOrder(db, orderId);
     return noContent(c);
 });
 
@@ -234,8 +242,9 @@ const permanentDeleteRoute = createRoute({
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {
+    const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    await OrdersService.permanentlyDeleteOrder(orderId);
+    await OrdersService.permanentlyDeleteOrder(db, orderId);
     return noContent(c);
 });
 
@@ -286,9 +295,10 @@ const postCodRoute = createRoute({
 });
 
 app.openapi(postCodRoute, async (c) => {
+    const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const result = await OrdersService.processCodAction(orderId, data);
+    const result = await OrdersService.processCodAction(db, orderId, data);
     return ok(c, result);
 });
 
@@ -308,8 +318,9 @@ const getFulfillRoute = createRoute({
 });
 
 app.openapi(getFulfillRoute, async (c) => {
+    const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const shipments = await OrdersService.getOrderShipments(orderId);
+    const shipments = await OrdersService.getOrderShipments(db, orderId);
     return ok(c, { shipments });
 });
 
@@ -340,9 +351,10 @@ const postFulfillRoute = createRoute({
 });
 
 app.openapi(postFulfillRoute, async (c) => {
+    const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const result = await OrdersService.createFulfillmentShipment(orderId, data);
+    const result = await OrdersService.createFulfillmentShipment(db, orderId, data);
     return created(c, result);
 });
 
@@ -363,9 +375,10 @@ const updateStatusRoute = createRoute({
 });
 
 app.openapi(updateStatusRoute, async (c) => {
+    const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const result = await OrdersService.updateOrderStatus(orderId, data.status);
+    const result = await OrdersService.updateOrderStatus(db, orderId, data.status);
 
     // Queue customer notification if the status change warrants one
     if (result.notification && c.env.ORDER_NOTIFICATIONS_QUEUE) {

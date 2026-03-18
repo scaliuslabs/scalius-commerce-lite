@@ -114,8 +114,9 @@ const createLocationRoute = createRoute({
 
 app.openapi(createLocationRoute, async (c) => {
     try {
+        const db = c.get("db");
         const data = c.req.valid("json");
-        const newLocation = await createLocation(data);
+        const newLocation = await createLocation(db, data);
         return created(c, { location: newLocation });
     } catch (error: unknown) {
         console.error("Error creating delivery location:", error);
@@ -191,7 +192,8 @@ const getByIdRoute = createRoute({
 app.openapi(getByIdRoute, async (c) => {
     try {
         const { id } = c.req.valid("param");
-        const location = await getLocationById(id);
+        const db = c.get("db");
+        const location = await getLocationById(db, id);
         if (!location) throw new NotFoundError("Location not found");
         return ok(c, location);
     } catch (error: unknown) {

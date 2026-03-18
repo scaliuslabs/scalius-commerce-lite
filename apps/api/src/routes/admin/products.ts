@@ -92,7 +92,7 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
-    const result = await ProductsAdmin.getProducts(db, {
+    const result = await ProductsAdmin.listProducts(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || undefined,
@@ -281,7 +281,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     try {
-        await ProductsAdmin.permanentDeleteProduct(db, id);
+        await ProductsAdmin.permanentlyDeleteProduct(db, id);
         return noContent(c);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("delete")) {
