@@ -37,15 +37,7 @@ import { Badge } from "../../ui/badge";
 import { toast } from "sonner";
 import { useCurrency } from "@/hooks/useCurrency";
 import { navigateTo } from "@/lib/client/navigate";
-
-function generateDiscountCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
+import { generateDiscountCode } from "./utils";
 
 const formSchema = z.object({
   code: z.string().min(3).max(50),

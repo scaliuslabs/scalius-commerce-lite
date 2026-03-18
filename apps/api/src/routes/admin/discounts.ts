@@ -3,6 +3,8 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { DiscountService, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
+import { discounts } from "@scalius/database/schema";
+import { eq, sql } from "drizzle-orm";
 import { NotFoundError, ApiError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -226,6 +228,40 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const { id } = c.req.valid("param");
     await DiscountService.permanentlyDelete(db, id);
     return noContent(c);
+});
+
+// ── Toggle Discount Status ──
+
+const toggleStatusRoute = createRoute({
+    method: "post",
+    path: "/{id}/toggle-status",
+    tags: ["Admin - Discounts"],
+    summary: "Toggle a discount's active status",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        isActive: z.boolean()
+                    })
+                }
+            }
+        }
+    },
+    responses: {
+        200: { description: "Discount status toggled" }
+    }
+});
+
+app.openapi(toggleStatusRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const { isActive } = c.req.valid("json");
+    const discount = await DiscountService.getById(db, id);
+    if (!discount) throw new NotFoundError("Discount not found");
+    await db.update(discounts).set({ isActive, updatedAt: sql`unixepoch()` }).where(eq(discounts.id, id));
+    return ok(c, { id, isActive });
 });
 
 // ── Restore Discount ──
