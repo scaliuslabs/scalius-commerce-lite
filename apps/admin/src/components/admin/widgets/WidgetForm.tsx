@@ -15,10 +15,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { WidgetPlacementRule, type Widget, type Collection } from '@/types/api-responses';
+import { WidgetPlacementRule, type Widget, type Collection, type WidgetHistoryEntry } from '@/types/api-responses';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { ArrowLeft, Clock } from 'lucide-react';
+import { ArrowLeft, Clock, Save } from 'lucide-react';
+import { clientGet, clientPost, clientDelete } from '@/lib/api-client-fetch';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { parseAiContext, serializeAiContext, type AiContext } from '@scalius/core/modules/ai/ai-context-schema';
 import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
 import { useAiContext } from './widget-form/useAiContext';
@@ -115,9 +119,13 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
   // Version history state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
-  const [selectedHistoryItem, setSelectedHistoryItem] = useState<any | null>(null);
+  const [history, setHistory] = useState<WidgetHistoryEntry[]>([]);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<WidgetHistoryEntry | null>(null);
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
+
+  // Save version state
+  const [isSaveVersionOpen, setIsSaveVersionOpen] = useState(false);
+  const [versionReason, setVersionReason] = useState("");
 
   // Editor state
   const [editorMode, setEditorMode] = useState<EditorMode>('generation-preview');
@@ -311,49 +319,52 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const openHistory = async () => {
     if (widget?.id) {
       setIsHistoryOpen(true);
-      const response = await fetch(`/api/v1/admin/widgets/${widget.id}/history`);
-      const json = await response.json();
-      const data = json.data !== undefined ? json.data : json;
-      setHistory(data);
+      try {
+        const data = await clientGet<WidgetHistoryEntry[]>(`/widgets/${widget.id}/history`);
+        setHistory(data);
+      } catch (error: unknown) {
+        toast.error('Failed to load version history');
+        setHistory([]);
+      }
     }
   };
 
   const handleRestore = async (historyId: string) => {
     if (!widget?.id) return;
     try {
-      const response = await fetch(`/api/v1/admin/widgets/${widget.id}/history/restore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ historyId }),
-      });
-      if (response.ok) {
-        toast.success('Version restored successfully!');
-        void navigateTo(window.location.pathname);
-      } else {
-        throw new Error('Failed to restore version.');
-      }
+      await clientPost(`/widgets/${widget.id}/history/restore`, { historyId });
+      toast.success('Version restored successfully!');
+      void navigateTo(window.location.pathname);
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      toast.error(error instanceof Error ? error.message : 'Failed to restore version');
     }
   };
 
   const handleDeleteHistory = async (historyId: string) => {
     if (!widget?.id) return;
     try {
-      const response = await fetch(`/api/v1/admin/widgets/${widget.id}/history/${historyId}`, {
-        method: 'DELETE',
-      });
-      if (response.ok) {
-        toast.success('Version deleted successfully!');
-        setHistory(prev => prev.filter(h => h.id !== historyId));
-        if (selectedHistoryItem?.id === historyId) {
-          setSelectedHistoryItem(null);
-        }
-      } else {
-        throw new Error('Failed to delete version.');
+      await clientDelete(`/widgets/${widget.id}/history/${historyId}`);
+      toast.success('Version deleted successfully!');
+      setHistory(prev => prev.filter(h => h.id !== historyId));
+      if (selectedHistoryItem?.id === historyId) {
+        setSelectedHistoryItem(null);
       }
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      toast.error(error instanceof Error ? error.message : 'Failed to delete version');
+    }
+  };
+
+  const handleSaveVersion = async () => {
+    if (!widget?.id) return;
+    try {
+      await clientPost(`/widgets/${widget.id}/history`, {
+        reason: versionReason.trim() || 'Manual save',
+      });
+      toast.success('Version saved!');
+      setIsSaveVersionOpen(false);
+      setVersionReason('');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save version');
     }
   };
 
@@ -466,9 +477,14 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
         <div className="flex justify-end gap-2">
           {!isCreateMode && (
-            <Button type="button" variant="outline" onClick={openHistory}>
-              <Clock className="mr-2 h-4 w-4" /> Version History
-            </Button>
+            <>
+              <Button type="button" variant="outline" onClick={() => setIsSaveVersionOpen(true)}>
+                <Save className="mr-2 h-4 w-4" /> Save Version
+              </Button>
+              <Button type="button" variant="outline" onClick={openHistory}>
+                <Clock className="mr-2 h-4 w-4" /> Version History
+              </Button>
+            </>
           )}
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Saving...' : submitButtonText}
@@ -510,6 +526,32 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         currentImprovementTarget={aiImprover.currentImprovementTarget}
         improvementHistory={aiImprover.improvementHistory}
       />
+
+      {/* Save Version Dialog */}
+      <AlertDialog open={isSaveVersionOpen} onOpenChange={setIsSaveVersionOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save Version</AlertDialogTitle>
+            <AlertDialogDescription>
+              Save the current widget content as a version you can restore later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label htmlFor="versionReason">Reason (optional)</Label>
+            <Input
+              id="versionReason"
+              value={versionReason}
+              onChange={(e) => setVersionReason(e.target.value)}
+              placeholder="e.g., Before redesign, Final version, etc."
+              className="mt-2"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setVersionReason('')}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSaveVersion}>Save Version</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Version History Modal */}
       <WidgetHistoryModal
