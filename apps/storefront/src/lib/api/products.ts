@@ -51,7 +51,7 @@ export async function getProductBySlug(
 
         const json: { success: boolean; data: ProductPageData } = await response.json();
         return json.data as ProductPageData;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`Error fetching product by slug "${slug}":`, error);
         return null;
       }
@@ -87,7 +87,7 @@ export async function getProductVariants(
 
         const json: { success: boolean; data: { variants: ProductVariant[] } } = await response.json();
         return json.data.variants;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           `Error fetching variants for product ID "${productId}":`,
           error,
@@ -179,7 +179,7 @@ export async function getProductsByCategory(
           };
         } = await response.json();
         return { data: json.data.products, pagination: json.data.pagination };
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           `Error fetching products for category "${categorySlug}":`,
           error,
@@ -232,7 +232,7 @@ export async function getAllProducts(
           };
         };
         return { data: json.data.products, pagination: json.data.pagination };
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching all products:", error);
         return null;
       }
@@ -303,7 +303,7 @@ export async function searchProductsForForm(
       };
     }
     return null;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(
       `Error searching for products with query "${search}":`,
       error,

@@ -45,7 +45,7 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
 
         const json: { success: boolean; data: SeoSettings } = await response.json();
         return json.success ? json.data : null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching SEO settings:", error);
         return null;
       }
@@ -74,7 +74,7 @@ export async function getAnalyticsConfigurations(): Promise<
 
         const json: { success: boolean; data: { analytics: AnalyticsConfig[] } } = await response.json();
         return json.data.analytics;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching analytics configurations:", error);
         return null;
       }
@@ -101,7 +101,7 @@ export async function getActiveCheckoutLanguage(): Promise<CheckoutLanguageData 
 
         const json: { success: boolean; data: { language: CheckoutLanguageData } } = await response.json();
         return json.data.language;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching active checkout language:", error);
         return null;
       }
@@ -128,7 +128,7 @@ export async function getHeroSliders(): Promise<HeroSliderData | null> {
 
         const json: { success: boolean; data: HeroSliderData } = await response.json();
         return json.data as HeroSliderData;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching hero sliders:", error);
         return null;
       }

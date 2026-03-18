@@ -97,7 +97,7 @@ async function getJwtToken(): Promise<string | null> {
       }
 
       return jwtToken;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error getting JWT token:", error);
       return null;
     } finally {
@@ -151,7 +151,7 @@ export async function fetchWithRetry(
       try {
         const { apiContext } = await import("./context");
         backendApi = apiContext.getStore()?.BACKEND_API;
-      } catch (e) {
+      } catch (e: unknown) {
         // Fallback
       }
     }
@@ -190,7 +190,7 @@ export async function fetchWithRetry(
     }
 
     return response;
-  } catch (error) {
+  } catch (error: unknown) {
     if (retries > 0) {
       console.warn(`Fetch to ${url} failed. Retrying... (${retries} left)`);
       await new Promise((resolve) => setTimeout(resolve, 300 * (3 - retries)));

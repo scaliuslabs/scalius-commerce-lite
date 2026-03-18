@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request }) => {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[checkout/stripe-intent] Error:", err);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,

@@ -462,7 +462,7 @@ export function loadVariantsFromDOM(): Variant[] {
         deletedAt?: string | null;
       })[];
       return variants.filter((v) => !v.deletedAt);
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("Failed to parse variants from JSON:", e);
       return [];
     }

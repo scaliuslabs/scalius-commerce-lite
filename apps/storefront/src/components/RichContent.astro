@@ -19,7 +19,7 @@ let processedContent = content;
 if (shouldProcessShortcodes && content) {
   try {
     processedContent = await processShortcodes(content);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error processing shortcodes:", error);
     processedContent = content; // Fallback to original content
   }

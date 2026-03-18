@@ -56,7 +56,7 @@ export async function renderWidgetShortcode(widgetId: string): Promise<string> {
 
     // FIXED: Added 'not-prose' class to prevent RichContent from styling the widget's content
     return `<div class="widget-shortcode not-prose" data-widget-id="${widgetId}">${html}</div>`;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error rendering widget shortcode:", error);
     return `<div class="shortcode-error">Error loading widget: ${widgetId}</div>`;
   }
@@ -78,7 +78,7 @@ export async function renderProductShortcode(
 
     // Render a placeholder div for the React component to hydrate into.
     return `<div class="product-shortcode-container" data-props='${props}'></div>`;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error rendering product shortcode:", error);
     return `<div class="shortcode-error">Error loading product: ${productSlug}</div>`;
   }

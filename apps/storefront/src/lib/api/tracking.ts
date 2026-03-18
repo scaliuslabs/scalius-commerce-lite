@@ -79,7 +79,7 @@ export async function sendMetaCapiEvent(payload: MetaCapiEventPayload): Promise<
       5000, // 5-second timeout
       false, // This endpoint does not require a JWT token
     );
-  } catch (error) {
+  } catch (error: unknown) {
     // The error is logged by fetchWithRetry, so we just swallow it here
     // to prevent it from crashing the client application.
     console.error("Error in sendMetaCapiEvent, but swallowing to prevent UI crash:", error);

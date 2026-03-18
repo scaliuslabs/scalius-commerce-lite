@@ -20,7 +20,7 @@ export async function getCities(): Promise<LocationData[]> {
   try {
     const citiesData = await getCitiesFromApi();
     return citiesData || [];
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to fetch cities from API via library:", error);
     return [];
   }
@@ -87,7 +87,7 @@ export async function processOrder(formData: FormData) {
         const area = allAreas?.find((a) => a.id === areaId);
         if (area) areaName = area.name;
       }
-    } catch (locationError) {
+    } catch (locationError: unknown) {
       console.error("Error fetching location names:", locationError);
     }
 
@@ -290,7 +290,7 @@ export async function processOrder(formData: FormData) {
           console.log(
             `Successfully deleted abandoned checkout record: ${checkoutId}`,
           );
-        } catch (err) {
+        } catch (err: unknown) {
           // The try/catch ensures that even if this cleanup fails, the user journey is not interrupted.
           // The error is already logged inside the deleteAbandonedCheckout function.
           console.warn(
@@ -301,7 +301,7 @@ export async function processOrder(formData: FormData) {
     }
 
     return result;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Order processing failed:", error);
     return {
       success: false,

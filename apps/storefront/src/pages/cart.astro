@@ -115,7 +115,7 @@ if (Astro.request.method === "POST" && codOnly) {
       errorMessage =
         result.error?.message || "Failed to process order. Please try again.";
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Order creation failed:", error);
     errorMessage =
       error instanceof Error ? error.message : "An unexpected error occurred";
@@ -564,7 +564,7 @@ const submitLabel = codOnly
           }
         }, 800);
       }
-    } catch(err) {
+    } catch(err: unknown) {
       console.error("Cart autofill location err:", err);
     }
   };

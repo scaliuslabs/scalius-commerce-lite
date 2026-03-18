@@ -71,7 +71,7 @@ try {
 
   productsResponse = fetchedProducts;
   attributes = fetchedAttributes || [];
-} catch (e) {
+} catch (e: unknown) {
   console.error("Error fetching category data:", e);
   error = "An error occurred while fetching products. Please try again.";
 }
@@ -495,7 +495,7 @@ const analyticsProductData = products.map((p) => ({
       });
 
       mainElement.dataset.viewContentTracked = "true";
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to track category view content:", error);
     }
   }

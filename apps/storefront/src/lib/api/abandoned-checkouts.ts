@@ -35,7 +35,7 @@ export async function saveAbandonedCheckout(payload: AbandonedCheckoutPayload): 
       5000, // 5-second timeout
       false, // Does not require authentication
     );
-  } catch (error) {
+  } catch (error: unknown) {
     // The error is logged by fetchWithRetry, so we just swallow it here
     // to prevent it from crashing the client application.
     console.error("Error in saveAbandonedCheckout, but swallowing to prevent UI crash:", error);
@@ -69,7 +69,7 @@ export async function deleteAbandonedCheckout(checkoutId: string): Promise<void>
       5000, // 5-second timeout
       true, // This call still requires authentication
     );
-  } catch (error)
+  } catch (error: unknown)
   {
     // Log a warning but don't let this failure block the user's success flow.
     console.warn(`Non-critical error: Failed to delete abandoned checkout record for ${checkoutId}. It may be cleaned up later.`, error);

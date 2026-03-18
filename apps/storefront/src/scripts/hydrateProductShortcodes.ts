@@ -31,7 +31,7 @@ function hydrate() {
         // Mark element as hydrated
         el._reactRoot = root;
 
-      } catch (e) {
+      } catch (e: unknown) {
         console.error("Failed to hydrate product shortcode:", e, el);
         el.innerHTML = `<div class="shortcode-error">Error loading product.</div>`;
       }

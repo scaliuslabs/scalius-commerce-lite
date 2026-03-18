@@ -51,7 +51,7 @@ async function parseAdditionalDomains(env?: any): Promise<string[]> {
         additionalDomains = cachedData.cspAllowedDomains;
       }
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("Failed to fetch CSP_ALLOWED via EdgeCache", e);
   }
 

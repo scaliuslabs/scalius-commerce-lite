@@ -83,7 +83,7 @@ async function getLanguageData(): Promise<CheckoutLanguageData> {
       globalLangData = language;
       return globalLangData;
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error fetching checkout language:", error);
   }
   // Fallback language object in case API fails
@@ -165,7 +165,7 @@ function processQuickBuy() {
         }
       }
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("Error processing quick buy data:", e);
   }
 }
@@ -447,7 +447,7 @@ async function handleApplyDiscount() {
     } else {
       showDiscountMessage(result?.error || "Invalid discount code", "error");
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error applying discount:", error);
     showDiscountMessage("Failed to apply discount. Please try again.", "error");
   } finally {

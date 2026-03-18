@@ -114,7 +114,7 @@ async function getFromL2<T>(key: string): Promise<T | null> {
       const data = await cachedResponse.json();
       return data as T;
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.warn(`[EdgeCache] L2 read error for ${key}:`, error);
   }
 
@@ -207,7 +207,7 @@ export async function withEdgeCache<T>(
       }
 
       return data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[EdgeCache] Fetch failed for ${key}:`, error);
       return null;
     } finally {

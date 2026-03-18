@@ -187,8 +187,8 @@ async function selectMethod(methodId: string, gw: { id: string; [key: string]: u
         stripeContainer.dataset.publishableKey = gw.publishableKey as string;
       }
       await handler.onSelect(stripeContainer || document.body);
-    } catch (err) {
-      showError((err as Error).message);
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : String(err));
       return;
     }
   }
@@ -285,11 +285,11 @@ async function processPayment(): Promise<void> {
     if (!result.success) {
       throw new Error(result.error || "Payment failed");
     }
-  } catch (err) {
+  } catch (err: unknown) {
     if (loadingOverlay) {
       loadingOverlay.style.display = "none";
     }
-    showError((err as Error).message || "An error occurred. Please try again.");
+    showError(err instanceof Error ? err.message : "An error occurred. Please try again.");
 
     // Restore button text based on selected method
     const restoreHandler = getGateway(selectedMethod);

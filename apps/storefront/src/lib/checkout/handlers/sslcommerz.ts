@@ -44,8 +44,8 @@ export const sslcommerzHandler: GatewayHandler = {
       if (!gatewayUrl) throw new Error("No gateway URL received");
 
       return { success: true, redirectUrl: gatewayUrl };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   },
 };

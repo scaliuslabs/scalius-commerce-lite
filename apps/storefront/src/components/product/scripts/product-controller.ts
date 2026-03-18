@@ -423,7 +423,7 @@ function handleAddToCart(redirect: boolean) {
       if (window.innerWidth < 768) window.scrollTo(0, 0);
       document.dispatchEvent(new CustomEvent("open-cart"));
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.error(e);
     showToast("Error adding to cart", "error");
   }

@@ -98,8 +98,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
       statusText: apiResponse.statusText,
       headers: responseHeaders,
     });
-  } catch (err: any) {
-    console.error("[customer-auth proxy] Error:", err?.message || err);
+  } catch (err: unknown) {
+    console.error("[customer-auth proxy] Error:", err instanceof Error ? err.message : err);
     return new Response(JSON.stringify({ error: "Proxy error" }), {
       status: 502,
       headers: { "Content-Type": "application/json" },

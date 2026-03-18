@@ -38,7 +38,7 @@ export default function LocationSelector({
       } else {
         setZones([]);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading zones:", error);
       setZones([]);
     } finally {
@@ -56,7 +56,7 @@ export default function LocationSelector({
       } else {
         setAreas([]);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading areas:", error);
       setAreas([]);
     } finally {

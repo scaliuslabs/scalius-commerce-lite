@@ -23,7 +23,7 @@ export async function getCities(): Promise<LocationData[] | null> {
 
         const json: { success: boolean; data: LocationData[] } = await response.json();
         return json.data;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching cities:", error);
         return null;
       }
@@ -57,7 +57,7 @@ export async function getZones(cityId: string): Promise<LocationData[] | null> {
 
         const json: { success: boolean; data: LocationData[] } = await response.json();
         return json.data;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`Error fetching zones for city "${cityId}":`, error);
         return null;
       }
@@ -91,7 +91,7 @@ export async function getAreas(zoneId: string): Promise<LocationData[] | null> {
 
         const json: { success: boolean; data: LocationData[] } = await response.json();
         return json.data;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`Error fetching areas for zone "${zoneId}":`, error);
         return null;
       }
@@ -120,7 +120,7 @@ export async function getShippingMethods(): Promise<ShippingMethod[] | null> {
         const json: { success: boolean; data: { shippingMethods: ShippingMethod[] } } =
           await response.json();
         return json.data.shippingMethods;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching shipping methods:", error);
         return null;
       }

@@ -48,7 +48,7 @@ async function warmCriticalCaches(baseUrl: string): Promise<void> {
           );
         }
         return response.ok;
-      } catch (error) {
+      } catch (error: unknown) {
         const duration = Date.now() - start;
         console.error(
           `[CacheWarm] ${endpoint} failed after ${duration}ms:`,
@@ -130,7 +130,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
         headers: { "Content-Type": "application/json" },
       },
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(
       `Failed to update cache version in KV for ${hostname}:`,
       error,
@@ -226,7 +226,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Failed to execute selective purge for ${hostname}:`, error);
     return new Response(
       JSON.stringify({ error: "Failed to execute selective purge" }),

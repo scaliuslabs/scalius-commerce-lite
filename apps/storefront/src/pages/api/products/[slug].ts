@@ -32,7 +32,7 @@ export const GET: APIRoute = async ({ params }) => {
           "public, max-age=0, stale-while-revalidate=120, stale-if-error=300",
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`API route error for product slug ${slug}:`, error);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,

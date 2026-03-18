@@ -35,7 +35,7 @@ export async function getNavigationData(
           return json.data.navigation[type] || [];
         }
         return null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           `Error fetching navigation data for type "${type}":`,
           error,

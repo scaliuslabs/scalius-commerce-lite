@@ -25,7 +25,7 @@ export async function getActiveHomepageWidgets(): Promise<ApiWidget[] | null> {
 
         const json: { success: boolean; data: { widgets: ApiWidget[] } } = await response.json();
         return json.data.widgets;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching active homepage widgets:", error);
         return null;
       }
@@ -64,7 +64,7 @@ export async function getWidgetById(
         const json: { success: boolean; data: { widget: ApiWidget } } =
           await response.json();
         return json.success ? json.data.widget : null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`Error fetching widget by ID "${widgetId}":`, error);
         return null;
       }

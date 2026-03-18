@@ -90,7 +90,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       status: 200,
       headers: getSitemapHeaders(),
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating products sitemap:', error);
     return new Response('Internal Server Error', { status: 500 });
   }

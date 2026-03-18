@@ -27,7 +27,7 @@ export async function getHeaderData(): Promise<HeaderData | null> {
           return json.data.header;
         }
         return null;
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching header data:", error);
         return null;
       }

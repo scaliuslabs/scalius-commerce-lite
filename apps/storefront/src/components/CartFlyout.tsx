@@ -34,7 +34,7 @@ export function setCartOpen(value: boolean) {
   if (typeof window !== "undefined") {
     try {
       cartOpenState.set(value);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Error setting cart open state:", err);
     }
   }

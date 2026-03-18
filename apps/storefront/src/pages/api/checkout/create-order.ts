@@ -25,7 +25,7 @@ export const POST: APIRoute = async ({ request }) => {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[checkout/create-order] Error:", err);
     return new Response(JSON.stringify({ success: false, error: "Internal server error" }), {
       status: 500,
