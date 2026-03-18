@@ -5,25 +5,16 @@ import { customers, customerHistory, deliveryLocations } from "@scalius/database
 import { sql, and, isNull, inArray, asc, desc, eq, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
-import { phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { z } from "zod";
 import type { Database } from "@scalius/database/client";
 
-// ─────────────────────────────────────────
-// Schema
-// ─────────────────────────────────────────
-
-export const createCustomerSchema = z.object({
-    name: z.string().min(3).max(100),
-    email: z.email().nullable(),
-    phone: phoneNumberSchema,
-    address: z.string().max(500).nullable(),
-    city: z.string().nullable(),
-    zone: z.string().nullable(),
-    area: z.string().nullable(),
-});
-
-export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
+// Re-export schemas from the canonical validation module
+export {
+    createCustomerSchema,
+    updateCustomerSchema,
+    type CreateCustomerInput,
+    type UpdateCustomerInput,
+} from "./customers.validation";
+import type { CreateCustomerInput, UpdateCustomerInput } from "./customers.validation";
 
 // ─────────────────────────────────────────
 // Queries
@@ -211,9 +202,6 @@ export async function createCustomer(
     return { id: customerId };
 }
 
-export const updateCustomerSchema = createCustomerSchema.partial();
-export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
-
 export async function getCustomerById(db: Database, id: string) {
     return db.select().from(customers).where(eq(customers.id, id)).get() ?? null;
 }
@@ -280,7 +268,27 @@ export async function updateCustomer(
 }
 
 export async function deleteCustomer(db: Database, id: string): Promise<void> {
+    const existing = await getCustomerById(db, id);
+    if (!existing) throw Object.assign(new Error("Customer not found"), { statusCode: 404 });
+
     await db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(eq(customers.id, id));
+
+    await db.insert(customerHistory).values({
+        id: "hist_" + nanoid(),
+        customerId: id,
+        name: existing.name,
+        email: existing.email,
+        phone: existing.phone,
+        address: existing.address,
+        city: existing.city,
+        zone: existing.zone,
+        area: existing.area,
+        cityName: existing.cityName,
+        zoneName: existing.zoneName,
+        areaName: existing.areaName,
+        changeType: "deleted",
+        createdAt: sql`unixepoch()`,
+    });
 }
 
 export async function permanentDeleteCustomer(db: Database, id: string): Promise<void> {

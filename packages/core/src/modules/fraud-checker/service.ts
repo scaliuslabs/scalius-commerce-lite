@@ -2,8 +2,8 @@
 // Fraud checker provider management and phone lookup service.
 // Moved from src/lib/fraud-checker/service.ts.
 
-import { db } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -47,11 +47,13 @@ export interface FraudCheckResult {
 const CATEGORY = "fraud-checker";
 
 export class FraudCheckerService {
+  constructor(private db: Database) {}
+
   /**
    * Get all fraud checker providers
    */
   async getProviders(): Promise<FraudCheckerProvider[]> {
-    const providerSettings = await db
+    const providerSettings = await this.db
       .select()
       .from(settings)
       .where(eq(settings.category, CATEGORY));
@@ -75,7 +77,7 @@ export class FraudCheckerService {
    * Get a specific provider by ID
    */
   async getProvider(id: string): Promise<FraudCheckerProvider | null> {
-    const [setting] = await db
+    const [setting] = await this.db
       .select()
       .from(settings)
       .where(and(eq(settings.category, CATEGORY), eq(settings.key, id)));
@@ -119,7 +121,7 @@ export class FraudCheckerService {
 
     if (existing) {
       // Update
-      await db
+      await this.db
         .update(settings)
         .set({
           value: JSON.stringify(providerData),
@@ -130,7 +132,7 @@ export class FraudCheckerService {
         );
     } else {
       // Create
-      await db.insert(settings).values({
+      await this.db.insert(settings).values({
         id: nanoid(),
         key: providerId,
         category: CATEGORY,
@@ -155,7 +157,7 @@ export class FraudCheckerService {
       throw new NotFoundError(`Fraud checker provider "${id}" not found`);
     }
 
-    await db
+    await this.db
       .delete(settings)
       .where(and(eq(settings.category, CATEGORY), eq(settings.key, id)));
     return true;

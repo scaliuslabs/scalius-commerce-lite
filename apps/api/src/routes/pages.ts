@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import { pages } from "@scalius/database/schema";
 import { sql, isNull, eq, and, SQL } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
@@ -7,7 +6,7 @@ import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for pages routes
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware to all routes
 app.use(
@@ -67,6 +66,7 @@ const listPagesRoute = createRoute({
 });
 
 app.openapi(listPagesRoute, async (c) => {
+  const db = c.get("db");
   const { limit, page, sort, publishedOnly } = c.req.valid("query");
 
   // Build query conditions with explicit typing
@@ -166,6 +166,7 @@ const getPageBySlugRoute = createRoute({
 });
 
 app.openapi(getPageBySlugRoute, async (c) => {
+  const db = c.get("db");
   const { slug } = c.req.valid("param");
 
   // Create an array of conditions for better type safety
@@ -232,6 +233,7 @@ const getPageByIdRoute = createRoute({
 });
 
 app.openapi(getPageByIdRoute, async (c) => {
+  const db = c.get("db");
   const { id } = c.req.valid("param");
 
   // Create an array of conditions for better type safety
