@@ -3,13 +3,14 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { GitCommitHorizontal, Trash2 } from 'lucide-react';
+import type { WidgetHistoryEntry } from '@/types/api-responses';
 
 interface WidgetHistoryModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  history: any[];
-  selectedHistoryItem: any | null;
-  setSelectedHistoryItem: (item: any | null) => void;
+  history: WidgetHistoryEntry[];
+  selectedHistoryItem: WidgetHistoryEntry | null;
+  setSelectedHistoryItem: (item: WidgetHistoryEntry | null) => void;
   handleRestore: (historyId: string) => void;
   handleDeleteHistory: (historyId: string) => void;
   widgetName: string;
