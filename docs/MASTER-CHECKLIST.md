@@ -1,7 +1,13 @@
 # Master Checklist — Scalius Commerce
 
-Last updated: 2026-03-18
+Last updated: 2026-03-18 (end of session)
 Source: 47 README files written by 14 documentation agents reading every line of code.
+
+**Session Progress:**
+- Phase 1: COMPLETE (24 bug fixes)
+- Phase 2: COMPLETE (international phone numbers)
+- Phase 3: COMPLETE (currency management)
+- Phase 4: Tracked for future sessions
 
 ---
 
@@ -11,30 +17,30 @@ These are things that are implemented but broken, or create data integrity issue
 
 ### P0 — Data Integrity / Security
 
-- [ ] **FCM push notifications never called** — `sendOrderNotification()` is fully built but the queue consumer only calls `sendOrderNotificationEmail()`. Need to add FCM push call in queue consumer alongside email. (`packages/core/src/modules/notifications/`)
-- [ ] **Admin order create doesn't deduct inventory** — Sets `inventoryAction: "deducted"` but never actually deducts stock. Orders created from admin dashboard don't reduce inventory. (`packages/core/src/modules/orders/orders.admin.ts`)
-- [ ] **Password length mismatch** — Better Auth enforces 12 chars minimum, but API validation schema accepts 8. Customers could set passwords via API that Better Auth then rejects. (`packages/core/src/auth/auth.ts` vs API route schemas)
-- [ ] **QR code TOTP secret leak** — 2FA QR codes generated via external `api.qrserver.com`, sending TOTP secrets over the wire to a third party. Must generate QR codes locally. (`apps/admin/src/components/admin/account-settings/`)
-- [ ] **Shipping method update inverted uniqueness check** — Update handler checks if same ID exists (always true) instead of checking if a DIFFERENT record has the same name. (`apps/api/src/routes/admin/settings/shipping.ts`)
-- [ ] **`restoreOrder()` doesn't re-reserve inventory** — Restoring a cancelled order marks it active but doesn't re-reserve the stock, leading to overselling. (`packages/core/src/modules/orders/orders.admin.ts`)
+- [x] **FCM push notifications never called** — `sendOrderNotification()` is fully built but the queue consumer only calls `sendOrderNotificationEmail()`. Need to add FCM push call in queue consumer alongside email. (`packages/core/src/modules/notifications/`)
+- [x] **Admin order create doesn't deduct inventory** — Sets `inventoryAction: "deducted"` but never actually deducts stock. Orders created from admin dashboard don't reduce inventory. (`packages/core/src/modules/orders/orders.admin.ts`)
+- [x] **Password length mismatch** — Better Auth enforces 12 chars minimum, but API validation schema accepts 8. Customers could set passwords via API that Better Auth then rejects. (`packages/core/src/auth/auth.ts` vs API route schemas)
+- [x] **QR code TOTP secret leak** — 2FA QR codes generated via external `api.qrserver.com`, sending TOTP secrets over the wire to a third party. Must generate QR codes locally. (`apps/admin/src/components/admin/account-settings/`)
+- [x] **Shipping method update inverted uniqueness check** — Update handler checks if same ID exists (always true) instead of checking if a DIFFERENT record has the same name. (`apps/api/src/routes/admin/settings/shipping.ts`)
+- [x] **`restoreOrder()` doesn't re-reserve inventory** — Restoring a cancelled order marks it active but doesn't re-reserve the stock, leading to overselling. (`packages/core/src/modules/orders/orders.admin.ts`)
 
 ### P1 — Broken UI / Missing Endpoints
 
-- [ ] **Widget trash view always empty** — `listWidgets()` service always filters `deletedAt IS NULL`. The admin widget list API has no `trashed` parameter support. Trash page shows nothing. (`packages/core/src/modules/widgets/widgets.service.ts`)
-- [ ] **2 missing discount API endpoints** — UI calls `POST /admin/discounts/{id}/toggle-status` and `POST /discounts/usage` but neither exists. Status toggle silently fails; usage recording happens via queue instead. (`apps/api/src/routes/admin/discounts.ts`)
-- [ ] **CollectionSelector search URL bug** — After initial load (correct `/api/v1/admin/collections`), search queries go to `/api/collections?search=...` (missing `/v1/admin` prefix). (`apps/admin/src/components/admin/discount/CollectionSelector.tsx`)
-- [ ] **`page.widgets` dead code** — Storefront `Page` type has `widgets?: ApiWidget[]` and `[slug].astro` renders it, but API never returns widgets for pages. Dead rendering path. (`apps/storefront/src/pages/[slug].astro`)
-- [ ] **Discount duplicate feature broken** — List row navigates to `?duplicate=true` but edit page never reads that parameter. (`apps/admin/src/components/admin/discount/`)
-- [ ] **`ORDER_STATUSES` UI missing 3 states** — Admin order status dropdown is missing `returned`, `partially_refunded`, and `incomplete` from the 11 possible states. (`apps/admin/src/components/admin/order-list/`)
-- [ ] **Product list flat discount display missing** — Only shows percentage discounts; flat amount discounts are invisible across admin list + storefront `hasDiscount` filter. (`packages/core/src/modules/products/`)
-- [ ] **`getProductDetails` returns soft-deleted variants** — No filter on `deletedAt` when querying variants. Edit form shows deleted variants. (`packages/core/src/modules/products/products.admin.ts`)
+- [x] **Widget trash view always empty** — `listWidgets()` service always filters `deletedAt IS NULL`. The admin widget list API has no `trashed` parameter support. Trash page shows nothing. (`packages/core/src/modules/widgets/widgets.service.ts`)
+- [x] **2 missing discount API endpoints** — UI calls `POST /admin/discounts/{id}/toggle-status` and `POST /discounts/usage` but neither exists. Status toggle silently fails; usage recording happens via queue instead. (`apps/api/src/routes/admin/discounts.ts`)
+- [x] **CollectionSelector search URL bug** — After initial load (correct `/api/v1/admin/collections`), search queries go to `/api/collections?search=...` (missing `/v1/admin` prefix). (`apps/admin/src/components/admin/discount/CollectionSelector.tsx`)
+- [x] **`page.widgets` dead code** — Storefront `Page` type has `widgets?: ApiWidget[]` and `[slug].astro` renders it, but API never returns widgets for pages. Dead rendering path. (`apps/storefront/src/pages/[slug].astro`)
+- [x] **Discount duplicate feature broken** — List row navigates to `?duplicate=true` but edit page never reads that parameter. (`apps/admin/src/components/admin/discount/`)
+- [x] **`ORDER_STATUSES` UI missing 3 states** — Admin order status dropdown is missing `returned`, `partially_refunded`, and `incomplete` from the 11 possible states. (`apps/admin/src/components/admin/order-list/`)
+- [x] **Product list flat discount display missing** — Only shows percentage discounts; flat amount discounts are invisible across admin list + storefront `hasDiscount` filter. (`packages/core/src/modules/products/`)
+- [x] **`getProductDetails` returns soft-deleted variants** — No filter on `deletedAt` when querying variants. Edit form shows deleted variants. (`packages/core/src/modules/products/products.admin.ts`)
 
 ### P2 — Inconsistencies / Code Quality
 
-- [ ] **Multiple routes use raw `db` import instead of `c.get("db")`** — Public pages, widgets, hero, meta-conversions, fraud-checker routes import `db` directly from `@scalius/database/client` instead of middleware-injected instance. (`apps/api/src/routes/pages.ts`, `widgets.ts`, `hero.ts`, etc.)
-- [ ] **Dead marketing module** — `packages/core/src/modules/marketing/discounts.service.ts` duplicates discount list query but is never imported. `marketing/index.ts` re-exports from `../discounts`. Should be deleted.
-- [ ] **Duplicate validation schemas** — Customer validation exists in both `customers.service.ts` and `customers.validation.ts`. (`packages/core/src/modules/customers/`)
-- [ ] **`generateDiscountCode()` duplicated 3 times** — Identical function in AmountOffOrderForm, FreeShippingForm, and DiscountDetailsSection. Should be one shared utility.
+- [x] **Multiple routes use raw `db` import instead of `c.get("db")`** — Public pages, widgets, hero, meta-conversions, fraud-checker routes import `db` directly from `@scalius/database/client` instead of middleware-injected instance. (`apps/api/src/routes/pages.ts`, `widgets.ts`, `hero.ts`, etc.)
+- [x] **Dead marketing module** — `packages/core/src/modules/marketing/discounts.service.ts` duplicates discount list query but is never imported. `marketing/index.ts` re-exports from `../discounts`. Should be deleted.
+- [x] **Duplicate validation schemas** — Customer validation exists in both `customers.service.ts` and `customers.validation.ts`. (`packages/core/src/modules/customers/`)
+- [x] **`generateDiscountCode()` duplicated 3 times** — Identical function in AmountOffOrderForm, FreeShippingForm, and DiscountDetailsSection. Should be one shared utility.
 - [ ] **Duplicated SocialLinksSection** — Same component exists in both header-builder and footer-builder. Should be shared.
 - [ ] **`integrations.ts` duplicates email/Firebase routes from `system.ts`** — Two API route files serve the same settings. (`apps/api/src/routes/admin/settings/`)
 - [ ] **`new Date()` vs `sql'unixepoch()'` inconsistency** — Some mutations use JS Date objects, others use SQL unixepoch(). Causes timestamp format inconsistency in D1. (`packages/core/src/modules/collections/`, `orders/`)
