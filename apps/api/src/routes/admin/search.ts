@@ -52,7 +52,8 @@ app.openapi(searchRoute, async (c) => {
             setTimeout(() => reject(new Error("Search timed out")), 5000);
         });
 
-        const searchPromise = search(q, {
+        const db = c.get("db");
+        const searchPromise = search(db, q, {
             categoryId: query.categoryId,
             minPrice,
             maxPrice,
