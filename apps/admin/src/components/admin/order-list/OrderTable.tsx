@@ -1,4 +1,15 @@
 import type { OrderListItem } from "@scalius/core/modules/orders";
+
+/** Minimal shipment shape used in the order list — compatible with ShipmentStatus */
+interface OrderShipment {
+  id: string;
+  orderId: string;
+  status?: unknown;
+  providerType?: unknown;
+  trackingId?: unknown;
+  lastChecked?: unknown;
+  [key: string]: unknown;
+}
 import {
   Table,
   TableBody,
@@ -24,7 +35,7 @@ type SortOrder = "asc" | "desc";
 
 interface OrderTableProps {
   orders: OrderListItem[];
-  shipmentStatuses: Record<string, any>;
+  shipmentStatuses: Record<string, OrderShipment>;
   selectedOrders: Set<string>;
   updatingStatusIds: Set<string>;
   sort: {
@@ -41,7 +52,7 @@ interface OrderTableProps {
   onPermanentDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
-  onShipmentStatusUpdated: (updatedShipment: any) => void;
+  onShipmentStatusUpdated: (updatedShipment: { orderId: string; [key: string]: unknown }) => void;
   onRefreshAllShipments?: () => void;
 }
 

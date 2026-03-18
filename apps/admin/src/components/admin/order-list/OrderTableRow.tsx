@@ -5,6 +5,10 @@ import type { OrderListItem } from "@scalius/core/modules/orders";
 interface OrderShipment {
   id: string;
   orderId: string;
+  status?: unknown;
+  providerType?: unknown;
+  trackingId?: unknown;
+  lastChecked?: unknown;
   [key: string]: unknown;
 }
 import { TableCell, TableRow } from "../../ui/table";
@@ -45,7 +49,7 @@ interface OrderTableRowProps {
   onPermanentDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
-  onShipmentStatusUpdated: (updatedShipment: Record<string, unknown>) => void;
+  onShipmentStatusUpdated: (updatedShipment: { orderId: string; [key: string]: unknown }) => void;
 }
 
 const formatDate = (date: Date) => {
@@ -257,10 +261,12 @@ export const OrderTableRow = React.memo(function OrderTableRow({
       </TableCell>
       <TableCell className="py-4">
         {shipment ? (() => {
-          const trackingUrl = shipment.providerType === "pathao"
-            ? `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId || '')}`
-            : shipment.providerType === "steadfast"
-              ? `https://steadfast.com.bd/t/${encodeURIComponent(shipment.trackingId || '')}`
+          const provType = shipment.providerType as string | undefined;
+          const trkId = shipment.trackingId as string | null | undefined;
+          const trackingUrl = provType === "pathao"
+            ? `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(trkId || '')}`
+            : provType === "steadfast"
+              ? `https://steadfast.com.bd/t/${encodeURIComponent(trkId || '')}`
               : null;
 
           return (
@@ -268,18 +274,18 @@ export const OrderTableRow = React.memo(function OrderTableRow({
               <ShipmentStatusIndicator
                 shipment={{
                   id: shipment.id,
-                  status: shipment.status,
+                  status: shipment.status as string,
                   orderId: order.id,
                   lastChecked:
                     shipment.lastChecked instanceof Date
-                      ? shipment.lastChecked.toISOString()
+                      ? (shipment.lastChecked as Date).toISOString()
                       : typeof shipment.lastChecked === "string"
-                        ? shipment.lastChecked
+                        ? (shipment.lastChecked as string)
                         : undefined,
                 }}
                 onStatusUpdated={onShipmentStatusUpdated}
               />
-              {shipment.trackingId && trackingUrl && (
+              {trkId && trackingUrl && (
                 <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-1">
                   <a
                     href={trackingUrl}
@@ -288,7 +294,7 @@ export const OrderTableRow = React.memo(function OrderTableRow({
                     className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <span className="font-mono truncate max-w-[90px]">{shipment.trackingId}</span>
+                    <span className="font-mono truncate max-w-[90px]">{trkId}</span>
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
