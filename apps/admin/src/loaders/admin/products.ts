@@ -86,10 +86,11 @@ export async function getProductEditData(id: string) {
       createdAt: new Date(img.createdAt),
     })),
     attributes: product.attributes || [],
-    additionalInfo: (product.additionalInfo || []).map((item, idx) => ({
-      id: `info-${idx}`,
-      title: item.label,
-      content: item.value,
+    additionalInfo: (product.additionalInfo || []).map((item) => ({
+      id: item.id,
+      title: item.title,
+      content: item.content,
+      sortOrder: item.sortOrder,
     })),
   };
 

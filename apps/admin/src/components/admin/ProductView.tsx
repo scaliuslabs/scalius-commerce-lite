@@ -76,8 +76,10 @@ interface ProductViewProps {
       name: string;
     };
     additionalInfo?: {
-      label: string;
-      value: string;
+      id: string;
+      title: string;
+      content: string;
+      sortOrder: number;
     }[];
     variants: ProductVariant[];
     images: ProductImage[];
@@ -159,11 +161,11 @@ export function ProductView({ product }: ProductViewProps) {
                     {product.additionalInfo?.map((info, idx) => (
                       <AccordionItem key={`info-${idx}`} value={`info-${idx}`} className="border-none mt-2">
                         <AccordionTrigger className="py-2 text-sm font-semibold hover:no-underline text-foreground transition-colors justify-start gap-2 border rounded-lg px-4 bg-muted/20 data-[state=open]:rounded-b-none data-[state=open]:bg-muted/40">
-                          {info.label}
+                          {info.title}
                         </AccordionTrigger>
                         <AccordionContent className="pt-4 pb-4 px-4 border border-t-0 rounded-b-lg">
                           <RichContent
-                            content={info.value}
+                            content={info.content}
                             variant="product"
                             className="text-sm text-foreground/90 max-w-3xl"
                           />
@@ -179,11 +181,11 @@ export function ProductView({ product }: ProductViewProps) {
                     {product.additionalInfo.map((info, idx) => (
                       <AccordionItem key={`info-${idx}`} value={`info-${idx}`} className="border-none mb-2">
                         <AccordionTrigger className="py-2 text-sm font-semibold hover:no-underline text-foreground transition-colors justify-start gap-2 border rounded-lg px-4 bg-muted/20 data-[state=open]:rounded-b-none data-[state=open]:bg-muted/40">
-                          {info.label}
+                          {info.title}
                         </AccordionTrigger>
                         <AccordionContent className="pt-4 pb-4 px-4 border border-t-0 rounded-b-lg">
                           <RichContent
-                            content={info.value}
+                            content={info.content}
                             variant="product"
                             className="text-sm text-foreground/90 max-w-3xl"
                           />

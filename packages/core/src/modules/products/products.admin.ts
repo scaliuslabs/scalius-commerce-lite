@@ -296,6 +296,21 @@ export async function getProductDetails(
         .where(eq(productImages.productId, id))
         .orderBy(productImages.sortOrder);
 
+    const richContent = await db
+        .select()
+        .from(productRichContent)
+        .where(eq(productRichContent.productId, id))
+        .orderBy(asc(productRichContent.sortOrder));
+
+    const attributeValues = await db
+        .select({
+            id: productAttributeValues.id,
+            attributeId: productAttributeValues.attributeId,
+            value: productAttributeValues.value,
+        })
+        .from(productAttributeValues)
+        .where(eq(productAttributeValues.productId, id));
+
     return {
         ...result,
         createdAt: new Date(Number(result.createdAt) * 1000),
@@ -307,6 +322,16 @@ export async function getProductDetails(
         images: images.map((img) => ({
             ...img,
             createdAt: img.createdAt instanceof Date ? img.createdAt : new Date(Number(img.createdAt) * 1000),
+        })),
+        additionalInfo: richContent.map((item) => ({
+            id: item.id,
+            title: item.title,
+            content: item.content,
+            sortOrder: item.sortOrder,
+        })),
+        attributes: attributeValues.map((attr) => ({
+            attributeId: attr.attributeId,
+            value: attr.value,
         })),
     } as ProductWithDetails;
 }
