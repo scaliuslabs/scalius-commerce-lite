@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import LocationSelector from "@/components/LocationSelector";
 import ShippingLocationSelector from "@/components/ShippingLocationSelector";
+import PhoneField from "@/components/PhoneField";
 import { getCities, processOrder } from "@/lib/cart/server";
 import {
   getShippingMethods,
@@ -340,20 +341,13 @@ const submitLabel = codOnly
               </div>
 
               <div>
-                <Label
-                  htmlFor="customerPhone"
-                  className="mb-1 block text-xs font-semibold text-foreground uppercase tracking-wide"
-                >
-                  {lang.languageData.customerPhoneLabel}
-                  <span class="text-destructive ml-0.5">*</span>
-                </Label>
-                <Input
-                  type="tel"
-                  id="customerPhone"
+                <PhoneField
+                  client:visible
                   name="customerPhone"
-                  required
+                  label={lang.languageData.customerPhoneLabel}
                   placeholder={lang.languageData.customerPhonePlaceholder}
-                  className="h-9 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-sm text-foreground"
+                  helpText={lang.languageData.customerPhoneHelp}
+                  required
                 />
               </div>
 
@@ -512,8 +506,11 @@ const submitLabel = codOnly
       if (el && !el.value) el.value = customer.name;
     }
     if (customer?.phone) {
-      const el = document.getElementById("customerPhone") as HTMLInputElement;
-      if (el && !el.value) el.value = normalizePhone(customer.phone);
+      // PhoneField is a React component — dispatch custom event to update its state
+      const phone = normalizePhone(customer.phone);
+      if (phone) {
+        window.dispatchEvent(new CustomEvent("phone-prefill", { detail: phone }));
+      }
     }
     if (customer?.email) {
       const el = document.getElementById("customerEmail") as HTMLInputElement;
