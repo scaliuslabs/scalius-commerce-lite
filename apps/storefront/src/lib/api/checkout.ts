@@ -19,6 +19,7 @@ export interface CheckoutConfig {
   checkoutMode?: "guest_cod_only" | "gateways_only" | "all";
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;
+  allowedCountries?: string[];
 }
 
 const COD_FALLBACK: CheckoutConfig = {

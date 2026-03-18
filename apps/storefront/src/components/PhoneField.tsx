@@ -10,6 +10,7 @@ interface PhoneFieldProps {
   defaultCountry?: string;
   helpText?: string;
   label?: string;
+  allowedCountries?: string[];
 }
 
 export default function PhoneField({
@@ -20,6 +21,7 @@ export default function PhoneField({
   defaultCountry = "BD",
   helpText,
   label,
+  allowedCountries,
 }: PhoneFieldProps) {
   const [value, setValue] = useState(defaultValue || "");
 
@@ -53,7 +55,8 @@ export default function PhoneField({
       <input type="hidden" id={name} name={name} value={value} />
       <PhoneInput
         international
-        defaultCountry={defaultCountry as any}
+        defaultCountry={(allowedCountries && allowedCountries.length > 0 ? allowedCountries[0] : defaultCountry) as any}
+        countries={allowedCountries && allowedCountries.length > 0 ? allowedCountries as any : undefined}
         value={value}
         onChange={(v) => setValue(v || "")}
         placeholder={placeholder || "Phone number"}

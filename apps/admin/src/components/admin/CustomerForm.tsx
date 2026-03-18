@@ -60,6 +60,20 @@ export function CustomerForm({
   defaultValues,
   isEdit = false,
 }: CustomerFormProps) {
+  const [allowedCountries, setAllowedCountries] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    fetch("/api/v1/admin/settings/allowed-countries")
+      .then(res => res.json())
+      .then(json => {
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        if (Array.isArray(data.allowedCountries) && data.allowedCountries.length > 0) {
+          setAllowedCountries(data.allowedCountries);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [isInitializing, setIsInitializing] = React.useState(
     isEdit &&
       defaultValues &&
@@ -199,7 +213,8 @@ export function CustomerForm({
                         <FormControl>
                           <PhoneInput
                             international
-                            defaultCountry="BD"
+                            defaultCountry={(allowedCountries[0] || "BD") as any}
+                            countries={allowedCountries.length > 0 ? allowedCountries as any : undefined}
                             value={field.value}
                             onChange={(value) => field.onChange(value || "")}
                             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"

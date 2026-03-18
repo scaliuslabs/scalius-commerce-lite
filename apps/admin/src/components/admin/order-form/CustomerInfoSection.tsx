@@ -35,6 +35,20 @@ export function CustomerInfoSection() {
   const { form, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
     useOrderForm();
 
+  const [allowedCountries, setAllowedCountries] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    fetch("/api/v1/admin/settings/allowed-countries")
+      .then(res => res.json())
+      .then(json => {
+        const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
+        if (Array.isArray(data.allowedCountries) && data.allowedCountries.length > 0) {
+          setAllowedCountries(data.allowedCountries);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [citySearchOpen, setCitySearchOpen] = React.useState(false);
   const [zoneSearchOpen, setZoneSearchOpen] = React.useState(false);
   const [areaSearchOpen, setAreaSearchOpen] = React.useState(false);
@@ -78,7 +92,8 @@ export function CustomerInfoSection() {
                 <FormControl>
                   <PhoneInput
                     international
-                    defaultCountry="BD"
+                    defaultCountry={(allowedCountries[0] || "BD") as any}
+                    countries={allowedCountries.length > 0 ? allowedCountries as any : undefined}
                     value={field.value}
                     onChange={(value) => field.onChange(value || "")}
                     onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}
