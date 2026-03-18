@@ -5,6 +5,7 @@
 import { siteSettings, settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
@@ -15,12 +16,14 @@ export interface CurrencyConfig {
     code: string;
     symbol: string;
     usdExchangeRate: number;
+    decimalPlaces: number;
 }
 
 const DEFAULT_CURRENCY: CurrencyConfig = {
     code: "BDT",
     symbol: "৳",
     usdExchangeRate: 1,
+    decimalPlaces: 2,
 };
 
 // ─────────────────────────────────────────
@@ -101,12 +104,14 @@ export async function getCurrencyConfig(
             .all();
 
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+        const code = map.currency_code ?? DEFAULT_CURRENCY.code;
         const config: CurrencyConfig = {
-            code: map.currency_code ?? DEFAULT_CURRENCY.code,
+            code,
             symbol: map.currency_symbol ?? DEFAULT_CURRENCY.symbol,
             usdExchangeRate: map.usd_exchange_rate
                 ? parseFloat(map.usd_exchange_rate)
                 : DEFAULT_CURRENCY.usdExchangeRate,
+            decimalPlaces: getDecimalPlaces(code),
         };
 
         if (kv) {

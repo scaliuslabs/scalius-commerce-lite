@@ -1,30 +1,38 @@
 /**
- * Round a price to 2 decimal places using banker's rounding.
- * Use at every calculation boundary: totals, discounts, balance due.
+ * Price arithmetic utilities powered by currency.js.
+ * Eliminates floating-point drift across all price calculations.
  */
-export function roundPrice(amount: number): number {
-  return Math.round((amount + Number.EPSILON) * 100) / 100;
+import Currency from "currency.js";
+import { getDecimalPlaces, getCurrencyCode } from "./currency";
+
+/**
+ * Round a price to the correct decimal places for the given currency.
+ * Defaults to the globally configured currency code.
+ */
+export function roundPrice(amount: number, currencyCode?: string): number {
+  const precision = getDecimalPlaces(currencyCode ?? getCurrencyCode());
+  return Currency(amount, { precision }).value;
 }
 
 /**
  * Safe price addition that avoids float drift.
  */
 export function addPrices(...amounts: number[]): number {
-  return roundPrice(amounts.reduce((sum, a) => sum + a, 0));
+  return amounts.reduce((sum, amt) => Currency(sum).add(amt).value, 0);
 }
 
 /**
  * Safe price subtraction.
  */
 export function subtractPrice(a: number, b: number): number {
-  return roundPrice(a - b);
+  return Currency(a).subtract(b).value;
 }
 
 /**
- * Check if two prices are effectively equal (within 0.01 tolerance).
+ * Check if two prices are effectively equal.
  */
 export function pricesEqual(a: number, b: number): boolean {
-  return Math.abs(a - b) < 0.01;
+  return Currency(a).subtract(b).value === 0;
 }
 
 /**
@@ -32,7 +40,7 @@ export function pricesEqual(a: number, b: number): boolean {
  */
 export function calculatePercentageDiscount(
   price: number,
-  percentage: number
+  percentage: number,
 ): number {
-  return roundPrice(price * (percentage / 100));
+  return Currency(price).multiply(percentage / 100).value;
 }

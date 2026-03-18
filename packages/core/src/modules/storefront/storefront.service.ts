@@ -19,6 +19,7 @@ import {
 } from "@scalius/database/schema";
 import { eq, isNull, and, inArray, asc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import Currency from "currency.js";
 import { processAnalyticsScript, shouldUsePartytown } from "../../integrations/analytics";
 import type { Database } from "@scalius/database/client";
 
@@ -59,10 +60,10 @@ const calculateDiscountedPrice = (
 ): number => {
     if (!discountType) return price;
     if (discountType === "percentage" && discountPercentage) {
-        return Math.round(price * (1 - discountPercentage / 100) * 100) / 100;
+        return Currency(price).subtract(Currency(price).multiply(discountPercentage / 100)).value;
     }
     if (discountType === "flat" && discountAmount) {
-        return Math.max(0, price - discountAmount);
+        return Math.max(Currency(price).subtract(discountAmount).value, 0);
     }
     return price;
 };
