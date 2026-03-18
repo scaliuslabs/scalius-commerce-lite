@@ -20,6 +20,7 @@ export interface CheckoutConfig {
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;
   allowedCountries?: string[];
+  allowedCountriesMode?: "include" | "exclude";
 }
 
 const COD_FALLBACK: CheckoutConfig = {

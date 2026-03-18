@@ -1,6 +1,7 @@
 import React from "react";
-import PhoneInput from "react-phone-number-input";
+import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
+import type { Country } from "react-phone-number-input";
 import {
   Card,
   CardContent,
@@ -36,6 +37,7 @@ export function CustomerInfoSection() {
     useOrderForm();
 
   const [allowedCountries, setAllowedCountries] = React.useState<string[]>([]);
+  const [allowedCountriesMode, setAllowedCountriesMode] = React.useState<"include" | "exclude">("include");
 
   React.useEffect(() => {
     fetch("/api/v1/admin/settings/allowed-countries")
@@ -45,9 +47,28 @@ export function CustomerInfoSection() {
         if (Array.isArray(data.allowedCountries) && data.allowedCountries.length > 0) {
           setAllowedCountries(data.allowedCountries);
         }
+        if (data.allowedCountriesMode === "include" || data.allowedCountriesMode === "exclude") {
+          setAllowedCountriesMode(data.allowedCountriesMode);
+        }
       })
       .catch(() => {});
   }, []);
+
+  const effectiveCountries = React.useMemo((): Country[] | undefined => {
+    if (allowedCountries.length === 0) return undefined;
+    if (allowedCountriesMode === "exclude") {
+      const excluded = new Set(allowedCountries);
+      return getCountries().filter((c) => !excluded.has(c));
+    }
+    return allowedCountries as Country[];
+  }, [allowedCountries, allowedCountriesMode]);
+
+  const effectiveDefaultCountry = React.useMemo(() => {
+    if (effectiveCountries && effectiveCountries.length > 0) {
+      return effectiveCountries[0];
+    }
+    return "BD" as Country;
+  }, [effectiveCountries]);
 
   const [citySearchOpen, setCitySearchOpen] = React.useState(false);
   const [zoneSearchOpen, setZoneSearchOpen] = React.useState(false);
@@ -92,8 +113,8 @@ export function CustomerInfoSection() {
                 <FormControl>
                   <PhoneInput
                     international
-                    defaultCountry={(allowedCountries[0] || "BD") as any}
-                    countries={allowedCountries.length > 0 ? allowedCountries as any : undefined}
+                    defaultCountry={effectiveDefaultCountry as any}
+                    countries={effectiveCountries as any}
                     value={field.value}
                     onChange={(value) => field.onChange(value || "")}
                     onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}

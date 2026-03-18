@@ -4,8 +4,9 @@ import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
-import PhoneInput from "react-phone-number-input";
+import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
+import type { Country } from "react-phone-number-input";
 import {
   Form,
   FormControl,
@@ -61,6 +62,7 @@ export function CustomerForm({
   isEdit = false,
 }: CustomerFormProps) {
   const [allowedCountries, setAllowedCountries] = React.useState<string[]>([]);
+  const [allowedCountriesMode, setAllowedCountriesMode] = React.useState<"include" | "exclude">("include");
 
   React.useEffect(() => {
     fetch("/api/v1/admin/settings/allowed-countries")
@@ -70,9 +72,28 @@ export function CustomerForm({
         if (Array.isArray(data.allowedCountries) && data.allowedCountries.length > 0) {
           setAllowedCountries(data.allowedCountries);
         }
+        if (data.allowedCountriesMode === "include" || data.allowedCountriesMode === "exclude") {
+          setAllowedCountriesMode(data.allowedCountriesMode);
+        }
       })
       .catch(() => {});
   }, []);
+
+  const effectiveCountries = React.useMemo((): Country[] | undefined => {
+    if (allowedCountries.length === 0) return undefined;
+    if (allowedCountriesMode === "exclude") {
+      const excluded = new Set(allowedCountries);
+      return getCountries().filter((c) => !excluded.has(c));
+    }
+    return allowedCountries as Country[];
+  }, [allowedCountries, allowedCountriesMode]);
+
+  const effectiveDefaultCountry = React.useMemo(() => {
+    if (effectiveCountries && effectiveCountries.length > 0) {
+      return effectiveCountries[0];
+    }
+    return "BD" as Country;
+  }, [effectiveCountries]);
 
   const [isInitializing, setIsInitializing] = React.useState(
     isEdit &&
@@ -213,8 +234,8 @@ export function CustomerForm({
                         <FormControl>
                           <PhoneInput
                             international
-                            defaultCountry={(allowedCountries[0] || "BD") as any}
-                            countries={allowedCountries.length > 0 ? allowedCountries as any : undefined}
+                            defaultCountry={effectiveDefaultCountry as any}
+                            countries={effectiveCountries as any}
                             value={field.value}
                             onChange={(value) => field.onChange(value || "")}
                             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"

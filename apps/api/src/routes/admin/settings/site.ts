@@ -483,8 +483,23 @@ app.openapi(getAllowedCountriesRoute, async (c) => {
         .from(settings)
         .where(and(eq(settings.category, "phone"), eq(settings.key, "allowed_countries")))
         .get();
-    const allowedCountries = row?.value ? JSON.parse(row.value) : [];
-    return ok(c, { allowedCountries });
+    let allowedCountries: string[] = [];
+    let allowedCountriesMode: "include" | "exclude" = "include";
+    if (row?.value) {
+        try {
+            const parsed = JSON.parse(row.value);
+            if (Array.isArray(parsed)) {
+                // Backward compat: old format was just an array
+                allowedCountries = parsed;
+            } else if (parsed && typeof parsed === "object") {
+                allowedCountries = Array.isArray(parsed.countries) ? parsed.countries : [];
+                allowedCountriesMode = parsed.mode === "exclude" ? "exclude" : "include";
+            }
+        } catch {
+            // Invalid JSON — defaults
+        }
+    }
+    return ok(c, { allowedCountries, allowedCountriesMode });
 });
 
 const saveAllowedCountriesRoute = createRoute({
@@ -496,7 +511,10 @@ const saveAllowedCountriesRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({ allowedCountries: z.array(z.string()) })
+                    schema: z.object({
+                        allowedCountries: z.array(z.string()),
+                        mode: z.enum(["include", "exclude"]).optional().default("include"),
+                    })
                 }
             }
         }
@@ -506,9 +524,10 @@ const saveAllowedCountriesRoute = createRoute({
 
 app.openapi(saveAllowedCountriesRoute, async (c) => {
     const db = c.get("db");
-    const { allowedCountries } = c.req.valid("json");
-    await upsertSetting(db, "phone", "allowed_countries", JSON.stringify(allowedCountries));
-    return ok(c, { message: "Allowed countries saved", allowedCountries });
+    const { allowedCountries, mode } = c.req.valid("json");
+    const stored = JSON.stringify({ countries: allowedCountries, mode: mode || "include" });
+    await upsertSetting(db, "phone", "allowed_countries", stored);
+    return ok(c, { message: "Allowed countries saved", allowedCountries, allowedCountriesMode: mode || "include" });
 });
 
 export { app as siteSettingsRoutes };

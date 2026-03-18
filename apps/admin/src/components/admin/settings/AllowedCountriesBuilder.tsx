@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Loader2, Save, X, Search } from "lucide-react";
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
@@ -28,10 +29,13 @@ const ALL_COUNTRIES: CountryOption[] = getCountries().map((code) => ({
   callingCode: getCountryCallingCode(code),
 }));
 
+type CountryMode = "include" | "exclude";
+
 export default function AllowedCountriesBuilder() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<Country[]>([]);
+  const [mode, setMode] = useState<CountryMode>("include");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -47,8 +51,13 @@ export default function AllowedCountriesBuilder() {
           json.data && typeof json.data === "object" && !Array.isArray(json.data)
             ? json.data
             : json;
+        // Backward compatible: old format is { allowedCountries: string[] }
+        // New format is { allowedCountries: string[], allowedCountriesMode: "include" | "exclude" }
         if (Array.isArray(data.allowedCountries)) {
           setSelected(data.allowedCountries as Country[]);
+        }
+        if (data.allowedCountriesMode === "include" || data.allowedCountriesMode === "exclude") {
+          setMode(data.allowedCountriesMode);
         }
       }
     } catch {
@@ -64,7 +73,7 @@ export default function AllowedCountriesBuilder() {
       const res = await fetch("/api/v1/admin/settings/allowed-countries", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ allowedCountries: selected }),
+        body: JSON.stringify({ allowedCountries: selected, mode }),
       });
 
       if (res.ok) {
@@ -101,6 +110,16 @@ export default function AllowedCountriesBuilder() {
     );
   }, [search]);
 
+  const modeDescription = useMemo(() => {
+    if (selected.length === 0) {
+      return "No restrictions set. All countries are currently accepted.";
+    }
+    if (mode === "include") {
+      return "Only these countries will be allowed for phone numbers.";
+    }
+    return "All countries are allowed EXCEPT these.";
+  }, [mode, selected.length]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -116,14 +135,37 @@ export default function AllowedCountriesBuilder() {
           <CardTitle className="text-base">Allowed Countries</CardTitle>
           <CardDescription>
             Restrict which countries can be used for phone numbers during
-            checkout and customer registration. Leave empty to allow all
-            countries.
+            checkout and customer registration.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Mode</Label>
+            <RadioGroup
+              value={mode}
+              onValueChange={(v) => setMode(v as CountryMode)}
+              className="flex flex-col gap-2 sm:flex-row sm:gap-6"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="include" id="mode-include" />
+                <Label htmlFor="mode-include" className="font-normal cursor-pointer">
+                  Only allow selected countries
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="exclude" id="mode-exclude" />
+                <Label htmlFor="mode-exclude" className="font-normal cursor-pointer">
+                  Allow all except selected countries
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
           {selected.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Selected ({selected.length})</Label>
+              <Label>
+                {mode === "include" ? "Allowed" : "Excluded"} ({selected.length})
+              </Label>
               <div className="flex flex-wrap gap-1.5">
                 {selected.map((code) => {
                   const country = ALL_COUNTRIES.find((c) => c.value === code);
@@ -189,7 +231,7 @@ export default function AllowedCountriesBuilder() {
                       </span>
                       {isSelected && (
                         <Badge variant="default" className="text-xs">
-                          Selected
+                          {mode === "include" ? "Allowed" : "Excluded"}
                         </Badge>
                       )}
                     </button>
@@ -199,11 +241,9 @@ export default function AllowedCountriesBuilder() {
             )}
           </div>
 
-          {selected.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              No restrictions set. All countries are currently accepted.
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            {modeDescription}
+          </p>
         </CardContent>
       </Card>
 

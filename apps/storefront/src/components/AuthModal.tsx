@@ -2,14 +2,15 @@
 // Global Authentication Modal replacing inline login forms.
 // Intercepts guest checkouts if disabled, allows choosing WhatsApp/Email.
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { User, Mail, Smartphone, X } from "lucide-react";
 import { sendCustomerOtp, verifyCustomerOtp, getCustomerSession, logoutCustomer, updateCustomerProfile, type CustomerInfo } from "@/lib/api/customer-auth";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/client";
-import PhoneInput from "react-phone-number-input";
+import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
+import type { Country } from "react-phone-number-input";
 
 /**
  * Lightweight client-side fetch for checkout config.
@@ -43,6 +44,7 @@ export default function AuthModal() {
   // Settings injected globally
   const [allowedMethods, setAllowedMethods] = useState<"email" | "phone" | "both" | "email_phone_mandatory" | "whatsapp_otp" | "sms_otp">("both");
   const [allowedCountries, setAllowedCountries] = useState<string[]>([]);
+  const [allowedCountriesMode, setAllowedCountriesMode] = useState<"include" | "exclude">("include");
 
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
 
@@ -58,6 +60,23 @@ export default function AuthModal() {
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const otpInputRef = useRef<HTMLInputElement>(null);
+
+  // Compute effective countries list based on mode
+  const effectiveCountries = useMemo((): Country[] | undefined => {
+    if (allowedCountries.length === 0) return undefined;
+    if (allowedCountriesMode === "exclude") {
+      const excluded = new Set(allowedCountries);
+      return getCountries().filter((c) => !excluded.has(c));
+    }
+    return allowedCountries as Country[];
+  }, [allowedCountries, allowedCountriesMode]);
+
+  const effectiveDefaultCountry = useMemo(() => {
+    if (effectiveCountries && effectiveCountries.length > 0) {
+      return effectiveCountries[0];
+    }
+    return "BD" as Country;
+  }, [effectiveCountries]);
 
   // Check session and settings on mount
   useEffect(() => {
@@ -78,6 +97,9 @@ export default function AuthModal() {
         }
         if (Array.isArray((config as any).allowedCountries) && (config as any).allowedCountries.length > 0) {
           setAllowedCountries((config as any).allowedCountries);
+        }
+        if ((config as any).allowedCountriesMode) {
+          setAllowedCountriesMode((config as any).allowedCountriesMode);
         }
       });
 
@@ -376,8 +398,8 @@ export default function AuthModal() {
               ) : (
                 <PhoneInput
                   international
-                  defaultCountry={(allowedCountries[0] || "BD") as any}
-                  countries={allowedCountries.length > 0 ? allowedCountries as any : undefined}
+                  defaultCountry={effectiveDefaultCountry as any}
+                  countries={effectiveCountries as any}
                   value={identifier}
                   onChange={(value) => { setIdentifier(value || ""); setError(""); }}
                   className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:outline-none [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:h-full"
@@ -390,8 +412,8 @@ export default function AuthModal() {
                 <label className="text-sm font-medium text-foreground">Phone Number (Required)</label>
                 <PhoneInput
                   international
-                  defaultCountry={(allowedCountries[0] || "BD") as any}
-                  countries={allowedCountries.length > 0 ? allowedCountries as any : undefined}
+                  defaultCountry={effectiveDefaultCountry as any}
+                  countries={effectiveCountries as any}
                   value={phoneInput}
                   onChange={(value) => { setPhoneInput(value || ""); setError(""); }}
                   className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:outline-none [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:h-full"

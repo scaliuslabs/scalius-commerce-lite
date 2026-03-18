@@ -1,6 +1,7 @@
-import PhoneInput from "react-phone-number-input";
+import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import type { Country } from "react-phone-number-input";
 
 interface PhoneFieldProps {
   name: string;
@@ -11,6 +12,7 @@ interface PhoneFieldProps {
   helpText?: string;
   label?: string;
   allowedCountries?: string[];
+  allowedCountriesMode?: "include" | "exclude";
 }
 
 export default function PhoneField({
@@ -22,8 +24,26 @@ export default function PhoneField({
   helpText,
   label,
   allowedCountries,
+  allowedCountriesMode = "include",
 }: PhoneFieldProps) {
   const [value, setValue] = useState(defaultValue || "");
+
+  // Compute the effective countries list based on mode
+  const effectiveCountries = useMemo(() => {
+    if (!allowedCountries || allowedCountries.length === 0) return undefined;
+    if (allowedCountriesMode === "exclude") {
+      const excluded = new Set(allowedCountries);
+      return getCountries().filter((c) => !excluded.has(c));
+    }
+    return allowedCountries as Country[];
+  }, [allowedCountries, allowedCountriesMode]);
+
+  const effectiveDefaultCountry = useMemo(() => {
+    if (effectiveCountries && effectiveCountries.length > 0) {
+      return effectiveCountries[0] as Country;
+    }
+    return defaultCountry as Country;
+  }, [effectiveCountries, defaultCountry]);
 
   // Sync hidden input whenever value changes so DOM reads always see current value
   useEffect(() => {
@@ -55,8 +75,8 @@ export default function PhoneField({
       <input type="hidden" id={name} name={name} value={value} />
       <PhoneInput
         international
-        defaultCountry={(allowedCountries && allowedCountries.length > 0 ? allowedCountries[0] : defaultCountry) as any}
-        countries={allowedCountries && allowedCountries.length > 0 ? allowedCountries as any : undefined}
+        defaultCountry={effectiveDefaultCountry as any}
+        countries={effectiveCountries as any}
         value={value}
         onChange={(v) => setValue(v || "")}
         placeholder={placeholder || "Phone number"}
