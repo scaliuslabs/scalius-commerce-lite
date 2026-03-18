@@ -1,13 +1,125 @@
 # Pages
 
-CMS page management with publish/unpublish workflow and bulk operations.
+CMS page management with TipTap rich text editing, publish/unpublish workflow, SEO metadata, shortcode processing, and bulk operations.
+
+## Content System
+
+Pages use a TipTap rich text editor in the admin (lazy-loaded via `React.lazy`). The `content` field stores HTML output from TipTap. On the storefront, content is rendered through `RichContent.astro` with Tailwind prose styling.
+
+### Shortcode Processing
+
+Page content supports embedded shortcodes processed at render time by `apps/storefront/src/lib/shortcodes.ts`:
+
+- `[widget id="wid_xxx"]` -- Embeds a standalone widget's HTML/CSS inline
+- `[product slug="product-slug"]` -- Embeds a product card (hydrated client-side via React)
+
+Shortcodes are parsed with regex, resolved via API calls (`getWidgetById`, `getProductBySlug`), and replaced with rendered HTML before the page is served.
+
+### Display Controls
+
+Each page has boolean flags controlling storefront layout:
+
+- `hideHeader` -- suppresses the site header on this page
+- `hideFooter` -- suppresses the site footer on this page
+- `hideTitle` -- suppresses the `<h1>` title rendering on the page
+
+These flags are passed through the storefront's `Layout` component and respected in `[slug].astro`.
+
+## Slug System
+
+Slugs are validated with regex `^[a-z0-9]+(?:-[a-z0-9]+)*$` (lowercase alphanumeric with hyphens). The admin form auto-generates slugs from the title. Duplicate slugs are rejected at the service layer (`ConflictError`), checked against non-deleted pages.
+
+On the storefront, `[slug].astro` is the catch-all dynamic route. It performs early validation before making API calls:
+1. Rejects empty slugs, file extensions, known non-page paths (`api`, `favicon`, `_astro`, etc.)
+2. Validates slug format against the same regex pattern
+3. Only then calls `getPageBySlug()` via the public API
 
 ## Files
 
 - `index.ts` -- barrel exports
-- `pages.service.ts` -- `listPages()`, `getPageById()`, `getPageBySlug()`, `createPage()`, `updatePage()`, `deletePage()`, `bulkDeletePages()`, `bulkPublishPages()`, `bulkUnpublishPages()`, `restorePages()`
+- `pages.service.ts` -- all DB queries and mutations
+- `pages.validation.ts` -- Zod schemas (`createPageSchema`, `updatePageSchema`)
+
+### Service Functions
+
+**Queries:**
+- `listPages(db, options)` -- paginated list with FTS5 search, sort (`title`/`createdAt`/`updatedAt`/`sortOrder`), trash filter. Defaults: page 1, limit 10, sort by `updatedAt` desc.
+- `getPageById(db, id)` -- single page by ID (includes deleted pages)
+- `getPageBySlug(db, slug)` -- single page by slug (non-deleted only)
+
+**Mutations:**
+- `createPage(db, data)` -- inserts with `page_` prefixed nanoid; checks slug uniqueness; returns `{ id }`
+- `updatePage(db, id, data)` -- partial update; validates slug uniqueness if slug changed; throws `NotFoundError` / `ConflictError`
+- `deletePage(db, id)` -- soft-delete (sets `deletedAt`)
+- `bulkDeletePages(db, ids, permanent?)` -- soft or hard delete
+- `bulkPublishPages(db, ids)` / `bulkUnpublishPages(db, ids)` -- toggle `isPublished`
+- `restorePages(db, ids)` -- clears `deletedAt`
+
+### Validation Schema
+
+- `title`: 3-100 chars
+- `slug`: 3-100 chars, lowercase alphanumeric with hyphens
+- `content`: required string (TipTap HTML)
+- `metaTitle`, `metaDescription`: nullable strings
+- `isPublished`: boolean (default true)
+- `publishedAt`: optional date (auto-set on publish if not provided)
+- `sortOrder`: number (default 0)
+- `hideHeader`, `hideFooter`, `hideTitle`: boolean (default false)
+
+## API Endpoints
+
+### Admin (authenticated, via `apps/api/src/routes/admin/pages.ts`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/pages` | List pages (paginated, searchable, sortable, trash filter) |
+| POST | `/admin/pages` | Create page |
+| GET | `/admin/pages/{id}` | Get page by ID |
+| PUT | `/admin/pages/{id}` | Update page |
+| DELETE | `/admin/pages/{id}` | Soft-delete page |
+| DELETE | `/admin/pages/{id}/permanent` | Hard-delete page |
+| POST | `/admin/pages/{id}/restore` | Restore soft-deleted page |
+| POST | `/admin/pages/bulk-delete` | Bulk soft/hard delete (body: `{ pageIds, permanent }`) |
+| POST | `/admin/pages/bulk-publish` | Bulk publish (body: `{ ids }`) |
+| POST | `/admin/pages/bulk-unpublish` | Bulk unpublish (body: `{ ids }`) |
+| POST | `/admin/pages/bulk-restore` | Bulk restore (body: `{ ids }`) |
+
+Note: bulk-delete uses `pageIds` as the key name (not `ids`), unlike other bulk endpoints.
+
+### Public (via `apps/api/src/routes/pages.ts`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/pages` | List pages (paginated, published-only by default, cached 1h) |
+| GET | `/pages/slug/{slug}` | Get published page by slug (cached 1h) |
+| GET | `/pages/{id}` | Get page by ID, non-deleted only (cached 1h) |
+
+Public routes return `{ page }` or `{ pages, pagination }` inside the standard `{ success, data }` envelope.
+
+## Storefront Integration
+
+**Client library** (`apps/storefront/src/lib/api/pages.ts`):
+- `getPageBySlug(slug)` -- fetches via `/pages/slug/{slug}`, edge-cached (24h TTL via `withEdgeCache`)
+- `getAllPages(options)` -- fetches via `/pages`, edge-cached, returns `{ data: Page[], pagination }`
+
+**Dynamic page route** (`apps/storefront/src/pages/[slug].astro`):
+- Validates slug format before making API calls
+- Fetches layout data and page data in parallel
+- Processes shortcodes in page content
+- Applies `hideHeader`, `hideFooter`, `hideTitle` flags
+- Passes `page.widgets` array if present (renders inline HTML/CSS)
 
 ## Dependencies
 
-- `@scalius/database` -- `pages`
-- `@scalius/core/search` -- FTS5
+- `@scalius/database` -- `pages` table
+- `@scalius/core/search` -- FTS5 full-text search (`ftsMatch`)
+- `@scalius/core/errors` -- `NotFoundError`, `ConflictError`
+- `nanoid` -- ID generation
+
+## Known Gaps
+
+- **No version history**: Unlike widgets, pages have no content versioning system. There is no `pageHistory` table or restore-from-history capability.
+- **Public route uses raw `db` import**: `apps/api/src/routes/pages.ts` imports `db` from `@scalius/database/client` instead of using `c.get("db")` from Hono context.
+- **`getPageById` includes deleted pages**: The service's `getPageById` does not filter by `deletedAt`, so admin can retrieve soft-deleted pages. The public route adds its own `isNull(deletedAt)` filter, so this is not a public concern, but the service function is inconsistent with `getPageBySlug` which does filter deleted.
+- **SEO**: `metaTitle` and `metaDescription` are stored but the admin form slug prefix shows `/pages/` while the actual storefront route is `/{slug}` (top-level, not under `/pages/`).
+- **`page.widgets`**: The storefront `Page` type includes an optional `widgets?: ApiWidget[]` array, and `[slug].astro` renders them. However, the public pages API does not return a `widgets` field -- this array would always be empty/undefined unless populated by a different mechanism.

@@ -1,30 +1,343 @@
-# Payments
+# Payments Module
 
-Multi-gateway payment processing with unified provider interface and gateway registry.
+Multi-gateway payment processing with a unified provider interface, gateway registry, queue-based async processing, and partial payment (deposit/balance) support.
+
+## Architecture Overview
+
+```
+Storefront (browser)
+  |
+  |  1. User selects payment method on /checkout
+  |  2. Browser calls storefront proxy endpoint
+  v
+Storefront (SSR proxy)               apps/storefront/src/pages/api/checkout/*
+  |
+  |  3. Proxy calls API worker via service binding
+  v
+API Worker                            apps/api/src/routes/payment/*
+  |
+  |  4. Creates payment session/intent via gateway SDK
+  |  5. Returns clientSecret (Stripe) or redirectUrl (SSLCommerz/Polar)
+  v
+Payment Gateway (Stripe / SSLCommerz / Polar)
+  |
+  |  6. Customer pays on gateway
+  |  7. Gateway sends webhook to API worker
+  v
+API Webhook Handler                   apps/api/src/routes/webhooks/*
+  |
+  |  8. Verifies signature, enqueues message to PAYMENT_EVENTS_QUEUE
+  v
+Queue Consumer                        apps/api/src/queue-consumer.ts
+  |
+  |  9. Processes message: calls processPaymentConfirmed() or processPaymentFailed()
+  v
+Process Payment (core)                packages/core/src/modules/payments/process-payment.ts
+  |
+  | 10. Atomically (db.batch): insert orderPayment + update order + apply inventory
+```
+
+COD is the exception: no external gateway, no webhook, no queue. Order is placed directly and payment is recorded when courier collects cash.
 
 ## Files
 
-- `provider.ts` -- `PaymentProvider` interface, `CreatePaymentParams`, `CreatePaymentResult`, `RefundParams`, `RefundResult`, `WebhookPayload`
-- `factory.ts` -- `createPaymentProvider()`, `GatewayConfig`
-- `gateway-registry.ts` -- `registerGateway()`, `getRegisteredGateways()`, `getGatewayMeta()`, `GatewayMeta`
-- `gateway-settings.ts` -- `getStripeSettings()`, `getSSLCommerzSettings()`, `getPolarSettings()`, `getActivePaymentMethods()`, `upsertSetting()`, cache invalidation helpers
-- `types.ts` -- `PaymentGateway` union, gateway-specific param/result types
-- `stripe.ts` -- `StripeProvider`, legacy wrappers (createPaymentIntent, capturePaymentIntent, etc.)
-- `sslcommerz.ts` -- `SSLCommerzProvider`, legacy wrappers
-- `polar.ts` -- `PolarProvider`, legacy wrappers
-- `cod.ts` -- `CODProvider`, legacy wrappers (initCODTracking, recordCODCollection, etc.)
-- `process-payment.ts` -- `processPaymentConfirmed()` (idempotent, checks duplicate first), `processPaymentFailed()`, `releaseOrderInventory()`, `recordWebhookEvent()`
-- `refund-service.ts` -- `processRefund()`, `processReturn()`
+### Core (`packages/core/src/modules/payments/`)
 
-## Key patterns
+| File | Exports | Purpose |
+|------|---------|---------|
+| `types.ts` | `PaymentGateway`, `PaymentType`, `PaymentResult`, gateway-specific param/result types | Shared type definitions for all gateways |
+| `provider.ts` | `PaymentProvider` interface, `CreatePaymentParams`, `CreatePaymentResult`, `RefundParams`, `RefundResult`, `WebhookPayload` | Unified gateway abstraction |
+| `factory.ts` | `createPaymentProvider()`, `GatewayConfig` | Factory function returning the correct `PaymentProvider` for a gateway type; checks `enabled` flag, throws `ServiceUnavailableError` if disabled |
+| `gateway-registry.ts` | `registerGateway()`, `getRegisteredGateways()`, `getGatewayMeta()`, `GatewayMeta` | Runtime registry for dynamic gateway discovery (used by checkout config endpoint) |
+| `gateway-settings.ts` | `getStripeSettings()`, `getSSLCommerzSettings()`, `getPolarSettings()`, `getActivePaymentMethods()`, `upsertSetting()`, `invalidate*Cache()` | Reads gateway credentials from `settings` DB table, caches in KV (5 min TTL), registers all 4 gateways in the registry |
+| `stripe.ts` | `StripeProvider` class, `createPaymentIntent()`, `capturePaymentIntent()`, `cancelPaymentIntent()`, `createRefund()`, `verifyStripeWebhook()`, `getStripe()` | Stripe SDK wrapper; module-level singleton with key rotation detection |
+| `sslcommerz.ts` | `SSLCommerzProvider` class, `initSSLCommerzSession()`, `validateSSLCommerzIPN()`, `validateSSLCommerzPayment()`, `initiateSSLCommerzRefund()`, `querySSLCommerzRefundStatus()` | SSLCommerz REST API wrapper; no SDK, uses native `fetch`; sandbox/production URL switching |
+| `polar.ts` | `PolarProvider` class, `createPolarCheckout()`, `createPolarRefund()`, `verifyPolarWebhook()` | Polar SDK wrapper; uses `@polar-sh/sdk` + `standardwebhooks` for signature verification |
+| `cod.ts` | `CODProvider` class, `initCODTracking()`, `recordCODCollection()`, `recordCODFailure()`, `markCODReturned()` | Cash on Delivery tracking; DB-only operations, no external gateway |
+| `process-payment.ts` | `processPaymentConfirmed()`, `processPaymentFailed()`, `releaseOrderInventory()`, `recordWebhookEvent()` | Shared post-payment business logic called by queue consumer |
+| `refund-service.ts` | `processRefund()`, `processReturn()` | Gateway-agnostic refund orchestrator; detects gateway from payment records |
+| `index.ts` | Barrel re-exports | All public exports from the module |
 
-- `processPaymentConfirmed()` is idempotent: checks for duplicate payment before processing
-- State machine validation before status transitions
-- Gateway registry for dynamic provider discovery
-- Settings cached in KV (5 min TTL)
-- Refund validation: amount must be positive, cannot exceed `paidAmount`, and cumulative refunds (existing + new) cannot exceed `paidAmount`. Partial refunds do NOT restore inventory — admin must manually adjust stock after a physical return.
+### API Routes (`apps/api/src/routes/`)
+
+| File | Route Mount | Endpoints |
+|------|-------------|-----------|
+| `payment/stripe-routes.ts` | `/api/v1/payment/stripe` | `POST /intent` -- Create PaymentIntent |
+| `payment/sslcommerz-routes.ts` | `/api/v1/payment/sslcommerz` | `POST /session` -- Create payment session; `POST /success`, `GET /success` -- redirect handler; `POST /fail`, `GET /fail` -- redirect handler; `POST /cancel`, `GET /cancel` -- redirect handler |
+| `payment/polar-routes.ts` | `/api/v1/payment/polar` | `POST /session` -- Create checkout session; `GET /success` -- redirect handler; `GET /cancel` -- redirect handler |
+| `webhooks/stripe.ts` | `/api/v1/webhooks/stripe` | `POST /` -- Stripe webhook receiver |
+| `webhooks/sslcommerz.ts` | `/api/v1/webhooks/sslcommerz` | `POST /` -- SSLCommerz IPN receiver |
+| `webhooks/polar.ts` | `/api/v1/webhooks/polar` | `POST /` -- Polar webhook receiver |
+| `checkout.ts` | `/api/v1/checkout` | `GET /config` -- Storefront checkout configuration (available gateways, auth settings, partial payment config) |
+| `admin/settings/payments.ts` | `/api/v1/admin/settings` | `GET /payment-methods`, `POST /payment-methods` -- Enabled methods + default; `GET /stripe`, `POST /stripe`; `GET /sslcommerz`, `POST /sslcommerz`; `GET /polar`, `POST /polar` |
+
+### Storefront (`apps/storefront/`)
+
+| File | Purpose |
+|------|---------|
+| `src/lib/api/checkout.ts` | `getCheckoutConfig()` -- fetches gateway config from API, uses L1+L2 edge cache; `isCodOnly()` helper |
+| `src/lib/checkout/index.ts` | `initCheckoutPage()` -- client-side checkout page controller; registers all gateway handlers, manages selection state, orchestrates payment flow |
+| `src/lib/checkout/types.ts` | `GatewayHandler`, `PaymentContext`, `PaymentResult`, `CheckoutConfig` -- client-side gateway abstraction |
+| `src/lib/checkout/registry.ts` | `registerGateway()`, `getGateway()` -- client-side gateway handler registry |
+| `src/lib/checkout/create-order.ts` | `createOrder()` -- shared order creation via `/api/checkout/create-order` proxy |
+| `src/lib/checkout/handlers/cod.ts` | COD handler: creates order, redirects to `/order-success` |
+| `src/lib/checkout/handlers/stripe.ts` | Stripe handler: creates order, fetches PaymentIntent, dynamically loads Stripe.js, mounts card element, confirms card payment client-side |
+| `src/lib/checkout/handlers/sslcommerz.ts` | SSLCommerz handler: creates order, fetches session, redirects to `gatewayUrl` |
+| `src/lib/checkout/handlers/polar.ts` | Polar handler: creates order, fetches session, redirects to `gatewayUrl` |
+| `src/pages/api/checkout/create-order.ts` | SSR proxy: calls API to create order (API_TOKEN server-side only) |
+| `src/pages/api/checkout/stripe-intent.ts` | SSR proxy: calls `POST /payment/stripe/intent`, unwraps `{success, data}` envelope |
+| `src/pages/api/checkout/sslcommerz-session.ts` | SSR proxy: calls `POST /payment/sslcommerz/session`, unwraps envelope, 15s timeout |
+| `src/pages/api/checkout/polar-session.ts` | SSR proxy: calls `POST /payment/polar/session`, unwraps envelope, 15s timeout |
+| `src/pages/checkout.astro` | Checkout page: injects `__CHECKOUT_CONFIG__`, imports `initCheckoutPage` |
+
+### Admin (`apps/admin/src/components/admin/settings/`)
+
+| File | Purpose |
+|------|---------|
+| `PaymentGatewaysManager.tsx` | Main payment settings UI. 2x2 accordion grid. Lazy-loads credentials per-gateway on expand. Manages enabled/disabled toggles, default method selector, save per-gateway. |
+| `PaymentMethodSettings.tsx` | Older/simpler payment method settings component (Stripe + SSLCommerz + COD only; no Polar). Card-based layout. |
+| `PolarSettingsForm.tsx` | `PolarForm` (credentials form) + `PolarSetupGuide` (5-step setup dialog) |
+| `payment-gateway-utils.tsx` | Shared types (`StripeData`, `SSLCommerzData`, `PolarData`, `MethodKey`), reusable components (`PasswordInput`, `SaveBtn`, `SandboxToggle`, `LiveWarning`, `ExtLink`), gateway logo SVGs, `META` lookup |
+
+### Database Schema (`packages/database/src/schema/orders.ts`)
+
+| Table | Purpose |
+|-------|---------|
+| `orders` | Main order table. Payment fields: `paymentMethod` (stripe/sslcommerz/polar/cod), `paymentStatus` (unpaid/partial/paid/refunded/failed), `paymentIntentId` (stores Stripe PI ID, SSLCommerz session key, or Polar checkout ID), `paidAmount`, `balanceDue` |
+| `orderPayments` | Individual payment records. Per-gateway columns: `stripePaymentIntentId`, `stripeChargeId`, `sslcommerzTranId`, `sslcommerzValId`, `sslcommerzBankTranId`, `polarCheckoutId`, `codCollectedBy`, `codCollectedAt`, `codReceiptUrl`. Status: `pending`/`succeeded`/`failed`/`refunded`. Indexed on gateway-specific ID columns for idempotency lookups. |
+| `paymentPlans` | Partial payment tracking. `orderId` (unique), `totalAmount`, `depositAmount`, `balanceDue`, `depositPaidAt`, `balancePaidAt`, `status` (pending/deposit_paid/fully_paid) |
+| `codTracking` | COD-specific tracking. `orderId` (unique), `deliveryAttempts`, `lastAttemptAt`, `codStatus` (pending/collected/failed/returned), `failureReason`, `collectedBy`, `collectedAmount`, `collectedAt`, `receiptUrl` |
+| `webhookEvents` | Webhook event log for auditing. `provider`, `eventType`, `orderId`, `status` (processed/failed), `result` |
+
+### Enums (`packages/database/src/schema/enums.ts`)
+
+- `PaymentMethod`: `stripe | sslcommerz | polar | cod`
+- `PaymentStatus`: `unpaid | partial | paid | refunded | failed`
+- `OrderStatus`: includes `incomplete` (pre-payment) and `pending` (post-payment)
+
+### Queue Consumer (`apps/api/src/queue-consumer.ts`)
+
+Dispatches `PaymentQueueMessage` types:
+
+| Message Type | Handler | Action |
+|------|---------|--------|
+| `payment.stripe.confirmed` | `processPaymentConfirmed()` | Converts amount from cents to major unit, records payment, updates order, applies inventory |
+| `payment.stripe.failed` | `processPaymentFailed()` | Marks order as failed if no prior payments |
+| `payment.stripe.canceled` | `releaseOrderInventory()` | Releases reserved inventory |
+| `payment.stripe.refunded` | (audit only) | Logs refund event; actual refund handled synchronously |
+| `payment.sslcommerz.confirmed` | `processPaymentConfirmed()` | Amount already in major unit (no conversion), records payment |
+| `payment.sslcommerz.failed` | `processPaymentFailed()` | Marks order as failed |
+| `payment.polar.confirmed` | `processPaymentConfirmed()` | Converts amount from cents to major unit |
+| `payment.polar.failed` | `processPaymentFailed()` | Marks order as failed |
+
+## Provider Details
+
+### Stripe
+
+- **SDK**: `stripe` v17+ (Web Fetch API native, works on CF Workers)
+- **Client singleton**: Module-level `_stripe` with key rotation detection (`_stripeKey` comparison)
+- **Session creation**: `createPaymentIntent()` creates a Stripe PaymentIntent; returns `clientSecret` for client-side confirmation via Stripe.js
+- **Capture modes**: Automatic (default) or manual (`manualCapture: true` -- authorize now, capture later via `capturePaymentIntent()`)
+- **Cancel**: `cancelPaymentIntent()` cancels uncaptured intents
+- **Webhook verification**: `verifyStripeWebhook()` uses `constructEventAsync` (Web Crypto compatible)
+- **Webhook events handled**: `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`, `charge.refunded`
+- **Replay protection**: KV key `stripe_wh:{event.id}` with 24h TTL
+- **Refund**: `createRefund()` refunds by charge ID; supports partial amount and reason codes (`duplicate`, `fraudulent`, `requested_by_customer`)
+- **Settings**: `secret_key`, `publishable_key`, `webhook_secret`, `enabled` (stored in `settings` table, category `stripe`)
+- **Currency**: Amount in smallest unit (cents/paisa); API route multiplies by 100, queue consumer divides by 100
+
+### SSLCommerz
+
+- **SDK**: None -- raw `fetch` calls to SSLCommerz REST API v4
+- **Base URLs**: `sandbox.sslcommerz.com` (sandbox) / `securepay.sslcommerz.com` (production)
+- **Session creation**: `initSSLCommerzSession()` POSTs to `/gwprocess/v4/api.php`; returns `GatewayPageURL` (redirect) + `sessionkey`
+- **Session params**: Includes `value_a` field to encode `paymentType` (full/deposit/balance) in metadata
+- **Redirect handlers**: API has POST + GET handlers for `/success`, `/fail`, `/cancel`; each validates order exists, then redirects to storefront with appropriate query params. `STOREFRONT_URL` from env determines redirect target.
+- **IPN validation**: SSLCommerz does NOT sign webhooks. `validateSSLCommerzIPN()` makes a server-to-server API call to `/validator/api/validationserverAPI.php` using `val_id`. Only `VALID`/`VALIDATED` statuses are accepted.
+- **Transaction validation**: `validateSSLCommerzPayment()` validates by `tran_id` via `/validator/api/merchantTransIDvalidationAPI.php`
+- **Replay protection**: KV key `ssl_wh:{tran_id}_{val_id}` with 24h TTL
+- **Refund**: `initiateSSLCommerzRefund()` uses `bank_tran_id` (from original payment). Production requires IP whitelisting. `querySSLCommerzRefundStatus()` checks refund progress (refunded/processing/cancelled).
+- **Settings**: `store_id`, `store_password`, `sandbox`, `enabled` (stored in `settings` table, category `sslcommerz`)
+- **Currency**: Amount in major unit (no conversion); SSLCommerz receives BDT directly
+
+### Polar
+
+- **SDK**: `@polar-sh/sdk` (`Polar` class) + `standardwebhooks` (`Webhook` class for signature verification)
+- **Client singleton**: Module-level `_cachedClient` with token change detection
+- **Session creation**: `createPolarCheckout()` uses ad-hoc pricing -- a Polar Product must exist but the actual amount is set per-checkout via `prices` override. Returns `checkoutUrl` (redirect) + `checkoutId`.
+- **Webhook verification**: `verifyPolarWebhook()` base64-encodes the webhook secret before passing to `standardwebhooks`. Synchronous verification (not async).
+- **Webhook events handled**: `checkout.updated` (status failed/expired -> enqueue failed), `order.paid` (enqueue confirmed), `order.refunded` (logged only)
+- **Replay protection**: KV key `polar_webhook:{eventId}:{eventType}` with 24h TTL
+- **Refund**: `createPolarRefund()` refunds by Polar order ID. Reason codes: `fraudulent`, `customer_request`, `duplicate`, `other`, `service_disruption`, `satisfaction_guarantee`, `dispute_prevention`.
+- **Settings**: `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` (stored in `settings` table, category `polar`)
+- **Currency**: Amount in cents; API route multiplies by 100, queue consumer divides by 100
+
+### COD (Cash on Delivery)
+
+- **No external gateway**: All operations are DB-only
+- **Tracking lifecycle**: `pending` -> `collected` (success) or `failed` (delivery attempt failed) -> `returned` (all attempts exhausted)
+- **`initCODTracking()`**: Creates a `codTracking` record with `deliveryAttempts: 0`, `codStatus: "pending"`
+- **`recordCODCollection()`**: Idempotent (checks for existing succeeded payment). Atomically via `db.batch()`: updates `codTracking` (collected status + details), inserts `orderPayments` (status: succeeded), updates `orders` (paymentStatus: PAID, paidAmount, balanceDue: 0).
+- **`recordCODFailure()`**: Increments `deliveryAttempts`, sets `codStatus: "failed"`, records `failureReason` (not_home/refused/no_cash/wrong_address/other)
+- **`markCODReturned()`**: Sets `codStatus: "returned"`
+- **CODProvider.createPayment()**: Calls `initCODTracking()`, returns `transactionId: "COD-{orderId}"` (no clientSecret or redirectUrl)
+- **CODProvider.createRefund()**: Returns a marker ID `COD-REFUND-{timestamp}` (no gateway API call; refund is manual)
+- **No verifyWebhook**: Intentionally not implemented
+
+## Key Patterns
+
+### processPaymentConfirmed() Atomicity
+
+The critical payment processing function uses `db.batch()` to atomically execute:
+1. Insert into `orderPayments` (payment record)
+2. Update `orders` (paidAmount, balanceDue, paymentStatus, status)
+3. Inventory action flag updates (from `buildInventoryStatements()`)
+
+If any statement fails, all roll back. This prevents the prior split-write bug where a payment could be recorded but inventory left un-deducted.
+
+### Idempotency
+
+Three layers of duplicate prevention:
+
+1. **Webhook level**: KV keys with 24h TTL prevent re-enqueuing the same webhook event (Stripe: `stripe_wh:{event.id}`, SSLCommerz: `ssl_wh:{tran_id}_{val_id}`, Polar: `polar_webhook:{eventId}:{eventType}`)
+2. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on retry)
+3. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (stripePaymentIntentId, sslcommerzTranId, polarCheckoutId) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders.
+
+COD collection (`recordCODCollection()`) has its own idempotency: queries for existing succeeded payment with `paymentMethod: "cod"`.
+
+### State Machine Validation
+
+Before any writes, `processPaymentConfirmed()` calls `validateTransition()` for both order status and payment status transitions. Invalid transitions throw errors.
+
+- Order: `incomplete -> pending` (on first payment)
+- Payment: `unpaid -> partial` or `unpaid -> paid` (depending on whether balance reaches zero)
+
+### Partial Payments (Deposit/Balance)
+
+Payment types: `full`, `deposit`, `balance`.
+
+- **Deposit flow**: API route validates `depositAmount < totalAmount`, creates a `paymentPlans` record, creates intent/session for deposit amount only. `processPaymentConfirmed()` sets payment plan status to `deposit_paid`.
+- **Balance flow**: API route computes `balanceDue` from order, creates intent/session for remaining amount. `processPaymentConfirmed()` sets payment plan status to `fully_paid` when balance reaches zero.
+- **Storefront**: When `partialPaymentEnabled` is true in checkout config, COD is hidden and button labels change to "Pay Advance via {gateway}". Advance amount is `min(partialPaymentAmount, totalAmount)`.
+
+### Refund Flow
+
+`processRefund()` in `refund-service.ts`:
+
+1. Validates: order exists, has payments, not already fully refunded
+2. Validates amount: positive, does not exceed `paidAmount`, cumulative refunds (existing + new) do not exceed `paidAmount`
+3. Finds latest successful payment record to determine gateway
+4. Dispatches to gateway-specific refund API (Stripe: by charge ID; SSLCommerz: by bank_tran_id; Polar: by checkout ID; COD: marker ID only)
+5. Updates `orders.paidAmount` and `orders.paymentStatus` (REFUNDED for full, PARTIAL for partial)
+6. On full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory
+
+`processReturn()`: Sets order status to `RETURNED`, restores inventory, optionally triggers auto-refund. Only orders in `delivered`, `completed`, or `shipped` status can be returned.
+
+### Gateway Settings Storage
+
+All gateway credentials are stored in the `settings` DB table with a `category` column:
+
+| Category | Keys |
+|----------|------|
+| `stripe` | `secret_key`, `publishable_key`, `webhook_secret`, `enabled` |
+| `sslcommerz` | `store_id`, `store_password`, `sandbox`, `enabled` |
+| `polar` | `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` |
+| `payment_methods` | `enabled_methods` (JSON array), `default_method` |
+
+Settings are cached in KV with 5-minute TTL (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods`). Admin save operations invalidate both the specific gateway cache and the payment methods cache.
+
+### Gateway Registry
+
+`gateway-settings.ts` side-effect registers all 4 gateways on import:
+
+- Each registration includes: `id`, `name`, `settingsCategory`, `getSettings()` (async DB lookup), `getPublicConfig()` (safe fields to expose), `getCurrencies()` (supported currencies)
+- `checkout.ts` route imports `gateway-settings.ts` for the side-effect, then calls `getRegisteredGateways()` to dynamically build the checkout config response
+- `checkoutMode` controls gateway visibility: `all` (show everything), `gateways_only` (hide COD), `guest_cod_only` (hide online gateways)
+
+### Storefront Proxy Pattern
+
+Storefront SSR pages at `apps/storefront/src/pages/api/checkout/` act as proxies:
+
+1. Browser calls storefront proxy (e.g., `POST /api/checkout/stripe-intent`)
+2. Proxy calls API worker via service binding (e.g., `POST /payment/stripe/intent`) using the server-side `API_TOKEN`
+3. Proxy unwraps the `{success, data}` envelope before returning to browser
+4. Browser receives flat response (e.g., `{clientSecret, paymentIntentId, ...}`)
+
+This keeps the API_TOKEN server-side and handles the envelope unwrapping for checkout page consumers.
+
+### Storefront Client-Side Gateway Handler Registry
+
+Mirrors the server-side pattern. `apps/storefront/src/lib/checkout/` has:
+
+- A `GatewayHandler` interface with `id`, `meta` (label/icon/desc), `getButtonText()`, optional `onSelect()`, and `processPayment()`
+- A `registry.ts` with `registerGateway()` / `getGateway()`
+- Handler implementations per gateway that each: call `createOrder()`, then call their respective proxy endpoint, then either redirect (SSLCommerz/Polar) or confirm client-side (Stripe)
+- All handlers are registered in `index.ts` on import
+
+## API Endpoints Summary
+
+### Public (storefront-facing, no admin auth)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/v1/checkout/config` | Checkout configuration (cached 60s) |
+| `POST` | `/api/v1/payment/stripe/intent` | Create Stripe PaymentIntent |
+| `POST` | `/api/v1/payment/sslcommerz/session` | Create SSLCommerz session |
+| `POST` | `/api/v1/payment/polar/session` | Create Polar checkout session |
+
+### Redirect handlers (called by gateways, not consumers)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST/GET` | `/api/v1/payment/sslcommerz/success` | SSLCommerz success redirect |
+| `POST/GET` | `/api/v1/payment/sslcommerz/fail` | SSLCommerz failure redirect |
+| `POST/GET` | `/api/v1/payment/sslcommerz/cancel` | SSLCommerz cancel redirect |
+| `GET` | `/api/v1/payment/polar/success` | Polar success redirect |
+| `GET` | `/api/v1/payment/polar/cancel` | Polar cancel redirect |
+
+### Webhooks (signature verification IS the auth)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/webhooks/stripe` | Stripe webhook receiver |
+| `POST` | `/api/v1/webhooks/sslcommerz` | SSLCommerz IPN receiver |
+| `POST` | `/api/v1/webhooks/polar` | Polar webhook receiver |
+
+### Admin (requires admin auth)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/v1/admin/settings/payment-methods` | Get enabled methods + gateway status |
+| `POST` | `/api/v1/admin/settings/payment-methods` | Save enabled methods + default |
+| `GET` | `/api/v1/admin/settings/stripe` | Get Stripe settings (secrets masked) |
+| `POST` | `/api/v1/admin/settings/stripe` | Save Stripe settings |
+| `GET` | `/api/v1/admin/settings/sslcommerz` | Get SSLCommerz settings (password masked) |
+| `POST` | `/api/v1/admin/settings/sslcommerz` | Save SSLCommerz settings |
+| `GET` | `/api/v1/admin/settings/polar` | Get Polar settings (token/secret masked) |
+| `POST` | `/api/v1/admin/settings/polar` | Save Polar settings |
 
 ## Dependencies
 
-- `@scalius/database` -- `orders`, `orderItems`, `payments`, `settings`
+- `stripe` -- Stripe SDK v17+ (Web Fetch API native)
+- `@polar-sh/sdk` -- Polar SDK
+- `standardwebhooks` -- Polar webhook signature verification
+- `@scalius/database` -- `orders`, `orderItems`, `orderPayments`, `paymentPlans`, `codTracking`, `webhookEvents`, `settings` tables
 - `@scalius/core/errors` -- `ValidationError`, `ServiceUnavailableError`, `NotFoundError`, `ConflictError`
+- `@scalius/core/modules/settings/settings.service` -- `getCurrencyConfig()` for currency code
+- `@scalius/core/modules/inventory/release` -- `releaseMultiple()` for inventory release on cancel/refund
+- `@scalius/core/modules/inventory/inventory-transitions` -- `buildInventoryStatements()`, `applyInventoryForStatusChange()`
+- `@scalius/core/modules/orders/order-state-machine` -- `validateTransition()` for state machine checks
+- `@scalius/shared/price-utils` -- `roundPrice()`, `pricesEqual()` for float-safe comparisons
+
+## Known Gaps
+
+1. **Polar webhook `order.refunded`**: Logged but not processed (no queue message enqueued, no DB update). Refunds are handled synchronously via the admin refund endpoint.
+2. **Stripe `charge.refunded` queue message**: Exists in the queue consumer but is audit-only (no DB mutation). Refunds are handled synchronously via the admin refund endpoint.
+3. **`PaymentMethodSettings.tsx`**: Older component that lists only Stripe + SSLCommerz + COD (no Polar support). `PaymentGatewaysManager.tsx` is the current component with all 4 gateways.
+4. **SSLCommerz refund IP whitelisting**: Production refunds require the server's public IP to be registered with SSLCommerz. Sandbox works without this.
+5. **COD refund**: `CODProvider.createRefund()` returns a marker ID only. Actual cash refund is a manual operational process.
+6. **No capture endpoint exposed**: `capturePaymentIntent()` and `cancelPaymentIntent()` exist in `stripe.ts` but have no API route. They would need to be called from an admin fulfillment flow.
+7. **processPaymentFailed**: Does not record `polarCheckoutId` on the failed payment entry (only handles stripe/sslcommerz gateway-specific IDs).
+8. **Amount unit inconsistency between gateways**: Stripe and Polar use cents (smallest unit), SSLCommerz uses major units. Conversion happens at the API route layer (x100) and queue consumer layer (/100), not in the core module. SSLCommerz amounts pass through without conversion.
+9. **Partial payment COD exclusion**: When `partialPaymentEnabled` is true on the storefront, COD is hidden from the payment method list. However, the API routes do not enforce this -- a direct API call could still create a COD order with partial payment config active.
+10. **Factory not used by API routes**: API routes call legacy wrapper functions (`createPaymentIntent()`, `initSSLCommerzSession()`, etc.) directly rather than going through `createPaymentProvider()` factory. The factory/provider pattern is implemented but not yet the primary code path for session creation.
