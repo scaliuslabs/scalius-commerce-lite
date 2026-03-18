@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for inventory.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { InventoryService, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku } from "@scalius/core/modules/inventory";
+import { getInventoryOverview, adjustInventory, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku } from "@scalius/core/modules/inventory";
 import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
@@ -35,7 +35,7 @@ app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
     try {
-        const result = await InventoryService.getInventoryOverview(db, {
+        const result = await getInventoryOverview(db, {
             section: query.section,
             search: query.search,
             status: query.status,
@@ -72,7 +72,7 @@ const alertsRoute = createRoute({
 app.openapi(alertsRoute, async (c) => {
     const db = c.get("db");
     const { status } = c.req.valid("query");
-    const result = await InventoryService.getInventoryOverview(db, {
+    const result = await getInventoryOverview(db, {
         section: "alerts",
         search: "",
         status: "all",
@@ -135,7 +135,7 @@ app.openapi(adjustRoute, async (c) => {
     const payload = c.req.valid("json");
     const user = c.get("user");
     try {
-        const result = await InventoryService.adjustInventory(db, variantId, payload, user?.id);
+        const result = await adjustInventory(db, variantId, payload, user?.id);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);

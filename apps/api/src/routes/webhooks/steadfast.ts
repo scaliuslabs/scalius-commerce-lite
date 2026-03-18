@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { deliveryShipments } from "@scalius/database/schema";
 import { getDb } from "@scalius/database/client";
 import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper";
-import { ShipmentTracker } from "@scalius/core/modules/delivery/tracking";
+import { updateOrderStatusFromShipment, notifyShipmentStatusChange } from "@scalius/core/modules/delivery/tracking";
 import { recordWebhookEvent } from "@scalius/core/modules/payments/process-payment";
 import { verifyDeliveryWebhook } from "../../middleware/webhook-auth";
 
@@ -163,8 +163,8 @@ app.post("/", async (c) => {
             .where(eq(deliveryShipments.id, shipment.id));
 
         if (normalizedStatus !== previousStatus) {
-            await ShipmentTracker.updateOrderStatusFromShipment(shipment.id, normalizedStatus);
-            await ShipmentTracker.notifyStatusChange(shipment.id, previousStatus, normalizedStatus);
+            await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
+            await notifyShipmentStatusChange(db, shipment.id, previousStatus, normalizedStatus);
         }
 
         await recordWebhookEvent(

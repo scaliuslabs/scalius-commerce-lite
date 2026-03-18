@@ -1,5 +1,13 @@
 // src/modules/fraud-checker/index.ts
-export { FraudCheckerService } from "./service";
+export {
+  getFraudProviders,
+  getFraudProvider,
+  saveFraudProvider,
+  deleteFraudProvider,
+  testFraudProvider,
+  fraudLookup,
+  fraudLookupWithActiveProvider,
+} from "./service";
 export type { FraudCheckerProvider, FraudCheckResult } from "./service";
 export type {
   FraudCheckProvider,

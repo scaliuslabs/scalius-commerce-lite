@@ -46,194 +46,192 @@ export interface FraudCheckResult {
 
 const CATEGORY = "fraud-checker";
 
-export class FraudCheckerService {
-  constructor(private db: Database) {}
+/**
+ * Get all fraud checker providers
+ */
+export async function getFraudProviders(db: Database): Promise<FraudCheckerProvider[]> {
+  const providerSettings = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.category, CATEGORY));
 
-  /**
-   * Get all fraud checker providers
-   */
-  async getProviders(): Promise<FraudCheckerProvider[]> {
-    const providerSettings = await this.db
-      .select()
-      .from(settings)
-      .where(eq(settings.category, CATEGORY));
+  return providerSettings
+    .map((setting) => {
+      try {
+        const data = JSON.parse(setting.value);
+        return {
+          id: setting.key,
+          ...data,
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean) as FraudCheckerProvider[];
+}
 
-    return providerSettings
-      .map((setting) => {
-        try {
-          const data = JSON.parse(setting.value);
-          return {
-            id: setting.key,
-            ...data,
-          };
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean) as FraudCheckerProvider[];
-  }
+/**
+ * Get a specific provider by ID
+ */
+export async function getFraudProvider(db: Database, id: string): Promise<FraudCheckerProvider | null> {
+  const [setting] = await db
+    .select()
+    .from(settings)
+    .where(and(eq(settings.category, CATEGORY), eq(settings.key, id)));
 
-  /**
-   * Get a specific provider by ID
-   */
-  async getProvider(id: string): Promise<FraudCheckerProvider | null> {
-    const [setting] = await this.db
-      .select()
-      .from(settings)
-      .where(and(eq(settings.category, CATEGORY), eq(settings.key, id)));
+  if (!setting) return null;
 
-    if (!setting) return null;
-
-    try {
-      const data = JSON.parse(setting.value);
-      return {
-        id: setting.key,
-        ...data,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Save a fraud checker provider (create or update)
-   */
-  async saveProvider(
-    provider: Omit<FraudCheckerProvider, "id"> & { id?: string },
-  ): Promise<FraudCheckerProvider> {
-    if (!provider.name || !provider.apiUrl || !provider.apiKey) {
-      throw new ValidationError("Missing required fields: name, apiUrl, apiKey");
-    }
-
-    const providerId = provider.id || nanoid();
-    const now = new Date();
-
-    const providerData = {
-      name: provider.name,
-      apiUrl: provider.apiUrl,
-      apiKey: provider.apiKey,
-      isActive: provider.isActive,
-      providerType: provider.providerType ?? "default",
+  try {
+    const data = JSON.parse(setting.value);
+    return {
+      id: setting.key,
+      ...data,
     };
+  } catch {
+    return null;
+  }
+}
 
-    // Check if provider exists
-    const existing = await this.getProvider(providerId);
+/**
+ * Save a fraud checker provider (create or update)
+ */
+export async function saveFraudProvider(
+  db: Database,
+  provider: Omit<FraudCheckerProvider, "id"> & { id?: string },
+): Promise<FraudCheckerProvider> {
+  if (!provider.name || !provider.apiUrl || !provider.apiKey) {
+    throw new ValidationError("Missing required fields: name, apiUrl, apiKey");
+  }
 
-    if (existing) {
-      // Update
-      await this.db
-        .update(settings)
-        .set({
-          value: JSON.stringify(providerData),
-          updatedAt: now,
-        })
-        .where(
-          and(eq(settings.category, CATEGORY), eq(settings.key, providerId)),
-        );
-    } else {
-      // Create
-      await this.db.insert(settings).values({
-        id: nanoid(),
-        key: providerId,
-        category: CATEGORY,
-        type: "json",
+  const providerId = provider.id || nanoid();
+  const now = new Date();
+
+  const providerData = {
+    name: provider.name,
+    apiUrl: provider.apiUrl,
+    apiKey: provider.apiKey,
+    isActive: provider.isActive,
+    providerType: provider.providerType ?? "default",
+  };
+
+  // Check if provider exists
+  const existing = await getFraudProvider(db, providerId);
+
+  if (existing) {
+    // Update
+    await db
+      .update(settings)
+      .set({
         value: JSON.stringify(providerData),
         updatedAt: now,
-      });
-    }
+      })
+      .where(
+        and(eq(settings.category, CATEGORY), eq(settings.key, providerId)),
+      );
+  } else {
+    // Create
+    await db.insert(settings).values({
+      id: nanoid(),
+      key: providerId,
+      category: CATEGORY,
+      type: "json",
+      value: JSON.stringify(providerData),
+      updatedAt: now,
+    });
+  }
 
+  return {
+    id: providerId,
+    ...providerData,
+  };
+}
+
+/**
+ * Delete a fraud checker provider
+ */
+export async function deleteFraudProvider(db: Database, id: string): Promise<boolean> {
+  const existing = await getFraudProvider(db, id);
+  if (!existing) {
+    throw new NotFoundError(`Fraud checker provider "${id}" not found`);
+  }
+
+  await db
+    .delete(settings)
+    .where(and(eq(settings.category, CATEGORY), eq(settings.key, id)));
+  return true;
+}
+
+/**
+ * Test a provider connection
+ */
+export async function testFraudProvider(
+  db: Database,
+  id: string,
+): Promise<{ success: boolean; message: string }> {
+  const provider = await getFraudProvider(db, id);
+  if (!provider) {
+    throw new NotFoundError(`Fraud checker provider "${id}" not found`);
+  }
+
+  try {
+    const result = await fraudLookup(provider, "01700000000");
     return {
-      id: providerId,
-      ...providerData,
+      success: result.success,
+      message: result.success
+        ? "Connection successful"
+        : result.error || "Connection failed",
+    };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Connection failed",
     };
   }
+}
 
-  /**
-   * Delete a fraud checker provider
-   */
-  async deleteProvider(id: string): Promise<boolean> {
-    const existing = await this.getProvider(id);
-    if (!existing) {
-      throw new NotFoundError(`Fraud checker provider "${id}" not found`);
-    }
+/**
+ * Lookup fraud data for a phone number using a specific provider
+ */
+export async function fraudLookup(
+  provider: FraudCheckerProvider,
+  phone: string,
+): Promise<FraudCheckResult> {
+  const checkProvider = getFraudCheckProvider(
+    provider.providerType ?? "default",
+  );
 
-    await this.db
-      .delete(settings)
-      .where(and(eq(settings.category, CATEGORY), eq(settings.key, id)));
-    return true;
-  }
-
-  /**
-   * Test a provider connection
-   */
-  async testProvider(
-    id: string,
-  ): Promise<{ success: boolean; message: string }> {
-    const provider = await this.getProvider(id);
-    if (!provider) {
-      throw new NotFoundError(`Fraud checker provider "${id}" not found`);
-    }
-
-    try {
-      const result = await this.lookup(provider, "01700000000");
-      return {
-        success: result.success,
-        message: result.success
-          ? "Connection successful"
-          : result.error || "Connection failed",
-      };
-    } catch (error: unknown) {
-      return {
-        success: false,
-        message:
-          error instanceof Error ? error.message : "Connection failed",
-      };
-    }
-  }
-
-  /**
-   * Lookup fraud data for a phone number using a specific provider
-   */
-  async lookup(
-    provider: FraudCheckerProvider,
-    phone: string,
-  ): Promise<FraudCheckResult> {
-    const checkProvider = getFraudCheckProvider(
-      provider.providerType ?? "default",
+  try {
+    const result = await checkProvider.lookup(
+      phone,
+      provider.apiUrl,
+      provider.apiKey,
     );
 
-    try {
-      const result = await checkProvider.lookup(
-        phone,
-        provider.apiUrl,
-        provider.apiKey,
-      );
+    return {
+      success: true,
+      riskLevel: result.riskLevel,
+      data: result.details as FraudCheckResult["data"],
+    };
+  } catch (error: unknown) {
+    throw new ServiceUnavailableError(
+      error instanceof Error ? error.message : "Fraud check lookup failed",
+    );
+  }
+}
 
-      return {
-        success: true,
-        riskLevel: result.riskLevel,
-        data: result.details as FraudCheckResult["data"],
-      };
-    } catch (error: unknown) {
-      throw new ServiceUnavailableError(
-        error instanceof Error ? error.message : "Fraud check lookup failed",
-      );
-    }
+/**
+ * Lookup fraud data using the first active provider
+ */
+export async function fraudLookupWithActiveProvider(db: Database, phone: string): Promise<FraudCheckResult> {
+  const providers = await getFraudProviders(db);
+  const activeProvider = providers.find((p) => p.isActive);
+
+  if (!activeProvider) {
+    throw new NotFoundError(
+      "No active fraud checker provider configured",
+    );
   }
 
-  /**
-   * Lookup fraud data using the first active provider
-   */
-  async lookupWithActiveProvider(phone: string): Promise<FraudCheckResult> {
-    const providers = await this.getProviders();
-    const activeProvider = providers.find((p) => p.isActive);
-
-    if (!activeProvider) {
-      throw new NotFoundError(
-        "No active fraud checker provider configured",
-      );
-    }
-
-    return this.lookup(activeProvider, phone);
-  }
+  return fraudLookup(activeProvider, phone);
 }

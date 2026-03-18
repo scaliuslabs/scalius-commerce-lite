@@ -5,7 +5,14 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
 import { ApiError } from "../../utils/api-error";
 import {
-    MediaService,
+    listMediaFiles,
+    uploadMediaFiles,
+    updateMediaFile,
+    deleteMediaFile,
+    moveMediaFiles,
+    listMediaFolders,
+    createMediaFolder,
+    deleteMediaFolder,
     updateMediaSchema,
     moveMediaSchema,
     createFolderSchema
@@ -36,7 +43,7 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
-    const result = await MediaService.listFiles(db, query.page, query.limit, query.search || "", query.folderId);
+    const result = await listMediaFiles(db, query.page, query.limit, query.search || "", query.folderId);
     return ok(c, result);
 });
 
@@ -65,7 +72,7 @@ app.openapi(uploadRoute, async (c) => {
 
     try {
         const validFiles = (files as unknown[]).filter((f): f is File => f instanceof File);
-        const result = await MediaService.uploadFiles(db, validFiles, folderId);
+        const result = await uploadMediaFiles(db, validFiles, folderId);
         return result.status === 201 ? created(c, result) : ok(c, result);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
@@ -94,7 +101,7 @@ app.openapi(patchMediaRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const file = await MediaService.updateFile(db, id, data);
+        const file = await updateMediaFile(db, id, data);
         return ok(c, { file });
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
@@ -123,7 +130,7 @@ app.openapi(putMediaRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const file = await MediaService.updateFile(db, id, data);
+        const file = await updateMediaFile(db, id, data);
         return ok(c, { file });
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
@@ -149,7 +156,7 @@ const moveRoute = createRoute({
 app.openapi(moveRoute, async (c) => {
     const db = c.get("db");
     const { fileIds, folderId } = c.req.valid("json");
-    await MediaService.moveFiles(db, fileIds, folderId || null);
+    await moveMediaFiles(db, fileIds, folderId || null);
     return ok(c, { message: `Moved ${fileIds.length} file(s)` });
 });
 
@@ -172,7 +179,7 @@ app.openapi(deleteFileRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     try {
-        await MediaService.deleteFile(db, id);
+        await deleteMediaFile(db, id);
         return noContent(c);
     } catch (error: unknown) {
         const err = error as { message?: string; statusCode?: number };
@@ -194,7 +201,7 @@ const listFoldersRoute = createRoute({
 
 app.openapi(listFoldersRoute, async (c) => {
     const db = c.get("db");
-    const folders = await MediaService.listFolders(db);
+    const folders = await listMediaFolders(db);
     return ok(c, { folders });
 });
 
@@ -216,7 +223,7 @@ const createFolderRoute = createRoute({
 app.openapi(createFolderRoute, async (c) => {
     const db = c.get("db");
     const { name, parentId } = c.req.valid("json");
-    const folder = await MediaService.createFolder(db, name, parentId);
+    const folder = await createMediaFolder(db, name, parentId);
     return created(c, { folder });
 });
 
@@ -238,7 +245,7 @@ const deleteFolderRoute = createRoute({
 app.openapi(deleteFolderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await MediaService.deleteFolder(db, id);
+    await deleteMediaFolder(db, id);
     return noContent(c);
 });
 

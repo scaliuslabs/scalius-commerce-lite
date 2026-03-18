@@ -7,8 +7,8 @@ import {
     bulkShipOrderSchema
 } from "@scalius/core/modules/orders/orders.validation";
 import { processReturn, processRefund } from "@scalius/core/modules/payments/refund-service";
-import { DeliveryService } from "@scalius/core/modules/delivery/service";
-import { ShipmentTracker } from "@scalius/core/modules/delivery/tracking";
+import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, createShipment, getLatestShipment } from "@scalius/core/modules/delivery/service";
+import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
 import { orderPayments, paymentPlans, deliveryShipments, orderItems, products, productVariants, productImages, orders } from "@scalius/database/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
@@ -488,12 +488,12 @@ const getShipmentsRoute = createRoute({
 
 app.openapi(getShipmentsRoute, async (c) => {
     const orderId = c.req.valid("param").id;
-    const deliveryService = new DeliveryService();
-    const shipments = await deliveryService.getShipments(orderId);
+    const db = c.get("db");
+    const shipments = await getShipments(db, orderId);
 
     const enhancedShipments = await Promise.all(
         shipments.map(async (shipment) => {
-            const provider = shipment.providerId ? await deliveryService.getProvider(shipment.providerId) : null;
+            const provider = shipment.providerId ? await getDeliveryProvider(db, shipment.providerId) : null;
             return {
                 ...shipment,
                 providerName: provider?.name || shipment.providerType,
@@ -531,17 +531,16 @@ app.openapi(createShipmentRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const db = c.get("db");
-    const deliveryService = new DeliveryService();
 
-    const shipmentResult = await deliveryService.createShipment(orderId, data.providerId, data.options);
+    const shipmentResult = await createShipment(db, orderId, data.providerId, data.options);
 
     if (!shipmentResult.success) {
         console.error(`Failed to create shipment for order ${orderId}: ${shipmentResult.message}`);
         throw new ValidationError(shipmentResult.message || "Failed to create shipment");
     }
 
-    const provider = await deliveryService.getProvider(data.providerId);
-    const createdShipment = await deliveryService.getLatestShipment(orderId);
+    const provider = await getDeliveryProvider(db, data.providerId);
+    const createdShipment = await getLatestShipment(db, orderId);
 
     if (!createdShipment) {
         throw new Error("Failed to retrieve created shipment");
@@ -577,9 +576,9 @@ const getShipmentRoute = createRoute({
 
 app.openapi(getShipmentRoute, async (c) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
-    const deliveryService = new DeliveryService();
+    const db = c.get("db");
 
-    const shipment = await deliveryService.getShipment(shipmentId);
+    const shipment = await getShipment(db, shipmentId);
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
@@ -604,13 +603,13 @@ const deleteShipmentRoute = createRoute({
 
 app.openapi(deleteShipmentRoute, async (c) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
-    const deliveryService = new DeliveryService();
+    const db = c.get("db");
 
-    const shipment = await deliveryService.getShipment(shipmentId);
+    const shipment = await getShipment(db, shipmentId);
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
-    await deliveryService.deleteShipment(shipmentId);
+    await deleteShipmentRecord(db, shipmentId);
     return ok(c, {});
 });
 
@@ -632,13 +631,13 @@ const checkShipmentStatusRoute = createRoute({
 
 app.openapi(checkShipmentStatusRoute, async (c) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
-    const deliveryService = new DeliveryService();
+    const db = c.get("db");
 
-    const shipment = await deliveryService.getShipment(shipmentId);
+    const shipment = await getShipment(db, shipmentId);
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
-    const updatedShipment = await deliveryService.checkShipmentStatus(shipmentId);
+    const updatedShipment = await checkShipmentStatus(db, shipmentId);
     return ok(c, updatedShipment);
 });
 
@@ -661,16 +660,15 @@ const refreshShipmentRoute = createRoute({
 
 app.openapi(refreshShipmentRoute, async (c) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
-    const deliveryService = new DeliveryService();
     const db = c.get("db");
 
-    const shipment = await deliveryService.getShipment(shipmentId);
+    const shipment = await getShipment(db, shipmentId);
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ValidationError("Shipment does not belong to this order");
 
     const previousStatus = shipment.status;
     try {
-        await deliveryService.checkShipmentStatus(shipmentId);
+        await checkShipmentStatus(db, shipmentId);
     } catch (e: unknown) {
         throw new ValidationError(e instanceof Error ? e.message : String(e));
     }
@@ -678,16 +676,16 @@ app.openapi(refreshShipmentRoute, async (c) => {
     const now = new Date();
     await db.update(deliveryShipments).set({ lastChecked: now }).where(eq(deliveryShipments.id, shipmentId));
 
-    const updatedShipment = await deliveryService.getShipment(shipmentId);
+    const updatedShipment = await getShipment(db, shipmentId);
     if (!updatedShipment) throw new Error("Failed to retrieve updated shipment");
 
-    const provider = updatedShipment.providerId ? await deliveryService.getProvider(updatedShipment.providerId) : null;
+    const provider = updatedShipment.providerId ? await getDeliveryProvider(db, updatedShipment.providerId) : null;
     const statusChanged = previousStatus !== updatedShipment.status;
     let orderStatusUpdate = false;
 
     if (statusChanged) {
         try {
-            const orderUpdate = await ShipmentTracker.updateOrderStatusFromShipment(shipmentId, updatedShipment.status);
+            const orderUpdate = await updateOrderStatusFromShipment(db, shipmentId, updatedShipment.status);
             orderStatusUpdate = !!orderUpdate && !!orderUpdate.orderId;
         } catch (e: unknown) {
             console.error("Error updating order status:", e);

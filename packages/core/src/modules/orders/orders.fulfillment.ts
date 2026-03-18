@@ -14,20 +14,18 @@ import {
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { markCODReturned, recordCODCollection, recordCODFailure } from "../payments/cod";
-import { DeliveryService } from "../delivery/service";
+import { createShipment } from "../delivery/service";
 
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { validateTransition } from "./order-state-machine";
 import type { StatusUpdateResult } from "./orders.types";
 
-const deliveryService = new DeliveryService();
-
 export async function bulkShipOrders(db: Database, orderIds: string[], providerId: string, options: Record<string, unknown>) {
     const results = [];
     for (const orderId of orderIds) {
         try {
-            const shipment = await deliveryService.createShipment(orderId, providerId, options);
+            const shipment = await createShipment(db, orderId, providerId, options);
             if (shipment.success) {
                 const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
                 await db.update(orders).set({

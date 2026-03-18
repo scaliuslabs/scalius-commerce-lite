@@ -3,7 +3,7 @@ import { db } from "@scalius/database/client";
 import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
 import { sql, eq, desc, count } from "drizzle-orm";
 import { getLogRetentionHours, getCleanupCheckIntervalHours } from "@scalius/core/integrations/meta/conversions-api";
-import { MetaService } from "@scalius/core/modules/analytics/meta.service";
+import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
 
 import { ok, created } from "../../../utils/api-response";
 const app = new OpenAPIHono();
@@ -146,7 +146,7 @@ const manualCleanupRoute = createRoute({
 
 app.openapi(manualCleanupRoute, async (c) => {
     try {
-        const result = await MetaService.manualLogCleanup(db, getLogRetentionHours());
+        const result = await manualLogCleanup(db, getLogRetentionHours());
         if (result.success) return ok(c, { message: result.message });
         throw new Error(result.message);
     } catch (error: unknown) {
