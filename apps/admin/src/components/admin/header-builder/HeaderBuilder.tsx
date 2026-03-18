@@ -14,51 +14,57 @@ import { ContactSection } from "./ContactSection";
 import { SocialLinksSection } from "./SocialLinksSection";
 import { NavigationSection } from "./NavigationSection";
 
-import type { HeaderConfig, HeaderBuilderProps, NavigationItem } from "./types";
+import type { HeaderConfig, HeaderBuilderProps, NavigationItem, LogoConfig, FaviconConfig, SocialLink } from "./types";
 import { defaultHeaderConfig } from "./types";
 
 /**
  * Migrate legacy config formats to the new structure
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy config migration accepts arbitrary shapes
-function migrateConfig(config: any): HeaderConfig {
+function migrateConfig(config: unknown): HeaderConfig {
+  const cfg = config as Record<string, unknown>;
   // Ensure navigation items have IDs and subMenus
-  const ensureNavIds = (items: any[]): NavigationItem[] => {
-    return (items || []).map((item) => ({
-      ...item,
-      id: item.id || nanoid(),
-      subMenu: item.subMenu ? ensureNavIds(item.subMenu) : [],
-    }));
+  const ensureNavIds = (items: unknown[]): NavigationItem[] => {
+    return (items || []).map((item) => {
+      const it = item as Record<string, unknown>;
+      return {
+        ...it,
+        id: (it.id as string) || nanoid(),
+        subMenu: it.subMenu ? ensureNavIds(it.subMenu as unknown[]) : [],
+      } as NavigationItem;
+    });
   };
 
   // Migrate old social.facebook to social array
-  let socialLinks = config.social || [];
+  let socialLinks: SocialLink[] = (cfg.social as SocialLink[]) || [];
   if (!Array.isArray(socialLinks)) {
     // Legacy format: { facebook: "url" }
+    const socialObj = cfg.social as Record<string, unknown> | undefined;
     socialLinks = [];
-    if (config.social?.facebook) {
+    if (socialObj?.facebook) {
       socialLinks.push({
         id: nanoid(),
         label: "Facebook",
-        url: config.social.facebook,
+        url: socialObj.facebook as string,
       });
     }
   }
 
+  const topBar = cfg.topBar as Record<string, unknown> | undefined;
+  const contact = cfg.contact as Record<string, unknown> | undefined;
   return {
     topBar: {
-      text: config.topBar?.text || "",
-      isEnabled: config.topBar?.isEnabled ?? true,
+      text: (topBar?.text as string) || "",
+      isEnabled: (topBar?.isEnabled as boolean) ?? true,
     },
-    logo: config.logo || defaultHeaderConfig.logo,
-    favicon: config.favicon || defaultHeaderConfig.favicon,
+    logo: (cfg.logo as LogoConfig) || defaultHeaderConfig.logo,
+    favicon: (cfg.favicon as FaviconConfig) || defaultHeaderConfig.favicon,
     contact: {
-      phone: config.contact?.phone || "",
-      text: config.contact?.text || "",
-      isEnabled: config.contact?.isEnabled ?? true,
+      phone: (contact?.phone as string) || "",
+      text: (contact?.text as string) || "",
+      isEnabled: (contact?.isEnabled as boolean) ?? true,
     },
     social: socialLinks,
-    navigation: ensureNavIds(config.navigation),
+    navigation: ensureNavIds(cfg.navigation as unknown[]),
   };
 }
 

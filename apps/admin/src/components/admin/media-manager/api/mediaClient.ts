@@ -8,6 +8,15 @@ import type {
   MediaFilterOptions,
 } from "../types";
 
+/** Shape of the upload response JSON — varies between success, partial, and error */
+interface UploadResponseData {
+  files?: MediaFile[];
+  warnings?: Array<{ filename: string; error: string }>;
+  summary?: string;
+  error?: string;
+  details?: Array<{ filename: string; error: string }> | string;
+}
+
 export class MediaApiClient {
   /**
    * Fetch media files with pagination and filtering
@@ -83,8 +92,7 @@ export class MediaApiClient {
       });
 
       // Parse response JSON
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- upload response shape varies between success/partial/error
-      let data: any;
+      let data: UploadResponseData;
       try {
         data = await response.json();
       } catch (parseError) {
@@ -111,7 +119,7 @@ export class MediaApiClient {
       if (!response.ok) {
         // Create a more informative error object
         const errorMessage =
-          data.error || data.details || "Upload failed for unknown reason";
+          data.error || (typeof data.details === 'string' ? data.details : undefined) || "Upload failed for unknown reason";
         const error: Error & { details?: Array<{ filename: string; error: string }>; summary?: string } = new Error(errorMessage);
 
         // Attach details array if available
