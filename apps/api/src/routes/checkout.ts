@@ -62,9 +62,17 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
     ]);
 
     let allowedCountries: string[] = [];
+    let allowedCountriesMode: "include" | "exclude" = "include";
     try {
       if (allowedCountriesRow?.value) {
-        allowedCountries = JSON.parse(allowedCountriesRow.value);
+        const parsed = JSON.parse(allowedCountriesRow.value);
+        if (Array.isArray(parsed)) {
+          // Backward compat: old format was just an array
+          allowedCountries = parsed;
+        } else if (parsed && typeof parsed === "object") {
+          allowedCountries = Array.isArray(parsed.countries) ? parsed.countries : [];
+          allowedCountriesMode = parsed.mode === "exclude" ? "exclude" : "include";
+        }
       }
     } catch {
       // Invalid JSON — default to empty array
@@ -109,6 +117,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
       partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0,
       allowedCountries,
+      allowedCountriesMode,
       currency: {
         code: localCurrencyCode,
         symbol: currencyMap.currency_symbol ?? "\u09F3",
