@@ -5,6 +5,7 @@
 import { sqliteTable, text, integer, real, unique, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
+import { user } from "./auth";
 
 export const settings = sqliteTable(
     "settings",
@@ -74,7 +75,7 @@ export const analytics = sqliteTable("analytics", {
 
 export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {
     id: text("id").primaryKey(),
-    userId: text("user_id").notNull(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     token: text("token").notNull().unique(),
     deviceInfo: text("device_info"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),

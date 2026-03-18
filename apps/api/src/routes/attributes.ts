@@ -335,7 +335,7 @@ app.openapi(searchFiltersRoute, async (c) => {
   }
 
   // 2. Get all categories from matching products
-  const categoryIds = [...new Set(matchingProducts.map((p) => p.categoryId))];
+  const categoryIds = [...new Set(matchingProducts.map((p) => p.categoryId).filter((id): id is string => id != null))];
 
   // 3. Get all filterable attributes that have values in products of these categories
   const searchAttributes = await db

@@ -1,9 +1,9 @@
 // src/db/schema/auth.ts
 // Better Auth tables: user, session, account, verification, twoFactor.
 
-import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { UNIX_NOW } from "./shared";
 
 export const user = sqliteTable("user", {
     id: text("id").primaryKey(),
@@ -24,10 +24,10 @@ export const user = sqliteTable("user", {
     twoFactorMethod: text("two_factor_method"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 });
 
 export const session = sqliteTable("session", {
@@ -43,10 +43,10 @@ export const session = sqliteTable("session", {
     twoFactorVerified: integer("two_factor_verified", { mode: "boolean" }).default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("session_user_id_idx").on(table.userId),
 ]);
@@ -67,10 +67,10 @@ export const account = sqliteTable("account", {
     idToken: text("id_token"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("account_user_id_idx").on(table.userId),
 ]);
@@ -82,10 +82,10 @@ export const verification = sqliteTable("verification", {
     expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 }, (table) => [
     index("verification_identifier_idx").on(table.identifier),
 ]);
@@ -99,10 +99,10 @@ export const twoFactor = sqliteTable("two_factor", {
     backupCodes: text("backup_codes").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
-        .default(sql`(cast(strftime('%s','now') as int))`),
+        .default(UNIX_NOW),
 });
 
 export type User = InferSelectModel<typeof user>;
