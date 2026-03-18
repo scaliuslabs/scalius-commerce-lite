@@ -229,7 +229,7 @@ app.openapi(deleteUserRoute, async (c) => {
 
 const changePasswordSchema = z.object({
     currentPassword: z.string().min(1),
-    newPassword: z.string().min(8, "New password must be at least 8 characters")
+    newPassword: z.string().min(12, "New password must be at least 12 characters")
 });
 
 const changePasswordRoute = createRoute({
@@ -522,7 +522,7 @@ setupApp.openapi(adminExistsRoute, async (c) => {
 const setupSchema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
-    password: z.string().min(8, "Password must be at least 8 characters")
+    password: z.string().min(12, "Password must be at least 12 characters")
 });
 
 const setupRoute = createRoute({
