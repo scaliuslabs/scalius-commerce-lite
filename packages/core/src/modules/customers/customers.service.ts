@@ -1,7 +1,7 @@
 // src/modules/customers/customers.service.ts
 // All DB queries and business logic for the customers domain.
 
-import { customers, customerHistory, deliveryLocations } from "@scalius/database/schema";
+import { customers, customerHistory, deliveryLocations, orders, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
 import { sql, and, isNull, inArray, asc, desc, eq, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
@@ -307,4 +307,103 @@ export async function bulkDeleteCustomers(db: Database, ids: string[], permanent
     } else {
         await db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inArray(customers.id, ids));
     }
+}
+
+// ─────────────────────────────────────────
+// Customer Orders (storefront)
+// ─────────────────────────────────────────
+
+export async function getCustomerOrders(
+    db: Database,
+    customerId: string,
+) {
+    // Fetch full customer profile from DB
+    const dbCustomer = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, customerId))
+        .get();
+
+    const customerProfile = dbCustomer
+        ? {
+            id: dbCustomer.id,
+            name: dbCustomer.name || "Customer",
+            email: dbCustomer.email || "",
+            phone: dbCustomer.phone || "",
+            address: dbCustomer.address,
+            cityName: dbCustomer.cityName,
+            zoneName: dbCustomer.zoneName,
+            city: dbCustomer.city,
+            zone: dbCustomer.zone,
+        }
+        : null;
+
+    const customerOrders = await db
+        .select({
+            id: orders.id,
+            status: orders.status,
+            totalAmount: orders.totalAmount,
+            paidAmount: orders.paidAmount,
+            shippingCharge: orders.shippingCharge,
+            discountAmount: orders.discountAmount,
+            paymentStatus: orders.paymentStatus,
+            paymentMethod: orders.paymentMethod,
+            fulfillmentStatus: orders.fulfillmentStatus,
+            shippingAddress: orders.shippingAddress,
+            cityName: orders.cityName,
+            zoneName: orders.zoneName,
+            notes: orders.notes,
+            createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`
+        })
+        .from(orders)
+        .where(eq(orders.customerId, customerId))
+        .orderBy(desc(orders.createdAt))
+        .limit(50);
+
+    // Fetch items for all orders in one batch
+    const orderIds = customerOrders.map((o) => o.id);
+    let itemsByOrder = new Map<string, Array<Record<string, unknown>>>();
+
+    if (orderIds.length > 0) {
+        const allItems = await db
+            .select({
+                orderId: orderItems.orderId,
+                productId: orderItems.productId,
+                variantId: orderItems.variantId,
+                quantity: orderItems.quantity,
+                price: orderItems.price,
+                productName: products.name,
+                productSlug: products.slug,
+                productImage: sql<string>`(
+                    SELECT ${productImages.url}
+                    FROM ${productImages}
+                    WHERE ${productImages.productId} = ${products.id}
+                    AND ${productImages.isPrimary} = 1
+                    LIMIT 1
+                )`.as("productImage"),
+                variantSize: productVariants.size,
+                variantColor: productVariants.color
+            })
+            .from(orderItems)
+            .leftJoin(products, eq(products.id, orderItems.productId))
+            .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+            .where(sql`${orderItems.orderId} IN ${orderIds}`);
+
+        for (const item of allItems) {
+            const list = itemsByOrder.get(item.orderId) || [];
+            list.push(item);
+            itemsByOrder.set(item.orderId, list);
+        }
+    }
+
+    // Format response
+    const formattedOrders = customerOrders.map((order) => ({
+        ...order,
+        createdAt: order.createdAt
+            ? new Date(order.createdAt * 1000).toISOString()
+            : null,
+        items: itemsByOrder.get(order.id) || []
+    }));
+
+    return { orders: formattedOrders, customerProfile };
 }

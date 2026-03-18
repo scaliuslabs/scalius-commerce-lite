@@ -9,7 +9,7 @@ import {
   PaymentMethod,
   InventoryPool
 } from "@scalius/database/schema";
-import { isDiscountValid, calculateDiscountAmount } from "./discounts";
+import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
 import { eq, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getShipments, getActiveDeliveryProviders } from "@scalius/core/modules/delivery/delivery.service";
