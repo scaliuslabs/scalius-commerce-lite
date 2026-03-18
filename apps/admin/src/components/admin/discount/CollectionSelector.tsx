@@ -92,7 +92,7 @@ export function CollectionSelector({
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/collections?search=${encodeURIComponent(searchTerm)}&limit=20`,
+          `/api/v1/admin/collections?search=${encodeURIComponent(searchTerm)}&limit=20`,
         );
         const json = await response.json();
         const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;

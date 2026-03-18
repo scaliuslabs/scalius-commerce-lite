@@ -18,14 +18,25 @@ if (!discountData) {
 }
 const { discount, formattedDiscount, selectedProducts, selectedCollections } =
   discountData;
+
+// Duplicate mode: load existing discount data but treat as a new creation
+const isDuplicate = Astro.url.searchParams.get("duplicate") === "true";
+const pageTitle = isDuplicate ? "Duplicate Discount" : "Edit Discount";
+const pageDescription = isDuplicate
+  ? `Creating a copy of "${discount.code}"`
+  : `Modify the discount "${discount.code}"`;
+
+// When duplicating, clear the ID (so forms create instead of update) and the code (must be unique)
+const effectiveId = isDuplicate ? undefined : discount.id;
+const effectiveCode = isDuplicate ? "" : discount.code;
 ---
 
-<AdminLayout title="Edit Discount">
+<AdminLayout title={pageTitle}>
   <div class="flex items-center justify-between mb-6">
     <div>
-      <h1 class="text-3xl font-bold tracking-tight">Edit Discount</h1>
+      <h1 class="text-3xl font-bold tracking-tight">{pageTitle}</h1>
       <p class="text-muted-foreground">
-        Modify the discount "{discount.code}"
+        {pageDescription}
       </p>
     </div>
     <a
@@ -42,8 +53,8 @@ const { discount, formattedDiscount, selectedProducts, selectedCollections } =
         <AmountOffProductsForm
           client:visible
           defaultValues={{
-            id: discount.id,
-            code: discount.code,
+            id: effectiveId,
+            code: effectiveCode,
             valueType: discount.valueType as "percentage" | "fixed_amount",
             discountValue: discount.discountValue,
             minPurchaseAmount: discount.minPurchaseAmount,
@@ -75,8 +86,8 @@ const { discount, formattedDiscount, selectedProducts, selectedCollections } =
         <AmountOffOrderForm
           client:visible
           defaultValues={{
-            id: discount.id,
-            code: discount.code,
+            id: effectiveId,
+            code: effectiveCode,
             valueType: discount.valueType as "percentage" | "fixed_amount",
             discountValue: discount.discountValue,
             minPurchaseAmount: discount.minPurchaseAmount,
@@ -102,8 +113,8 @@ const { discount, formattedDiscount, selectedProducts, selectedCollections } =
         <FreeShippingForm
           client:visible
           defaultValues={{
-            id: discount.id,
-            code: discount.code,
+            id: effectiveId,
+            code: effectiveCode,
             minPurchaseAmount: discount.minPurchaseAmount,
             maxUsesPerOrder: discount.maxUsesPerOrder,
             maxUses: discount.maxUses,
