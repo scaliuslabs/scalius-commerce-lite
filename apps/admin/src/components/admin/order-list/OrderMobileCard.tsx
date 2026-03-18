@@ -5,6 +5,10 @@ import type { OrderListItem } from "@scalius/core/modules/orders";
 interface OrderShipment {
   id: string;
   orderId: string;
+  status?: unknown;
+  providerType?: unknown;
+  trackingId?: unknown;
+  lastChecked?: unknown;
   [key: string]: unknown;
 }
 import { Card, CardContent } from "../../ui/card";
@@ -40,7 +44,7 @@ interface OrderMobileCardProps {
   onPermanentDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
-  onShipmentStatusUpdated: (updatedShipment: Record<string, unknown>) => void;
+  onShipmentStatusUpdated: (updatedShipment: { orderId: string; [key: string]: unknown }) => void;
 }
 
 const formatDate = (date: Date) => {
@@ -214,13 +218,13 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <ShipmentStatusIndicator
                 shipment={{
                   id: shipment.id,
-                  status: shipment.status,
+                  status: shipment.status as string,
                   orderId: order.id,
                   lastChecked:
                     shipment.lastChecked instanceof Date
-                      ? shipment.lastChecked.toISOString()
+                      ? (shipment.lastChecked as Date).toISOString()
                       : typeof shipment.lastChecked === "string"
-                        ? shipment.lastChecked
+                        ? (shipment.lastChecked as string)
                         : undefined,
                 }}
                 onStatusUpdated={onShipmentStatusUpdated}

@@ -14,25 +14,11 @@ const sort = (searchParams.get("sort") || "updatedAt") as
   | "updatedAt";
 const order = (searchParams.get("order") || "desc") as "asc" | "desc";
 
-interface CategoryItem {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  imageUrl: string | null;
-  metaTitle: string | null;
-  metaDescription: string | null;
-  createdAt: Date | null;
-  updatedAt: Date | null;
-  deletedAt: Date | null;
-  productCount: number;
-}
-interface PaginationInfo { total: number; page: number; limit: number; totalPages: number; }
-interface CategoryStats { totalCategories: number; categoriesWithImages: number; totalProducts: number; }
+type LoaderResult = Awaited<ReturnType<typeof getCategoriesIndexData>>;
 
-let formattedCategories: CategoryItem[] = [];
-let data: { pagination: PaginationInfo } = { pagination: { total: 0, page, limit, totalPages: 0 } };
-let stats: CategoryStats | null = null;
+let formattedCategories: LoaderResult["categories"] = [];
+let pagination: LoaderResult["pagination"] = { total: 0, page, limit, totalPages: 0 };
+let stats: LoaderResult["stats"] | null = null;
 
 try {
   const result = await getCategoriesIndexData({
@@ -44,7 +30,7 @@ try {
     order,
   });
   formattedCategories = result.categories;
-  data = { pagination: result.pagination };
+  pagination = result.pagination;
   stats = result.stats;
 } catch (error) {
   console.error("Error fetching categories in SSR:", error);
@@ -57,10 +43,10 @@ try {
     client:idle
     categories={formattedCategories}
     pagination={{
-      total: data.pagination.total,
+      total: pagination.total,
       page,
       limit,
-      totalPages: data.pagination.totalPages,
+      totalPages: pagination.totalPages,
     }}
     initialSearchQuery={search}
     initialSort={{ field: sort, order }}
