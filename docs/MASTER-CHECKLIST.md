@@ -1,101 +1,114 @@
 # Master Checklist — Scalius Commerce
 
-Last updated: 2026-03-18 (end of session)
-Source: 47 README files written by 14 documentation agents reading every line of code.
+Last updated: 2026-03-18 (final update)
+Source: 47 README files written by 14 documentation agents, then updated after all fixes.
 
-**Session Progress:**
+**Session Completed:**
 - Phase 1: COMPLETE (24 bug fixes)
-- Phase 2: COMPLETE (international phone numbers)
-- Phase 3: COMPLETE (currency management)
-- Phase 4: Tracked for future sessions
+- Phase 2: COMPLETE (international phone numbers — libphonenumber-js + react-phone-number-input)
+- Phase 3: COMPLETE (currency management — currency.js + 160+ ISO 4217 currencies)
+- Phase 4: 8 quick fixes COMPLETE, ~20 feature items tracked for future
 
 ---
 
-## Phase 1: Critical Bug Fixes (Broken Functionality)
-
-These are things that are implemented but broken, or create data integrity issues.
+## Phase 1: Critical Bug Fixes — ALL COMPLETE
 
 ### P0 — Data Integrity / Security
 
-- [x] **FCM push notifications never called** — `sendOrderNotification()` is fully built but the queue consumer only calls `sendOrderNotificationEmail()`. Need to add FCM push call in queue consumer alongside email. (`packages/core/src/modules/notifications/`)
-- [x] **Admin order create doesn't deduct inventory** — Sets `inventoryAction: "deducted"` but never actually deducts stock. Orders created from admin dashboard don't reduce inventory. (`packages/core/src/modules/orders/orders.admin.ts`)
-- [x] **Password length mismatch** — Better Auth enforces 12 chars minimum, but API validation schema accepts 8. Customers could set passwords via API that Better Auth then rejects. (`packages/core/src/auth/auth.ts` vs API route schemas)
-- [x] **QR code TOTP secret leak** — 2FA QR codes generated via external `api.qrserver.com`, sending TOTP secrets over the wire to a third party. Must generate QR codes locally. (`apps/admin/src/components/admin/account-settings/`)
-- [x] **Shipping method update inverted uniqueness check** — Update handler checks if same ID exists (always true) instead of checking if a DIFFERENT record has the same name. (`apps/api/src/routes/admin/settings/shipping.ts`)
-- [x] **`restoreOrder()` doesn't re-reserve inventory** — Restoring a cancelled order marks it active but doesn't re-reserve the stock, leading to overselling. (`packages/core/src/modules/orders/orders.admin.ts`)
+- [x] FCM push notifications connected in queue consumer
+- [x] Admin order create now deducts inventory (reserve → deduct with rollback)
+- [x] Password validation aligned to 12 chars everywhere
+- [x] QR codes generated locally via `qrcode` package (no TOTP secret leak)
+- [x] Shipping method update uniqueness check fixed
+- [x] `restoreOrder()` now re-reserves inventory (fails if insufficient stock)
 
 ### P1 — Broken UI / Missing Endpoints
 
-- [x] **Widget trash view always empty** — `listWidgets()` service always filters `deletedAt IS NULL`. The admin widget list API has no `trashed` parameter support. Trash page shows nothing. (`packages/core/src/modules/widgets/widgets.service.ts`)
-- [x] **2 missing discount API endpoints** — UI calls `POST /admin/discounts/{id}/toggle-status` and `POST /discounts/usage` but neither exists. Status toggle silently fails; usage recording happens via queue instead. (`apps/api/src/routes/admin/discounts.ts`)
-- [x] **CollectionSelector search URL bug** — After initial load (correct `/api/v1/admin/collections`), search queries go to `/api/collections?search=...` (missing `/v1/admin` prefix). (`apps/admin/src/components/admin/discount/CollectionSelector.tsx`)
-- [x] **`page.widgets` dead code** — Storefront `Page` type has `widgets?: ApiWidget[]` and `[slug].astro` renders it, but API never returns widgets for pages. Dead rendering path. (`apps/storefront/src/pages/[slug].astro`)
-- [x] **Discount duplicate feature broken** — List row navigates to `?duplicate=true` but edit page never reads that parameter. (`apps/admin/src/components/admin/discount/`)
-- [x] **`ORDER_STATUSES` UI missing 3 states** — Admin order status dropdown is missing `returned`, `partially_refunded`, and `incomplete` from the 11 possible states. (`apps/admin/src/components/admin/order-list/`)
-- [x] **Product list flat discount display missing** — Only shows percentage discounts; flat amount discounts are invisible across admin list + storefront `hasDiscount` filter. (`packages/core/src/modules/products/`)
-- [x] **`getProductDetails` returns soft-deleted variants** — No filter on `deletedAt` when querying variants. Edit form shows deleted variants. (`packages/core/src/modules/products/products.admin.ts`)
+- [x] Widget trash view works (`?trashed=true` parameter support)
+- [x] Discount toggle-status endpoint added
+- [x] CollectionSelector search URL fixed (`/v1/admin` prefix)
+- [x] Dead `page.widgets` code removed from storefront
+- [x] Discount duplicate feature working (`?duplicate=true`)
+- [x] All 11 order states in UI (added returned, partially_refunded, incomplete, completed)
+- [x] Flat discount display in product list
+- [x] Soft-deleted variants filtered from product details
+- [x] Product additionalInfo/richContent loading fixed
 
-### P2 — Inconsistencies / Code Quality
+### P2 — Code Quality
 
-- [x] **Multiple routes use raw `db` import instead of `c.get("db")`** — Public pages, widgets, hero, meta-conversions, fraud-checker routes import `db` directly from `@scalius/database/client` instead of middleware-injected instance. (`apps/api/src/routes/pages.ts`, `widgets.ts`, `hero.ts`, etc.)
-- [x] **Dead marketing module** — `packages/core/src/modules/marketing/discounts.service.ts` duplicates discount list query but is never imported. `marketing/index.ts` re-exports from `../discounts`. Should be deleted.
-- [x] **Duplicate validation schemas** — Customer validation exists in both `customers.service.ts` and `customers.validation.ts`. (`packages/core/src/modules/customers/`)
-- [x] **`generateDiscountCode()` duplicated 3 times** — Identical function in AmountOffOrderForm, FreeShippingForm, and DiscountDetailsSection. Should be one shared utility.
-- [ ] **Duplicated SocialLinksSection** — Same component exists in both header-builder and footer-builder. Should be shared.
-- [ ] **`integrations.ts` duplicates email/Firebase routes from `system.ts`** — Two API route files serve the same settings. (`apps/api/src/routes/admin/settings/`)
-- [ ] **`new Date()` vs `sql'unixepoch()'` inconsistency** — Some mutations use JS Date objects, others use SQL unixepoch(). Causes timestamp format inconsistency in D1. (`packages/core/src/modules/collections/`, `orders/`)
-- [ ] **Admin invite fallback logs temp password to console** — Security concern in production. (`packages/core/src/auth/`)
-- [ ] **No session revocation on role/permission changes** — Stale permissions for up to 5 min (KV cache TTL). (`packages/core/src/auth/rbac/`)
-- [ ] **Soft delete doesn't write history record** — Customer soft-delete doesn't create a `"deleted"` history entry despite enum supporting it. (`packages/core/src/modules/customers/`)
-- [ ] **`adjustInventory()` doesn't use CAS** — Uses `version` column instead of `stockVersion`, no WHERE condition for concurrent safety. (`packages/core/src/modules/inventory/`)
-- [ ] **Form validation schema divergence** — Discount code min length is 1 in AmountOffProducts vs 3 in AmountOffOrder/FreeShipping. (`apps/admin/src/components/admin/discount/`)
+- [x] Raw `db` imports replaced with `c.get("db")` in pages, fraud-checker routes
+- [x] Dead marketing module deleted
+- [x] Duplicate customer validation schemas consolidated
+- [x] `generateDiscountCode()` extracted to shared utility
+- [x] Duplicate integrations.ts routes removed (canonical in system.ts)
+- [x] Customer soft-delete now writes history record
+- [x] `adjustInventory()` uses `stockVersion` with CAS + retry
+- [x] Checkout language edit form sync fixed (useEffect on editingLanguage)
 
----
+### P2 — Not Yet Fixed (Code Quality, Low Priority)
 
-## Phase 2: International Phone Numbers
-
-Replace Bangladesh-only phone handling with full international support.
-
-- [ ] **Install `libphonenumber-js`** in `packages/shared` (lightweight, tree-shakeable)
-- [ ] **Install `react-phone-number-input`** in `apps/admin` and `apps/storefront`
-- [ ] **Add "Allowed Countries" setting** — Merchant configures which countries are allowed in admin settings. Default: all countries.
-- [ ] **Update `packages/shared/src/customer-utils.ts`** — Replace hardcoded Bangladesh regex with `libphonenumber-js` validation. Always store E.164 format.
-- [ ] **Update admin CustomerForm** — Replace text input with `react-phone-number-input` component. Respect allowed countries setting.
-- [ ] **Update admin OrderForm** — Same phone input upgrade for order creation.
-- [ ] **Update storefront checkout** — Phone input with country selector, validates against allowed countries.
-- [ ] **Update storefront customer-auth** — OTP phone input uses international format.
-- [ ] **Update core customer service** — Normalize all phone numbers to E.164 on save.
-- [ ] **Fix phone format inconsistency** — Admin uses `01XXXXXXXXX`, storefront auth uses `+8801XXXXXXXXX`. Unify to E.164 everywhere.
-- [ ] **Migration consideration** — Existing phone numbers in DB may need normalization. Create a utility to bulk-normalize existing data.
-- [ ] **Update FTS5 search** — Phone search should work with or without country code prefix.
+- [ ] Duplicated SocialLinksSection between header/footer builders
+- [ ] `new Date()` vs `sql'unixepoch()'` timestamp inconsistency in collections/orders
+- [ ] Admin invite fallback logs temp password to console
+- [ ] No session revocation on role/permission changes (stale for KV cache TTL)
+- [ ] Discount form validation schema divergence (code min length 1 vs 3)
 
 ---
 
-## Phase 3: Currency Management
+## Phase 2: International Phone Numbers — ALL COMPLETE
 
-Allow merchant to choose any currency; all displays and calculations use it.
-
-- [ ] **Install `currency.js`** in `packages/shared` (handles precision, formatting)
-- [ ] **Add currency picker to admin settings** — Dropdown with all ISO 4217 currencies. Store selected currency code + symbol + decimal places in siteSettings.
-- [ ] **Update `packages/shared/src/currency.ts`** — Replace hardcoded `৳` default with dynamic currency from settings. Use `currency.js` for all formatting.
-- [ ] **Update `packages/shared/src/price-utils.ts`** — Use `currency.js` for `roundPrice`, `addPrices`, `subtractPrice`, `calculatePercentageDiscount` to avoid floating-point issues.
-- [ ] **Update admin price displays** — All `formatPrice()` calls use the merchant's selected currency.
-- [ ] **Update storefront price displays** — All product cards, detail pages, cart, checkout use correct currency.
-- [ ] **Update API price responses** — Include currency info in checkout config endpoint so storefront knows which currency to display.
-- [ ] **Validate currency code in settings** — Reject invalid ISO 4217 codes.
-- [ ] **Payment gateway currency alignment** — Ensure Stripe/SSLCommerz/Polar receive the correct currency code from settings (not hardcoded).
+- [x] `libphonenumber-js` installed in `packages/shared`
+- [x] `react-phone-number-input` installed in admin + storefront
+- [x] Allowed countries setting with include/exclude mode toggle
+- [x] `validateAndFormatPhone()` replaces all Bangladesh-only regex
+- [x] Admin CustomerForm uses PhoneInput with country filtering
+- [x] Admin OrderForm uses PhoneInput with country filtering
+- [x] Storefront checkout PhoneField with `client:visible` hydration
+- [x] Storefront AuthModal PhoneInput with country filtering
+- [x] All phone storage in E.164 format
+- [x] Phone format inconsistency fixed (admin + storefront unified)
+- [x] Migration 0026: normalize existing phone data to E.164
+- [x] Checkout config includes `allowedCountries` + `allowedCountriesMode`
+- [x] Bangladesh-specific placeholders removed from defaults
+- [x] `customerPhoneHelp` editable in checkout language admin
 
 ---
 
-## Phase 4: Future Improvements (Not Bugs)
+## Phase 3: Currency Management — ALL COMPLETE
 
-Nice-to-haves documented by the audit. NOT blocking — track for future sessions.
+- [x] `currency.js` installed in `packages/shared`
+- [x] Searchable currency picker with 160+ ISO 4217 currencies
+- [x] `formatPrice()` uses `currency.js` with ISO 4217 decimal places
+- [x] `price-utils.ts` uses `currency.js` for all arithmetic
+- [x] Admin `useCurrency` hook delegates to shared `formatPrice()`
+- [x] Storefront pricing engine uses shared `formatPrice()`
+- [x] Checkout `currencyFmt()` fixed (was showing integers only)
+- [x] Payment gateways use `getDecimalPlaces()` for smallest-unit conversion
+- [x] Checkout config includes `decimalPlaces`
+- [x] Hardcoded ৳ removed from discount routes
+- [x] Layout.astro injects `__CURRENCY_DECIMAL_PLACES__`
+
+---
+
+## Phase 4: Quick Fixes — COMPLETE
+
+- [x] `getPageById` filters soft-deleted pages
+- [x] `permanentlyDeleteCategory()` checks for products before deleting
+- [x] Discount percentage capped at 0-100
+- [x] Collection preview link removed (no storefront page)
+- [x] Pathao import decrypts credentials before API call
+- [x] Bulk permanent delete respects FK ordering (items before orders)
+- [x] Admin page slug prefix shows `/` not `/pages/`
+- [x] COD payment status auto-syncs to "paid" on DELIVERED/COMPLETED
+
+---
+
+## Phase 4: Future Improvements (Tracked for Future Sessions)
 
 ### Delivery
-- [ ] `ShipmentTracker.notifyStatusChange()` is placeholder (no webhook to admin)
+- [ ] `ShipmentTracker.notifyStatusChange()` is placeholder
 - [ ] `shipmentItems`, `shipmentAmount`, `isFinalShipment`, `trackingUrl`, `courierName` never populated
 - [ ] Credential encryption only works if `CREDENTIAL_ENCRYPTION_KEY` is set
-- [x] Pathao import doesn't decrypt credentials before use
 
 ### Media
 - [ ] No `alt` field on media table
@@ -114,27 +127,23 @@ Nice-to-haves documented by the audit. NOT blocking — track for future session
 ### Categories
 - [ ] No category hierarchy (flat only)
 - [ ] No drag-and-drop reorder
-- [ ] `permanentlyDeleteCategory()` has no product guard
 
 ### Collections
 - [ ] Reorder is sequential (not batched)
 - [ ] No FTS5 search (uses LIKE)
 - [ ] No product count on collection list
+- [ ] No SSR data loading
 
 ### Pages
 - [ ] No version history (unlike widgets which now have it)
-- [ ] `getPageById` includes soft-deleted pages
 
 ### Payments
 - [ ] Polar webhook `order.refunded` not processed
 - [ ] No capture endpoint exposed
 - [ ] Gateway factory pattern not used by routes
-- [ ] Amount unit inconsistency between gateways (cents vs whole)
 
 ### Orders
 - [ ] Notification types limited (only shipped/delivered emails)
-- [x] No payment status sync on order status change
-- [x] Bulk permanent delete ordering issue
 
 ### Widgets
 - [ ] `displayTarget` enum only has "homepage" (no other targets)
@@ -142,25 +151,19 @@ Nice-to-haves documented by the audit. NOT blocking — track for future session
 - [ ] No server-side pagination
 
 ### Discounts
-- [ ] Combination flags (`combineWith*`) are cosmetic only (one discount per order)
+- [ ] Combination flags (`combineWith*`) are cosmetic only
 - [ ] `applicationType` "buy" never written (dead BOGO prep)
 - [ ] `customerSegment` field unused
-- [ ] No percentage cap validation
 
 ### Other
 - [ ] SMS transport stub (not implemented)
 - [ ] `clearAllPermissionCache()` only clears current Worker isolate
 - [ ] Abandoned checkout save requires no auth but cleanup requires auth
-- [x] Admin form slug prefix shows `/pages/` but storefront serves `/{slug}`
-- [ ] Collections-list has no SSR data loading
-- [ ] Preview link in collections points to homepage
 
 ---
 
 ## By Design (Not Bugs)
 
-Confirmed by product owner — these are intentional:
-
-- **Fraud checker not in checkout flow** — Manual merchant tool on order list page for ship/no-ship decisions
-- **2FA not enforced** — Always optional, but must work flawlessly when merchant enables it
-- **Single discount per order** — Intentional. Combination flags stored for future use but not enforced yet
+- **Fraud checker not in checkout flow** — Manual merchant tool on order list page
+- **2FA not enforced** — Always optional, works flawlessly when enabled
+- **Single discount per order** — Intentional, combination flags for future use
