@@ -2,7 +2,7 @@
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
 import type { Database } from "@scalius/database/client";
-import { subtractPrice, addPrices } from "@scalius/shared/price-utils";
+import { subtractPrice, addPrices, roundPrice } from "@scalius/shared/price-utils";
 import {
     customers,
     products,
@@ -232,7 +232,7 @@ export async function createStorefrontOrder(
         serverItemTotal += unitPrice * item.quantity;
     }
 
-    serverItemTotal = Math.round(serverItemTotal * 100) / 100;
+    serverItemTotal = roundPrice(serverItemTotal);
 
     // Determine exact shipping charge
     let verifiedShippingCharge = shippingMethod ? (shippingMethod.fee as number) : (data.shippingCharge || 0);

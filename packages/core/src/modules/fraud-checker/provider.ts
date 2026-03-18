@@ -1,5 +1,6 @@
 // src/modules/fraud-checker/provider.ts
 // Provider interface and registry for fraud checker integrations.
+import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 
 /**
  * Normalized result from a fraud check lookup.
@@ -55,7 +56,7 @@ export class DefaultFraudCheckProvider implements FraudCheckProvider {
 
   async lookup(phone: string, apiUrl: string, apiKey: string): Promise<FraudCheckResult> {
     const formData = new FormData();
-    formData.append("phone", phone);
+    formData.append("phone", formatPhoneForProvider(phone));
 
     const response = await fetch(apiUrl, {
       method: "POST",
