@@ -183,6 +183,13 @@
       "when": 1773964800000,
       "tag": "0025_add-query-indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1774051200000,
+      "tag": "0026_normalize_phone_e164",
+      "breakpoints": true
     }
   ]
 }
