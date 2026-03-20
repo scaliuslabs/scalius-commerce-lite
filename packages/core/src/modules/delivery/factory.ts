@@ -1,6 +1,7 @@
 import { PathaoProvider } from "./providers/pathao";
 import { SteadfastProvider } from "./providers/steadfast";
 import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
+import type { Database } from "@scalius/database/client";
 import type { DeliveryProviderRecord, DeliveryProviderType } from "@scalius/database/schema";
 import type { DeliveryProviderInterface } from "./provider";
 import type {
@@ -19,6 +20,7 @@ import type {
 export async function createProvider(
   provider: DeliveryProviderRecord,
   encryptionKey?: string,
+  db?: Database,
 ): Promise<DeliveryProviderInterface> {
   try {
     // Parse JSON strings from database (decrypt if needed)
@@ -54,9 +56,11 @@ export async function createProvider(
 
     switch (provider.type as DeliveryProviderType) {
       case "pathao":
+        if (!db) throw new Error("PathaoProvider requires a database instance");
         return new PathaoProvider(
           credentials as PathaoCredentials,
           config as PathaoConfig,
+          db,
         );
       case "steadfast":
         return new SteadfastProvider(

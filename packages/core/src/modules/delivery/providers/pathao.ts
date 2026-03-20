@@ -11,7 +11,7 @@ import type {
 } from "../types";
 import type { DeliveryProviderInterface } from "../provider";
 import { mapProviderStatus } from "../status-mapper";
-import { db } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import { getExternalLocationIds } from "../locations";
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 
@@ -21,12 +21,14 @@ import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 export class PathaoProvider implements DeliveryProviderInterface {
   private credentials: PathaoCredentials;
   private config: PathaoConfig;
+  private db: Database;
   private accessToken: string | null = null;
   private tokenExpiry: Date | null = null;
 
-  constructor(credentials: PathaoCredentials, config: PathaoConfig) {
+  constructor(credentials: PathaoCredentials, config: PathaoConfig, db: Database) {
     this.credentials = credentials;
     this.config = config;
+    this.db = db;
   }
 
   getName(): string {
@@ -181,7 +183,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       }
 
       const externalLocationIds = await getExternalLocationIds(
-        db,
+        this.db,
         {
           city: order.city,
           zone: order.zone,

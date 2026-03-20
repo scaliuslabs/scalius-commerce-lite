@@ -87,7 +87,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
         throw new Error(extractApiError(errorJson, "Failed to refresh shipment status"));
       }
 
-      const updatedShipment = await response.json();
+      const updatedShipment = unwrapEnvelope(await response.json());
 
       // Add the lastChecked timestamp to the updated shipment
       updatedShipment.lastChecked = now;
