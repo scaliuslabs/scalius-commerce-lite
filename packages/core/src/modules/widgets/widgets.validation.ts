@@ -49,10 +49,7 @@ export const createWidgetSchema = widgetBaseSchema.refine(
 );
 
 /** Schema for updating an existing widget (PUT /api/widgets/:id) */
-export const updateWidgetSchema = widgetBaseSchema.partial().refine(
-    validateCollectionRef,
-    collectionRefMessage,
-);
+export const updateWidgetSchema = widgetBaseSchema.partial();
 
 export type CreateWidgetInput = z.infer<typeof createWidgetSchema>;
 export type UpdateWidgetInput = z.infer<typeof updateWidgetSchema>;

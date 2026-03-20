@@ -4,9 +4,10 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
-import { ValidationError } from "../../utils/api-error";
+import { ValidationError, NotFoundError } from "../../utils/api-error";
 import {
     listCategories,
+    getCategoryById,
     createCategory,
     updateCategory,
     deleteCategory,
@@ -95,6 +96,33 @@ app.openapi(listRoute, async (c) => {
     });
     return ok(c, result);
 });
+
+// ── Get Category by ID ──
+
+const getByIdRoute = createRoute({
+    method: "get",
+    path: "/{id}",
+    tags: ["Admin - Categories"],
+    summary: "Get a single category by ID",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Category details",
+            content: { "application/json": { schema: successEnvelope(categorySummarySchema) } },
+        },
+        ...errorResponses,
+    }
+});
+
+app.openapi(getByIdRoute, (async (c: any) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const category = await getCategoryById(db, id);
+    if (!category) throw new NotFoundError("Category not found");
+    return ok(c, category);
+}) as any);
 
 // ── Create Category ──
 
