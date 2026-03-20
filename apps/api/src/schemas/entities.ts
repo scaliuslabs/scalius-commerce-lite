@@ -2,7 +2,7 @@
 // Zod schemas for domain entities used in API responses.
 // Derived from the actual shapes returned by core service functions.
 //
-// All entity schemas use .passthrough() so they don't break if services add fields.
+// Entity schemas define strict shapes for OpenAPI documentation and SDK type generation.
 
 import { z } from "@hono/zod-openapi";
 
@@ -31,7 +31,6 @@ export const productSummarySchema = z
     primaryImage: z.string().nullable(),
     sku: z.string().optional(),
   })
-  .passthrough();
 
 /** Product image. */
 export const productImageSchema = z
@@ -44,7 +43,6 @@ export const productImageSchema = z
     sortOrder: z.number(),
     createdAt: z.string().or(z.date()),
   })
-  .passthrough();
 
 /** Product variant — returned by variant CRUD endpoints.
  * Uses z.any() for timestamps since Drizzle returns Date objects
@@ -89,7 +87,6 @@ export const productRichContentSchema = z
     content: z.string(),
     sortOrder: z.number(),
   })
-  .passthrough();
 
 /** Product attribute value. */
 export const productAttributeValueSchema = z
@@ -97,7 +94,6 @@ export const productAttributeValueSchema = z
     attributeId: z.string(),
     value: z.string(),
   })
-  .passthrough();
 
 /** Product detail — returned by getProductDetails (admin). */
 export const productDetailSchema = z
@@ -122,7 +118,6 @@ export const productDetailSchema = z
     additionalInfo: z.array(productRichContentSchema),
     attributes: z.array(productAttributeValueSchema),
   })
-  .passthrough();
 
 /** Product stats — returned by getProductStats (admin). */
 export const productStatsSchema = z
@@ -132,7 +127,6 @@ export const productStatsSchema = z
     productsWithImages: z.number(),
     categoriesCount: z.number(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Orders
@@ -153,7 +147,6 @@ export const orderShipmentSummarySchema = z
     updatedAt: z.string().or(z.date()),
     createdAt: z.string().or(z.date()),
   })
-  .passthrough();
 
 /** Order summary — returned by listOrders (admin). */
 export const orderSummarySchema = z
@@ -182,7 +175,6 @@ export const orderSummarySchema = z
     totalQuantity: z.number(),
     latestShipment: orderShipmentSummarySchema.nullable(),
   })
-  .passthrough();
 
 /** Order item — returned inside order detail. */
 export const orderItemSchema = z
@@ -197,7 +189,6 @@ export const orderItemSchema = z
     variantSize: z.string().nullable(),
     variantColor: z.string().nullable(),
   })
-  .passthrough();
 
 /** Order detail — returned by getOrderDetails (admin). */
 export const orderDetailSchema = z
@@ -231,7 +222,6 @@ export const orderDetailSchema = z
     items: z.array(orderItemSchema),
     latestShipment: orderShipmentSummarySchema.nullable(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Categories
@@ -252,7 +242,6 @@ export const categorySummarySchema = z
     deletedAt: z.string().nullable(),
     productCount: z.number(),
   })
-  .passthrough();
 
 /** Category detail — returned by getCategoryById (admin). */
 export const categoryDetailSchema = z
@@ -267,7 +256,6 @@ export const categoryDetailSchema = z
     createdAt: z.number(),
     updatedAt: z.number(),
   })
-  .passthrough();
 
 /** Category stats — returned by getCategoryStats (admin). */
 export const categoryStatsSchema = z
@@ -276,7 +264,6 @@ export const categoryStatsSchema = z
     categoriesWithImages: z.number(),
     totalProducts: z.number(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Customers
@@ -302,7 +289,6 @@ export const customerSummarySchema = z
     createdAt: z.string(),
     updatedAt: z.string(),
   })
-  .passthrough();
 
 /** Customer detail — returned by getCustomerById (admin). Full DB row. */
 export const customerDetailSchema = z
@@ -321,7 +307,6 @@ export const customerDetailSchema = z
     totalOrders: z.number(),
     totalSpent: z.number(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Collections
@@ -340,7 +325,6 @@ export const collectionSchema = z
     updatedAt: z.any(),
     deletedAt: z.any().nullable(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Discounts
@@ -367,7 +351,6 @@ export const discountSchema = z
     updatedAt: z.any(),
     deletedAt: z.any().nullable(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Pages
@@ -391,7 +374,6 @@ export const pageSchema = z
     updatedAt: z.any(),
     deletedAt: z.any().nullable(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Widgets
@@ -414,7 +396,6 @@ export const widgetSchema = z
     updatedAt: z.any(),
     deletedAt: z.any().nullable(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Attributes
@@ -451,7 +432,6 @@ export const mediaSchema = z
     updatedAt: z.any(),
     deletedAt: z.any().nullable(),
   })
-  .passthrough();
 
 /** Media folder. */
 export const mediaFolderSchema = z
@@ -463,7 +443,6 @@ export const mediaFolderSchema = z
     updatedAt: z.any(),
     deletedAt: z.any().nullable(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Delivery
@@ -477,7 +456,6 @@ export const deliveryProviderSchema = z
     type: z.string(),
     isActive: z.boolean(),
   })
-  .passthrough();
 
 /** Delivery shipment. */
 export const deliveryShipmentSchema = z
@@ -491,7 +469,6 @@ export const deliveryShipmentSchema = z
     externalId: z.string().nullable(),
     trackingId: z.string().nullable(),
   })
-  .passthrough();
 
 /** Delivery location (city/zone/area). */
 export const deliveryLocationSchema = z
@@ -502,7 +479,6 @@ export const deliveryLocationSchema = z
     parentId: z.string().nullable(),
     isActive: z.boolean(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Settings
@@ -516,14 +492,12 @@ export const settingSchema = z
     key: z.string(),
     value: z.string().nullable(),
   })
-  .passthrough();
 
 /** Site settings singleton row. */
 export const siteSettingsSchema = z
   .object({
     id: z.string(),
   })
-  .passthrough();
 
 // ─────────────────────────────────────────
 // Navigation
@@ -538,4 +512,3 @@ export const navigationItemSchema = z
     type: z.string(),
     sortOrder: z.number(),
   })
-  .passthrough();

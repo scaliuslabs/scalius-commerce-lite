@@ -1195,7 +1195,6 @@ export type GetApiV1PagesResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | boolean | number | undefined;
             }>;
             pagination: {
                 page: number;
@@ -1278,7 +1277,6 @@ export type GetApiV1PagesSlugBySlugResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | boolean | number | undefined;
             };
         };
     };
@@ -1344,7 +1342,6 @@ export type GetApiV1PagesByIdResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | boolean | number | undefined;
             };
         };
     };
@@ -1493,7 +1490,6 @@ export type GetApiV1WidgetsByIdResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | boolean | (string | null) | number | undefined;
             };
         };
     };
@@ -1545,7 +1541,6 @@ export type GetApiV1WidgetsActiveHomepageResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | boolean | (string | null) | number | undefined;
             }>;
         };
     };
@@ -3296,7 +3291,6 @@ export type GetApiV1LocationsCitiesResponses = {
             type: string;
             parentId: string | null;
             isActive: boolean;
-            [key: string]: unknown | string | (string | null) | boolean;
         }>;
     };
 };
@@ -3354,7 +3348,6 @@ export type GetApiV1LocationsZonesResponses = {
             type: string;
             parentId: string | null;
             isActive: boolean;
-            [key: string]: unknown | string | (string | null) | boolean;
         }>;
     };
 };
@@ -3412,7 +3405,6 @@ export type GetApiV1LocationsAreasResponses = {
             type: string;
             parentId: string | null;
             isActive: boolean;
-            [key: string]: unknown | string | (string | null) | boolean;
         }>;
     };
 };
@@ -4776,7 +4768,6 @@ export type GetApiV1AdminCategoriesResponses = {
                 updatedAt: string | null;
                 deletedAt: string | null;
                 productCount: number;
-                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | number;
             }>;
             pagination: {
                 page: number;
@@ -5574,7 +5565,6 @@ export type GetApiV1AdminCollectionsResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | ('manual' | 'dynamic') | number | boolean | undefined;
             }>;
             pagination: {
                 page: number;
@@ -5683,7 +5673,6 @@ export type PostApiV1AdminCollectionsResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | ('manual' | 'dynamic') | number | boolean | undefined;
         };
     };
 };
@@ -6291,7 +6280,6 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | ('manual' | 'dynamic') | number | boolean | undefined;
         };
     };
 };
@@ -6395,7 +6383,6 @@ export type PutApiV1AdminCollectionsByIdResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | ('manual' | 'dynamic') | number | boolean | undefined;
         };
     };
 };
@@ -6596,7 +6583,6 @@ export type GetApiV1AdminCustomersResponses = {
                 lastOrderAt: string | null;
                 createdAt: string;
                 updatedAt: string;
-                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | number | (string | null);
             }>;
             pagination: {
                 page: number;
@@ -6705,7 +6691,6 @@ export type PostApiV1AdminCustomersResponses = {
             areaName: string | null;
             totalOrders: number;
             totalSpent: number;
-            [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | number;
         };
     };
 };
@@ -6838,7 +6823,6 @@ export type GetApiV1AdminCustomersByIdResponses = {
             areaName: string | null;
             totalOrders: number;
             totalSpent: number;
-            [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | number;
         };
     };
 };
@@ -7062,7 +7046,6 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 areaName: string | null;
                 totalOrders: number;
                 totalSpent: number;
-                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | number;
             };
             history: Array<{
                 id: string;
@@ -7207,7 +7190,6 @@ export type GetApiV1AdminPagesResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | boolean | number | undefined;
             }>;
             pagination: {
                 page: number;
@@ -7878,7 +7860,6 @@ export type GetApiV1AdminPagesByIdResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | (string | null) | (string | null) | boolean | number | undefined;
         };
     };
 };
@@ -8263,7 +8244,6 @@ export type PostApiV1AdminWidgetsResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | (string | null) | (string | null) | boolean | (string | null) | number | undefined;
         };
     };
 };
@@ -8750,7 +8730,6 @@ export type GetApiV1AdminWidgetsByIdResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | (string | null) | (string | null) | boolean | (string | null) | number | undefined;
         };
     };
 };
@@ -8856,7 +8835,6 @@ export type PutApiV1AdminWidgetsByIdResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | (string | null) | (string | null) | boolean | (string | null) | number | undefined;
         };
     };
 };
@@ -9108,7 +9086,6 @@ export type PatchApiV1AdminWidgetsByIdToggleStatusResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | (string | null) | (string | null) | boolean | (string | null) | number | undefined;
         };
     };
 };
@@ -9576,7 +9553,6 @@ export type GetApiV1AdminDiscountsResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | number | (number | null) | (number | null) | (number | null) | (number | null) | boolean | (string | null) | undefined;
             }>;
             pagination: {
                 page: number;
@@ -9700,7 +9676,6 @@ export type PostApiV1AdminDiscountsResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | number | (number | null) | (number | null) | (number | null) | (number | null) | boolean | (string | null) | undefined;
         };
     };
 };
@@ -9855,7 +9830,6 @@ export type GetApiV1AdminDiscountsByIdResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | number | (number | null) | (number | null) | (number | null) | (number | null) | boolean | (string | null) | undefined;
         };
     };
 };
@@ -9975,7 +9949,6 @@ export type PutApiV1AdminDiscountsByIdResponses = {
             createdAt?: unknown;
             updatedAt?: unknown;
             deletedAt?: unknown;
-            [key: string]: unknown | string | number | (number | null) | (number | null) | (number | null) | (number | null) | boolean | (string | null) | undefined;
         };
     };
 };
@@ -10270,7 +10243,6 @@ export type GetApiV1AdminMediaResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | number | (string | null) | undefined;
             }>;
             pagination: {
                 page: number;
@@ -10785,7 +10757,6 @@ export type GetApiV1AdminMediaFoldersResponses = {
                 createdAt?: unknown;
                 updatedAt?: unknown;
                 deletedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | undefined;
             }>;
         };
     };
@@ -12064,7 +12035,6 @@ export type GetApiV1AdminShipmentsByIdResponses = {
             rawStatus: string | null;
             externalId: string | null;
             trackingId: string | null;
-            [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null);
         };
     };
 };
@@ -19199,22 +19169,7 @@ export type GetApiV1AdminOrdersResponses = {
                     lastChecked: string | unknown;
                     updatedAt: string;
                     createdAt: string;
-                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | unknown) | unknown;
                 } | null;
-                [key: string]: unknown | string | (string | null) | (string | null) | number | (string | null) | (string | null) | (string | null) | unknown | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | ({
-                    id: string;
-                    providerId: string | null;
-                    providerType: string | null;
-                    providerName: string | null;
-                    status: string;
-                    rawStatus: string | null;
-                    externalId: string | null;
-                    trackingId: string | null;
-                    lastChecked: string | unknown;
-                    updatedAt: unknown;
-                    createdAt: unknown;
-                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | unknown) | unknown;
-                } | null);
             }>;
             pagination: {
                 page: number;
@@ -19408,7 +19363,6 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 productImage: string | null;
                 variantSize: string | null;
                 variantColor: string | null;
-                [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | null) | (string | null);
             }>;
             latestShipment: {
                 id: string;
@@ -19422,33 +19376,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 lastChecked: string | unknown;
                 updatedAt: string;
                 createdAt: string;
-                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | unknown) | unknown;
             } | null;
-            [key: string]: unknown | string | (string | null) | (string | null) | number | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (number | null) | (number | null) | unknown | (string | unknown) | Array<{
-                id: string;
-                productId: string;
-                variantId: string | null;
-                quantity: number;
-                price: number;
-                productName: string | null;
-                productImage: string | null;
-                variantSize: string | null;
-                variantColor: string | null;
-                [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | null) | (string | null);
-            }> | ({
-                id: string;
-                providerId: string | null;
-                providerType: string | null;
-                providerName: string | null;
-                status: string;
-                rawStatus: string | null;
-                externalId: string | null;
-                trackingId: string | null;
-                lastChecked: string | unknown;
-                updatedAt: unknown;
-                createdAt: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | unknown) | unknown;
-            } | null);
         };
     };
 };
@@ -19626,7 +19554,6 @@ export type GetApiV1AdminOrdersByIdFulfillResponses = {
                 rawStatus: string | null;
                 externalId: string | null;
                 trackingId: string | null;
-                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null);
             }>;
         };
     };
@@ -19718,7 +19645,6 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
             productImage: string | null;
             variantSize: string | null;
             variantColor: string | null;
-            [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | null) | (string | null);
         }>;
     };
 };
@@ -19933,7 +19859,6 @@ export type GetApiV1AdminOrdersByIdShipmentsByShipmentIdResponses = {
             rawStatus: string | null;
             externalId: string | null;
             trackingId: string | null;
-            [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null);
         };
     };
 };
@@ -19981,7 +19906,6 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusResponses = {
             rawStatus: string | null;
             externalId: string | null;
             trackingId: string | null;
-            [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null);
         };
     };
 };
@@ -20347,7 +20271,6 @@ export type GetApiV1AdminProductsStatsResponses = {
             activeProducts: number;
             productsWithImages: number;
             categoriesCount: number;
-            [key: string]: unknown | number;
         };
     };
 };
@@ -20539,9 +20462,6 @@ export type GetApiV1AdminProductsResponses = {
                 imageCount: number;
                 primaryImage: string | null;
                 sku?: string;
-                [key: string]: unknown | string | number | (string | null) | boolean | unknown | {
-                    name: string;
-                } | (string | null) | undefined;
             }>;
             pagination: {
                 page: number;
@@ -20910,70 +20830,16 @@ export type GetApiV1AdminProductsByIdResponses = {
                 isPrimary: boolean;
                 sortOrder: number;
                 createdAt: string;
-                [key: string]: unknown | string | (string | null) | boolean | number | unknown;
             }>;
             additionalInfo: Array<{
                 id: string;
                 title: string;
                 content: string;
                 sortOrder: number;
-                [key: string]: unknown | string | number;
             }>;
             attributes: Array<{
                 attributeId: string;
                 value: string;
-                [key: string]: unknown | string;
-            }>;
-            [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | null) | boolean | (number | null) | unknown | (string | unknown) | ({
-                name: string | null;
-            } | null) | Array<{
-                id: string;
-                productId: string;
-                size: string | null;
-                color: string | null;
-                weight: number | null;
-                sku: string;
-                price: number;
-                stock: number;
-                reservedStock: number;
-                preorderStock?: number;
-                lowStockThreshold?: number | null;
-                allowPreorder?: boolean;
-                preorderDate?: unknown;
-                preorderMessage?: string | null;
-                allowBackorder?: boolean;
-                backorderLimit?: number;
-                discountPercentage?: number | null;
-                discountType?: string | null;
-                discountAmount?: number | null;
-                barcode?: string | null;
-                barcodeType?: string | null;
-                colorSortOrder?: number | null;
-                sizeSortOrder?: number | null;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
-                stockVersion?: number;
-                version?: number;
-            }> | Array<{
-                id: string;
-                productId: string;
-                url: string;
-                alt: string | null;
-                isPrimary: boolean;
-                sortOrder: number;
-                createdAt: unknown;
-                [key: string]: unknown | string | (string | null) | boolean | number | unknown;
-            }> | Array<{
-                id: string;
-                title: string;
-                content: string;
-                sortOrder: number;
-                [key: string]: unknown | string | number;
-            }> | Array<{
-                attributeId: string;
-                value: string;
-                [key: string]: unknown | string;
             }>;
         };
     };
