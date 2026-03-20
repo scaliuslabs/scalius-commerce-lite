@@ -71,7 +71,7 @@ packages/
 - **API routes use OpenAPIHono**: All routes in `apps/api/src/routes/` use `createRoute()` from `@hono/zod-openapi`. OpenAPI spec is auto-generated at `/api/v1/openapi.json`.
 - **Standardized API errors**: Use `ApiError` classes from `apps/api/src/utils/api-error.ts` (ValidationError, NotFoundError, etc.)
 - **Standardized API responses**: Use helpers from `apps/api/src/utils/api-response.ts` (ok, created, noContent)
-- **Response envelope contract**: ALL success responses return `{ success: true, data: T }`. The `T` passed to `ok(c, T)` must be the FINAL payload — never include redundant `success: true` or `data:` wrapping inside `T`. Storefront consumers read `json.data` to get `T`. The admin proxy unwraps this to `{ success: true, ...T }` for backward compat (only works when `T` is an object, not an array).
+- **Response envelope contract**: ALL success responses return `{ success: true, data: T }`. The `T` passed to `ok(c, T)` must be the FINAL payload — never include redundant `success: true` or `data:` wrapping inside `T`. All consumers (admin, storefront) read `json.data` to get `T`. The admin proxy passes responses through unchanged.
 - **202 Accepted responses**: Must ALSO include `success: true` at top level (storefront checks it). Use `c.json({ success: true, data: {...} }, 202)` — not `ok()` (which forces 200).
 - **Storefront proxy endpoints** (`apps/storefront/src/pages/api/checkout/*.ts`): Must unwrap `.data` before returning to browser — the checkout page reads top-level fields.
 - **Never use `import.meta.env` for secrets**: Secrets (`API_TOKEN`, `JWT_SECRET`, `PURGE_TOKEN`) come ONLY from Cloudflare runtime (`env.*` via `wrangler secret put`). Build-time `import.meta.env` bakes `.dev.vars` values into production bundles.
@@ -216,19 +216,19 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 - **Customers**: phone normalization (E.164 format), OTP logging removed, stale discount applicability cache removed
 - **API Standardization**: ALL routes use `ok()`/`created()`/`ApiError` (242 conversions), `CACHE_TTLS` constants, `paginated()` removed
 - **Schema**: timestamp defaults standardized (`UNIX_NOW` constant), 8 FK indexes added, singleton constraints on `siteSettings`/`metaConversionsSettings`, collections enum `"manual"`/`"dynamic"`, `permissions.updatedAt` added
-- **Admin Proxy**: unwraps `{ success, data: T }` → `{ success, ...T }` for admin components, flattens error objects to strings
+- **Admin Proxy**: passes through API responses unchanged (envelope rewriting removed — all consumers use `unwrapEnvelope()` or `extractApiError()` from `api-helpers.ts`)
 - **Database**: 7 migrations total (0019-0024, 0028)
 
 ## Known Backlog
 
-- **SDK is hollow**: All 24 type exports in `packages/api-client` are `any`. Methods file is empty, client is a no-op. `openapi.json` no longer exists. Live API has 328+ endpoints. Unified SDK work is next priority.
-- **Major version upgrades pending**: TipTap 2->3, Firebase 11->12, Recharts 2->3, react-day-picker 8->9, @hookform/resolvers 3->5
-- **ESLint not configured**: `.prettierrc.mjs` exists for formatting but no ESLint setup yet.
+- **Token blacklist fails open**: When KV is unavailable, revoked JWT tokens are accepted instead of rejected.
+- **`publishedAt` field unused**: Pages store `publishedAt` but it's never used for scheduled publishing.
+- **Dual provider systems**: Universal provider registry exists (email + payment migrated) but delivery and SMS have type definitions with zero registered implementations in the new system. Legacy interfaces still in use.
 - **In-memory state**: Rate limiter and layout cache use in-memory Maps (reset on Worker isolate restart). Acceptable for single-tenant but needs KV migration for scale.
 
 ## Known Limitations / TODO
 
-- **Scanner app**: needs rebuild as standalone `/scanner` route with QR-token auth (backend complete, frontend removed)
+- **Scanner app**: standalone `/scanner` route exists with QR-token auth — needs testing and polish
 - **Type safety**: ~27 `any` type usages remain across the admin app (mostly Cloudflare env probing and window globals)
 - **Test coverage**: zero test coverage (private test suite planned, gitignored)
 - **Widget history**: Admin UI has history/restore/delete buttons but API endpoints don't exist (GET/POST/DELETE `/admin/widgets/{id}/history/*`)

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Save, CheckCircle2, ExternalLink, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -80,7 +80,7 @@ export default function EmailSettingsForm() {
         fetchSettings();
       } else {
         const err = await res.json();
-        toast.error(err.message || "Failed to save email settings");
+        toast.error(extractApiError(err, "Failed to save email settings"));
       }
     } catch {
       toast.error("An error occurred while saving");

@@ -7,6 +7,7 @@ import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { Loader2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
+import { extractApiError } from "@/lib/api-helpers";
 
 import { BrandingSection } from "./BrandingSection";
 import { TopBarSection } from "./TopBarSection";
@@ -107,9 +108,9 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
         });
 
         if (!response.ok) {
-          const error = await response.json();
+          const errorBody = await response.json();
           throw new Error(
-            error.details || "Failed to save header configuration",
+            extractApiError(errorBody, "Failed to save header configuration"),
           );
         }
       }

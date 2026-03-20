@@ -7,6 +7,7 @@ import { ValidationError } from "../../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 import {
     upsertSetting,
+    upsertEncryptedSetting,
     getActivePaymentMethods,
     getStripeSettings,
     getSSLCommerzSettings,
@@ -19,6 +20,12 @@ import {
 
 const app = new OpenAPIHono();
 const MASKED = "••••••••••••";
+
+/** Get encryption key — prefers CREDENTIAL_ENCRYPTION_KEY, falls back to JWT_SECRET */
+function getEncryptionKey(env: Record<string, unknown>): string | undefined {
+    return (env.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
+        ?? (env.JWT_SECRET as string | undefined);
+}
 
 // ─────────────────────────────────────────
 // VALIDATION SCHEMAS
@@ -81,11 +88,12 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
     try {
         const db = c.get("db");
         const kv = getKv();
-        const config = await getActivePaymentMethods(db, kv);
+        const encKey = getEncryptionKey(c.env as Record<string, unknown>);
+        const config = await getActivePaymentMethods(db, kv, encKey);
 
-        const stripeSettings = await getStripeSettings(db);
-        const sslSettings = await getSSLCommerzSettings(db);
-        const polarSettings = await getPolarSettings(db);
+        const stripeSettings = await getStripeSettings(db, undefined, encKey);
+        const sslSettings = await getSSLCommerzSettings(db, undefined, encKey);
+        const polarSettings = await getPolarSettings(db, undefined, encKey);
 
         return ok(c, {
             ...config,
@@ -187,11 +195,12 @@ app.openapi(saveStripeRoute, async (c) => {
     try {
         const db = c.get("db");
         const body = c.req.valid("json");
+        const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const ops: Promise<void>[] = [];
 
-        if (body.secretKey && body.secretKey !== MASKED && body.secretKey.trim()) ops.push(upsertSetting(db, "stripe", "secret_key", body.secretKey.trim()));
+        if (body.secretKey && body.secretKey !== MASKED && body.secretKey.trim()) ops.push(upsertEncryptedSetting(db, "stripe", "secret_key", body.secretKey.trim(), encKey));
         if (body.publishableKey !== undefined && body.publishableKey !== MASKED) ops.push(upsertSetting(db, "stripe", "publishable_key", body.publishableKey.trim()));
-        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) ops.push(upsertSetting(db, "stripe", "webhook_secret", body.webhookSecret.trim()));
+        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) ops.push(upsertEncryptedSetting(db, "stripe", "webhook_secret", body.webhookSecret.trim(), encKey));
         if (body.enabled !== undefined) ops.push(upsertSetting(db, "stripe", "enabled", String(body.enabled)));
 
         await Promise.all(ops);
@@ -260,10 +269,11 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
     try {
         const db = c.get("db");
         const body = c.req.valid("json");
+        const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const ops: Promise<void>[] = [];
 
         if (body.storeId && body.storeId.trim()) ops.push(upsertSetting(db, "sslcommerz", "store_id", body.storeId.trim()));
-        if (body.storePassword && body.storePassword !== MASKED && body.storePassword.trim()) ops.push(upsertSetting(db, "sslcommerz", "store_password", body.storePassword.trim()));
+        if (body.storePassword && body.storePassword !== MASKED && body.storePassword.trim()) ops.push(upsertEncryptedSetting(db, "sslcommerz", "store_password", body.storePassword.trim(), encKey));
         if (body.sandbox !== undefined) ops.push(upsertSetting(db, "sslcommerz", "sandbox", String(body.sandbox)));
         if (body.enabled !== undefined) ops.push(upsertSetting(db, "sslcommerz", "enabled", String(body.enabled)));
 
@@ -335,10 +345,11 @@ app.openapi(savePolarRoute, async (c) => {
     try {
         const db = c.get("db");
         const body = c.req.valid("json");
+        const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const ops: Promise<void>[] = [];
 
-        if (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) ops.push(upsertSetting(db, "polar", "access_token", body.accessToken.trim()));
-        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) ops.push(upsertSetting(db, "polar", "webhook_secret", body.webhookSecret.trim()));
+        if (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) ops.push(upsertEncryptedSetting(db, "polar", "access_token", body.accessToken.trim(), encKey));
+        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) ops.push(upsertEncryptedSetting(db, "polar", "webhook_secret", body.webhookSecret.trim(), encKey));
         if (body.productId && body.productId.trim()) ops.push(upsertSetting(db, "polar", "product_id", body.productId.trim()));
         if (body.sandbox !== undefined) ops.push(upsertSetting(db, "polar", "sandbox", String(body.sandbox)));
         if (body.enabled !== undefined) ops.push(upsertSetting(db, "polar", "enabled", String(body.enabled)));

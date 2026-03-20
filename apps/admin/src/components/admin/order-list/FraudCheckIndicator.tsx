@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/popover";
 import { Shield, ShieldAlert, ShieldCheck, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface FraudCheckIndicatorProps {
   phone: string;
@@ -34,7 +34,7 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
       if (json.success && result) {
         setFraudData(result);
       } else {
-        toast.error("Check Failed", { description: result.error || "Failed to check fraud data" });
+        toast.error("Check Failed", { description: extractApiError(json, "Failed to check fraud data") });
       }
     } catch (error) {
       toast.error("Error", { description: "Failed to perform fraud check" });

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Loader2, Save, X, Search } from "lucide-react";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import en from "react-phone-number-input/locale/en";
 import type { Country } from "react-phone-number-input";
@@ -78,7 +78,7 @@ export default function AllowedCountriesBuilder() {
         toast.success("Allowed countries saved successfully!");
       } else {
         const err = await res.json();
-        toast.error(err.message || "Failed to save allowed countries");
+        toast.error(extractApiError(err, "Failed to save allowed countries"));
       }
     } catch {
       toast.error("An error occurred while saving");

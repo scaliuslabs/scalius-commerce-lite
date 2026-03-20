@@ -45,7 +45,8 @@ export interface RefundResult {
 export async function processRefund(
     db: Database,
     kv: KVNamespace | undefined,
-    params: RefundRequest
+    params: RefundRequest,
+    encryptionKey?: string,
 ): Promise<RefundResult> {
     // 1. Fetch order
     const order = await db
@@ -136,7 +137,7 @@ export async function processRefund(
             throw new ValidationError("No Stripe charge ID found on payment record");
         }
 
-        const stripe = await getStripeSettings(db, kv);
+        const stripe = await getStripeSettings(db, kv, encryptionKey);
         if (!stripe) {
             throw new ServiceUnavailableError("Stripe is not configured");
         }
@@ -159,7 +160,7 @@ export async function processRefund(
             throw new ValidationError("No SSLCommerz bank_tran_id found on payment record");
         }
 
-        const ssl = await getSSLCommerzSettings(db, kv);
+        const ssl = await getSSLCommerzSettings(db, kv, encryptionKey);
         if (!ssl) {
             throw new ServiceUnavailableError("SSLCommerz is not configured");
         }
@@ -186,7 +187,7 @@ export async function processRefund(
             throw new ValidationError("No Polar order ID found on payment record");
         }
 
-        const polar = await getPolarSettings(db, kv);
+        const polar = await getPolarSettings(db, kv, encryptionKey);
         if (!polar) {
             throw new ServiceUnavailableError("Polar is not configured");
         }
@@ -275,7 +276,8 @@ export async function processReturn(
         orderId: string;
         reason: string;
         autoRefund: boolean;
-    }
+    },
+    encryptionKey?: string,
 ): Promise<{ success: boolean; refundResult?: RefundResult; error?: string }> {
     // Verify order exists and is in a returnable state
     const order = await db
@@ -317,7 +319,7 @@ export async function processReturn(
         refundResult = await processRefund(db, kv, {
             orderId: params.orderId,
             reason: params.reason,
-        });
+        }, encryptionKey);
     }
 
     return { success: true, refundResult };

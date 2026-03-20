@@ -57,6 +57,7 @@ export {
   getPolarSettings,
   getActivePaymentMethods,
   upsertSetting,
+  upsertEncryptedSetting,
   invalidateStripeCache,
   invalidateSSLCommerzCache,
   invalidatePolarCache,

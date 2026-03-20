@@ -210,9 +210,9 @@ export function useShippingMethods() {
       const result = await response.json();
       if (!response.ok) {
         throw new Error(
-          result.error ||
+          extractApiError(result,
             (editingMethodId ? "Failed to update" : "Failed to create") +
-              " shipping method",
+              " shipping method"),
         );
       }
       toast.success(`Shipping method ${editingMethodId ? "updated" : "created"} successfully.`);

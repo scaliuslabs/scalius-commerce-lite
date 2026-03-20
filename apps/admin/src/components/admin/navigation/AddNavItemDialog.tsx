@@ -112,13 +112,13 @@ export function AddNavItemDialog({
         ]);
 
         if (navRes.ok) {
-          const data = await navRes.json();
+          const data = unwrapEnvelope(await navRes.json());
           setCategories(data.items?.categories || []);
           setPages(data.items?.pages || []);
         }
 
         if (attrRes.ok) {
-          const data = await attrRes.json();
+          const data = unwrapEnvelope(await attrRes.json());
           setAttributes(
             data.attributes
               ?.filter((a: { id: string; name: string; slug: string; filterable?: boolean }) => a.filterable !== false)

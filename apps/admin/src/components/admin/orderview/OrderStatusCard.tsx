@@ -30,6 +30,7 @@ import { Receipt, Loader2, Undo2 } from "lucide-react";
 import type { Order } from "./types";
 import { ORDER_STATUSES } from "./types";
 import { navigateTo } from "@/lib/client/navigate";
+import { extractApiError } from "@/lib/api-helpers";
 
 interface OrderStatusCardProps {
   order: Order;
@@ -55,7 +56,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
         let errorMessage = "Failed to update status. Please try again.";
         try {
           const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
+          errorMessage = extractApiError(errorData, errorMessage);
         } catch {
           errorMessage = `Server error (${response.status}). Please try again.`;
         }
@@ -93,7 +94,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
 
       const result = await response.json();
       if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to process return");
+        throw new Error(extractApiError(result, "Failed to process return"));
       }
 
       toast.success("Order Returned", { description: "Order return has been processed successfully." });

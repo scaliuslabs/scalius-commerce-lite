@@ -21,8 +21,10 @@ polarWebhookRoutes.post("/", async (c) => {
 
         const db: Database = c.get("db");
         const kv = getKv();
+        const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+            ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
 
-        const polarSettings = await getPolarSettings(db, kv);
+        const polarSettings = await getPolarSettings(db, kv, encryptionKey);
         if (!polarSettings || !polarSettings.webhookSecret) {
             console.error("[Polar Webhook] No webhook secret configured");
             return c.json({ error: "Webhook not configured" }, 503);

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission } from "../utils";
 import { navigateTo } from "@/lib/client/navigate";
+import { extractApiError, extractApiErrorDetails } from "@/lib/api-helpers";
 
 interface UseProductSubmitOptions {
   isEdit: boolean;
@@ -53,7 +54,8 @@ export function useProductSubmit({
       const data = await response.json();
 
       if (!response.ok) {
-        if (data.error === "A product with this slug already exists") {
+        const errorMessage = extractApiError(data, "Failed to save product");
+        if (errorMessage === "A product with this slug already exists") {
           // Set error on the slug field
           form.setError("slug", {
             type: "manual",
@@ -66,22 +68,25 @@ export function useProductSubmit({
             "This slug is already in use. Please choose a different one.",
           );
           setShowAlert(true);
-        } else if (data.details && Array.isArray(data.details)) {
-          // Handle Zod validation errors
-          data.details.forEach((error: { path?: string[]; message?: string }) => {
-            if (error.path && error.path.length > 0) {
-              const fieldName = error.path[0] as keyof ProductFormValues;
-              form.setError(fieldName, {
-                type: "manual",
-                message: error.message,
-              });
-            }
-          });
-          toast.error("Validation Error", { description: "Please check the form for errors." });
         } else {
-          toast.error("Error", { description: data.error || "Failed to save product. Please try again." });
+          const details = extractApiErrorDetails(data);
+          if (details) {
+            // Handle Zod validation errors
+            details.forEach((error: { path?: string[]; message?: string }) => {
+              if (error.path && error.path.length > 0) {
+                const fieldName = error.path[0] as keyof ProductFormValues;
+                form.setError(fieldName, {
+                  type: "manual",
+                  message: error.message,
+                });
+              }
+            });
+            toast.error("Validation Error", { description: "Please check the form for errors." });
+          } else {
+            toast.error("Error", { description: errorMessage });
+          }
         }
-        throw new Error(data.error || "Failed to save product");
+        throw new Error(errorMessage);
       }
 
       toast.success("Success", { description: isEdit

@@ -52,7 +52,7 @@ import { toast } from "sonner";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PermissionGate } from "./PermissionGate";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface Role {
   id: string;
@@ -99,12 +99,12 @@ export function RolesManagement() {
         ]);
 
         if (rolesRes.ok) {
-          const data = await rolesRes.json();
+          const data = unwrapEnvelope(await rolesRes.json());
           setRoles(data.roles);
         }
 
         if (permsRes.ok) {
-          const data = await permsRes.json();
+          const data = unwrapEnvelope(await permsRes.json());
           setAllPermissions(data.permissions);
           setGroupedPermissions(data.grouped);
         }
@@ -135,7 +135,7 @@ export function RolesManagement() {
       const json = await response.json();
 
       if (!response.ok) {
-        toast.error(json.error || "Failed to create role");
+        toast.error(extractApiError(json, "Failed to create role"));
         return false;
       }
 
@@ -168,7 +168,7 @@ export function RolesManagement() {
       const json = await response.json();
 
       if (!response.ok) {
-        toast.error(json.error || "Failed to update role");
+        toast.error(extractApiError(json, "Failed to update role"));
         return false;
       }
 
@@ -191,7 +191,7 @@ export function RolesManagement() {
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.error || "Failed to delete role");
+        toast.error(extractApiError(data, "Failed to delete role"));
         return;
       }
 

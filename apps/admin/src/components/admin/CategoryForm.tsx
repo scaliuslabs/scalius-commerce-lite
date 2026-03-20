@@ -37,6 +37,7 @@ import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { navigateTo } from "@/lib/client/navigate";
+import { extractApiError, extractApiErrorDetails } from "@/lib/api-helpers";
 
 const categoryFormSchema = z.object({
   id: z.string().optional(),
@@ -138,7 +139,8 @@ export function CategoryForm({
       if (!response.ok) {
         const data = await response.json();
 
-        if (data.error === "A category with this slug already exists") {
+        const errorMessage = extractApiError(data, "Failed to save category");
+        if (errorMessage === "A category with this slug already exists") {
           form.setError("slug", {
             type: "manual",
             message:
@@ -148,27 +150,30 @@ export function CategoryForm({
             description:
               "This slug is already in use. Please choose a different one.",
           });
-        } else if (data.details && Array.isArray(data.details)) {
-          // Handle Zod validation errors
-          data.details.forEach((error: { path?: string[]; message?: string }) => {
-            if (error.path && error.path.length > 0) {
-              const fieldName = error.path[0] as keyof CategoryFormValues;
-              form.setError(fieldName, {
-                type: "manual",
-                message: error.message,
-              });
-            }
-          });
-          toast.error("Validation Error", {
-            description: "Please check the form for errors.",
-          });
         } else {
-          toast.error("Failed to save category", {
-            description: data.error || "Please try again.",
-            duration: 6000,
-          });
+          const details = extractApiErrorDetails(data);
+          if (details) {
+            // Handle Zod validation errors
+            details.forEach((error: { path?: string[]; message?: string }) => {
+              if (error.path && error.path.length > 0) {
+                const fieldName = error.path[0] as keyof CategoryFormValues;
+                form.setError(fieldName, {
+                  type: "manual",
+                  message: error.message,
+                });
+              }
+            });
+            toast.error("Validation Error", {
+              description: "Please check the form for errors.",
+            });
+          } else {
+            toast.error("Failed to save category", {
+              description: errorMessage,
+              duration: 6000,
+            });
+          }
         }
-        throw new Error(data.error || "Failed to save category");
+        throw new Error(errorMessage);
       }
 
       toast.success(

@@ -14,7 +14,9 @@ const KV_WEBHOOK_TTL = 86400; // 24 hours
 
 app.post("/", async (c) => {
   const db = c.get("db");
-  const stripeSettings = await getStripeSettings(db, c.env.CACHE);
+  const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+    ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+  const stripeSettings = await getStripeSettings(db, c.env.CACHE, encryptionKey);
 
   if (!stripeSettings) {
     console.warn("[stripe-webhook] Stripe not configured — ignoring event");

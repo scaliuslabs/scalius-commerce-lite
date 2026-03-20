@@ -2,7 +2,7 @@ import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
 import type { Customer, SortField, CustomerListPagination } from "./useCustomerListState";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface UseCustomerListActionsProps {
   showTrashed: boolean;
@@ -198,7 +198,7 @@ export function useCustomerListActions({
         const response = await action();
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || "An unknown error occurred.");
+          throw new Error(extractApiError(data, "An unknown error occurred."));
         }
         optimisticUpdate();
         setSelectedCustomers(new Set());

@@ -15,6 +15,7 @@ import {
 } from "../ui/select";
 import { useFormContext } from "react-hook-form";
 import { Loader2 } from "lucide-react";
+import { unwrapEnvelope } from "@/lib/api-helpers";
 
 interface Location {
   id: string;
@@ -54,7 +55,7 @@ export function LocationSelector() {
           "/api/v1/admin/settings/delivery-locations?type=city",
         );
         if (!response.ok) throw new Error("Failed to load cities");
-        const result = await response.json();
+        const result = unwrapEnvelope(await response.json());
         setCities(result.locations);
 
         // If we have a city value, proceed to load zones
@@ -65,7 +66,7 @@ export function LocationSelector() {
               `/api/v1/admin/settings/delivery-locations?type=zone&parentId=${initialCity}`,
             );
             if (!zoneResponse.ok) throw new Error("Failed to load zones");
-            const zoneResult = await zoneResponse.json();
+            const zoneResult = unwrapEnvelope(await zoneResponse.json());
             setZones(zoneResult.locations);
 
             // If we have a zone value, proceed to load areas
@@ -76,7 +77,7 @@ export function LocationSelector() {
                   `/api/v1/admin/settings/delivery-locations?type=area&parentId=${initialZone}`,
                 );
                 if (!areaResponse.ok) throw new Error("Failed to load areas");
-                const areaResult = await areaResponse.json();
+                const areaResult = unwrapEnvelope(await areaResponse.json());
                 setAreas(areaResult.locations);
               } catch (error: unknown) {
                 console.error("Error loading initial areas:", error);
@@ -192,7 +193,7 @@ export function LocationSelector() {
         throw new Error("Failed to load zones");
       }
 
-      const result = await response.json();
+      const result = unwrapEnvelope(await response.json());
       setZones(result.locations);
     } catch (error: unknown) {
       console.error("Error loading zones:", error);
@@ -212,7 +213,7 @@ export function LocationSelector() {
         throw new Error("Failed to load areas");
       }
 
-      const result = await response.json();
+      const result = unwrapEnvelope(await response.json());
       setAreas(result.locations);
     } catch (error: unknown) {
       console.error("Error loading areas:", error);

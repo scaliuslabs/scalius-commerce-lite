@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 // Local type replacing @scalius/database/schema import
 export interface CheckoutLanguage {
@@ -261,7 +261,7 @@ export function useLanguages() {
       );
       if (!response.ok) {
         const res = await response.json();
-        throw new Error(res.error || "Failed to update active state");
+        throw new Error(extractApiError(res, "Failed to update active state"));
       }
       toast.success("Language active state updated successfully.");
       fetchLanguages(pagination.page);
@@ -292,10 +292,9 @@ export function useLanguages() {
       const result = await response.json();
       if (!response.ok) {
         throw new Error(
-          result.error ||
+          extractApiError(result,
           (editingLanguageId ? "Failed to update" : "Failed to create") +
-          " checkout language: " +
-          (result.details ? JSON.stringify(result.details) : ""),
+          " checkout language"),
         );
       }
       toast.success(`Checkout language ${editingLanguageId ? "updated" : "created"} successfully.`);
@@ -319,7 +318,7 @@ export function useLanguages() {
       );
       if (!response.ok) {
         const result = await response.json();
-        throw new Error(result.error || "Failed to move to trash");
+        throw new Error(extractApiError(result, "Failed to move to trash"));
       }
       toast.success(`"${language.name}" moved to trash.`);
       fetchLanguages(pagination.page);
@@ -342,7 +341,7 @@ export function useLanguages() {
         const result = await response.json().catch(() => ({
           error: "Failed to permanently delete after API call.",
         }));
-        throw new Error(result.error || "Failed to permanently delete");
+        throw new Error(extractApiError(result, "Failed to permanently delete"));
       }
       toast.success(`"${language.name}" permanently deleted.`);
       fetchLanguages(pagination.page);
@@ -363,7 +362,7 @@ export function useLanguages() {
       );
       if (!response.ok) {
         const result = await response.json();
-        throw new Error(result.error || "Failed to restore language");
+        throw new Error(extractApiError(result, "Failed to restore language"));
       }
       toast.success(`"${language.name}" restored successfully.`);
       fetchLanguages(pagination.page);

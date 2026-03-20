@@ -1,4 +1,4 @@
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 type FraudCheckerProvider = {
   id?: string;
@@ -36,7 +36,7 @@ export function initFraudCheckerActions(): void {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to save provider");
+          throw new Error(extractApiError(errorData, "Failed to save provider"));
         }
 
         const json = await response.json();
@@ -58,7 +58,7 @@ export function initFraudCheckerActions(): void {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to delete provider");
+          throw new Error(extractApiError(errorData, "Failed to delete provider"));
         }
 
         return true;
@@ -84,7 +84,7 @@ export function initFraudCheckerActions(): void {
           return {
             success: false,
             message:
-              errorData.error || "Failed to test provider connection",
+              extractApiError(errorData, "Failed to test provider connection"),
           };
         }
 

@@ -57,7 +57,9 @@ const createIntentRoute = createRoute({
 
 app.openapi(createIntentRoute, async (c) => {
   const db = c.get("db");
-  const stripe = await getStripeSettings(db, c.env.CACHE);
+  const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+    ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+  const stripe = await getStripeSettings(db, c.env.CACHE, encryptionKey);
 
   if (!stripe) {
     throw new ServiceUnavailableError("Stripe is not configured. Please set credentials in the admin dashboard.");

@@ -160,7 +160,7 @@ export function useOrderListApi(
         let errorMessage = "Failed to update order status. Please try again.";
         try {
           const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
+          errorMessage = extractApiError(errorData, errorMessage);
         } catch {
           errorMessage = `Server error (${response.status}). Please try again.`;
         }
@@ -196,7 +196,7 @@ export function useOrderListApi(
         let errorMessage = "Failed to delete orders. Please try again.";
         try {
           const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
+          errorMessage = extractApiError(errorData, errorMessage);
         } catch {
           errorMessage = `Server error (${response.status}). Please try again.`;
         }

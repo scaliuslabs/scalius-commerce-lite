@@ -14,7 +14,9 @@ const KV_WEBHOOK_TTL = 86400; // 24 hours
 
 app.post("/", async (c) => {
   const db = c.get("db");
-  const ssl = await getSSLCommerzSettings(db, c.env.CACHE);
+  const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+    ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+  const ssl = await getSSLCommerzSettings(db, c.env.CACHE, encryptionKey);
 
   if (!ssl) {
     console.warn("[ssl-webhook] SSLCommerz not configured — ignoring IPN");

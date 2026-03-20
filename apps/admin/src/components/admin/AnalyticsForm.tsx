@@ -32,6 +32,7 @@ import {
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { navigateTo } from "@/lib/client/navigate";
+import { extractApiError } from "@/lib/api-helpers";
 
 const analyticsFormSchema = z.object({
   id: z.string().optional(),
@@ -91,8 +92,8 @@ export function AnalyticsForm({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to save analytics script");
+        const errorBody = await response.json();
+        throw new Error(extractApiError(errorBody, "Failed to save analytics script"));
       }
 
       await response.json();

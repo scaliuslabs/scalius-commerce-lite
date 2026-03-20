@@ -1,3 +1,5 @@
+import { extractApiError, unwrapEnvelope } from "@/lib/api-helpers";
+
 type ShipmentResult = {
   success: boolean;
   data?: Record<string, unknown>;
@@ -48,11 +50,11 @@ export function initShipmentActions(): void {
 
         if (!response.ok) {
           throw new Error(
-            result.error || result.message || "Failed to create shipment"
+            extractApiError(result, "Failed to create shipment")
           );
         }
 
-        return { success: true, data: result };
+        return { success: true, data: unwrapEnvelope(result) };
       } catch (error: unknown) {
         console.error("Error creating shipment:", error);
         return {
@@ -95,13 +97,12 @@ export function initShipmentActions(): void {
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(
-            errorData.error ||
-              errorData.message ||
-              "Failed to check shipment status"
+            extractApiError(errorData, "Failed to check shipment status")
           );
         }
 
-        const result = await response.json();
+        const json = await response.json();
+        const result = unwrapEnvelope<Record<string, unknown>>(json);
 
         return {
           success: true,
@@ -111,7 +112,7 @@ export function initShipmentActions(): void {
             lastChecked: result.lastChecked,
             statusChanged: result.statusChanged,
             orderStatusUpdate: result.orderStatusUpdate,
-            metadata: result.metadata ? JSON.parse(result.metadata) : {},
+            metadata: result.metadata ? JSON.parse(result.metadata as string) : {},
           },
         };
       } catch (error: unknown) {
@@ -131,7 +132,7 @@ export function initShipmentActions(): void {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to delete shipment");
+          throw new Error(extractApiError(errorData, "Failed to delete shipment"));
         }
 
         return true;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import type { MetaConversionsSettings, FormData } from "../MetaConversionsSettingsForm";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 const DEFAULT_FORM_DATA: FormData = {
   pixelId: "",
@@ -83,7 +83,7 @@ export function useMetaConversionsSettings(initialSettings?: MetaConversionsSett
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to save settings");
+        throw new Error(extractApiError(errorData, "Failed to save settings"));
       }
 
       const json = await response.json();

@@ -22,7 +22,7 @@ export function useCollectionActions(
         });
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to update collection");
+          throw new Error(extractApiError(errorData, "Failed to update collection"));
         }
         toast.success("Collection updated.");
         setCollections((prev) =>

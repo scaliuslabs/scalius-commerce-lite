@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { navigateTo } from "@/lib/client/navigate";
 import { formatPrice } from "@scalius/shared/currency";
+import { extractApiError } from "@/lib/api-helpers";
 
 export type SortField =
   | "code"
@@ -163,8 +164,8 @@ export function useDiscountListFilters(
         method: "DELETE",
       });
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to delete discount");
+        const errorBody = await response.json();
+        throw new Error(extractApiError(errorBody, "Failed to delete discount"));
       }
       toast.success("Discount moved to trash");
       setDisplayDiscounts((prev) => prev.filter((d) => d.id !== idToDelete));
@@ -193,8 +194,8 @@ export function useDiscountListFilters(
         method: "DELETE",
       });
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to permanently delete discount");
+        const errorBody = await response.json();
+        throw new Error(extractApiError(errorBody, "Failed to permanently delete discount"));
       }
       toast.success("Discount deleted permanently");
       setDisplayDiscounts((prev) => prev.filter((d) => d.id !== idToDelete));
@@ -215,8 +216,8 @@ export function useDiscountListFilters(
         method: "POST",
       });
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to restore discount");
+        const errorBody = await response.json();
+        throw new Error(extractApiError(errorBody, "Failed to restore discount"));
       }
       toast.success("Discount restored");
       setDisplayDiscounts((prev) => prev.filter((d) => d.id !== id));
@@ -266,10 +267,10 @@ export function useDiscountListFilters(
         },
       );
       if (!response.ok) {
-        const error = await response.json();
+        const errorBody = await response.json();
         throw new Error(
-          error.error ||
-          (bulkActionConfirmation === "restore"
+          extractApiError(errorBody,
+          bulkActionConfirmation === "restore"
             ? "Failed to restore discounts"
             : "Failed to delete discounts"),
         );
@@ -313,8 +314,8 @@ export function useDiscountListFilters(
         body: JSON.stringify({ isActive: !currentStatus }),
       });
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to update discount status");
+        const errorBody = await response.json();
+        throw new Error(extractApiError(errorBody, "Failed to update discount status"));
       }
       toast.success(`Discount ${!currentStatus ? "activated" : "deactivated"}`);
       setDisplayDiscounts((prev) =>

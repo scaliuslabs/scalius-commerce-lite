@@ -1,6 +1,7 @@
 // src/components/admin/pages-list/hooks/useBulkActions.ts
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/api-helpers";
 import type { BulkAction } from "../types";
 
 export function useBulkActions(
@@ -40,7 +41,7 @@ export function useBulkActions(
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || `Bulk ${action} failed.`);
+          throw new Error(extractApiError(errorData, `Bulk ${action} failed.`));
         }
 
         toast.success(`${selectedIds.size} pages processed successfully.`);

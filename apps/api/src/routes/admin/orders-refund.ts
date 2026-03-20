@@ -47,7 +47,9 @@ app.openapi(returnOrderRoute, async (c) => {
     const data = c.req.valid("json");
     const db = c.get("db");
     const envCache = c.env?.CACHE;
-    const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false });
+    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false }, encryptionKey);
     if (!result.success) throw new ValidationError(result.error || "Return processing failed");
     return ok(c, result);
 });
@@ -86,7 +88,9 @@ app.openapi(refundOrderRoute, async (c) => {
     const data = c.req.valid("json");
     const db = c.get("db");
     const envCache = c.env?.CACHE;
-    const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway });
+    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway }, encryptionKey);
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     return ok(c, result);
 });

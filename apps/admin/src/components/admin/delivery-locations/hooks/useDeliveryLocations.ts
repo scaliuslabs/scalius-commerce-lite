@@ -196,7 +196,7 @@ export function useDeliveryLocations() {
         );
         if (!res.ok) {
           const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.error || "Import request failed");
+          throw new Error(extractApiError(errJson, "Import request failed"));
         }
         const json = await res.json();
         const data: PathaoImportProgress = unwrapEnvelope(json);

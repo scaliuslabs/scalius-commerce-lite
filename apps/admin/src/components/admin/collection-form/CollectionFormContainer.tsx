@@ -14,6 +14,7 @@ import {
 import { Input } from "../../ui/input";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { navigateTo } from "@/lib/client/navigate";
+import { extractApiError } from "@/lib/api-helpers";
 import { ProductSelectionSection } from "./ProductSelectionSection";
 import { LayoutSettingsSection } from "./LayoutSettingsSection";
 import {
@@ -87,8 +88,7 @@ export function CollectionForm({
 
       if (!response.ok) {
         throw new Error(
-          (data as { message?: string }).message ||
-            "Failed to save collection",
+          extractApiError(data, "Failed to save collection"),
         );
       }
 
