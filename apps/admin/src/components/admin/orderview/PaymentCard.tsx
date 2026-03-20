@@ -154,8 +154,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
         const data = unwrapEnvelope<{ tracking: CODTracking | null }>(await codRes.json());
         setCodTracking(data.tracking);
       }
-    } catch {
-      // silent — non-critical
+    } catch (error) {
+      console.error("Failed to load payment data:", error);
+      toast.error("Failed to load payment data");
     } finally {
       setLoading(false);
     }

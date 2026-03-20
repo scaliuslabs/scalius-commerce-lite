@@ -23,6 +23,7 @@ export interface Variant {
   discountPercentage: number;
   discountAmount: number;
   stock: number;
+  reservedStock?: number;
   colorSortOrder: number;
   sizeSortOrder: number;
 }
@@ -121,7 +122,7 @@ export function createVariantIndex(variants: Variant[]): VariantIndex {
       variantBySizeColor.set(`${v.size}||${v.color}`, v);
     }
 
-    if (v.stock > 0) {
+    if ((v.stock - (v.reservedStock ?? 0)) > 0) {
       if (v.size) inStockSizes.add(v.size);
       if (v.color) inStockColors.add(v.color);
 
@@ -349,7 +350,7 @@ export function validateSelection(
   }
 
   // Check stock
-  if (variant.stock <= 0) {
+  if ((variant.stock - (variant.reservedStock ?? 0)) <= 0) {
     return {
       valid: false,
       error: "Selected option out of stock",
@@ -446,6 +447,7 @@ export function parseVariantFromDOM(element: HTMLElement): Variant {
     ),
     discountAmount: parseInt(element.dataset.variantDiscountAmount || "0"),
     stock: parseInt(element.dataset.variantStock || "0"),
+    reservedStock: parseInt(element.dataset.variantReservedStock || "0"),
     colorSortOrder: parseInt(element.dataset.variantColorSortOrder || "0"),
     sizeSortOrder: parseInt(element.dataset.variantSizeSortOrder || "0"),
   };

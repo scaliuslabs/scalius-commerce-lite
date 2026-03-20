@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * HTML Section Parser - Extract logical sections from HTML for targeted improvements
  *
@@ -53,7 +54,7 @@ export function parseHtmlIntoSections(
   const widgetContainer = doc.querySelector('.widget-container');
   if (widgetContainer) {
     const widgetSections = widgetContainer.querySelectorAll('.widget-section');
-    widgetSections.forEach((section, idx) => {
+    widgetSections.forEach((section: Element, idx: number) => {
       sections.push({
         index: idx,
         html: section.innerHTML,
@@ -72,7 +73,7 @@ export function parseHtmlIntoSections(
 
   semanticTags.forEach(tag => {
     const elements = doc.body.querySelectorAll(tag);
-    elements.forEach(el => {
+    elements.forEach((el: Element) => {
       if (!isNested(el, semanticElements)) {
         semanticElements.push(el);
       }
@@ -83,7 +84,7 @@ export function parseHtmlIntoSections(
     semanticElements.forEach((el, idx) => {
       sections.push({
         index: idx,
-        html: el.outerHTML,
+        html: (el as HTMLElement).outerHTML,
         css: extractCssForElement(css, el),
         description: generateDescription(el),
         id: `parsed-section-${idx}-${Date.now()}`,
@@ -105,7 +106,7 @@ export function parseHtmlIntoSections(
   ];
 
   const topLevelDivs = Array.from(doc.body.children).filter(
-    el => el.tagName.toLowerCase() === 'div'
+    (el): el is HTMLElement => el.tagName.toLowerCase() === 'div'
   );
 
   topLevelDivs.forEach((el, idx) => {
@@ -138,7 +139,7 @@ export function parseHtmlIntoSections(
   allTopLevel.forEach((el, idx) => {
     sections.push({
       index: idx,
-      html: el.outerHTML,
+      html: (el as HTMLElement).outerHTML,
       css: '', // Can't reliably extract CSS for arbitrary elements
       description: `${el.tagName.toLowerCase()} element ${idx + 1}`,
       id: `parsed-section-${idx}-${Date.now()}`,
@@ -165,7 +166,7 @@ export function parseHtmlIntoSections(
  * Check if element is nested within any of the given elements
  */
 function isNested(element: Element, containers: Element[]): boolean {
-  return containers.some(container => container.contains(element) && container !== element);
+  return containers.some(container => (container as HTMLElement).contains(element) && container !== element);
 }
 
 /**
@@ -173,8 +174,8 @@ function isNested(element: Element, containers: Element[]): boolean {
  */
 function generateDescription(element: Element): string {
   const tag = element.tagName.toLowerCase();
-  const className = element.className || '';
-  const id = element.id || '';
+  const className = (element as HTMLElement).className || '';
+  const id = (element as HTMLElement).id || '';
 
   // Prioritize ID
   if (id) return `${tag} (#${id})`;
@@ -202,8 +203,8 @@ function generateDescription(element: Element): string {
  * Extract CSS rules that apply to a specific element
  */
 function extractCssForElement(css: string, element: Element): string {
-  const className = element.className;
-  const id = element.id;
+  const className = (element as HTMLElement).className;
+  const id = (element as HTMLElement).id;
 
   if (!className && !id) return '';
 
@@ -222,12 +223,12 @@ function extractCssForElement(css: string, element: Element): string {
 
     // Check if this rule is relevant
     if (braceCount === 0 && currentRule.trim()) {
-      const selector = currentRule.split('{')[0].trim();
+      const selector = currentRule.split('{')[0]?.trim() ?? '';
 
       // Check if selector matches element
       if (className) {
         const classes = className.split(' ');
-        if (classes.some(cls => selector.includes(`.${cls}`))) {
+        if (classes.some((cls: string) => selector.includes(`.${cls}`))) {
           isRelevant = true;
         }
       }

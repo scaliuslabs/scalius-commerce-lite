@@ -182,8 +182,6 @@ export async function isDiscountValid(
     // Check usage limit per customer (requires customerPhone)
     if (discount.limitOnePerCustomer && customerPhone) {
         try {
-            console.log(`Checking one-use-per-customer for phone: ${customerPhone}`);
-
             const customerUsageResult = await db
                 .select({ id: discountUsage.id })
                 .from(discountUsage)
@@ -201,15 +199,10 @@ export async function isDiscountValid(
                 .get();
 
             if (customerUsageResult) {
-                console.log(
-                    `Found previous usage for ${customerPhone} for discount ${discount.code}`,
-                );
                 return {
                     valid: false,
                     error: "This discount code can only be used once per customer"
                 };
-            } else {
-                console.log(`No previous usage found for ${customerPhone}`);
             }
         } catch (error: unknown) {
             console.error("Error checking customer discount usage:", error);

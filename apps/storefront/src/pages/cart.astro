@@ -670,8 +670,11 @@ const submitLabel = codOnly
         }
 
         // Capture the current shipping fee from the ShippingLocationSelector
-        let shippingFee = (window as any).lastShippingEventDetail?.fee ?? 0;
-        const shippingMethodId = (window as any).lastShippingEventDetail?.id;
+        // Fall back to the first shipping method's fee when no selection has been made
+        const defaultShippingFee = parseFloat(meta?.dataset.defaultShippingFee || "0");
+        const defaultShippingId = meta?.dataset.defaultShippingId || undefined;
+        let shippingFee = (window as any).lastShippingEventDetail?.fee ?? defaultShippingFee;
+        const shippingMethodId = (window as any).lastShippingEventDetail?.id ?? defaultShippingId;
 
         // Zero out shipping if any cart item has free delivery
         const cartDataForShipping = JSON.parse(

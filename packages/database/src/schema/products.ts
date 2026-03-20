@@ -94,7 +94,7 @@ export const productVariants = sqliteTable("product_variants", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("product_variants_product_id_idx").on(table.productId),
-    index("product_variants_sku_idx").on(table.sku),
+    uniqueIndex("product_variants_sku_unique_idx").on(table.sku),
     index("product_variants_barcode_idx").on(table.barcode),
 ]);
 

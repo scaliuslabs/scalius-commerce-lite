@@ -5,6 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { search } from "@scalius/core/search";
 
 import { ok } from "../../utils/api-response";
+import { ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono();
 
@@ -74,7 +75,7 @@ app.openapi(searchRoute, async (c) => {
     } catch (error: unknown) {
         console.error("Search error:", error);
         if (error instanceof Error && error.message === "Search timed out") {
-            throw new Error("Search timed out");
+            throw new ServiceUnavailableError("Search timed out");
         }
         throw error;
     }

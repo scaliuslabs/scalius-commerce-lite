@@ -168,6 +168,7 @@ interface Env {
   API_TOKEN?: string;
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
+  CREDENTIAL_ENCRYPTION_KEY?: string;
 
   // Note: Stripe and SSLCommerz credentials are stored in the DB settings table
   // and managed via the admin dashboard — NOT as environment variables.

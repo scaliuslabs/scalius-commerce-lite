@@ -7,6 +7,7 @@ import { adminFcmTokens, settings } from "@scalius/database/schema";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
 import { eq, sql, and, inArray } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
+import { escapeHtml } from "@scalius/shared/html-escape";
 
 // ─────────────────────────────────────────
 // Admin push notification
@@ -67,10 +68,11 @@ export async function sendOrderNotification(
         const baseUrl = env.PUBLIC_API_BASE_URL || new URL(requestUrl).origin;
         const orderViewLink = `${baseUrl}/admin/orders/${order.id}`;
 
+        const safeName = escapeHtml(order.customerName || "Unknown Customer");
         const messagePayload = {
             notification: {
                 title: "New Order Created!",
-                body: `Order ${order.id} from ${order.customerName}. Click to view.`,
+                body: `Order ${order.id} from ${safeName}. Click to view.`,
             },
             webpush: {
                 fcmOptions: {
@@ -79,7 +81,7 @@ export async function sendOrderNotification(
             },
             data: {
                 orderId: order.id,
-                customerName: order.customerName || "Unknown Customer",
+                customerName: safeName,
                 link: orderViewLink,
             },
             tokens,
@@ -146,11 +148,13 @@ export async function sendOrderNotificationEmail(
         order_delivered: `Order #${orderId} Delivered`,
     };
 
+    const safeName = escapeHtml(name);
+    const safeTrackingId = data?.trackingId ? escapeHtml(String(data.trackingId)) : "";
     const messages: Record<string, string> = {
-        order_created: `Thank you for your order, ${name}! We've received your order <strong>#${orderId}</strong> and will process it shortly.`,
-        order_confirmed: `Great news, ${name}! Your order <strong>#${orderId}</strong> has been confirmed and is being prepared.`,
-        order_shipped: `Your order <strong>#${orderId}</strong> is on its way, ${name}! ${data?.trackingId ? `Tracking ID: <strong>${data.trackingId}</strong>` : ""}`,
-        order_delivered: `Your order <strong>#${orderId}</strong> has been delivered, ${name}! We hope you love your purchase.`,
+        order_created: `Thank you for your order, ${safeName}! We've received your order <strong>#${orderId}</strong> and will process it shortly.`,
+        order_confirmed: `Great news, ${safeName}! Your order <strong>#${orderId}</strong> has been confirmed and is being prepared.`,
+        order_shipped: `Your order <strong>#${orderId}</strong> is on its way, ${safeName}! ${safeTrackingId ? `Tracking ID: <strong>${safeTrackingId}</strong>` : ""}`,
+        order_delivered: `Your order <strong>#${orderId}</strong> has been delivered, ${safeName}! We hope you love your purchase.`,
     };
 
     await sendEmail({

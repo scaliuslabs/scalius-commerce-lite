@@ -49,10 +49,12 @@ declare global {
     API_TOKEN?: string;
     JWT_SECRET?: string;
     FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
+    CREDENTIAL_ENCRYPTION_KEY?: string;
 
     // Variables (set in wrangler.jsonc [vars] or dashboard)
     BETTER_AUTH_URL?: string;
     PUBLIC_API_BASE_URL?: string;
+    STOREFRONT_URL?: string;
     R2_PUBLIC_URL?: string;
     CDN_DOMAIN_URL?: string;
     PURGE_URL?: string;

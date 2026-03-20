@@ -7,31 +7,36 @@
  *
  * Handles the standard API envelope { success: true, data: T },
  * unwrapping to return T directly.
+ *
+ * Auth cookies are forwarded via AsyncLocalStorage (request-scoped).
+ * The auth middleware calls `setRequestHeaders()` which stores the headers
+ * for the duration of that request only — no cross-request leakage.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { env as cfEnv } from "cloudflare:workers";
 
 const API_PATH_PREFIX = "/api/v1/admin";
 
 /**
- * Per-request headers storage.
- * Set by middleware before page rendering so loaders can forward auth cookies.
+ * Request-scoped header storage using AsyncLocalStorage.
+ * Each request gets its own store — concurrent requests never share state.
  */
-let _requestHeaders: Headers | undefined;
+const requestHeadersStore = new AsyncLocalStorage<Headers>();
 
-/** Called by middleware to store the current request's headers. */
-export function setRequestHeaders(headers: Headers): void {
-  _requestHeaders = headers;
+/** Called by middleware to run the request handler with scoped headers. */
+export function runWithRequestHeaders<T>(headers: Headers, fn: () => T): T {
+  return requestHeadersStore.run(headers, fn);
 }
 
-/** Get stored request headers (for forwarding auth cookies to API). */
+/** Extract cookie and authorization headers for forwarding to the API worker. */
 function getForwardHeaders(): HeadersInit {
-  if (!_requestHeaders) return {};
-  // Forward cookie and authorization headers for auth
+  const requestHeaders = requestHeadersStore.getStore();
+  if (!requestHeaders) return {};
   const forwarded: Record<string, string> = {};
-  const cookie = _requestHeaders.get("cookie");
+  const cookie = requestHeaders.get("cookie");
   if (cookie) forwarded["cookie"] = cookie;
-  const auth = _requestHeaders.get("authorization");
+  const auth = requestHeaders.get("authorization");
   if (auth) forwarded["authorization"] = auth;
   return forwarded;
 }

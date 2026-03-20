@@ -10,7 +10,7 @@ export function safeErrorResponse(error: unknown, status = 500): Response {
   console.error("API Error occurred:", error);
 
   // Determine if we are in development mode
-  const isDev = typeof process !== "undefined" && process.env?.NODE_ENV === "development";
+  const isDev = typeof (globalThis as any).process !== "undefined" && (globalThis as any).process.env?.NODE_ENV === "development";
 
   // Prepare the response body
   let body: Record<string, unknown> = {
@@ -77,7 +77,7 @@ export function honoSafeError(
   status = 500,
 ) {
   console.error("API Error occurred:", error);
-  const isDev = typeof process !== "undefined" && process.env?.NODE_ENV === "development";
+  const isDev = typeof (globalThis as any).process !== "undefined" && (globalThis as any).process.env?.NODE_ENV === "development";
   const message = isDev && error instanceof Error ? error.message : "An error occurred";
   return c.json({ success: false, error: message, timestamp: new Date().toISOString() }, status);
 }

@@ -8,6 +8,9 @@
     "./client": "./src/client.ts",
     "./types": "./src/types.ts"
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "drizzle-orm": "^0.45.1"
   },

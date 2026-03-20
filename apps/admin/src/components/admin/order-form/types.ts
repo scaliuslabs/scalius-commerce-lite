@@ -3,6 +3,8 @@ export interface Product {
     name: string;
     price: number;
     discountPercentage: number | null;
+    discountType?: "percentage" | "flat" | null;
+    discountAmount?: number | null;
     variants: {
       id: string;
       size: string | null;

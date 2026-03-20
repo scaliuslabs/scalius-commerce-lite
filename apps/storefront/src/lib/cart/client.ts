@@ -13,6 +13,7 @@ import {
   type CheckoutLanguageData,
   saveAbandonedCheckout,
 } from "@/lib/api";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { trackFbAddToCart, trackFbInitiateCheckout } from "@/lib/analytics";
 import { nanoid } from "nanoid";
 
@@ -61,13 +62,10 @@ function getCheckoutFormData(): CheckoutFormData {
 }
 
 function handleAbandonedCheckout() {
-  console.log("[client.ts] handleAbandonedCheckout called.");
   if (abandonedCheckoutTimer !== null) clearTimeout(abandonedCheckoutTimer);
   abandonedCheckoutTimer = setTimeout(() => {
-    console.log("[client.ts] Debounced save running...");
     const checkoutData = getCheckoutFormData();
     if (!checkoutData.cart || checkoutData.cart.items.length === 0) {
-      console.log("[client.ts] Aborting save: cart is empty.");
       return;
     }
 
@@ -77,7 +75,6 @@ function handleAbandonedCheckout() {
       customerPhone: typeof phone === "string" ? phone : undefined,
       checkoutData: checkoutData,
     };
-    console.log("[client.ts] Sending abandoned checkout payload:", payload);
     saveAbandonedCheckout(payload);
   }, 1500); // Debounce for 1.5 seconds
 }
@@ -231,7 +228,7 @@ function updateDiscountUI() {
     removeButton.style.display = "block";
 
     discountRowEl.style.display = "flex";
-    const sym = window.__CURRENCY_SYMBOL__ || "৳";
+    const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
     discountAmountEl.textContent = `-${sym}${(discount.discountAmount || 0).toLocaleString()}`;
     appliedDiscountCodeEl.textContent = discount.code;
     appliedDiscountCodeEl.parentElement!.classList.remove("hidden");
@@ -268,7 +265,7 @@ export async function updateTotals() {
 
   if (!subtotalEl || !shippingEl || !totalEl || !discountHiddenInput) return;
 
-  const sym = window.__CURRENCY_SYMBOL__ || "৳";
+  const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
   subtotalEl.textContent = `${sym}${totalAmount.toLocaleString()}`;
   shippingEl.textContent =
     hasFreeDeliveryItem && shippingFee === 0
@@ -317,7 +314,7 @@ export async function renderCartItems() {
     return;
   }
 
-  const csym = window.__CURRENCY_SYMBOL__ || "৳";
+  const csym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
   cartItemsContainer.innerHTML = Object.values(items)
     .map(
       (item) => `
@@ -387,7 +384,6 @@ function attemptToTrackInitiateCheckout() {
     });
 
     hasTrackedInitiateCheckout = true;
-    console.log("CAPI: InitiateCheckout event tracked.");
   }
 }
 

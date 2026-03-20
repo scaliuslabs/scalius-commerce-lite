@@ -6,6 +6,7 @@ import { verifyPolarWebhook } from "@scalius/core/modules/payments/polar";
 import { getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { type Database } from "@scalius/database/client";
 import { getKv } from "../../utils/kv-cache";
+import { getEncryptionKey } from "../../utils/encryption-key";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 
 export const polarWebhookRoutes = new OpenAPIHono<{ Bindings: Env }>();
@@ -21,8 +22,7 @@ polarWebhookRoutes.post("/", async (c) => {
 
         const db: Database = c.get("db");
         const kv = getKv();
-        const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-            ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+        const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
 
         const polarSettings = await getPolarSettings(db, kv, encryptionKey);
         if (!polarSettings || !polarSettings.webhookSecret) {

@@ -116,7 +116,8 @@ const activeFilterCount = Object.keys(currentFilters).filter(
   (key) => !filterParams.includes(key) && currentFilters[key]
 ).length;
 
-const currencySymbol = layoutData?.currency?.symbol ?? "৳";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 
 // Include product name for richer analytics data
 const analyticsProductData = products.map((p) => ({
@@ -127,6 +128,7 @@ const analyticsProductData = products.map((p) => ({
 ---
 
 <Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>
+  {query && <meta slot="head" name="robots" content="noindex,nofollow" />}
   <main
     class="min-h-screen bg-gray-50"
     data-search-query={query}

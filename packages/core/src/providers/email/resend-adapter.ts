@@ -1,13 +1,13 @@
 // packages/core/src/providers/email/resend-adapter.ts
-// Adapter: bridges the existing ResendEmailProvider to the universal provider registry.
+// CANONICAL Resend email provider — the universal provider implementation.
 //
 // This file:
 // 1. Defines a Zod settings schema for Resend
-// 2. Wraps the existing Resend implementation behind the new EmailProvider interface
-// 3. Registers it with the universal registry
+// 2. Implements EmailProvider with validated settings passed at construction
+// 3. Registers it with the universal provider registry
 //
-// The existing ResendEmailProvider in integrations/email/resend.ts is NOT modified.
-// All existing imports continue to work.
+// The legacy ResendEmailProvider in integrations/email/resend.ts reads settings
+// from DB on every send and is retained only for backward compatibility.
 
 import { z } from "zod";
 import { registerProvider } from "../registry";

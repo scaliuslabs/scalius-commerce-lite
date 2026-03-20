@@ -9,6 +9,7 @@ import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settin
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
+import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 
 import { ok } from "../../utils/api-response";
@@ -57,8 +58,7 @@ const createIntentRoute = createRoute({
 
 app.openapi(createIntentRoute, async (c) => {
   const db = c.get("db");
-  const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-    ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
   const stripe = await getStripeSettings(db, c.env.CACHE, encryptionKey);
 
   if (!stripe) {

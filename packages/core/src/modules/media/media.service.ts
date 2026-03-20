@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 
-const MAX_FILE_SIZE_MB = 20; // Increased to 20MB for robustness
+const MAX_FILE_SIZE_MB = 10; // Aligned with R2 storage.ts limit
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const MAX_FILES_PER_UPLOAD = 50; // Increased to 50 for robust bulk uploads
 const BATCH_SIZE = 5;

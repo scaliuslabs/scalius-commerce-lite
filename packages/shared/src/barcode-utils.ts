@@ -18,7 +18,7 @@ export function generateEAN13(): string {
 export function calculateEAN13CheckDigit(digits: string): string {
   let sum = 0;
   for (let i = 0; i < 12; i++) {
-    sum += parseInt(digits[i]) * (i % 2 === 0 ? 1 : 3);
+    sum += parseInt(digits[i] ?? '0') * (i % 2 === 0 ? 1 : 3);
   }
   return String((10 - (sum % 10)) % 10);
 }

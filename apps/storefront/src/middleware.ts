@@ -292,7 +292,10 @@ const apiContextMiddleware = defineMiddleware((context, next) => {
   return apiContext.run({
     BACKEND_API: env?.BACKEND_API as Fetcher | undefined,
     PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,
-    CDN_DOMAIN_URL: env?.CDN_DOMAIN_URL as string | undefined,
+    PUBLIC_API_BASE_URL: env?.PUBLIC_API_BASE_URL as string | undefined,
+    CDN_DOMAIN_URL: cdnDomain,
+    STOREFRONT_URL: env?.STOREFRONT_URL as string | undefined,
+    API_TOKEN: env?.API_TOKEN as string | undefined,
   }, next);
 });
 

@@ -123,7 +123,7 @@ const CODE128_STOP = "1100011101011"; // 13-bit stop pattern
 function encodeCode128B(data: string): string {
   const startCode = 104; // START B
   let checksum = startCode;
-  let bits = CODE128_BITS[startCode];
+  let bits = CODE128_BITS[startCode] ?? '';
 
   for (let i = 0; i < data.length; i++) {
     const charCode = data.charCodeAt(i);
@@ -131,13 +131,13 @@ function encodeCode128B(data: string): string {
     if (value < 0 || value > 94) {
       throw new Error(`Character '${data[i]}' not supported in Code 128B`);
     }
-    bits += CODE128_BITS[value];
+    bits += CODE128_BITS[value] ?? '';
     checksum += value * (i + 1);
   }
 
   // Checksum
   const checksumValue = checksum % 103;
-  bits += CODE128_BITS[checksumValue];
+  bits += CODE128_BITS[checksumValue] ?? '';
 
   // Stop
   bits += CODE128_STOP;

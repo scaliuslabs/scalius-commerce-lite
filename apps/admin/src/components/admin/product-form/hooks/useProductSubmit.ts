@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission } from "../utils";
 import { navigateTo } from "@/lib/client/navigate";
-import { extractApiError, extractApiErrorDetails } from "@/lib/api-helpers";
+import { extractApiError, extractApiErrorDetails, unwrapEnvelope } from "@/lib/api-helpers";
 
 interface UseProductSubmitOptions {
   isEdit: boolean;
@@ -103,7 +103,8 @@ export function useProductSubmit({
         onSuccess();
       } else if (!isEdit) {
         // For new products, redirect to edit page with the new product ID
-        await navigateTo(`/admin/products/${data.id}/edit?new=true`);
+        const result = unwrapEnvelope(data);
+        await navigateTo(`/admin/products/${result.id}/edit?new=true`);
       }
     } catch (error: unknown) {
       console.error("Error submitting form:", error);

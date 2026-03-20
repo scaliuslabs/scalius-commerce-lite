@@ -71,7 +71,8 @@ Object.values(widgetsAfterCollection).forEach((widgets) =>
   widgets.sort(sortBySortOrder)
 );
 
-const currencySymbol = layoutData?.currency?.symbol ?? "৳";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 
 function isCollection1(
   collection: CollectionWithProducts

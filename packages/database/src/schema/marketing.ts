@@ -2,7 +2,7 @@
 // Marketing domain tables: discounts, discountProducts, discountCollections,
 // discountUsage, metaConversionsSettings, metaConversionsLogs.
 
-import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { products } from "./products";
@@ -52,7 +52,7 @@ export const discounts = sqliteTable("discounts", {
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
-    index("discounts_code_idx").on(table.code),
+    uniqueIndex("discounts_code_unique_idx").on(table.code),
     index("discounts_deleted_at_idx").on(table.deletedAt),
 ]);
 
@@ -121,7 +121,9 @@ export const metaConversionsSettings = sqliteTable("meta_conversions_settings", 
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
-});
+}, (table) => [
+    uniqueIndex("meta_conversions_settings_singleton_idx").on(table.singletonKey),
+]);
 
 export const metaConversionsLogs = sqliteTable("meta_conversions_logs", {
     id: text("id").primaryKey(),

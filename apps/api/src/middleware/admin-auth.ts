@@ -2,7 +2,7 @@
 import type { MiddlewareHandler } from "hono";
 import { extractTokenFromHeader, verifyToken, refreshTokenIfNeeded } from "../utils/jwt";
 import { getAuth } from "@scalius/core/auth";
-import { getUserPermissions, isSuperAdmin } from "@scalius/core/auth/rbac/helpers";
+import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 
@@ -44,10 +44,10 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
             const token = extractTokenFromHeader(authHeader);
 
             if (token) {
-                user = (await verifyToken(token)) as User;
+                user = (await verifyToken(token, { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE })) as User;
 
                 // Refresh token if needed
-                const refreshedToken = refreshTokenIfNeeded(token);
+                const refreshedToken = await refreshTokenIfNeeded(token, 5, { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE });
                 if (refreshedToken !== token) {
                     c.header("X-New-Token", refreshedToken);
                 }
@@ -107,13 +107,14 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
     // 4. Admin & RBAC Validation
     const db = c.get("db");
-    const userIsSuperAdmin = await isSuperAdmin(db, user.id);
+    // getUserPermissions already checks isSuperAdmin internally and returns ALL
+    // permissions for super admins — no need for a separate isSuperAdmin() query.
     const userPerms = await getUserPermissions(db, user.id);
 
-    // First line of defense: must be super admin, have admin role, OR have custom delegated permissions
-    const hasAdminAccess = userIsSuperAdmin || user.role === "admin" || userPerms.size > 0;
+    // Gate: must be super admin (has all perms) or have admin role
+    const hasAdminAccess = user.role === "admin" || userPerms.size > 0;
 
-    if (user.role !== "admin" && !hasAdminAccess) {
+    if (!hasAdminAccess) {
         throw new ForbiddenError("Admin access required");
     }
 
@@ -124,7 +125,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     const routePermission = getRoutePermission(pathname, method);
 
-    if (routePermission && !userIsSuperAdmin) {
+    if (routePermission) {
         let hasRequiredPermission = false;
 
         if (routePermission.permission) {

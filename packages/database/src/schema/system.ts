@@ -2,7 +2,7 @@
 // System/platform tables: settings, siteSettings, analytics, adminFcmTokens,
 // shippingMethods, checkoutLanguages.
 
-import { sqliteTable, text, integer, real, unique, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { user } from "./auth";
@@ -53,7 +53,9 @@ export const siteSettings = sqliteTable("site_settings", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
-});
+}, (table) => [
+    uniqueIndex("site_settings_singleton_idx").on(table.singletonKey),
+]);
 
 export const analytics = sqliteTable("analytics", {
     id: text("id").primaryKey(),

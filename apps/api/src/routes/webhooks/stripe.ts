@@ -6,6 +6,7 @@ import type Stripe from "stripe";
 import { verifyStripeWebhook } from "@scalius/core/modules/payments/stripe";
 import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
 import type { PaymentQueueMessage } from "../../queue-consumer";
+import { getEncryptionKey } from "../../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -14,8 +15,7 @@ const KV_WEBHOOK_TTL = 86400; // 24 hours
 
 app.post("/", async (c) => {
   const db = c.get("db");
-  const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-    ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
   const stripeSettings = await getStripeSettings(db, c.env.CACHE, encryptionKey);
 
   if (!stripeSettings) {

@@ -124,32 +124,36 @@ export function CustomerForm({
   // Trigger a manual form update to help with initialization of dependent fields
   React.useEffect(() => {
     if (isEdit && defaultValues && isInitializing) {
-      // Only do this for edit mode
+      let cancelled = false;
 
-      // Force a rerender of the form after a short delay
-      const timer = setTimeout(() => {
-        // First set city to trigger city dropdown to populate
+      const initFields = async () => {
+        // Set city to trigger city dropdown to populate
         if (defaultValues.city) {
           form.setValue("city", defaultValues.city, { shouldDirty: false });
         }
+        // Wait for city's useEffect to trigger zone list load
+        await new Promise((r) => setTimeout(r, 300));
+        if (cancelled) return;
 
-        // Then wait a bit to set zone after city's useEffect has triggered
-        setTimeout(() => {
-          if (defaultValues.zone) {
-            form.setValue("zone", defaultValues.zone, { shouldDirty: false });
-          }
+        if (defaultValues.zone) {
+          form.setValue("zone", defaultValues.zone, { shouldDirty: false });
+        }
+        // Wait for zone's useEffect to trigger area list load
+        await new Promise((r) => setTimeout(r, 300));
+        if (cancelled) return;
 
-          // Then wait again to set area after zone's useEffect has triggered
-          setTimeout(() => {
-            if (defaultValues.area) {
-              form.setValue("area", defaultValues.area, { shouldDirty: false });
-            }
-            setIsInitializing(false);
-          }, 300);
-        }, 300);
-      }, 300);
+        if (defaultValues.area) {
+          form.setValue("area", defaultValues.area, { shouldDirty: false });
+        }
+        // Wait for area to settle
+        await new Promise((r) => setTimeout(r, 300));
+        if (cancelled) return;
 
-      return () => clearTimeout(timer);
+        setIsInitializing(false);
+      };
+
+      initFields();
+      return () => { cancelled = true; };
     }
   }, [isEdit, defaultValues, isInitializing, form]);
 

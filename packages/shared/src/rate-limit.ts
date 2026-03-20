@@ -1,74 +1,74 @@
-// Use standard Request type from Fetch API instead of Cloudflare
-// No need for explicit import as Request is a global type in modern browsers and Node.js
+/**
+ * KV-based rate limiter for Cloudflare Workers.
+ *
+ * Uses KV with TTL for automatic expiry — no setInterval needed.
+ * Accepts CF-Connecting-IP (not spoofable) for IP identification.
+ */
 
 interface RateLimitOptions {
-  windowMs: number; // milliseconds
-  max: number; // max requests per windowMs
-  message?: string; // error message
-  statusCode?: number; // error status code
-  requestPropertyName?: string; // property on req object to use as key
+  kv: KVNamespace;
+  /** Unique key for this limit (e.g. IP address, user ID) */
+  key: string;
+  /** Max requests allowed within the window */
+  limit: number;
+  /** Window duration in milliseconds */
+  windowMs: number;
 }
 
-interface RateLimitResponse {
-  check: (req: Request) => Promise<void>;
+interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  /** Unix timestamp (ms) when the window resets */
+  resetAt: number;
 }
 
-// Simple in-memory store for rate limiting
-const ipHitMap = new Map<string, { hits: number; resetTime: number }>();
+/**
+ * Check and increment a rate limit counter stored in KV.
+ *
+ * Each key stores JSON `{ count, resetAt }` with a TTL matching the window.
+ */
+export async function rateLimit(options: RateLimitOptions): Promise<RateLimitResult> {
+  const { kv, key, limit, windowMs } = options;
+  const kvKey = `rl:${key}`;
+  const now = Date.now();
 
-let cleanupScheduled = false;
+  const raw = await kv.get(kvKey);
+  let count = 0;
+  let resetAt = now + windowMs;
 
-export function rateLimit(options: RateLimitOptions): RateLimitResponse {
-  const windowMs = options.windowMs || 60 * 1000; // default: 1 minute
-  const max = options.max || 100; // default: 100 requests per minute
-  const message =
-    options.message || "Too many requests, please try again later.";
-
-  return {
-    check: async (req: Request) => {
-      // Schedule cleanup lazily to avoid global scope errors in Cloudflare Workers
-      if (!cleanupScheduled) {
-        cleanupScheduled = true;
-        // Run cleanup every minute but only start it when a request comes in
-        setInterval(() => {
-          const now = Date.now();
-          for (const [key, value] of ipHitMap.entries()) {
-            if (value.resetTime <= now) {
-              ipHitMap.delete(key);
-            }
-          }
-        }, 60000);
+  if (raw) {
+    try {
+      const stored = JSON.parse(raw) as { count: number; resetAt: number };
+      // If the stored window hasn't expired, use it
+      if (stored.resetAt > now) {
+        count = stored.count;
+        resetAt = stored.resetAt;
       }
+      // else: expired entry, start fresh (count=0, new resetAt)
+    } catch {
+      // Corrupted entry, start fresh
+    }
+  }
 
-      // Get IP from headers or fall back to a default
-      const ip =
-        req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-        req.headers.get("x-real-ip") ||
-        "unknown";
+  count++;
 
-      const now = Date.now();
+  const ttlSeconds = Math.max(1, Math.ceil((resetAt - now) / 1000));
+  await kv.put(kvKey, JSON.stringify({ count, resetAt }), { expirationTtl: ttlSeconds });
 
-      // Initialize or get existing record
-      let record = ipHitMap.get(ip);
-      if (!record) {
-        record = {
-          hits: 0,
-          resetTime: now + windowMs,
-        };
-        ipHitMap.set(ip, record);
-      } else if (record.resetTime <= now) {
-        // Reset if the window has passed
-        record.hits = 0;
-        record.resetTime = now + windowMs;
-      }
+  const allowed = count <= limit;
+  const remaining = Math.max(0, limit - count);
 
-      // Increment hit counter
-      record.hits++;
+  return { allowed, remaining, resetAt };
+}
 
-      // Check if over limit
-      if (record.hits > max) {
-        throw new Error(message);
-      }
-    },
-  };
+/**
+ * Extract the client IP from a request using CF-Connecting-IP (preferred)
+ * with fallback to x-forwarded-for for local dev.
+ */
+export function getClientIp(request: Request): string {
+  return (
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown"
+  );
 }

@@ -1,64 +1,52 @@
 /**
- * Runtime environment variable store for Cloudflare Worker bindings.
+ * Runtime environment variable accessors for Cloudflare Worker bindings.
  *
- * Cloudflare Worker env vars (from wrangler.jsonc `vars` / .dev.vars) are
- * only available at RUNTIME via the Worker's `env` object, NOT through
- * `import.meta.env` (which is a Vite build-time concept).
+ * All getters delegate to `apiContext.getStore()` (AsyncLocalStorage),
+ * which is set per-request by the middleware. This avoids module-level
+ * mutable state that would race under concurrent requests.
  *
- * This module provides a simple module-level store that the middleware sets
- * on each request. Unlike apiContext.ts, it has NO dependencies on
- * `node:async_hooks`, so it can be safely imported in client-side code
- * (the SSR-only writes are tree-shaken by Vite).
- *
- * For Astro pages/layouts (.astro files), prefer importing
- * `import { env } from 'cloudflare:workers'` directly.
+ * `setRuntimeEnv()` is kept for backward compatibility with the middleware
+ * call site but is now a no-op — the middleware passes all vars through
+ * `apiContext.run()` instead.
  */
 
-let _publicApiUrl: string | undefined;
-let _publicApiBaseUrl: string | undefined;
-let _cdnDomainUrl: string | undefined;
-let _storefrontUrl: string | undefined;
-let _apiToken: string | undefined;
+import { apiContext } from "./context";
 
 /**
- * Called by middleware on each request to set runtime env vars
- * from Cloudflare Workers env (wrangler.jsonc vars).
+ * No-op — kept so the middleware call site doesn't need changes.
+ * All runtime env access now goes through apiContext.getStore().
  */
-export function setRuntimeEnv(vars: {
+export function setRuntimeEnv(_vars: {
     PUBLIC_API_URL?: string;
     PUBLIC_API_BASE_URL?: string;
     CDN_DOMAIN_URL?: string;
     STOREFRONT_URL?: string;
     API_TOKEN?: string;
 }): void {
-    _publicApiUrl = vars.PUBLIC_API_URL;
-    _publicApiBaseUrl = vars.PUBLIC_API_BASE_URL;
-    _cdnDomainUrl = vars.CDN_DOMAIN_URL;
-    _storefrontUrl = vars.STOREFRONT_URL;
-    _apiToken = vars.API_TOKEN;
+    // Intentionally empty — apiContext.run() in middleware handles this now.
 }
 
-/** Returns PUBLIC_API_URL from wrangler.jsonc vars (set at runtime by middleware). */
+/** Returns PUBLIC_API_URL from the per-request context. */
 export function getRuntimeApiUrl(): string | undefined {
-    return _publicApiUrl;
+    return apiContext.getStore()?.PUBLIC_API_URL;
 }
 
-/** Returns PUBLIC_API_BASE_URL from wrangler.jsonc vars. */
+/** Returns PUBLIC_API_BASE_URL from the per-request context. */
 export function getRuntimeApiBaseUrl(): string | undefined {
-    return _publicApiBaseUrl;
+    return apiContext.getStore()?.PUBLIC_API_BASE_URL;
 }
 
-/** Returns CDN_DOMAIN_URL from wrangler.jsonc vars (set at runtime by middleware). */
+/** Returns CDN_DOMAIN_URL from the per-request context. */
 export function getRuntimeCdnDomain(): string | undefined {
-    return _cdnDomainUrl;
+    return apiContext.getStore()?.CDN_DOMAIN_URL;
 }
 
-/** Returns STOREFRONT_URL from wrangler.jsonc vars. */
+/** Returns STOREFRONT_URL from the per-request context. */
 export function getRuntimeStorefrontUrl(): string | undefined {
-    return _storefrontUrl;
+    return apiContext.getStore()?.STOREFRONT_URL;
 }
 
-/** Returns API_TOKEN from wrangler secrets (set at runtime by middleware). */
+/** Returns API_TOKEN from the per-request context. */
 export function getRuntimeApiToken(): string | undefined {
-    return _apiToken;
+    return apiContext.getStore()?.API_TOKEN;
 }

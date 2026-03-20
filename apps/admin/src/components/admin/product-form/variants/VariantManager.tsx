@@ -35,6 +35,7 @@ interface VariantManagerProps {
   productSlug?: string;
   productName?: string;
   variants: ProductVariant[];
+  onVariantChange?: () => void;
 }
 
 export function VariantManager({
@@ -42,6 +43,7 @@ export function VariantManager({
   productSlug,
   productName,
   variants,
+  onVariantChange,
 }: VariantManagerProps) {
   const { symbol } = useCurrency();
   const [localVariants, setLocalVariants] =
@@ -128,7 +130,7 @@ export function VariantManager({
             prev.map((v) => (v.id === savedVariant.id ? savedVariant : v)),
           );
           setEditingVariantId(null);
-          window.dispatchEvent(new CustomEvent("variantChanged"));
+          onVariantChange ? onVariantChange() : window.dispatchEvent(new CustomEvent("variantChanged"));
           return true;
         }
       } else {
@@ -136,7 +138,7 @@ export function VariantManager({
         if (savedVariant) {
           setLocalVariants((prev) => [...prev, savedVariant]);
           setIsAdding(false);
-          window.dispatchEvent(new CustomEvent("variantChanged"));
+          onVariantChange ? onVariantChange() : window.dispatchEvent(new CustomEvent("variantChanged"));
           return true;
         }
       }
@@ -193,7 +195,7 @@ export function VariantManager({
           return update ? { ...v, ...update } : v;
         }),
       );
-      window.dispatchEvent(new CustomEvent("variantChanged"));
+      onVariantChange ? onVariantChange() : window.dispatchEvent(new CustomEvent("variantChanged"));
       handleToggleBulkEdit();
     }
   };
@@ -219,7 +221,7 @@ export function VariantManager({
         newSet.delete(variantToDelete);
         return newSet;
       });
-      window.dispatchEvent(new CustomEvent("variantChanged"));
+      onVariantChange ? onVariantChange() : window.dispatchEvent(new CustomEvent("variantChanged"));
     }
 
     setVariantToDelete(null);
@@ -242,7 +244,7 @@ export function VariantManager({
       setLocalVariants(originalVariants);
     } else {
       setSelectedVariants(new Set());
-      window.dispatchEvent(new CustomEvent("variantChanged"));
+      onVariantChange ? onVariantChange() : window.dispatchEvent(new CustomEvent("variantChanged"));
     }
 
     setIsBulkDeleteDialogOpen(false);
@@ -253,7 +255,7 @@ export function VariantManager({
     const duplicated = await duplicateVariant(productId, id);
     if (duplicated) {
       setLocalVariants((prev) => [...prev, duplicated]);
-      window.dispatchEvent(new CustomEvent("variantChanged"));
+      onVariantChange ? onVariantChange() : window.dispatchEvent(new CustomEvent("variantChanged"));
     }
   };
 
@@ -264,7 +266,7 @@ export function VariantManager({
     const created = await bulkCreateVariants(productId, generatedVariants);
     if (created.length > 0) {
       setLocalVariants((prev) => [...prev, ...created]);
-      window.dispatchEvent(new CustomEvent("variantChanged"));
+      onVariantChange ? onVariantChange() : window.dispatchEvent(new CustomEvent("variantChanged"));
     }
   };
 
@@ -273,7 +275,7 @@ export function VariantManager({
     const created = await bulkCreateVariants(productId, importedVariants);
     if (created.length > 0) {
       setLocalVariants((prev) => [...prev, ...created]);
-      window.dispatchEvent(new CustomEvent("variantChanged"));
+      onVariantChange ? onVariantChange() : window.dispatchEvent(new CustomEvent("variantChanged"));
     }
   };
 
@@ -298,7 +300,7 @@ export function VariantManager({
   const isAnyRowEditing = isAdding || !!editingVariantId;
 
   const handleSortUpdated = () => {
-    window.dispatchEvent(new CustomEvent("variantChanged"));
+    onVariantChange ? onVariantChange() : window.dispatchEvent(new CustomEvent("variantChanged"));
   };
 
   return (

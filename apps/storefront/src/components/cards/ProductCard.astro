@@ -4,13 +4,14 @@ import type { Product } from "@/lib/api";
 import { ArrowRight } from "lucide-react";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
   product: Product;
   currencySymbol?: string;
 }
 
-const { product, currencySymbol = "৳" } = Astro.props;
+const { product, currencySymbol = DEFAULT_CURRENCY.symbol } = Astro.props;
 
 const hasDiscount = product.discountedPrice < product.price;
 const discountBadge = formatDiscountBadge(

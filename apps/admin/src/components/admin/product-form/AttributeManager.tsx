@@ -420,7 +420,10 @@ function AttributeValueSelector({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: search }),
       });
-    } catch {}
+    } catch (error) {
+      console.error("Failed to create attribute value:", error);
+      toast.error("Failed to create attribute value");
+    }
   };
 
   return (

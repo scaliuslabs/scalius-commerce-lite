@@ -45,7 +45,7 @@ function getEssentialDomains(): string[] {
 }
 
 async function parseCspAllowedDomains(env?: Record<string, unknown>): Promise<string[]> {
-  let cspAllowed = String(env?.CSP_ALLOWED || process.env.CSP_ALLOWED || "");
+  let cspAllowed = String(env?.CSP_ALLOWED || "");
   try {
     if (env?.CACHE) {
       const cache = env.CACHE as { get(key: string): Promise<string | null> };
@@ -93,7 +93,7 @@ function getPlatformDomains(env?: Record<string, unknown>): string[] {
   ];
 
   for (const key of envKeys) {
-    const raw: string | undefined = (env?.[key] as string | undefined) || process.env[key];
+    const raw: string | undefined = env?.[key] as string | undefined;
     if (!raw) continue;
 
     // CDN_DOMAIN_URL is stored as a bare domain (no scheme)
@@ -137,7 +137,11 @@ async function getCombinedDomains(env?: Record<string, unknown>): Promise<string
 export async function setPageCspHeader(response: Response, env?: Record<string, unknown>): Promise<Response> {
   const allowedDomains = await getCombinedDomains(env);
   // Use PUBLIC_API_BASE_URL environment variable - no hardcoded fallbacks
-  const currentOrigin = String(env?.PUBLIC_API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "").trim();
+  const currentOrigin = String(env?.PUBLIC_API_BASE_URL || "").trim();
+
+  // Only allow localhost in dev mode — never in production CSP
+  const isDev = currentOrigin.includes("localhost") || currentOrigin.includes("127.0.0.1");
+  const localDevSources = isDev ? ["http://localhost:*", "http://127.0.0.1:*"] : [];
 
   const scriptSrc = [
     "'self'",
@@ -148,8 +152,7 @@ export async function setPageCspHeader(response: Response, env?: Record<string, 
 
   const connectSrc = [
     "'self'",
-    "http://localhost:*",
-    "http://127.0.0.1:*",
+    ...localDevSources,
     currentOrigin,
     ...allowedDomains,
   ];
@@ -161,8 +164,7 @@ export async function setPageCspHeader(response: Response, env?: Record<string, 
     "data:",
     "https:",
     "blob:",
-    "http://localhost:*",
-    "http://127.0.0.1:*",
+    ...localDevSources,
     ...allowedDomains,
   ];
 

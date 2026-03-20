@@ -111,11 +111,16 @@ export async function processRefund(
 
     const isFullRefund = refundAmount >= paidAmount;
 
-    // 2. Find the latest successful payment
+    // 2. Find the latest successful payment (filter out failed/refunded)
     const payment = await db
         .select()
         .from(orderPayments)
-        .where(eq(orderPayments.orderId, params.orderId))
+        .where(
+            and(
+                eq(orderPayments.orderId, params.orderId),
+                eq(orderPayments.status, "succeeded"),
+            ),
+        )
         .orderBy(desc(orderPayments.createdAt))
         .get();
 
@@ -301,17 +306,16 @@ export async function processReturn(
         );
     }
 
-    // Always restore inventory on return (idempotent — safe to call multiple times)
-    await applyInventoryForStatusChange(db, params.orderId, OrderStatus.RETURNED);
-
-    // Set order status to RETURNED
-    await db
-        .update(orders)
-        .set({
+    // Restore inventory and set order status to RETURNED atomically
+    const newInventoryAction = await applyInventoryForStatusChange(db, params.orderId, OrderStatus.RETURNED);
+    await db.batch([
+        db.update(orders).set({
             status: OrderStatus.RETURNED,
+            inventoryAction: newInventoryAction,
             updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(orders.id, params.orderId));
+        }).where(eq(orders.id, params.orderId)),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ] as any);
 
     // Auto-refund if requested and order has payments
     let refundResult: RefundResult | undefined;

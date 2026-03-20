@@ -54,10 +54,12 @@ app.openapi(formOptionsRoute, async (c) => {
     const [allCategories, allProducts] = await Promise.all([
         db.select({ id: categories.id, name: categories.name })
             .from(categories)
-            .where(isNull(categories.deletedAt)),
+            .where(isNull(categories.deletedAt))
+            .limit(500),
         db.select({ id: products.id, name: products.name, price: products.price })
             .from(products)
-            .where(isNull(products.deletedAt)),
+            .where(isNull(products.deletedAt))
+            .limit(500),
     ]);
     return ok(c, { categories: allCategories, products: allProducts });
 });

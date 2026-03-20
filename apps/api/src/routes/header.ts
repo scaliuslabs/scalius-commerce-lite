@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
-import { NotFoundError } from "../utils/api-error";
+import { NotFoundError, ValidationError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -83,7 +83,7 @@ app.openapi(getHeaderRoute, async (c) => {
     : null;
 
   if (!headerConfig) {
-    throw new Error("Invalid header configuration");
+    throw new ValidationError("Invalid header configuration");
   }
 
   // Build response data

@@ -74,11 +74,11 @@ export async function renderProductShortcode(
       return `<div class="shortcode-error">Product not found: ${productSlug}</div>`;
     }
 
-    // Escape quotes for safe embedding in data attribute
-    const props = JSON.stringify(productData).replace(/'/g, "&apos;");
+    // Encode as URI component for safe embedding in data attribute
+    const props = encodeURIComponent(JSON.stringify(productData));
 
     // Render a placeholder div for the React component to hydrate into.
-    return `<div class="product-shortcode-container" data-props='${props}'></div>`;
+    return `<div class="product-shortcode-container" data-props="${props}"></div>`;
   } catch (error: unknown) {
     console.error("Error rendering product shortcode:", error);
     return `<div class="shortcode-error">Error loading product: ${productSlug}</div>`;

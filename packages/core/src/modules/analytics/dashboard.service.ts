@@ -39,7 +39,7 @@ export async function getDashboardStats(db: Database) {
         db
             .select({
                 count: sql<number>`count(*)`,
-                revenue: sql<number>`sum(total_amount)`,
+                revenue: sql<number>`sum(case when status NOT IN ('cancelled', 'returned') then total_amount else 0 end)`,
                 delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
                 processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
                 shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
@@ -47,7 +47,7 @@ export async function getDashboardStats(db: Database) {
             })
             .from(orders)
             .where(
-                sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
+                sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfMonthTs}`,
             ),
         db
             .select({

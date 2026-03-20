@@ -281,82 +281,115 @@ export async function listAttributeValues(
 
     if (!attribute) throw new NotFoundError("Attribute not found");
 
-    const allRows = await db
+    const offset = (page - 1) * limit;
+    const attrOptions = (attribute.options as string[]) || [];
+
+    // Build WHERE conditions for DB-level filtering
+    const whereConditions = [
+        eq(productAttributeValues.attributeId, attributeId),
+        isNull(products.deletedAt),
+    ];
+    if (search) {
+        whereConditions.push(like(productAttributeValues.value, `%${search}%`));
+    }
+
+    const combinedWhere = and(...whereConditions);
+
+    // Get total count of distinct values at DB level
+    const totalResult = await db
         .select({
-            value: productAttributeValues.value,
-            createdAt: productAttributeValues.createdAt,
-            productName: products.name
+            total: count(sql`DISTINCT ${productAttributeValues.value}`),
         })
         .from(productAttributeValues)
         .innerJoin(products, eq(productAttributeValues.productId, products.id))
-        .where(
-            and(
-                eq(productAttributeValues.attributeId, attributeId),
-                isNull(products.deletedAt)
-            )
+        .where(combinedWhere)
+        .get();
+
+    // Get paginated distinct values with counts using GROUP BY
+    const dbValues = await db
+        .select({
+            value: productAttributeValues.value,
+            productCount: count(productAttributeValues.productId),
+            earliestCreatedAt: sql<number>`MIN(${productAttributeValues.createdAt})`,
+        })
+        .from(productAttributeValues)
+        .innerJoin(products, eq(productAttributeValues.productId, products.id))
+        .where(combinedWhere)
+        .groupBy(productAttributeValues.value)
+        .orderBy(
+            sort === "asc"
+                ? asc(sql`MIN(${productAttributeValues.createdAt})`)
+                : desc(sql`MIN(${productAttributeValues.createdAt})`)
         )
+        .limit(limit)
+        .offset(offset)
         .all();
 
-    const valueMap = new Map<string, { value: string; productCount: number; createdAt: Date; isPreset: boolean; sampleProducts: string[] }>();
+    // For each value in this page, fetch up to 5 sample product names
+    const values = await Promise.all(
+        dbValues.map(async (row) => {
+            const samples = await db
+                .select({ productName: products.name })
+                .from(productAttributeValues)
+                .innerJoin(products, eq(productAttributeValues.productId, products.id))
+                .where(
+                    and(
+                        eq(productAttributeValues.attributeId, attributeId),
+                        eq(productAttributeValues.value, row.value),
+                        isNull(products.deletedAt)
+                    )
+                )
+                .limit(5)
+                .all();
 
-    for (const row of allRows) {
-        const existing = valueMap.get(row.value) || {
-            value: row.value,
+            return {
+                value: row.value,
+                productCount: row.productCount,
+                createdAt: row.earliestCreatedAt,
+                isPreset: attrOptions.includes(row.value),
+                sampleProducts: samples.map((s) => s.productName),
+            };
+        })
+    );
+
+    // Count preset options that have no product usage (and match search if any)
+    const unusedPresets = attrOptions
+        .filter((opt) => {
+            if (search && !opt.toLowerCase().includes(search.toLowerCase())) return false;
+            return !dbValues.some((v) => v.value === opt);
+        })
+        .map((opt) => ({
+            value: opt,
             productCount: 0,
-            createdAt: row.createdAt,
-            isPreset: false,
-            sampleProducts: [] as string[]
-        };
+            createdAt: attribute.updatedAt instanceof Date
+                ? Math.floor(attribute.updatedAt.getTime() / 1000)
+                : (attribute.updatedAt as number),
+            isPreset: true,
+            sampleProducts: [] as string[],
+        }));
 
-        existing.productCount++;
-        if (row.createdAt < existing.createdAt) {
-            existing.createdAt = row.createdAt;
-        }
-        if (existing.sampleProducts.length < 5) {
-            existing.sampleProducts.push(row.productName);
-        }
-        valueMap.set(row.value, existing);
+    const dbTotal = totalResult?.total ?? 0;
+    const totalValues = dbTotal + unusedPresets.length;
+
+    // Merge unused presets into results if we're on a page that would include them
+    // (unused presets are appended after DB results)
+    const dbTotalPages = Math.ceil(dbTotal / limit);
+    let finalValues = values;
+    if (page > dbTotalPages || (page === dbTotalPages && values.length < limit)) {
+        // Calculate how many unused preset slots fit on this page
+        const dbItemsOnPage = values.length;
+        const slotsLeft = limit - dbItemsOnPage;
+        const presetOffset = page <= dbTotalPages ? 0 : (page - dbTotalPages - 1) * limit + (limit - dbItemsOnPage);
+        finalValues = [...values, ...unusedPresets.slice(presetOffset, presetOffset + slotsLeft)];
     }
-
-    const attrOptions = (attribute.options as string[]) || [];
-    for (const option of attrOptions) {
-        if (valueMap.has(option)) {
-            valueMap.get(option)!.isPreset = true;
-        } else {
-            valueMap.set(option, {
-                value: option,
-                productCount: 0,
-                createdAt: attribute.updatedAt,
-                isPreset: true,
-                sampleProducts: []
-            });
-        }
-    }
-
-    let allValues = Array.from(valueMap.values());
-    if (search) {
-        const lowerSearch = search.toLowerCase();
-        allValues = allValues.filter((v) =>
-            v.value.toLowerCase().includes(lowerSearch)
-        );
-    }
-
-    allValues.sort((a, b) => {
-        const timeA = a.createdAt.getTime();
-        const timeB = b.createdAt.getTime();
-        return sort === "asc" ? timeA - timeB : timeB - timeA;
-    });
-
-    const offset = (page - 1) * limit;
-    const paginatedValues = allValues.slice(offset, offset + limit);
 
     return {
         attributeId,
         attributeName: attribute.name,
-        values: paginatedValues,
-        totalValues: allValues.length,
+        values: finalValues,
+        totalValues,
         page,
-        totalPages: Math.ceil(allValues.length / limit)
+        totalPages: Math.ceil(totalValues / limit)
     };
 }
 

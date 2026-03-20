@@ -12,6 +12,18 @@ const BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
 // 60 s – an acceptable security trade-off for short-lived tokens.
 const MIN_BLACKLIST_TTL = 60;
 
+/**
+ * Produce a SHA-256 hex digest of the token for blacklist keys.
+ * Replaces the old truncated base64 approach which had collision risk.
+ */
+async function hashToken(token: string): Promise<string> {
+  const data = new TextEncoder().encode(token);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 interface JwtEnv {
   JWT_SECRET?: string;
   [key: string]: unknown;
@@ -109,16 +121,18 @@ export function isTokenExpiringSoon(
 
 /**
  * Refresh a token if it is close to expiry.
+ * Verifies the token signature before re-signing to prevent forged token escalation.
  */
-export function refreshTokenIfNeeded(
+export async function refreshTokenIfNeeded(
   token: string,
   thresholdMinutes = 5,
   env?: JwtEnv,
-): string {
+): Promise<string> {
   try {
     if (isTokenExpiringSoon(token, thresholdMinutes)) {
-      const decoded = jwt.decode(token) as Record<string, unknown>;
-      const { iat, exp, nbf, jti, ...payload } = decoded;
+      // Verify signature first — never re-sign an unverified token
+      const verified = await verifyToken(token, env);
+      const { iat, exp, nbf, jti, ...payload } = verified as Record<string, unknown>;
       return generateToken(payload, DEFAULT_EXPIRATION, env);
     }
     return token;
@@ -142,7 +156,7 @@ export async function revokeToken(token: string): Promise<void> {
       Math.floor((expiresAt - Date.now()) / 1000),
     );
 
-    const tokenHash = Buffer.from(token).toString("base64").slice(0, 32);
+    const tokenHash = await hashToken(token);
     const kv = getKv();
     await setCache(
       `${BLACKLIST_KEY_PREFIX}${tokenHash}`,
@@ -165,7 +179,7 @@ export async function revokeToken(token: string): Promise<void> {
  */
 export async function isTokenBlacklisted(token: string): Promise<boolean> {
   try {
-    const tokenHash = Buffer.from(token).toString("base64").slice(0, 32);
+    const tokenHash = await hashToken(token);
     const kv = getKv();
     const result = await getCache<{ revoked: boolean }>(
       `${BLACKLIST_KEY_PREFIX}${tokenHash}`,

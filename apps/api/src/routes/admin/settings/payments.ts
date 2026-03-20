@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getKv } from "../../../utils/kv-cache";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
+import { getEncryptionKey } from "../../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 import {
     upsertSetting,
@@ -20,12 +21,6 @@ import {
 
 const app = new OpenAPIHono();
 const MASKED = "••••••••••••";
-
-/** Get encryption key — prefers CREDENTIAL_ENCRYPTION_KEY, falls back to JWT_SECRET */
-function getEncryptionKey(env: Record<string, unknown>): string | undefined {
-    return (env.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
-        ?? (env.JWT_SECRET as string | undefined);
-}
 
 // ─────────────────────────────────────────
 // VALIDATION SCHEMAS

@@ -101,14 +101,13 @@ async function apiTestCredentials(
     },
   );
   const json = await response.json();
-  const result = unwrapEnvelope(json);
   if (!response.ok) {
     return {
       success: false,
       message: extractApiError(json, "Failed to test credentials"),
     };
   }
-  return result;
+  return unwrapEnvelope(json);
 }
 
 interface DeliveryProvidersContainerProps {

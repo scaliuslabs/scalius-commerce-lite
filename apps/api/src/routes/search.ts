@@ -2,13 +2,13 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { search } from "@scalius/core/search";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
-import { rateLimit } from "@scalius/shared/rate-limit";
+import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 
 import { ok } from "../utils/api-response";
 import { RateLimitError } from "../utils/api-error";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for search routes
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware to all routes
 app.use(
@@ -20,12 +20,6 @@ app.use(
     methods: ["GET"]
   }),
 );
-
-// Set up rate limiting for search API
-const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 30, // 30 requests per minute
-});
 
 // Schema for search query validation
 const searchQuerySchema = z.object({
@@ -77,11 +71,14 @@ const searchRoute = createRoute({
 });
 
 app.openapi(searchRoute, async (c) => {
-  // Apply rate limiting
-  try {
-    await limiter.check(c.req.raw);
-  } catch (error: unknown) {
-    throw new RateLimitError("Too many requests. Please try again later.");
+  // Apply rate limiting via KV
+  const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
+  if (kv) {
+    const ip = getClientIp(c.req.raw);
+    const result = await rateLimit({ kv, key: `search:${ip}`, limit: 30, windowMs: 60_000 });
+    if (!result.allowed) {
+      throw new RateLimitError("Too many requests. Please try again later.");
+    }
   }
 
   const params = c.req.valid("query");

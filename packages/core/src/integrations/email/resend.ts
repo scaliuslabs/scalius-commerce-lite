@@ -1,6 +1,9 @@
 // src/integrations/email/resend.ts
-// Resend email provider implementation.
-// API key and sender address are loaded from the DB settings table.
+// LEGACY Resend email provider — reads settings from DB on every send.
+// @deprecated Use `packages/core/src/providers/email/resend-adapter.ts` (universal provider)
+// which receives validated settings at construction time and integrates with
+// the provider registry. This file is retained for backward compatibility with
+// the email barrel (integrations/email/index.ts).
 
 import type { EmailProvider, SendEmailOptions } from "./provider";
 

@@ -120,8 +120,12 @@ export async function updateOrderStatusFromShipment(
 
     return null;
   } catch (error: unknown) {
-    console.error("Error updating order status from shipment:", error);
-    return null;
+    console.error("Error updating order status from shipment:", {
+      shipmentId,
+      newStatus,
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+    });
+    throw error;
   }
 }
 
