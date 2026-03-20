@@ -1,10 +1,10 @@
 import { deliveryProviders, deliveryShipments, orders, orderItems, products } from "@scalius/database/schema";
 import { createProvider } from "./factory";
-import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
+import { encryptCredentials, decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
 
 import type { Database } from "@scalius/database/client";
 import type { ShipmentOptions, ShipmentResult } from "./types";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError } from "@scalius/core/errors";
 
@@ -57,7 +57,6 @@ export async function saveDeliveryProvider(
   encryptionKey?: string,
 ) {
   const providerId = provider.id || nanoid();
-  const now = new Date();
 
   // Convert objects to JSON strings
   let credentials =
@@ -88,7 +87,7 @@ export async function saveDeliveryProvider(
         isActive: provider.isActive,
         credentials,
         config,
-        updatedAt: now,
+        updatedAt: sql`unixepoch()`,
       })
       .where(eq(deliveryProviders.id, providerId));
   } else {
@@ -100,8 +99,8 @@ export async function saveDeliveryProvider(
       isActive: provider.isActive,
       credentials,
       config,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: sql`unixepoch()`,
+      updatedAt: sql`unixepoch()`,
     });
   }
 
@@ -120,14 +119,14 @@ export async function deleteDeliveryProvider(db: Database, id: string) {
 /**
  * Test provider connection
  */
-export async function testDeliveryProvider(db: Database, id: string) {
+export async function testDeliveryProvider(db: Database, id: string, encryptionKey?: string) {
   const provider = await getDeliveryProvider(db, id);
   if (!provider) {
     throw new NotFoundError(`Provider with ID ${id} not found`);
   }
 
   try {
-    const providerInstance = await createProvider(provider);
+    const providerInstance = await createProvider(provider, encryptionKey);
     return await providerInstance.testConnection();
   } catch (error: unknown) {
     return {
@@ -150,6 +149,7 @@ export async function createShipment(
   orderId: string,
   providerId: string,
   options?: ShipmentOptions,
+  encryptionKey?: string,
 ): Promise<ShipmentResult> {
   // Get order
   const [order] = await db
@@ -197,7 +197,6 @@ export async function createShipment(
 
   // 1. Insert a "creating" placeholder shipment FIRST
   const shipmentId = nanoid();
-  const now = new Date();
 
   await db.insert(deliveryShipments).values({
     id: shipmentId,
@@ -206,14 +205,14 @@ export async function createShipment(
     providerType: provider.type,
     status: "creating",
     rawStatus: "creating",
-    metadata: JSON.stringify({ initiatedAt: now.toISOString() }),
-    createdAt: now,
-    updatedAt: now,
+    metadata: JSON.stringify({ initiatedAt: new Date().toISOString() }),
+    createdAt: sql`unixepoch()`,
+    updatedAt: sql`unixepoch()`,
   });
 
   try {
     // 2. Call provider API
-    const providerInstance = await createProvider(provider);
+    const providerInstance = await createProvider(provider, encryptionKey);
     const shipmentResult = await providerInstance.createShipment(
       order,
       enrichedOptions,
@@ -232,7 +231,7 @@ export async function createShipment(
             (shipmentResult.data.metadata?.status as string) ||
             "pending",
           metadata: JSON.stringify(shipmentResult.data.metadata || {}),
-          updatedAt: new Date(),
+          updatedAt: sql`unixepoch()`,
         })
         .where(eq(deliveryShipments.id, shipmentId));
 
@@ -246,7 +245,7 @@ export async function createShipment(
         status: "failed",
         rawStatus: "provider_rejected",
         metadata: JSON.stringify({ error: shipmentResult.message }),
-        updatedAt: new Date(),
+        updatedAt: sql`unixepoch()`,
       })
       .where(eq(deliveryShipments.id, shipmentId));
 
@@ -261,7 +260,7 @@ export async function createShipment(
         status: "failed",
         rawStatus: "exception",
         metadata: JSON.stringify({ error: errorMsg }),
-        updatedAt: new Date(),
+        updatedAt: sql`unixepoch()`,
       })
       .where(eq(deliveryShipments.id, shipmentId));
 
@@ -312,7 +311,7 @@ export async function getShipments(db: Database, orderId: string) {
 /**
  * Check and update shipment status
  */
-export async function checkShipmentStatus(db: Database, shipmentId: string) {
+export async function checkShipmentStatus(db: Database, shipmentId: string, encryptionKey?: string) {
   // Get shipment
   const [shipment] = await db
     .select()
@@ -334,7 +333,7 @@ export async function checkShipmentStatus(db: Database, shipmentId: string) {
 
   try {
     // Create provider instance
-    const providerInstance = await createProvider(provider);
+    const providerInstance = await createProvider(provider, encryptionKey);
 
     // Check status
     const statusResult = await providerInstance.checkShipmentStatus(
@@ -347,7 +346,7 @@ export async function checkShipmentStatus(db: Database, shipmentId: string) {
       .set({
         status: statusResult.status,
         rawStatus: statusResult.rawStatus,
-        updatedAt: new Date(),
+        updatedAt: sql`unixepoch()`,
         metadata: JSON.stringify(statusResult.metadata || {}),
       })
       .where(eq(deliveryShipments.id, shipmentId));

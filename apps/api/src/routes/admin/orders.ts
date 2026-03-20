@@ -532,7 +532,9 @@ app.openapi(createShipmentRoute, async (c) => {
     const data = c.req.valid("json");
     const db = c.get("db");
 
-    const shipmentResult = await createShipment(db, orderId, data.providerId, data.options);
+    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const shipmentResult = await createShipment(db, orderId, data.providerId, data.options, encryptionKey);
 
     if (!shipmentResult.success) {
         console.error(`Failed to create shipment for order ${orderId}: ${shipmentResult.message}`);
@@ -637,7 +639,9 @@ app.openapi(checkShipmentStatusRoute, async (c) => {
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
-    const updatedShipment = await checkShipmentStatus(db, shipmentId);
+    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const updatedShipment = await checkShipmentStatus(db, shipmentId, encryptionKey);
     return ok(c, updatedShipment);
 });
 
@@ -667,8 +671,10 @@ app.openapi(refreshShipmentRoute, async (c) => {
     if (shipment.orderId !== orderId) throw new ValidationError("Shipment does not belong to this order");
 
     const previousStatus = shipment.status;
+    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
     try {
-        await checkShipmentStatus(db, shipmentId);
+        await checkShipmentStatus(db, shipmentId, encryptionKey);
     } catch (e: unknown) {
         throw new ValidationError(e instanceof Error ? e.message : String(e));
     }

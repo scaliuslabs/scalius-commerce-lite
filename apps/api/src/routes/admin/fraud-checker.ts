@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for fraud checker providers.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
+import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider, fraudLookupWithActiveProvider } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
 
 import { ok, created } from "../../utils/api-response";
 import { ValidationError } from "../../utils/api-error";
@@ -176,6 +176,32 @@ app.openapi(testProviderRoute, async (c) => {
     } catch (error: unknown) {
         throw error;
     }
+});
+
+// ── Lookup (phone) ──
+
+const lookupSchema = z.object({
+    phone: z.string().min(1),
+});
+
+const lookupRoute = createRoute({
+    method: "post",
+    path: "/lookup",
+    tags: ["Admin - Fraud Checker"],
+    summary: "Lookup fraud data for a phone number",
+    request: {
+        body: { content: { "application/json": { schema: lookupSchema } } }
+    },
+    responses: {
+        200: { description: "Lookup result" }
+    }
+});
+
+app.openapi(lookupRoute, async (c) => {
+    const db = c.get("db");
+    const { phone } = c.req.valid("json");
+    const result = await fraudLookupWithActiveProvider(db, phone);
+    return ok(c, result.data ?? {});
 });
 
 export { app as adminFraudCheckerRoutes };

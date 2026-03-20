@@ -13,7 +13,7 @@ import {
     DiscountType,
     DiscountValueType,
 } from "@scalius/database/schema";
-import { eq, sql, and, isNull, count, inArray } from "drizzle-orm";
+import { eq, sql, and, isNull, inArray } from "drizzle-orm";
 import { roundPrice } from "@scalius/shared/price-utils";
 
 // ─────────────────────────────────────────
@@ -160,17 +160,13 @@ export async function isDiscountValid(
     // Check total usage limit
     if (discount.maxUses) {
         try {
-            const countExpr = count().as("count");
             const usageCountResult = await db
-                .select({ count: countExpr })
+                .select({ count: sql<number>`COUNT(*)` })
                 .from(discountUsage)
                 .where(eq(discountUsage.discountId, discount.id))
                 .get();
 
             const usageCount = usageCountResult?.count || 0;
-            console.log(
-                `Discount ${discount.code} usage count: ${usageCount}/${discount.maxUses}`,
-            );
 
             if (usageCount >= discount.maxUses) {
                 return {

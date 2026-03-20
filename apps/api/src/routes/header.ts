@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
@@ -63,6 +62,7 @@ const getHeaderRoute = createRoute({
 });
 
 app.openapi(getHeaderRoute, async (c) => {
+  const db = c.get("db");
   // Get header config from database
   const [settings] = await db.select().from(siteSettings).limit(1);
 

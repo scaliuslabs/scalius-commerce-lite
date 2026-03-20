@@ -129,7 +129,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const [failReason, setFailReason] = React.useState<string>("not_home");
   const [failNotes, setFailNotes] = React.useState("");
 
-  const grandTotal = order.totalAmount + order.shippingCharge - (order.discountAmount ?? 0);
+  // totalAmount already includes shipping and discount (computed server-side)
+  const grandTotal = order.totalAmount;
   const isCOD = order.paymentMethod === "cod";
 
   const fetchPaymentData = React.useCallback(async () => {
@@ -292,10 +293,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
 
           {/* Amount breakdown */}
           <div className="space-y-1.5 text-sm rounded-lg bg-muted/30 p-3">
-            <div className="flex justify-between text-muted-foreground">
-              <span>Order total</span>
-              <span>{symbol}{order.totalAmount.toLocaleString()}</span>
-            </div>
+            {(order.shippingCharge > 0 || (order.discountAmount ?? 0) > 0) && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Subtotal</span>
+                <span>{symbol}{(order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)).toLocaleString()}</span>
+              </div>
+            )}
             {order.shippingCharge > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Shipping</span>
@@ -309,7 +312,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
               </div>
             )}
             <div className="flex justify-between font-semibold border-t border-border pt-1.5 mt-1.5">
-              <span>Grand total</span>
+              <span>Total</span>
               <span>{symbol}{grandTotal.toLocaleString()}</span>
             </div>
             {(order.paidAmount ?? 0) > 0 && (

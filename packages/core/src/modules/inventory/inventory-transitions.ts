@@ -11,6 +11,7 @@ import type { Database } from "@scalius/database/client";
 import { releaseMultiple } from "./release";
 import { deductMultiple } from "./deduct";
 import { reserveMultiple } from "./reserve";
+import { restoreDeductedMultiple } from "./restore";
 import { checkAndAlertLowStock } from "./alerts";
 
 // The set of order statuses that mean "this order is dead / returned"
@@ -66,6 +67,20 @@ export async function buildInventoryStatements(
     if (needsRestore && currentAction === "reserved") {
         // Release reservations — uses its own DB calls (CAS-based)
         await releaseOrderReservations(db, orderId, order.inventoryPool);
+        return {
+            statements: [
+                db.update(orders)
+                    .set({ inventoryAction: "restored", updatedAt: sql`unixepoch()` })
+                    .where(eq(orders.id, orderId)),
+            ],
+            newAction: "restored",
+        };
+    }
+
+    if (needsRestore && currentAction === "deducted") {
+        // Restore deducted stock — used when a shipped/delivered order is cancelled or returned.
+        // Physical stock was already decremented, so we add it back.
+        await restoreDeductedOrderStock(db, orderId, order.inventoryPool);
         return {
             statements: [
                 db.update(orders)
@@ -240,6 +255,45 @@ async function reserveOrderItems(
         if (!result.success) {
             console.error(
                 `[inventory-transitions] Failed to re-reserve stock for order ${orderId}: ${result.error}`
+            );
+        }
+    }
+}
+
+/**
+ * Restore deducted stock for all items in an order.
+ * Used when a shipped/delivered order is cancelled or returned.
+ * Physical stock was permanently decremented at ship time — this adds it back.
+ */
+async function restoreDeductedOrderStock(
+    db: Database,
+    orderId: string,
+    inventoryPool: string,
+): Promise<void> {
+    const items = await db
+        .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+
+    const pool = (inventoryPool ?? InventoryPool.REGULAR) as
+        | "regular"
+        | "preorder"
+        | "backorder";
+
+    const entries = items
+        .filter((i) => i.variantId !== null)
+        .map((i) => ({
+            variantId: i.variantId as string,
+            quantity: i.quantity,
+            pool,
+        }));
+
+    if (entries.length > 0) {
+        const result = await restoreDeductedMultiple(db, entries, orderId);
+        if (!result.success) {
+            console.error(
+                `[inventory-transitions] Failed to restore deducted stock for order ${orderId}: ${result.error}`
             );
         }
     }

@@ -4,7 +4,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { deliveryShipments } from "@scalius/database/schema";
-import { getDb } from "@scalius/database/client";
 import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper";
 import { updateOrderStatusFromShipment, notifyShipmentStatusChange } from "@scalius/core/modules/delivery/tracking";
 import { recordWebhookEvent } from "@scalius/core/modules/payments/process-payment";
@@ -13,7 +12,7 @@ import { verifyDeliveryWebhook } from "../../middleware/webhook-auth";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.post("/", async (c) => {
-    const db = getDb(c.env);
+    const db = c.get("db");
 
     // Read raw body for signature verification (must be done before .json())
     const rawBody = await c.req.text();

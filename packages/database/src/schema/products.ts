@@ -2,7 +2,7 @@
 // Product domain tables: products, images, variants, categories, collections,
 // attributes, attribute values, rich content, and media.
 
-import { sqliteTable, text, integer, real, unique, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
@@ -32,7 +32,7 @@ export const products = sqliteTable(
         freeDelivery: integer("free_delivery", { mode: "boolean" }).notNull().default(false),
     },
     (table) => [
-        index("products_slug_idx").on(table.slug),
+        uniqueIndex("products_slug_idx").on(table.slug),
         index("products_category_id_idx").on(table.categoryId),
         index("products_active_idx").on(table.isActive, table.deletedAt),
         index("products_deleted_at_idx").on(table.deletedAt),
@@ -117,7 +117,7 @@ export const categories = sqliteTable(
         deletedAt: integer("deleted_at", { mode: "timestamp" }),
     },
     (table) => [
-        index("categories_slug_idx").on(table.slug),
+        uniqueIndex("categories_slug_idx").on(table.slug),
         index("categories_deleted_at_idx").on(table.deletedAt),
     ],
 );
@@ -175,6 +175,7 @@ export const productAttributeValues = sqliteTable(
     (table) => [
         unique().on(table.productId, table.attributeId),
         index("product_attribute_values_product_id_idx").on(table.productId),
+        index("product_attribute_values_attribute_id_idx").on(table.attributeId),
     ],
 );
 

@@ -4,9 +4,17 @@ import { abandonedCheckouts } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { authMiddleware } from "../middleware/auth";
+import { rateLimit } from "@scalius/shared/rate-limit";
+import { RateLimitError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+// Rate limit: 10 abandoned checkout saves per minute per IP
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+});
 
 // ─── POST / (Create or Update) ──────────────────────────────────────────────
 
@@ -34,6 +42,12 @@ const saveAbandonedCheckoutRoute = createRoute({
 });
 
 app.openapi(saveAbandonedCheckoutRoute, async (c) => {
+  try {
+    await limiter.check(c.req.raw);
+  } catch {
+    throw new RateLimitError("Too many requests. Please try again later.");
+  }
+
   const db = c.get("db");
   const { checkoutId, customerPhone, checkoutData } = c.req.valid("json");
   const checkoutDataString = JSON.stringify(checkoutData);

@@ -50,7 +50,7 @@ export function initFraudCheckerActions(): void {
     async deleteProvider(id) {
       try {
         const response = await fetch(
-          `/api/v1/admin/settings/fraud-checker/${id}`,
+          `/api/v1/admin/fraud-checker/${id}`,
           {
             method: "DELETE",
           }
@@ -71,7 +71,7 @@ export function initFraudCheckerActions(): void {
     async testProvider(id) {
       try {
         const response = await fetch(
-          `/api/v1/admin/settings/fraud-checker/${id}/test`,
+          `/api/v1/admin/fraud-checker/${id}/test`,
           {
             method: "POST",
           }

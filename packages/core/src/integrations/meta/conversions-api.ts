@@ -4,11 +4,8 @@ import { sha256, hashEmail, hashPhone } from "./crypto-utils";
 import { getCapiSettings, logCapiEvent } from "../../modules/analytics/meta.service";
 import { type Database } from "@scalius/database/client";
 
-// --- CONFIGURABLE LOG RETENTION ---
-// Change this value to adjust retention period (in hours)
-const LOG_RETENTION_HOURS = 12;
-// Check cleanup only once per this period (in hours)
-const CLEANUP_CHECK_INTERVAL_HOURS = 11;
+// Fallback retention used when settings row doesn't exist yet
+const DEFAULT_LOG_RETENTION_DAYS = 30;
 
 // --- META API TYPES ---
 interface UserData {
@@ -148,6 +145,7 @@ export async function sendCapiEvent(
       errorMessage = "Missing Pixel ID or Access Token in CAPI settings.";
     }
 
+    const fallbackRetentionHours = (settings?.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS) * 24;
     await logCapiEvent(db, {
       eventId: event.event_id,
       eventName: event.event_name,
@@ -155,12 +153,13 @@ export async function sendCapiEvent(
       requestPayload: JSON.stringify({ data: [{ ...event, user_data: {} }] }, null, 2),
       errorMessage: errorMessage,
       eventTime: event.event_time,
-    }, LOG_RETENTION_HOURS);
+    }, fallbackRetentionHours);
 
     console.log("Meta CAPI is disabled or not configured. Skipping event.", { reason: errorMessage });
     return { success: false, error: "CAPI not configured" };
   }
 
+  const retentionHours = settings.logRetentionDays * 24;
   const { pixelId, accessToken, testEventCode } = settings;
   const version = "v19.0";
   const url = `https://graph.facebook.com/${version}/${pixelId}/events?access_token=${accessToken}`;
@@ -193,7 +192,7 @@ export async function sendCapiEvent(
       ...logPayload,
       status: "success",
       responsePayload: JSON.stringify(responseData, null, 2),
-    }, LOG_RETENTION_HOURS);
+    }, retentionHours);
     console.log(`Successfully sent '${event.event_name}' event to Meta CAPI.`);
     return { success: true, response: responseData };
   } catch (error: unknown) {
@@ -208,23 +207,7 @@ export async function sendCapiEvent(
       responsePayload: (error as { response?: Response }).response
         ? JSON.stringify(await (error as { response: Response }).response.json())
         : "",
-    }, LOG_RETENTION_HOURS);
+    }, retentionHours);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
-}
-
-/**
- * Gets the configured log retention period in hours.
- * This is used by the UI to display retention information.
- */
-export function getLogRetentionHours(): number {
-  return LOG_RETENTION_HOURS;
-}
-
-/**
- * Gets the cleanup check interval in hours.
- * This is used by the UI to display cleanup frequency information.
- */
-export function getCleanupCheckIntervalHours(): number {
-  return CLEANUP_CHECK_INTERVAL_HOURS;
 }

@@ -447,7 +447,7 @@ export async function updateCustomerProfile(
     // Update customer record in DB if customerId exists
     if (session.customerId) {
         const dbUpdates: Record<string, unknown> = {
-            updatedAt: new Date(),
+            updatedAt: sql`unixepoch()`,
         };
         if (updates.name) dbUpdates.name = updates.name;
         if (updates.address) dbUpdates.address = updates.address;

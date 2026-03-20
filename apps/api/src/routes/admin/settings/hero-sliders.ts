@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import { heroSliders } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 import { sql, and, eq, isNull } from "drizzle-orm";
@@ -39,6 +38,7 @@ const listRoute = createRoute({
 
 app.openapi(listRoute, async (c) => {
     try {
+        const db = c.get("db");
         const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
         const parsedData = data.map((slider) => ({ ...slider, images: JSON.parse(slider.images) }));
         return ok(c, parsedData);
@@ -60,6 +60,7 @@ const createSliderRoute = createRoute({
 
 app.openapi(createSliderRoute, async (c) => {
     try {
+        const db = c.get("db");
         const data = c.req.valid("json");
         const existingSlider = await db.select().from(heroSliders).where(sql`type = ${data.type} AND deleted_at IS NULL`).get();
 
@@ -100,6 +101,7 @@ const getByIdRoute = createRoute({
 
 app.openapi(getByIdRoute, async (c) => {
     try {
+        const db = c.get("db");
         const { id } = c.req.valid("param");
         const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
 
@@ -126,6 +128,7 @@ const updateSliderRoute = createRoute({
 
 app.openapi(updateSliderRoute, async (c) => {
     try {
+        const db = c.get("db");
         const { id } = c.req.valid("param");
         const data = c.req.valid("json");
 
@@ -162,6 +165,7 @@ const deleteSliderRoute = createRoute({
 
 app.openapi(deleteSliderRoute, async (c) => {
     try {
+        const db = c.get("db");
         const { id } = c.req.valid("param");
         const [slider] = await db.update(heroSliders)
             .set({ deletedAt: sql`CURRENT_TIMESTAMP` })

@@ -4,7 +4,6 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 // Side-effect import: registers all gateway metadata in the registry
 import "@scalius/core/modules/payments/gateway-settings";
-import { getDb } from "@scalius/database/client";
 import { getCheckoutConfig } from "@scalius/core/modules/settings/checkout-config.service";
 import { cacheMiddleware } from "../middleware/cache";
 
@@ -35,7 +34,7 @@ app.use(
 
 app.openapi(getCheckoutConfigRoute, async (c) => {
   try {
-    const db = getDb(c.env);
+    const db = c.get("db");
     const kv: KVNamespace | undefined = c.env.CACHE;
 
     const config = await getCheckoutConfig(db, kv);

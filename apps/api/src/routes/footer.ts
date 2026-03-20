@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
@@ -64,6 +63,7 @@ const getFooterRoute = createRoute({
 });
 
 app.openapi(getFooterRoute, async (c) => {
+  const db = c.get("db");
   // Get footer config from database
   const [settings] = await db.select().from(siteSettings).limit(1);
 

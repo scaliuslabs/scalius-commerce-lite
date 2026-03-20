@@ -217,11 +217,11 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 - **API Standardization**: ALL routes use `ok()`/`created()`/`ApiError` (242 conversions), `CACHE_TTLS` constants, `paginated()` removed
 - **Schema**: timestamp defaults standardized (`UNIX_NOW` constant), 8 FK indexes added, singleton constraints on `siteSettings`/`metaConversionsSettings`, collections enum `"manual"`/`"dynamic"`, `permissions.updatedAt` added
 - **Admin Proxy**: unwraps `{ success, data: T }` → `{ success, ...T }` for admin components, flattens error objects to strings
-- **Database**: 6 migrations total (0019-0024)
+- **Database**: 7 migrations total (0019-0024, 0028)
 
 ## Known Backlog
 
-- **SDK needs regeneration**: `packages/api-client/openapi.json` has 60 paths from an old spec. Live API has 221+ paths. Run `pnpm generate:sdk` after starting API to update. Deferred until API surface stabilizes.
+- **SDK is hollow**: All 24 type exports in `packages/api-client` are `any`. Methods file is empty, client is a no-op. `openapi.json` no longer exists. Live API has 328+ endpoints. Unified SDK work is next priority.
 - **Major version upgrades pending**: TipTap 2->3, Firebase 11->12, Recharts 2->3, react-day-picker 8->9, @hookform/resolvers 3->5
 - **ESLint not configured**: `.prettierrc.mjs` exists for formatting but no ESLint setup yet.
 - **In-memory state**: Rate limiter and layout cache use in-memory Maps (reset on Worker isolate restart). Acceptable for single-tenant but needs KV migration for scale.
@@ -229,7 +229,7 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 ## Known Limitations / TODO
 
 - **Scanner app**: needs rebuild as standalone `/scanner` route with QR-token auth (backend complete, frontend removed)
-- **Type safety**: ~250 `any` type usages remain across the admin app
+- **Type safety**: ~27 `any` type usages remain across the admin app (mostly Cloudflare env probing and window globals)
 - **Test coverage**: zero test coverage (private test suite planned, gitignored)
 - **Widget history**: Admin UI has history/restore/delete buttons but API endpoints don't exist (GET/POST/DELETE `/admin/widgets/{id}/history/*`)
 

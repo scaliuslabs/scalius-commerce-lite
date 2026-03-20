@@ -4,7 +4,7 @@ import { extractTokenFromHeader, verifyToken, refreshTokenIfNeeded } from "../ut
 import { getAuth } from "@scalius/core/auth";
 import { getUserPermissions, isSuperAdmin } from "@scalius/core/auth/rbac/helpers";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
-import { getDb } from "@scalius/database/client";
+import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 
 interface User {
     id: string;
@@ -16,7 +16,7 @@ interface User {
 
 /**
  * Admin Authentication & RBAC middleware for Hono
- * 
+ *
  * This perfectly decouples the API from Astro's SSR middleware.
  * It accepts EITHER a Better Auth session cookie (from the Dashboard frontend)
  * OR a JWT Bearer token via Authorization header (for decoupled mobile/external apps).
@@ -88,14 +88,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
     // If all methods fail, return 401
     if (!user) {
-        return c.json(
-            {
-                success: false,
-                error: "Authentication required",
-                message: "Admin access required. Please provide a valid authentication token or session cookie.",
-            },
-            401,
-        );
+        throw new UnauthorizedError("Admin access required. Please provide a valid authentication token or session cookie.");
     }
 
     // Inject user into Hono context
@@ -105,10 +98,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     if ((user as Record<string, unknown>)._isScannerToken) {
         const pathname = new URL(c.req.url).pathname;
         if (!pathname.includes("/inventory/")) {
-            return c.json(
-                { success: false, error: "Forbidden", message: "Scanner tokens can only access inventory endpoints" },
-                403,
-            );
+            throw new ForbiddenError("Scanner tokens can only access inventory endpoints");
         }
         // Skip full RBAC check — scanner has implicit inventory permission
         await next();
@@ -116,63 +106,40 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     }
 
     // 4. Admin & RBAC Validation
-    try {
-        const db = getDb(c.env);
-        const userIsSuperAdmin = await isSuperAdmin(db, user.id);
-        const userPerms = await getUserPermissions(db, user.id);
+    const db = c.get("db");
+    const userIsSuperAdmin = await isSuperAdmin(db, user.id);
+    const userPerms = await getUserPermissions(db, user.id);
 
-        // First line of defense: must be super admin, have admin role, OR have custom delegated permissions
-        const hasAdminAccess = userIsSuperAdmin || user.role === "admin" || userPerms.size > 0;
+    // First line of defense: must be super admin, have admin role, OR have custom delegated permissions
+    const hasAdminAccess = userIsSuperAdmin || user.role === "admin" || userPerms.size > 0;
 
-        if (user.role !== "admin" && !hasAdminAccess) {
-            return c.json(
-                {
-                    error: "Forbidden",
-                    message: "Admin access required",
-                },
-                403,
-            );
-        }
-
-        // 4. Fine-grained Route Permissions mapped from Astro routes configuration
-        // getRoutePermission expects paths like "/api/v1/admin/categories"
-        const honoPathname = new URL(c.req.url).pathname;
-        const pathname = honoPathname.startsWith("/api/v1") ? honoPathname : `/api/v1${honoPathname}`;
-        const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-        const routePermission = getRoutePermission(pathname, method);
-
-        if (routePermission && !userIsSuperAdmin) {
-            let hasRequiredPermission = false;
-
-            if (routePermission.permission) {
-                hasRequiredPermission = userPerms.has(routePermission.permission);
-            } else if (routePermission.anyOf) {
-                hasRequiredPermission = routePermission.anyOf.some((p: string) => userPerms.has(p));
-            } else if (routePermission.allOf) {
-                hasRequiredPermission = routePermission.allOf.every((p: string) => userPerms.has(p));
-            }
-
-            if (!hasRequiredPermission) {
-                const requiredPermissions =
-                    routePermission.permission ||
-                    routePermission.anyOf?.join(" or ") ||
-                    routePermission.allOf?.join(" and ");
-
-                return c.json(
-                    {
-                        error: "Forbidden",
-                        message: `You do not have permission to perform this action`,
-                        requiredPermission: requiredPermissions,
-                    },
-                    403,
-                );
-            }
-        }
-
-        // Passed all authentication and authorization checks
-        return next();
-    } catch (error: unknown) {
-        console.error("Admin Auth Middleware Error:", error);
-        return c.json({ error: "Server error", message: "Failed to verify admin permissions" }, 500);
+    if (user.role !== "admin" && !hasAdminAccess) {
+        throw new ForbiddenError("Admin access required");
     }
+
+    // 4. Fine-grained Route Permissions mapped from Astro routes configuration
+    // getRoutePermission expects paths like "/api/v1/admin/categories"
+    const honoPathname = new URL(c.req.url).pathname;
+    const pathname = honoPathname.startsWith("/api/v1") ? honoPathname : `/api/v1${honoPathname}`;
+    const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+    const routePermission = getRoutePermission(pathname, method);
+
+    if (routePermission && !userIsSuperAdmin) {
+        let hasRequiredPermission = false;
+
+        if (routePermission.permission) {
+            hasRequiredPermission = userPerms.has(routePermission.permission);
+        } else if (routePermission.anyOf) {
+            hasRequiredPermission = routePermission.anyOf.some((p: string) => userPerms.has(p));
+        } else if (routePermission.allOf) {
+            hasRequiredPermission = routePermission.allOf.every((p: string) => userPerms.has(p));
+        }
+
+        if (!hasRequiredPermission) {
+            throw new ForbiddenError("You do not have permission to perform this action");
+        }
+    }
+
+    // Passed all authentication and authorization checks
+    return next();
 };

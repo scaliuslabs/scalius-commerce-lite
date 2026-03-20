@@ -61,8 +61,8 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
     );
   };
 
-  const grandTotal =
-    order.totalAmount + order.shippingCharge - (order.discountAmount ?? 0);
+  // totalAmount already includes shipping and discount (computed server-side)
+  const grandTotal = order.totalAmount;
 
   const PAYMENT_STATUS_COLORS: Record<string, string> = {
     paid:     "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",

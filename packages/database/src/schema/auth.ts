@@ -17,10 +17,10 @@ export const user = sqliteTable("user", {
     isSuperAdmin: integer("is_super_admin", { mode: "boolean" })
         .notNull()
         .default(false),
-    banned: integer("banned", { mode: "boolean" }).default(false),
+    banned: integer("banned", { mode: "boolean" }).notNull().default(false),
     banReason: text("ban_reason"),
     banExpires: integer("ban_expires", { mode: "timestamp" }),
-    twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).default(false),
+    twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).notNull().default(false),
     twoFactorMethod: text("two_factor_method"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
@@ -40,7 +40,7 @@ export const session = sqliteTable("session", {
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
     impersonatedBy: text("impersonated_by"),
-    twoFactorVerified: integer("two_factor_verified", { mode: "boolean" }).default(false),
+    twoFactorVerified: integer("two_factor_verified", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),

@@ -4,6 +4,7 @@
 export { reserveStock, reserveMultiple, reserveStockBatch } from "./reserve";
 export { deductStock, deductMultiple } from "./deduct";
 export { releaseReservation, releaseMultiple } from "./release";
+export { restoreDeductedStock, restoreDeductedMultiple } from "./restore";
 export { recordMovement } from "./movements";
 export { checkAndAlertLowStock } from "./alerts";
 export type { LowStockAlertResult } from "./alerts";

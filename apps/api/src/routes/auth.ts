@@ -1,7 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { generateToken, revokeToken, getTokenStats } from "../utils/jwt";
 import { authMiddleware } from "../middleware/auth";
-import { db } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
@@ -53,10 +52,13 @@ const getTokenRoute = createRoute({
 });
 
 app.openapi(getTokenRoute, async (c) => {
-  const API_TOKEN =
-    c.env.API_TOKEN ||
-    process.env.API_TOKEN ||
-    "default-api-token-change-in-production";
+  const API_TOKEN = c.env.API_TOKEN;
+
+  if (!API_TOKEN || API_TOKEN === "default-api-token-change-in-production") {
+    // In production, refuse to issue system tokens with a missing or default secret
+    console.error("API_TOKEN is not set or is using the insecure default value. Set it via `wrangler secret put API_TOKEN`.");
+    throw new UnauthorizedError("Service token endpoint is not configured");
+  }
 
   const apiToken = c.req.header("X-API-Token");
 
@@ -87,6 +89,7 @@ const firebaseConfigRoute = createRoute({
 });
 
 app.openapi(firebaseConfigRoute, async (c) => {
+  const db = c.get("db");
   const result = await db
     .select({ value: settings.value })
     .from(settings)

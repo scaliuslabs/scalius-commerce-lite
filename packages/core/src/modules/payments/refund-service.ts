@@ -213,16 +213,36 @@ export async function processRefund(
         throw new ValidationError(`Unsupported payment gateway: ${gateway}`);
     }
 
-    // 4. Update order payment status
+    // 4. Record refund in orderPayments + update order atomically
+    const refundPaymentId = crypto.randomUUID();
     const newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - refundAmount));
-    await db
-        .update(orders)
-        .set({
+
+    await db.batch([
+        db.insert(orderPayments).values({
+            id: refundPaymentId,
+            orderId: params.orderId,
+            amount: refundAmount,
+            currency: currencyConfig.code,
+            paymentMethod: gateway,
+            paymentType: "refund",
+            status: "refunded",
+            stripePaymentIntentId: payment.stripePaymentIntentId,
+            stripeChargeId: payment.stripeChargeId,
+            sslcommerzTranId: payment.sslcommerzTranId,
+            sslcommerzValId: payment.sslcommerzValId,
+            sslcommerzBankTranId: payment.sslcommerzBankTranId,
+            polarCheckoutId: payment.polarCheckoutId,
+            metadata: JSON.stringify({ refundId, reason: params.reason }),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }),
+        db.update(orders).set({
             paidAmount: newPaidAmount,
             paymentStatus: isFullRefund ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL,
             updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(orders.id, params.orderId));
+        }).where(eq(orders.id, params.orderId)),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ] as any);
 
     // 5. Handle inventory on full refund:
     //    - If still reserved (pre-ship): release reservations

@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import {
   categories,
   products,
@@ -73,6 +72,7 @@ const listCategoriesRoute = createRoute({
 });
 
 app.openapi(listCategoriesRoute, async (c) => {
+  const db = c.get("db");
   const categoriesList = await db
     .select({
       id: categories.id,
@@ -124,6 +124,7 @@ const getCategoryBySlugRoute = createRoute({
 });
 
 app.openapi(getCategoryBySlugRoute, async (c) => {
+  const db = c.get("db");
   const { slug } = c.req.valid("param");
 
   const category = await db
@@ -180,6 +181,7 @@ const getCategoryProductsRoute = createRoute({
 });
 
 app.openapi(getCategoryProductsRoute, async (c) => {
+  const db = c.get("db");
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
   const {
