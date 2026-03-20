@@ -10,7 +10,7 @@ import { loadPageWithLayout } from "@/lib/page-data";
 
 const { slug } = Astro.params;
 if (!slug) {
-  return Astro.redirect("/404");
+  return new Response(null, { status: 404 });
 }
 
 // Parallel fetch: layout data + product data
@@ -18,7 +18,7 @@ const { layoutData, pageData: productData } = await loadPageWithLayout(
   () => getProductBySlug(slug)
 );
 if (!productData) {
-  return Astro.redirect("/404");
+  return new Response(null, { status: 404 });
 }
 
 const { product, category, images, variants, relatedProducts } = productData;

@@ -47,63 +47,20 @@ import { Badge } from "../../ui/badge";
 import { useCurrency } from "@/hooks/use-currency";
 import { navigateTo } from "@/lib/client/navigate";
 import { generateDiscountCode } from "./utils";
+import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart } from "./shared-validation";
 
-const formSchema = z
-  .object({
-    code: z
-      .string()
-      .min(3, { message: "Code must be at least 3 characters long" })
-      .max(50, { message: "Code cannot exceed 50 characters" })
-      .regex(/^[a-zA-Z0-9_-]+$/, {
-        message:
-          "Code can only contain letters, numbers, underscores, and hyphens",
-      }),
+const formSchema = refineEndDateAfterStart(
+  z.object({
+    code: discountCodeSchema,
     valueType: z.enum(["percentage", "fixed_amount"]),
-    discountValue: z.coerce // Use coerce for better number handling from input
+    discountValue: z.coerce
       .number({ message: "Discount value must be a number" })
       .positive({ message: "Discount value must be positive" }),
-    minPurchaseAmount: z.coerce
-      .number({
-        message: "Minimum purchase must be a number or empty",
-      })
-      .positive({ message: "Minimum purchase must be positive" })
-      .nullable()
-      .optional(),
-    maxUsesPerOrder: z.coerce
-      .number({
-        message: "Max uses per order must be an integer or empty",
-      })
-      .int({ message: "Max uses per order must be a whole number" })
-      .positive({ message: "Max uses per order must be positive" })
-      .nullable()
-      .optional(),
-    maxUses: z.coerce
-      .number({
-        message: "Max total uses must be an integer or empty",
-      })
-      .int({ message: "Max total uses must be a whole number" })
-      .positive({ message: "Max total uses must be positive" })
-      .nullable()
-      .optional(),
-    limitOnePerCustomer: z.boolean(),
+    ...sharedDiscountFields,
     combineWithProductDiscounts: z.boolean(),
     combineWithShippingDiscounts: z.boolean(),
-    startDate: z.date({ message: "Start date is required" }),
-    endDate: z.date().nullable().optional(),
-    isActive: z.boolean(),
-  })
-  .refine(
-    (data) => {
-      if (data.endDate && data.startDate && data.endDate < data.startDate) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: "End date cannot be before the start date",
-      path: ["endDate"],
-    },
-  );
+  }),
+);
 
 type FormValues = z.infer<typeof formSchema>;
 

@@ -290,7 +290,7 @@ const getFirebaseRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Get Firebase settings (system)",
     responses: {
-        200: { description: "Firebase settings", content: { "application/json": { schema: successEnvelope(z.object({ serviceAccount: z.string(), publicConfig: z.record(z.string(), z.any()) })) } } },
+        200: { description: "Firebase settings", content: { "application/json": { schema: successEnvelope(z.object({ serviceAccount: z.string(), publicConfig: z.record(z.string(), z.unknown()) })) } } },
         ...errorResponses,
     }
 });
@@ -317,7 +317,7 @@ app.openapi(getFirebaseRoute, async (c) => {
 
 const saveFirebaseSchema = z.object({
     serviceAccount: z.string().optional(),
-    publicConfig: z.any().optional(),
+    publicConfig: z.record(z.string(), z.unknown()).optional(),
 });
 
 const saveFirebaseRoute = createRoute({

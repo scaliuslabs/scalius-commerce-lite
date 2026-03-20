@@ -3,6 +3,7 @@
 
 import { getConfiguredSdkClient } from "./client";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import { getApiV1CheckoutConfig } from "@scalius/api-client/sdk";
 
 export interface GatewayConfig {
@@ -46,7 +47,7 @@ export async function getCheckoutConfig(): Promise<CheckoutConfig> {
         const { data } = await getApiV1CheckoutConfig({
           client: getConfiguredSdkClient(),
         });
-        return (data as any)?.data ?? null;
+        return unwrapData<CheckoutConfig>(data);
       } catch (err: unknown) {
         console.error("[checkout] Failed to fetch gateway config:", err);
         return null;

@@ -153,53 +153,9 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-// Error handling middleware
-app.use("*", async (c, next) => {
-  try {
-    await next();
-  } catch (error: unknown) {
-    console.error("API Error:", error);
-
-    if (error instanceof ApiError) {
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: error.code,
-            message: error.message,
-            details: error.details,
-          },
-        },
-        error.status as 400 | 401 | 403 | 404 | 409 | 422 | 500,
-      );
-    }
-
-    if (error instanceof Error) {
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: "INTERNAL_ERROR",
-            message: error.message,
-            ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
-          },
-        },
-        500,
-      );
-    }
-
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: "INTERNAL_ERROR",
-          message: "Internal Server Error",
-        },
-      },
-      500,
-    );
-  }
-});
+// Error handling is handled by app.onError() above.
+// All uncaught errors propagate to the global onError handler which
+// returns properly formatted JSON error responses.
 
 // Public root (relative path '/') - handles requests to /api/v1/
 // Update welcome message if desired, path remains '/'

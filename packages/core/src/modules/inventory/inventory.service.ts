@@ -239,7 +239,6 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
             }
 
             return {
-                success: true,
                 variantId,
                 previousStock,
                 newStock,

@@ -3,6 +3,7 @@
 import { getConfiguredSdkClient } from "./client";
 import type { ApiWidget } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import {
   getApiV1WidgetsActiveHomepage,
   getApiV1WidgetsById,
@@ -23,7 +24,7 @@ export async function getActiveHomepageWidgets(): Promise<ApiWidget[] | null> {
         const { data } = await getApiV1WidgetsActiveHomepage({
           client: getConfiguredSdkClient(),
         });
-        return (data as any)?.data?.widgets ?? null;
+        return unwrapData<{ widgets: ApiWidget[] }>(data)?.widgets ?? null;
       } catch (error: unknown) {
         console.error("Error fetching active homepage widgets:", error);
         return null;
@@ -57,7 +58,7 @@ export async function getWidgetById(
           path: { id: widgetId },
         });
         if (error) return null;
-        return (data as any)?.data?.widget ?? null;
+        return unwrapData<{ widget: ApiWidget }>(data)?.widget ?? null;
       } catch (error: unknown) {
         console.error(`Error fetching widget by ID "${widgetId}":`, error);
         return null;

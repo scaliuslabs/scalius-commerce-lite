@@ -3,6 +3,7 @@
 import { getConfiguredSdkClient } from "./client";
 import type { LocationData, ShippingMethod } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import {
   getApiV1LocationsCities,
   getApiV1LocationsZones,
@@ -23,7 +24,7 @@ export async function getCities(): Promise<LocationData[] | null> {
         const { data } = await getApiV1LocationsCities({
           client: getConfiguredSdkClient(),
         });
-        return (data as any)?.data ?? null;
+        return unwrapData<LocationData[]>(data);
       } catch (error: unknown) {
         console.error("Error fetching cities:", error);
         return null;
@@ -53,7 +54,7 @@ export async function getZones(cityId: string): Promise<LocationData[] | null> {
           client: getConfiguredSdkClient(),
           query: { cityId },
         });
-        return (data as any)?.data ?? null;
+        return unwrapData<LocationData[]>(data);
       } catch (error: unknown) {
         console.error(`Error fetching zones for city "${cityId}":`, error);
         return null;
@@ -83,7 +84,7 @@ export async function getAreas(zoneId: string): Promise<LocationData[] | null> {
           client: getConfiguredSdkClient(),
           query: { zoneId },
         });
-        return (data as any)?.data ?? null;
+        return unwrapData<LocationData[]>(data);
       } catch (error: unknown) {
         console.error(`Error fetching areas for zone "${zoneId}":`, error);
         return null;
@@ -106,7 +107,7 @@ export async function getShippingMethods(): Promise<ShippingMethod[] | null> {
         const { data } = await getApiV1ShippingMethods({
           client: getConfiguredSdkClient(),
         });
-        return (data as any)?.data?.shippingMethods ?? null;
+        return unwrapData<{ shippingMethods: ShippingMethod[] }>(data)?.shippingMethods ?? null;
       } catch (error: unknown) {
         console.error("Error fetching shipping methods:", error);
         return null;

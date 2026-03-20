@@ -164,40 +164,41 @@ export async function createCustomer(
     }
 
     const customerId = "cust_" + nanoid();
-    await db.insert(customers).values({
-        id: customerId,
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        address: data.address,
-        city: data.city,
-        zone: data.zone,
-        area: data.area,
-        cityName,
-        zoneName,
-        areaName,
-        totalOrders: 0,
-        totalSpent: 0,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-    });
-
-    await db.insert(customerHistory).values({
-        id: "hist_" + nanoid(),
-        customerId,
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        address: data.address,
-        city: data.city,
-        zone: data.zone,
-        area: data.area,
-        cityName,
-        zoneName,
-        areaName,
-        changeType: "created",
-        createdAt: sql`unixepoch()`,
-    });
+    await db.batch([
+        db.insert(customers).values({
+            id: customerId,
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            cityName,
+            zoneName,
+            areaName,
+            totalOrders: 0,
+            totalSpent: 0,
+            createdAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        }),
+        db.insert(customerHistory).values({
+            id: "hist_" + nanoid(),
+            customerId,
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            cityName,
+            zoneName,
+            areaName,
+            changeType: "created",
+            createdAt: sql`unixepoch()`,
+        }),
+    ] as any);
 
     return { id: customerId };
 }
@@ -245,50 +246,52 @@ export async function updateCustomer(
         updatedAt: sql`unixepoch()`,
     };
 
-    await db.update(customers).set(updateData).where(eq(customers.id, id));
+    await db.batch([
+        db.update(customers).set(updateData).where(eq(customers.id, id)),
+        db.insert(customerHistory).values({
+            id: "hist_" + nanoid(),
+            customerId: id,
+            name: data.name ?? existing.name,
+            email: data.email !== undefined ? data.email : existing.email,
+            phone: data.phone ?? existing.phone,
+            address: data.address !== undefined ? data.address : existing.address,
+            city: data.city !== undefined ? data.city : existing.city,
+            zone: data.zone !== undefined ? data.zone : existing.zone,
+            area: data.area !== undefined ? data.area : existing.area,
+            cityName,
+            zoneName,
+            areaName,
+            changeType: "updated",
+            createdAt: sql`unixepoch()`,
+        }),
+    ] as any);
 
-    await db.insert(customerHistory).values({
-        id: "hist_" + nanoid(),
-        customerId: id,
-        name: data.name ?? existing.name,
-        email: data.email !== undefined ? data.email : existing.email,
-        phone: data.phone ?? existing.phone,
-        address: data.address !== undefined ? data.address : existing.address,
-        city: data.city !== undefined ? data.city : existing.city,
-        zone: data.zone !== undefined ? data.zone : existing.zone,
-        area: data.area !== undefined ? data.area : existing.area,
-        cityName,
-        zoneName,
-        areaName,
-        changeType: "updated",
-        createdAt: sql`unixepoch()`,
-    });
-
-    return { success: true };
 }
+
 
 export async function deleteCustomer(db: Database, id: string): Promise<void> {
     const existing = await getCustomerById(db, id);
     if (!existing) throw Object.assign(new Error("Customer not found"), { statusCode: 404 });
 
-    await db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(eq(customers.id, id));
-
-    await db.insert(customerHistory).values({
-        id: "hist_" + nanoid(),
-        customerId: id,
-        name: existing.name,
-        email: existing.email,
-        phone: existing.phone,
-        address: existing.address,
-        city: existing.city,
-        zone: existing.zone,
-        area: existing.area,
-        cityName: existing.cityName,
-        zoneName: existing.zoneName,
-        areaName: existing.areaName,
-        changeType: "deleted",
-        createdAt: sql`unixepoch()`,
-    });
+    await db.batch([
+        db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
+        db.insert(customerHistory).values({
+            id: "hist_" + nanoid(),
+            customerId: id,
+            name: existing.name,
+            email: existing.email,
+            phone: existing.phone,
+            address: existing.address,
+            city: existing.city,
+            zone: existing.zone,
+            area: existing.area,
+            cityName: existing.cityName,
+            zoneName: existing.zoneName,
+            areaName: existing.areaName,
+            changeType: "deleted",
+            createdAt: sql`unixepoch()`,
+        }),
+    ] as any);
 }
 
 export async function permanentlyDeleteCustomer(db: Database, id: string): Promise<void> {

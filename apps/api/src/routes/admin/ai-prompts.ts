@@ -3,6 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { errorResponses } from "../../schemas/responses";
+import { ServiceUnavailableError } from "../../utils/api-error";
 
 const app = new OpenAPIHono();
 
@@ -43,13 +44,13 @@ app.openapi(getPromptRoute, async (c) => {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch system prompt from ${promptUrl}: ${response.status} ${response.statusText}`);
+            throw new ServiceUnavailableError(`Failed to fetch system prompt from ${promptUrl}: ${response.status} ${response.statusText}`);
         }
 
         const systemPrompt = await response.text();
 
         if (!systemPrompt || systemPrompt.trim().length === 0) {
-            throw new Error("System prompt is empty");
+            throw new ServiceUnavailableError("System prompt is empty");
         }
 
         return c.text(systemPrompt, 200, {

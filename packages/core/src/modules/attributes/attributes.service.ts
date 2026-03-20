@@ -62,15 +62,18 @@ export async function listAttributes(
 
     const total = totalResult?.count ?? 0;
 
-    const sortField = sort as keyof typeof productAttributes._.columns;
+    const ALLOWED_SORT_FIELDS = ["name", "slug", "filterable", "createdAt", "updatedAt"] as const;
+    type SortField = typeof ALLOWED_SORT_FIELDS[number];
+    const safeSortField: SortField = ALLOWED_SORT_FIELDS.includes(sort as SortField) ? sort as SortField : "name";
+    const sortColumn = productAttributes[safeSortField];
     const attributes = await db
         .select()
         .from(productAttributes)
         .where(combinedWhereClause)
         .orderBy(
             order === "asc"
-                ? asc(productAttributes[sortField])
-                : desc(productAttributes[sortField]),
+                ? asc(sortColumn)
+                : desc(sortColumn),
         )
         .limit(limit)
         .offset(offset);
@@ -228,6 +231,8 @@ export async function restoreAttribute(db: Database, id: string) {
 }
 
 export async function bulkDeleteAttributes(db: Database, ids: string[], permanent = false) {
+    if (ids.length === 0) return;
+
     if (permanent) {
         await db
             .delete(productAttributes)
@@ -241,6 +246,8 @@ export async function bulkDeleteAttributes(db: Database, ids: string[], permanen
 }
 
 export async function bulkRestoreAttributes(db: Database, ids: string[]) {
+    if (ids.length === 0) return;
+
     await db
         .update(productAttributes)
         .set({ deletedAt: null })
@@ -325,32 +332,43 @@ export async function listAttributeValues(
         .offset(offset)
         .all();
 
-    // For each value in this page, fetch up to 5 sample product names
-    const values = await Promise.all(
-        dbValues.map(async (row) => {
-            const samples = await db
-                .select({ productName: products.name })
-                .from(productAttributeValues)
-                .innerJoin(products, eq(productAttributeValues.productId, products.id))
-                .where(
-                    and(
-                        eq(productAttributeValues.attributeId, attributeId),
-                        eq(productAttributeValues.value, row.value),
-                        isNull(products.deletedAt)
-                    )
+    // Batch fetch sample product names for all values on this page
+    const pageValues = dbValues.map((v) => v.value);
+    let sampleProductMap = new Map<string, string[]>();
+    if (pageValues.length > 0) {
+        const allSamples = await db
+            .select({
+                value: productAttributeValues.value,
+                productName: products.name,
+            })
+            .from(productAttributeValues)
+            .innerJoin(products, eq(productAttributeValues.productId, products.id))
+            .where(
+                and(
+                    eq(productAttributeValues.attributeId, attributeId),
+                    inArray(productAttributeValues.value, pageValues),
+                    isNull(products.deletedAt),
                 )
-                .limit(5)
-                .all();
+            )
+            .all();
 
-            return {
-                value: row.value,
-                productCount: row.productCount,
-                createdAt: row.earliestCreatedAt,
-                isPreset: attrOptions.includes(row.value),
-                sampleProducts: samples.map((s) => s.productName),
-            };
-        })
-    );
+        // Group by value, keeping at most 5 sample names per value
+        for (const row of allSamples) {
+            const existing = sampleProductMap.get(row.value) || [];
+            if (existing.length < 5) {
+                existing.push(row.productName);
+                sampleProductMap.set(row.value, existing);
+            }
+        }
+    }
+
+    const values = dbValues.map((row) => ({
+        value: row.value,
+        productCount: row.productCount,
+        createdAt: row.earliestCreatedAt,
+        isPreset: attrOptions.includes(row.value),
+        sampleProducts: sampleProductMap.get(row.value) || [],
+    }));
 
     // Count preset options that have no product usage (and match search if any)
     const unusedPresets = attrOptions

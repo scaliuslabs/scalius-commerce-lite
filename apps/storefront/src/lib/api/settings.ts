@@ -7,6 +7,7 @@ import type {
   CheckoutLanguageData,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapEnvelope, unwrapData } from "./unwrap";
 import {
   getApiV1Seo,
   getApiV1AnalyticsConfigurations,
@@ -45,8 +46,7 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
         const { data } = await getApiV1Seo({
           client: getConfiguredSdkClient(),
         });
-        const d = data as any;
-        return d?.success ? d.data : null;
+        return unwrapEnvelope<SeoSettings>(data);
       } catch (error: unknown) {
         console.error("Error fetching SEO settings:", error);
         return null;
@@ -70,7 +70,7 @@ export async function getAnalyticsConfigurations(): Promise<
         const { data } = await getApiV1AnalyticsConfigurations({
           client: getConfiguredSdkClient(),
         });
-        return (data as any)?.data?.analytics ?? null;
+        return unwrapData<{ analytics: AnalyticsConfig[] }>(data)?.analytics ?? null;
       } catch (error: unknown) {
         console.error("Error fetching analytics configurations:", error);
         return null;
@@ -92,7 +92,7 @@ export async function getActiveCheckoutLanguage(): Promise<CheckoutLanguageData 
         const { data } = await getApiV1CheckoutLanguagesActive({
           client: getConfiguredSdkClient(),
         });
-        return (data as any)?.data?.language ?? null;
+        return unwrapData<{ language: CheckoutLanguageData }>(data)?.language ?? null;
       } catch (error: unknown) {
         console.error("Error fetching active checkout language:", error);
         return null;
@@ -114,7 +114,7 @@ export async function getHeroSliders(): Promise<HeroSliderData | null> {
         const { data } = await getApiV1HeroSliders({
           client: getConfiguredSdkClient(),
         });
-        return (data as any)?.data ?? null;
+        return unwrapData<HeroSliderData>(data);
       } catch (error: unknown) {
         console.error("Error fetching hero sliders:", error);
         return null;

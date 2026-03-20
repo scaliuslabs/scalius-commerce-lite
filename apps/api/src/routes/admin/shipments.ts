@@ -18,7 +18,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const statusCheckSchema = z.object({
     status: z.string(),
     statusChanged: z.boolean(),
-    orderStatusUpdate: z.any(),
+    orderStatusUpdate: z.object({ status: z.string() }).passthrough().nullable(),
     lastChecked: z.string(),
 }).passthrough();
 

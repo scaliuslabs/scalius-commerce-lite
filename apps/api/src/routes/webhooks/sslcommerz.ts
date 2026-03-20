@@ -51,7 +51,7 @@ app.post("/", async (c) => {
 
   if (!validation) {
     console.error(`[ssl-webhook] IPN validation API call failed for order ${tranId}`);
-    return c.text("OK");
+    return c.text("RETRY", 503);
   }
 
   const isValid = validation.status === "VALID" || validation.status === "VALIDATED";

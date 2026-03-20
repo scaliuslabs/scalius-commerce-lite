@@ -7,6 +7,7 @@ import { eq, sql } from "drizzle-orm";
 import { productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { recordMovement } from "./movements";
+import { checkAndAlertLowStock } from "./alerts";
 import type { ReservationEntry, StockOperationResult } from "./types";
 
 /**
@@ -86,6 +87,9 @@ export async function restoreDeductedStock(
     newStock,
     notes: `Deducted stock restored${orderId ? ` for order ${orderId}` : ""}`,
   });
+
+  // Auto-resolve low stock alerts when stock is restored
+  await checkAndAlertLowStock(db, variantId);
 
   return { success: true, variantId, previousStock, newStock };
 }

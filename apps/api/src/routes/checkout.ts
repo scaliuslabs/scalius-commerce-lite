@@ -22,7 +22,7 @@ const getCheckoutConfigRoute = createRoute({
   responses: {
     200: {
       description: "Checkout configuration",
-      content: { "application/json": { schema: successEnvelope(z.any()) } },
+      content: { "application/json": { schema: successEnvelope(z.record(z.string(), z.unknown())) } },
     },
     500: errorResponses[500],
   }

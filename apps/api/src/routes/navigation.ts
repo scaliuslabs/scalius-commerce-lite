@@ -50,7 +50,7 @@ const getNavigationRoute = createRoute({
     200: {
       description: "Navigation data",
       content: { "application/json": { schema: successEnvelope(z.object({
-        navigation: z.record(z.string(), z.any()),
+        navigation: z.record(z.string(), z.unknown()),
       })) } },
     },
     404: errorResponses[404],
@@ -177,7 +177,7 @@ const getNavigationByIdRoute = createRoute({
         menu: z.object({
           id: z.string(),
           name: z.string(),
-          items: z.array(z.any()),
+          items: z.array(z.object({ id: z.string(), label: z.string(), url: z.string().nullable(), sortOrder: z.number() }).passthrough()),
         }),
       })) } },
     },

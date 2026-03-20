@@ -36,17 +36,10 @@ interface JwtEnv {
 function getJwtSecret(env?: JwtEnv): string {
   const secret =
     env?.JWT_SECRET ||
-    (typeof process !== "undefined" ? process.env.JWT_SECRET : undefined) ||
-    "your-jwt-secret-key-change-this-in-production";
+    (typeof process !== "undefined" ? process.env.JWT_SECRET : undefined);
 
-  if (
-    typeof process !== "undefined" &&
-    process.env.NODE_ENV === "production" &&
-    secret === "your-jwt-secret-key-change-this-in-production"
-  ) {
-    throw new Error(
-      "CRITICAL SECURITY ERROR: Using default JWT secret in production. Set JWT_SECRET environment variable.",
-    );
+  if (!secret) {
+    throw new Error("JWT_SECRET environment variable is required");
   }
 
   return secret;
@@ -188,7 +181,7 @@ export async function isTokenBlacklisted(token: string): Promise<boolean> {
     return result?.revoked === true;
   } catch (error: unknown) {
     console.error("Error checking token blacklist:", error);
-    return false; // Fail open to avoid blocking valid requests
+    return true; // Fail closed — reject token when KV is unavailable
   }
 }
 

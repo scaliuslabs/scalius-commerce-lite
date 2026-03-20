@@ -13,13 +13,13 @@ const checkoutLanguageSchema = z.object({
   id: z.string(),
   name: z.string(),
   code: z.string(),
-  languageData: z.any(),
-  fieldVisibility: z.any(),
+  languageData: z.union([z.string(), z.record(z.string(), z.unknown())]),
+  fieldVisibility: z.union([z.string(), z.record(z.string(), z.unknown())]),
   isActive: z.boolean(),
   isDefault: z.boolean(),
-  createdAt: z.any().optional(),
-  updatedAt: z.any().optional(),
-  deletedAt: z.any().nullable().optional(),
+  createdAt: z.union([z.string(), z.number()]).optional(),
+  updatedAt: z.union([z.string(), z.number()]).optional(),
+  deletedAt: z.union([z.string(), z.number()]).nullable().optional(),
 }).passthrough();
 
 const defaultLanguageData = {

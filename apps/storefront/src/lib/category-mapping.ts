@@ -13,8 +13,12 @@ interface CategoryMapping {
 }
 
 /**
- * Default category mappings for common medicine/pharmacy products
- * Add your category slugs/names as keys and map them to standard taxonomies
+ * Default category mappings for product taxonomies.
+ *
+ * TODO: These mappings are hardcoded for a pharmacy/health store.
+ * For other store types, this should be configurable from admin settings
+ * (e.g., stored in the `settings` table under category "taxonomy").
+ * The default fallback also uses "Health & Beauty" which is domain-specific.
  */
 const CATEGORY_MAPPINGS: Record<string, CategoryMapping> = {
   // Health & Beauty categories

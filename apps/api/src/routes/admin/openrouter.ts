@@ -5,7 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import { ok } from "../../utils/api-response";
-import { ValidationError } from "../../utils/api-error";
+import { ValidationError, ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 import {
     OPENROUTER_BASE_URL,
@@ -35,7 +35,7 @@ app.openapi(listModelsRoute, (async (c: any) => {
         const response = await fetch("https://openrouter.ai/api/v1/models");
 
         if (!response.ok) {
-            throw new Error("Failed to fetch models from OpenRouter");
+            throw new ServiceUnavailableError("Failed to fetch models from OpenRouter");
         }
 
         const data = await response.json() as { data?: Array<Record<string, unknown>> };
@@ -74,10 +74,10 @@ app.openapi(listModelsRoute, (async (c: any) => {
 
 const generateSchema = z.object({
     model: z.string().min(1),
-    messages: z.array(z.object({ role: z.string(), content: z.any() })).optional(),
+    messages: z.array(z.object({ role: z.string(), content: z.union([z.string(), z.array(z.record(z.string(), z.unknown()))]) })).optional(),
     prompt: z.string().optional(),
     stream: z.boolean().optional(),
-    images: z.array(z.any()).optional(),
+    images: z.array(z.object({ url: z.string(), mimeType: z.string().optional() }).passthrough()).optional(),
 }).refine(data => data.messages || data.prompt, {
     message: "Messages or prompt is required.",
 });
@@ -217,7 +217,7 @@ app.openapi(generateRoute, (async (c: any) => {
 
 const generateStagedSchema = z.object({
     model: z.string().min(1),
-    messages: z.array(z.object({ role: z.string(), content: z.any() })).min(1),
+    messages: z.array(z.object({ role: z.string(), content: z.union([z.string(), z.array(z.record(z.string(), z.unknown()))]) })).min(1),
     stage: z.string().optional(),
     sectionIndex: z.number().optional(),
     totalSections: z.number().optional(),

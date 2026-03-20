@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { discountCodeSchema, sharedDiscountFields } from "../shared-validation";
 
 export interface Product {
   id: string;
@@ -15,7 +16,7 @@ export interface Collection {
 }
 
 export const formSchema = z.object({
-  code: z.string().min(1, "Discount code is required").max(50),
+  code: discountCodeSchema,
   valueType: z.enum(["percentage", "fixed_amount"]),
   discountValue: z
     .number({ message: "Must be a number" })
@@ -28,17 +29,16 @@ export const formSchema = z.object({
     .refine((data) => data.products.length > 0 || data.collections.length > 0, {
       message: "Please select at least one product or collection.",
     }),
-  minPurchaseAmount: z.number().nullable().optional(),
-  minQuantity: z.number().int().positive().nullable().optional(),
-  maxUsesPerOrder: z.number().int().positive().nullable().optional(),
-  maxUses: z.number().int().positive().nullable().optional(),
-  limitOnePerCustomer: z.boolean(),
+  ...sharedDiscountFields,
+  minQuantity: z.coerce
+    .number({ message: "Min quantity must be a number" })
+    .int({ message: "Min quantity must be a whole number" })
+    .positive({ message: "Min quantity must be positive" })
+    .nullable()
+    .optional(),
   combineWithProductDiscounts: z.boolean(),
   combineWithOrderDiscounts: z.boolean(),
   combineWithShippingDiscounts: z.boolean(),
-  startDate: z.date({ message: "Start date is required." }),
-  endDate: z.date().nullable().optional(),
-  isActive: z.boolean(),
 });
 
 export type FormValues = z.infer<typeof formSchema>;

@@ -230,7 +230,7 @@ async function bulkUpsert(
       parentId: u.parentId,
       externalIds: JSON.stringify(parsedIds),
       metadata: u.metadata ? JSON.stringify(u.metadata) : undefined,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
+      updatedAt: sql`(unixepoch())`,
     }).where(eq(deliveryLocations.id, u.id));
   }
 

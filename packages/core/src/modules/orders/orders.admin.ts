@@ -880,6 +880,7 @@ export async function permanentlyDeleteOrder(db: Database, id: string) {
 }
 
 export async function bulkDeleteOrders(db: Database, orderIds: string[], permanent: boolean = false) {
+    if (orderIds.length === 0) return;
     for (const orderId of orderIds) {
         const order = await db.select({ id: orders.id, inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, orderId)).get();
         if (!order) continue;

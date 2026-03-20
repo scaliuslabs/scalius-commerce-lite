@@ -3,7 +3,7 @@
 // Settings that lived in shared/ or in Astro API routes are consolidated here.
 
 import { siteSettings, settings } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Database } from "@scalius/database/client";
@@ -172,4 +172,61 @@ export async function invalidateSiteSettingsCache(kv?: KVNamespace | null): Prom
     try {
         await kv.delete(SITE_SETTINGS_CACHE_KEY);
     } catch { }
+}
+
+// ─────────────────────────────────────────
+// Notification Channel Preferences
+// ─────────────────────────────────────────
+
+const VALID_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp", "push"] as const;
+
+const DEFAULT_NOTIFICATION_CHANNELS: Record<string, string[]> = {
+    order_created: ["email"],
+    order_confirmed: ["email"],
+    order_processing: ["email"],
+    order_shipped: ["email"],
+    order_delivered: ["email"],
+    order_cancelled: ["email"],
+};
+
+/**
+ * Get notification channel preferences per order status.
+ * Returns a map of status -> enabled channels.
+ */
+export async function getNotificationChannels(
+    db: Database,
+): Promise<Record<string, string[]>> {
+    const row = await db
+        .select({ value: settings.value })
+        .from(settings)
+        .where(and(eq(settings.category, "notifications"), eq(settings.key, "order_channels")))
+        .get();
+
+    if (!row?.value) return DEFAULT_NOTIFICATION_CHANNELS;
+    try {
+        return JSON.parse(row.value);
+    } catch {
+        return DEFAULT_NOTIFICATION_CHANNELS;
+    }
+}
+
+/**
+ * Update notification channel preferences.
+ * Validates channel values against the known set.
+ */
+export async function updateNotificationChannels(
+    db: Database,
+    channels: Record<string, string[]>,
+): Promise<Record<string, string[]>> {
+    // Validate and filter channel values
+    for (const [status, statusChannels] of Object.entries(channels)) {
+        channels[status] = statusChannels.filter((c) =>
+            (VALID_NOTIFICATION_CHANNELS as readonly string[]).includes(c),
+        );
+    }
+
+    // Import upsertSetting from gateway-settings (same pattern used by site-settings.service.ts)
+    const { upsertSetting } = await import("../payments/gateway-settings");
+    await upsertSetting(db, "notifications", "order_channels", JSON.stringify(channels));
+    return channels;
 }

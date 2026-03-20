@@ -278,6 +278,8 @@ export async function getProductDetails(
             deletedAt: products.deletedAt,
             isActive: products.isActive,
             discountPercentage: products.discountPercentage,
+            discountType: products.discountType,
+            discountAmount: products.discountAmount,
             freeDelivery: products.freeDelivery,
             category: {
                 name: categories.name,
@@ -692,8 +694,10 @@ export async function bulkDeleteProducts(db: DrizzleD1Database<typeof schema>, p
         await db.batch([
             db.delete(productVariants).where(inArray(productVariants.productId, productIds)),
             db.delete(productImages).where(inArray(productImages.productId, productIds)),
+            db.delete(productAttributeValues).where(inArray(productAttributeValues.productId, productIds)),
+            db.delete(productRichContent).where(inArray(productRichContent.productId, productIds)),
             db.delete(products).where(inArray(products.id, productIds)),
-        ]);
+        ] as any);
     } else {
         await db
             .update(products)

@@ -17,16 +17,16 @@ const listRoute = createRoute({
     tags: ["Admin - Analytics"],
     summary: "List all analytics scripts",
     responses: {
-        200: { description: "Analytics script list", content: { "application/json": { schema: successEnvelope(z.array(z.object({ id: z.string(), name: z.string(), type: z.string(), config: z.string(), isActive: z.boolean(), usePartytown: z.boolean(), location: z.string(), createdAt: z.any(), updatedAt: z.any() }).passthrough().nullable())) } } },
+        200: { description: "Analytics script list", content: { "application/json": { schema: successEnvelope(z.array(z.object({ id: z.string(), name: z.string(), type: z.string(), config: z.string(), isActive: z.boolean(), usePartytown: z.boolean(), location: z.string(), createdAt: z.union([z.string(), z.number()]), updatedAt: z.union([z.string(), z.number()]) }).passthrough().nullable())) } } },
         ...errorResponses,
     }
 });
 
-app.openapi(listRoute, async (c) => {
+app.openapi(listRoute, (async (c: any) => {
     const db = c.get("db");
     const scripts = await listAnalyticsScripts(db);
     return ok(c, scripts);
-});
+}) as any);
 
 // ── Create Analytics Script ──
 

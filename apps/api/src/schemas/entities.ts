@@ -44,9 +44,7 @@ export const productImageSchema = z
     createdAt: z.string().or(z.date()),
   })
 
-/** Product variant — returned by variant CRUD endpoints.
- * Uses z.any() for timestamps since Drizzle returns Date objects
- * that get JSON-serialized to strings. */
+/** Product variant — returned by variant CRUD endpoints. */
 export const productVariantSchema = z
   .object({
     id: z.string(),
@@ -61,7 +59,7 @@ export const productVariantSchema = z
     preorderStock: z.number().optional(),
     lowStockThreshold: z.number().nullable().optional(),
     allowPreorder: z.boolean().optional(),
-    preorderDate: z.any().nullable().optional(),
+    preorderDate: z.union([z.string(), z.number()]).nullable().optional(),
     preorderMessage: z.string().nullable().optional(),
     allowBackorder: z.boolean().optional(),
     backorderLimit: z.number().optional(),
@@ -72,9 +70,9 @@ export const productVariantSchema = z
     barcodeType: z.string().nullable().optional(),
     colorSortOrder: z.number().nullable().optional(),
     sizeSortOrder: z.number().nullable().optional(),
-    createdAt: z.any().optional(),
-    updatedAt: z.any().optional(),
-    deletedAt: z.any().nullable().optional(),
+    createdAt: z.union([z.string(), z.number()]).optional(),
+    updatedAt: z.union([z.string(), z.number()]).optional(),
+    deletedAt: z.union([z.string(), z.number()]).nullable().optional(),
     stockVersion: z.number().optional(),
     version: z.number().optional(),
   });
@@ -321,9 +319,9 @@ export const collectionSchema = z
     config: z.string(),
     sortOrder: z.number(),
     isActive: z.boolean(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
-    deletedAt: z.any().nullable(),
+    createdAt: z.union([z.string(), z.number()]).nullable(),
+    updatedAt: z.union([z.string(), z.number()]).nullable(),
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
   })
 
 // ─────────────────────────────────────────
@@ -344,12 +342,12 @@ export const discountSchema = z
     maxUses: z.number().nullable(),
     limitOnePerCustomer: z.boolean(),
     customerSegment: z.string().nullable(),
-    startDate: z.any(),
-    endDate: z.any().nullable(),
+    startDate: z.union([z.string(), z.number()]),
+    endDate: z.union([z.string(), z.number()]).nullable(),
     isActive: z.boolean(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
-    deletedAt: z.any().nullable(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
   })
 
 // ─────────────────────────────────────────
@@ -370,9 +368,9 @@ export const pageSchema = z
     hideFooter: z.boolean(),
     hideTitle: z.boolean(),
     sortOrder: z.number(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
-    deletedAt: z.any().nullable(),
+    createdAt: z.union([z.string(), z.number()]).nullable(),
+    updatedAt: z.union([z.string(), z.number()]).nullable(),
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
   })
 
 // ─────────────────────────────────────────
@@ -392,27 +390,26 @@ export const widgetSchema = z
     placementRule: z.string(),
     referenceCollectionId: z.string().nullable(),
     sortOrder: z.number(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
-    deletedAt: z.any().nullable(),
+    createdAt: z.union([z.string(), z.number()]).nullable(),
+    updatedAt: z.union([z.string(), z.number()]).nullable(),
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
   })
 
 // ─────────────────────────────────────────
 // Attributes
 // ─────────────────────────────────────────
 
-/** Product attribute — returned by attributes service endpoints.
- * Uses z.any() for timestamps since Drizzle returns Date objects. */
+/** Product attribute — returned by attributes service endpoints. */
 export const attributeSchema = z
   .object({
     id: z.string(),
     name: z.string(),
     slug: z.string(),
     filterable: z.boolean(),
-    options: z.any().nullable(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
-    deletedAt: z.any().nullable(),
+    options: z.array(z.string()).nullable(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
   });
 
 // ─────────────────────────────────────────
@@ -428,9 +425,9 @@ export const mediaSchema = z
     size: z.number(),
     mimeType: z.string(),
     folderId: z.string().nullable(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
-    deletedAt: z.any().nullable(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
   })
 
 /** Media folder. */
@@ -439,9 +436,9 @@ export const mediaFolderSchema = z
     id: z.string(),
     name: z.string(),
     parentId: z.string().nullable(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
-    deletedAt: z.any().nullable(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
   })
 
 // ─────────────────────────────────────────

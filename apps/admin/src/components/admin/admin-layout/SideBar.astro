@@ -7,22 +7,7 @@ import favicon from "@/assets/favicon.png";
 import logoDark from "@/assets/logo-dark.png";
 import logoLight from "@/assets/logo-light.png";
 import "./sidebar/sidebar.css";
-
-export interface NavSubItem {
-  name: string;
-  href: string;
-  icon?: any;
-}
-export interface NavItem {
-  name: string;
-  href: string;
-  icon: any;
-  subItems?: NavSubItem[];
-}
-export interface NavSection {
-  label: string;
-  items: NavItem[];
-}
+import type { NavSubItem, NavItem, NavSection } from "@/layouts/components/AdminNav";
 
 interface Props {
   navSections: NavSection[];

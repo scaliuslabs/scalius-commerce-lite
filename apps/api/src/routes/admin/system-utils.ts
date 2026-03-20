@@ -46,7 +46,7 @@ const listAbandonedCheckoutsRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Abandoned checkout list", content: { "application/json": { schema: successEnvelope(z.object({ checkouts: z.array(z.object({ id: z.string(), checkoutId: z.string().nullable(), customerPhone: z.string().nullable(), checkoutData: z.string(), createdAt: z.any(), updatedAt: z.any() }).passthrough()), pagination: z.object({ page: z.number(), limit: z.number(), total: z.number(), totalPages: z.number() }) })) } } },
+        200: { description: "Abandoned checkout list", content: { "application/json": { schema: successEnvelope(z.object({ checkouts: z.array(z.object({ id: z.string(), checkoutId: z.string().nullable(), customerPhone: z.string().nullable(), checkoutData: z.string(), createdAt: z.union([z.string(), z.number()]), updatedAt: z.union([z.string(), z.number()]) }).passthrough()), pagination: z.object({ page: z.number(), limit: z.number(), total: z.number(), totalPages: z.number() }) })) } } },
         ...errorResponses,
     }
 });

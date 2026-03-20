@@ -105,8 +105,8 @@ export async function createLocation(db: Database, data: LocationData) {
     metadata: JSON.stringify(data.metadata),
     isActive: data.isActive !== undefined ? data.isActive : true,
     sortOrder: data.sortOrder || 0,
-    createdAt: sql`CURRENT_TIMESTAMP`,
-    updatedAt: sql`CURRENT_TIMESTAMP`,
+    createdAt: sql`(unixepoch())`,
+    updatedAt: sql`(unixepoch())`,
   });
 
   return { id, ...data };
@@ -115,7 +115,7 @@ export async function createLocation(db: Database, data: LocationData) {
 /** Update an existing location */
 export async function updateLocation(db: Database, id: string, data: Partial<LocationData>) {
   const updateData: Record<string, unknown> = {
-    updatedAt: sql`CURRENT_TIMESTAMP`,
+    updatedAt: sql`(unixepoch())`,
   };
 
   if (data.name !== undefined) updateData.name = data.name;
@@ -144,8 +144,8 @@ export async function deleteLocation(db: Database, id: string) {
   await db
     .update(deliveryLocations)
     .set({
-      deletedAt: sql`CURRENT_TIMESTAMP`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
+      deletedAt: sql`(unixepoch())`,
+      updatedAt: sql`(unixepoch())`,
     })
     .where(eq(deliveryLocations.id, id));
 

@@ -5,7 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { listDiscounts, getDiscountById, createDiscount, updateDiscount, deleteDiscount, bulkDeleteDiscounts, restoreDiscounts, permanentlyDeleteDiscount, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
 import { discounts } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
-import { NotFoundError, ApiError, ValidationError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses } from "../../schemas/responses";
@@ -68,13 +68,8 @@ const createDiscountRoute = createRoute({
 app.openapi(createDiscountRoute, (async (c: any) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    try {
-        const result = await createDiscount(db, data);
-        return created(c, result);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    const result = await createDiscount(db, data);
+    return created(c, result);
 }) as any);
 
 // ── Bulk Delete Discounts ──
@@ -154,13 +149,13 @@ const getByIdRoute = createRoute({
     }
 });
 
-app.openapi(getByIdRoute, async (c) => {
+app.openapi(getByIdRoute, (async (c: any) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const discount = await getDiscountById(db, id);
     if (!discount) throw new NotFoundError("Discount not found");
     return ok(c, discount);
-});
+}) as any);
 
 // ── Update Discount ──
 
@@ -183,13 +178,8 @@ app.openapi(updateDiscountRoute, (async (c: any) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    try {
-        const result = await updateDiscount(db, id, data);
-        return ok(c, result);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    const result = await updateDiscount(db, id, data);
+    return ok(c, result);
 }) as any);
 
 // ── Delete Discount ──

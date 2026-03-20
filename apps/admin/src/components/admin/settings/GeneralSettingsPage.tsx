@@ -34,6 +34,7 @@ const AuthSettingsBuilder = lazy(() => import("./AuthSettingsBuilder"));
 const CurrencySettingsBuilder = lazy(() => import("./CurrencySettingsBuilder"));
 const AllowedCountriesBuilder = lazy(() => import("./AllowedCountriesBuilder"));
 const ScannerTokenGenerator = lazy(() => import("./ScannerTokenGenerator").then(m => ({ default: m.ScannerTokenGenerator })));
+const NotificationChannelsBuilder = lazy(() => import("./NotificationChannelsBuilder"));
 
 function TabSpinner() {
     return (
@@ -59,6 +60,7 @@ const tabs = [
     { value: "auth", label: "Auth & Access" },
     { value: "security", label: "Security" },
     { value: "scanner", label: "Scanner" },
+    { value: "notification-channels", label: "Notifications" },
 ] as const;
 
 export default function GeneralSettingsPage({
@@ -184,6 +186,14 @@ export default function GeneralSettingsPage({
                         {mountedTabs.has("scanner") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <ScannerTokenGenerator />
+                            </Suspense>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="notification-channels" className="mt-0">
+                        {mountedTabs.has("notification-channels") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <NotificationChannelsBuilder />
                             </Suspense>
                         )}
                     </TabsContent>

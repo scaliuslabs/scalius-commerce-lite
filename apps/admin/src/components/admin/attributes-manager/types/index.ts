@@ -53,7 +53,7 @@ export interface NewAttribute {
 export interface AttributeValue {
   value: string;
   productCount: number;
-  productNames: string[];
+  sampleProducts: string[];
   isPreset?: boolean;
 }
 

@@ -20,21 +20,45 @@ export function sanitizeFtsQuery(input: string): string {
   return tokens.length > 0 ? tokens.join(" ") : "";
 }
 
+// Allowlist of valid FTS5 table names to prevent SQL injection
+const ALLOWED_FTS_TABLES = [
+  "products_fts", "product_variants_fts", "categories_fts",
+  "pages_fts", "orders_fts", "customers_fts",
+  "discounts_fts", "abandoned_checkouts_fts",
+] as const;
+type FtsTable = typeof ALLOWED_FTS_TABLES[number];
+
+const ALLOWED_SOURCE_TABLES = [
+  "products", "product_variants", "categories",
+  "pages", "orders", "customers",
+  "discounts", "abandoned_checkouts",
+] as const;
+type SourceTable = typeof ALLOWED_SOURCE_TABLES[number];
+
 /**
  * Build a Drizzle SQL condition that filters rows by FTS5 MATCH.
  * Returns `undefined` when the query is empty/invalid (caller should skip the condition).
  *
- * Table names are safe (hardcoded by callers), the match value is parameterized.
+ * Table names are restricted to an allowlist at both compile-time and runtime.
+ * The match value is parameterized.
  *
  * Usage:
  *   const cond = ftsMatch("products_fts", "products", searchTerm);
  *   if (cond) conditions.push(cond);
  */
 export function ftsMatch(
-  ftsTable: string,
-  sourceTable: string,
+  ftsTable: FtsTable,
+  sourceTable: SourceTable,
   query: string,
 ): SQL | undefined {
+  // Runtime validation as defense-in-depth
+  if (!(ALLOWED_FTS_TABLES as readonly string[]).includes(ftsTable)) {
+    throw new Error(`Invalid FTS table: ${ftsTable}`);
+  }
+  if (!(ALLOWED_SOURCE_TABLES as readonly string[]).includes(sourceTable)) {
+    throw new Error(`Invalid source table: ${sourceTable}`);
+  }
+
   const sanitized = sanitizeFtsQuery(query);
   if (!sanitized) return undefined;
   return sql`${sql.raw(sourceTable)}.rowid IN (SELECT rowid FROM ${sql.raw(ftsTable)} WHERE ${sql.raw(ftsTable)} MATCH ${sanitized})`;

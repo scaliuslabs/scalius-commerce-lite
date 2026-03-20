@@ -9,7 +9,7 @@ import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
 import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
 import { ok, created } from "../../utils/api-response";
-import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, RateLimitError } from "../../utils/api-error";
+import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, RateLimitError, ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono();
 
@@ -37,7 +37,7 @@ const adminUserSchema = z.object({
     image: z.string().nullable(),
     twoFactorEnabled: z.boolean(),
     isSuperAdmin: z.boolean(),
-    createdAt: z.any(),
+    createdAt: z.union([z.string(), z.number()]),
     roles: z.array(z.object({ id: z.string(), name: z.string(), displayName: z.string() })),
     overrides: z.object({ grants: z.array(z.string()), denials: z.array(z.string()) }),
 }).passthrough();
@@ -163,7 +163,7 @@ app.openapi(createUserRoute, async (c) => {
         });
 
         if (!signUpResult || !signUpResult.user) {
-            throw new Error("Could not create admin user");
+            throw new ServiceUnavailableError("Could not create admin user");
         }
 
         await db
@@ -176,14 +176,24 @@ app.openapi(createUserRoute, async (c) => {
         }
 
         const baseUrl = env.BETTER_AUTH_URL || env.PUBLIC_API_BASE_URL;
-        if (!baseUrl) throw new Error("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
+        if (!baseUrl) throw new ValidationError("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
         const loginUrl = `${baseUrl}/auth/login`;
 
+        let emailFailed = false;
         try {
             await sendAdminInviteEmail(email, sessionUser.name, tempPassword, loginUrl);
         } catch (emailError: unknown) {
             console.error("Failed to send invitation email:", emailError);
-            console.log(`IMPORTANT: Temp password for ${email}: ${tempPassword}`);
+            emailFailed = true;
+        }
+
+        if (emailFailed) {
+            return created(c, {
+                message: "Admin user created but invitation email failed to send. Please share the temporary password securely.",
+                user: { id: signUpResult.user.id, name, email },
+                tempPassword,
+                emailFailed: true
+            });
         }
 
         return created(c, {
@@ -595,7 +605,7 @@ setupApp.openapi(setupRoute, async (c) => {
 
         const signUpResult = await auth.api.signUpEmail({ body: { name, email, password } });
         if (!signUpResult || !signUpResult.user) {
-            throw new Error("Could not create user account");
+            throw new ServiceUnavailableError("Could not create user account");
         }
 
         await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));

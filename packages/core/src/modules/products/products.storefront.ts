@@ -395,7 +395,7 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
             size: null, color: null, weight: null,
             sku: `SKU-${product.id}`,
             price: product.price,
-            stock: 100,
+            stock: 0,
             discountType: "percentage",
             discountPercentage: 0,
             discountAmount: 0,

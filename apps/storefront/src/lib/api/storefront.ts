@@ -4,6 +4,7 @@
 
 import { getConfiguredSdkClient } from "./client";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
 import type {
   ApiWidget,
@@ -92,8 +93,7 @@ export async function getHomepageData(): Promise<HomepageData | null> {
         const { data } = await getApiV1StorefrontHomepage({
           client: getConfiguredSdkClient(),
         });
-        const d = data as any;
-        return d?.success && d?.data ? d.data : null;
+        return unwrapEnvelope<HomepageData>(data);
       } catch (error: unknown) {
         console.error("Error fetching homepage data:", error);
         return null;
@@ -121,8 +121,7 @@ export async function getLayoutData(): Promise<LayoutData | null> {
         const { data } = await getApiV1StorefrontLayout({
           client: getConfiguredSdkClient(),
         });
-        const d = data as any;
-        return d?.success && d?.data ? d.data : null;
+        return unwrapEnvelope<LayoutData>(data);
       } catch (error: unknown) {
         console.error("Error fetching layout data:", error);
         return null;

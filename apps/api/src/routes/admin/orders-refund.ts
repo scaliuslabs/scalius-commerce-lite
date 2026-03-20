@@ -69,7 +69,7 @@ const refundOrderRoute = createRoute({
                     schema: z.object({
                         amount: z.number().optional(),
                         reason: z.string().optional(),
-                        gateway: z.enum(["stripe", "sslcommerz"]).optional()
+                        gateway: z.enum(["stripe", "sslcommerz", "polar", "cod"]).optional()
                     })
                 }
             }

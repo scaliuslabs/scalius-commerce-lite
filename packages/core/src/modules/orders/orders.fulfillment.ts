@@ -139,12 +139,16 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
 }
 
 // Statuses that warrant a customer notification email
-const NOTIFICATION_STATUSES: Record<string, "order_shipped" | "order_delivered"> = {
+const NOTIFICATION_STATUSES: Record<string, string> = {
+    pending: "order_created",
+    confirmed: "order_confirmed",
+    processing: "order_processing",
     shipped: "order_shipped",
     delivered: "order_delivered",
+    cancelled: "order_cancelled",
 };
 
-export async function updateOrderStatus(db: Database, orderId: string, status: string): Promise<StatusUpdateResult> {
+export async function updateOrderStatus(db: Database, orderId: string, status: string, data?: { trackingId?: string }): Promise<StatusUpdateResult> {
     const existingOrder = await db.select({
         status: orders.status,
         inventoryAction: orders.inventoryAction,
@@ -199,6 +203,9 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
             customerEmail: existingOrder.customerEmail ?? undefined,
             customerName: existingOrder.customerName,
             notificationType,
+            ...(status === OrderStatus.SHIPPED && data?.trackingId
+                ? { trackingId: data.trackingId }
+                : {}),
         }
         : undefined;
 

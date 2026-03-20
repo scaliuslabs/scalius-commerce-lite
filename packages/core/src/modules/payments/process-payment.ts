@@ -39,8 +39,10 @@ export async function processPaymentConfirmed(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // ── 0. Duplicate payment check FIRST (before any mutations) ──
-    // If two identical webhooks arrive concurrently, this gate prevents
-    // both from proceeding to inventory/status changes.
+    // SAFETY: Unique partial indexes on orderPayments(orderId, stripePaymentIntentId),
+    // (orderId, sslcommerzTranId), and (orderId, polarCheckoutId) prevent duplicates
+    // at the DB level. This SELECT is an optimization to avoid unnecessary batch
+    // operations, not the primary idempotency guarantee.
     if (params.stripePaymentIntentId) {
       const existing = await db
         .select({ id: orderPayments.id })
@@ -224,6 +226,7 @@ export async function processPaymentFailed(
       status: "failed",
       stripePaymentIntentId: gateway === "stripe" ? (intentId ?? null) : null,
       sslcommerzTranId: gateway === "sslcommerz" ? (intentId ?? null) : null,
+      polarCheckoutId: gateway === "polar" ? (intentId ?? null) : null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

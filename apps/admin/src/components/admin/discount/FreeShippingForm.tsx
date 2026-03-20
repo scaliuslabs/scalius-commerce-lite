@@ -38,18 +38,13 @@ import { toast } from "sonner";
 import { useCurrency } from "@/hooks/use-currency";
 import { navigateTo } from "@/lib/client/navigate";
 import { generateDiscountCode } from "./utils";
+import { discountCodeSchema, sharedDiscountFields } from "./shared-validation";
 
 const formSchema = z.object({
-  code: z.string().min(3).max(50),
-  minPurchaseAmount: z.number().nullable().optional(),
-  maxUsesPerOrder: z.number().int().positive().nullable().optional(),
-  maxUses: z.number().int().positive().nullable().optional(),
-  limitOnePerCustomer: z.boolean(),
+  code: discountCodeSchema,
+  ...sharedDiscountFields,
   combineWithProductDiscounts: z.boolean(),
   combineWithOrderDiscounts: z.boolean(),
-  startDate: z.date(),
-  endDate: z.date().nullable().optional(),
-  isActive: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;

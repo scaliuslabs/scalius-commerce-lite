@@ -3,6 +3,7 @@
 import { createApiUrl, fetchWithRetry, getConfiguredSdkClient } from "./client";
 import type { CartItem } from "@/store/cart";
 import type { DiscountValidationResponse } from "./types";
+import { unwrapData } from "./unwrap";
 import { getApiV1DiscountsValidate } from "@scalius/api-client/sdk";
 
 /**
@@ -51,7 +52,7 @@ export async function validateDiscount(
       return error as unknown as DiscountValidationResponse;
     }
 
-    return (data as any)?.data ?? null;
+    return unwrapData<DiscountValidationResponse>(data);
   } catch (error: unknown) {
     console.error(`Error validating discount code "${code}":`, error);
     return {

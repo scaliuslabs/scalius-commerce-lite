@@ -282,7 +282,7 @@ export async function updateDiscount(db: Database, id: string, data: Record<stri
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(batchOps as any);
-    return { success: true };
+    return { id };
 }
 
 export async function deleteDiscount(db: Database, id: string) {

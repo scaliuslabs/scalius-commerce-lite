@@ -22,7 +22,7 @@ export interface RefundRequest {
     amount?: number;
     reason: string;
     /** Override gateway detection (useful for multi-gateway orders) */
-    gateway?: "stripe" | "sslcommerz" | "polar";
+    gateway?: "stripe" | "sslcommerz" | "polar" | "cod";
 }
 
 export interface RefundResult {

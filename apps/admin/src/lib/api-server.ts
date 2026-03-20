@@ -14,7 +14,7 @@
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import { env as cfEnv } from "cloudflare:workers";
+import { getCfEnv } from "@/lib/cf-env";
 
 const API_PATH_PREFIX = "/api/v1/admin";
 
@@ -52,12 +52,7 @@ interface ApiEnvelope {
  * Resolve the CF env for service binding or fallback URL.
  */
 function getEnv(): Record<string, unknown> | undefined {
-  try {
-    const e = cfEnv as unknown as Record<string, unknown>;
-    return e?.API || e?.PUBLIC_API_BASE_URL || e?.ASSETS ? e : undefined;
-  } catch {
-    return undefined;
-  }
+  return getCfEnv() as unknown as Record<string, unknown> | undefined;
 }
 
 /**

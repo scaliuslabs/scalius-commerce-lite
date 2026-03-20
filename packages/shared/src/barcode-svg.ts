@@ -3,6 +3,8 @@
  * No external dependencies. Produces a string of SVG markup.
  */
 
+import { escapeHtml } from "./html-escape";
+
 // Code 128 bit-patterns. Each entry is an 11-bit pattern (stop is 13 bits).
 // '1' = black bar, '0' = white space.
 const CODE128_BITS: string[] = [
@@ -191,16 +193,9 @@ export function generateBarcodeSvg(
 
   let text = "";
   if (showText) {
-    text = `<text x="${totalWidth / 2}" y="${height + fontSize + 2}" text-anchor="middle" font-family="monospace" font-size="${fontSize}">${escapeXml(data)}</text>`;
+    text = `<text x="${totalWidth / 2}" y="${height + fontSize + 2}" text-anchor="middle" font-family="monospace" font-size="${fontSize}">${escapeHtml(data)}</text>`;
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${totalHeight}" width="${totalWidth}" height="${totalHeight}">${bars}${text}</svg>`;
 }
 
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}

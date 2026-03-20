@@ -23,10 +23,10 @@ const homepageRoute = createRoute({
     200: {
       description: "Homepage data",
       content: { "application/json": { schema: successEnvelope(z.object({
-        seo: z.any(),
-        hero: z.any(),
-        widgets: z.array(z.any()),
-        collections: z.array(z.any()),
+        seo: z.record(z.string(), z.unknown()),
+        hero: z.record(z.string(), z.unknown()),
+        widgets: z.array(z.record(z.string(), z.unknown())),
+        collections: z.array(z.record(z.string(), z.unknown())),
       }).passthrough()) } },
     },
     500: errorResponses[500],
@@ -38,11 +38,11 @@ app.use(
   cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:storefront:homepage:", varyByQuery: false, methods: ["GET"] }),
 );
 
-app.openapi(homepageRoute, async (c) => {
+app.openapi(homepageRoute, (async (c: any) => {
   const db = c.get("db");
   const data = await getHomepageData(db);
   return ok(c, data);
-});
+}) as any);
 
 // GET /storefront/layout — consolidated layout data
 const layoutRoute = createRoute({
@@ -54,12 +54,12 @@ const layoutRoute = createRoute({
     200: {
       description: "Layout data",
       content: { "application/json": { schema: successEnvelope(z.object({
-        analytics: z.any(),
-        header: z.any(),
-        navigation: z.any(),
-        footer: z.any(),
-        currency: z.any(),
-        theme: z.any(),
+        analytics: z.unknown(),
+        header: z.record(z.string(), z.unknown()),
+        navigation: z.record(z.string(), z.unknown()),
+        footer: z.record(z.string(), z.unknown()),
+        currency: z.record(z.string(), z.unknown()),
+        theme: z.record(z.string(), z.unknown()),
       }).passthrough()) } },
     },
     500: errorResponses[500],
@@ -71,11 +71,11 @@ app.use(
   cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:storefront:layout:", varyByQuery: false, methods: ["GET"] }),
 );
 
-app.openapi(layoutRoute, async (c) => {
+app.openapi(layoutRoute, (async (c: any) => {
   const db = c.get("db");
   const data = await getLayoutData(db);
   return ok(c, data);
-});
+}) as any);
 
 // GET /storefront/csp — returns merchant-configured CSP allowed domains
 const cspRoute = createRoute({

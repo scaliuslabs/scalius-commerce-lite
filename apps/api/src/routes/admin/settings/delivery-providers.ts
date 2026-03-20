@@ -59,8 +59,8 @@ const deliveryProviderSchema = z.object({
     credentials: z.string(),
     config: z.string(),
     isActive: z.boolean(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
 }).passthrough();
 
 const listRoute = createRoute({
@@ -94,8 +94,8 @@ app.openapi(listRoute, async (c) => {
 const createDeliveryProviderSchema = z.object({
     name: z.string().min(1),
     type: z.string().min(1),
-    credentials: z.any(),
-    config: z.any(),
+    credentials: z.union([z.string(), z.record(z.string(), z.unknown())]),
+    config: z.union([z.string(), z.record(z.string(), z.unknown())]),
     isActive: z.boolean().optional().default(true),
 });
 
@@ -154,8 +154,8 @@ const updateDeliveryProviderSchema = z.object({
     id: z.string().min(1),
     name: z.string().min(1),
     type: z.string().min(1),
-    credentials: z.any().optional(),
-    config: z.any().optional(),
+    credentials: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
+    config: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
     isActive: z.boolean().optional(),
 });
 
@@ -237,8 +237,8 @@ app.openapi(updateProviderRoute, (async (c: any) => {
 
 const createTestSchema = z.object({
     type: z.string().min(1),
-    credentials: z.any(),
-    config: z.any(),
+    credentials: z.union([z.string(), z.record(z.string(), z.unknown())]),
+    config: z.union([z.string(), z.record(z.string(), z.unknown())]),
     name: z.string().optional().default("Test Provider"),
 });
 

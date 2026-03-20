@@ -45,7 +45,7 @@ const storefrontCollectionSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.string(),
-  config: z.any(),
+  config: z.record(z.string(), z.unknown()),
   sortOrder: z.number(),
   isActive: z.boolean(),
   createdAt: z.string().nullable(),
@@ -129,10 +129,10 @@ const getCollectionByIdRoute = createRoute({
     200: {
       description: "Collection details with resolved products",
       content: { "application/json": { schema: successEnvelope(z.object({
-        collection: z.any(),
-        categories: z.array(z.any()),
-        products: z.array(z.any()),
-        featuredProduct: z.any().optional(),
+        collection: storefrontCollectionSchema,
+        categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough()),
+        products: z.array(collectionProductSchema),
+        featuredProduct: collectionProductSchema.optional(),
       })) } },
     },
     404: errorResponses[404],

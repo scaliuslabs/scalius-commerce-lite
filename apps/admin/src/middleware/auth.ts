@@ -1,8 +1,8 @@
 import { defineMiddleware } from "astro:middleware";
 import { createAuth } from "@scalius/core/auth";
-import { env as cfEnv } from "cloudflare:workers";
 import { runWithRequestHeaders } from "@/lib/api-server";
 import { isPublicRoute } from "./route-utils";
+import { getCfEnv, getEnvWithFallback } from "@/lib/cf-env";
 
 /**
  * Auth middleware — runs first.
@@ -14,23 +14,10 @@ export const authMiddleware = defineMiddleware(async (context, next) => {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // Use native CF Worker env in prod/dev, fallback to process.env for scripts
-  // NOTE: Do NOT use Object.keys(cfEnv) — it returns [] on CF Workers proxy objects.
-  const isCfEnv = (() => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Cloudflare env is a Proxy; property detection requires any
-      return !!(cfEnv as any)?.ASSETS || !!(cfEnv as any)?.DB || !!(cfEnv as any)?.PUBLIC_API_BASE_URL;
-    } catch {
-      return false;
-    }
-  })();
-  const env = isCfEnv
-    ? (cfEnv as unknown as Env)
-    : typeof process !== "undefined"
-      ? (process.env as unknown as Env)
-      : ({} as Env);
+  const cfEnvResult = getCfEnv();
+  const env = cfEnvResult ?? getEnvWithFallback();
 
-  if (isCfEnv) {
+  if (cfEnvResult) {
     const [{ getDb }, { initKv }, { initStorage }] = await Promise.all([
       import("@scalius/database/client"),
       import("@scalius/core/utils/kv-cache"),

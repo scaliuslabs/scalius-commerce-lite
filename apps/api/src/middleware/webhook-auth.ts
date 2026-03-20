@@ -218,12 +218,11 @@ export async function verifyDeliveryWebhook(
     return { verified: true, credentials, config };
   }
 
-  // --- Strategy 3: No security configured (backward compatible) ---
-  console.warn(
-    `[webhook-auth] [${providerType}] SECURITY WARNING: No webhookSecret or allowedWebhookIps configured. ` +
-    `Webhook requests are being accepted without verification. ` +
+  // --- Strategy 3: No security configured — REJECT ---
+  console.error(
+    `[webhook-auth] [${providerType}] REJECTED: No webhookSecret or allowedWebhookIps configured. ` +
     `Set credentials.webhookSecret or config.allowedWebhookIps for this provider.`,
   );
 
-  return { verified: true, credentials, config };
+  return { verified: false, credentials, config, reason: "No webhook authentication configured for this provider" };
 }

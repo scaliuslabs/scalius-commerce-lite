@@ -7,6 +7,9 @@ import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+
+const heroImageSchema = z.object({ url: z.string(), alt: z.string().nullable(), sortOrder: z.number() }).passthrough();
+
 // Create an OpenAPIHono app for hero routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -39,7 +42,7 @@ const listSlidersRoute = createRoute({
         desktop: z.object({
           id: z.string(),
           type: z.string(),
-          images: z.array(z.any()),
+          images: z.array(heroImageSchema),
           isActive: z.boolean(),
           createdAt: z.string().nullable(),
           updatedAt: z.string().nullable(),
@@ -47,13 +50,13 @@ const listSlidersRoute = createRoute({
         mobile: z.object({
           id: z.string(),
           type: z.string(),
-          images: z.array(z.any()),
+          images: z.array(heroImageSchema),
           isActive: z.boolean(),
           createdAt: z.string().nullable(),
           updatedAt: z.string().nullable(),
         }).nullable().optional(),
-        slider: z.any().optional(),
-        images: z.array(z.any()),
+        slider: z.object({ id: z.string(), type: z.string(), images: z.array(heroImageSchema), isActive: z.boolean() }).passthrough().nullable().optional(),
+        images: z.array(heroImageSchema),
         isMobile: z.boolean().optional(),
       }).passthrough()) } },
     },
@@ -164,7 +167,7 @@ const getSliderByIdRoute = createRoute({
         slider: z.object({
           id: z.string(),
           type: z.string(),
-          images: z.array(z.any()),
+          images: z.array(heroImageSchema),
           isActive: z.boolean(),
           createdAt: z.string().nullable(),
           updatedAt: z.string().nullable(),

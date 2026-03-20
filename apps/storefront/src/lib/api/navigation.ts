@@ -3,6 +3,7 @@
 import { getConfiguredSdkClient } from "./client";
 import type { NavigationItem } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import { getApiV1Navigation } from "@scalius/api-client/sdk";
 
 /**
@@ -22,7 +23,7 @@ export async function getNavigationData(
           client: getConfiguredSdkClient(),
           query: { type, format: "nested" } as any,
         });
-        const d = (data as any)?.data;
+        const d = unwrapData<{ navigation: Record<string, NavigationItem[]> }>(data);
         if (d?.navigation) {
           return (d.navigation[type] as NavigationItem[]) || [];
         }

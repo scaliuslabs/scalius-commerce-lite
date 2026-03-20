@@ -122,7 +122,19 @@ export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: 
         }
     }
 
-    const response: Record<string, unknown> = {
+    if (uploadedFiles.length === 0 && errors.length > 0) {
+        throw new ValidationError("All files failed to upload", {
+            details: errors.map((e) => ({ filename: e.filename, error: e.error })),
+            summary: `0 file(s) uploaded successfully, ${errors.length} file(s) failed`,
+        });
+    }
+
+    const response: {
+        files: typeof uploadedFiles;
+        summary: string;
+        warnings?: Array<{ filename: string; error: string }>;
+        partialSuccess?: boolean;
+    } = {
         files: uploadedFiles,
         summary: errors.length === 0
             ? `Successfully uploaded ${uploadedFiles.length} file(s)`
@@ -131,24 +143,7 @@ export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: 
 
     if (errors.length > 0) {
         response.warnings = errors.map((e) => ({ filename: e.filename, error: e.error }));
-        response.details = errors.map((e) => ({ filename: e.filename, error: e.error })); // Maintain for UI
-
-        if (uploadedFiles.length === 0) {
-            response.status = 400;
-            response.error = "All files failed to upload";
-        } else {
-            response.status = 207; // Partial success
-        }
-    } else {
-        response.status = 201;
-    }
-
-    if (response.status === 400) {
-        // Throw it instead of returning so normal Hono error catch maps it properly, but format it as UI expects under data.error and data.details
-        throw new ValidationError("All files failed to upload", {
-            details: response.details,
-            summary: response.summary
-        });
+        response.partialSuccess = true;
     }
 
     return response;

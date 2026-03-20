@@ -62,8 +62,8 @@ const roleSchema = z.object({
     description: z.string().nullable(),
     isSystem: z.boolean(),
     permissions: z.array(z.string()),
-    createdAt: z.any(),
-    updatedAt: z.any(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
 }).passthrough();
 
 const listRolesRoute = createRoute({

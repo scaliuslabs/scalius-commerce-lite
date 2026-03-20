@@ -6,18 +6,19 @@ import type { Database } from "@scalius/database/client";
 import type { Analytics } from "@scalius/database/schema";
 
 /**
- * Format dates for consistent API responses
+ * Format dates for consistent API responses.
+ * Drizzle's mode: "timestamp" returns Date objects, so call .toISOString() directly.
  */
 function formatScriptResponse(script: Analytics | undefined | null) {
     if (!script) return null;
     return {
         ...script,
-        createdAt: script.createdAt
-            ? new Date(Number(script.createdAt) * 1000).toISOString()
-            : null,
-        updatedAt: script.updatedAt
-            ? new Date(Number(script.updatedAt) * 1000).toISOString()
-            : null,
+        createdAt: script.createdAt instanceof Date
+            ? script.createdAt.toISOString()
+            : script.createdAt ? new Date(Number(script.createdAt) * 1000).toISOString() : null,
+        updatedAt: script.updatedAt instanceof Date
+            ? script.updatedAt.toISOString()
+            : script.updatedAt ? new Date(Number(script.updatedAt) * 1000).toISOString() : null,
     };
 }
 

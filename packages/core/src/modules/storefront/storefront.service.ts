@@ -24,6 +24,11 @@ import type { Database } from "@scalius/database/client";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
 
+function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
+    if (!json) return fallback;
+    try { return JSON.parse(json); } catch { return fallback; }
+}
+
 const unixToISO = (timestamp: unknown): string | null => {
     try {
         if (timestamp === null || timestamp === undefined) return null;
@@ -106,7 +111,7 @@ export async function getHomepageData(db: Database) {
     const mobileSlider = (heroResults as { type: string }[]).find((s) => s.type === "mobile");
     const formatSlider = (slider: Record<string, unknown> | undefined) => {
         if (!slider) return null;
-        return { id: slider.id, type: slider.type, images: JSON.parse((slider.images as string) || "[]") };
+        return { id: slider.id, type: slider.type, images: safeJsonParse(slider.images as string, []) };
     };
     const hero = { desktop: formatSlider(desktopSlider), mobile: formatSlider(mobileSlider) };
 
@@ -130,7 +135,7 @@ export async function getHomepageData(db: Database) {
         type: col.type as string,
         sortOrder: col.sortOrder as number,
         isActive: col.isActive as boolean,
-        parsedConfig: JSON.parse((col.config as string) || "{}"),
+        parsedConfig: safeJsonParse<Record<string, any>>(col.config as string, {}),
     }));
 
     const resolvedMap = await resolveCollectionProductsBatch(
@@ -221,7 +226,7 @@ export async function getLayoutData(db: Database) {
     let navigationData: NestedNavigationItem[] = [];
 
     if (siteSettingsData?.headerConfig) {
-        const headerConfig = JSON.parse(siteSettingsData.headerConfig);
+        const headerConfig = safeJsonParse<Record<string, any>>(siteSettingsData.headerConfig, {});
 
         // Normalize social links — supports both array and legacy { facebook: "url" } format
         let socialLinks: SocialLink[] = [];
@@ -277,14 +282,14 @@ export async function getLayoutData(db: Database) {
     // Process Footer
     let footerData: Record<string, unknown>;
     if (siteSettingsData?.footerConfig) {
-        const footerConfig = JSON.parse(siteSettingsData.footerConfig);
+        const footerConfig = safeJsonParse<Record<string, any>>(siteSettingsData.footerConfig, {});
 
         let footerSocialLinks: SocialLink[] = [];
         if (Array.isArray(footerConfig.social)) {
-            footerSocialLinks = footerConfig.social.map((link: Record<string, unknown>) => ({
-                id: link.id || nanoid(),
-                label: link.label || link.platform || "",
-                url: link.url || "",
+            footerSocialLinks = footerConfig.social.map((link: Record<string, any>) => ({
+                id: String(link.id || nanoid()),
+                label: String(link.label || link.platform || ""),
+                url: String(link.url || ""),
                 iconUrl: link.iconUrl || link.icon,
             }));
         }

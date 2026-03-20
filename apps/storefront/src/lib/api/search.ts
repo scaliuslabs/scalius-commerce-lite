@@ -2,6 +2,7 @@
 
 import { getConfiguredSdkClient } from "./client";
 import type { SearchResults } from "./types";
+import { unwrapData } from "./unwrap";
 import { getApiV1Search } from "@scalius/api-client/sdk";
 
 /**
@@ -43,7 +44,7 @@ export async function search(
       client: getConfiguredSdkClient(),
       query: { q: query, ...options } as Record<string, unknown>,
     });
-    return (data as any)?.data ?? null;
+    return unwrapData<SearchResults>(data);
   } catch (error: unknown) {
     console.error(`Error performing search for query "${query}":`, error);
     return null;

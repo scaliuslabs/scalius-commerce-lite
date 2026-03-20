@@ -118,7 +118,7 @@ const searchProductsRoute = createRoute({
           price: z.number(),
           slug: z.string(),
           imageUrl: z.string().nullable(),
-          variants: z.array(z.any()),
+          variants: z.array(z.record(z.string(), z.unknown())),
         }).passthrough()),
         pagination: paginationSchema.extend({ hasNextPage: z.boolean(), hasPrevPage: z.boolean() }),
       })) } },
@@ -149,11 +149,11 @@ const getProductBySlugRoute = createRoute({
     200: {
       description: "Product details",
       content: { "application/json": { schema: successEnvelope(z.object({
-        product: z.any(),
-        category: z.any().nullable(),
-        images: z.array(z.any()),
-        variants: z.array(z.any()),
-        relatedProducts: z.array(z.any()),
+        product: z.record(z.string(), z.unknown()),
+        category: z.record(z.string(), z.unknown()).nullable(),
+        images: z.array(z.record(z.string(), z.unknown())),
+        variants: z.array(z.record(z.string(), z.unknown())),
+        relatedProducts: z.array(z.record(z.string(), z.unknown())),
       })) } },
     },
     404: errorResponses[404],
@@ -161,13 +161,13 @@ const getProductBySlugRoute = createRoute({
   }
 });
 
-app.openapi(getProductBySlugRoute, async (c) => {
+app.openapi(getProductBySlugRoute, (async (c: any) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const result = await getStorefrontProductBySlug(db, slug);
   if (!result) throw new NotFoundError("Product not found");
   return ok(c, result);
-});
+}) as any);
 
 /** Extracts attribute-based filters from raw query params by checking known attribute slugs. */
 async function getAttributeFilters(

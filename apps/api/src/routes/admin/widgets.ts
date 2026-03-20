@@ -60,7 +60,7 @@ const widgetHistoryEntrySchema = z.object({
     htmlContent: z.string(),
     cssContent: z.string().nullable(),
     reason: z.string(),
-    createdAt: z.any(),
+    createdAt: z.union([z.string(), z.number()]),
 }).passthrough();
 
 const app = new OpenAPIHono();
@@ -270,13 +270,8 @@ const updateWidgetRoute = createRoute({
 app.openapi(updateWidgetRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    try {
-        const result = await updateWidget(db, id, c.req.valid("json"));
-        return ok(c, result);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    const result = await updateWidget(db, id, c.req.valid("json"));
+    return ok(c, result);
 });
 
 // ── Delete Widget ──

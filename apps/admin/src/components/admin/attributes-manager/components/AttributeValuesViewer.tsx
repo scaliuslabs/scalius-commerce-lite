@@ -151,7 +151,7 @@ export function AttributeValuesViewer({
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
-                            {(item.productNames || [])
+                            {(item.sampleProducts || [])
                               .slice(0, 3)
                               .map((name, idx) => (
                                 <Badge
@@ -162,9 +162,9 @@ export function AttributeValuesViewer({
                                   {name}
                                 </Badge>
                               ))}
-                            {(item.productNames || []).length > 3 && (
+                            {(item.sampleProducts || []).length > 3 && (
                               <Badge variant="outline" className="text-xs">
-                                +{(item.productNames || []).length - 3} more
+                                +{(item.sampleProducts || []).length - 3} more
                               </Badge>
                             )}
                           </div>

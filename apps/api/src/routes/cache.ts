@@ -52,8 +52,8 @@ const getGroupsRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
-            groups: z.record(z.string(), z.any()),
-            pathMapping: z.record(z.string(), z.any()),
+            groups: z.record(z.string(), z.unknown()),
+            pathMapping: z.record(z.string(), z.unknown()),
           })),
         },
       },
