@@ -260,18 +260,28 @@ export const sdkAuthClient: Client = createClient(
 );
 
 /**
+ * Get the SDK base URL (root domain, NOT including /api/v1 prefix).
+ * SDK route paths already include /api/v1/, so we need just the origin.
+ */
+function getSdkBaseUrl(): string {
+  const apiUrl = getApiBaseUrl();
+  // Strip /api/v1 suffix if present — SDK paths already include it
+  return apiUrl.replace(/\/api\/v1\/?$/, "") || apiUrl;
+}
+
+/**
  * Reconfigure SDK clients with the current base URL.
  * Must be called before any SDK request since base URL is resolved lazily.
- * Returns the current base URL for convenience.
+ * Returns the configured client for convenience.
  */
 export function getConfiguredSdkClient(): Client {
-  const baseUrl = getApiBaseUrl();
+  const baseUrl = getSdkBaseUrl();
   sdkClient.setConfig({ baseUrl });
   return sdkClient;
 }
 
 export function getConfiguredSdkAuthClient(): Client {
-  const baseUrl = getApiBaseUrl();
+  const baseUrl = getSdkBaseUrl();
   sdkAuthClient.setConfig({ baseUrl });
   return sdkAuthClient;
 }
