@@ -7,20 +7,19 @@
 
 import {
     siteSettings,
-    products,
-    categories,
     collections,
     widgets,
     heroSliders,
     analytics,
+    categories,
     pages,
     settings,
     type Analytics,
 } from "@scalius/database/schema";
-import { eq, isNull, and, inArray, asc, sql } from "drizzle-orm";
+import { eq, isNull, and, asc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { processAnalyticsScript, shouldUsePartytown } from "../../integrations/analytics";
-import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import type { Database } from "@scalius/database/client";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
@@ -51,32 +50,6 @@ interface SocialLink {
     url: string;
     iconUrl?: string;
 }
-
-const buildProductSelect = () => ({
-    id: products.id,
-    name: products.name,
-    slug: products.slug,
-    price: products.price,
-    discountType: products.discountType,
-    discountPercentage: products.discountPercentage,
-    discountAmount: products.discountAmount,
-    freeDelivery: products.freeDelivery,
-    categoryId: products.categoryId,
-    imageUrl: sql<string | null>`(
-    SELECT "product_images"."url"
-    FROM "product_images"
-    WHERE "product_images"."product_id" = "products"."id"
-      AND "product_images"."is_primary" = 1
-    ORDER BY "product_images"."sort_order" ASC
-    LIMIT 1
-  )`.as("imageUrl"),
-    hasVariants: sql<boolean>`(
-    SELECT COUNT(*) > 0
-    FROM "product_variants"
-    WHERE "product_variants"."product_id" = "products"."id"
-      AND "product_variants"."deleted_at" IS NULL
-  )`.as("hasVariants"),
-});
 
 // ── Homepage data ─────────────────────────────────────────────────────────────
 
@@ -160,109 +133,17 @@ export async function getHomepageData(db: Database) {
         parsedConfig: JSON.parse((col.config as string) || "{}"),
     }));
 
-    const allProductIds = new Set<string>();
-    const allCategoryIds = new Set<string>();
-    const allFeaturedProductIds = new Set<string>();
-
-    for (const col of parsedCollections) {
-        const cfg = col.parsedConfig;
-        if (Array.isArray(cfg.productIds)) cfg.productIds.forEach((id: string) => allProductIds.add(id));
-        if (Array.isArray(cfg.categoryIds)) cfg.categoryIds.forEach((id: string) => allCategoryIds.add(id));
-        if (cfg.featuredProductId) allFeaturedProductIds.add(cfg.featuredProductId);
-    }
-
-    const productIdsArr = Array.from(allProductIds);
-    const categoryIdsArr = Array.from(allCategoryIds);
-    const featuredIdsArr = Array.from(allFeaturedProductIds);
-
-    const productBatchResults = await db.batch([
-        // 0. Specific products by ID
-        productIdsArr.length > 0
-            ? db.select(buildProductSelect()).from(products).where(and(inArray(products.id, productIdsArr), eq(products.isActive, true), isNull(products.deletedAt)))
-            : db.select({ id: sql`NULL` }).from(products).where(sql`1 = 0`),
-
-        // 1. Products by category
-        categoryIdsArr.length > 0
-            ? db.select(buildProductSelect()).from(products).where(and(inArray(products.categoryId, categoryIdsArr), eq(products.isActive, true), isNull(products.deletedAt)))
-            : db.select({ id: sql`NULL` }).from(products).where(sql`1 = 0`),
-
-        // 2. Category metadata
-        categoryIdsArr.length > 0
-            ? db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(and(inArray(categories.id, categoryIdsArr), isNull(categories.deletedAt)))
-            : db.select({ id: sql`NULL` }).from(categories).where(sql`1 = 0`),
-
-        // 3. Featured products
-        featuredIdsArr.length > 0
-            ? db.select(buildProductSelect()).from(products).where(and(inArray(products.id, featuredIdsArr), eq(products.isActive, true), isNull(products.deletedAt)))
-            : db.select({ id: sql`NULL` }).from(products).where(sql`1 = 0`),
-    ]);
-
-    // Build lookup maps
-    const specificProductsById = new Map<string, Record<string, unknown>>();
-    const categoryProductsByCategoryId = new Map<string, Record<string, unknown>[]>();
-    const categoryMetadataById = new Map<string, Record<string, unknown>>();
-    const featuredProductsById = new Map<string, Record<string, unknown>>();
-
-    for (const prod of productBatchResults[0] as Record<string, unknown>[]) {
-        if (prod.id && prod.id !== null) {
-            specificProductsById.set(prod.id as string, {
-                ...prod,
-                discountedPrice: calculateDiscountedPrice(prod.price as number, prod.discountType as string | null, prod.discountPercentage as number | null, prod.discountAmount as number | null),
-            });
-        }
-    }
-    for (const prod of productBatchResults[1] as Record<string, unknown>[]) {
-        if (prod.categoryId) {
-            if (!categoryProductsByCategoryId.has(prod.categoryId as string)) categoryProductsByCategoryId.set(prod.categoryId as string, []);
-            categoryProductsByCategoryId.get(prod.categoryId as string)!.push({
-                ...prod,
-                discountedPrice: calculateDiscountedPrice(prod.price as number, prod.discountType as string | null, prod.discountPercentage as number | null, prod.discountAmount as number | null),
-            });
-        }
-    }
-    for (const cat of productBatchResults[2] as Record<string, unknown>[]) {
-        if (cat.id && cat.id !== null) categoryMetadataById.set(cat.id as string, cat);
-    }
-    for (const prod of productBatchResults[3] as Record<string, unknown>[]) {
-        if (prod.id && prod.id !== null) {
-            featuredProductsById.set(prod.id as string, {
-                ...prod,
-                discountedPrice: calculateDiscountedPrice(prod.price as number, prod.discountType as string | null, prod.discountPercentage as number | null, prod.discountAmount as number | null),
-            });
-        }
-    }
+    const resolvedMap = await resolveCollectionProductsBatch(
+        db,
+        parsedCollections.map((col) => ({ id: col.id, config: col.parsedConfig })),
+    );
 
     // Build final collections array
     const formattedCollections = parsedCollections
         .map((col) => {
             const cfg = col.parsedConfig;
-            const productIds: string[] = Array.isArray(cfg.productIds) ? cfg.productIds : [];
-            const categoryIds: string[] = Array.isArray(cfg.categoryIds) ? cfg.categoryIds : [];
-            const maxProducts = Math.min(Math.max(cfg.maxProducts || 8, 1), 24);
-
-            let collectionProducts: Record<string, unknown>[] = [];
-            let collectionCategories: Record<string, unknown>[] = [];
-            let featuredProduct: Record<string, unknown> | null = null;
-
-            if (productIds.length > 0) {
-                collectionProducts = productIds.map((id) => specificProductsById.get(id)).filter((p): p is Record<string, unknown> => p != null).slice(0, maxProducts);
-                collectionCategories = [];
-            } else if (categoryIds.length > 0) {
-                const categoryProducts: Record<string, unknown>[] = [];
-                for (const catId of categoryIds) {
-                    categoryProducts.push(...(categoryProductsByCategoryId.get(catId) || []));
-                }
-                const seen = new Set<string>();
-                collectionProducts = categoryProducts.filter((p) => { if (seen.has(p.id as string)) return false; seen.add(p.id as string); return true; }).slice(0, maxProducts);
-                collectionCategories = categoryIds.map((id) => categoryMetadataById.get(id)).filter((c): c is Record<string, unknown> => c != null);
-            }
-
-            if (cfg.featuredProductId) {
-                featuredProduct = featuredProductsById.get(cfg.featuredProductId) || null;
-            }
-
-            // Skip empty collections
-            if (collectionProducts.length === 0) return null;
+            const resolved = resolvedMap.get(col.id);
+            if (!resolved || resolved.products.length === 0) return null;
 
             return {
                 id: col.id,
@@ -278,9 +159,9 @@ export async function getHomepageData(db: Database) {
                 },
                 sortOrder: col.sortOrder,
                 isActive: col.isActive,
-                categories: collectionCategories,
-                products: collectionProducts,
-                featuredProduct,
+                categories: resolved.categories,
+                products: resolved.products,
+                featuredProduct: resolved.featuredProduct,
             };
         })
         .filter(Boolean);

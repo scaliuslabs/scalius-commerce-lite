@@ -6,11 +6,13 @@ interface CacheEntry<T> {
   expiresIn: number;
 }
 
+const MAX_ENTRIES = 1000;
 const cacheStorage = new Map<string, CacheEntry<any>>();
 
 /**
  * A shared storage for in-memory caching of high-traffic global data.
  * This persists across requests in Node.js (dev) and often in Cloudflare Workers (warm start).
+ * Capped at MAX_ENTRIES with LRU eviction to prevent unbounded memory growth.
  */
 export const smartCache = {
   get<T>(key: string): T | null {
@@ -22,10 +24,23 @@ export const smartCache = {
       return null;
     }
 
+    // Move to end (most recently used) for LRU ordering
+    cacheStorage.delete(key);
+    cacheStorage.set(key, entry);
+
     return entry.data;
   },
 
   set<T>(key: string, data: T, ttlSeconds: number = 60): T {
+    // Delete first so re-insertion moves to end (most recent)
+    cacheStorage.delete(key);
+
+    // Evict oldest entry if at capacity
+    if (cacheStorage.size >= MAX_ENTRIES) {
+      const oldest = cacheStorage.keys().next().value;
+      if (oldest !== undefined) cacheStorage.delete(oldest);
+    }
+
     cacheStorage.set(key, {
       data,
       timestamp: Date.now(),
