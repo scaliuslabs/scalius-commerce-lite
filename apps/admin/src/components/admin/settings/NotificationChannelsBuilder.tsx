@@ -116,9 +116,10 @@ export function NotificationChannelsBuilder() {
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5 text-muted-foreground" />
           <div>
-            <CardTitle className="text-base">Notification Channels</CardTitle>
+            <CardTitle className="text-base">Customer Notification Channels</CardTitle>
             <CardDescription className="mt-1">
-              Configure which channels are used for each order status notification.
+              Choose how your <strong>customers</strong> are notified about their order status changes.
+              These notifications are sent directly to the customer via their preferred channel.
             </CardDescription>
           </div>
         </div>
