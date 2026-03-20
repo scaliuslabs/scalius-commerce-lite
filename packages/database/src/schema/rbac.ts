@@ -19,6 +19,7 @@ export const permissions = sqliteTable("permissions", {
         .notNull()
         .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
         .default(UNIX_NOW),
 });
 

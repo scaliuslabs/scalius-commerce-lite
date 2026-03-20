@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 
 /**
  * Returns a debounced version of the given callback.
@@ -8,19 +8,18 @@ export function useDebouncedCallback<A extends unknown[]>(
   callback: (...args: A) => void,
   delay: number,
 ): (...args: A) => void {
-  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [timeoutId]);
+  }, []);
 
-  return (...args: A) => {
-    if (timeoutId) clearTimeout(timeoutId);
-    const newTimeoutId = setTimeout(() => {
+  return useCallback((...args: A) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
       callback(...args);
     }, delay);
-    setTimeoutId(newTimeoutId);
-  };
+  }, [callback, delay]);
 }

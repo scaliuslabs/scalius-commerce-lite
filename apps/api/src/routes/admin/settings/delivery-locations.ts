@@ -3,6 +3,7 @@ import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
 import { createLocation, getLocationById } from "@scalius/core/modules/delivery/locations";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
+import { getEncryptionKey } from "../../../utils/encryption-key";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
@@ -333,7 +334,7 @@ app.post("/import-pathao", async (c) => {
     const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
 
     if (!kv) {
-        throw new Error("KV namespace not available");
+        throw new ValidationError("KV namespace not available");
     }
 
     // Find active Pathao provider to get credentials
@@ -349,8 +350,7 @@ app.post("/import-pathao", async (c) => {
 
     let creds: { baseUrl: string; clientId: string; clientSecret: string; username: string; password: string };
     try {
-        const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-            ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+        const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
         const rawCreds = await decryptCredentialsGraceful(provider.credentials, encryptionKey);
         creds = JSON.parse(rawCreds);
     } catch {
@@ -370,7 +370,7 @@ app.post("/import-pathao", async (c) => {
  */
 app.get("/import-pathao/status", async (c) => {
     const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
-    if (!kv) throw new Error("KV not available");
+    if (!kv) throw new ValidationError("KV not available");
 
     const status = await getPathaoImportStatus(kv);
     return ok(c, status);
@@ -381,7 +381,7 @@ app.get("/import-pathao/status", async (c) => {
  */
 app.delete("/import-pathao", async (c) => {
     const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
-    if (!kv) throw new Error("KV not available");
+    if (!kv) throw new ValidationError("KV not available");
 
     await resetPathaoImportProgress(kv);
     return ok(c, { message: "Import progress reset. You can start a fresh import." });

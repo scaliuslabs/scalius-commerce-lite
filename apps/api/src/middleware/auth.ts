@@ -47,13 +47,13 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
 
   try {
     // Verify token (async - checks Redis blacklist)
-    const decoded = (await verifyToken(token)) as User;
+    const decoded = (await verifyToken(token, { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE })) as User;
 
     // Store user info in context
     c.set("user", decoded);
 
     // Check if token needs to be refreshed
-    const refreshedToken = refreshTokenIfNeeded(token);
+    const refreshedToken = await refreshTokenIfNeeded(token, 5, { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE });
 
     // If token was refreshed, set new token in response header
     if (refreshedToken !== token) {

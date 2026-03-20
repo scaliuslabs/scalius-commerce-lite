@@ -345,8 +345,8 @@ export async function verifyOtp(
                 }
             }
 
-            // Create new customer record
-            customerId = nanoid();
+            // Create new customer record — use "cust_" prefix for consistency with customers.service.ts
+            customerId = "cust_" + nanoid();
 
             // Determine phone value
             let customerPhone = resolvedPhone;

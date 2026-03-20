@@ -9,6 +9,7 @@ import { cacheMiddleware } from "../middleware/cache";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
+import { getEncryptionKey } from "../utils/encryption-key";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── GET /config ─────────────────────────────────────────────────────────────
@@ -42,13 +43,12 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
     const db = c.get("db");
     const kv: KVNamespace | undefined = c.env.CACHE;
 
-    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-      ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const config = await getCheckoutConfig(db, kv, encryptionKey);
 
     return ok(c, config);
   } catch (error: unknown) {
-    console.error("Error fetching checkout config:", error);
+    console.error("[checkout] Error fetching checkout config:", error instanceof Error ? error.message : error);
     return ok(c, {
       gateways: [{ id: "cod", name: "Cash on Delivery", currencies: ["bdt"] }],
       guestCheckoutEnabled: true,

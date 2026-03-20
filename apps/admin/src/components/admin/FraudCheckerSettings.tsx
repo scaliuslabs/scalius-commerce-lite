@@ -1,138 +1,88 @@
 import { type FC, useState } from "react";
-import type { FraudCheckerProvider } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
-
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { toast } from "sonner";
+import { clientPost, clientPut, clientDelete } from "@/lib/api-browser";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Loader2, Plus, Pencil, Trash2, TestTube } from "lucide-react";
+
+import type { FraudCheckerProvider } from "@/types/api-responses";
+
+// ── Types & Validation ──
+
+type FraudProvider = FraudCheckerProvider;
+
+const providerSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  apiUrl: z.string().min(1, "API URL is required"),
+  apiKey: z.string().min(1, "API key is required"),
+  isActive: z.boolean(),
+});
+
+type ProviderFormValues = z.infer<typeof providerSchema>;
 
 interface FraudCheckerSettingsProps {
   providers: FraudCheckerProvider[];
 }
 
-declare global {
-  interface Window {
-    fraudCheckerActions: {
-      saveProvider: (provider: Omit<FraudCheckerProvider, "id"> & { id?: string }) => Promise<FraudCheckerProvider>;
-      deleteProvider: (id: string) => Promise<boolean>;
-      testProvider: (id: string) => Promise<{ success: boolean; message?: string }>;
-    };
-  }
-}
+// ── Component ──
 
 const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
   providers: initialProviders,
 }) => {
-  const [providers, setProviders] = useState<FraudCheckerProvider[]>(initialProviders);
-  const [selectedProvider, setSelectedProvider] = useState<FraudCheckerProvider | null>(null);
+  const [providers, setProviders] = useState<FraudProvider[]>(initialProviders);
+  const [selectedProvider, setSelectedProvider] = useState<FraudProvider | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<FraudProvider | null>(null);
 
-  const [formData, setFormData] = useState<Omit<FraudCheckerProvider, "id"> & { id?: string }>({
-    name: "",
-    apiUrl: "https://fraudchecker.link/api/v1/qc/",
-    apiKey: "",
-    isActive: false,
+  const form = useForm<ProviderFormValues>({
+    resolver: zodResolver(providerSchema),
+    defaultValues: {
+      name: "",
+      apiUrl: "https://fraudchecker.link/api/v1/qc/",
+      apiKey: "",
+      isActive: false,
+    },
   });
 
-  const resetForm = (provider?: FraudCheckerProvider) => {
-    if (provider) {
-      setFormData(provider);
-    } else {
-      setFormData({
-        name: "",
-        apiUrl: "https://fraudchecker.link/api/v1/qc/",
-        apiKey: "",
-        isActive: false,
-      });
-    }
+  const resetForm = (provider?: FraudProvider) => {
+    form.reset(
+      provider
+        ? { name: provider.name, apiUrl: provider.apiUrl, apiKey: provider.apiKey, isActive: provider.isActive }
+        : { name: "", apiUrl: "https://fraudchecker.link/api/v1/qc/", apiKey: "", isActive: false },
+    );
   };
 
-  const handleChange = (field: string, value: string | boolean) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSave = async () => {
-    if (!formData.name || !formData.apiUrl || !formData.apiKey) {
-      toast.error("All fields are required");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      if (!window.fraudCheckerActions) {
-        toast.error("Fraud checker actions not available");
-        return;
-      }
-
-      const savedProvider = await window.fraudCheckerActions.saveProvider(formData);
-
-      if (isCreating) {
-        setProviders((prev) => [...prev, savedProvider]);
-      } else {
-        setProviders((prev) =>
-          prev.map((p) => (p.id === savedProvider.id ? savedProvider : p)),
-        );
-      }
-
-      setSelectedProvider(savedProvider);
-      setIsEditing(false);
-      setIsCreating(false);
-      toast.success("Provider saved successfully");
-    } catch (error: unknown) {
-      toast.error(`Error saving provider: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedProvider) return;
-
-    if (!confirm(`Are you sure you want to delete ${selectedProvider.name}?`)) {
-      return;
-    }
-
-    setIsDeleting(true);
-    try {
-      if (!window.fraudCheckerActions) {
-        toast.error("Fraud checker actions not available");
-        return;
-      }
-
-      await window.fraudCheckerActions.deleteProvider(selectedProvider.id);
-      setProviders((prev) => prev.filter((p) => p.id !== selectedProvider.id));
-      toast.success("Provider deleted");
-      setSelectedProvider(null);
-    } catch (error: unknown) {
-      toast.error(`Error deleting provider: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleTest = async () => {
-    if (!selectedProvider) return;
-
-    setIsTesting(true);
-    try {
-      if (!window.fraudCheckerActions) {
-        toast.error("Fraud checker actions not available");
-        return;
-      }
-
-      const result = await window.fraudCheckerActions.testProvider(selectedProvider.id);
-
-      if (result.success) {
-        toast.success(result.message || "Connection successful");
-      } else {
-        toast.error(result.message || "Connection failed");
-      }
-    } catch (error: unknown) {
-      toast.error(`Error testing provider: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setIsTesting(false);
-    }
+  const handleSelect = (provider: FraudProvider) => {
+    setSelectedProvider(provider);
+    resetForm(provider);
+    setIsEditing(false);
+    setIsCreating(false);
   };
 
   const handleCreate = () => {
@@ -152,184 +102,259 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
   const handleCancel = () => {
     setIsEditing(false);
     setIsCreating(false);
-    if (selectedProvider) {
-      resetForm(selectedProvider);
+    if (selectedProvider) resetForm(selectedProvider);
+  };
+
+  const handleSave = async (values: ProviderFormValues) => {
+    setIsSaving(true);
+    try {
+      let saved: FraudProvider;
+      if (isCreating) {
+        saved = await clientPost<FraudProvider>("/fraud-checker", values);
+        setProviders((prev) => [...prev, saved]);
+      } else if (selectedProvider) {
+        saved = await clientPut<FraudProvider>("/fraud-checker", { id: selectedProvider.id, ...values });
+        setProviders((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+      } else {
+        return;
+      }
+
+      setSelectedProvider(saved);
+      resetForm(saved);
+      setIsEditing(false);
+      setIsCreating(false);
+      toast.success("Provider saved successfully");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to save provider");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleSelect = (provider: FraudCheckerProvider) => {
-    setSelectedProvider(provider);
-    resetForm(provider);
-    setIsEditing(false);
-    setIsCreating(false);
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await clientDelete(`/fraud-checker/${deleteTarget.id}`);
+      setProviders((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      if (selectedProvider?.id === deleteTarget.id) {
+        setSelectedProvider(null);
+        setIsEditing(false);
+      }
+      toast.success("Provider deleted");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete provider");
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleTest = async () => {
+    if (!selectedProvider) return;
+    setIsTesting(true);
+    try {
+      const result = await clientPost<{ success: boolean; message?: string }>(
+        `/fraud-checker/${selectedProvider.id}/test`,
+        {},
+      );
+      if (result.success) {
+        toast.success(result.message || "Connection successful");
+      } else {
+        toast.error(result.message || "Connection failed");
+      }
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to test provider");
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Fraud Checker Providers</h2>
-        <button
-          onClick={handleCreate}
-          className="px-4 py-2 bg-foreground text-background rounded hover:bg-primary/90 transition-colors"
-        >
-          Add Provider
-        </button>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="col-span-1 border rounded p-4">
-          <h3 className="font-medium mb-4">Available Providers</h3>
-          {providers.length === 0 ? (
-            <p className="text-gray-500">No providers configured</p>
-          ) : (
-            <ul className="space-y-2">
-              {providers.map((provider) => (
-                <li
-                  key={provider.id}
-                  className={`p-2 rounded cursor-pointer ${selectedProvider?.id === provider.id
-                      ? "bg-background border border-gray-300"
-                      : "hover:bg-background border border-transparent"
-                    }`}
-                  onClick={() => handleSelect(provider)}
-                >
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className={`w-2 h-2 rounded-full ${provider.isActive ? "bg-green-500" : "bg-gray-300"
-                        }`}
-                    ></span>
-                    <span className="font-medium">{provider.name}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="col-span-1 md:col-span-2 border rounded p-4">
-          <h3 className="font-medium mb-4">
-            {isCreating ? "New Provider" : selectedProvider ? "Provider Details" : "Select a Provider"}
-          </h3>
-
-          {(selectedProvider || isCreating) && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    className="w-full p-2 border rounded"
-                  />
-                ) : (
-                  <p>{formData.name}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">API URL</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={formData.apiUrl}
-                    onChange={(e) => handleChange("apiUrl", e.target.value)}
-                    className="w-full p-2 border rounded"
-                  />
-                ) : (
-                  <p>{formData.apiUrl}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">API Key</label>
-                {isEditing ? (
-                  <input
-                    type="password"
-                    value={formData.apiKey}
-                    onChange={(e) => handleChange("apiKey", e.target.value)}
-                    className="w-full p-2 border rounded"
-                  />
-                ) : (
-                  <p>••••••••••••</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Status</label>
-                {isEditing ? (
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.isActive}
-                      onChange={(e) => handleChange("isActive", e.target.checked)}
-                      className="rounded"
-                      id="provider-active"
-                    />
-                    <label htmlFor="provider-active" className="text-sm select-none">
-                      Active
-                    </label>
-                  </div>
-                ) : (
-                  <p>
-                    {formData.isActive ? (
-                      <span className="text-green-600 font-medium">Active</span>
-                    ) : (
-                      <span className="text-gray-600">Inactive</span>
-                    )}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex space-x-2 pt-4">
-                {isEditing ? (
-                  <>
-                    <button
-                      onClick={handleSave}
-                      className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 transition-colors disabled:opacity-50"
-                      disabled={isSaving}
-                    >
-                      {isSaving ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      onClick={handleCancel}
-                      className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={handleEdit}
-                      className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={handleTest}
-                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50"
-                      disabled={isTesting}
-                    >
-                      {isTesting ? "Testing..." : "Test Connection"}
-                    </button>
-                    <button
-                      onClick={handleDelete}
-                      className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:opacity-50"
-                      disabled={isDeleting}
-                    >
-                      {isDeleting ? "Deleting..." : "Delete"}
-                    </button>
-                  </>
-                )}
-              </div>
+        {/* Provider List */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium">Providers</CardTitle>
+              <Button variant="outline" size="sm" onClick={handleCreate} className="h-7 text-xs">
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Add
+              </Button>
             </div>
-          )}
+          </CardHeader>
+          <CardContent className="pt-0">
+            {providers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No providers configured</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {providers.map((provider) => (
+                  <li
+                    key={provider.id}
+                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer text-sm transition-colors ${
+                      selectedProvider?.id === provider.id
+                        ? "bg-accent border border-border"
+                        : "hover:bg-accent/50 border border-transparent"
+                    }`}
+                    onClick={() => handleSelect(provider)}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${
+                        provider.isActive ? "bg-green-500" : "bg-muted-foreground/30"
+                      }`}
+                    />
+                    <span className="font-medium truncate">{provider.name}</span>
+                    <Badge variant={provider.isActive ? "default" : "secondary"} className="ml-auto text-[10px] px-1.5 py-0">
+                      {provider.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
 
-          {!selectedProvider && !isCreating && (
-            <p className="text-gray-500">Select a provider to view details or create a new one.</p>
-          )}
-        </div>
+        {/* Provider Detail / Form */}
+        <Card className="md:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">
+              {isCreating ? "New Provider" : selectedProvider ? "Provider Details" : "Select a Provider"}
+            </CardTitle>
+            {!isCreating && !selectedProvider && (
+              <CardDescription className="text-xs">
+                Select a provider to view details, or add a new one.
+              </CardDescription>
+            )}
+          </CardHeader>
+          <CardContent>
+            {(selectedProvider || isCreating) ? (
+              <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="text-xs">Name</Label>
+                  {isEditing ? (
+                    <>
+                      <Input
+                        id="name"
+                        {...form.register("name")}
+                        className="h-8 text-sm"
+                        placeholder="Provider name"
+                      />
+                      {form.formState.errors.name && (
+                        <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm">{selectedProvider?.name}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="apiUrl" className="text-xs">API URL</Label>
+                  {isEditing ? (
+                    <>
+                      <Input
+                        id="apiUrl"
+                        {...form.register("apiUrl")}
+                        className="h-8 text-sm"
+                        placeholder="https://fraudchecker.link/api/v1/qc/"
+                      />
+                      {form.formState.errors.apiUrl && (
+                        <p className="text-xs text-destructive">{form.formState.errors.apiUrl.message}</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm font-mono text-muted-foreground">{selectedProvider?.apiUrl}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="apiKey" className="text-xs">API Key</Label>
+                  {isEditing ? (
+                    <>
+                      <Input
+                        id="apiKey"
+                        type="password"
+                        {...form.register("apiKey")}
+                        className="h-8 text-sm"
+                        placeholder="Enter API key"
+                      />
+                      {form.formState.errors.apiKey && (
+                        <p className="text-xs text-destructive">{form.formState.errors.apiKey.message}</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{"*".repeat(12)}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="isActive"
+                    checked={form.watch("isActive")}
+                    onCheckedChange={(checked) => form.setValue("isActive", checked)}
+                    disabled={!isEditing}
+                  />
+                  <Label htmlFor="isActive" className="text-xs cursor-pointer">
+                    {form.watch("isActive") ? "Active" : "Inactive"}
+                  </Label>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t">
+                  {isEditing ? (
+                    <>
+                      <Button type="submit" size="sm" disabled={isSaving} className="h-7 text-xs">
+                        {isSaving && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                        Save
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={handleCancel} className="h-7 text-xs">
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button type="button" variant="outline" size="sm" onClick={handleEdit} className="h-7 text-xs">
+                        <Pencil className="h-3.5 w-3.5 mr-1" />
+                        Edit
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={handleTest} disabled={isTesting} className="h-7 text-xs">
+                        {isTesting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <TestTube className="h-3.5 w-3.5 mr-1" />}
+                        Test
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => selectedProvider && setDeleteTarget(selectedProvider)}
+                        className="h-7 text-xs"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Delete
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </form>
+            ) : null}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Provider</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteTarget?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

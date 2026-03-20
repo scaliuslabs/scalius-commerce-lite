@@ -97,7 +97,7 @@ export function useDeliveryLocations() {
         const res = await fetch("/api/v1/admin/settings/delivery-providers");
         if (!res.ok) return;
         const json = await res.json();
-        const providers = Array.isArray(json) ? json : (json.data ?? []);
+        const providers = unwrapEnvelope<Array<{ type: string; isActive: boolean }>>(json);
         const hasActive = providers.some(
           (p: { type: string; isActive: boolean }) => p.type === "pathao" && p.isActive,
         );

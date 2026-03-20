@@ -6,7 +6,10 @@ import { eq, sql, and, isNull } from "drizzle-orm";
 import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError } from "@scalius/core/errors";
+import { NotFoundError, ConflictError } from "@scalius/core/errors";
+
+const MAX_CAS_RETRIES = 3;
+const BASE_BACKOFF_MS = 50;
 
 export interface StockAdjustResult {
   variantId: string;
@@ -35,46 +38,67 @@ export async function adjustStock(
 ): Promise<StockAdjustResult> {
   const delta = Math.round(adjustment);
 
-  const variant = await db
-    .select({
-      id: productVariants.id,
-      stock: productVariants.stock,
-    })
-    .from(productVariants)
-    .where(eq(productVariants.id, variantId))
-    .get();
+  for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
+    const variant = await db
+      .select({
+        id: productVariants.id,
+        stock: productVariants.stock,
+        stockVersion: productVariants.stockVersion,
+      })
+      .from(productVariants)
+      .where(eq(productVariants.id, variantId))
+      .get();
 
-  if (!variant) {
-    throw new NotFoundError("Variant not found");
+    if (!variant) {
+      throw new NotFoundError("Variant not found");
+    }
+
+    const previousStock = variant.stock;
+    const newStock = Math.max(0, previousStock + delta);
+
+    const result = await db
+      .update(productVariants)
+      .set({
+        stock: sql`MAX(0, ${productVariants.stock} + ${delta})`,
+        stockVersion: sql`${productVariants.stockVersion} + 1`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(
+        and(
+          eq(productVariants.id, variantId),
+          eq(productVariants.stockVersion, variant.stockVersion),
+        ),
+      )
+      .returning({ id: productVariants.id });
+
+    if (result.length > 0) {
+      await recordMovement(db, {
+        variantId,
+        type: "adjusted",
+        quantity: delta,
+        previousStock,
+        newStock,
+        notes: reason ? `Scanner adjustment: ${reason}` : "Scanner adjustment",
+        createdBy: adminUserId,
+      });
+
+      if (delta < 0) {
+        await checkAndAlertLowStock(db, variantId);
+      }
+
+      return { variantId, previousStock, newStock, delta };
+    }
+
+    // CAS conflict — retry with backoff
+    if (attempt < MAX_CAS_RETRIES - 1) {
+      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
+      await new Promise((resolve) => setTimeout(resolve, backoff));
+    }
   }
 
-  const previousStock = variant.stock;
-  const newStock = Math.max(0, previousStock + delta);
-
-  await db
-    .update(productVariants)
-    .set({
-      stock: sql`MAX(0, ${productVariants.stock} + ${delta})`,
-      stockVersion: sql`${productVariants.stockVersion} + 1`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(eq(productVariants.id, variantId));
-
-  await recordMovement(db, {
-    variantId,
-    type: "adjusted",
-    quantity: delta,
-    previousStock,
-    newStock,
-    notes: reason ? `Scanner adjustment: ${reason}` : "Scanner adjustment",
-    createdBy: adminUserId,
-  });
-
-  if (delta < 0) {
-    await checkAndAlertLowStock(db, variantId);
-  }
-
-  return { variantId, previousStock, newStock, delta };
+  throw new ConflictError(
+    `Failed to adjust stock after ${MAX_CAS_RETRIES} retries due to concurrent modifications`,
+  );
 }
 
 /**
@@ -90,53 +114,74 @@ export async function setStock(
 ): Promise<StockSetResult> {
   const targetStock = Math.max(0, Math.round(newStockValue));
 
-  const variant = await db
-    .select({
-      id: productVariants.id,
-      stock: productVariants.stock,
-    })
-    .from(productVariants)
-    .where(eq(productVariants.id, variantId))
-    .get();
+  for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
+    const variant = await db
+      .select({
+        id: productVariants.id,
+        stock: productVariants.stock,
+        stockVersion: productVariants.stockVersion,
+      })
+      .from(productVariants)
+      .where(eq(productVariants.id, variantId))
+      .get();
 
-  if (!variant) {
-    throw new NotFoundError("Variant not found");
+    if (!variant) {
+      throw new NotFoundError("Variant not found");
+    }
+
+    const previousStock = variant.stock;
+    const delta = targetStock - previousStock;
+
+    // No change needed
+    if (delta === 0) {
+      return { variantId, previousStock, newStock: targetStock, delta: 0 };
+    }
+
+    const result = await db
+      .update(productVariants)
+      .set({
+        stock: targetStock,
+        stockVersion: sql`${productVariants.stockVersion} + 1`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(
+        and(
+          eq(productVariants.id, variantId),
+          eq(productVariants.stockVersion, variant.stockVersion),
+        ),
+      )
+      .returning({ id: productVariants.id });
+
+    if (result.length > 0) {
+      await recordMovement(db, {
+        variantId,
+        type: "adjusted",
+        quantity: delta,
+        previousStock,
+        newStock: targetStock,
+        notes: reason
+          ? `Stocktake: ${reason}`
+          : `Stocktake: set from ${previousStock} to ${targetStock}`,
+        createdBy: adminUserId,
+      });
+
+      if (delta < 0) {
+        await checkAndAlertLowStock(db, variantId);
+      }
+
+      return { variantId, previousStock, newStock: targetStock, delta };
+    }
+
+    // CAS conflict — retry with backoff
+    if (attempt < MAX_CAS_RETRIES - 1) {
+      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
+      await new Promise((resolve) => setTimeout(resolve, backoff));
+    }
   }
 
-  const previousStock = variant.stock;
-  const delta = targetStock - previousStock;
-
-  // No change needed
-  if (delta === 0) {
-    return { variantId, previousStock, newStock: targetStock, delta: 0 };
-  }
-
-  await db
-    .update(productVariants)
-    .set({
-      stock: targetStock,
-      stockVersion: sql`${productVariants.stockVersion} + 1`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(eq(productVariants.id, variantId));
-
-  await recordMovement(db, {
-    variantId,
-    type: "adjusted",
-    quantity: delta,
-    previousStock,
-    newStock: targetStock,
-    notes: reason
-      ? `Stocktake: ${reason}`
-      : `Stocktake: set from ${previousStock} to ${targetStock}`,
-    createdBy: adminUserId,
-  });
-
-  if (delta < 0) {
-    await checkAndAlertLowStock(db, variantId);
-  }
-
-  return { variantId, previousStock, newStock: targetStock, delta };
+  throw new ConflictError(
+    `Failed to set stock after ${MAX_CAS_RETRIES} retries due to concurrent modifications`,
+  );
 }
 
 /**

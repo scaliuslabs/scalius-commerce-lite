@@ -11,6 +11,7 @@ import { getKv } from "../../utils/kv-cache";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
+import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 
 import { ok } from "../../utils/api-response";
@@ -66,8 +67,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 
     const db: Database = c.get("db");
     const kv = getKv();
-    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
 
     // Get Polar credentials from DB
     const polarSettings = await getPolarSettings(db, kv, encryptionKey);

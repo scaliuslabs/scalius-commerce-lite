@@ -3,34 +3,7 @@
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { DiscountList } from "@/components/admin/discount/discount-list";
 import { getDiscountsIndexData } from "@/loaders/admin/discounts";
-
-// Local type definition matching DiscountListProps['discounts'] expected structure
-interface DiscountItem {
-  id: string;
-  code: string;
-  type: string;
-  valueType: string;
-  discountValue: number;
-  minPurchaseAmount: number | null;
-  minQuantity: number | null;
-  maxUsesPerOrder: number | null;
-  maxUses: number | null;
-  limitOnePerCustomer: boolean;
-  combineWithProductDiscounts: boolean;
-  combineWithOrderDiscounts: boolean;
-  combineWithShippingDiscounts: boolean;
-  customerSegment: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  isActive: boolean;
-  createdAt: string | null;
-  updatedAt: string | null;
-  deletedAt: string | null;
-  relatedProducts: { buy: string[]; get: string[] };
-  relatedCollections: { buy: string[]; get: string[] };
-  usageCount: number;
-  totalDiscountAmount: number;
-}
+import type { Discount } from "@/types/api-responses";
 
 // Get params from URL
 const searchParams = Astro.url.searchParams;
@@ -57,14 +30,12 @@ const { discounts: rawDiscounts, pagination } = await getDiscountsIndexData({
   limit,
 });
 
-// Explicitly map and type the discounts to match DiscountItem structure
-const discounts: DiscountItem[] = rawDiscounts.map((d: any) => ({
+const discounts = rawDiscounts.map((d: Discount) => ({
   ...d,
-  startDate: d.startDate,
-  endDate: d.endDate,
-  createdAt: d.createdAt,
-  updatedAt: d.updatedAt,
-  deletedAt: d.deletedAt,
+  limitOnePerCustomer: d.limitOnePerCustomer ?? false,
+  combineWithProductDiscounts: d.combineWithProductDiscounts ?? false,
+  combineWithOrderDiscounts: d.combineWithOrderDiscounts ?? false,
+  combineWithShippingDiscounts: d.combineWithShippingDiscounts ?? false,
   relatedProducts: d.relatedProducts || { buy: [], get: [] },
   relatedCollections: d.relatedCollections || { buy: [], get: [] },
   usageCount: d.usageCount || 0,

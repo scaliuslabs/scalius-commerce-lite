@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { getProductBySlug } from "@/lib/api";
 import { getLayoutData } from "@/lib/api/storefront";
 import type { CartItem } from "@/store/cart";
+import { escapeHtml } from "@scalius/shared/html-escape";
 
 export const prerender = false;
 
@@ -150,8 +151,8 @@ export const GET: APIRoute = async ({ params, url }) => {
       </head>
       <body>
         <div class="card">
-          <img src="${cartItem.image || ""}" alt="${cartItem.name}" class="product-image">
-          <p class="product-name">${cartItem.name}</p>
+          <img src="${escapeHtml(cartItem.image || "")}" alt="${escapeHtml(cartItem.name)}" class="product-image">
+          <p class="product-name">${escapeHtml(cartItem.name)}</p>
           <p class="status-text" id="status-text">Adding to cart & preparing checkout...</p>
           <div class="loader"><div class="loader-bar"></div></div>
         </div>

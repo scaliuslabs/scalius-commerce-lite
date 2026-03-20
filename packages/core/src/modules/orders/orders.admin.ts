@@ -745,33 +745,36 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             }
         }
     } else if (existingOrder.inventoryAction === "deducted") {
-        for (const existingItem of existingItems) {
-            if (existingItem.variantId) {
-                const matchingNewItem = data.items.find(
-                    (item) => item.variantId === existingItem.variantId && item.quantity === existingItem.quantity
-                );
-                if (!matchingNewItem) {
-                    await db.update(productVariants)
-                        .set({ stock: sql`${productVariants.stock} + ${existingItem.quantity}`, updatedAt: sql`unixepoch()` })
-                        .where(eq(productVariants.id, existingItem.variantId));
-                }
+        // Compute net delta per variant: positive = need more stock deducted,
+        // negative = need stock restored. Match by variantId only.
+        const deltaMap = new Map<string, number>();
+        for (const item of existingItems) {
+            if (item.variantId) {
+                deltaMap.set(item.variantId, (deltaMap.get(item.variantId) ?? 0) - item.quantity);
             }
         }
         for (const item of data.items) {
             if (item.variantId) {
-                const existingItem = existingItems.find((ei) => ei.variantId === item.variantId);
-                const quantityDiff = existingItem ? item.quantity - existingItem.quantity : item.quantity;
-
-                if (quantityDiff !== 0) {
-                    const variant = await db.select().from(productVariants).where(and(eq(productVariants.id, item.variantId), isNull(productVariants.deletedAt))).get();
-                    if (!variant) throw new NotFoundError(`Variant ${item.variantId} not found`);
-                    if (variant.stock < quantityDiff) {
-                        throw new ValidationError(`Insufficient stock for variant ${item.variantId}. Available: ${variant.stock}, Additional Requested: ${quantityDiff}`);
-                    }
-                    await db.update(productVariants)
-                        .set({ stock: variant.stock - quantityDiff, updatedAt: sql`unixepoch()` })
-                        .where(eq(productVariants.id, item.variantId));
+                deltaMap.set(item.variantId, (deltaMap.get(item.variantId) ?? 0) + item.quantity);
+            }
+        }
+        for (const [variantId, delta] of deltaMap) {
+            if (delta === 0) continue;
+            if (delta > 0) {
+                // Need to deduct more stock
+                const variant = await db.select().from(productVariants).where(and(eq(productVariants.id, variantId), isNull(productVariants.deletedAt))).get();
+                if (!variant) throw new NotFoundError(`Variant ${variantId} not found`);
+                if (variant.stock < delta) {
+                    throw new ValidationError(`Insufficient stock for variant ${variantId}. Available: ${variant.stock}, Additional Requested: ${delta}`);
                 }
+                await db.update(productVariants)
+                    .set({ stock: variant.stock - delta, updatedAt: sql`unixepoch()` })
+                    .where(eq(productVariants.id, variantId));
+            } else {
+                // Restore stock (delta is negative, so negate it)
+                await db.update(productVariants)
+                    .set({ stock: sql`${productVariants.stock} + ${-delta}`, updatedAt: sql`unixepoch()` })
+                    .where(eq(productVariants.id, variantId));
             }
         }
     }

@@ -53,9 +53,10 @@ const footerData = layoutData?.footer ?? {
 
 const faviconUrl = headerData?.favicon?.src || "/favicon.svg";
 
-const currencySymbol = layoutData?.currency?.symbol ?? "৳";
-const currencyCode = layoutData?.currency?.code ?? "BDT";
-const currencyDecimalPlaces = layoutData?.currency?.decimalPlaces ?? 2;
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
+const currencyDecimalPlaces = layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 
 // Build dynamic CSS overrides from admin-configured theme colors.
 // Only non-empty color values are included.

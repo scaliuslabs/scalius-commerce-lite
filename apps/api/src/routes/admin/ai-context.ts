@@ -81,7 +81,7 @@ const batchDetailsRoute = createRoute({
 app.openapi(batchDetailsRoute, async (c) => {
     try {
         const db = c.get("db");
-        const kv = c.get("env")?.CACHE;
+        const kv = (c.env as Record<string, unknown>)?.CACHE as KVNamespace | undefined;
         const { productIds, categoryIds, allCategories } = c.req.valid("json");
 
         let productsData: ProductContextDetail[] = [];
@@ -128,38 +128,53 @@ app.openapi(batchDetailsRoute, async (c) => {
                             : Promise.resolve([]),
                     ]);
 
-                const categoriesWithUrls = await Promise.all(
-                    categoryResults.map(async (cat) => ({
-                        ...cat,
-                        url: await SettingsService.getStorefrontPath(db, `/categories/${cat.slug}`, kv)
-                    })),
+                // Batch all storefront path lookups in a single Promise.all
+                const allPaths: string[] = [];
+                // Category paths
+                for (const cat of categoryResults) allPaths.push(`/categories/${cat.slug}`);
+                // Product paths (url + buyNow per product)
+                for (const product of productResults) {
+                    allPaths.push(`/products/${product.slug}`);
+                    allPaths.push(`/buy/${product.slug}`);
+                }
+                // Variant paths
+                for (const variant of variants) {
+                    const product = productResults.find((p) => p.id === variant.productId);
+                    if (product) allPaths.push(`/buy/${product.slug}?variant=${variant.id}`);
+                }
+
+                const resolvedUrls = await Promise.all(
+                    allPaths.map((path) => SettingsService.getStorefrontPath(db, path, kv))
                 );
+                const urlMap = new Map(allPaths.map((path, i) => [path, resolvedUrls[i]!]));
+
+                const categoriesWithUrls = categoryResults.map((cat) => ({
+                    ...cat,
+                    url: urlMap.get(`/categories/${cat.slug}`)!
+                }));
                 const categoryMap = new Map(categoriesWithUrls.map((c) => [c.id, c]));
 
                 for (const product of productResults) {
-                    const productUrl = await SettingsService.getStorefrontPath(db, `/products/${product.slug}`, kv);
-                    const buyNowUrl = await SettingsService.getStorefrontPath(db, `/buy/${product.slug}`, kv);
+                    const productUrl = urlMap.get(`/products/${product.slug}`)!;
+                    const buyNowUrl = urlMap.get(`/buy/${product.slug}`)!;
                     const productCategory = product.categoryId
                         ? categoryMap.get(product.categoryId)
                         : null;
 
                     const productVariantsList = variants.filter((v) => v.productId === product.id);
-                    const variantsWithBuyNowUrls: VariantWithBuyNowUrl[] = await Promise.all(
-                        productVariantsList.map(async (variant) => {
-                            const finalPrice = calculateFinalPrice(
-                                variant.price,
-                                variant.discountType,
-                                variant.discountAmount,
-                                variant.discountPercentage
-                            );
-
-                            return {
-                                ...variant,
-                                buyNowUrl: await SettingsService.getStorefrontPath(db, `/buy/${product.slug}?variant=${variant.id}`, kv),
-                                finalPrice
-                            };
-                        })
-                    );
+                    const variantsWithBuyNowUrls: VariantWithBuyNowUrl[] = productVariantsList.map((variant) => {
+                        const finalPrice = calculateFinalPrice(
+                            variant.price,
+                            variant.discountType,
+                            variant.discountAmount,
+                            variant.discountPercentage
+                        );
+                        return {
+                            ...variant,
+                            buyNowUrl: urlMap.get(`/buy/${product.slug}?variant=${variant.id}`)!,
+                            finalPrice
+                        };
+                    });
 
                     const productFinalPrice = calculateFinalPrice(
                         product.price,

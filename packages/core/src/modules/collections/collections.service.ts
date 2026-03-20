@@ -297,7 +297,7 @@ export async function resolveCollectionProducts(
         ]);
 
         const productsData = batchResults[0] as RawProduct[];
-        const featuredData = (batchResults[1] as RawProduct[])[0] ?? null;
+        const featuredData = hasFeaturedProduct ? (batchResults[1] as RawProduct[])[0] ?? null : null;
 
         return {
             products: productsData.map(enrichProduct),
@@ -326,7 +326,7 @@ export async function resolveCollectionProducts(
 
         const categoriesData = batchResults[0] as { id: string; name: string; slug: string }[];
         const productsData = batchResults[1] as RawProduct[];
-        const featuredData = (batchResults[2] as RawProduct[])[0] ?? null;
+        const featuredData = hasFeaturedProduct ? (batchResults[2] as RawProduct[])[0] ?? null : null;
 
         return {
             products: productsData.map(enrichProduct),

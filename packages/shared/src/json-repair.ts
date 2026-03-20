@@ -39,11 +39,30 @@ export function repairJSON(jsonString: string): string {
   // Remove trailing commas
   repaired = repaired.replace(/,(\s*[}\]])/g, "$1");
 
-  // Balance braces and brackets
-  const openBraces = (repaired.match(/\{/g) || []).length;
-  const closeBraces = (repaired.match(/\}/g) || []).length;
-  const openBrackets = (repaired.match(/\[/g) || []).length;
-  const closeBrackets = (repaired.match(/\]/g) || []).length;
+  // Balance braces and brackets — skip characters inside quoted strings
+  let openBraces = 0;
+  let closeBraces = 0;
+  let openBrackets = 0;
+  let closeBrackets = 0;
+  let inString = false;
+
+  for (let i = 0; i < repaired.length; i++) {
+    const ch = repaired[i];
+    if (ch === "\\" && inString) {
+      i++; // skip escaped character
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (ch === "{") openBraces++;
+    else if (ch === "}") closeBraces++;
+    else if (ch === "[") openBrackets++;
+    else if (ch === "]") closeBrackets++;
+  }
 
   if (openBraces > closeBraces) {
     repaired += "}".repeat(openBraces - closeBraces);

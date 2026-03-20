@@ -25,6 +25,10 @@ export async function bulkShipOrders(db: Database, orderIds: string[], providerI
     const results = [];
     for (const orderId of orderIds) {
         try {
+            const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+            if (!order) throw new NotFoundError(`Order ${orderId} not found`);
+            validateTransition("order", order.status, OrderStatus.SHIPPED);
+
             const shipment = await createShipment(db, orderId, providerId, options);
             if (shipment.success) {
                 const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
@@ -44,8 +48,21 @@ export async function bulkShipOrders(db: Database, orderIds: string[], providerI
 }
 
 export async function processCodAction(db: Database, orderId: string, body: Record<string, unknown>) {
+    const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundError("Order not found");
+
     switch (body.action) {
         case "collected": {
+            // Validate transition to DELIVERED. If current status is CONFIRMED,
+            // transition through SHIPPED first (COD collection implies delivery).
+            if (order.status === OrderStatus.CONFIRMED) {
+                validateTransition("order", order.status, OrderStatus.SHIPPED);
+                const shipInventory = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
+                await db.update(orders).set({ status: OrderStatus.SHIPPED, inventoryAction: shipInventory, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
+            }
+            const currentStatus = order.status === OrderStatus.CONFIRMED ? OrderStatus.SHIPPED : order.status;
+            validateTransition("order", currentStatus, OrderStatus.DELIVERED);
+
             const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy as string, collectedAmount: body.collectedAmount as number, receiptUrl: body.receiptUrl as string | undefined });
             if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
             await db.update(orders).set({ status: OrderStatus.DELIVERED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
@@ -106,15 +123,17 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
     }
 
     const orderUpdate: Record<string, unknown> = { fulfillmentStatus: newFulfillmentStatus, updatedAt: sql`unixepoch()` };
-    if (isFinalShipment && order.status === OrderStatus.CONFIRMED) orderUpdate.status = OrderStatus.SHIPPED;
+    if (isFinalShipment && order.status === OrderStatus.CONFIRMED) {
+        validateTransition("order", order.status, OrderStatus.SHIPPED);
+        // Apply inventory before batch so the transition is included
+        const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
+        orderUpdate.status = OrderStatus.SHIPPED;
+        orderUpdate.inventoryAction = newInventoryAction;
+    }
 
     writes.push(db.update(orders).set(orderUpdate).where(eq(orders.id, orderId)));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(writes as any);
-
-    if (isFinalShipment && order.status === OrderStatus.CONFIRMED) {
-        await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED).catch(console.error);
-    }
 
     return { success: true, shipmentId, isFinalShipment, fulfillmentStatus: newFulfillmentStatus };
 }

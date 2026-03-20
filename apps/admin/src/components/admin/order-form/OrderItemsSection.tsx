@@ -96,6 +96,9 @@ export function OrderItemsSection() {
     const variant = variantId ? product.variants.find((v) => v.id === variantId) : null;
     const basePrice = variant ? variant.price : product.price;
 
+    if (product.discountType === "flat" && product.discountAmount && product.discountAmount > 0) {
+      return Math.max(0, basePrice - product.discountAmount).toFixed(2);
+    }
     if (product.discountPercentage && product.discountPercentage > 0) {
       const discountAmount = basePrice * (product.discountPercentage / 100);
       return (basePrice - discountAmount).toFixed(2);
@@ -109,7 +112,9 @@ export function OrderItemsSection() {
     const variant = selectedVariant ? selectedProduct.variants.find((v) => v.id === selectedVariant) : null;
     let basePrice = variant ? variant.price : selectedProduct.price;
 
-    if (selectedProduct.discountPercentage && selectedProduct.discountPercentage > 0) {
+    if (selectedProduct.discountType === "flat" && selectedProduct.discountAmount && selectedProduct.discountAmount > 0) {
+      basePrice = Math.max(0, basePrice - selectedProduct.discountAmount);
+    } else if (selectedProduct.discountPercentage && selectedProduct.discountPercentage > 0) {
       const discountAmount = basePrice * (selectedProduct.discountPercentage / 100);
       basePrice = basePrice - discountAmount;
     }

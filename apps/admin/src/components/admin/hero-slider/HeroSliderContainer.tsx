@@ -20,13 +20,11 @@ export function HeroSliderContainer() {
       const response = await fetch("/api/v1/admin/settings/hero-sliders");
       const json = await response.json();
       const data = unwrapEnvelope(json);
-      if (json.success || Array.isArray(data)) {
-        const items = Array.isArray(data) ? data : [];
-        const desktop = items.find((s: HeroSlider) => s.type === "desktop");
-        const mobile = items.find((s: HeroSlider) => s.type === "mobile");
-        setDesktopSlider(desktop || null);
-        setMobileSlider(mobile || null);
-      }
+      const items = Array.isArray(data) ? data : [];
+      const desktop = items.find((s: HeroSlider) => s.type === "desktop");
+      const mobile = items.find((s: HeroSlider) => s.type === "mobile");
+      setDesktopSlider(desktop || null);
+      setMobileSlider(mobile || null);
     } catch {
       toast.error("Failed to fetch sliders");
     } finally {

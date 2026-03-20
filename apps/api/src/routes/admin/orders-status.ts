@@ -2,10 +2,11 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
 import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, createShipment, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
-import { deliveryShipments } from "@scalius/database/schema";
+import { deliveryShipments, codTracking } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
+import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 
@@ -114,7 +115,7 @@ const getCodRoute = createRoute({
 
 app.openapi(getCodRoute, (async (c: any) => {
     const orderId = c.req.valid("param").id;
-    const tracking = await c.get("db").select().from(require("@scalius/database/schema").codTracking).where(require("drizzle-orm").eq(require("@scalius/database/schema").codTracking.orderId, orderId)).get();
+    const tracking = await c.get("db").select().from(codTracking).where(eq(codTracking.orderId, orderId)).get();
     return ok(c, { tracking: tracking ?? null });
 }) as any);
 
@@ -283,8 +284,7 @@ app.openapi(createShipmentRoute, async (c) => {
     const data = c.req.valid("json");
     const db = c.get("db");
 
-    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const shipmentResult = await createShipment(db, orderId, data.providerId, data.options, encryptionKey);
 
     if (!shipmentResult.success) {
@@ -296,7 +296,7 @@ app.openapi(createShipmentRoute, async (c) => {
     const createdShipmentRecord = await getLatestShipment(db, orderId);
 
     if (!createdShipmentRecord) {
-        throw new Error("Failed to retrieve created shipment");
+        throw new NotFoundError("Failed to retrieve created shipment");
     }
 
     const now = new Date();
@@ -399,8 +399,7 @@ app.openapi(checkShipmentStatusRoute, (async (c: any) => {
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
-    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const updatedShipment = await checkShipmentStatus(db, shipmentId, encryptionKey);
     return ok(c, updatedShipment);
 }) as any);
@@ -434,8 +433,7 @@ app.openapi(refreshShipmentRoute, async (c) => {
     if (shipment.orderId !== orderId) throw new ValidationError("Shipment does not belong to this order");
 
     const previousStatus = shipment.status;
-    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     try {
         await checkShipmentStatus(db, shipmentId, encryptionKey);
     } catch (e: unknown) {
@@ -446,7 +444,7 @@ app.openapi(refreshShipmentRoute, async (c) => {
     await db.update(deliveryShipments).set({ lastChecked: now }).where(eq(deliveryShipments.id, shipmentId));
 
     const updatedShipment = await getShipment(db, shipmentId);
-    if (!updatedShipment) throw new Error("Failed to retrieve updated shipment");
+    if (!updatedShipment) throw new NotFoundError("Failed to retrieve updated shipment");
 
     const provider = updatedShipment.providerId ? await getDeliveryProvider(db, updatedShipment.providerId) : null;
     const statusChanged = previousStatus !== updatedShipment.status;

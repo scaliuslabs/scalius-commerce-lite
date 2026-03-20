@@ -7,9 +7,11 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260313.1",
     "@scalius/tsconfig": "workspace:*",
     "vitest": "^4.1.0"
   },

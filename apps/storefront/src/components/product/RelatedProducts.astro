@@ -3,13 +3,14 @@ import { Truck } from "lucide-react";
 import type { Product } from "@/lib/api";
 import { formatDiscountBadge } from "./lib/pricing-engine";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
   relatedProducts: Product[];
   currencySymbol?: string;
 }
 
-const { relatedProducts, currencySymbol = "৳" } = Astro.props;
+const { relatedProducts, currencySymbol = DEFAULT_CURRENCY.symbol } = Astro.props;
 
 const formatPrice = (price: number) =>
   `${currencySymbol}${price.toLocaleString("en-US", {

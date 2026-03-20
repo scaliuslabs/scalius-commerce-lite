@@ -21,6 +21,7 @@ registerEmailProvider("resend", new ResendEmailProvider());
 
 import type { SendEmailOptions } from "./provider";
 import { getEmailProvider } from "./provider";
+import { escapeHtml } from "@scalius/shared/html-escape";
 
 /**
  * Send an email using the active provider.
@@ -49,7 +50,7 @@ export async function sendVerificationEmail(
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Verify your email</h2>
-        <p>Hi ${name},</p>
+        <p>Hi ${escapeHtml(name)},</p>
         <p>Please click the button below to verify your email address:</p>
         <p style="margin: 30px 0;">
           <a href="${verificationUrl}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
@@ -65,7 +66,7 @@ export async function sendVerificationEmail(
         </p>
       </div>
     `,
-    text: `Hi ${name},\n\nPlease verify your email: ${verificationUrl}\n\nExpires in 24 hours.`,
+    text: `Hi ${name},\n\nPlease verify your email: ${verificationUrl}\n\nExpires in 24 hours.`,  // Plain text: no HTML escaping needed
   });
 }
 
@@ -83,7 +84,7 @@ export async function sendPasswordResetEmail(
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Reset your password</h2>
-        <p>Hi ${name},</p>
+        <p>Hi ${escapeHtml(name)},</p>
         <p>Click the button below to create a new password:</p>
         <p style="margin: 30px 0;">
           <a href="${resetUrl}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
@@ -119,11 +120,11 @@ export async function sendAdminInviteEmail(
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Admin Invitation</h2>
         <p>Hi,</p>
-        <p>${inviterName} has invited you to join Scalius Commerce as an administrator.</p>
+        <p>${escapeHtml(inviterName)} has invited you to join Scalius Commerce as an administrator.</p>
         <p>Your temporary login credentials are:</p>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <p style="margin: 0;"><strong>Email:</strong> ${email}</p>
-          <p style="margin: 10px 0 0;"><strong>Temporary Password:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 4px;">${tempPassword}</code></p>
+          <p style="margin: 0;"><strong>Email:</strong> ${escapeHtml(email)}</p>
+          <p style="margin: 10px 0 0;"><strong>Temporary Password:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 4px;">${escapeHtml(tempPassword)}</code></p>
         </div>
         <p style="margin: 30px 0;">
           <a href="${loginUrl}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">

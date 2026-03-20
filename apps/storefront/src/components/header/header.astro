@@ -57,6 +57,7 @@ const headerData: HeaderData = {
 <script>
   import { cartStore } from "@/store/cart";
   import { debounce } from "@/lib/utils";
+  import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
   const openCart = debounce(() => {
     document.dispatchEvent(new CustomEvent("open-cart"));
@@ -65,7 +66,7 @@ const headerData: HeaderData = {
   function initializeHeader() {
     function updateCartDisplay() {
       const { totalItems, totalAmount } = cartStore.get();
-      const sym = window.__CURRENCY_SYMBOL__ || "৳";
+      const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
       const formattedTotal = `${sym}${totalAmount.toLocaleString()}`;
 
       const countElements = document.querySelectorAll(

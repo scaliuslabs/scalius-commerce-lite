@@ -1,4 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
+import { isPublicRoute } from "./route-utils";
 
 // Memory + KV cache for hasAdminUsers to prevent D1 queries on every request
 let memoryHasAdminUsers: boolean | null = null;
@@ -52,11 +53,8 @@ export const adminDetectionMiddleware = defineMiddleware(async (context, next) =
   const url = new URL(context.request.url);
   const pathname = url.pathname;
 
-  // Skip for non-admin API routes and Better Auth routes (matches original behavior)
-  if (
-    (pathname.startsWith("/api/v1") && !pathname.startsWith("/api/v1/admin")) ||
-    pathname.startsWith("/api/auth/")
-  ) {
+  // Skip for non-admin API routes and Better Auth routes
+  if (isPublicRoute(pathname)) {
     return (await next()) || new Response();
   }
 

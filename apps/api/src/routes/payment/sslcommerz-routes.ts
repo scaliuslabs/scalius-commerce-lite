@@ -8,6 +8,7 @@ import { initSSLCommerzSession } from "@scalius/core/modules/payments/sslcommerz
 import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
+import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 
 import { ok } from "../../utils/api-response";
@@ -53,8 +54,7 @@ const createSessionRoute = createRoute({
 
 app.openapi(createSessionRoute, async (c) => {
   const db = c.get("db");
-  const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-    ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
   const ssl = await getSSLCommerzSettings(db, c.env.CACHE, encryptionKey);
 
   if (!ssl) {

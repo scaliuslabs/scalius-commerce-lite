@@ -4,13 +4,14 @@
 import ProductCard from "@/components/cards/ProductCard.astro";
 import type { CollectionWithProducts } from "@/lib/api";
 import { ArrowRight } from "lucide-react";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
   collection: CollectionWithProducts;
   currencySymbol?: string;
 }
 
-const { collection, currencySymbol = "৳" } = Astro.props;
+const { collection, currencySymbol = DEFAULT_CURRENCY.symbol } = Astro.props;
 
 // Data is pre-populated from consolidated API
 const products = collection.products || [];

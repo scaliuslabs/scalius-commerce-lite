@@ -95,7 +95,7 @@ app.openapi(createSliderRoute, async (c) => {
             updatedAt: sql`CURRENT_TIMESTAMP`
         }).returning();
         const slider = sliderArr[0];
-        if (!slider) throw new Error("Failed to create slider");
+        if (!slider) throw new ValidationError("Failed to create slider");
 
         return created(c, { ...slider, images: JSON.parse(slider.images) });
     } catch (error: unknown) {

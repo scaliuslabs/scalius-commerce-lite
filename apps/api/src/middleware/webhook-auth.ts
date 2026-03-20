@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { deliveryProviders } from "@scalius/database/schema";
 import { getDb } from "@scalius/database/client";
 import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
+import { getEncryptionKey } from "../utils/encryption-key";
 
 interface WebhookVerificationResult {
   verified: boolean;
@@ -81,8 +82,7 @@ export async function verifyDeliveryWebhook(
     return { verified: false, credentials: null, config: null, reason: "Provider not configured" };
   }
 
-  const encryptionKey = (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-    ?? (env as Record<string, unknown>).JWT_SECRET as string | undefined;
+  const encryptionKey = getEncryptionKey(env as Record<string, unknown>);
   const rawCreds = provider.credentials
     ? await decryptCredentialsGraceful(provider.credentials, encryptionKey)
     : "{}";

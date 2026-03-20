@@ -3,7 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**"],
+      "inputs": ["src/**", "package.json", "tsconfig.json", "wrangler.jsonc", "astro.config.mjs", "*.config.*"],
       "outputs": ["dist/**", ".astro/**"]
     },
     "dev": {
@@ -24,6 +24,9 @@
     },
     "test": {
       "dependsOn": ["^build"],
+      "cache": false
+    },
+    "generate": {
       "cache": false
     },
     "db:generate": { "cache": false },

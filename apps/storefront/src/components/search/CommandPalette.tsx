@@ -152,18 +152,16 @@ export default function CommandPalette() {
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((prev) => (prev + 1) % flatResults.length);
         const nextIndex = (selectedIndex + 1) % flatResults.length;
+        setSelectedIndex(nextIndex);
         document
           .getElementById(`cmd-item-${nextIndex}`)
           ?.scrollIntoView({ block: "nearest" });
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedIndex(
-          (prev) => (prev - 1 + flatResults.length) % flatResults.length,
-        );
         const nextIndex =
           (selectedIndex - 1 + flatResults.length) % flatResults.length;
+        setSelectedIndex(nextIndex);
         document
           .getElementById(`cmd-item-${nextIndex}`)
           ?.scrollIntoView({ block: "nearest" });

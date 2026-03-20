@@ -14,18 +14,18 @@ export const GET: APIRoute = async () => {
     console.error("Error reading Firebase config from API for SW:", e);
   }
 
-  // 2. Fallback to Env Vars
+  // 2. If API fetch failed, return a no-op service worker that logs a warning
   if (!publicConfig.apiKey) {
-    publicConfig = {
-      apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY || "",
-      authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN || "",
-      projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID || "",
-      storageBucket: import.meta.env.PUBLIC_FIREBASE_STORAGE_BUCKET || "",
-      messagingSenderId:
-        import.meta.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
-      appId: import.meta.env.PUBLIC_FIREBASE_APP_ID || "",
-      measurementId: import.meta.env.PUBLIC_FIREBASE_MEASUREMENT_ID || "",
-    };
+    const noopScript = `// Firebase Cloud Messaging Service Worker — config unavailable
+console.warn("[firebase-messaging-sw.js] Firebase config not available from API. Push notifications disabled.");
+`;
+    return new Response(noopScript, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/javascript",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+      },
+    });
   }
 
   // 3. Construct the script

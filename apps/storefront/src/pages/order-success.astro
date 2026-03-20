@@ -38,10 +38,12 @@ if (errorFetching || !order) {
 }
 
 const orderItemsFromApi: OrderItem[] = order.items || [];
-const currencySymbol = layoutData?.currency?.symbol ?? "৳";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 ---
 
 <Layout title="Order Successful" layoutData={layoutData}>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
   <main
     class="container mx-auto px-4 py-8 max-w-2xl"
     data-fb-order-details={JSON.stringify({

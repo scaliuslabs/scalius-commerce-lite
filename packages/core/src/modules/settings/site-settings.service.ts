@@ -67,51 +67,39 @@ export async function getGeneralSettings(db: Database) {
 }
 
 export async function saveHeaderConfig(db: Database, config: Record<string, unknown>) {
-    const [existingSettings] = await db.select().from(siteSettings).limit(1);
-
-    if (existingSettings) {
-        await db
-            .update(siteSettings)
-            .set({
-                headerConfig: JSON.stringify(config),
-                updatedAt: sql`unixepoch()`
-            })
-            .where(eq(siteSettings.id, existingSettings.id));
-    } else {
-        await db.insert(siteSettings).values({
-            id: "settings_" + nanoid(),
-            siteName: "My Store",
-            siteDescription: "",
+    await db.insert(siteSettings).values({
+        id: "settings_" + nanoid(),
+        siteName: "My Store",
+        siteDescription: "",
+        headerConfig: JSON.stringify(config),
+        footerConfig: JSON.stringify({}),
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`
+    }).onConflictDoUpdate({
+        target: siteSettings.singletonKey,
+        set: {
             headerConfig: JSON.stringify(config),
-            footerConfig: JSON.stringify({}),
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`
-        });
-    }
+            updatedAt: sql`unixepoch()`,
+        },
+    });
 }
 
 export async function saveFooterConfig(db: Database, config: Record<string, unknown>) {
-    const [existingSettings] = await db.select().from(siteSettings).limit(1);
-
-    if (existingSettings) {
-        await db
-            .update(siteSettings)
-            .set({
-                footerConfig: JSON.stringify(config),
-                updatedAt: sql`unixepoch()`
-            })
-            .where(eq(siteSettings.id, existingSettings.id));
-    } else {
-        await db.insert(siteSettings).values({
-            id: "settings_" + nanoid(),
-            siteName: "My Store",
-            siteDescription: "",
-            headerConfig: JSON.stringify({}),
+    await db.insert(siteSettings).values({
+        id: "settings_" + nanoid(),
+        siteName: "My Store",
+        siteDescription: "",
+        headerConfig: JSON.stringify({}),
+        footerConfig: JSON.stringify(config),
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`
+    }).onConflictDoUpdate({
+        target: siteSettings.singletonKey,
+        set: {
             footerConfig: JSON.stringify(config),
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`
-        });
-    }
+            updatedAt: sql`unixepoch()`,
+        },
+    });
 }
 
 // ─────────────────────────────────────────
@@ -165,33 +153,28 @@ export async function saveSeoSettings(
         robotsTxt?: string;
     },
 ) {
-    const [existing] = await db.select().from(siteSettings).limit(1);
+    // Filter out undefined values to avoid NULLing existing data
+    const updates: Record<string, unknown> = {};
+    if (data.siteTitle !== undefined) updates.siteTitle = data.siteTitle;
+    if (data.homepageTitle !== undefined) updates.homepageTitle = data.homepageTitle;
+    if (data.homepageMetaDescription !== undefined) updates.homepageMetaDescription = data.homepageMetaDescription;
+    if (data.robotsTxt !== undefined) updates.robotsTxt = data.robotsTxt;
 
-    if (existing) {
-        await db
-            .update(siteSettings)
-            .set({
-                siteTitle: data.siteTitle,
-                homepageTitle: data.homepageTitle,
-                homepageMetaDescription: data.homepageMetaDescription,
-                robotsTxt: data.robotsTxt,
-                updatedAt: sql`unixepoch()`
-            })
-            .where(eq(siteSettings.id, existing.id));
-    } else {
-        await db.insert(siteSettings).values({
-            id: "settings_" + nanoid(),
-            siteName: "My Store",
-            headerConfig: JSON.stringify({}),
-            footerConfig: JSON.stringify({}),
-            siteTitle: data.siteTitle,
-            homepageTitle: data.homepageTitle,
-            homepageMetaDescription: data.homepageMetaDescription,
-            robotsTxt: data.robotsTxt,
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`
-        });
-    }
+    await db.insert(siteSettings).values({
+        id: "settings_" + nanoid(),
+        siteName: "My Store",
+        headerConfig: JSON.stringify({}),
+        footerConfig: JSON.stringify({}),
+        ...updates,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`
+    }).onConflictDoUpdate({
+        target: siteSettings.singletonKey,
+        set: {
+            ...updates,
+            updatedAt: sql`unixepoch()`,
+        },
+    });
 }
 
 // ─────────────────────────────────────────
@@ -204,24 +187,21 @@ export async function getStorefrontUrlSetting(db: Database) {
 }
 
 export async function saveStorefrontUrl(db: Database, url?: string) {
-    const [existing] = await db.select().from(siteSettings).limit(1);
-
-    if (existing) {
-        await db
-            .update(siteSettings)
-            .set({ storefrontUrl: url || "/", updatedAt: sql`unixepoch()` })
-            .where(eq(siteSettings.id, existing.id));
-    } else {
-        await db.insert(siteSettings).values({
-            id: "settings_" + nanoid(),
-            siteName: "My Store",
-            headerConfig: JSON.stringify({}),
-            footerConfig: JSON.stringify({}),
+    await db.insert(siteSettings).values({
+        id: "settings_" + nanoid(),
+        siteName: "My Store",
+        headerConfig: JSON.stringify({}),
+        footerConfig: JSON.stringify({}),
+        storefrontUrl: url || "/",
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`
+    }).onConflictDoUpdate({
+        target: siteSettings.singletonKey,
+        set: {
             storefrontUrl: url || "/",
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`
-        });
-    }
+            updatedAt: sql`unixepoch()`,
+        },
+    });
 }
 
 // ─────────────────────────────────────────

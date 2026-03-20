@@ -85,6 +85,8 @@ export async function handleOrderIngestBatch(
     // Drizzle D1 batch() requires specific tuple types
     const writeBatch: unknown[] = [];
     const reservationEntries: { variantId: string; quantity: number; pool: "regular" | "preorder" | "backorder"; orderId: string }[] = [];
+    // Track which writeBatch indices belong to each order (for Phase 1b removal)
+    const orderWriteRanges = new Map<string, { start: number; end: number }>();
 
     const successMessages: Message<OrderIngestQueueMessage>[] = [];
     const failedMessages: { msg: Message<OrderIngestQueueMessage>; reason: string }[] = [];
@@ -111,6 +113,9 @@ export async function handleOrderIngestBatch(
                     ...orderReservationEntries.map((e) => ({ ...e, orderId: oid })),
                 );
             }
+
+            // Track the start of this order's write statements
+            const writeStart = writeBatch.length;
 
             // Customer: create new or update existing
             const od = payload.orderData;
@@ -234,6 +239,7 @@ export async function handleOrderIngestBatch(
                 );
             }
 
+            orderWriteRanges.set(od.id as string, { start: writeStart, end: writeBatch.length });
             successMessages.push(msg);
         } catch (e: unknown) {
             console.error(`[Queue] Error preparing order ${payload.orderData.id as string}:`, e);
@@ -248,6 +254,8 @@ export async function handleOrderIngestBatch(
     // validation time (HTTP handler) and queue processing time (here).
     // Uses customerPhone (consistent with eligibility check) rather than
     // customerId, which may not exist yet for new customers.
+    // Collect indices of writeBatch entries to remove for rejected orders.
+    const rejectedWriteIndices = new Set<number>();
     for (let i = successMessages.length - 1; i >= 0; i--) {
         const msg = successMessages[i];
         if (!msg) continue;
@@ -256,6 +264,7 @@ export async function handleOrderIngestBatch(
 
         const discountId = payload.discountUsage.discountId;
         const customerPhone = payload.orderData.customerPhone as string | undefined;
+        const orderId = payload.orderData.id as string;
 
         // Re-check per-customer limit using phone (matches eligibility check)
         if (customerPhone) {
@@ -276,6 +285,8 @@ export async function handleOrderIngestBatch(
                 await setCheckoutStatus(env, payload.checkoutToken, "failed", "Discount already used by this customer");
                 successMessages.splice(i, 1);
                 failedMessages.push({ msg, reason: "Discount already used" });
+                const range = orderWriteRanges.get(orderId);
+                if (range) for (let j = range.start; j < range.end; j++) rejectedWriteIndices.add(j);
                 continue;
             }
         }
@@ -298,8 +309,17 @@ export async function handleOrderIngestBatch(
                 await setCheckoutStatus(env, payload.checkoutToken, "failed", "Discount code has reached its usage limit");
                 successMessages.splice(i, 1);
                 failedMessages.push({ msg, reason: "Discount maxUses exceeded" });
+                const range = orderWriteRanges.get(orderId);
+                if (range) for (let j = range.start; j < range.end; j++) rejectedWriteIndices.add(j);
                 continue;
             }
+        }
+    }
+
+    // Remove rejected orders' write statements from the batch
+    if (rejectedWriteIndices.size > 0) {
+        for (let i = writeBatch.length - 1; i >= 0; i--) {
+            if (rejectedWriteIndices.has(i)) writeBatch.splice(i, 1);
         }
     }
 

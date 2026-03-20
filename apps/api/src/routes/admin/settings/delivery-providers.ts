@@ -4,18 +4,13 @@ import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
+import { getEncryptionKey } from "../../../utils/encryption-key";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono();
 
 const MASKED_VALUE = "••••••••••••";
-
-/** Get encryption key — prefers CREDENTIAL_ENCRYPTION_KEY, falls back to JWT_SECRET */
-function getEncryptionKey(env: Record<string, unknown>): string | undefined {
-    return (env.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
-        ?? (env.JWT_SECRET as string | undefined);
-}
 
 function unmaskedCredentials(
     newCredentials: string,

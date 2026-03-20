@@ -26,8 +26,8 @@ function processBlock(css: string, scope: string): string {
 
   while (i < css.length) {
     // Skip whitespace
-    if (/\s/.test(css[i])) {
-      result.push(css[i]);
+    if (/\s/.test(css[i]!)) {
+      result.push(css[i]!);
       i++;
       continue;
     }
@@ -45,10 +45,10 @@ function processBlock(css: string, scope: string): string {
     }
 
     // At-rule
-    if (css[i] === "@") {
+    if (css[i]! === "@") {
       const atRule = extractAtRule(css, i);
       if (!atRule) {
-        result.push(css[i]);
+        result.push(css[i]!);
         i++;
         continue;
       }
@@ -115,9 +115,36 @@ function processBlock(css: string, scope: string): string {
   return result.join("");
 }
 
+/**
+ * Split a selector list on commas, but not commas inside functional
+ * pseudo-selectors like :is(), :where(), :not(), :has().
+ */
+function splitSelectors(selectorText: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+
+  for (let i = 0; i < selectorText.length; i++) {
+    const ch = selectorText[i];
+    if (ch === "(") {
+      depth++;
+      current += ch;
+    } else if (ch === ")") {
+      depth = Math.max(0, depth - 1);
+      current += ch;
+    } else if (ch === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  parts.push(current);
+  return parts;
+}
+
 function prefixSelectors(selectorText: string, scope: string): string {
-  return selectorText
-    .split(",")
+  return splitSelectors(selectorText)
     .map((sel) => {
       const s = sel.trim();
       if (!s) return s;
@@ -152,18 +179,18 @@ function extractAtRule(css: string, start: number): AtRuleInfo | null {
   const nameMatch = css.slice(start).match(/^@([\w-]+)/);
   if (!nameMatch) return null;
 
-  const name = nameMatch[1];
+  const name = nameMatch[1]!;
 
   // Find either { or ; to determine if it's a block or statement at-rule
   let j = start + nameMatch[0].length;
   while (j < css.length) {
-    if (css[j] === "{") {
+    if (css[j]! === "{") {
       const bodyStart = j + 1;
       const closeBrace = findMatchingBrace(css, j);
       if (closeBrace === -1) return null;
       return { name, bodyStart, bodyEnd: closeBrace, end: closeBrace + 1 };
     }
-    if (css[j] === ";") {
+    if (css[j]! === ";") {
       return { name, bodyStart: -1, bodyEnd: -1, end: j + 1 };
     }
     j++;

@@ -39,6 +39,7 @@ export default function AuthModal() {
   const [method, setMethod] = useState<VerificationMethod>("email");
   const [identifier, setIdentifier] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
+  const [emailInput, setEmailInput] = useState("");
   const [otp, setOtp] = useState("");
 
   // Settings injected globally
@@ -193,7 +194,7 @@ export default function AuthModal() {
     } else {
       const phoneValid = !!identifier && isValidPhoneNumber(identifier);
       if (allowedMethods === "email_phone_mandatory") {
-        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(phoneInput.trim());
+        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.trim());
         return phoneValid && emailValid;
       }
       return phoneValid;
@@ -304,6 +305,7 @@ export default function AuthModal() {
     setStep("input");
     setIdentifier("");
     setPhoneInput("");
+    setEmailInput("");
     setOtp("");
     window.dispatchEvent(new CustomEvent("customer-logout"));
   };
@@ -368,13 +370,13 @@ export default function AuthModal() {
               <div className="flex rounded-lg border border-border p-1 mb-4 bg-muted/50">
                 <button
                   className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${method === "email" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => { setMethod("email"); setError(""); setIdentifier(""); setPhoneInput(""); }}
+                  onClick={() => { setMethod("email"); setError(""); setIdentifier(""); setPhoneInput(""); setEmailInput(""); }}
                 >
                   <Mail className="h-4 w-4" /> Email
                 </button>
                 <button
                   className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${method === "phone" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => { setMethod("phone"); setError(""); setIdentifier(""); setPhoneInput(""); }}
+                  onClick={() => { setMethod("phone"); setError(""); setIdentifier(""); setPhoneInput(""); setEmailInput(""); }}
                 >
                   <Smartphone className="h-4 w-4" /> WhatsApp
                 </button>
@@ -432,8 +434,8 @@ export default function AuthModal() {
                 </label>
                 <input
                   type="email"
-                  value={phoneInput} // Reusing phoneInput state object variable contextually for email to save lines
-                  onChange={(e) => { setPhoneInput(e.target.value); setError(""); }}
+                  value={emailInput}
+                  onChange={(e) => { setEmailInput(e.target.value); setError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
                   placeholder="you@example.com"
                   className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all"

@@ -2,6 +2,7 @@
 // Rebuilt Inventory Management Dashboard (Premium UI/UX).
 
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Card,
@@ -127,7 +128,12 @@ export function InventoryManager() {
   const [variants, setVariants] = useState<InventoryVariant[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [stats, setStats] = useState<InventoryStats | null>(null);
+  // Separate requested page/limit from server-returned pagination to avoid fetch loops
+  const [requestedPage, setRequestedPage] = useState(1);
+  const [requestedLimit, setRequestedLimit] = useState(50);
   const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [movementsRequestedPage, setMovementsRequestedPage] = useState(1);
+  const [movementsRequestedLimit, setMovementsRequestedLimit] = useState(50);
   const [movementsPagination, setMovementsPagination] = useState<Pagination | null>(null);
   const [search, setSearch] = useState("");
   const [localSearch, setLocalSearch] = useState("");
@@ -146,8 +152,8 @@ export function InventoryManager() {
           section: "variants",
           search,
           status: stockFilter,
-          page: String(pagination?.page || 1),
-          limit: String(pagination?.limit || 50),
+          page: String(requestedPage),
+          limit: String(requestedLimit),
           sort: sort.field,
           order: sort.order
         });
@@ -160,8 +166,8 @@ export function InventoryManager() {
       } else if (activeTab === "movements") {
         const params = new URLSearchParams({
           section: "movements",
-          page: String(movementsPagination?.page || 1),
-          limit: String(movementsPagination?.limit || 50),
+          page: String(movementsRequestedPage),
+          limit: String(movementsRequestedLimit),
         });
         const res = await fetch(`/api/v1/admin/inventory?${params}`);
         const json2 = await res.json();
@@ -171,10 +177,11 @@ export function InventoryManager() {
       }
     } catch (err: unknown) {
       console.error("Failed to fetch inventory data:", err);
+      toast.error("Failed to fetch inventory data");
     } finally {
       setLoading(false);
     }
-  }, [activeTab, search, stockFilter, pagination?.page, pagination?.limit, movementsPagination?.page, movementsPagination?.limit, sort.field, sort.order, refreshKey]);
+  }, [activeTab, search, stockFilter, requestedPage, requestedLimit, movementsRequestedPage, movementsRequestedLimit, sort.field, sort.order, refreshKey]);
 
   useEffect(() => {
     fetchData();
@@ -400,8 +407,8 @@ export function InventoryManager() {
             </div>
             <PaginationControls
               pagination={pagination}
-              onPageChange={(page) => setPagination(prev => prev ? { ...prev, page } : null)}
-              onLimitChange={(limit) => setPagination(prev => prev ? { ...prev, limit, page: 1 } : null)}
+              onPageChange={(page) => setRequestedPage(page)}
+              onLimitChange={(limit) => { setRequestedLimit(limit); setRequestedPage(1); }}
               itemName="variants"
             />
           </div>
@@ -461,8 +468,8 @@ export function InventoryManager() {
             </div>
             <PaginationControls
               pagination={movementsPagination}
-              onPageChange={(page) => setMovementsPagination(prev => prev ? { ...prev, page } : null)}
-              onLimitChange={(limit) => setMovementsPagination(prev => prev ? { ...prev, limit, page: 1 } : null)}
+              onPageChange={(page) => setMovementsRequestedPage(page)}
+              onLimitChange={(limit) => { setMovementsRequestedLimit(limit); setMovementsRequestedPage(1); }}
               itemName="movements"
             />
           </div>
@@ -545,8 +552,9 @@ function AdjustModal({ variant, onClose, onSubmit }: { variant: InventoryVariant
       if (!res.ok) throw new Error("Failed");
       onSubmit();
       onClose();
-    } catch {
-      alert("Failed to adjust stock.");
+    } catch (error) {
+      console.error("Failed to adjust stock:", error);
+      toast.error("Failed to adjust stock");
     } finally {
       setSubmitting(false);
     }

@@ -59,8 +59,8 @@ function extractSections(content: string): ParsedSection[] {
 
   let match;
   while ((match = partPattern.exec(content)) !== null) {
-    const partNumber = parseInt(match[1], 10);
-    const partContent = match[2];
+    const partNumber = parseInt(match[1] ?? '0', 10);
+    const partContent = match[2] ?? '';
 
     const html = extractTag(partContent, 'htmljs') || extractTag(partContent, 'html') || '';
     const css = extractTag(partContent, 'css') || '';

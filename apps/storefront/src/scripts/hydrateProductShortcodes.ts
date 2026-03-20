@@ -21,7 +21,7 @@ function hydrate() {
           return;
         }
         
-        const props = JSON.parse(propsString);
+        const props = JSON.parse(decodeURIComponent(propsString));
         const root = createRoot(el);
         
         root.render(

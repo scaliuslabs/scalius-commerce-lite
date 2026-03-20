@@ -4,6 +4,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, admin } from "better-auth/plugins";
 import { getDb } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
+import { escapeHtml } from "@scalius/shared/html-escape";
 
 /**
  * Create Better Auth instance with the given environment.
@@ -58,7 +59,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <h2>Verify your email</h2>
-              <p>Hi ${user.name},</p>
+              <p>Hi ${escapeHtml(user.name)},</p>
               <p>Please click the button below to verify your email address:</p>
               <p style="margin: 30px 0;">
                 <a href="${url}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
@@ -85,7 +86,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <h2>Reset your password</h2>
-              <p>Hi ${user.name},</p>
+              <p>Hi ${escapeHtml(user.name)},</p>
               <p>We received a request to reset your password. Click the button below to create a new password:</p>
               <p style="margin: 30px 0;">
                 <a href="${url}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
@@ -167,7 +168,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
               html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                   <h2>Two-Factor Authentication</h2>
-                  <p>Hi ${user.name},</p>
+                  <p>Hi ${escapeHtml(user.name)},</p>
                   <p>Your verification code is:</p>
                   <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 20px; background-color: #f5f5f5; border-radius: 8px; margin: 20px 0;">
                     ${otp}

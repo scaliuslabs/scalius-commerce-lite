@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
+import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 
@@ -121,8 +122,7 @@ app.openapi(checkStatusRoute, (async (c: any) => {
     }
 
     const previousStatus = currentShipment.status;
-    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
-        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const result = await checkShipmentStatus(db, shipmentId, encryptionKey);
     const now = new Date();
 

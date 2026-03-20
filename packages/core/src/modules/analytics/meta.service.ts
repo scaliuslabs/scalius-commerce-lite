@@ -44,8 +44,10 @@ export async function logCapiEvent(
             eventTime: new Date(eventTime * 1000),
         });
 
-        // Implement lazy cleanup directly in the service
-        performLogCleanup(db, retentionHours);
+        // Fire-and-forget: cleanup is best-effort and non-critical.
+        // Not awaited intentionally — the caller should not wait for cleanup
+        // to complete before returning. Errors are caught inside performLogCleanup.
+        void performLogCleanup(db, retentionHours);
     } catch (error: unknown) {
         console.error("Failed to write to Meta CAPI log:", error);
     }

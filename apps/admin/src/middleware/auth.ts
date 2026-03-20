@@ -1,21 +1,18 @@
 import { defineMiddleware } from "astro:middleware";
 import { createAuth } from "@scalius/core/auth";
 import { env as cfEnv } from "cloudflare:workers";
-import { setRequestHeaders } from "@/lib/api-server";
+import { runWithRequestHeaders } from "@/lib/api-server";
+import { isPublicRoute } from "./route-utils";
 
 /**
  * Auth middleware — runs first.
  * Detects CF environment, initializes DB/KV/Storage bindings, and extracts
  * the Better Auth session, populating `context.locals` for downstream middleware.
- * Also stores request headers so SSR loaders can forward auth cookies to the API.
  */
 export const authMiddleware = defineMiddleware(async (context, next) => {
   const request = context.request;
   const url = new URL(request.url);
   const pathname = url.pathname;
-
-  // Store request headers so apiGet/apiPost can forward auth cookies
-  setRequestHeaders(request.headers);
 
   // Use native CF Worker env in prod/dev, fallback to process.env for scripts
   // NOTE: Do NOT use Object.keys(cfEnv) — it returns [] on CF Workers proxy objects.
@@ -46,42 +43,41 @@ export const authMiddleware = defineMiddleware(async (context, next) => {
     }
   }
 
-  // Non-admin API routes and Better Auth routes bypass session extraction
-  if (pathname.startsWith("/api/v1") && !pathname.startsWith("/api/v1/admin")) {
-    const response = await next();
-    return response || new Response();
-  }
-
-  if (pathname.startsWith("/api/auth/")) {
-    const response = await next();
-    return response || new Response();
-  }
-
-  // Extract Better Auth session
-  let session = null;
-  let sessionUser = null;
-
-  try {
-    const auth = createAuth(env);
-    const sessionResult = await auth.api.getSession({
-      headers: request.headers,
-    });
-
-    if (sessionResult) {
-      session = sessionResult.session;
-      sessionUser = sessionResult.user;
+  // Run the rest of the middleware chain inside AsyncLocalStorage so that
+  // apiGet/apiPost/etc. can access this request's headers without module-level state.
+  return runWithRequestHeaders(request.headers, async () => {
+    // Non-admin API routes and Better Auth routes bypass session extraction
+    if (isPublicRoute(pathname)) {
+      const response = await next();
+      return response || new Response();
     }
-  } catch (error: unknown) {
-    console.error("Error getting session:", error);
-  }
 
-  context.locals.session = session;
-  context.locals.user = sessionUser;
-  context.locals.apiBaseUrl = (env?.PUBLIC_API_BASE_URL as string) || "";
+    // Extract Better Auth session
+    let session = null;
+    let sessionUser = null;
 
-  // Store env reference for downstream middleware
-  context.locals._env = env;
+    try {
+      const auth = createAuth(env);
+      const sessionResult = await auth.api.getSession({
+        headers: request.headers,
+      });
 
-  const response = await next();
-  return response || new Response();
+      if (sessionResult) {
+        session = sessionResult.session;
+        sessionUser = sessionResult.user;
+      }
+    } catch (error: unknown) {
+      console.error("Error getting session:", error);
+    }
+
+    context.locals.session = session;
+    context.locals.user = sessionUser;
+    context.locals.apiBaseUrl = (env?.PUBLIC_API_BASE_URL as string) || "";
+
+    // Store env reference for downstream middleware
+    context.locals._env = env;
+
+    const response = await next();
+    return response || new Response();
+  });
 });

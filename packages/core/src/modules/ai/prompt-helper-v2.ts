@@ -138,6 +138,11 @@ export async function getImageDimensions(
   url: string,
   timeoutMs = 5000
 ): Promise<{ width: number; height: number }> {
+  // Image() is a browser-only DOM API — not available in Workers/Node
+  if (typeof Image === "undefined") {
+    return { width: 0, height: 0 };
+  }
+
   return new Promise((resolve, reject) => {
     const img = new Image();
     const timeout = setTimeout(() => {

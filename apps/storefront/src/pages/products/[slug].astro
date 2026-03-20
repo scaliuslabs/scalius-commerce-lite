@@ -56,7 +56,8 @@ const colorOptions = Array.from(colorOrderMap.entries())
 
 const pageTitle = product.metaTitle || product.name;
 const pageDescription = cleanMetaDescription;
-const currencySymbol = layoutData?.currency?.symbol ?? "৳";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 ---
 
 <Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>

@@ -12,7 +12,8 @@
   },
   "scripts": {
     "generate": "node --import tsx scripts/generate-spec.ts && openapi-ts",
-    "generate:spec": "node --import tsx scripts/generate-spec.ts"
+    "generate:spec": "node --import tsx scripts/generate-spec.ts",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.66.0",

@@ -7,7 +7,7 @@ import {
     bulkShipOrderSchema
 } from "@scalius/core/modules/orders/orders.validation";
 import { orderPayments, paymentPlans, orderItems, products, productVariants, productImages, orders } from "@scalius/database/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
@@ -488,19 +488,29 @@ app.openapi(getFormDataRoute, (async (c: any) => {
             .where(isNull(products.deletedAt)),
     ]);
 
-    // Fetch variants for each product
-    const productsWithVariants = await Promise.all(
-        allProducts.map(async (product: any) => {
-            const variants = await db
-                .select()
-                .from(productVariants)
-                .where(and(
-                    eq(productVariants.productId, product.id),
-                    isNull(productVariants.deletedAt),
-                ));
-            return { ...product, variants };
-        })
-    );
+    // Fetch all variants in a single batched query instead of N+1
+    const allProductIds = allProducts.map((p: any) => p.id);
+    const allVariants = allProductIds.length > 0
+        ? await db
+            .select()
+            .from(productVariants)
+            .where(and(
+                inArray(productVariants.productId, allProductIds),
+                isNull(productVariants.deletedAt),
+            ))
+        : [];
+
+    const variantsByProductId = new Map<string, typeof allVariants>();
+    for (const variant of allVariants) {
+        const existing = variantsByProductId.get(variant.productId) ?? [];
+        existing.push(variant);
+        variantsByProductId.set(variant.productId, existing);
+    }
+
+    const productsWithVariants = allProducts.map((product: any) => ({
+        ...product,
+        variants: variantsByProductId.get(product.id) ?? [],
+    }));
 
     return ok(c, {
         order,

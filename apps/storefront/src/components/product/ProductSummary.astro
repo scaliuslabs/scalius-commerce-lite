@@ -6,6 +6,7 @@ import {
   getVariantDiscountedPrice,
   formatDiscountBadge,
 } from "./lib/pricing-engine";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
   product: Product;
@@ -23,7 +24,7 @@ const {
   sizeOptions,
   colorOptions,
   isVariantSpecificImagesEnabled,
-  currencySymbol = "৳",
+  currencySymbol = DEFAULT_CURRENCY.symbol,
 } = Astro.props;
 
 const formatPrice = (price: number) =>

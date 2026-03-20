@@ -10,6 +10,7 @@ const layoutData = await getLayoutData();
 ---
 
 <Layout title="My Account" layoutData={layoutData}>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
   <main class="container max-w-4xl mx-auto px-4 py-8">
     <!-- Loading state (shown while checking auth) -->
     <div id="loadingState" class="flex items-center justify-center min-h-[400px]">
@@ -165,6 +166,8 @@ const layoutData = await getLayoutData();
   import { getCustomerSession, getCustomerOrders, logoutCustomer, updateCustomerProfile, type CustomerOrder } from "@/lib/api/customer-auth";
   import { getCities, getZones } from "@/lib/api/shipping";
   import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+  import { escapeHtml } from "@scalius/shared/html-escape";
+  import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 
 
@@ -175,7 +178,7 @@ const layoutData = await getLayoutData();
   }
 
   function formatCurrency(amount: number): string {
-    const sym = window.__CURRENCY_SYMBOL__ || "৳";
+    const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
     return sym + amount.toFixed(0);
   }
 
@@ -198,11 +201,11 @@ const layoutData = await getLayoutData();
     // Item details layout (shown when expanded)
     const itemDetails = order.items.map((item) =>
       `<div class="flex items-start gap-4 py-3">
-        <img src="${item.productImage || "/placeholder.jpg"}" alt="" class="w-12 h-12 rounded-md object-cover border border-border shrink-0 bg-card" loading="lazy" />
+        <img src="${escapeHtml(item.productImage || "/placeholder.jpg")}" alt="" class="w-12 h-12 rounded-md object-cover border border-border shrink-0 bg-card" loading="lazy" />
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-semibold text-foreground truncate">${item.productName || "Product"}</p>
+          <p class="text-sm font-semibold text-foreground truncate">${escapeHtml(item.productName || "Product")}</p>
           ${(item.variantSize || item.variantColor)
-            ? `<p class="text-[11px] font-medium text-muted-foreground mt-0.5">${[item.variantSize && `Size: ${item.variantSize}`, item.variantColor && `Color: ${item.variantColor}`].filter(Boolean).join(" • ")}</p>`
+            ? `<p class="text-[11px] font-medium text-muted-foreground mt-0.5">${[item.variantSize && `Size: ${escapeHtml(item.variantSize)}`, item.variantColor && `Color: ${escapeHtml(item.variantColor)}`].filter(Boolean).join(" • ")}</p>`
             : ""}
         </div>
         <div class="text-right shrink-0">
@@ -218,7 +221,7 @@ const layoutData = await getLayoutData();
            <div>
              <div class="flex items-center gap-3">
                <span class="text-lg font-bold text-foreground">#${order.id}</span>
-               <span class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${statusClass}">${order.status}</span>
+               <span class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${statusClass}">${escapeHtml(order.status)}</span>
              </div>
              <p class="text-sm text-muted-foreground mt-1">${formatDate(order.createdAt)} • ${itemCount} item${itemCount !== 1 ? "s" : ""}</p>
            </div>
@@ -238,7 +241,7 @@ const layoutData = await getLayoutData();
              <div class="w-full sm:w-64 flex justify-between font-bold text-foreground mt-1 pt-1 border-t border-border"><span>Order Total</span><span>${formatCurrency(order.totalAmount)}</span></div>
              ${(order.paidAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-emerald-600 mt-1 pt-1 border-t border-border"><span>Paid Amount</span><span>${formatCurrency(order.paidAmount)}</span></div>` : ""}
              ${(order.totalAmount - (order.paidAmount || 0)) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-destructive mt-1 pt-0.5"><span>Due Amount</span><span>${formatCurrency(order.totalAmount - (order.paidAmount || 0))}</span></div>` : ""}
-             ${order.shippingAddress ? `<div class="w-full text-left mt-2 text-[11px] text-muted-foreground"><span class="font-semibold text-foreground">Shipped to:</span> ${order.shippingAddress}${order.cityName ? `, ${order.cityName}` : ""}${order.zoneName ? `, ${order.zoneName}` : ""}</div>` : ""}
+             ${order.shippingAddress ? `<div class="w-full text-left mt-2 text-[11px] text-muted-foreground"><span class="font-semibold text-foreground">Shipped to:</span> ${escapeHtml(order.shippingAddress)}${order.cityName ? `, ${escapeHtml(order.cityName)}` : ""}${order.zoneName ? `, ${escapeHtml(order.zoneName)}` : ""}</div>` : ""}
            </div>
         </div>
       </div>

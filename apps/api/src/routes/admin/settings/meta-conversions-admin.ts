@@ -4,6 +4,7 @@ import { sql, eq, desc, count } from "drizzle-orm";
 import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
 
 import { ok, created } from "../../../utils/api-response";
+import { ValidationError } from "../../../utils/api-error";
 import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono();
 const MASKED_VALUE = "••••••••••••";
@@ -84,7 +85,7 @@ app.openapi(saveSettingsRoute, (async (c: any) => {
     }
     const result = resultArr[0];
 
-    if (!result) throw new Error("Failed to save settings");
+    if (!result) throw new ValidationError("Failed to save settings");
     const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
     return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
 }) as any);
@@ -181,7 +182,7 @@ app.openapi(manualCleanupRoute, async (c) => {
     const retentionHours = (settings?.logRetentionDays ?? 30) * 24;
     const result = await manualLogCleanup(db, retentionHours);
     if (result.success) return ok(c, { message: result.message });
-    throw new Error(result.message);
+    throw new ValidationError(result.message);
 });
 
 export { app as metaConversionsAdminRoutes };

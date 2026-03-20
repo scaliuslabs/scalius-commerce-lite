@@ -151,13 +151,16 @@ app.openapi(createRoleRoute, (async (c: any) => {
                 .from(permissions)
                 .where(inArray(permissions.name, data.permissions));
 
-            for (const perm of permRecords) {
-                await db.insert(rolePermissions).values({
-                    id: crypto.randomUUID(),
-                    roleId,
-                    permissionId: perm.id,
-                    createdAt: new Date()
-                });
+            if (permRecords.length > 0) {
+                const inserts = permRecords.map((perm: { id: string; name: string }) =>
+                    db.insert(rolePermissions).values({
+                        id: crypto.randomUUID(),
+                        roleId,
+                        permissionId: perm.id,
+                        createdAt: new Date()
+                    })
+                );
+                await db.batch(inserts as [typeof inserts[0], ...typeof inserts]);
             }
         }
 
@@ -294,13 +297,16 @@ app.openapi(updateRoleRoute, async (c) => {
                     .from(permissions)
                     .where(inArray(permissions.name, data.permissions));
 
-                for (const perm of permRecords) {
-                    await db.insert(rolePermissions).values({
-                        id: crypto.randomUUID(),
-                        roleId,
-                        permissionId: perm.id,
-                        createdAt: new Date()
-                    });
+                if (permRecords.length > 0) {
+                    const inserts = permRecords.map((perm: { id: string; name: string }) =>
+                        db.insert(rolePermissions).values({
+                            id: crypto.randomUUID(),
+                            roleId,
+                            permissionId: perm.id,
+                            createdAt: new Date()
+                        })
+                    );
+                    await db.batch(inserts as [typeof inserts[0], ...typeof inserts]);
                 }
             }
         }

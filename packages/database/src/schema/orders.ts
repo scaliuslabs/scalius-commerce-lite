@@ -31,14 +31,18 @@ export const orders = sqliteTable("orders", {
     totalAmount: real("total_amount").notNull(),
     shippingCharge: real("shipping_charge").notNull(),
     discountAmount: real("discount_amount").default(0),
+    /** Valid: pending | processing | confirmed | shipped | delivered | completed | cancelled | refunded | returned | partially_refunded | incomplete (see OrderStatus enum) */
     status: text("status").notNull().default(OrderStatus.PENDING),
     notes: text("notes"),
     paymentMethod: text("payment_method").notNull().default(PaymentMethod.COD),
+    /** Valid: unpaid | partial | paid | refunded | failed (see PaymentStatus enum) */
     paymentStatus: text("payment_status").notNull().default(PaymentStatus.UNPAID),
     paymentIntentId: text("payment_intent_id"),
     paidAmount: real("paid_amount").notNull().default(0),
     balanceDue: real("balance_due").notNull().default(0),
+    /** Valid: pending | partial | complete (see FulfillmentStatus enum) */
     fulfillmentStatus: text("fulfillment_status").notNull().default(FulfillmentStatus.PENDING),
+    /** Valid: regular | preorder | backorder (see InventoryPool enum) */
     inventoryPool: text("inventory_pool").notNull().default(InventoryPool.REGULAR),
     inventoryAction: text("inventory_action").notNull().default("none"),
     expectedDelivery: text("expected_delivery"),
@@ -90,6 +94,7 @@ export const orderPayments = sqliteTable("order_payments", {
     currency: text("currency").notNull().default("BDT"),
     paymentMethod: text("payment_method").notNull(),
     paymentType: text("payment_type").notNull().default("full"),
+    /** Valid: pending | confirmed | failed | refunded | cancelled */
     status: text("status").notNull().default("pending"),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
     stripeChargeId: text("stripe_charge_id"),
@@ -143,6 +148,7 @@ export const codTracking = sqliteTable("cod_tracking", {
         .unique(),
     deliveryAttempts: integer("delivery_attempts").notNull().default(0),
     lastAttemptAt: integer("last_attempt_at", { mode: "timestamp" }),
+    /** Valid: pending | collected | failed | returned */
     codStatus: text("cod_status").notNull().default("pending"),
     failureReason: text("failure_reason"),
     collectedBy: text("collected_by"),

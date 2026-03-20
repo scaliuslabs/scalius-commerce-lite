@@ -331,7 +331,7 @@ async function processQueueMessage(
       if (result.success) {
         console.log(`[Queue] Polar refund processed for order ${payload.orderId} (status: ${payload.polarStatus})`);
       } else {
-        console.error(`[Queue] Polar refund failed for order ${payload.orderId}: ${result.error}`);
+        throw new Error(`Polar refund failed for order ${payload.orderId}: ${result.error}`);
       }
       break;
     }

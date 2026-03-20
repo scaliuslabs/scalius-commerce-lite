@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * Image Optimization Utility for Cloudflare Images
  *
@@ -81,14 +82,14 @@ function buildParams(opts: ImageOptimizationOptions): string {
 function detectIsDev(): boolean {
   return (
     (typeof import.meta !== "undefined" &&
-      import.meta.env?.MODE === "development") ||
-    (typeof import.meta !== "undefined" && import.meta.env?.DEV === true) ||
+      (import.meta as any).env?.MODE === "development") ||
+    (typeof import.meta !== "undefined" && (import.meta as any).env?.DEV === true) ||
     (typeof window !== "undefined" &&
       (window.location.hostname === "localhost" ||
         window.location.hostname === "127.0.0.1" ||
         window.location.hostname.startsWith("192.168.") ||
         window.location.hostname.includes("local"))) ||
-    (typeof process !== "undefined" && process.env?.NODE_ENV === "development")
+    (typeof (globalThis as any).process !== "undefined" && (globalThis as any).process.env?.NODE_ENV === "development")
   );
 }
 
@@ -98,11 +99,11 @@ function detectIsDev(): boolean {
  */
 function detectCdnBase(): string {
   const r2Url =
-    typeof import.meta !== "undefined" && import.meta.env?.R2_PUBLIC_URL;
+    typeof import.meta !== "undefined" && (import.meta as any).env?.R2_PUBLIC_URL;
   if (r2Url) return (r2Url as string).replace(/\/$/, "");
 
   const cdnDomain =
-    typeof import.meta !== "undefined" && import.meta.env?.CDN_DOMAIN_URL;
+    typeof import.meta !== "undefined" && (import.meta as any).env?.CDN_DOMAIN_URL;
   if (cdnDomain) {
     const d = (cdnDomain as string).replace(/^https?:\/\//, "");
     return `https://${d}`;

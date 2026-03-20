@@ -3,6 +3,7 @@ import { getUserPermissions, isSuperAdmin } from "@scalius/core/auth/rbac/helper
 import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { hasPageAccess } from "@scalius/core/auth/rbac/page-permissions";
+import { isPublicRoute } from "./route-utils";
 
 const protectedApiPatterns = [
   /^\/api\/v1\/admin(\/.*)?$/, /^\/api\/admin(\/.*)?$/,
@@ -34,11 +35,8 @@ export const rbacMiddleware = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url);
   const pathname = url.pathname;
 
-  // Skip RBAC for non-admin API routes and Better Auth routes (matches original behavior)
-  if (
-    (pathname.startsWith("/api/v1") && !pathname.startsWith("/api/v1/admin")) ||
-    pathname.startsWith("/api/auth/")
-  ) {
+  // Skip RBAC for non-admin API routes and Better Auth routes
+  if (isPublicRoute(pathname)) {
     return (await next()) || new Response();
   }
 

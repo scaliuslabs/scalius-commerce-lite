@@ -84,6 +84,7 @@ export function ScannerTokenGenerator() {
     setCopied(false);
 
     try {
+      // Astro API route at pages/api/scanner-token.ts — not an API worker /api/v1/ route
       const res = await fetch("/api/scanner-token", { method: "POST" });
       const json = (await res.json()) as {
         success: boolean;
