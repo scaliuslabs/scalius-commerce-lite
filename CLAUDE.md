@@ -229,9 +229,9 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 ## Known Limitations / TODO
 
 - **Scanner app**: standalone `/scanner` route exists with QR-token auth — needs testing and polish
-- **Type safety**: ~27 `any` type usages remain across the admin app (mostly Cloudflare env probing and window globals)
-- **Test coverage**: zero test coverage (private test suite planned, gitignored)
-- **Widget history**: Admin UI has history/restore/delete buttons but API endpoints don't exist (GET/POST/DELETE `/admin/widgets/{id}/history/*`)
+- **Type safety**: ~14 `any` type usages remain across the admin app (mostly Cloudflare env probing and window globals)
+- **Test coverage**: 9 test files in `tests/` (payments, inventory, orders, discounts, response envelope)
+- **Widget history**: API endpoints exist (GET/POST/DELETE `/admin/widgets/{id}/history/*`) — needs UI testing
 
 ## Agent Team Guidelines
 

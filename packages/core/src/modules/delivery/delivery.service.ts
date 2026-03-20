@@ -126,7 +126,7 @@ export async function testDeliveryProvider(db: Database, id: string, encryptionK
   }
 
   try {
-    const providerInstance = await createProvider(provider, encryptionKey);
+    const providerInstance = await createProvider(provider, encryptionKey, db);
     return await providerInstance.testConnection();
   } catch (error: unknown) {
     return {
@@ -212,7 +212,7 @@ export async function createShipment(
 
   try {
     // 2. Call provider API
-    const providerInstance = await createProvider(provider, encryptionKey);
+    const providerInstance = await createProvider(provider, encryptionKey, db);
     const shipmentResult = await providerInstance.createShipment(
       order,
       enrichedOptions,
@@ -333,7 +333,7 @@ export async function checkShipmentStatus(db: Database, shipmentId: string, encr
 
   try {
     // Create provider instance
-    const providerInstance = await createProvider(provider, encryptionKey);
+    const providerInstance = await createProvider(provider, encryptionKey, db);
 
     // Check status
     const statusResult = await providerInstance.checkShipmentStatus(

@@ -282,7 +282,7 @@ app.openapi(createTestRoute, async (c) => {
         };
 
         try {
-            const providerInstance = await createProvider(mockProvider, getEncryptionKey(c.env as Record<string, unknown>));
+            const providerInstance = await createProvider(mockProvider, getEncryptionKey(c.env as Record<string, unknown>), c.get("db"));
             const result = await providerInstance.testConnection();
 
             return ok(c, {
@@ -356,7 +356,7 @@ app.openapi(testExistingRoute, async (c) => {
         if (!provider) throw new NotFoundError("Provider not found");
 
         try {
-            const providerInstance = await createProvider(provider, getEncryptionKey(c.env as Record<string, unknown>));
+            const providerInstance = await createProvider(provider, getEncryptionKey(c.env as Record<string, unknown>), db);
             const result = await providerInstance.testConnection();
             return ok(c, result);
         } catch (testError: unknown) {
