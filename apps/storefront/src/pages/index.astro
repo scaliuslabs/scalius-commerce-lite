@@ -10,6 +10,7 @@ import {
   type ApiWidget,
 } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
+import { scopeCss } from "@scalius/shared/css-scope";
 
 // Parallel fetch: layout data + homepage data
 const { layoutData, pageData: homepageData } = await loadPageWithLayout(
@@ -88,8 +89,8 @@ function isCollection2(
 <Layout title={homepageTitle} description={homepageMetaDescription} layoutData={layoutData}>
   {
     fixedTopWidgets.map((widget) => (
-      <div class="widget-container">
-        {widget.cssContent && <style set:html={widget.cssContent} />}
+      <div class={`widget-container sw-${widget.id}`}>
+        {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
         <div set:html={widget.htmlContent} />
       </div>
     ))
@@ -104,8 +105,8 @@ function isCollection2(
       activeCollections.map((collection) => (
         <Fragment key={collection.id}>
           {(widgetsBeforeCollection[collection.id] || []).map((widget) => (
-            <div class="widget-container mb-2">
-              {widget.cssContent && <style set:html={widget.cssContent} />}
+            <div class={`widget-container mb-2 sw-${widget.id}`}>
+              {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
               <div set:html={widget.htmlContent} />
             </div>
           ))}
@@ -114,8 +115,8 @@ function isCollection2(
           {isCollection2(collection) && <Collection2 collection={collection} />}
 
           {(widgetsAfterCollection[collection.id] || []).map((widget) => (
-            <div class="widget-container mt-2">
-              {widget.cssContent && <style set:html={widget.cssContent} />}
+            <div class={`widget-container mt-2 sw-${widget.id}`}>
+              {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
               <div set:html={widget.htmlContent} />
             </div>
           ))}
@@ -126,8 +127,8 @@ function isCollection2(
 
   {
     fixedBottomWidgets.map((widget) => (
-      <div class="widget-container mt-1">
-        {widget.cssContent && <style set:html={widget.cssContent} />}
+      <div class={`widget-container mt-1 sw-${widget.id}`}>
+        {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
         <div set:html={widget.htmlContent} />
       </div>
     ))

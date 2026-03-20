@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { registerGateway } from "./gateway-registry";
+import { encryptCredentials, decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
 
 const CACHE_TTL = 300; // 5 minutes
 
@@ -63,9 +64,10 @@ const STRIPE_CACHE_KEY = "gw:stripe";
 
 export async function getStripeSettings(
   db: Database,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  encryptionKey?: string
 ): Promise<StripeSettings | null> {
-  // Try KV cache first
+  // Try KV cache first (stores decrypted values)
   if (kv) {
     const cached = await kv.get<StripeSettings>(STRIPE_CACHE_KEY, "json");
     if (cached) return cached;
@@ -75,13 +77,13 @@ export async function getStripeSettings(
   if (!values.secret_key || !values.webhook_secret) return null;
 
   const stripeSettings: StripeSettings = {
-    secretKey: values.secret_key,
+    secretKey: await decryptCredentialsGraceful(values.secret_key, encryptionKey),
     publishableKey: values.publishable_key ?? "",
-    webhookSecret: values.webhook_secret,
+    webhookSecret: await decryptCredentialsGraceful(values.webhook_secret, encryptionKey),
     enabled: values.enabled !== "false",
   };
 
-  // Cache in KV
+  // Cache in KV (decrypted — KV is ephemeral, not at-rest)
   if (kv) {
     await kv.put(STRIPE_CACHE_KEY, JSON.stringify(stripeSettings), {
       expirationTtl: CACHE_TTL,
@@ -105,7 +107,8 @@ const SSL_CACHE_KEY = "gw:sslcommerz";
 
 export async function getSSLCommerzSettings(
   db: Database,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  encryptionKey?: string
 ): Promise<SSLCommerzSettings | null> {
   if (kv) {
     const cached = await kv.get<SSLCommerzSettings>(SSL_CACHE_KEY, "json");
@@ -117,7 +120,7 @@ export async function getSSLCommerzSettings(
 
   const sslSettings: SSLCommerzSettings = {
     storeId: values.store_id,
-    storePassword: values.store_password,
+    storePassword: await decryptCredentialsGraceful(values.store_password, encryptionKey),
     sandbox: values.sandbox !== "false",
     enabled: values.enabled !== "false",
   };
@@ -145,7 +148,8 @@ const POLAR_CACHE_KEY = "gw:polar";
 
 export async function getPolarSettings(
   db: Database,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  encryptionKey?: string
 ): Promise<PolarSettings | null> {
   if (kv) {
     const cached = await kv.get<PolarSettings>(POLAR_CACHE_KEY, "json");
@@ -156,8 +160,10 @@ export async function getPolarSettings(
   if (!values.access_token || !values.product_id) return null;
 
   const polarSettings: PolarSettings = {
-    accessToken: values.access_token,
-    webhookSecret: values.webhook_secret ?? "",
+    accessToken: await decryptCredentialsGraceful(values.access_token, encryptionKey),
+    webhookSecret: values.webhook_secret
+      ? await decryptCredentialsGraceful(values.webhook_secret, encryptionKey)
+      : "",
     productId: values.product_id,
     sandbox: values.sandbox !== "false",
     enabled: values.enabled !== "false",
@@ -202,6 +208,20 @@ export async function upsertSetting(
     });
 }
 
+/** Encrypt a value then upsert it. Falls back to plaintext if no key. */
+export async function upsertEncryptedSetting(
+  db: Database,
+  category: string,
+  key: string,
+  value: string,
+  encryptionKey?: string,
+): Promise<void> {
+  const stored = encryptionKey
+    ? await encryptCredentials(value, encryptionKey)
+    : value;
+  await upsertSetting(db, category, key, stored);
+}
+
 // ---------------------------------------------------------------------------
 // Payment Methods Configuration (storefront-facing)
 // ---------------------------------------------------------------------------
@@ -225,7 +245,8 @@ export interface PaymentMethodsConfig {
  */
 export async function getActivePaymentMethods(
   db: Database,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  encryptionKey?: string
 ): Promise<PaymentMethodsConfig> {
   // Try cache
   if (kv) {
@@ -257,19 +278,19 @@ export async function getActivePaymentMethods(
       continue;
     }
     if (method === "stripe") {
-      const stripe = await getStripeSettings(db); // skip KV — we're already building cache
+      const stripe = await getStripeSettings(db, undefined, encryptionKey); // skip KV — we're already building cache
       if (stripe && stripe.enabled) {
         validMethods.push("stripe");
       }
     }
     if (method === "sslcommerz") {
-      const ssl = await getSSLCommerzSettings(db);
+      const ssl = await getSSLCommerzSettings(db, undefined, encryptionKey);
       if (ssl && ssl.enabled) {
         validMethods.push("sslcommerz");
       }
     }
     if (method === "polar") {
-      const polar = await getPolarSettings(db);
+      const polar = await getPolarSettings(db, undefined, encryptionKey);
       if (polar && polar.enabled) {
         validMethods.push("polar");
       }
@@ -309,8 +330,8 @@ registerGateway({
   id: "stripe",
   name: "Card Payment",
   settingsCategory: STRIPE_CATEGORY,
-  getSettings: async (db, kv) => {
-    const s = await getStripeSettings(db, kv);
+  getSettings: async (db, kv, encryptionKey) => {
+    const s = await getStripeSettings(db, kv, encryptionKey);
     return s ? { ...s, enabled: s.enabled } : null;
   },
   getPublicConfig: (s) => ({
@@ -323,8 +344,8 @@ registerGateway({
   id: "sslcommerz",
   name: "Online Payment",
   settingsCategory: SSL_CATEGORY,
-  getSettings: async (db, kv) => {
-    const s = await getSSLCommerzSettings(db, kv);
+  getSettings: async (db, kv, encryptionKey) => {
+    const s = await getSSLCommerzSettings(db, kv, encryptionKey);
     return s ? { ...s, enabled: s.enabled } : null;
   },
   getPublicConfig: (s) => ({
@@ -337,8 +358,8 @@ registerGateway({
   id: "polar",
   name: "Polar",
   settingsCategory: POLAR_CATEGORY,
-  getSettings: async (db, kv) => {
-    const s = await getPolarSettings(db, kv);
+  getSettings: async (db, kv, encryptionKey) => {
+    const s = await getPolarSettings(db, kv, encryptionKey);
     return s ? { ...s, enabled: s.enabled } : null;
   },
   getPublicConfig: (s) => ({

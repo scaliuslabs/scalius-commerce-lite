@@ -29,7 +29,7 @@ import { ChevronsUpDown, Check, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@scalius/shared/utils";
 import type { ProductFormValues } from "./types";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 export interface Category {
   id: string;
@@ -166,7 +166,7 @@ function CategoryCombobox({
       const json = await response.json();
       const data = unwrapEnvelope(json);
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create category");
+        throw new Error(extractApiError(json, "Failed to create category"));
       }
 
       const newCategory: Category = {

@@ -30,7 +30,7 @@ import {
     AlertTriangle,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface GatewayStatus {
     configured: boolean;
@@ -135,7 +135,7 @@ export default function PaymentMethodSettings() {
                 fetchData();
             } else {
                 const err = await res.json();
-                toast.error(err.error || "Failed to save");
+                toast.error(extractApiError(err, "Failed to save"));
             }
         } catch {
             toast.error("An error occurred while saving");

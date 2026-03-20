@@ -1,7 +1,7 @@
 import { useState, useEffect, type FC } from "react";
 import type { DeliveryProviderRecord, DeliveryShipment } from "@/types/api-responses";
 import { toast } from "sonner";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface ShipmentFormProps {
   orderId: string;
@@ -29,8 +29,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
           throw new Error("Failed to fetch providers");
         }
 
-        const json = await response.json();
-        const data = Array.isArray(json) ? json : (json.data ?? []);
+        const data = unwrapEnvelope(await response.json());
         // Only show active providers
         const activeProviders = data.filter(
           (p: DeliveryProviderRecord) => p.isActive,
@@ -75,7 +74,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create shipment");
+        throw new Error(extractApiError(errorData, "Failed to create shipment"));
       }
 
       const shipmentJson = await response.json();

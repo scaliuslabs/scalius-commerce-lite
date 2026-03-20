@@ -375,10 +375,9 @@ export function AbandonedCheckoutsManager() {
             .catch(() => ({
               message: "Authentication required to access this endpoint",
             }));
-          throw new Error(errorData.message || "Failed to fetch data");
+          throw new Error(errorData.message || errorData.error?.message || "Failed to fetch data");
         }
         const json = await response.json();
-        // Handle both raw API envelope { success, data: T } and proxy-unwrapped { success, ...T }
         const data = unwrapEnvelope(json);
         setCheckouts(data.checkouts);
         setPagination(data.pagination);

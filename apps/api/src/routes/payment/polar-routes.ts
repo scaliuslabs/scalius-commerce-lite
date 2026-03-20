@@ -66,9 +66,11 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 
     const db: Database = c.get("db");
     const kv = getKv();
+    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
 
     // Get Polar credentials from DB
-    const polarSettings = await getPolarSettings(db, kv);
+    const polarSettings = await getPolarSettings(db, kv, encryptionKey);
     if (!polarSettings || !polarSettings.enabled) {
         throw new ServiceUnavailableError("Polar is not configured or disabled");
     }

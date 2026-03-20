@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import type { Order } from "./types";
 import { navigateTo } from "@/lib/client/navigate";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface OrderPayment {
   id: string;
@@ -198,8 +198,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
       });
 
       if (!res.ok) {
-        const err = await res.json() as { error?: string };
-        throw new Error(err.error ?? "Failed");
+        const err = await res.json();
+        throw new Error(extractApiError(err, "Failed"));
       }
 
       const messages: Record<string, string> = {
@@ -245,7 +245,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error ?? "Failed to issue refund");
+        throw new Error(extractApiError(data, "Failed to issue refund"));
       }
 
       toast.success("Refund Issued", { description: `Successfully initiated refund of ${symbol}${amount}.` });

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 // Local type replacing @scalius/database/schema import
 export interface MetaConversionsLog {
@@ -107,7 +107,7 @@ export function useMetaConversionsLogs() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to perform manual cleanup");
+        throw new Error(extractApiError(errorData, "Failed to perform manual cleanup"));
       }
 
       const json = await response.json();

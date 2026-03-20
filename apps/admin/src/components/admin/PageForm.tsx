@@ -33,6 +33,7 @@ import { CharacterCounter } from "@/components/ui/character-counter";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { navigateTo } from "@/lib/client/navigate";
+import { extractApiError } from "@/lib/api-helpers";
 
 const pageFormSchema = z.object({
   id: z.string().optional(),
@@ -112,8 +113,8 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || error.message || "Failed to save page");
+        const errorBody = await response.json();
+        throw new Error(extractApiError(errorBody, "Failed to save page"));
       }
 
       await response.json();

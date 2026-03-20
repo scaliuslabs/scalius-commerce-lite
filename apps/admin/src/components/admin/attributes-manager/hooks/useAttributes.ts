@@ -36,7 +36,6 @@ export function useAttributes(
       );
       if (!response.ok) throw new Error("Failed to fetch attributes");
       const json = await response.json();
-      // Handle both raw API envelope { success, data: T } and proxy-unwrapped { success, ...T }
       const data = unwrapEnvelope(json);
       setAttributes(data.attributes);
       setPagination(data.pagination);

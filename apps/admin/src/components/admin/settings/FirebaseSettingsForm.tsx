@@ -19,7 +19,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface FirebaseConfig {
   serviceAccount: string;
@@ -181,7 +181,7 @@ export default function FirebaseSettingsForm() {
         }
       } else {
         const err = await res.json();
-        toast.error(err.error || "Failed to save settings");
+        toast.error(extractApiError(err, "Failed to save settings"));
       }
     } catch (error: unknown) {
       toast.error("An error occurred while saving");

@@ -26,7 +26,7 @@ import { Textarea } from "../ui/textarea";
 import { LocationSelector } from "./LocationSelector";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { navigateTo } from "@/lib/client/navigate";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 const customerFormSchema = z.object({
   id: z.string().optional(),
@@ -172,8 +172,8 @@ export function CustomerForm({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to save customer");
+        const errorBody = await response.json();
+        throw new Error(extractApiError(errorBody, "Failed to save customer"));
       }
 
       await response.json();

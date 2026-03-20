@@ -54,7 +54,7 @@ export function BulkShipDialog({
           }
 
           const json = await response.json();
-          const data = Array.isArray(json) ? json : (json.data ?? []);
+          const data = Array.isArray(json) ? json : (json.data ?? json);
           const activeProviders = data.filter((p: Provider) => p.isActive);
           setProviders(activeProviders);
         } catch (error) {

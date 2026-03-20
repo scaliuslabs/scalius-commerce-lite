@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { ProductVariant, VariantFormValues, BulkGeneratedVariant } from "../types";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 export interface UseVariantOperationsReturn {
   createVariant: (
@@ -55,7 +55,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(json.error || "Failed to create variant");
+        throw new Error(extractApiError(json, "Failed to create variant"));
       }
 
       const result = unwrapEnvelope(json);
@@ -94,7 +94,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(json.error || "Failed to update variant");
+        throw new Error(extractApiError(json, "Failed to update variant"));
       }
 
       const result = unwrapEnvelope(json);
@@ -126,7 +126,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
 
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
-        throw new Error(result.error || "Failed to delete variant");
+        throw new Error(extractApiError(result, "Failed to delete variant"));
       }
 
       toast.success("Success!", { description: "Variant has been deleted." });
@@ -155,7 +155,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
 
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
-        throw new Error(result.error || "Failed to delete variants");
+        throw new Error(extractApiError(result, "Failed to delete variants"));
       }
 
       toast.success("Success!", { description: `${variantIds.length} variants deleted.` });
@@ -192,7 +192,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
 
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
-        throw new Error(result.error || "Failed to update variants");
+        throw new Error(extractApiError(result, "Failed to update variants"));
       }
 
       toast.success("Success!", { description: "Variants updated successfully." });
@@ -222,7 +222,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(json.error || "Failed to create variants");
+        throw new Error(extractApiError(json, "Failed to create variants"));
       }
 
       const result = unwrapEnvelope(json);
@@ -259,7 +259,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(json.error || "Failed to duplicate variant");
+        throw new Error(extractApiError(json, "Failed to duplicate variant"));
       }
 
       const result = unwrapEnvelope(json);

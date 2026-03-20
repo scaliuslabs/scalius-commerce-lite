@@ -1,20 +1,15 @@
 /**
  * Client-side API fetching utility for React components.
  *
- * In production, requests go through the admin proxy (pages/api/v1/[...path].ts)
- * which unwraps { success, data: T } → { success, ...T }.
- *
- * In dev, Vite's proxy (astro.config.mjs) intercepts /api/v1/* and forwards
- * directly to the API worker, BYPASSING the admin proxy. So responses arrive
- * as raw { success, data: T }.
- *
- * This utility normalizes both shapes to return T directly.
+ * All responses use the standard API envelope: { success, data: T }.
+ * Both the admin proxy and Vite dev proxy pass through unchanged.
+ * This utility unwraps the envelope and returns T directly.
  */
 
 const PROXY_BASE = "/api/v1/admin";
 
 /**
- * Parse API response, handling both envelope shapes.
+ * Parse API response envelope { success, data: T }.
  * Returns the unwrapped data payload T.
  */
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -23,9 +18,10 @@ async function parseResponse<T>(response: Response): Promise<T> {
     try {
       const body = await response.json();
       if (body?.error) {
-        message = typeof body.error === "string"
-          ? body.error
-          : body.error?.message ?? message;
+        const err = body.error;
+        message = typeof err === "string"
+          ? err
+          : err?.message ?? message;
       }
     } catch {
       // Use default message
@@ -44,15 +40,12 @@ async function parseResponse<T>(response: Response): Promise<T> {
     );
   }
 
-  // Raw API envelope: { success, data: T } — unwrap data
-  if (
-    body.data !== undefined &&
-    Object.keys(body).filter((k) => k !== "success").length === 1
-  ) {
+  // Standard envelope: { success, data: T } — return data
+  if (body.data !== undefined) {
     return body.data as T;
   }
 
-  // Proxy-unwrapped: { success, ...T } — strip success
+  // Fallback for non-envelope responses
   const { success: _, ...rest } = body;
   return rest as T;
 }

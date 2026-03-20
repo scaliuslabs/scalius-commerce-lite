@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { nanoid } from "nanoid";
+import { extractApiError } from "@/lib/api-helpers";
 
 import { BrandingSection } from "./BrandingSection";
 import { ContentSection } from "./ContentSection";
@@ -104,9 +105,9 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
         });
 
         if (!response.ok) {
-          const error = await response.json();
+          const errorBody = await response.json();
           throw new Error(
-            error.details || "Failed to save footer configuration",
+            extractApiError(errorBody, "Failed to save footer configuration"),
           );
         }
       }

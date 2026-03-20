@@ -14,7 +14,7 @@ import { Loader2, Save, Info, Search, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@scalius/shared/utils";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface CurrencyEntry {
   code: string;
@@ -286,7 +286,7 @@ export default function CurrencySettingsBuilder() {
         fetchSettings();
       } else {
         const err = await res.json();
-        toast.error(err.message || "Failed to save currency settings");
+        toast.error(extractApiError(err, "Failed to save currency settings"));
       }
     } catch {
       toast.error("An error occurred while saving");

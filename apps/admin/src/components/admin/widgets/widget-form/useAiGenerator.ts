@@ -178,7 +178,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
 
       if (!response.ok || !response.body) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to generate content.");
+        throw new Error(errorData.message || errorData.error?.message || "Failed to generate content.");
       }
 
       const reader = response.body.getReader();

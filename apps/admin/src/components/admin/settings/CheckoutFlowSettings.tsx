@@ -20,7 +20,7 @@ import {
 import { toast } from "sonner";
 import { Loader2, Save, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 export default function CheckoutFlowSettings() {
     const [loading, setLoading] = useState(true);
@@ -74,7 +74,7 @@ export default function CheckoutFlowSettings() {
                 fetchSettings();
             } else {
                 const err = await res.json();
-                toast.error(err.message || "Failed to save checkout flow settings");
+                toast.error(extractApiError(err, "Failed to save checkout flow settings"));
             }
         } catch {
             toast.error("An error occurred while saving");

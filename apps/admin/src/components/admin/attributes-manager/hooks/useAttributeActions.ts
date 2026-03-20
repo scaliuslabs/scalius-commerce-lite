@@ -23,7 +23,7 @@ export function useAttributeActions(
         });
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to update attribute");
+          throw new Error(extractApiError(errorData, "Failed to update attribute"));
         }
         toast.success(`Attribute updated.`);
         setAttributes((prev) =>
@@ -54,7 +54,7 @@ export function useAttributeActions(
         });
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to create attribute");
+          throw new Error(extractApiError(errorData, "Failed to create attribute"));
         }
         toast.success(`Attribute "${newAttribute.name}" created successfully.`);
         onSuccess();

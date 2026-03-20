@@ -1,5 +1,6 @@
 // src/lib/shortcodes.ts
 import { getProductBySlug, getWidgetById } from "@/lib/api";
+import { scopeCss } from "@scalius/shared/css-scope";
 
 export interface ShortcodeMatch {
   fullMatch: string;
@@ -49,13 +50,13 @@ export async function renderWidgetShortcode(widgetId: string): Promise<string> {
       return `<div class="shortcode-error">Widget not found or inactive: ${widgetId}</div>`;
     }
 
+    const scopeClass = `sw-${widgetId}`;
     let html = widgetData.htmlContent;
     if (widgetData.cssContent) {
-      html = `<style>${widgetData.cssContent}</style>${html}`;
+      html = `<style>${scopeCss(widgetData.cssContent, scopeClass)}</style>${html}`;
     }
 
-    // FIXED: Added 'not-prose' class to prevent RichContent from styling the widget's content
-    return `<div class="widget-shortcode not-prose" data-widget-id="${widgetId}">${html}</div>`;
+    return `<div class="widget-shortcode not-prose ${scopeClass}" data-widget-id="${widgetId}">${html}</div>`;
   } catch (error: unknown) {
     console.error("Error rendering widget shortcode:", error);
     return `<div class="shortcode-error">Error loading widget: ${widgetId}</div>`;

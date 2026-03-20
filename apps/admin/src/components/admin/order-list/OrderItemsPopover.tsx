@@ -4,6 +4,7 @@ import { Badge } from "../../ui/badge";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrency } from "@/hooks/use-currency";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 type PopoverOrderItem = {
   id: string;
@@ -39,11 +40,10 @@ export function OrderItemsPopover({
         const response = await fetch(`/api/v1/admin/orders/${orderId}/items`);
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Failed to fetch order items");
+          throw new Error(extractApiError(errorData, "Failed to fetch order items"));
         }
         const json = await response.json();
-        // API returns { success, data: [...items] } envelope — unwrap it
-        const data: PopoverOrderItem[] = json.data ?? json;
+        const data: PopoverOrderItem[] = unwrapEnvelope(json);
         setItems(data);
       } catch (error) {
         console.error("Failed to fetch order items:", error);

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { MediaManager, type MediaFile } from "../media-manager";
 import type { User } from "./AccountSettingsContainer";
 import { navigateTo } from "@/lib/client/navigate";
+import { extractApiError } from "@/lib/api-helpers";
 
 function getInitials(nameStr: string): string {
   return nameStr
@@ -58,7 +59,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
       const result = await response.json();
 
       if (!response.ok) {
-        toast.error(result.error || "Failed to update profile");
+        toast.error(extractApiError(result, "Failed to update profile"));
         return;
       }
 

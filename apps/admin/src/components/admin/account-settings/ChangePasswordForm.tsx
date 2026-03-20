@@ -12,6 +12,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Loader2, KeyRound, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/api-helpers";
 
 function getPasswordStrength(password: string) {
   if (!password) return { strength: 0, label: "", color: "" };
@@ -65,7 +66,7 @@ export function ChangePasswordForm() {
       const result = await response.json();
 
       if (!response.ok) {
-        setError(result.message || "Failed to change password");
+        setError(extractApiError(result, "Failed to change password"));
         return;
       }
 

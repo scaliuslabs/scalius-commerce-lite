@@ -30,6 +30,7 @@ export interface CheckoutConfig {
 export async function getCheckoutConfig(
     db: Database,
     kv?: KVNamespace,
+    encryptionKey?: string,
 ): Promise<CheckoutConfig> {
     const [siteSettingsRow, currencyRows, allowedCountriesRow] = await Promise.all([
         db.select({
@@ -77,7 +78,7 @@ export async function getCheckoutConfig(
     // Dynamically resolve enabled gateways from the registry
     const registeredGateways = getRegisteredGateways();
     const gatewaySettingsPromises = registeredGateways.map((gw) =>
-        gw.getSettings(db, kv).catch(() => null)
+        gw.getSettings(db, kv, encryptionKey).catch(() => null)
     );
     const settingsResults = await Promise.all(gatewaySettingsPromises);
 

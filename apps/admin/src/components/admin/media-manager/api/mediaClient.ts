@@ -7,7 +7,7 @@ import type {
   MediaFoldersApiResponse,
   MediaFilterOptions,
 } from "../types";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError, extractApiErrorDetails } from "@/lib/api-helpers";
 
 /** Shape of the upload response JSON — varies between success, partial, and error */
 interface UploadResponseData {
@@ -89,15 +89,32 @@ export class MediaApiClient {
       });
 
       // Parse response JSON
-      let data: UploadResponseData;
+      let rawData: Record<string, unknown>;
       try {
-        data = await response.json();
+        rawData = await response.json();
       } catch (parseError) {
         console.error("Failed to parse upload response:", parseError);
         throw new Error(
           "Upload failed: Server returned an invalid response. Please try again."
         );
       }
+
+      // Handle errors (4xx, 5xx)
+      if (!response.ok) {
+        const errorMessage = extractApiError(rawData, "Upload failed for unknown reason");
+        const error: Error & { details?: Array<{ filename: string; error: string }>; summary?: string } = new Error(errorMessage);
+
+        // Attach details array if available
+        const details = extractApiErrorDetails(rawData);
+        if (details) {
+          error.details = details as Array<{ filename: string; error: string }>;
+        }
+
+        throw error;
+      }
+
+      // Unwrap envelope for success responses
+      const data = unwrapEnvelope<UploadResponseData>(rawData);
 
       // Handle success (201) and partial success (207)
       if (response.status === 207 || response.status === 201) {
@@ -109,27 +126,7 @@ export class MediaApiClient {
             summary: data.summary,
           };
         }
-        return data.files || []; // Just the files array for backward compatibility
-      }
-
-      // Handle errors (4xx, 5xx)
-      if (!response.ok) {
-        // Create a more informative error object
-        const errorMessage =
-          data.error || (typeof data.details === 'string' ? data.details : undefined) || "Upload failed for unknown reason";
-        const error: Error & { details?: Array<{ filename: string; error: string }>; summary?: string } = new Error(errorMessage);
-
-        // Attach details array if available
-        if (data.details && Array.isArray(data.details)) {
-          error.details = data.details;
-        }
-
-        // Attach summary if available
-        if (data.summary) {
-          error.summary = data.summary;
-        }
-
-        throw error;
+        return data.files || [];
       }
 
       // Fallback for unexpected responses
@@ -157,7 +154,7 @@ export class MediaApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to delete file");
+      throw new Error(extractApiError(errorData, "Failed to delete file"));
     }
   }
 
@@ -195,8 +192,7 @@ export class MediaApiClient {
     }
 
     const json = await response.json();
-    // Handle both raw API envelope { success, data: { folders } } and proxy-unwrapped { success, folders }
-    const data: MediaFoldersApiResponse = json.data && json.data.folders ? json.data : json;
+    const data: MediaFoldersApiResponse = unwrapEnvelope(json);
     return data.folders ?? [];
   }
 
@@ -217,11 +213,11 @@ export class MediaApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to create folder");
+      throw new Error(extractApiError(errorData, "Failed to create folder"));
     }
 
     const json = await response.json();
-    const data = json.data && json.data.folder ? json.data : json;
+    const data = unwrapEnvelope(json);
     return data.folder;
   }
 
@@ -235,7 +231,7 @@ export class MediaApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to delete folder");
+      throw new Error(extractApiError(errorData, "Failed to delete folder"));
     }
   }
 
@@ -256,7 +252,7 @@ export class MediaApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to move files");
+      throw new Error(extractApiError(errorData, "Failed to move files"));
     }
   }
 
@@ -277,11 +273,11 @@ export class MediaApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to update file");
+      throw new Error(extractApiError(errorData, "Failed to update file"));
     }
 
     const json = await response.json();
-    const data = json.data && json.data.file ? json.data : json;
+    const data = unwrapEnvelope(json);
     return data.file;
   }
 }

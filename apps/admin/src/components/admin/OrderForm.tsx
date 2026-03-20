@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/api-helpers";
 import { OrderStatus } from "@/types/api-responses";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
@@ -194,7 +195,7 @@ export function OrderForm({
         let errorMessage = "Failed to save order. Please try again.";
         try {
           const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
+          errorMessage = extractApiError(errorData, errorMessage);
         } catch {
           errorMessage = `Server error (${response.status}). Please try again.`;
         }

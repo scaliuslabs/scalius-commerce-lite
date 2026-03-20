@@ -20,6 +20,7 @@ import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay
 import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
 import type { Order } from "./types";
 import { navigateTo } from "@/lib/client/navigate";
+import { extractApiError } from "@/lib/api-helpers";
 
 interface ShipmentCardProps {
   order: Order;
@@ -49,7 +50,7 @@ const CreateShipmentForm = ({
       });
       const result = await response.json();
       if (!response.ok) {
-        throw new Error(result.error || "Failed to create shipment");
+        throw new Error(extractApiError(result, "Failed to create shipment"));
       }
       toast.success("Success", { description: "Shipment created successfully. Page will reload." });
       onShipmentCreated();

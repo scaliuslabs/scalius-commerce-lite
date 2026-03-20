@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Shield, AlertTriangle, Crown, X } from "lucide-react";
 import { toast } from "sonner";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 interface Role {
   id: string;
@@ -101,12 +102,12 @@ export function UserPermissionEditor({
         ]);
 
         if (rolesRes.ok) {
-          const data = await rolesRes.json();
+          const data = unwrapEnvelope(await rolesRes.json());
           setRoles(data.roles);
         }
 
         if (permsRes.ok) {
-          const data = await permsRes.json();
+          const data = unwrapEnvelope(await permsRes.json());
           setGroupedPermissions(data.grouped);
         }
       } catch (error: unknown) {
@@ -144,7 +145,7 @@ export function UserPermissionEditor({
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.error || "Failed to assign role");
+        toast.error(extractApiError(data, "Failed to assign role"));
         return;
       }
 
@@ -166,7 +167,7 @@ export function UserPermissionEditor({
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.error || "Failed to remove role");
+        toast.error(extractApiError(data, "Failed to remove role"));
         return;
       }
 
@@ -192,7 +193,7 @@ export function UserPermissionEditor({
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.error || "Failed to set permission");
+        toast.error(extractApiError(data, "Failed to set permission"));
         return;
       }
 
@@ -231,7 +232,7 @@ export function UserPermissionEditor({
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.error || "Failed to remove override");
+        toast.error(extractApiError(data, "Failed to remove override"));
         return;
       }
 

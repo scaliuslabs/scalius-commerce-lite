@@ -6,7 +6,7 @@ import {
 } from "./ProviderIcon";
 import { ProviderListSidebar } from "./ProviderListSidebar";
 import { ProviderDetailPanel } from "./ProviderDetailPanel";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 // Default credentials structure per provider type
 const DEFAULT_CREDENTIALS = {
@@ -48,7 +48,7 @@ async function apiSaveProvider(provider: Omit<DeliveryProviderRecord, "createdAt
   });
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to save provider");
+    throw new Error(extractApiError(errorData, "Failed to save provider"));
   }
   const json = await response.json();
   return unwrapEnvelope(json);
@@ -60,7 +60,7 @@ async function apiDeleteProvider(id: string) {
   });
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to delete provider");
+    throw new Error(extractApiError(errorData, "Failed to delete provider"));
   }
   return true;
 }
@@ -75,7 +75,7 @@ async function apiTestProvider(id: string) {
       .catch(() => ({ error: "Failed to parse error response" }));
     return {
       success: false,
-      message: errorData.error || "Failed to test provider connection",
+      message: extractApiError(errorData, "Failed to test provider connection"),
     };
   }
   const json = await response.json();
@@ -105,7 +105,7 @@ async function apiTestCredentials(
   if (!response.ok) {
     return {
       success: false,
-      message: result.error || "Failed to test credentials",
+      message: extractApiError(json, "Failed to test credentials"),
     };
   }
   return result;

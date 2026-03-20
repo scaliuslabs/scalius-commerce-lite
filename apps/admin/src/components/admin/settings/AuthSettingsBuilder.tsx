@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 import { Loader2, Save, CheckCircle2, ExternalLink } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -79,7 +79,7 @@ export default function AuthSettingsBuilder() {
                 fetchSettings();
             } else {
                 const err = await res.json();
-                toast.error(err.message || "Failed to save auth settings");
+                toast.error(extractApiError(err, "Failed to save auth settings"));
             }
         } catch {
             toast.error("An error occurred while saving");
