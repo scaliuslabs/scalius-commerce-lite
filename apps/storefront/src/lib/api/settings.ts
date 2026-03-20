@@ -1,12 +1,18 @@
 // src/lib/api/settings.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type {
   SeoSettings,
   AnalyticsConfig,
   CheckoutLanguageData,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import {
+  getApiV1Seo,
+  getApiV1AnalyticsConfigurations,
+  getApiV1CheckoutLanguagesActive,
+  getApiV1HeroSliders,
+} from "@scalius/api-client/sdk";
 
 /**
  * Defines the structure for the hero slider data, containing separate
@@ -36,15 +42,11 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
     "global_seo_settings",
     async () => {
       try {
-        const url = createApiUrl("/seo");
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: SeoSettings } = await response.json();
-        return json.success ? json.data : null;
+        const { data } = await getApiV1Seo({
+          client: getConfiguredSdkClient(),
+        });
+        const d = data as any;
+        return d?.success ? d.data : null;
       } catch (error: unknown) {
         console.error("Error fetching SEO settings:", error);
         return null;
@@ -65,15 +67,10 @@ export async function getAnalyticsConfigurations(): Promise<
     "global_analytics_config",
     async () => {
       try {
-        const url = createApiUrl("/analytics/configurations");
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: { analytics: AnalyticsConfig[] } } = await response.json();
-        return json.data.analytics;
+        const { data } = await getApiV1AnalyticsConfigurations({
+          client: getConfiguredSdkClient(),
+        });
+        return (data as any)?.data?.analytics ?? null;
       } catch (error: unknown) {
         console.error("Error fetching analytics configurations:", error);
         return null;
@@ -92,15 +89,10 @@ export async function getActiveCheckoutLanguage(): Promise<CheckoutLanguageData 
     "global_checkout_language",
     async () => {
       try {
-        const url = createApiUrl("/checkout-languages/active");
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: { language: CheckoutLanguageData } } = await response.json();
-        return json.data.language;
+        const { data } = await getApiV1CheckoutLanguagesActive({
+          client: getConfiguredSdkClient(),
+        });
+        return (data as any)?.data?.language ?? null;
       } catch (error: unknown) {
         console.error("Error fetching active checkout language:", error);
         return null;
@@ -119,15 +111,10 @@ export async function getHeroSliders(): Promise<HeroSliderData | null> {
     "homepage_hero_sliders",
     async () => {
       try {
-        const url = createApiUrl("/hero/sliders");
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: HeroSliderData } = await response.json();
-        return json.data as HeroSliderData;
+        const { data } = await getApiV1HeroSliders({
+          client: getConfiguredSdkClient(),
+        });
+        return (data as any)?.data ?? null;
       } catch (error: unknown) {
         console.error("Error fetching hero sliders:", error);
         return null;

@@ -1,6 +1,7 @@
 // src/lib/api/tracking.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
+import { postApiV1MetaEvents } from "@scalius/api-client/sdk";
 
 /**
  * Defines the payload structure for sending a server-side event
@@ -59,26 +60,11 @@ export interface MetaCapiEventPayload {
  * @returns A promise that resolves when the request is sent, but doesn't wait for the full response.
  */
 export async function sendMetaCapiEvent(payload: MetaCapiEventPayload): Promise<void> {
-  const url = createApiUrl("/meta/events");
-
   try {
-    // This is a tracking endpoint, so we don't need authentication (`requiresAuth: false`).
-    // We use `keepalive: true` to increase the likelihood of the request
-    // completing successfully, even if the user navigates away.
-    await fetchWithRetry(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        keepalive: true, // Important for tracking events
-      },
-      1, // Only one retry for tracking events to avoid duplicates
-      5000, // 5-second timeout
-      false, // This endpoint does not require a JWT token
-    );
+    await postApiV1MetaEvents({
+      client: getConfiguredSdkClient(),
+      body: payload as unknown as typeof payload,
+    });
   } catch (error: unknown) {
     // The error is logged by fetchWithRetry, so we just swallow it here
     // to prevent it from crashing the client application.

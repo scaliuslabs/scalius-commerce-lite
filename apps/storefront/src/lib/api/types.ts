@@ -2,30 +2,41 @@
 //
 // Centralized type definitions for the Scalius Commerce storefront.
 //
-// Types are sourced from the shared @scalius/api-client SDK where available,
-// with storefront-specific types defined locally.
-//
-// The SDK types (generated from the OpenAPI spec) are primarily request/response
-// wrappers (e.g., GetProductsResponse, PostOrdersData). Storefront-specific
-// domain interfaces (Product, Category, etc.) are kept locally because the SDK
-// does not yet export standalone domain types. Once the SDK is regenerated with
-// extracted domain types, more of these can be replaced with SDK re-exports.
+// SDK response types are re-exported with short aliases from @scalius/api-client.
+// Domain interfaces (Product, Category, etc.) are kept locally because the SDK
+// exports per-endpoint response wrappers, not standalone domain types.
 
 // ---------------------------------------------------------------------------
-// SDK Re-exports
+// SDK Re-exports (response types, aliased for brevity)
 // ---------------------------------------------------------------------------
 
-// OrderPostRequest from the SDK closely matches our CreateOrderPayload.
-// Differences:
-//   - SDK adds: totalAmount (optional), omits: shippingMethodId, paymentMethod
-//   - Storefront needs: shippingMethodId, paymentMethod
-// We keep the local CreateOrderPayload to preserve the extra fields the
-// storefront relies on, but re-export the SDK type for reference/use where
-// the stricter API contract is desired.
-export type { OrderPostRequest } from "@scalius/api-client/types";
+import type {
+  PostApiV1OrdersData,
+  GetApiV1ProductsResponse as GetProductsResponse,
+  GetApiV1ProductsBySlugResponse as GetProductsBySlugResponse,
+  GetApiV1CategoriesResponse as GetCategoriesResponse,
+  GetApiV1CategoriesBySlugResponse as GetCategoriesBySlugResponse,
+  GetApiV1CollectionsResponse as GetCollectionsResponse,
+  GetApiV1CollectionsByIdResponse as GetCollectionsByIdResponse,
+  GetApiV1SearchResponse as GetSearchResponse,
+  GetApiV1HeaderResponse as GetHeaderResponse,
+  GetApiV1FooterResponse as GetFooterResponse,
+  GetApiV1NavigationResponse as GetNavigationResponse,
+  GetApiV1PagesResponse as GetPagesResponse,
+  GetApiV1PagesSlugBySlugResponse as GetPagesSlugBySlugResponse,
+  GetApiV1SeoResponse as GetSeoResponse,
+  GetApiV1HeroSlidersResponse as GetHeroSlidersResponse,
+  GetApiV1CheckoutLanguagesActiveResponse as GetCheckoutLanguagesActiveResponse,
+  GetApiV1DiscountsValidateResponse as GetDiscountsValidateResponse,
+  GetApiV1AnalyticsConfigurationsResponse as GetAnalyticsConfigurationsResponse,
+  GetApiV1WidgetsActiveHomepageResponse as GetWidgetsActiveHomepageResponse,
+  GetApiV1WidgetsByIdResponse as GetWidgetsByIdResponse,
+  GetApiV1LocationsCitiesResponse as GetLocationsCitiesResponse,
+  GetApiV1LocationsZonesResponse as GetLocationsZonesResponse,
+  GetApiV1LocationsAreasResponse as GetLocationsAreasResponse,
+  PostApiV1OrdersResponse as PostOrdersResponse,
+} from "@scalius/api-client/types";
 
-// Re-export SDK response types that consumers may find useful for typing
-// raw API responses directly.
 export type {
   GetProductsResponse,
   GetProductsBySlugResponse,
@@ -50,7 +61,10 @@ export type {
   GetLocationsZonesResponse,
   GetLocationsAreasResponse,
   PostOrdersResponse,
-} from "@scalius/api-client/types";
+};
+
+// Extract the order request body type from the SDK endpoint definition.
+export type OrderPostRequest = NonNullable<PostApiV1OrdersData["body"]>;
 
 // ---------------------------------------------------------------------------
 // Generic API Responses (storefront-specific wrappers)
@@ -77,10 +91,8 @@ export interface PaginatedResponse<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Product & Category Types
+// Product & Category Types (local domain types — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
-// TODO: Replace with SDK domain types once @scalius/api-client exports
-// standalone Product, ProductVariant, ProductImage, Category, CategorySummary.
 
 export interface ProductRichContent {
   id: string;
@@ -162,10 +174,8 @@ export interface CategorySummary {
 }
 
 // ---------------------------------------------------------------------------
-// Collection & Widget Types
+// Collection & Widget Types (local domain types — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
-// TODO: Replace with SDK domain types once @scalius/api-client exports
-// standalone Collection, CollectionConfig, CollectionWithProducts, ApiWidget.
 
 export interface CollectionConfig {
   categoryIds?: string[];
@@ -210,10 +220,8 @@ export interface ApiWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Page & Site Settings Types
+// Page & Site Settings Types (local domain types — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
-// TODO: Replace with SDK domain types once @scalius/api-client exports
-// standalone Page, NavigationItem, FooterMenu, HeaderData, FooterData, etc.
 
 export interface Page {
   id: string;
@@ -316,10 +324,8 @@ export interface SeoSettings {
 }
 
 // ---------------------------------------------------------------------------
-// Order & Cart Types
+// Order & Cart Types (local domain types — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
-// TODO: Replace with SDK domain types once @scalius/api-client exports
-// standalone Order, OrderItem types.
 
 export interface OrderItem {
   id: string;
@@ -373,8 +379,9 @@ export interface OrderDeliveryProvider {
   isActive?: boolean;
 }
 
-// CreateOrderPayload extends the SDK's OrderPostRequest with storefront-specific
-// fields (shippingMethodId, paymentMethod) that are not yet in the OpenAPI spec.
+// CreateOrderPayload is a local subset of the SDK's OrderPostRequest.
+// The SDK type includes additional fields (productName, variantLabel, inventoryPool, polar payment).
+// Keep this local type until consumers are migrated to use OrderPostRequest directly.
 export interface CreateOrderPayload {
   customerName: string;
   customerPhone: string;
@@ -401,10 +408,8 @@ export interface CreateOrderPayload {
 }
 
 // ---------------------------------------------------------------------------
-// Other Types
+// Other Types (local domain types — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
-// TODO: Replace with SDK domain types once @scalius/api-client exports
-// standalone LocationData, ShippingMethod, Discount, AnalyticsConfig, etc.
 
 export interface LocationData {
   id: string;
@@ -469,10 +474,8 @@ export interface SearchResults {
 }
 
 // ---------------------------------------------------------------------------
-// Checkout Language Types
+// Checkout Language Types (local domain type — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
-// TODO: Replace with SDK domain type once @scalius/api-client exports
-// standalone CheckoutLanguageData.
 
 export interface CheckoutLanguageData {
   id: string;

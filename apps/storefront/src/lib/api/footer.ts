@@ -1,8 +1,9 @@
 // src/lib/api/footer.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type { FooterData } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { getApiV1Footer } from "@scalius/api-client/sdk";
 
 /**
  * Fetches the configuration data for the site footer.
@@ -13,20 +14,11 @@ export async function getFooterData(): Promise<FooterData | null> {
     "global_footer_data",
     async () => {
       try {
-        const url = createApiUrl("/footer");
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: FooterData } =
-          await response.json();
-
-        if (json.success && json.data) {
-          return json.data;
-        }
-        return null;
+        const { data } = await getApiV1Footer({
+          client: getConfiguredSdkClient(),
+        });
+        const d = (data as any)?.data;
+        return d ?? null;
       } catch (error: unknown) {
         console.error("Error fetching footer data:", error);
         return null;

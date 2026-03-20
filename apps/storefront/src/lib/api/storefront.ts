@@ -2,7 +2,7 @@
 // Consolidated storefront API functions for maximum performance
 // Reduces multiple API calls to single optimized requests
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
 import { BUILD_ID } from "@/config/build-id";
 import type {
@@ -13,6 +13,10 @@ import type {
   NavigationItem,
   AnalyticsConfig,
 } from "./types";
+import {
+  getApiV1StorefrontHomepage,
+  getApiV1StorefrontLayout,
+} from "@scalius/api-client/sdk";
 
 // =============================================
 // HOMEPAGE DATA TYPES
@@ -85,20 +89,11 @@ export async function getHomepageData(): Promise<HomepageData | null> {
     `storefront_homepage_${BUILD_ID}`,
     async () => {
       try {
-        const url = createApiUrl("/storefront/homepage");
-        const response = await fetchWithRetry(url, {}, 3, 15000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: HomepageData } =
-          await response.json();
-
-        if (json.success && json.data) {
-          return json.data;
-        }
-        return null;
+        const { data } = await getApiV1StorefrontHomepage({
+          client: getConfiguredSdkClient(),
+        });
+        const d = data as any;
+        return d?.success && d?.data ? d.data : null;
       } catch (error: unknown) {
         console.error("Error fetching homepage data:", error);
         return null;
@@ -123,20 +118,11 @@ export async function getLayoutData(): Promise<LayoutData | null> {
     `storefront_layout_${BUILD_ID}`,
     async () => {
       try {
-        const url = createApiUrl("/storefront/layout");
-        const response = await fetchWithRetry(url, {}, 3, 15000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: LayoutData } =
-          await response.json();
-
-        if (json.success && json.data) {
-          return json.data;
-        }
-        return null;
+        const { data } = await getApiV1StorefrontLayout({
+          client: getConfiguredSdkClient(),
+        });
+        const d = data as any;
+        return d?.success && d?.data ? d.data : null;
       } catch (error: unknown) {
         console.error("Error fetching layout data:", error);
         return null;

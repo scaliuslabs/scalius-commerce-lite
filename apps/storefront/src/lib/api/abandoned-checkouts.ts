@@ -1,5 +1,9 @@
 // src/lib/api/abandoned-checkouts.ts
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient, getConfiguredSdkAuthClient } from "./client";
+import {
+  postApiV1AbandonedCheckouts,
+  postApiV1AbandonedCheckoutsCleanup,
+} from "@scalius/api-client/sdk";
 
 export interface AbandonedCheckoutPayload {
   checkoutId: string;
@@ -16,25 +20,11 @@ export interface AbandonedCheckoutPayload {
  * @param payload The abandoned checkout data.
  */
 export async function saveAbandonedCheckout(payload: AbandonedCheckoutPayload): Promise<void> {
-  const url = createApiUrl("/abandoned-checkouts");
-
   try {
-    // This is an internal tracking/data-saving endpoint.
-    // It is public to allow anonymous users to save their cart state.
-    await fetchWithRetry(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      },
-      1, // Only one retry
-      5000, // 5-second timeout
-      false, // Does not require authentication
-    );
+    await postApiV1AbandonedCheckouts({
+      client: getConfiguredSdkClient(),
+      body: payload as any,
+    });
   } catch (error: unknown) {
     // The error is logged by fetchWithRetry, so we just swallow it here
     // to prevent it from crashing the client application.
@@ -49,28 +39,12 @@ export async function saveAbandonedCheckout(payload: AbandonedCheckoutPayload): 
  * @param checkoutId The ID of the checkout session to delete.
  */
 export async function deleteAbandonedCheckout(checkoutId: string): Promise<void> {
-  // CHANGE: Point to the new, dedicated cleanup endpoint
-  const url = createApiUrl(`/abandoned-checkouts/cleanup`);
-
   try {
-    // This call MUST be authenticated, as it's a destructive action.
-    await fetchWithRetry(
-      url,
-      {
-        // CHANGE: Use a simple POST method
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        // CHANGE: Send the checkoutId in the request body
-        body: JSON.stringify({ checkoutId }),
-      },
-      1, // Only one retry
-      5000, // 5-second timeout
-      true, // This call still requires authentication
-    );
-  } catch (error: unknown)
-  {
+    await postApiV1AbandonedCheckoutsCleanup({
+      client: getConfiguredSdkAuthClient(),
+      body: { checkoutId } as any,
+    });
+  } catch (error: unknown) {
     // Log a warning but don't let this failure block the user's success flow.
     console.warn(`Non-critical error: Failed to delete abandoned checkout record for ${checkoutId}. It may be cleaned up later.`, error);
   }

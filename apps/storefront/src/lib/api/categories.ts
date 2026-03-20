@@ -1,8 +1,12 @@
 // src/lib/api/categories.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type { Category } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import {
+  getApiV1Categories,
+  getApiV1CategoriesBySlug,
+} from "@scalius/api-client/sdk";
 
 /**
  * Fetches a list of all categories.
@@ -14,15 +18,10 @@ export async function getAllCategories(): Promise<Category[] | null> {
     "global_all_categories",
     async () => {
       try {
-        const url = createApiUrl("/categories");
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: { categories: Category[] } } = await response.json();
-        return json.data.categories;
+        const { data } = await getApiV1Categories({
+          client: getConfiguredSdkClient(),
+        });
+        return (data as any)?.data?.categories ?? null;
       } catch (error: unknown) {
         console.error("Error fetching all categories:", error);
         return null;
@@ -50,16 +49,12 @@ export async function getCategoryBySlug(
     `category_slug_${slug}`,
     async () => {
       try {
-        const url = createApiUrl(`/categories/${slug}`);
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          if (response.status === 404) return null;
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: { category: Category } } = await response.json();
-        return json.data.category;
+        const { data, error } = await getApiV1CategoriesBySlug({
+          client: getConfiguredSdkClient(),
+          path: { slug },
+        });
+        if (error) return null;
+        return (data as any)?.data?.category ?? null;
       } catch (error: unknown) {
         console.error(`Error fetching category by slug "${slug}":`, error);
         return null;

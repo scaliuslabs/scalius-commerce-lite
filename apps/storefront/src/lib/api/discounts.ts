@@ -1,8 +1,9 @@
 // src/lib/api/discounts.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { createApiUrl, fetchWithRetry, getConfiguredSdkClient } from "./client";
 import type { CartItem } from "@/store/cart";
 import type { DiscountValidationResponse } from "./types";
+import { getApiV1DiscountsValidate } from "@scalius/api-client/sdk";
 
 /**
  * Validates a discount code against the current cart state.
@@ -26,33 +27,31 @@ export async function validateDiscount(
     return null;
   }
   try {
-    const params = new URLSearchParams({ code });
-    if (total !== undefined) params.append("total", String(total));
-    if (shippingCost !== undefined) params.append("shippingCost", String(shippingCost));
-    if (customerPhone) params.append("customerPhone", customerPhone);
+    const queryParams: Record<string, unknown> = { code };
+    if (total !== undefined) queryParams.total = String(total);
+    if (shippingCost !== undefined) queryParams.shippingCost = String(shippingCost);
+    if (customerPhone) queryParams.customerPhone = customerPhone;
     if (items && items.length > 0) {
-      // Only send fields the API needs to keep URLs short and match cartItemSchema
       const apiItems = items.map((item: any) => ({
         id: item.id || item.productId,
         price: Number(item.price),
         quantity: Number(item.quantity),
         ...(item.variantId ? { variantId: item.variantId } : {}),
       }));
-      params.append("items", JSON.stringify(apiItems));
+      queryParams.items = JSON.stringify(apiItems);
     }
-    
-    const url = createApiUrl(`/discounts/validate?${params.toString()}`);
-    // This is a public endpoint.
-    const response = await fetchWithRetry(url, {}, 2, 8000, false);
 
-    if (!response.ok) {
+    const { data, error } = await getApiV1DiscountsValidate({
+      client: getConfiguredSdkClient(),
+      query: queryParams as any,
+    });
+
+    if (error) {
       // API returns specific error details in the body even for non-200 responses
-      const errorData = await response.json();
-      return errorData as DiscountValidationResponse;
+      return error as unknown as DiscountValidationResponse;
     }
 
-    const json: { success: boolean; data: DiscountValidationResponse } = await response.json();
-    return json.data as DiscountValidationResponse;
+    return (data as any)?.data ?? null;
   } catch (error: unknown) {
     console.error(`Error validating discount code "${code}":`, error);
     return {
@@ -79,6 +78,7 @@ export async function recordDiscountUsage(
   amountDiscounted: number,
 ): Promise<boolean> {
   try {
+    // No SDK function for POST /discounts/usage — use fetchWithRetry directly
     const url = createApiUrl("/discounts/usage");
     const payload = {
       discountId,
@@ -86,8 +86,7 @@ export async function recordDiscountUsage(
       customerId,
       amountDiscounted,
     };
-    
-    // This is an authenticated, fire-and-forget style request.
+
     const response = await fetchWithRetry(
       url,
       {
@@ -105,7 +104,7 @@ export async function recordDiscountUsage(
       console.error("Failed to record discount usage:", errorText);
       return false;
     }
-    
+
     console.log(`Successfully recorded usage for discount ${discountId} on order ${orderId}.`);
     return true;
   } catch (error: unknown) {

@@ -1,7 +1,8 @@
 // src/lib/api/search.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type { SearchResults } from "./types";
+import { getApiV1Search } from "@scalius/api-client/sdk";
 
 /**
  * Defines the available options for a search query.
@@ -37,24 +38,12 @@ export async function search(
     };
   }
 
-  const params = new URLSearchParams({ q: query });
-  for (const [key, value] of Object.entries(options)) {
-    if (value !== undefined) {
-      params.append(key, String(value));
-    }
-  }
-
   try {
-    const url = createApiUrl(`/search?${params.toString()}`);
-    // Search is a public endpoint.
-    const response = await fetchWithRetry(url, {}, 2, 10000, false);
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const json: { success: boolean; data: SearchResults } = await response.json();
-    return json.data as SearchResults;
+    const { data } = await getApiV1Search({
+      client: getConfiguredSdkClient(),
+      query: { q: query, ...options } as Record<string, unknown>,
+    });
+    return (data as any)?.data ?? null;
   } catch (error: unknown) {
     console.error(`Error performing search for query "${query}":`, error);
     return null;

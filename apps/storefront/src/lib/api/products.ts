@@ -1,6 +1,6 @@
 // src/lib/api/products.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type {
   Product,
   ProductVariant,
@@ -8,6 +8,12 @@ import type {
   PaginatedResponse,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import {
+  getApiV1ProductsBySlug,
+  getApiV1Products,
+  getApiV1CategoriesBySlugProducts,
+  getApiV1Search,
+} from "@scalius/api-client/sdk";
 
 /**
  * A comprehensive data structure for a single product page,
@@ -25,12 +31,12 @@ export interface ProductPageData {
  * Fetches the complete data needed for a product detail page.
  * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
  * @param slug The URL-friendly slug of the product.
- * @param requiresAuth - Optional parameter to control authentication.
+ * @param _requiresAuth - Unused (preserved for signature compat).
  * @returns A promise that resolves to the product page data or null if not found.
  */
 export async function getProductBySlug(
   slug: string,
-  requiresAuth = false,
+  _requiresAuth = false,
 ): Promise<ProductPageData | null> {
   if (!slug) {
     console.error("getProductBySlug: slug is required.");
@@ -41,16 +47,12 @@ export async function getProductBySlug(
     `product_slug_${slug}`,
     async () => {
       try {
-        const url = createApiUrl(`/products/${slug}`);
-        const response = await fetchWithRetry(url, {}, 3, 8000, requiresAuth);
-
-        if (!response.ok) {
-          if (response.status === 404) return null;
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: ProductPageData } = await response.json();
-        return json.data as ProductPageData;
+        const { data, error } = await getApiV1ProductsBySlug({
+          client: getConfiguredSdkClient(),
+          path: { slug },
+        });
+        if (error) return null;
+        return (data as any)?.data ?? null;
       } catch (error: unknown) {
         console.error(`Error fetching product by slug "${slug}":`, error);
         return null;
@@ -78,6 +80,10 @@ export async function getProductVariants(
     `product_variants_${productId}`,
     async () => {
       try {
+        // There is no dedicated SDK function for /products/{id}/variants,
+        // so we use the product-by-slug endpoint data which includes variants.
+        // For a direct variant fetch, fall back to fetchWithRetry.
+        const { createApiUrl, fetchWithRetry } = await import("./client");
         const url = createApiUrl(`/products/${productId}/variants`);
         const response = await fetchWithRetry(url, {}, 3, 8000, false);
 
@@ -144,41 +150,32 @@ export async function getProductsByCategory(
     }
   }
   const queryString = params.toString();
-
-  // Create a cache key that includes the full query params
   const cacheKey = `category_products_${categorySlug}_${queryString || "default"}`;
 
   return withEdgeCache(
     cacheKey,
     async () => {
       try {
-        const url = createApiUrl(
-          `/categories/${categorySlug}/products${queryString ? `?${queryString}` : ""}`,
-        );
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
+        const { data, error } = await getApiV1CategoriesBySlugProducts({
+          client: getConfiguredSdkClient(),
+          path: { slug: categorySlug },
+          query: options as Record<string, unknown>,
+        });
 
-        if (!response.ok) {
-          if (response.status === 404)
-            return {
-              data: [],
-              pagination: {
-                page: 1,
-                limit: options.limit || 20,
-                total: 0,
-                totalPages: 0,
-              },
-            };
-          throw new Error(`API error: ${response.status}`);
+        if (error) {
+          return {
+            data: [],
+            pagination: {
+              page: 1,
+              limit: options.limit || 20,
+              total: 0,
+              totalPages: 0,
+            },
+          };
         }
 
-        const json: {
-          success: boolean;
-          data: {
-            products: Product[];
-            pagination: PaginatedResponse<any>["pagination"];
-          };
-        } = await response.json();
-        return { data: json.data.products, pagination: json.data.pagination };
+        const d = (data as any)?.data;
+        return { data: d?.products ?? [], pagination: d?.pagination };
       } catch (error: unknown) {
         console.error(
           `Error fetching products for category "${categorySlug}":`,
@@ -187,7 +184,7 @@ export async function getProductsByCategory(
         return null;
       }
     },
-    { ttlSeconds: CACHE_TTL.MEDIUM }, // 1 hour for paginated listings
+    { ttlSeconds: CACHE_TTL.MEDIUM },
   );
 }
 
@@ -207,37 +204,24 @@ export async function getAllProducts(
     }
   }
   const queryString = params.toString();
-
-  // Create a cache key that includes the full query params
   const cacheKey = `all_products_${queryString || "default"}`;
 
   return withEdgeCache(
     cacheKey,
     async () => {
       try {
-        const url = createApiUrl(
-          `/products${queryString ? `?${queryString}` : ""}`,
-        );
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json = (await response.json()) as {
-          success: boolean;
-          data: {
-            products: Product[];
-            pagination: PaginatedResponse<any>["pagination"];
-          };
-        };
-        return { data: json.data.products, pagination: json.data.pagination };
+        const { data } = await getApiV1Products({
+          client: getConfiguredSdkClient(),
+          query: options as Record<string, unknown>,
+        });
+        const d = (data as any)?.data;
+        return { data: d?.products ?? [], pagination: d?.pagination };
       } catch (error: unknown) {
         console.error("Error fetching all products:", error);
         return null;
       }
     },
-    { ttlSeconds: CACHE_TTL.MEDIUM }, // 1 hour for paginated listings
+    { ttlSeconds: CACHE_TTL.MEDIUM },
   );
 }
 
@@ -249,7 +233,7 @@ export async function getAllProducts(
  * inline variants. If you need variants, fetch them separately with getProductVariants().
  *
  * @param search The search term.
- * @param page The page number for pagination (not supported by /search - included for API compatibility).
+ * @param _page The page number for pagination (not supported by /search - included for API compatibility).
  * @param limit The number of results per page.
  * @returns A promise resolving to a paginated list of products.
  */
@@ -267,37 +251,21 @@ export async function searchProductsForForm(
     };
   }
 
-  const params = new URLSearchParams({
-    q: search, // Backend expects 'q', not 'search'
-    limit: String(limit),
-  });
-
   try {
-    // Use /search endpoint - /products/search does not exist
-    const url = createApiUrl(`/search?${params.toString()}`);
-    const response = await fetchWithRetry(url, {}, 3, 8000, false);
+    const { data } = await getApiV1Search({
+      client: getConfiguredSdkClient(),
+      query: { q: search, limit } as Record<string, unknown>,
+    });
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    // The /search endpoint returns { success, data: { products, categories, pages, success, query, timestamp } }
-    const json = (await response.json()) as {
-      success: boolean;
-      data: {
-        products: Product[];
-        success: boolean;
-      };
-    };
-
-    if (json.success) {
-      // Note: /search doesn't include variants inline - they need separate fetching if required
+    const d = data as any;
+    if (d?.success) {
+      const products = d.data?.products ?? [];
       return {
-        data: json.data.products as (Product & { variants?: ProductVariant[] })[],
+        data: products as (Product & { variants?: ProductVariant[] })[],
         pagination: {
           page: 1,
           limit,
-          total: json.data.products.length,
+          total: products.length,
           totalPages: 1,
         },
       };

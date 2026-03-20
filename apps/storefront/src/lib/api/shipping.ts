@@ -1,8 +1,14 @@
 // src/lib/api/shipping.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type { LocationData, ShippingMethod } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import {
+  getApiV1LocationsCities,
+  getApiV1LocationsZones,
+  getApiV1LocationsAreas,
+  getApiV1ShippingMethods,
+} from "@scalius/api-client/sdk";
 
 /**
  * Fetches a list of all active cities for shipping.
@@ -14,15 +20,10 @@ export async function getCities(): Promise<LocationData[] | null> {
     "global_shipping_cities",
     async () => {
       try {
-        const url = createApiUrl("/locations/cities");
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: LocationData[] } = await response.json();
-        return json.data;
+        const { data } = await getApiV1LocationsCities({
+          client: getConfiguredSdkClient(),
+        });
+        return (data as any)?.data ?? null;
       } catch (error: unknown) {
         console.error("Error fetching cities:", error);
         return null;
@@ -48,15 +49,11 @@ export async function getZones(cityId: string): Promise<LocationData[] | null> {
     `shipping_zones_${cityId}`,
     async () => {
       try {
-        const url = createApiUrl(`/locations/zones?cityId=${cityId}`);
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: LocationData[] } = await response.json();
-        return json.data;
+        const { data } = await getApiV1LocationsZones({
+          client: getConfiguredSdkClient(),
+          query: { cityId },
+        });
+        return (data as any)?.data ?? null;
       } catch (error: unknown) {
         console.error(`Error fetching zones for city "${cityId}":`, error);
         return null;
@@ -82,15 +79,11 @@ export async function getAreas(zoneId: string): Promise<LocationData[] | null> {
     `shipping_areas_${zoneId}`,
     async () => {
       try {
-        const url = createApiUrl(`/locations/areas?zoneId=${zoneId}`);
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: LocationData[] } = await response.json();
-        return json.data;
+        const { data } = await getApiV1LocationsAreas({
+          client: getConfiguredSdkClient(),
+          query: { zoneId },
+        });
+        return (data as any)?.data ?? null;
       } catch (error: unknown) {
         console.error(`Error fetching areas for zone "${zoneId}":`, error);
         return null;
@@ -110,16 +103,10 @@ export async function getShippingMethods(): Promise<ShippingMethod[] | null> {
     "global_shipping_methods",
     async () => {
       try {
-        const url = createApiUrl("/shipping-methods");
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: { shippingMethods: ShippingMethod[] } } =
-          await response.json();
-        return json.data.shippingMethods;
+        const { data } = await getApiV1ShippingMethods({
+          client: getConfiguredSdkClient(),
+        });
+        return (data as any)?.data?.shippingMethods ?? null;
       } catch (error: unknown) {
         console.error("Error fetching shipping methods:", error);
         return null;
