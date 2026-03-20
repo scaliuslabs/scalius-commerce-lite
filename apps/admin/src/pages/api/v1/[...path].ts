@@ -5,18 +5,12 @@
 // The API returns standardized responses: { success: true, data: T }.
 // This proxy passes responses through unchanged.
 import type { APIRoute } from "astro";
-import { env as cfEnv } from "cloudflare:workers";
+import { getCfEnv } from "@/lib/cf-env";
 
 export const prerender = false;
 
 export const ALL: APIRoute = async (ctx) => {
-  // Probe known properties — Object.keys() returns [] on CF Workers proxy objects
-  const env = (() => {
-    try {
-      const e = cfEnv as unknown as Env;
-      return (e?.API || e?.PUBLIC_API_BASE_URL || e?.ASSETS) ? e : undefined;
-    } catch { return undefined; }
-  })();
+  const env = getCfEnv();
 
   const url = new URL(ctx.request.url);
   const pathAndQuery = url.pathname + url.search;

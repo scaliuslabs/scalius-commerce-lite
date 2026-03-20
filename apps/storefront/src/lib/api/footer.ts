@@ -3,6 +3,7 @@
 import { getConfiguredSdkClient } from "./client";
 import type { FooterData } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import { getApiV1Footer } from "@scalius/api-client/sdk";
 
 /**
@@ -17,8 +18,7 @@ export async function getFooterData(): Promise<FooterData | null> {
         const { data } = await getApiV1Footer({
           client: getConfiguredSdkClient(),
         });
-        const d = (data as any)?.data;
-        return d ?? null;
+        return unwrapData<FooterData>(data);
       } catch (error: unknown) {
         console.error("Error fetching footer data:", error);
         return null;

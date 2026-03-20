@@ -4,7 +4,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
-import { ApiError, ValidationError } from "../../utils/api-error";
+import { ValidationError } from "../../utils/api-error";
 import {
     listCategories,
     createCategory,
@@ -118,13 +118,8 @@ const createCategoryRoute = createRoute({
 app.openapi(createCategoryRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    try {
-        const result = await createCategory(db, data);
-        return created(c, result);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number; suggestion?: string; affectedProducts?: unknown };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    const result = await createCategory(db, data);
+    return created(c, result);
 });
 
 // ── Bulk Delete Categories ──
@@ -156,13 +151,8 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { categoryIds, permanent } = c.req.valid("json");
     if (categoryIds.length === 0) throw new ValidationError("No category IDs provided");
-    try {
-        await bulkDeleteCategories(db, categoryIds, permanent);
-        return noContent(c);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number; suggestion?: string; affectedProducts?: unknown };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error", err.affectedProducts ? { suggestion: err.suggestion, affectedProducts: err.affectedProducts } : undefined);
-    }
+    await bulkDeleteCategories(db, categoryIds, permanent);
+    return noContent(c);
 });
 
 // ── Bulk Restore Categories ──
@@ -219,13 +209,8 @@ app.openapi(updateCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    try {
-        await updateCategory(db, id, data);
-        return ok(c, {});
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number; suggestion?: string; affectedProducts?: unknown };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    await updateCategory(db, id, data);
+    return ok(c, {});
 });
 
 // ── Delete Category ──
@@ -247,13 +232,8 @@ const deleteCategoryRoute = createRoute({
 app.openapi(deleteCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    try {
-        await deleteCategory(db, id);
-        return noContent(c);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number; suggestion?: string; affectedProducts?: unknown };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error", err.affectedProducts ? { suggestion: err.suggestion, affectedProducts: err.affectedProducts } : undefined);
-    }
+    await deleteCategory(db, id);
+    return noContent(c);
 });
 
 // ── Permanent Delete Category ──

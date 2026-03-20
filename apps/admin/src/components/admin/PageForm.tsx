@@ -141,9 +141,9 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
     }
   };
 
-  // Auto-generate slug from title
+  // Auto-generate slug from title (only when creating a new page, not editing)
   React.useEffect(() => {
-    if (!isClient) return;
+    if (!isClient || isEdit) return;
 
     const subscription = form.watch((value, { name }) => {
       if (name === "title" && value.title) {
@@ -157,7 +157,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       }
     });
     return () => subscription.unsubscribe();
-  }, [form, isClient]);
+  }, [form, isClient, isEdit]);
 
   const slug = form.watch("slug");
   const storefrontPageUrl = getStorefrontPath(slug ? `/${slug}` : "/");

@@ -96,6 +96,57 @@ export async function getPageBySlug(db: Database, slug: string) {
 }
 
 // ─────────────────────────────────────────
+// Public Queries
+// ─────────────────────────────────────────
+
+export async function getPublicPageBySlug(db: Database, slug: string) {
+    return db
+        .select()
+        .from(pages)
+        .where(and(eq(pages.slug, slug), eq(pages.isPublished, true), isNull(pages.deletedAt)))
+        .get() ?? null;
+}
+
+export async function getPublicPages(
+    db: Database,
+    options: {
+        page?: number;
+        limit?: number;
+        sort?: "title" | "createdAt" | "-title" | "-createdAt";
+    } = {},
+) {
+    const { page = 1, limit = 10, sort = "title" } = options;
+
+    const conditions = [isNull(pages.deletedAt), eq(pages.isPublished, true)];
+    const whereClause = and(...conditions);
+
+    const total = (await db
+        .select({ count: sql<number>`count(*)` })
+        .from(pages)
+        .where(whereClause)
+        .get())?.count || 0;
+
+    const sortField = sort.startsWith("-") ? sort.substring(1) : sort;
+    const sortDirection = sort.startsWith("-") ? "desc" : "asc";
+    const orderCol = sortField === "title" ? pages.title : pages.createdAt;
+    const orderBy = sortDirection === "asc" ? asc(orderCol) : desc(orderCol);
+
+    const offset = (page - 1) * limit;
+    const results = await db
+        .select()
+        .from(pages)
+        .where(whereClause)
+        .orderBy(orderBy)
+        .limit(limit)
+        .offset(offset);
+
+    return {
+        pages: results,
+        pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+}
+
+// ─────────────────────────────────────────
 // Mutations
 // ─────────────────────────────────────────
 
@@ -117,6 +168,8 @@ export async function createPage(db: Database, data: CreatePageInput): Promise<{
         metaTitle: data.metaTitle || null,
         metaDescription: data.metaDescription || null,
         isPublished: data.isPublished,
+        publishedAt: data.publishedAt ?? null,
+        sortOrder: data.sortOrder ?? 0,
         hideHeader: data.hideHeader,
         hideFooter: data.hideFooter,
         hideTitle: data.hideTitle,

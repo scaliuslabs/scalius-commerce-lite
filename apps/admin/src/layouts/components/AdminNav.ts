@@ -32,7 +32,7 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 export interface NavSubItem {
   name: string;
   href: string;
-  icon?: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   requiredPermission?: string;
   anyOfPermissions?: string[];
 }
@@ -40,7 +40,7 @@ export interface NavSubItem {
 export interface NavItem {
   name: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   subItems?: NavSubItem[];
   requiredPermission?: string;
   anyOfPermissions?: string[];

@@ -105,10 +105,10 @@ const actions = [
     shadow: "shadow-indigo-500/25 dark:shadow-indigo-500/10",
   },
   {
-    title: "Shipping",
-    href: "/admin/settings/shipping-methods",
+    title: "Delivery Providers",
+    href: "/admin/settings/delivery-providers",
     icon: Truck,
-    description: "Configure shipping settings",
+    description: "Configure delivery settings",
     color: "text-cyan-600 dark:text-cyan-400",
     bg: "bg-cyan-50 dark:bg-cyan-950/30",
     border:

@@ -7,6 +7,7 @@ import type {
   Product,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import {
   getApiV1Collections,
   getApiV1CollectionsById,
@@ -25,7 +26,7 @@ export async function getAllCollections(): Promise<Collection[] | null> {
         const { data } = await getApiV1Collections({
           client: getConfiguredSdkClient(),
         });
-        return (data as any)?.data?.collections ?? null;
+        return unwrapData<{ collections: Collection[] }>(data)?.collections ?? null;
       } catch (error: unknown) {
         console.error("Error fetching all collections:", error);
         return null;
@@ -59,7 +60,7 @@ export async function getCollectionById(
         });
         if (error) return null;
 
-        const d = (data as any)?.data;
+        const d = unwrapData<{ collection: any; categories?: CategorySummary[]; products?: Product[]; featuredProduct?: Product | null }>(data);
         if (d?.collection) {
           return {
             ...d.collection,

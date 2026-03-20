@@ -132,7 +132,10 @@ type OrderEmailType = "order_created" | "order_confirmed" | "order_shipped" | "o
 
 /**
  * Sends a transactional order update email to a customer.
+ * Checks notification channel preferences before sending.
  * Extracted from the inline helper in queue-consumer.ts.
+ *
+ * @param db - Database instance for reading channel preferences
  */
 export async function sendOrderNotificationEmail(
     email: string,
@@ -140,7 +143,33 @@ export async function sendOrderNotificationEmail(
     orderId: string,
     type: OrderEmailType,
     data?: Record<string, unknown>,
+    db?: Database,
 ): Promise<void> {
+    // Check if this channel is enabled for this status
+    if (db) {
+        try {
+            const { getNotificationChannels } = await import("../settings/settings.service");
+            const channels = await getNotificationChannels(db);
+            const enabledChannels = channels[type] || ["email"];
+
+            if (!enabledChannels.includes("email")) {
+                return; // Email channel disabled for this status
+            }
+
+            // Log stubs for future channels
+            if (enabledChannels.includes("sms")) {
+                console.log(`[Notifications] SMS not yet implemented for ${type} (order ${orderId})`);
+            }
+            if (enabledChannels.includes("whatsapp")) {
+                console.log(`[Notifications] WhatsApp not yet implemented for ${type} (order ${orderId})`);
+            }
+            // Push notifications are handled separately by sendOrderNotification()
+        } catch (channelError: unknown) {
+            // If channel check fails, default to sending email
+            console.warn("[Notifications] Failed to check channel preferences, defaulting to email:", channelError);
+        }
+    }
+
     const subjects: Record<string, string> = {
         order_created: `Order #${orderId} Received`,
         order_confirmed: `Order #${orderId} Confirmed`,

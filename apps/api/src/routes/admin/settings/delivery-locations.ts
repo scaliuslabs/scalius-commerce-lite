@@ -35,8 +35,8 @@ const deliveryLocationSchema = z.object({
     name: z.string(),
     type: z.enum(["city", "zone", "area"]),
     parentId: z.string().nullable(),
-    externalIds: z.any(),
-    metadata: z.any(),
+    externalIds: z.record(z.string(), z.unknown()).nullable(),
+    metadata: z.record(z.string(), z.unknown()).nullable(),
     isActive: z.boolean(),
     sortOrder: z.number(),
     displayName: z.string().optional(),
@@ -151,6 +151,9 @@ const deleteAllRoute = createRoute({
     path: "/all",
     tags: ["Admin - Delivery Locations"],
     summary: "Delete all delivery locations permanently",
+    request: {
+        body: { content: { "application/json": { schema: z.object({ confirmDeleteAll: z.literal(true) }) } } }
+    },
     responses: {
         200: { description: "All locations deleted", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
@@ -158,14 +161,13 @@ const deleteAllRoute = createRoute({
 });
 
 app.openapi(deleteAllRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        await db.delete(deliveryLocations);
-        return ok(c, { message: "All delivery locations have been permanently deleted." });
-    } catch (error: unknown) {
-        console.error("Error cleaning all delivery locations:", error);
-        throw error;
+    const { confirmDeleteAll } = c.req.valid("json");
+    if (!confirmDeleteAll) {
+        throw new ValidationError("Must confirm deletion by setting confirmDeleteAll: true");
     }
+    const db = c.get("db");
+    await db.delete(deliveryLocations);
+    return ok(c, { message: "All delivery locations have been permanently deleted." });
 });
 
 // ── Bulk Delete Locations ──

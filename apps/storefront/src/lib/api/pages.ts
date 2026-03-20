@@ -3,6 +3,7 @@
 import { getConfiguredSdkClient } from "./client";
 import type { Page, PaginatedResponse } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import {
   getApiV1PagesSlugBySlug,
   getApiV1Pages,
@@ -31,7 +32,7 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
           path: { slug },
         });
         if (error) return null;
-        return (data as any)?.data?.page ?? null;
+        return unwrapData<{ page: Page }>(data)?.page ?? null;
       } catch (error: unknown) {
         console.error(`Error fetching page by slug "${slug}":`, error);
         return null;
@@ -78,7 +79,7 @@ export async function getAllPages(
           client: getConfiguredSdkClient(),
           query: options as Record<string, unknown>,
         });
-        const d = (data as any)?.data;
+        const d = unwrapData<{ pages: Page[]; pagination: any }>(data);
         if (d) {
           return { data: d.pages as Page[], pagination: d.pagination };
         }

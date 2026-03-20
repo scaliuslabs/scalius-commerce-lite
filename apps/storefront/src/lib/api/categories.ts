@@ -3,6 +3,7 @@
 import { getConfiguredSdkClient } from "./client";
 import type { Category } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import {
   getApiV1Categories,
   getApiV1CategoriesBySlug,
@@ -21,7 +22,7 @@ export async function getAllCategories(): Promise<Category[] | null> {
         const { data } = await getApiV1Categories({
           client: getConfiguredSdkClient(),
         });
-        return (data as any)?.data?.categories ?? null;
+        return unwrapData<{ categories: Category[] }>(data)?.categories ?? null;
       } catch (error: unknown) {
         console.error("Error fetching all categories:", error);
         return null;
@@ -54,7 +55,7 @@ export async function getCategoryBySlug(
           path: { slug },
         });
         if (error) return null;
-        return (data as any)?.data?.category ?? null;
+        return unwrapData<{ category: Category }>(data)?.category ?? null;
       } catch (error: unknown) {
         console.error(`Error fetching category by slug "${slug}":`, error);
         return null;

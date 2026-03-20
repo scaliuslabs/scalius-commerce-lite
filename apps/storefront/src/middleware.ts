@@ -3,9 +3,8 @@
 import { defineMiddleware, sequence } from "astro:middleware";
 import { env as cfEnv } from "cloudflare:workers";
 import { apiContext } from "@/lib/api/context";
-import { setRuntimeEnv } from "@/lib/api/runtime-env";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
-import { setEdgeCacheContext } from "@/lib/edge-cache";
+import { setEdgeCacheContext, cacheContextAls } from "@/lib/edge-cache";
 import { BUILD_ID } from "@/config/build-id";
 
 // Timeout constants to prevent hanging on slow/unavailable services
@@ -129,18 +128,25 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       // Store for reuse in HTML caching below
       resolvedCacheVersion = cacheVersion;
 
-      // Set context for API functions (L2 caching)
-      setEdgeCacheContext(
-        cfCache,
-        cacheVersion,
-        hostname,
-        (promise: Promise<unknown>) => locals.cfContext.waitUntil(promise),
-      );
+      // Set context for API functions (L2 caching) — both ALS and fallback
+      const waitUntilFn = (promise: Promise<unknown>) => locals.cfContext.waitUntil(promise);
+      setEdgeCacheContext(cfCache, cacheVersion, hostname, waitUntilFn);
     } catch (error: unknown) {
       console.warn("Failed to initialize edge cache context:", error);
       // Continue without L2 caching - L1 still works
     }
   }
+
+  // Wrap remainder in cacheContextAls.run() so all downstream withEdgeCache
+  // calls read per-request context instead of module-level state.
+  const cacheCtx = {
+    cache: cfCache,
+    kvVersion: resolvedCacheVersion || "1",
+    hostname,
+    waitUntil: isCloudflareEnv ? ((promise: Promise<any>) => locals.cfContext.waitUntil(promise)) : null,
+  };
+
+  return cacheContextAls.run(cacheCtx, async () => {
 
   // HTML page caching (only for cacheable paths)
   if (
@@ -262,6 +268,8 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
     }
   }
   return await setPageCspHeader(response, env ?? undefined);
+
+  }); // end cacheContextAls.run()
 });
 
 const apiContextMiddleware = defineMiddleware((context, next) => {
@@ -274,16 +282,7 @@ const apiContextMiddleware = defineMiddleware((context, next) => {
     try { cdnDomain = (cfEnv as any)?.CDN_DOMAIN_URL as string | undefined; } catch {}
   }
 
-  // Set module-level env vars for sync access by client.ts + media-url.ts
-  setRuntimeEnv({
-    PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,
-    PUBLIC_API_BASE_URL: env?.PUBLIC_API_BASE_URL as string | undefined,
-    CDN_DOMAIN_URL: cdnDomain,
-    STOREFRONT_URL: env?.STOREFRONT_URL as string | undefined,
-    API_TOKEN: env?.API_TOKEN as string | undefined,
-  });
-
-  // Also set on globalThis as a last-resort fallback for media-url.ts
+  // Set on globalThis as a last-resort fallback for media-url.ts
   // (in case the module-level store is somehow stale/empty during SSR rendering)
   if (cdnDomain) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- globalThis assignment for SSR cross-module access

@@ -8,6 +8,7 @@ import {
 } from "@scalius/database/schema";
 import { eq, isNull, sql, and, desc, inArray, or } from "drizzle-orm";
 import { ftsMatch } from "@scalius/core/search";
+import { getPublicCategories, getPublicCategoryBySlug } from "@scalius/core/modules/categories/categories.storefront";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
@@ -86,30 +87,8 @@ const listCategoriesRoute = createRoute({
 
 app.openapi(listCategoriesRoute, async (c) => {
   const db = c.get("db");
-  const categoriesList = await db
-    .select({
-      id: categories.id,
-      name: categories.name,
-      slug: categories.slug,
-      description: categories.description,
-      imageUrl: categories.imageUrl,
-      createdAt: categories.createdAt,
-      metaTitle: categories.metaTitle,
-      metaDescription: categories.metaDescription
-    })
-    .from(categories)
-    .where(isNull(categories.deletedAt))
-    .orderBy(categories.name)
-    .all();
-
-  // Format dates
-  const formattedCategories = categoriesList.map((category) => ({
-    ...category,
-    createdAt:
-      category.createdAt instanceof Date ? category.createdAt.toISOString() : null
-  }));
-
-  return ok(c, { categories: formattedCategories });
+  const categoriesList = await getPublicCategories(db);
+  return ok(c, { categories: categoriesList });
 });
 
 // GET /categories/:slug — get category by slug
@@ -138,33 +117,9 @@ const getCategoryBySlugRoute = createRoute({
 app.openapi(getCategoryBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
-
-  const category = await db
-    .select({
-      id: categories.id,
-      name: categories.name,
-      slug: categories.slug,
-      description: categories.description,
-      imageUrl: categories.imageUrl,
-      metaTitle: categories.metaTitle,
-      metaDescription: categories.metaDescription,
-      createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`
-    })
-    .from(categories)
-    .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
-    .get();
-
-  if (!category) {
-    throw new NotFoundError("Category not found");
-  }
-
-  // Format the response
-  return ok(c, {
-    category: {
-      ...category,
-      createdAt: unixToDate(category.createdAt)?.toISOString() || null
-    }
-  });
+  const category = await getPublicCategoryBySlug(db, slug);
+  if (!category) throw new NotFoundError("Category not found");
+  return ok(c, { category });
 });
 
 // GET /categories/:slug/products — get products in a category
@@ -183,10 +138,10 @@ const getCategoryProductsRoute = createRoute({
     200: {
       description: "Category products with pagination and filters",
       content: { "application/json": { schema: successEnvelope(z.object({
-        category: z.any(),
-        products: z.array(z.any()),
+        category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough(),
+        products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number() }).passthrough()),
         pagination: paginationSchema,
-        appliedFilters: z.any(),
+        appliedFilters: z.record(z.string(), z.unknown()),
       })) } },
     },
     404: errorResponses[404],
@@ -194,7 +149,7 @@ const getCategoryProductsRoute = createRoute({
   }
 });
 
-app.openapi(getCategoryProductsRoute, async (c) => {
+app.openapi(getCategoryProductsRoute, (async (c: any) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
@@ -233,7 +188,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   const allAttributes = await db
     .select({ slug: productAttributes.slug })
     .from(productAttributes);
-  const validAttributeSlugs = new Set(allAttributes.map((a) => a.slug));
+  const validAttributeSlugs = new Set(allAttributes.map((a: any) => a.slug));
   const attributeFilters: { slug: string; value: string }[] = [];
 
   for (const key in queryParams) {
@@ -360,7 +315,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     .all();
 
   // Get primary images for products
-  const productIds = productsList.map((p) => p.id);
+  const productIds = productsList.map((p: any) => p.id);
 
   // Only fetch images if we have products
   let imageMap = new Map();
@@ -380,11 +335,11 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       .all();
 
     // Create a map of product ID to image URL
-    imageMap = new Map(images.map((img) => [img.productId, img.url]));
+    imageMap = new Map(images.map((img: any) => [img.productId, img.url]));
   }
 
   // Combine products with their images and add category info
-  const productsWithImages = productsList.map((product) => ({
+  const productsWithImages = productsList.map((product: any) => ({
     ...product,
     imageUrl: imageMap.get(product.id) || null,
     discountedPrice: product.discountPercentage
@@ -460,7 +415,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       sort
     }
   });
-});
+}) as any);
 
 // Export the category routes
 export { app as categoryRoutes };

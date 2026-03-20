@@ -47,7 +47,7 @@ const inventoryMovementSchema = z.object({
     newStock: z.number(),
     notes: z.string().nullable(),
     createdBy: z.string().nullable(),
-    createdAt: z.any(),
+    createdAt: z.union([z.string(), z.number()]),
     variantSku: z.string().nullable(),
     productName: z.string().nullable(),
 }).passthrough();
@@ -59,9 +59,9 @@ const inventoryAlertSchema = z.object({
     currentQty: z.number(),
     threshold: z.number(),
     alertStatus: z.string(),
-    alertSentAt: z.any().nullable(),
-    acknowledgedAt: z.any().nullable(),
-    resolvedAt: z.any().nullable(),
+    alertSentAt: z.union([z.string(), z.number()]).nullable(),
+    acknowledgedAt: z.union([z.string(), z.number()]).nullable(),
+    resolvedAt: z.union([z.string(), z.number()]).nullable(),
     productName: z.string().nullable(),
     variantSku: z.string().nullable(),
     variantSize: z.string().nullable(),
@@ -78,7 +78,6 @@ const inventoryOverviewSchema = z.object({
 }).passthrough();
 
 const adjustResultSchema = z.object({
-    success: z.boolean(),
     variantId: z.string(),
     previousStock: z.number(),
     newStock: z.number(),

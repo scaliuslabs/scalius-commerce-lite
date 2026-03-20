@@ -9,6 +9,7 @@ import {
 } from "@scalius/database/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { ftsMatch } from "@scalius/core/search";
+import { getPublicFilterableAttributes, getPublicAttributesByCategory } from "@scalius/core/modules/attributes/attributes.public";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
@@ -45,7 +46,7 @@ app.use(
   }),
 );
 
-const filterResponseSchema = successEnvelope(z.any());
+const filterResponseSchema = successEnvelope(z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), values: z.array(z.string()) }).passthrough()));
 
 // GET /attributes/filterable
 const filterableRoute = createRoute({
@@ -62,55 +63,11 @@ const filterableRoute = createRoute({
   }
 });
 
-app.openapi(filterableRoute, async (c) => {
+app.openapi(filterableRoute, (async (c: any) => {
   const db = c.get("db");
-  // 1. Get all attributes marked as filterable
-  const filterableAttributes = await db
-    .select({
-      id: productAttributes.id,
-      name: productAttributes.name,
-      slug: productAttributes.slug
-    })
-    .from(productAttributes)
-    .where(
-      and(
-        eq(productAttributes.filterable, true),
-        isNull(productAttributes.deletedAt),
-      ),
-    );
-
-  if (filterableAttributes.length === 0) {
-    return ok(c, { filters: [] });
-  }
-
-  // 2. For each attribute, get all unique values assigned to products
-  const attributeIds = filterableAttributes.map((attr) => attr.id);
-  const uniqueValues =
-    attributeIds.length > 0
-      ? await db
-          .selectDistinct({
-            attributeId: productAttributeValues.attributeId,
-            value: productAttributeValues.value
-          })
-          .from(productAttributeValues)
-          .where(inArray(productAttributeValues.attributeId, attributeIds))
-      : [];
-
-  // 3. Structure the data for the frontend
-  const filters = filterableAttributes
-    .map((attr) => ({
-      id: attr.id,
-      name: attr.name,
-      slug: attr.slug,
-      values: uniqueValues
-        .filter((uv) => uv.attributeId === attr.id)
-        .map((uv) => uv.value)
-        .sort()
-    }))
-    .filter((filter) => filter.values.length > 0);
-
-  return ok(c, { filters });
-});
+  const result = await getPublicFilterableAttributes(db);
+  return ok(c, result);
+}) as any);
 
 // GET /attributes/category/:categoryId
 const categoryAttributesRoute = createRoute({
@@ -132,61 +89,12 @@ const categoryAttributesRoute = createRoute({
   }
 });
 
-app.openapi(categoryAttributesRoute, async (c) => {
+app.openapi(categoryAttributesRoute, (async (c: any) => {
   const db = c.get("db");
   const { categoryId } = c.req.valid("param");
-
-  // 1. Get all filterable attributes that have values in products of this category
-  const categoryAttributes = await db
-    .selectDistinct({
-      attributeId: productAttributeValues.attributeId,
-      attributeName: productAttributes.name,
-      attributeSlug: productAttributes.slug,
-      value: productAttributeValues.value
-    })
-    .from(productAttributeValues)
-    .innerJoin(
-      productAttributes,
-      and(
-        eq(productAttributeValues.attributeId, productAttributes.id),
-        eq(productAttributes.filterable, true),
-        isNull(productAttributes.deletedAt),
-      ),
-    )
-    .innerJoin(
-      products,
-      and(
-        eq(productAttributeValues.productId, products.id),
-        eq(products.categoryId, categoryId),
-        eq(products.isActive, true),
-        isNull(products.deletedAt),
-      ),
-    );
-
-  // 2. Group by attribute and collect values
-  const attributeMap = new Map();
-  categoryAttributes.forEach((item) => {
-    if (!attributeMap.has(item.attributeId)) {
-      attributeMap.set(item.attributeId, {
-        id: item.attributeId,
-        name: item.attributeName,
-        slug: item.attributeSlug,
-        values: new Set()
-      });
-    }
-    attributeMap.get(item.attributeId).values.add(item.value);
-  });
-
-  // 3. Convert to final format
-  const filters = Array.from(attributeMap.values()).map((attr) => ({
-    id: attr.id,
-    name: attr.name,
-    slug: attr.slug,
-    values: Array.from(attr.values).sort()
-  }));
-
-  return ok(c, { filters });
-});
+  const result = await getPublicAttributesByCategory(db, categoryId);
+  return ok(c, result);
+}) as any);
 
 // GET /attributes/category-slug/:categorySlug
 const categorySlugAttributesRoute = createRoute({
@@ -209,74 +117,22 @@ const categorySlugAttributesRoute = createRoute({
   }
 });
 
-app.openapi(categorySlugAttributesRoute, async (c) => {
+app.openapi(categorySlugAttributesRoute, (async (c: any) => {
   const db = c.get("db");
   const { categorySlug } = c.req.valid("param");
 
-  // 1. First get the category ID from slug
+  // Resolve slug to ID
   const category = await db
     .select({ id: categories.id })
     .from(categories)
-    .where(
-      and(eq(categories.slug, categorySlug), isNull(categories.deletedAt)),
-    )
+    .where(and(eq(categories.slug, categorySlug), isNull(categories.deletedAt)))
     .get();
 
-  if (!category) {
-    throw new NotFoundError("Category not found");
-  }
+  if (!category) throw new NotFoundError("Category not found");
 
-  // 2. Get all filterable attributes that have values in products of this category
-  const categoryAttributes = await db
-    .selectDistinct({
-      attributeId: productAttributeValues.attributeId,
-      attributeName: productAttributes.name,
-      attributeSlug: productAttributes.slug,
-      value: productAttributeValues.value
-    })
-    .from(productAttributeValues)
-    .innerJoin(
-      productAttributes,
-      and(
-        eq(productAttributeValues.attributeId, productAttributes.id),
-        eq(productAttributes.filterable, true),
-        isNull(productAttributes.deletedAt),
-      ),
-    )
-    .innerJoin(
-      products,
-      and(
-        eq(productAttributeValues.productId, products.id),
-        eq(products.categoryId, category.id),
-        eq(products.isActive, true),
-        isNull(products.deletedAt),
-      ),
-    );
-
-  // 3. Group by attribute and collect values
-  const attributeMap = new Map();
-  categoryAttributes.forEach((item) => {
-    if (!attributeMap.has(item.attributeId)) {
-      attributeMap.set(item.attributeId, {
-        id: item.attributeId,
-        name: item.attributeName,
-        slug: item.attributeSlug,
-        values: new Set()
-      });
-    }
-    attributeMap.get(item.attributeId).values.add(item.value);
-  });
-
-  // 4. Convert to final format
-  const filters = Array.from(attributeMap.values()).map((attr) => ({
-    id: attr.id,
-    name: attr.name,
-    slug: attr.slug,
-    values: Array.from(attr.values).sort()
-  }));
-
-  return ok(c, { filters });
-});
+  const result = await getPublicAttributesByCategory(db, category.id);
+  return ok(c, result);
+}) as any);
 
 // GET /attributes/search-filters
 const searchFiltersRoute = createRoute({
@@ -299,7 +155,7 @@ const searchFiltersRoute = createRoute({
   }
 });
 
-app.openapi(searchFiltersRoute, async (c) => {
+app.openapi(searchFiltersRoute, (async (c: any) => {
   const db = c.get("db");
   const { q: query, categoryId } = c.req.valid("query");
 
@@ -332,7 +188,7 @@ app.openapi(searchFiltersRoute, async (c) => {
   }
 
   // 2. Get all categories from matching products
-  const categoryIds = [...new Set(matchingProducts.map((p) => p.categoryId).filter((id): id is string => id != null))];
+  const categoryIds: string[] = [...new Set<string>(matchingProducts.map((p: any) => p.categoryId).filter((id: any): id is string => id != null))];
 
   // 3. Get all filterable attributes that have values in products of these categories
   const searchAttributes = await db
@@ -363,7 +219,7 @@ app.openapi(searchFiltersRoute, async (c) => {
 
   // 4. Group by attribute and collect values
   const attributeMap = new Map();
-  searchAttributes.forEach((item) => {
+  searchAttributes.forEach((item: any) => {
     if (!attributeMap.has(item.attributeId)) {
       attributeMap.set(item.attributeId, {
         id: item.attributeId,
@@ -384,6 +240,6 @@ app.openapi(searchFiltersRoute, async (c) => {
   }));
 
   return ok(c, { filters });
-});
+}) as any);
 
 export { app as attributeRoutes };

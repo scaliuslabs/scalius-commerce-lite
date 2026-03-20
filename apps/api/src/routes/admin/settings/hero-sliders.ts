@@ -34,9 +34,9 @@ const heroSliderSchema = z.object({
     type: z.enum(["desktop", "mobile"]),
     images: z.array(sliderImageSchema),
     isActive: z.boolean(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
-    deletedAt: z.any().nullable(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
 }).passthrough();
 
 const listRoute = createRoute({
@@ -91,8 +91,8 @@ app.openapi(createSliderRoute, async (c) => {
             type: data.type,
             images: JSON.stringify(data.images),
             isActive: data.isActive ?? true,
-            createdAt: sql`CURRENT_TIMESTAMP`,
-            updatedAt: sql`CURRENT_TIMESTAMP`
+            createdAt: sql`(unixepoch())`,
+            updatedAt: sql`(unixepoch())`
         }).returning();
         const slider = sliderArr[0];
         if (!slider) throw new ValidationError("Failed to create slider");
@@ -158,7 +158,7 @@ app.openapi(updateSliderRoute, async (c) => {
         const updateData = {
             ...data,
             images: data.images ? JSON.stringify(data.images) : undefined,
-            updatedAt: sql`CURRENT_TIMESTAMP`
+            updatedAt: sql`(unixepoch())`
         };
 
         const [slider] = await db.update(heroSliders)
@@ -194,7 +194,7 @@ app.openapi(deleteSliderRoute, async (c) => {
         const db = c.get("db");
         const { id } = c.req.valid("param");
         const [slider] = await db.update(heroSliders)
-            .set({ deletedAt: sql`CURRENT_TIMESTAMP` })
+            .set({ deletedAt: sql`(unixepoch())` })
             .where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt)))
             .returning();
 

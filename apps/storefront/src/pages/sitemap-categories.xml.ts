@@ -23,7 +23,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
 
     const categoryUrls: SitemapUrl[] = categories.map((category) => ({
       loc: `${baseUrl}/categories/${category.slug}`,
-      lastmod: category.createdAt,
+      lastmod: category.updatedAt || category.createdAt,
       changefreq: 'weekly' as const,
       priority: 0.8,
     }));

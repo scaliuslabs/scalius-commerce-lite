@@ -1,6 +1,6 @@
-// Main MediaManager component (Dialog version for selecting media)
+// Main MediaManager component (Dialog version for selecting media) — uses shared useMediaManager hook
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -27,11 +27,8 @@ import {
   MediaFilterBar,
   FolderBrowser,
 } from "./components";
-import { useMediaFiles, useMediaUpload, useFolders } from "./hooks";
-import { debounce } from "./utils";
-import { MediaApiClient } from "./api";
-import type { MediaFile, MediaManagerProps } from "./types";
-import { toast } from "sonner";
+import { useMediaManager } from "./hooks/useMediaManager";
+import type { MediaManagerProps } from "./types";
 
 export function MediaManager({
   onSelect,
@@ -42,255 +39,61 @@ export function MediaManager({
   maxFileSize = 10,
   dialogClassName,
 }: MediaManagerProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [pendingDeleteFileId, setPendingDeleteFileId] = useState<string | null>(
-    null,
-  );
-  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
-  const [folderSidebarCollapsed, setFolderSidebarCollapsed] = useState(false); // FIXED: Expanded by default for better UX
+  const [dialogOpen, setDialogOpen] = React.useState(false);
 
-  // Use custom hooks
-  const {
-    files,
-    isLoading,
-    isLoadingMore,
-    currentPage,
-    totalPages,
-    filters,
-    loadFiles,
-    loadMore,
-    applyFilters,
-    deleteFile,
-    deleteFiles: deleteMultipleFiles,
-  } = useMediaFiles(false);
-
-  const {
-    folders,
-    currentFolderId,
-    loadFolders,
-    createFolder,
-    deleteFolder,
-    moveToFolder,
-  } = useFolders(false);
-
-  const { isUploading, uploadProgress, currentUploadStatus, uploadFiles } =
-    useMediaUpload({
-      maxSizeMB: maxFileSize,
-      acceptedTypes: acceptedFileTypes,
-      folderId: currentFolderId === "all" ? null : currentFolderId,
-      onUploadComplete: (uploadedFiles) => {
-        // Reload files from page 1 with correct folder context
-        const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
-        loadFiles(1, { ...filters, folderId: folderParam });
-
-        // If multiple selection is enabled, auto-select uploaded files and enter selection mode
-        if (onSelectMultiple && uploadedFiles.length > 0) {
-          const newFileIds = uploadedFiles.map((f) => f.id);
-          setTimeout(() => {
-            setSelectedFileIds(newFileIds);
-            setSelectionMode(true);
-            toast.success("Upload Complete", { description: "Files uploaded. Click 'Add' to insert them." });
-          }, 400);
-        } else if (onSelect && uploadedFiles.length > 0) {
-          // Single select mode
-          if (uploadedFiles.length === 1) {
-            // If only one file uploaded, auto-select it immediately for better UX
-            const file = uploadedFiles[0];
-            const fileWithDateObject = {
-              ...file,
-              id: `temp_${file.id}`,
-              createdAt: new Date(file.createdAt),
-            };
-            onSelect(fileWithDateObject);
-            setDialogOpen(false);
-            toast.success("Image Selected", { description: "Newly uploaded image has been selected." });
-          } else {
-            // Multiple files uploaded in single-select mode: notify user
-            toast.success("Upload Complete", { description: "Multiple files uploaded. Click one to select." });
-          }
+  const mm = useMediaManager({
+    autoLoad: false,
+    maxFileSize,
+    acceptedFileTypes,
+    onSelect: onSelect
+      ? (file) => {
+          onSelect(file);
+          setDialogOpen(false);
         }
-      },
-    });
+      : undefined,
+    onSelectMultiple: onSelectMultiple
+      ? (files) => {
+          onSelectMultiple(files);
+          setDialogOpen(false);
+        }
+      : undefined,
+  });
 
-  // FIXED: Consolidated effect to prevent race conditions
   // Load files and folders when dialog opens OR when folder changes
   useEffect(() => {
     if (dialogOpen) {
-      const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
-      loadFiles(1, { ...filters, folderId: folderParam });
-      loadFolders();
+      const folderParam = mm.currentFolderId === "all" ? "all" : mm.currentFolderId;
+      mm.loadFiles(1, { ...mm.filters, folderId: folderParam });
+      mm.loadFolders();
     }
-  }, [dialogOpen, currentFolderId]);
+  }, [dialogOpen, mm.currentFolderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initialize selection when dialog opens
-  // CRITICAL: We explicitly DO NOT include selectedFiles in the dependency array.
-  // If the parent component passes a new array reference every render (e.g. `selectedFiles={[]}`),
-  // including it here will cause an infinite render loop (useEffect -> setState -> render -> new array -> useEffect -> ...).
   useEffect(() => {
     if (dialogOpen) {
       if (selectedFiles && selectedFiles.length > 0) {
-        // Strip temp_ prefix if present
-        const ids = selectedFiles.map(f => f.id.replace(/^temp_/, ""));
-        setSelectedFileIds(ids);
-        setSelectionMode(true);
+        const ids = selectedFiles.map((f) => f.id.replace(/^temp_/, ""));
+        mm.setSelectedFileIds(ids);
+        mm.setSelectionMode(true);
       } else {
-        setSelectedFileIds([]);
-        setSelectionMode(false);
+        mm.setSelectedFileIds([]);
+        mm.setSelectionMode(false);
       }
     }
   }, [dialogOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced search
-  const debouncedApplyFilters = useCallback(
-    debounce((newFilters) => {
-      const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
-      applyFilters({ ...newFilters, folderId: folderParam });
-    }, 500),
-    [applyFilters, currentFolderId],
-  );
-
   useEffect(() => {
-    if (dialogOpen && filters.search !== undefined) {
-      debouncedApplyFilters(filters);
+    if (dialogOpen && mm.filters.search !== undefined) {
+      mm.debouncedApplyFilters(mm.filters);
     }
-  }, [filters.search, dialogOpen, debouncedApplyFilters]);
-
-  // Selection handlers
-  const toggleFileSelection = (fileId: string) => {
-    setSelectedFileIds((prev) =>
-      prev.includes(fileId)
-        ? prev.filter((id) => id !== fileId)
-        : [...prev, fileId],
-    );
-  };
-
-  const toggleSelectionMode = () => {
-    if (selectionMode) {
-      setSelectedFileIds([]);
-    }
-    setSelectionMode(!selectionMode);
-  };
-
-  const selectAllFiles = () => {
-    const allFileIds = files.map((file) => file.id);
-    setSelectedFileIds(allFileIds);
-  };
-
-  const clearSelection = () => {
-    setSelectedFileIds([]);
-  };
-
-  // File handlers
-  const handleFileSelect = (file: MediaFile) => {
-    if (selectionMode) {
-      toggleFileSelection(file.id);
-    } else if (onSelect) {
-      const fileWithDateObject = {
-        ...file,
-        id: `temp_${file.id}`,
-        createdAt: new Date(file.createdAt),
-      };
-      onSelect(fileWithDateObject);
-      setDialogOpen(false);
-    }
-  };
-
-  const handleFilePreview = (file: MediaFile, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPreviewFile(file);
-    setShowPreview(true);
-  };
-
-  const handleDeleteConfirmation = (fileId: string) => {
-    setPendingDeleteFileId(fileId);
-    setShowDeleteDialog(true);
-  };
-
-  const handleFileDelete = async () => {
-    if (!pendingDeleteFileId) return;
-    await deleteFile(pendingDeleteFileId);
-    // Reload with correct folder context
-    const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
-    loadFiles(1, { ...filters, folderId: folderParam });
-    setPendingDeleteFileId(null);
-    setShowDeleteDialog(false);
-  };
-
-  const handleBulkDeleteConfirmation = () => {
-    if (selectedFileIds.length === 0) return;
-    setShowBulkDeleteDialog(true);
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedFileIds.length === 0) return;
-    await deleteMultipleFiles(selectedFileIds);
-    // Reload with correct folder context
-    const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
-    loadFiles(1, { ...filters, folderId: folderParam });
-    setSelectedFileIds([]);
-    setShowBulkDeleteDialog(false);
-  };
-
-  const handleMoveToFolder = async (folderId: string | null) => {
-    if (selectedFileIds.length === 0) return;
-
-    try {
-      await MediaApiClient.moveFilesToFolder(selectedFileIds, folderId);
-      toast.success("Files Moved", { description: `Successfully moved ${selectedFileIds.length} file${selectedFileIds.length !== 1 ? "s" : ""}.` });
-      setSelectedFileIds([]);
-      // Reload with correct folder context
-      const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
-      loadFiles(1, { ...filters, folderId: folderParam });
-    } catch (error: unknown) {
-      toast.error("Move Failed", { description: (error instanceof Error ? error.message : String(error)) || "Could not move files. Please try again." });
-    }
-  };
-
-  const handleAddSelectedFiles = () => {
-    if (selectedFileIds.length === 0 || !onSelectMultiple) return;
-
-    const selectedMediaFiles = files.filter((file) =>
-      selectedFileIds.includes(file.id),
-    );
-    const filesWithDateObjects = selectedMediaFiles.map((file) => ({
-      ...file,
-      id: `temp_${file.id}`,
-      createdAt: new Date(file.createdAt),
-    }));
-
-    onSelectMultiple(filesWithDateObjects);
-    setDialogOpen(false);
-  };
-
-  // Preview navigation
-  const navigateToNextImage = () => {
-    if (!previewFile) return;
-    const currentIndex = files.findIndex((file) => file.id === previewFile.id);
-    if (currentIndex < files.length - 1) {
-      setPreviewFile(files[currentIndex + 1]);
-    }
-  };
-
-  const navigateToPrevImage = () => {
-    if (!previewFile) return;
-    const currentIndex = files.findIndex((file) => file.id === previewFile.id);
-    if (currentIndex > 0) {
-      setPreviewFile(files[currentIndex - 1]);
-    }
-  };
+  }, [mm.filters.search, dialogOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset state when dialog closes
   const handleDialogChange = (isOpen: boolean) => {
     setDialogOpen(isOpen);
     if (!isOpen) {
-      setShowPreview(false);
-      // We don't reset selection here anymore; it's handled safely by the initialization effect
-      // Don't reset search or folder when closing
+      mm.setShowPreview(false);
     }
   };
 
@@ -319,22 +122,22 @@ export function MediaManager({
             e.stopPropagation();
             const droppedFiles = e.dataTransfer.files;
             if (droppedFiles && droppedFiles.length > 0) {
-              await uploadFiles(droppedFiles);
+              await mm.uploadFiles(droppedFiles);
             }
           }}
         >
           <div className="flex h-full">
             {/* Folder sidebar */}
             <FolderBrowser
-              folders={folders}
-              currentFolderId={currentFolderId}
-              onFolderSelect={moveToFolder}
-              onFolderCreate={createFolder}
-              onFolderDelete={deleteFolder}
-              className={folderSidebarCollapsed ? "w-12" : "w-64"}
-              isCollapsed={folderSidebarCollapsed}
+              folders={mm.folders}
+              currentFolderId={mm.currentFolderId}
+              onFolderSelect={mm.moveToFolder}
+              onFolderCreate={mm.createFolder}
+              onFolderDelete={mm.deleteFolder}
+              className={mm.folderSidebarCollapsed ? "w-12" : "w-64"}
+              isCollapsed={mm.folderSidebarCollapsed}
               onToggleCollapse={() =>
-                setFolderSidebarCollapsed(!folderSidebarCollapsed)
+                mm.setFolderSidebarCollapsed(!mm.folderSidebarCollapsed)
               }
             />
 
@@ -344,50 +147,50 @@ export function MediaManager({
               <div className="px-4 py-2 border-b shrink-0">
                 <div className="flex items-center justify-between mb-2">
                   <DialogTitle className="text-base">Media Library</DialogTitle>
-                  {isUploading && uploadProgress.length > 0 && (
+                  {mm.isUploading && mm.uploadProgress.length > 0 && (
                     <div className="text-xs text-muted-foreground flex items-center gap-2">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Uploading {uploadProgress.length} file(s)...
+                      Uploading {mm.uploadProgress.length} file(s)...
                     </div>
                   )}
                 </div>
                 <DialogDescription className="text-xs">
-                  {currentFolderId === "all"
-                    ? "📁 Showing all files • Drag & drop to upload (Max 20 files, 10MB each)"
-                    : currentFolderId
-                      ? `📂 ${folders.find((f) => f.id === currentFolderId)?.name || "Folder"} • Max 20 files, 10MB each`
-                      : "📁 Uncategorized files • Max 20 files, 10MB each"}
+                  {mm.currentFolderId === "all"
+                    ? "Showing all files -- Drag & drop to upload (Max 20 files, 10MB each)"
+                    : mm.currentFolderId
+                      ? `${mm.folders.find((f) => f.id === mm.currentFolderId)?.name || "Folder"} -- Max 20 files, 10MB each`
+                      : "Uncategorized files -- Max 20 files, 10MB each"}
                 </DialogDescription>
               </div>
 
               {/* Compact Filter bar */}
               <div className="border-b px-4 py-2 bg-muted/30 shrink-0">
                 <MediaFilterBar
-                  filters={filters}
+                  filters={mm.filters}
                   onFiltersChange={(newFilters) => {
                     const folderParam =
-                      currentFolderId === "all" ? "all" : currentFolderId;
-                    applyFilters({ ...newFilters, folderId: folderParam });
+                      mm.currentFolderId === "all" ? "all" : mm.currentFolderId;
+                    mm.applyFilters({ ...newFilters, folderId: folderParam });
                   }}
-                  selectionMode={selectionMode}
-                  selectedCount={selectedFileIds.length}
-                  totalCount={files.length}
-                  onToggleSelectionMode={toggleSelectionMode}
-                  onSelectAll={selectAllFiles}
-                  onClearSelection={clearSelection}
-                  onBulkDelete={handleBulkDeleteConfirmation}
-                  onAddSelected={handleAddSelectedFiles}
+                  selectionMode={mm.selectionMode}
+                  selectedCount={mm.selectedFileIds.length}
+                  totalCount={mm.files.length}
+                  onToggleSelectionMode={mm.toggleSelectionMode}
+                  onSelectAll={mm.selectAllFiles}
+                  onClearSelection={mm.clearSelection}
+                  onBulkDelete={mm.handleBulkDeleteConfirmation}
+                  onAddSelected={mm.handleAddSelectedFiles}
                   canAddSelected={!!onSelectMultiple}
-                  folders={folders}
-                  onMoveToFolder={handleMoveToFolder}
-                  onUpload={uploadFiles}
-                  isUploading={isUploading}
+                  folders={mm.folders}
+                  onMoveToFolder={mm.handleMoveToFolder}
+                  onUpload={mm.uploadFiles}
+                  isUploading={mm.isUploading}
                 />
               </div>
 
-              {/* Gallery - Maximized space with upload indicator */}
+              {/* Gallery */}
               <div className="flex-1 overflow-hidden px-4 pb-4 pt-2 relative">
-                {isUploading && (
+                {mm.isUploading && (
                   <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-md flex items-center justify-center pointer-events-none">
                     <div className="bg-card p-6 rounded-lg shadow-lg border border-border/50 min-w-[280px]">
                       <div className="flex items-center justify-center mb-4">
@@ -401,16 +204,16 @@ export function MediaManager({
                       <p className="text-sm font-semibold text-center mb-2">
                         Uploading Files
                       </p>
-                      {uploadProgress.length > 0 && (
+                      {mm.uploadProgress.length > 0 && (
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
                             <span>
-                              {uploadProgress.length} file(s) in progress
+                              {mm.uploadProgress.length} file(s) in progress
                             </span>
                           </div>
-                          {currentUploadStatus && (
+                          {mm.currentUploadStatus && (
                             <p className="text-xs text-center text-muted-foreground truncate">
-                              {currentUploadStatus}
+                              {mm.currentUploadStatus}
                             </p>
                           )}
                           <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
@@ -425,19 +228,19 @@ export function MediaManager({
                   </div>
                 )}
                 <MediaGallery
-                  files={files}
-                  selectedFileIds={selectedFileIds}
-                  selectionMode={selectionMode}
-                  isLoading={isLoading}
-                  isLoadingMore={isLoadingMore}
-                  hasMore={currentPage < totalPages}
-                  onFileSelect={handleFileSelect}
-                  onFileDelete={handleDeleteConfirmation}
-                  onFilePreview={handleFilePreview}
-                  onToggleSelection={toggleFileSelection}
-                  onLoadMore={loadMore}
+                  files={mm.files}
+                  selectedFileIds={mm.selectedFileIds}
+                  selectionMode={mm.selectionMode}
+                  isLoading={mm.isLoading}
+                  isLoadingMore={mm.isLoadingMore}
+                  hasMore={mm.currentPage < mm.totalPages}
+                  onFileSelect={mm.handleFileSelect}
+                  onFileDelete={mm.handleDeleteConfirmation}
+                  onFilePreview={mm.handleFilePreview}
+                  onToggleSelection={mm.toggleFileSelection}
+                  onLoadMore={mm.loadMore}
                   emptyMessage={
-                    filters.search
+                    mm.filters.search
                       ? "No files match your search"
                       : "No files in this folder. Upload some files to get started!"
                   }
@@ -451,30 +254,30 @@ export function MediaManager({
 
       {/* Preview Dialog */}
       <MediaPreview
-        open={showPreview && dialogOpen}
-        file={previewFile}
-        files={files}
-        onOpenChange={setShowPreview}
-        onNavigateNext={navigateToNextImage}
-        onNavigatePrev={navigateToPrevImage}
+        open={mm.showPreview && dialogOpen}
+        file={mm.previewFile}
+        files={mm.files}
+        onOpenChange={mm.setShowPreview}
+        onNavigateNext={mm.navigateToNextImage}
+        onNavigatePrev={mm.navigateToPrevImage}
         onSelect={
           onSelect
             ? (file) => {
-              const fileWithDateObject = {
-                ...file,
-                id: `temp_${file.id}`,
-                createdAt: new Date(file.createdAt),
-              };
-              onSelect(fileWithDateObject);
-              setShowPreview(false);
-              setDialogOpen(false);
-            }
+                const fileWithDateObject = {
+                  ...file,
+                  id: `temp_${file.id}`,
+                  createdAt: new Date(file.createdAt),
+                };
+                onSelect(fileWithDateObject);
+                mm.setShowPreview(false);
+                setDialogOpen(false);
+              }
             : undefined
         }
       />
 
       {/* Single Delete Confirmation */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialog open={mm.showDeleteDialog} onOpenChange={mm.setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
@@ -486,14 +289,14 @@ export function MediaManager({
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={() => {
-                setPendingDeleteFileId(null);
-                setShowDeleteDialog(false);
+                mm.setPendingDeleteFileId(null);
+                mm.setShowDeleteDialog(false);
               }}
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleFileDelete}
+              onClick={mm.handleFileDelete}
               className={buttonVariants({ variant: "destructive" })}
             >
               Delete
@@ -504,26 +307,26 @@ export function MediaManager({
 
       {/* Bulk Delete Confirmation */}
       <AlertDialog
-        open={showBulkDeleteDialog}
-        onOpenChange={setShowBulkDeleteDialog}
+        open={mm.showBulkDeleteDialog}
+        onOpenChange={mm.setShowBulkDeleteDialog}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Bulk Deletion</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {selectedFileIds.length} selected
-              file{selectedFileIds.length !== 1 ? "s" : ""}? This action cannot
+              Are you sure you want to delete {mm.selectedFileIds.length} selected
+              file{mm.selectedFileIds.length !== 1 ? "s" : ""}? This action cannot
               be undone and all selected files will be permanently removed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleBulkDelete}
+              onClick={mm.handleBulkDelete}
               className={buttonVariants({ variant: "destructive" })}
             >
-              Delete {selectedFileIds.length} file
-              {selectedFileIds.length !== 1 ? "s" : ""}
+              Delete {mm.selectedFileIds.length} file
+              {mm.selectedFileIds.length !== 1 ? "s" : ""}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -274,7 +274,7 @@ const listValuesRoute = createRoute({
                 values: z.array(z.object({
                     value: z.string(),
                     productCount: z.number(),
-                    createdAt: z.any(),
+                    createdAt: z.union([z.string(), z.number()]),
                     isPreset: z.boolean(),
                     sampleProducts: z.array(z.string()),
                 })),

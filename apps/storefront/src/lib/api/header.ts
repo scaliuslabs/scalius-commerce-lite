@@ -3,6 +3,7 @@
 import { getConfiguredSdkClient } from "./client";
 import type { HeaderData } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import { getApiV1Header } from "@scalius/api-client/sdk";
 
 /**
@@ -17,7 +18,7 @@ export async function getHeaderData(): Promise<HeaderData | null> {
         const { data } = await getApiV1Header({
           client: getConfiguredSdkClient(),
         });
-        const d = (data as any)?.data;
+        const d = unwrapData<{ header: HeaderData }>(data);
         return d?.header ?? null;
       } catch (error: unknown) {
         console.error("Error fetching header data:", error);

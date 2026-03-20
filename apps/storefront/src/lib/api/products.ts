@@ -8,6 +8,7 @@ import type {
   PaginatedResponse,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData, unwrapEnvelope } from "./unwrap";
 import {
   getApiV1ProductsBySlug,
   getApiV1Products,
@@ -52,7 +53,7 @@ export async function getProductBySlug(
           path: { slug },
         });
         if (error) return null;
-        return (data as any)?.data ?? null;
+        return unwrapData<ProductPageData>(data);
       } catch (error: unknown) {
         console.error(`Error fetching product by slug "${slug}":`, error);
         return null;
@@ -174,7 +175,7 @@ export async function getProductsByCategory(
           };
         }
 
-        const d = (data as any)?.data;
+        const d = unwrapData<{ products: Product[]; pagination: any }>(data);
         return { data: d?.products ?? [], pagination: d?.pagination };
       } catch (error: unknown) {
         console.error(
@@ -214,7 +215,7 @@ export async function getAllProducts(
           client: getConfiguredSdkClient(),
           query: options as Record<string, unknown>,
         });
-        const d = (data as any)?.data;
+        const d = unwrapData<{ products: Product[]; pagination: any }>(data);
         return { data: d?.products ?? [], pagination: d?.pagination };
       } catch (error: unknown) {
         console.error("Error fetching all products:", error);
@@ -257,9 +258,9 @@ export async function searchProductsForForm(
       query: { q: search, limit } as Record<string, unknown>,
     });
 
-    const d = data as any;
-    if (d?.success) {
-      const products = d.data?.products ?? [];
+    const d = unwrapEnvelope<{ products: Product[] }>(data);
+    if (d) {
+      const products = d.products ?? [];
       return {
         data: products as (Product & { variants?: ProductVariant[] })[],
         pagination: {

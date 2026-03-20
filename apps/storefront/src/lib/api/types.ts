@@ -165,6 +165,7 @@ export interface Category {
   metaTitle: string | null;
   metaDescription: string | null;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CategorySummary {

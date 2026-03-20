@@ -210,22 +210,8 @@ export function InventoryManager() {
 
   const hasActiveFilters = localSearch.trim() || stockFilter !== "all";
 
-  // Sort function applied client-side if API doesn't support all sorts yet
-  const displayVariants = [...variants].sort((a, b) => {
-    let aVal: string | number = "";
-    let bVal: string | number = "";
-
-    const rawA = a[sort.field as keyof typeof a];
-    const rawB = b[sort.field as keyof typeof b];
-    if (typeof rawA === 'string') aVal = rawA.toLowerCase();
-    else if (typeof rawA === 'number') aVal = rawA;
-    if (typeof rawB === 'string') bVal = rawB.toLowerCase();
-    else if (typeof rawB === 'number') bVal = rawB;
-
-    if (aVal < bVal) return sort.order === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sort.order === 'asc' ? 1 : -1;
-    return 0;
-  });
+  // Sort params are sent to the server (lines above); display the server-sorted results directly
+  const displayVariants = variants;
 
   return (
     <Card className="border-none shadow-none bg-transparent sm:bg-card">

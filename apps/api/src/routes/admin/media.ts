@@ -70,17 +70,17 @@ const uploadRoute = createRoute({
     responses: {
         200: {
             description: "Upload result (partial success or info)",
-            content: { "application/json": { schema: successEnvelope(z.any()) } },
+            content: { "application/json": { schema: successEnvelope(z.object({ files: z.array(mediaSchema) }).passthrough()) } },
         },
         201: {
             description: "All files uploaded successfully",
-            content: { "application/json": { schema: successEnvelope(z.any()) } },
+            content: { "application/json": { schema: successEnvelope(z.object({ files: z.array(mediaSchema) }).passthrough()) } },
         },
         ...errorResponses,
     }
 });
 
-app.openapi(uploadRoute, async (c) => {
+app.openapi(uploadRoute, (async (c: any) => {
     const db = c.get("db");
     const body = await c.req.parseBody({ all: true });
 
@@ -90,15 +90,10 @@ app.openapi(uploadRoute, async (c) => {
 
     const folderId = (body["folderId"] as string) || null;
 
-    try {
-        const validFiles = (files as unknown[]).filter((f): f is File => f instanceof File);
-        const result = await uploadMediaFiles(db, validFiles, folderId);
-        return result.status === 201 ? created(c, result) : ok(c, result);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
-});
+    const validFiles = (files as unknown[]).filter((f): f is File => f instanceof File);
+    const result = await uploadMediaFiles(db, validFiles, folderId);
+    return result.partialSuccess ? ok(c, result) : created(c, result);
+}) as any);
 
 // ── Update Media (PATCH) ──
 
@@ -114,24 +109,19 @@ const patchMediaRoute = createRoute({
     responses: {
         200: {
             description: "Media updated",
-            content: { "application/json": { schema: successEnvelope(z.object({ file: z.any() })) } },
+            content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } },
         },
         ...errorResponses,
     }
 });
 
-app.openapi(patchMediaRoute, async (c) => {
+app.openapi(patchMediaRoute, (async (c: any) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    try {
-        const file = await updateMediaFile(db, id, data);
-        return ok(c, { file });
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 500, "ERROR", err.message || "Unknown error");
-    }
-});
+    const file = await updateMediaFile(db, id, data);
+    return ok(c, { file });
+}) as any);
 
 // ── Update Media (PUT) ──
 
@@ -147,24 +137,19 @@ const putMediaRoute = createRoute({
     responses: {
         200: {
             description: "Media updated",
-            content: { "application/json": { schema: successEnvelope(z.object({ file: z.any() })) } },
+            content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } },
         },
         ...errorResponses,
     }
 });
 
-app.openapi(putMediaRoute, async (c) => {
+app.openapi(putMediaRoute, (async (c: any) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    try {
-        const file = await updateMediaFile(db, id, data);
-        return ok(c, { file });
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 500, "ERROR", err.message || "Unknown error");
-    }
-});
+    const file = await updateMediaFile(db, id, data);
+    return ok(c, { file });
+}) as any);
 
 // ── Move Files ──
 
@@ -211,13 +196,8 @@ const deleteFileRoute = createRoute({
 app.openapi(deleteFileRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    try {
-        await deleteMediaFile(db, id);
-        return noContent(c);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 500, "ERROR", err.message || "Unknown error");
-    }
+    await deleteMediaFile(db, id);
+    return noContent(c);
 });
 
 // ── List Folders ──
@@ -261,7 +241,7 @@ const createFolderRoute = createRoute({
             description: "Folder created",
             content: {
                 "application/json": {
-                    schema: successEnvelope(z.object({ folder: z.any() })),
+                    schema: successEnvelope(z.object({ folder: mediaFolderSchema })),
                 },
             },
         },
@@ -269,12 +249,12 @@ const createFolderRoute = createRoute({
     }
 });
 
-app.openapi(createFolderRoute, async (c) => {
+app.openapi(createFolderRoute, (async (c: any) => {
     const db = c.get("db");
     const { name, parentId } = c.req.valid("json");
     const folder = await createMediaFolder(db, name, parentId);
     return created(c, { folder });
-});
+}) as any);
 
 // ── Delete Folder ──
 

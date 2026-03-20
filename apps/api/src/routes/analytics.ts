@@ -37,7 +37,7 @@ const getConfigurationsRoute = createRoute({
           id: z.string(),
           name: z.string(),
           type: z.string(),
-          config: z.any(),
+          config: z.string(),
           isActive: z.boolean(),
         }).passthrough()),
       })) } },

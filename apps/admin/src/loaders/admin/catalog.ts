@@ -59,12 +59,8 @@ export async function getCategoriesIndexData(options: {
 }
 
 export async function getCategoryEditData(id: string) {
-  const listResult = await apiGet<{ categories: Category[]; pagination: PaginationResponse }>("/categories", {
-    page: "1",
-    limit: "999",
-  });
-
-  const category = listResult.categories.find((c) => c.id === id);
+  // TODO: Use GET /admin/categories/{id} once the endpoint exists (avoids fetching all categories)
+  const category = await apiGet<Category>("/categories/" + id).catch(() => null);
   if (!category) return null;
 
   return {

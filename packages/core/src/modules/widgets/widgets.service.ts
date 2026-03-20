@@ -17,6 +17,19 @@ import {
 export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type UpdateWidgetInput };
 
 // ─────────────────────────────────────────
+// HTML Sanitization
+// ─────────────────────────────────────────
+
+/** Strip dangerous HTML patterns before serving widget content to storefront */
+function sanitizeWidgetHtml(html: string): string {
+    if (!html) return html;
+    return html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+        .replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/javascript\s*:/gi, "blocked:");
+}
+
+// ─────────────────────────────────────────
 // Queries
 // ─────────────────────────────────────────
 
@@ -64,6 +77,34 @@ export async function getWidgetById(db: Database, id: string) {
         .get() ?? null;
 }
 
+/** Get active widget by ID with sanitized HTML for storefront rendering */
+export async function getActiveWidgetById(db: Database, id: string) {
+    const widget = await db
+        .select()
+        .from(widgets)
+        .where(and(eq(widgets.id, id), eq(widgets.isActive, true), isNull(widgets.deletedAt)))
+        .get() ?? null;
+
+    if (widget && widget.htmlContent) {
+        widget.htmlContent = sanitizeWidgetHtml(widget.htmlContent);
+    }
+    return widget;
+}
+
+/** Get all active homepage widgets with sanitized HTML for storefront rendering */
+export async function getActiveHomepageWidgets(db: Database) {
+    const result = await db
+        .select()
+        .from(widgets)
+        .where(and(eq(widgets.isActive, true), isNull(widgets.deletedAt)))
+        .orderBy(asc(widgets.placementRule), asc(widgets.sortOrder));
+
+    return result.map((w) => ({
+        ...w,
+        htmlContent: w.htmlContent ? sanitizeWidgetHtml(w.htmlContent) : w.htmlContent,
+    }));
+}
+
 // ─────────────────────────────────────────
 // Mutations
 // ─────────────────────────────────────────
@@ -106,6 +147,9 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
 }
 
 export async function deleteWidget(db: Database, id: string): Promise<void> {
+    const existing = await getWidgetById(db, id);
+    if (!existing) throw new NotFoundError("Widget not found");
+
     await db
         .update(widgets)
         .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
@@ -113,6 +157,7 @@ export async function deleteWidget(db: Database, id: string): Promise<void> {
 }
 
 export async function bulkDeleteWidgets(db: Database, ids: string[], permanent = false): Promise<void> {
+    if (ids.length === 0) return;
     if (permanent) {
         await db.delete(widgets).where(inArray(widgets.id, ids));
     } else {
@@ -124,14 +169,17 @@ export async function bulkDeleteWidgets(db: Database, ids: string[], permanent =
 }
 
 export async function bulkActivateWidgets(db: Database, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
     await db.update(widgets).set({ isActive: true }).where(inArray(widgets.id, ids));
 }
 
 export async function bulkDeactivateWidgets(db: Database, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
     await db.update(widgets).set({ isActive: false }).where(inArray(widgets.id, ids));
 }
 
 export async function restoreWidgets(db: Database, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
     await db.update(widgets).set({ deletedAt: null }).where(inArray(widgets.id, ids));
 }
 
@@ -185,18 +233,23 @@ export async function restoreFromHistory(
         .where(and(eq(widgetHistory.id, historyId), eq(widgetHistory.widgetId, widgetId)));
     if (!entry) throw new NotFoundError("History entry not found");
 
-    // Auto-snapshot current state before overwriting
-    await createHistoryEntry(db, widgetId, "Auto-saved before restore");
-
-    // Overwrite widget with history entry content
-    await db
-        .update(widgets)
-        .set({
-            htmlContent: entry.htmlContent,
-            cssContent: entry.cssContent,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(widgets.id, widgetId));
+    // Atomic: snapshot current state + restore from history in a single batch
+    await db.batch([
+        db.insert(widgetHistory).values({
+            id: "whist_" + nanoid(),
+            widgetId,
+            htmlContent: widget.htmlContent,
+            cssContent: widget.cssContent,
+            reason: "Auto-saved before restore",
+        }),
+        db.update(widgets)
+            .set({
+                htmlContent: entry.htmlContent,
+                cssContent: entry.cssContent,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(eq(widgets.id, widgetId)),
+    ] as const);
 
     return { message: "Widget restored from history" };
 }

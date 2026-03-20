@@ -119,6 +119,7 @@ export interface StatusUpdateResult {
         orderId: string;
         customerEmail?: string;
         customerName: string;
-        notificationType: "order_shipped" | "order_delivered";
+        notificationType: string;
+        trackingId?: string;
     };
 }

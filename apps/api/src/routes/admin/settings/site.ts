@@ -88,7 +88,7 @@ const getGeneralRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Get general settings (header + footer config)",
     responses: {
-        200: { description: "General settings", content: { "application/json": { schema: successEnvelope(z.object({ headerConfig: z.any(), footerConfig: z.any() })) } } },
+        200: { description: "General settings", content: { "application/json": { schema: successEnvelope(z.object({ headerConfig: z.record(z.string(), z.unknown()), footerConfig: z.record(z.string(), z.unknown()) })) } } },
         ...errorResponses,
     }
 });
@@ -116,7 +116,7 @@ const navigationItemSchema: z.ZodType<unknown> = z.object({
     id: z.string(),
     title: z.string(),
     href: z.string().optional(),
-    subMenu: z.any().optional().openapi({
+    subMenu: z.array(z.record(z.string(), z.unknown())).optional().openapi({
         type: "array",
         items: {
             type: "object",
@@ -206,7 +206,7 @@ const getThemeRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Get theme settings",
     responses: {
-        200: { description: "Theme settings", content: { "application/json": { schema: successEnvelope(z.object({ colors: z.record(z.string(), z.any()) }).passthrough()) } } },
+        200: { description: "Theme settings", content: { "application/json": { schema: successEnvelope(z.object({ colors: z.record(z.string(), z.unknown()) }).passthrough()) } } },
         ...errorResponses,
     }
 });
@@ -218,7 +218,7 @@ app.openapi(getThemeRoute, async (c) => {
 });
 
 const saveThemeSchema = z.object({
-    colors: z.record(z.string(), z.any()),
+    colors: z.record(z.string(), z.unknown()),
 });
 
 const saveThemeRoute = createRoute({

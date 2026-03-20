@@ -19,7 +19,6 @@
     "./providers/*/*": "./src/providers/*/*.ts",
     "./search": "./src/search/index.ts",
     "./middleware-helper/*": "./src/middleware-helper/*.ts",
-    "./notification-utils": "./src/notification-utils.ts",
     "./utils/*": "./src/utils/*.ts"
   },
   "dependencies": {

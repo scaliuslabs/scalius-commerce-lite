@@ -308,6 +308,8 @@ export async function bulkDeleteCategories(
     categoryIds: string[],
     permanent = false,
 ): Promise<void> {
+    if (categoryIds.length === 0) return;
+
     const referencedProducts = await db
         .select({ id: products.id, name: products.name, categoryId: products.categoryId })
         .from(products)
@@ -364,6 +366,8 @@ export async function bulkDeleteCategories(
  * Restores soft-deleted categories.
  */
 export async function restoreCategories(db: Database, categoryIds: string[]): Promise<void> {
+    if (categoryIds.length === 0) return;
+
     await db
         .update(categories)
         .set({ deletedAt: null })

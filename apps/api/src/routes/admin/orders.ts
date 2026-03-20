@@ -26,7 +26,7 @@ app.route("/", adminOrdersRefundRoutes);
 const bulkShipResultItemSchema = z.object({
     orderId: z.string(),
     success: z.boolean(),
-    shipment: z.any().optional(),
+    shipment: z.object({ id: z.string(), status: z.string() }).passthrough().optional(),
     error: z.string().optional(),
 }).passthrough();
 
@@ -65,8 +65,8 @@ const orderFormDataSchema = z.object({
     discountAmount: z.number().nullable(),
     shippingCharge: z.number(),
     status: z.string(),
-    createdAt: z.any(),
-    updatedAt: z.any(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
 }).passthrough();
 
 const formDataItemSchema = z.object({

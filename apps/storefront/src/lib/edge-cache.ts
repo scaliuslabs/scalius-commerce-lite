@@ -7,6 +7,9 @@
  *
  * Cache keys include KV version so /api/purge-cache invalidation works correctly.
  * When KV version bumps, new cache keys are used, effectively invalidating old entries.
+ *
+ * Cache context is stored per-request in AsyncLocalStorage to prevent
+ * cross-request state contamination under concurrent Worker requests.
  */
 
 import { smartCache } from "./smart-cache";
@@ -28,12 +31,31 @@ interface CacheContext {
   waitUntil: ((promise: Promise<any>) => void) | null;
 }
 
-/**
- * Request-scoped cache context.
- * Set by middleware at the start of each request.
- * Provides access to Cloudflare Cache API and KV version.
- */
-let cacheContext: CacheContext = {
+// ---------------------------------------------------------------------------
+// AsyncLocalStorage for per-request cache context
+// ---------------------------------------------------------------------------
+
+interface AsyncLocalStorageLike<T> {
+  getStore(): T | undefined;
+  run<R>(store: T, fn: () => R): R;
+}
+
+let _cacheAls: AsyncLocalStorageLike<CacheContext>;
+
+if (import.meta.env.SSR) {
+  const { AsyncLocalStorage } = await import("node:async_hooks");
+  _cacheAls = new AsyncLocalStorage<CacheContext>();
+} else {
+  _cacheAls = {
+    getStore: () => undefined,
+    run: <R>(_store: CacheContext, fn: () => R) => fn(),
+  };
+}
+
+export const cacheContextAls: AsyncLocalStorageLike<CacheContext> = _cacheAls;
+
+/** Default context used when ALS is not yet initialized. */
+const DEFAULT_CONTEXT: CacheContext = {
   cache: null,
   kvVersion: "1",
   hostname: "localhost",
@@ -41,8 +63,15 @@ let cacheContext: CacheContext = {
 };
 
 /**
+ * Get the current cache context from ALS.
+ */
+function getCacheContext(): CacheContext {
+  return cacheContextAls.getStore() ?? DEFAULT_CONTEXT;
+}
+
+/**
  * Initialize the edge cache context for the current request.
- * Called by middleware at the start of each request.
+ * Called by middleware at the start of each request via cacheContextAls.run().
  *
  * @param cache The Cloudflare Cache API instance (caches.default)
  * @param kvVersion The current cache version from KV
@@ -55,18 +84,20 @@ export function setEdgeCacheContext(
   hostname: string,
   waitUntil: ((promise: Promise<any>) => void) | null,
 ): void {
-  // Clear inflight map on new request to prevent dead promise issues
-  // Per CF docs: module-level mutable state can cause issues with isolate reuse
-  // If a previous request was interrupted, its promise may never resolve
-  inflight.clear();
-  cacheContext = { cache, kvVersion, hostname, waitUntil };
+  // Store context so getEdgeCacheContext() works for callers that
+  // don't go through cacheContextAls.run() yet.
+  // The ALS path is preferred — this is a compatibility shim.
+  _fallbackContext = { cache, kvVersion, hostname, waitUntil };
 }
+
+/** Fallback for callers not yet within ALS.run(). */
+let _fallbackContext: CacheContext = DEFAULT_CONTEXT;
 
 /**
  * Get the current cache context (for use in cache warming).
  */
 export function getEdgeCacheContext(): CacheContext {
-  return cacheContext;
+  return cacheContextAls.getStore() ?? _fallbackContext;
 }
 
 /**
@@ -87,9 +118,10 @@ const inflight = new Map<string, Promise<any>>();
  * Cache key format: https://{hostname}/_api-cache/{key}?v={version}&build={BUILD_ID}
  */
 function buildL2CacheKey(key: string): string {
+  const ctx = getCacheContext();
   // Use actual hostname with a reserved path prefix for API cache
   // This follows Cloudflare's recommendation to avoid hostname mismatches
-  return `https://${cacheContext.hostname}/_api-cache/${key}?v=${cacheContext.kvVersion}&build=${BUILD_ID}`;
+  return `https://${ctx.hostname}/_api-cache/${key}?v=${ctx.kvVersion}&build=${BUILD_ID}`;
 }
 
 /**
@@ -97,14 +129,15 @@ function buildL2CacheKey(key: string): string {
  * Returns null if not found or if L2 is unavailable.
  */
 async function getFromL2<T>(key: string): Promise<T | null> {
-  if (!cacheContext.cache) return null;
+  const ctx = getCacheContext();
+  if (!ctx.cache) return null;
 
   try {
     const cacheKeyUrl = buildL2CacheKey(key);
 
     // Add timeout to cache.match to prevent hanging (per CF best practices)
     const cachedResponse = await Promise.race([
-      cacheContext.cache.match(cacheKeyUrl),
+      ctx.cache.match(cacheKeyUrl),
       new Promise<Response | undefined>((resolve) =>
         setTimeout(() => resolve(undefined), L2_CACHE_TIMEOUT_MS),
       ),
@@ -126,7 +159,8 @@ async function getFromL2<T>(key: string): Promise<T | null> {
  * Uses waitUntil to avoid blocking the response.
  */
 function storeInL2<T>(key: string, data: T, ttlSeconds: number): void {
-  if (!cacheContext.cache) return;
+  const ctx = getCacheContext();
+  if (!ctx.cache) return;
 
   const cacheKeyUrl = buildL2CacheKey(key);
   const response = new Response(JSON.stringify(data), {
@@ -138,15 +172,15 @@ function storeInL2<T>(key: string, data: T, ttlSeconds: number): void {
       // Track when this was cached for debugging
       "X-Cached-At": new Date().toISOString(),
       "X-Cache-Key": key,
-      "X-Cache-Version": cacheContext.kvVersion,
+      "X-Cache-Version": ctx.kvVersion,
     },
   });
 
-  const storePromise = cacheContext.cache.put(cacheKeyUrl, response);
+  const storePromise = ctx.cache.put(cacheKeyUrl, response);
 
   // Use waitUntil if available to avoid blocking response
-  if (cacheContext.waitUntil) {
-    cacheContext.waitUntil(storePromise);
+  if (ctx.waitUntil) {
+    ctx.waitUntil(storePromise);
   }
 }
 
@@ -165,12 +199,13 @@ export async function withEdgeCache<T>(
   options: EdgeCacheOptions = {},
 ): Promise<T | null> {
   const ttlSeconds = options.ttlSeconds ?? DEFAULT_TTL_SECONDS;
+  const ctx = getCacheContext();
 
   // Include KV version in L1 key so a version bump (from cache purge)
   // automatically misses L1 on ALL isolates — not just the one that
   // handled the purge request. This eliminates the cross-isolate
   // staleness window that existed when L1 used unversioned keys.
-  const l1Key = `${key}:v${cacheContext.kvVersion}`;
+  const l1Key = `${key}:v${ctx.kvVersion}`;
 
   // 1. Check L1 Cache (in-memory) - fastest
   const l1Cached = smartCache.get<T>(l1Key);
@@ -229,7 +264,6 @@ export async function withEdgeCache<T>(
  */
 export function clearMemoryCache(): void {
   smartCache.clear();
-  inflight.clear(); // Also clear any pending requests
 }
 
 /**
@@ -241,8 +275,6 @@ export function clearMemoryCache(): void {
  */
 export function clearL1ByPrefixes(prefixes: string[]): void {
   smartCache.deleteByPrefixes(prefixes);
-  // Also clear inflight requests that might be using stale data
-  inflight.clear();
 }
 
 export const CACHE_TTL = {

@@ -366,13 +366,8 @@ const deleteCollectionRoute = createRoute({
 app.openapi(deleteCollectionRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    try {
-        await deleteCollection(db, id);
-        return noContent(c);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    await deleteCollection(db, id);
+    return noContent(c);
 });
 
 // ── Permanent Delete Collection ──
@@ -394,13 +389,8 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    try {
-        await bulkDeleteCollections(db, [id], true);
-        return noContent(c);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    await bulkDeleteCollections(db, [id], true);
+    return noContent(c);
 });
 
 export { app as adminCollectionRoutes };

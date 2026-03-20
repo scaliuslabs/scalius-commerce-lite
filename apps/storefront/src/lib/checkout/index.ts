@@ -205,7 +205,7 @@ function clearCheckoutAndCart(): void {
   sessionStorage.removeItem("scalius_checkout_data");
   sessionStorage.removeItem("scalius_checkout_gateways");
   try {
-    localStorage.removeItem("scalius_cart");
+    localStorage.removeItem("cart");
   } catch {
     // ignore
   }

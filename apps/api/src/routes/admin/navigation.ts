@@ -73,8 +73,8 @@ const getConfigRoute = createRoute({
             content: {
                 "application/json": {
                     schema: successEnvelope(z.object({
-                        headerConfig: z.any(),
-                        footerConfig: z.any(),
+                        headerConfig: z.record(z.string(), z.unknown()),
+                        footerConfig: z.record(z.string(), z.unknown()),
                     })),
                 },
             },
@@ -117,7 +117,7 @@ const navigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() =>
 const saveConfigSchema = z.object({
     type: z.enum(["header", "footer"]),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Navigation config is intentionally flexible
-    config: z.record(z.string(), z.any()),
+    config: z.record(z.string(), z.unknown()),
 });
 
 const saveConfigRoute = createRoute({

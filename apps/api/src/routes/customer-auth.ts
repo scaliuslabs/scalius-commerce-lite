@@ -392,8 +392,8 @@ const getCustomerOrdersRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
-            orders: z.array(z.any()),
-            customer: z.any(),
+            orders: z.array(z.object({ id: z.string(), status: z.string(), totalAmount: z.number(), createdAt: z.union([z.string(), z.number()]).nullable() }).passthrough()),
+            customer: z.object({ id: z.string(), name: z.string(), phone: z.string() }).passthrough(),
           })),
         },
       },
@@ -402,7 +402,7 @@ const getCustomerOrdersRoute = createRoute({
   },
 });
 
-app.openapi(getCustomerOrdersRoute, async (c) => {
+app.openapi(getCustomerOrdersRoute, (async (c: any) => {
   const cookieHeader = c.req.header("Cookie") || null;
   const token = getSessionCookie(cookieHeader);
 
@@ -443,6 +443,6 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
     : sessionProfile;
 
   return ok(c, { orders: result.orders, customer });
-});
+}) as any);
 
 export { app as customerAuthRoutes };

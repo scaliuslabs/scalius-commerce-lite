@@ -7,6 +7,7 @@ import { shippingMethodsSettingsRoutes } from "./settings/shipping";
 import { deliveryProvidersRoutes } from "./settings/delivery-providers";
 import { heroSlidersRoutes } from "./settings/hero-sliders";
 import { metaConversionsAdminRoutes } from "./settings/meta-conversions-admin";
+import { notificationChannelsRoutes } from "./settings/notification-channels";
 
 const app = new OpenAPIHono();
 
@@ -20,5 +21,6 @@ app.route("/shipping-methods", shippingMethodsSettingsRoutes);
 app.route("/delivery-providers", deliveryProvidersRoutes);
 app.route("/hero-sliders", heroSlidersRoutes);
 app.route("/meta-conversions", metaConversionsAdminRoutes);
+app.route("/notification-channels", notificationChannelsRoutes);
 
 export { app as adminSettingsRoutes };

@@ -55,9 +55,9 @@ const searchRoute = createRoute({
     200: {
       description: "Search results",
       content: { "application/json": { schema: successEnvelope(z.object({
-        products: z.array(z.any()),
-        pages: z.array(z.any()),
-        categories: z.array(z.any()),
+        products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number() }).passthrough()),
+        pages: z.array(z.object({ id: z.string(), title: z.string(), slug: z.string() }).passthrough()),
+        categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough()),
         query: z.string(),
         timestamp: z.string().optional(),
       })) } },

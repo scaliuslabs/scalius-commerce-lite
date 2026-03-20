@@ -90,13 +90,8 @@ const createPageRoute = createRoute({
 
 app.openapi(createPageRoute, async (c) => {
     const db = c.get("db");
-    try {
-        const result = await createPage(db, c.req.valid("json"));
-        return created(c, result);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    const result = await createPage(db, c.req.valid("json"));
+    return created(c, result);
 });
 
 // ── Bulk Delete Pages ──
@@ -275,13 +270,8 @@ const updatePageRoute = createRoute({
 app.openapi(updatePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    try {
-        await updatePage(db, id, c.req.valid("json"));
-        return ok(c, {});
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    await updatePage(db, id, c.req.valid("json"));
+    return ok(c, {});
 });
 
 // ── Delete Page ──

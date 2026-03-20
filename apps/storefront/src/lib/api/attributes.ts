@@ -2,6 +2,7 @@
 
 import { getConfiguredSdkClient } from "./client";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { unwrapData } from "./unwrap";
 import {
   getApiV1AttributesFilterable,
   getApiV1AttributesCategorySlugByCategorySlug,
@@ -53,7 +54,7 @@ export async function getFilterableAttributes(
           result = await getApiV1AttributesFilterable({ client });
         }
 
-        return (result.data as any)?.data?.filters ?? null;
+        return unwrapData<{ filters: FilterableAttribute[] }>(result.data)?.filters ?? null;
       } catch (error: unknown) {
         console.error("Error fetching filterable attributes:", error);
         return null;

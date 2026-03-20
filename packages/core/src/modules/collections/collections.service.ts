@@ -123,7 +123,10 @@ export async function updateCollection(
     id: string,
     data: UpdateCollectionInput,
 ) {
-    const updateData: Partial<typeof collections.$inferInsert> & { updatedAt: Date } = { updatedAt: new Date() };
+    const existing = await db.select({ id: collections.id }).from(collections).where(eq(collections.id, id)).get();
+    if (!existing) throw new NotFoundError("Collection not found");
+
+    const updateData: Record<string, unknown> = { updatedAt: sql`(unixepoch())` };
     if (data.name !== undefined) updateData.name = data.name;
     if (data.type !== undefined) updateData.type = data.type;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
@@ -143,7 +146,7 @@ export async function deleteCollection(db: Database, id: string): Promise<void> 
 
     await db
         .update(collections)
-        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .set({ deletedAt: sql`(unixepoch())`, updatedAt: sql`(unixepoch())` })
         .where(eq(collections.id, id));
 }
 
@@ -152,34 +155,42 @@ export async function bulkDeleteCollections(
     ids: string[],
     permanent = false,
 ): Promise<void> {
+    if (ids.length === 0) return;
+
     if (permanent) {
         await db.delete(collections).where(inArray(collections.id, ids));
     } else {
         await db
             .update(collections)
-            .set({ deletedAt: new Date(), updatedAt: new Date() })
+            .set({ deletedAt: sql`(unixepoch())`, updatedAt: sql`(unixepoch())` })
             .where(inArray(collections.id, ids));
     }
 }
 
 export async function bulkActivateCollections(db: Database, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
     await db
         .update(collections)
-        .set({ isActive: true, updatedAt: new Date() })
+        .set({ isActive: true, updatedAt: sql`(unixepoch())` })
         .where(inArray(collections.id, ids));
 }
 
 export async function bulkDeactivateCollections(db: Database, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
     await db
         .update(collections)
-        .set({ isActive: false, updatedAt: new Date() })
+        .set({ isActive: false, updatedAt: sql`(unixepoch())` })
         .where(inArray(collections.id, ids));
 }
 
 export async function restoreCollections(db: Database, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
     await db
         .update(collections)
-        .set({ deletedAt: null, updatedAt: new Date() })
+        .set({ deletedAt: null, updatedAt: sql`(unixepoch())` })
         .where(inArray(collections.id, ids));
 }
 
@@ -187,12 +198,15 @@ export async function reorderCollections(
     db: Database,
     items: { id: string; sortOrder: number }[],
 ): Promise<void> {
-    for (const item of items) {
-        await db
-            .update(collections)
-            .set({ sortOrder: item.sortOrder, updatedAt: new Date() })
-            .where(eq(collections.id, item.id));
-    }
+    if (items.length === 0) return;
+
+    await db.batch(
+        items.map((item) =>
+            db.update(collections)
+                .set({ sortOrder: item.sortOrder, updatedAt: sql`(unixepoch())` })
+                .where(eq(collections.id, item.id))
+        ) as any
+    );
 }
 
 // ─────────────────────────────────────────

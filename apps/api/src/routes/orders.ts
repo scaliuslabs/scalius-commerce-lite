@@ -53,7 +53,7 @@ const getOrderRoute = createRoute({
     200: {
       description: "Order details",
       content: { "application/json": { schema: successEnvelope(z.object({
-        order: z.any(),
+        order: z.object({ id: z.string(), status: z.string(), totalAmount: z.number() }).passthrough(),
       })) } },
     },
     404: errorResponses[404],

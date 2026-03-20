@@ -2,6 +2,7 @@
 
 import { createApiUrl, fetchWithRetry, getConfiguredSdkAuthClient } from "./client";
 import type { Order, CreateOrderPayload } from "./types";
+import { unwrapData } from "./unwrap";
 import { getApiV1OrdersById } from "@scalius/api-client/sdk";
 
 /**
@@ -103,7 +104,7 @@ export async function getOrderDetails(orderId: string): Promise<Order | null> {
       path: { id: orderId },
     });
     if (error) return null;
-    return (data as any)?.data?.order ?? null;
+    return unwrapData<{ order: Order }>(data)?.order ?? null;
   } catch (error: unknown) {
     console.error(`Error fetching details for order "${orderId}":`, error);
     return null;

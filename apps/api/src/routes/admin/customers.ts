@@ -79,13 +79,8 @@ const createCustomerRoute = createRoute({
 app.openapi(createCustomerRoute, (async (c: any) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    try {
-        const result = await createCustomer(db, data);
-        return created(c, result);
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    const result = await createCustomer(db, data);
+    return created(c, result);
 }) as any);
 
 // ── Bulk Delete Customers ──
@@ -163,13 +158,8 @@ const updateCustomerRoute = createRoute({
 app.openapi(updateCustomerRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    try {
-        await updateCustomer(db, id, c.req.valid("json"));
-        return ok(c, {});
-    } catch (error: unknown) {
-        const err = error as { message?: string; statusCode?: number };
-        throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
-    }
+    await updateCustomer(db, id, c.req.valid("json"));
+    return ok(c, {});
 });
 
 // ── Delete Customer ──
@@ -249,7 +239,7 @@ const getHistoryRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Customer history data", content: { "application/json": { schema: successEnvelope(z.object({ customer: customerDetailSchema, history: z.array(z.object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), address: z.string().nullable(), city: z.string().nullable(), zone: z.string().nullable(), area: z.string().nullable(), cityName: z.string().nullable(), zoneName: z.string().nullable(), areaName: z.string().nullable(), changeType: z.string(), createdAt: z.any() }).passthrough()), orders: z.array(z.object({ id: z.string(), totalAmount: z.number(), status: z.string(), createdAt: z.any() }).passthrough()) })) } } },
+        200: { description: "Customer history data", content: { "application/json": { schema: successEnvelope(z.object({ customer: customerDetailSchema, history: z.array(z.object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), address: z.string().nullable(), city: z.string().nullable(), zone: z.string().nullable(), area: z.string().nullable(), cityName: z.string().nullable(), zoneName: z.string().nullable(), areaName: z.string().nullable(), changeType: z.string(), createdAt: z.union([z.string(), z.number()]) }).passthrough()), orders: z.array(z.object({ id: z.string(), totalAmount: z.number(), status: z.string(), createdAt: z.union([z.string(), z.number()]) }).passthrough()) })) } } },
         ...errorResponses,
     }
 });

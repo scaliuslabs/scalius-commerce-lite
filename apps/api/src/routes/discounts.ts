@@ -40,7 +40,7 @@ const validateDiscountRoute = createRoute({
       description: "Discount validation result",
       content: { "application/json": { schema: successEnvelope(z.object({
         valid: z.boolean(),
-        discount: z.any().optional(),
+        discount: z.object({ id: z.string(), code: z.string(), type: z.string(), discountValue: z.number() }).passthrough().optional(),
         discountAmount: z.number().optional(),
         message: z.string().optional(),
       }).passthrough()) } },
@@ -94,6 +94,7 @@ app.openapi(validateDiscountRoute, async (c) => {
       total || 0,
       cartItems,
       shippingCost || 0,
+      validationResult.applicableProductIds,
     );
 
     const enhancedDiscount = {
@@ -123,7 +124,9 @@ app.openapi(validateDiscountRoute, async (c) => {
     });
   }
 
-  return ok(c, validationResult);
+  // Strip internal applicableProductIds before sending to client
+  const { applicableProductIds: _, ...clientResult } = validationResult;
+  return ok(c, clientResult);
 });
 
 export { app as discountRoutes };
