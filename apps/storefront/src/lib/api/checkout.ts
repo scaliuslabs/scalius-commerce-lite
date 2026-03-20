@@ -1,8 +1,9 @@
 // src/lib/api/checkout.ts
 // Fetches checkout configuration from the backend (enabled payment gateways).
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { getApiV1CheckoutConfig } from "@scalius/api-client/sdk";
 
 export interface GatewayConfig {
   id: "stripe" | "sslcommerz" | "polar" | "cod";
@@ -42,16 +43,10 @@ export async function getCheckoutConfig(): Promise<CheckoutConfig> {
     "checkout_config",
     async () => {
       try {
-        const res = await fetchWithRetry(
-          createApiUrl("/checkout/config"),
-          {},
-          3,
-          5000,
-          false,
-        );
-        if (!res.ok) throw new Error(`Status ${res.status}`);
-        const json: { success: boolean; data: CheckoutConfig } = await res.json();
-        return json.data as CheckoutConfig;
+        const { data } = await getApiV1CheckoutConfig({
+          client: getConfiguredSdkClient(),
+        });
+        return (data as any)?.data ?? null;
       } catch (err: unknown) {
         console.error("[checkout] Failed to fetch gateway config:", err);
         return null;

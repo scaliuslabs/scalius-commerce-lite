@@ -1,7 +1,8 @@
 // src/lib/api/orders.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { createApiUrl, fetchWithRetry, getConfiguredSdkAuthClient } from "./client";
 import type { Order, CreateOrderPayload } from "./types";
+import { getApiV1OrdersById } from "@scalius/api-client/sdk";
 
 /**
  * Submits a new order to the backend.
@@ -14,6 +15,10 @@ export async function createOrder(
   payload: CreateOrderPayload,
 ): Promise<{ success: boolean; orderId?: string; error?: any }> {
   try {
+    // Use fetchWithRetry directly for orders because:
+    // 1. We need retries=0 to prevent double ingestion
+    // 2. We need 15s timeout for this heavy endpoint
+    // 3. The 202 polling logic requires raw response access
     const url = createApiUrl("/orders");
     const response = await fetchWithRetry(
       url,
@@ -93,16 +98,12 @@ export async function getOrderDetails(orderId: string): Promise<Order | null> {
   }
 
   try {
-    const url = createApiUrl(`/orders/${orderId}`);
-    const response = await fetchWithRetry(url);
-
-    if (!response.ok) {
-      if (response.status === 404) return null;
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const json: { success: boolean; data: { order: Order } } = await response.json();
-    return json.data.order;
+    const { data, error } = await getApiV1OrdersById({
+      client: getConfiguredSdkAuthClient(),
+      path: { id: orderId },
+    });
+    if (error) return null;
+    return (data as any)?.data?.order ?? null;
   } catch (error: unknown) {
     console.error(`Error fetching details for order "${orderId}":`, error);
     return null;

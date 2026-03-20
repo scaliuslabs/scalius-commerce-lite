@@ -1,5 +1,5 @@
 // src/lib/api/collections.ts
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type {
   Collection,
   CollectionWithProducts,
@@ -7,14 +7,10 @@ import type {
   Product,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
-
-// Define the expected structure of the API response for a single collection
-interface CollectionApiResponse {
-  collection: Collection;
-  categories?: CategorySummary[];
-  products?: Product[];
-  featuredProduct?: Product | null;
-}
+import {
+  getApiV1Collections,
+  getApiV1CollectionsById,
+} from "@scalius/api-client/sdk";
 
 /**
  * Fetches a list of all active collections.
@@ -26,15 +22,10 @@ export async function getAllCollections(): Promise<Collection[] | null> {
     "global_all_collections",
     async () => {
       try {
-        const url = createApiUrl("/collections");
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: { collections: Collection[] } } = await response.json();
-        return json.data.collections;
+        const { data } = await getApiV1Collections({
+          client: getConfiguredSdkClient(),
+        });
+        return (data as any)?.data?.collections ?? null;
       } catch (error: unknown) {
         console.error("Error fetching all collections:", error);
         return null;
@@ -62,23 +53,20 @@ export async function getCollectionById(
     `collection_by_id_${id}`,
     async () => {
       try {
-        const url = createApiUrl(`/collections/${id}`);
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
+        const { data, error } = await getApiV1CollectionsById({
+          client: getConfiguredSdkClient(),
+          path: { id },
+        });
+        if (error) return null;
 
-        if (!response.ok) {
-          if (response.status === 404) return null;
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: CollectionApiResponse } = await response.json();
-
-        if (json.data && json.data.collection) {
+        const d = (data as any)?.data;
+        if (d?.collection) {
           return {
-            ...json.data.collection,
-            categories: json.data.categories,
-            products: json.data.products,
-            featuredProduct: json.data.featuredProduct,
-          };
+            ...d.collection,
+            categories: d.categories as CategorySummary[] | undefined,
+            products: d.products as Product[] | undefined,
+            featuredProduct: d.featuredProduct as Product | null | undefined,
+          } as CollectionWithProducts;
         }
 
         return null;

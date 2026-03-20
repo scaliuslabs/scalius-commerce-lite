@@ -1,8 +1,9 @@
 // src/lib/api/navigation.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type { NavigationItem } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { getApiV1Navigation } from "@scalius/api-client/sdk";
 
 /**
  * Fetches navigation data for specified areas of the site.
@@ -17,22 +18,13 @@ export async function getNavigationData(
     `global_navigation_${type}`,
     async () => {
       try {
-        const url = createApiUrl(`/navigation?type=${type}&format=nested`);
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: {
-          success: boolean;
-          data: {
-            navigation: Record<string, NavigationItem[]>;
-          };
-        } = await response.json();
-
-        if (json.success && json.data.navigation) {
-          return json.data.navigation[type] || [];
+        const { data } = await getApiV1Navigation({
+          client: getConfiguredSdkClient(),
+          query: { type, format: "nested" } as any,
+        });
+        const d = (data as any)?.data;
+        if (d?.navigation) {
+          return (d.navigation[type] as NavigationItem[]) || [];
         }
         return null;
       } catch (error: unknown) {

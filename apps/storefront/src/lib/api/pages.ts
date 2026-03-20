@@ -1,8 +1,12 @@
 // src/lib/api/pages.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type { Page, PaginatedResponse } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import {
+  getApiV1PagesSlugBySlug,
+  getApiV1Pages,
+} from "@scalius/api-client/sdk";
 
 /**
  * Fetches a single CMS page by its URL-friendly slug.
@@ -22,16 +26,12 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
     `page_slug_${slug}`,
     async () => {
       try {
-        const url = createApiUrl(`/pages/slug/${slug}`);
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          if (response.status === 404) return null;
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: { page: Page } } = await response.json();
-        return json.success ? json.data.page : null;
+        const { data, error } = await getApiV1PagesSlugBySlug({
+          client: getConfiguredSdkClient(),
+          path: { slug },
+        });
+        if (error) return null;
+        return (data as any)?.data?.page ?? null;
       } catch (error: unknown) {
         console.error(`Error fetching page by slug "${slug}":`, error);
         return null;
@@ -74,24 +74,13 @@ export async function getAllPages(
     cacheKey,
     async () => {
       try {
-        const url = createApiUrl(
-          `/pages${queryString ? `?${queryString}` : ""}`,
-        );
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json = (await response.json()) as {
-          success: boolean;
-          data: {
-            pages: Page[];
-            pagination: PaginatedResponse<any>["pagination"];
-          };
-        };
-        if (json.success) {
-          return { data: json.data.pages, pagination: json.data.pagination };
+        const { data } = await getApiV1Pages({
+          client: getConfiguredSdkClient(),
+          query: options as Record<string, unknown>,
+        });
+        const d = (data as any)?.data;
+        if (d) {
+          return { data: d.pages as Page[], pagination: d.pagination };
         }
         return null;
       } catch (error: unknown) {

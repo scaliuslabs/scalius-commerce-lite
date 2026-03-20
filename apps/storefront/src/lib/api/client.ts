@@ -3,7 +3,19 @@
 /**
  * Core API Client for Scalius Commerce
  * Handles request creation, authentication, and resilient fetching.
+ *
+ * Exports two SDK client instances:
+ * - sdkClient: public endpoints (no JWT auth)
+ * - sdkAuthClient: authenticated endpoints (JWT auto-attached)
+ *
+ * Both route through service bindings in production and handle retries.
+ * Legacy fetchWithRetry/createApiUrl are preserved for modules that need
+ * custom retry/timeout parameters (orders polling, fire-and-forget tracking).
  */
+
+import { getRuntimeApiUrl, getRuntimeApiToken } from "./runtime-env";
+import { createClient, createConfig } from "@scalius/api-client/factory";
+import type { Client } from "@scalius/api-client/factory";
 
 // Resolve the API base URL lazily (called per-request, not at module init).
 //
@@ -15,7 +27,6 @@
 // 2. Client-side: window.__API_BASE_URL__ injected by Layout.astro
 // 3. Build-time: import.meta.env.PUBLIC_API_URL (from .env if present)
 // 4. Last resort: /api/v1 (same-origin proxy for local dev)
-import { getRuntimeApiUrl, getRuntimeApiToken } from "./runtime-env";
 
 function getApiBaseUrl(): string {
   // SSR: try runtime env (set per-request by middleware from locals.runtime.env)
@@ -199,4 +210,68 @@ export async function fetchWithRetry(
     console.error(`Fetch failed for ${url} after multiple retries.`, error);
     throw error;
   }
+}
+
+// ---------------------------------------------------------------------------
+// SDK Client Instances
+// ---------------------------------------------------------------------------
+// These use the storefront's service binding + retry infrastructure.
+// SDK functions accept { client } to route through these instead of the
+// default singleton client.
+
+/**
+ * Custom fetch that routes through service bindings in production
+ * and applies retry logic. Used as the transport for SDK clients.
+ */
+function createStorefrontFetch(requiresAuth: boolean) {
+  return async (request: Request): Promise<Response> => {
+    const url = request.url;
+    // Delegate to fetchWithRetry which handles service bindings, retries, auth
+    return fetchWithRetry(
+      url,
+      {
+        method: request.method,
+        headers: Object.fromEntries(request.headers.entries()),
+        body: request.method !== "GET" && request.method !== "HEAD"
+          ? await request.text()
+          : undefined,
+      },
+      3,    // retries
+      8000, // timeout
+      requiresAuth,
+    );
+  };
+}
+
+/** SDK client for public endpoints (no JWT auth). Used by most storefront calls. */
+export const sdkClient: Client = createClient(
+  createConfig({
+    baseUrl: "", // fetchWithRetry resolves the full URL from the request
+    fetch: createStorefrontFetch(false),
+  }),
+);
+
+/** SDK client for authenticated endpoints (JWT auto-attached). */
+export const sdkAuthClient: Client = createClient(
+  createConfig({
+    baseUrl: "", // fetchWithRetry resolves the full URL from the request
+    fetch: createStorefrontFetch(true),
+  }),
+);
+
+/**
+ * Reconfigure SDK clients with the current base URL.
+ * Must be called before any SDK request since base URL is resolved lazily.
+ * Returns the current base URL for convenience.
+ */
+export function getConfiguredSdkClient(): Client {
+  const baseUrl = getApiBaseUrl();
+  sdkClient.setConfig({ baseUrl });
+  return sdkClient;
+}
+
+export function getConfiguredSdkAuthClient(): Client {
+  const baseUrl = getApiBaseUrl();
+  sdkAuthClient.setConfig({ baseUrl });
+  return sdkAuthClient;
 }

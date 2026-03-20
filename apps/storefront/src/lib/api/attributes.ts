@@ -1,7 +1,12 @@
 // src/lib/api/attributes.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import {
+  getApiV1AttributesFilterable,
+  getApiV1AttributesCategorySlugByCategorySlug,
+  getApiV1AttributesSearchFilters,
+} from "@scalius/api-client/sdk";
 
 export interface FilterableAttribute {
   id: string;
@@ -31,27 +36,24 @@ export async function getFilterableAttributes(
     cacheKey,
     async () => {
       try {
-        let url: string;
+        const client = getConfiguredSdkClient();
+        let result: any;
 
         if (options.categorySlug) {
-          url = createApiUrl(
-            `/attributes/category-slug/${options.categorySlug}`,
-          );
+          result = await getApiV1AttributesCategorySlugByCategorySlug({
+            client,
+            path: { categorySlug: options.categorySlug },
+          });
         } else if (options.searchQuery) {
-          const params = new URLSearchParams({ q: options.searchQuery });
-          url = createApiUrl(`/attributes/search-filters?${params.toString()}`);
+          result = await getApiV1AttributesSearchFilters({
+            client,
+            query: { q: options.searchQuery },
+          });
         } else {
-          url = createApiUrl("/attributes/filterable");
+          result = await getApiV1AttributesFilterable({ client });
         }
 
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json: { success: boolean; data: { filters: FilterableAttribute[] } } = await response.json();
-        return json.data.filters;
+        return (result.data as any)?.data?.filters ?? null;
       } catch (error: unknown) {
         console.error("Error fetching filterable attributes:", error);
         return null;
