@@ -19,8 +19,15 @@ import {
 import { categories, products } from "@scalius/database/schema";
 import { isNull } from "drizzle-orm";
 import { NotFoundError, ApiError } from "../../utils/api-error";
-
 import { ok, created, noContent } from "../../utils/api-response";
+import {
+    successEnvelope,
+    paginatedEnvelope,
+    errorResponses,
+    messageResponse,
+    noContentResponse,
+} from "../../schemas/responses";
+import { collectionSchema } from "../../schemas/entities";
 const app = new OpenAPIHono();
 
 // ── Form Options (categories + products for collection form) ──
@@ -31,7 +38,14 @@ const formOptionsRoute = createRoute({
     tags: ["Admin - Collections"],
     summary: "Get categories and products for collection form",
     responses: {
-        200: { description: "Form options" }
+        200: {
+            description: "Form options",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                categories: z.array(z.object({ id: z.string(), name: z.string() })),
+                products: z.array(z.object({ id: z.string(), name: z.string(), price: z.number() })),
+            })) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -66,7 +80,11 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Collection list with pagination"  }
+        200: {
+            description: "Collection list with pagination",
+            content: { "application/json": { schema: paginatedEnvelope("collections", collectionSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -95,7 +113,11 @@ const createCollectionRoute = createRoute({
         body: { content: { "application/json": { schema: createCollectionSchema } } }
     },
     responses: {
-        201: { description: "Collection created"  }
+        201: {
+            description: "Collection created",
+            content: { "application/json": { schema: successEnvelope(collectionSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -126,7 +148,8 @@ const bulkDeleteRoute = createRoute({
         }
     },
     responses: {
-        204: { description: "Collections deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -148,7 +171,8 @@ const bulkActivateRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Collections activated" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -170,7 +194,8 @@ const bulkDeactivateRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Collections deactivated" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -192,7 +217,8 @@ const bulkRestoreRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Collections restored" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -214,7 +240,11 @@ const restoreRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Collection restored" }
+        200: {
+            description: "Collection restored",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -246,7 +276,11 @@ const reorderRoute = createRoute({
         }
     },
     responses: {
-        200: { description: "Collections reordered"  }
+        200: {
+            description: "Collections reordered",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -268,7 +302,11 @@ const getByIdRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Collection details"  }
+        200: {
+            description: "Collection details",
+            content: { "application/json": { schema: successEnvelope(collectionSchema) } },
+        },
+        404: errorResponses[404],
     }
 });
 
@@ -292,7 +330,11 @@ const updateCollectionRoute = createRoute({
         body: { content: { "application/json": { schema: updateCollectionSchema } } }
     },
     responses: {
-        200: { description: "Collection updated"  }
+        200: {
+            description: "Collection updated",
+            content: { "application/json": { schema: successEnvelope(collectionSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -314,7 +356,8 @@ const deleteCollectionRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Collection deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -341,7 +384,8 @@ const permanentDeleteRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Collection permanently deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 

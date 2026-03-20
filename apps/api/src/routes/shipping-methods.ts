@@ -5,6 +5,7 @@ import { eq, isNull, asc, and } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware
@@ -26,11 +27,21 @@ const listShippingMethodsRoute = createRoute({
   summary: "List all active shipping methods",
   responses: {
     200: {
-      description: "Shipping methods list"
+      description: "Shipping methods list",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        shippingMethods: z.array(z.object({
+          id: z.string(),
+          name: z.string(),
+          fee: z.number(),
+          description: z.string().nullable(),
+          isActive: z.boolean(),
+          sortOrder: z.number(),
+          createdAt: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        }).passthrough()),
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 

@@ -6,6 +6,8 @@ import { cacheMiddleware } from "../middleware/cache";
 import { ValidationError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
+import { deliveryLocationSchema } from "../schemas/entities";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware - locations change infrequently
@@ -37,11 +39,10 @@ const listCitiesRoute = createRoute({
   summary: "Get all active cities",
   responses: {
     200: {
-      description: "City list"
+      description: "City list",
+      content: { "application/json": { schema: successEnvelope(z.array(deliveryLocationSchema)) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -75,14 +76,11 @@ const listZonesRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Zone list"
+      description: "Zone list",
+      content: { "application/json": { schema: successEnvelope(z.array(deliveryLocationSchema)) } },
     },
-    400: {
-      description: "Bad request"
-    },
-    500: {
-      description: "Server error"
-    }
+    400: errorResponses[400],
+    500: errorResponses[500],
   }
 });
 
@@ -119,14 +117,11 @@ const listAreasRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Area list"
+      description: "Area list",
+      content: { "application/json": { schema: successEnvelope(z.array(deliveryLocationSchema)) } },
     },
-    400: {
-      description: "Bad request"
-    },
-    500: {
-      description: "Server error"
-    }
+    400: errorResponses[400],
+    500: errorResponses[500],
   }
 });
 

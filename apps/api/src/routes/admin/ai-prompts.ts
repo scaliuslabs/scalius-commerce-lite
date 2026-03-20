@@ -2,6 +2,7 @@
 // Admin OpenAPI routes for AI system prompts.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { errorResponses } from "../../schemas/responses";
 
 const app = new OpenAPIHono();
 
@@ -22,7 +23,8 @@ const getPromptRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "System prompt text" }
+        200: { description: "System prompt text", content: { "text/plain": { schema: z.string() } } },
+        ...errorResponses,
     }
 });
 

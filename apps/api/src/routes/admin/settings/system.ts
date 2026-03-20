@@ -8,6 +8,7 @@ import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 
 import { ok } from "../../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
+import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono();
 const MASKED = "••••••••••••";
 
@@ -15,12 +16,26 @@ const MASKED = "••••••••••••";
 // AUTH
 // ─────────────────────────────────────────
 
+const authSettingsResponseSchema = z.object({
+    authVerificationMethod: z.string(),
+    guestCheckoutEnabled: z.boolean(),
+    whatsappAccessToken: z.string(),
+    whatsappPhoneNumberId: z.string(),
+    whatsappTemplateName: z.string(),
+    checkoutMode: z.string(),
+    partialPaymentEnabled: z.boolean(),
+    partialPaymentAmount: z.number().nullable(),
+});
+
 const getAuthRoute = createRoute({
     method: "get",
     path: "/auth",
     tags: ["Admin - Settings"],
     summary: "Get auth/checkout settings",
-    responses: { 200: { description: "Auth settings"  } }
+    responses: {
+        200: { description: "Auth settings", content: { "application/json": { schema: successEnvelope(authSettingsResponseSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getAuthRoute, async (c) => {
@@ -61,7 +76,10 @@ const saveAuthRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save auth/checkout settings",
     request: { body: { content: { "application/json": { schema: saveAuthSchema } } } },
-    responses: { 200: { description: "Auth settings saved"  } }
+    responses: {
+        200: { description: "Auth settings saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveAuthRoute, async (c) => {
@@ -115,7 +133,10 @@ const getSecurityRoute = createRoute({
     path: "/security",
     tags: ["Admin - Settings"],
     summary: "Get security settings",
-    responses: { 200: { description: "Security settings"  } }
+    responses: {
+        200: { description: "Security settings", content: { "application/json": { schema: successEnvelope(z.object({ cspAllowedDomains: z.string() })) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getSecurityRoute, async (c) => {
@@ -143,7 +164,10 @@ const saveSecurityRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save security settings",
     request: { body: { content: { "application/json": { schema: saveSecuritySchema } } } },
-    responses: { 200: { description: "Security settings saved"  } }
+    responses: {
+        200: { description: "Security settings saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveSecurityRoute, async (c) => {
@@ -187,7 +211,10 @@ const getEmailRoute = createRoute({
     path: "/email",
     tags: ["Admin - Settings"],
     summary: "Get email settings (system)",
-    responses: { 200: { description: "Email settings"  } }
+    responses: {
+        200: { description: "Email settings", content: { "application/json": { schema: successEnvelope(z.object({ apiKey: z.string(), sender: z.string() })) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getEmailRoute, async (c) => {
@@ -218,7 +245,10 @@ const saveEmailRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save email settings (system)",
     request: { body: { content: { "application/json": { schema: saveEmailSchema } } } },
-    responses: { 200: { description: "Email settings saved"  } }
+    responses: {
+        200: { description: "Email settings saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveEmailRoute, async (c) => {
@@ -259,7 +289,10 @@ const getFirebaseRoute = createRoute({
     path: "/firebase",
     tags: ["Admin - Settings"],
     summary: "Get Firebase settings (system)",
-    responses: { 200: { description: "Firebase settings"  } }
+    responses: {
+        200: { description: "Firebase settings", content: { "application/json": { schema: successEnvelope(z.object({ serviceAccount: z.string(), publicConfig: z.record(z.string(), z.any()) })) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getFirebaseRoute, async (c) => {
@@ -293,7 +326,10 @@ const saveFirebaseRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save Firebase settings (system)",
     request: { body: { content: { "application/json": { schema: saveFirebaseSchema } } } },
-    responses: { 200: { description: "Firebase settings saved"  } }
+    responses: {
+        200: { description: "Firebase settings saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveFirebaseRoute, async (c) => {

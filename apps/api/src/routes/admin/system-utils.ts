@@ -9,6 +9,7 @@ import { ftsMatch } from "@scalius/core/search";
 
 import { ok, noContent } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError } from "../../utils/api-error";
+import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono();
 
 // --- Abandoned Checkouts ---
@@ -45,7 +46,8 @@ const listAbandonedCheckoutsRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Abandoned checkout list"  }
+        200: { description: "Abandoned checkout list", content: { "application/json": { schema: successEnvelope(z.object({ checkouts: z.array(z.object({ id: z.string(), checkoutId: z.string().nullable(), customerPhone: z.string().nullable(), checkoutData: z.string(), createdAt: z.any(), updatedAt: z.any() }).passthrough()), pagination: z.object({ page: z.number(), limit: z.number(), total: z.number(), totalPages: z.number() }) })) } } },
+        ...errorResponses,
     }
 });
 
@@ -149,7 +151,7 @@ const bulkDeleteCheckoutsRoute = createRoute({
         body: { content: { "application/json": { schema: bulkDeleteSchema } } }
     },
     responses: {
-        204: { description: "Checkouts deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -176,7 +178,7 @@ const deleteCheckoutsRoute = createRoute({
         body: { content: { "application/json": { schema: bulkDeleteSchema } } }
     },
     responses: {
-        204: { description: "Checkouts deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -209,7 +211,8 @@ const registerFcmTokenRoute = createRoute({
         body: { content: { "application/json": { schema: fcmTokenSchema } } }
     },
     responses: {
-        200: { description: "Token registered"  }
+        200: { description: "Token registered", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
     }
 });
 
@@ -268,7 +271,8 @@ const cleanupFcmTokensRoute = createRoute({
         body: { content: { "application/json": { schema: cleanupSchema } } }
     },
     responses: {
-        200: { description: "Cleanup result"  }
+        200: { description: "Cleanup result", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), cleanedCount: z.number() })) } } },
+        ...errorResponses,
     }
 });
 

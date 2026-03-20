@@ -10,6 +10,7 @@ import { eq, isNull, sql, and, desc, inArray, or } from "drizzle-orm";
 import { ftsMatch } from "@scalius/core/search";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
+import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for category routes
@@ -55,6 +56,17 @@ const unixToDate = (timestamp: number | null): Date | null => {
   return new Date(timestamp * 1000);
 };
 
+const storefrontCategorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  createdAt: z.string().nullable(),
+  metaTitle: z.string().nullable(),
+  metaDescription: z.string().nullable(),
+}).passthrough();
+
 // GET /categories — list all categories
 const listCategoriesRoute = createRoute({
   method: "get",
@@ -63,11 +75,12 @@ const listCategoriesRoute = createRoute({
   summary: "List all categories",
   responses: {
     200: {
-      description: "Category list"
+      description: "Category list",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        categories: z.array(storefrontCategorySchema),
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -112,14 +125,13 @@ const getCategoryBySlugRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Category details"
+      description: "Category details",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        category: storefrontCategorySchema,
+      })) } },
     },
-    404: {
-      description: "Category not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 
@@ -169,14 +181,16 @@ const getCategoryProductsRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Category products with pagination and filters"
+      description: "Category products with pagination and filters",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        category: z.any(),
+        products: z.array(z.any()),
+        pagination: paginationSchema,
+        appliedFilters: z.any(),
+      })) } },
     },
-    404: {
-      description: "Category not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 

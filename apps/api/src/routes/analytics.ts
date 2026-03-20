@@ -4,6 +4,7 @@ import { analytics, type Analytics } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
   processAnalyticsScript,
   shouldUsePartytown
@@ -30,11 +31,18 @@ const getConfigurationsRoute = createRoute({
   summary: "Get active analytics configurations",
   responses: {
     200: {
-      description: "Active analytics configurations"
+      description: "Active analytics configurations",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        analytics: z.array(z.object({
+          id: z.string(),
+          name: z.string(),
+          type: z.string(),
+          config: z.any(),
+          isActive: z.boolean(),
+        }).passthrough()),
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 

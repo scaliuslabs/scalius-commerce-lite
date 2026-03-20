@@ -19,6 +19,7 @@ import {
 import * as SettingsService from "@scalius/core/modules/settings/settings.service";
 
 import { ok } from "../../utils/api-response";
+import { successEnvelope, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono();
 
 interface VariantWithBuyNowUrl extends ProductVariant {
@@ -72,7 +73,8 @@ const batchDetailsRoute = createRoute({
         body: { content: { "application/json": { schema: batchDetailsSchema } } }
     },
     responses: {
-        200: { description: "Batch details"  }
+        200: { description: "Batch details", content: { "application/json": { schema: successEnvelope(z.object({ products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number(), url: z.string(), buyNowUrl: z.string(), finalPrice: z.number() }).passthrough()), categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), url: z.string() }).passthrough()) })) } } },
+        ...errorResponses,
     }
 });
 

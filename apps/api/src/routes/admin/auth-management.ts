@@ -10,6 +10,7 @@ import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, RateLimitError } from "../../utils/api-error";
+import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono();
 
 // Generate a secure random password
@@ -28,13 +29,27 @@ function generateTempPassword(length = 16): string {
 // Admin Users Management
 // ─────────────────────────────────────────
 
+const adminUserSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+    emailVerified: z.boolean(),
+    image: z.string().nullable(),
+    twoFactorEnabled: z.boolean(),
+    isSuperAdmin: z.boolean(),
+    createdAt: z.any(),
+    roles: z.array(z.object({ id: z.string(), name: z.string(), displayName: z.string() })),
+    overrides: z.object({ grants: z.array(z.string()), denials: z.array(z.string()) }),
+}).passthrough();
+
 const listUsersRoute = createRoute({
     method: "get",
     path: "/users",
     tags: ["Admin - Auth Management"],
     summary: "List all admin users",
     responses: {
-        200: { description: "Admin user list"  }
+        200: { description: "Admin user list", content: { "application/json": { schema: successEnvelope(z.object({ users: z.array(adminUserSchema) })) } } },
+        ...errorResponses,
     }
 });
 
@@ -115,7 +130,8 @@ const createUserRoute = createRoute({
         body: { content: { "application/json": { schema: createAdminSchema } } }
     },
     responses: {
-        201: { description: "Admin user created"  }
+        201: { description: "Admin user created", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), user: z.object({ id: z.string(), name: z.string(), email: z.string() }) })) } } },
+        ...errorResponses,
     }
 });
 
@@ -189,7 +205,8 @@ const deleteUserRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "User deleted"  }
+        200: { description: "User deleted", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
     }
 });
 
@@ -241,7 +258,8 @@ const changePasswordRoute = createRoute({
         body: { content: { "application/json": { schema: changePasswordSchema } } }
     },
     responses: {
-        200: { description: "Password changed"  }
+        200: { description: "Password changed", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
     }
 });
 
@@ -282,7 +300,8 @@ const updateProfileRoute = createRoute({
         body: { content: { "application/json": { schema: updateProfileSchema } } }
     },
     responses: {
-        200: { description: "Profile updated"  }
+        200: { description: "Profile updated", content: { "application/json": { schema: successEnvelope(z.object({ user: z.object({ id: z.string(), name: z.string(), email: z.string(), image: z.string().nullable() }).passthrough().nullable().optional() })) } } },
+        ...errorResponses,
     }
 });
 
@@ -321,7 +340,8 @@ const get2faInfoRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Get 2FA info for current user",
     responses: {
-        200: { description: "2FA info"  }
+        200: { description: "2FA info", content: { "application/json": { schema: successEnvelope(z.object({ method: z.string(), twoFactorEnabled: z.boolean(), email: z.string() })) } } },
+        ...errorResponses,
     }
 });
 
@@ -354,7 +374,8 @@ const mark2faVerifiedRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Mark session as 2FA verified",
     responses: {
-        200: { description: "Session marked as verified"  }
+        200: { description: "Session marked as verified", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
     }
 });
 
@@ -385,7 +406,8 @@ const update2faMethodRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ method: z.enum(["totp", "email"]) }) } } }
     },
     responses: {
-        200: { description: "Method updated"  }
+        200: { description: "Method updated", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
     }
 });
 
@@ -422,7 +444,8 @@ const verify2faRoute = createRoute({
         }
     },
     responses: {
-        200: { description: "2FA verified"  }
+        200: { description: "2FA verified", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
     }
 });
 
@@ -472,7 +495,8 @@ const getAccountSecurityRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Get current user account security data",
     responses: {
-        200: { description: "Account security data" }
+        200: { description: "Account security data", content: { "application/json": { schema: successEnvelope(z.object({ twoFactorMethod: z.string().nullable(), isSuperAdmin: z.boolean() })) } } },
+        ...errorResponses,
     }
 });
 
@@ -508,7 +532,7 @@ const adminExistsRoute = createRoute({
     tags: ["Admin - Setup"],
     summary: "Check if any admin user exists",
     responses: {
-        200: { description: "Admin exists status" }
+        200: { description: "Admin exists status", content: { "application/json": { schema: successEnvelope(z.object({ adminExists: z.boolean() })) } } },
     }
 });
 
@@ -534,7 +558,8 @@ const setupRoute = createRoute({
         body: { content: { "application/json": { schema: setupSchema } } }
     },
     responses: {
-        201: { description: "Admin account created"  }
+        201: { description: "Admin account created", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), userId: z.string() })) } } },
+        ...errorResponses,
     }
 });
 

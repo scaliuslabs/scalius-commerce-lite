@@ -19,6 +19,7 @@ import { PERMISSIONS, getPermissionsByCategory } from "@scalius/core/auth/rbac/p
 
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
+import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono();
 
 // -- Validation Schemas --
@@ -54,13 +55,25 @@ const removeOverrideSchema = z.object({
 
 // ── List Roles ──
 
+const roleSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    displayName: z.string(),
+    description: z.string().nullable(),
+    isSystem: z.boolean(),
+    permissions: z.array(z.string()),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+}).passthrough();
+
 const listRolesRoute = createRoute({
     method: "get",
     path: "/roles",
     tags: ["Admin - RBAC"],
     summary: "List all roles with permissions",
     responses: {
-        200: { description: "Role list"  }
+        200: { description: "Role list", content: { "application/json": { schema: successEnvelope(z.object({ roles: z.array(roleSchema) })) } } },
+        ...errorResponses,
     }
 });
 
@@ -97,11 +110,12 @@ const createRoleRoute = createRoute({
         body: { content: { "application/json": { schema: createRoleSchema } } }
     },
     responses: {
-        201: { description: "Role created"  }
+        201: { description: "Role created", content: { "application/json": { schema: successEnvelope(z.object({ role: roleSchema })) } } },
+        ...errorResponses,
     }
 });
 
-app.openapi(createRoleRoute, async (c) => {
+app.openapi(createRoleRoute, (async (c: any) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
@@ -163,7 +177,7 @@ app.openapi(createRoleRoute, async (c) => {
         console.error("Error creating role:", error);
         throw error;
     }
-});
+}) as any);
 
 // ── Get Role ──
 
@@ -176,11 +190,12 @@ const getRoleRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Role details"  }
+        200: { description: "Role details", content: { "application/json": { schema: successEnvelope(z.object({ role: roleSchema })) } } },
+        ...errorResponses,
     }
 });
 
-app.openapi(getRoleRoute, async (c) => {
+app.openapi(getRoleRoute, (async (c: any) => {
     try {
         const sessionUser = c.get("user");
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
@@ -213,7 +228,7 @@ app.openapi(getRoleRoute, async (c) => {
         console.error("Error fetching role:", error);
         throw error;
     }
-});
+}) as any);
 
 // ── Update Role ──
 
@@ -227,7 +242,8 @@ const updateRoleRoute = createRoute({
         body: { content: { "application/json": { schema: updateRoleSchema } } }
     },
     responses: {
-        200: { description: "Role updated"  }
+        200: { description: "Role updated", content: { "application/json": { schema: successEnvelope(z.object({ role: roleSchema })) } } },
+        ...errorResponses,
     }
 });
 
@@ -320,7 +336,8 @@ const deleteRoleRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Role deleted"  }
+        200: { description: "Role deleted", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
     }
 });
 
@@ -383,7 +400,8 @@ const assignRoleRoute = createRoute({
         body: { content: { "application/json": { schema: userRoleSchema } } }
     },
     responses: {
-        201: { description: "Role assigned"  }
+        201: { description: "Role assigned", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
     }
 });
 
@@ -449,7 +467,8 @@ const removeRoleRoute = createRoute({
         body: { content: { "application/json": { schema: userRoleSchema } } }
     },
     responses: {
-        200: { description: "Role removed"  }
+        200: { description: "Role removed", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
     }
 });
 
@@ -500,7 +519,8 @@ const setOverrideRoute = createRoute({
         body: { content: { "application/json": { schema: setOverrideSchema } } }
     },
     responses: {
-        200: { description: "Override set"  }
+        200: { description: "Override set", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
     }
 });
 
@@ -558,7 +578,8 @@ const removeOverrideRoute = createRoute({
         body: { content: { "application/json": { schema: removeOverrideSchema } } }
     },
     responses: {
-        200: { description: "Override removed"  }
+        200: { description: "Override removed", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
     }
 });
 
@@ -606,7 +627,8 @@ const listPermissionsRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "List all available permissions",
     responses: {
-        200: { description: "Permissions list"  }
+        200: { description: "Permissions list", content: { "application/json": { schema: successEnvelope(z.object({ permissions: z.array(z.object({ id: z.string(), name: z.string(), description: z.string().nullable(), category: z.string() }).passthrough()), grouped: z.record(z.string(), z.array(z.object({ name: z.string(), description: z.string() }))) })) } } },
+        ...errorResponses,
     }
 });
 
@@ -645,7 +667,8 @@ const myPermissionsRoute = createRoute({
     tags: ["Admin - RBAC"],
     summary: "Get current user's permission context",
     responses: {
-        200: { description: "User permission context"  }
+        200: { description: "User permission context", content: { "application/json": { schema: successEnvelope(z.object({ userId: z.string(), isSuperAdmin: z.boolean(), roles: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()), permissions: z.array(z.string()), overrides: z.object({ grants: z.array(z.string()), denials: z.array(z.string()) }) })) } } },
+        ...errorResponses,
     }
 });
 

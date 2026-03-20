@@ -16,9 +16,12 @@ const getMediaRoute = createRoute({
     }),
   },
   responses: {
-    200: { description: "Media file" },
+    200: {
+      description: "Media file",
+      content: { "*/*": { schema: z.any() } },
+    },
     404: { description: "Not found" },
-    500: { description: "R2 bucket not available" }
+    500: { description: "R2 bucket not available" },
   }
 });
 

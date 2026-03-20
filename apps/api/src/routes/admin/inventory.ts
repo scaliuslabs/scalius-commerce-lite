@@ -7,7 +7,114 @@ import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
+import { successEnvelope, paginationSchema, errorResponses } from "../../schemas/responses";
+
 const app = new OpenAPIHono();
+
+// ─── Inline response schemas ──
+
+const inventoryVariantSchema = z.object({
+    id: z.string(),
+    productId: z.string(),
+    productName: z.string().nullable(),
+    sku: z.string(),
+    size: z.string().nullable(),
+    color: z.string().nullable(),
+    price: z.number(),
+    stock: z.number(),
+    reservedStock: z.number(),
+    available: z.number(),
+    lowStockThreshold: z.number().nullable(),
+    version: z.number(),
+}).passthrough();
+
+const inventoryStatsSchema = z.object({
+    totalVariants: z.number(),
+    totalOnHand: z.number(),
+    totalReserved: z.number(),
+    totalAvailable: z.number(),
+    outOfStockCount: z.number(),
+    lowStockCount: z.number(),
+});
+
+const inventoryMovementSchema = z.object({
+    id: z.string(),
+    variantId: z.string(),
+    orderId: z.string().nullable(),
+    type: z.string(),
+    quantity: z.number(),
+    previousStock: z.number(),
+    newStock: z.number(),
+    notes: z.string().nullable(),
+    createdBy: z.string().nullable(),
+    createdAt: z.any(),
+    variantSku: z.string().nullable(),
+    productName: z.string().nullable(),
+}).passthrough();
+
+const inventoryAlertSchema = z.object({
+    id: z.string(),
+    variantId: z.string(),
+    productId: z.string(),
+    currentQty: z.number(),
+    threshold: z.number(),
+    alertStatus: z.string(),
+    alertSentAt: z.any().nullable(),
+    acknowledgedAt: z.any().nullable(),
+    resolvedAt: z.any().nullable(),
+    productName: z.string().nullable(),
+    variantSku: z.string().nullable(),
+    variantSize: z.string().nullable(),
+    variantColor: z.string().nullable(),
+}).passthrough();
+
+// The inventory overview endpoint returns different shapes per section
+const inventoryOverviewSchema = z.object({
+    variants: z.array(inventoryVariantSchema).optional(),
+    movements: z.array(inventoryMovementSchema).optional(),
+    alerts: z.array(inventoryAlertSchema).optional(),
+    pagination: paginationSchema.optional(),
+    stats: inventoryStatsSchema.optional(),
+}).passthrough();
+
+const adjustResultSchema = z.object({
+    success: z.boolean(),
+    variantId: z.string(),
+    previousStock: z.number(),
+    newStock: z.number(),
+    delta: z.number(),
+}).passthrough();
+
+const stockAdjustResultSchema = z.object({
+    variantId: z.string(),
+    previousStock: z.number(),
+    newStock: z.number(),
+    delta: z.number(),
+});
+
+const scannerLookupSchema = z.object({
+    variant: z.object({
+        id: z.string(),
+        sku: z.string(),
+        size: z.string().nullable(),
+        color: z.string().nullable(),
+        price: z.number(),
+        stock: z.number(),
+        reservedStock: z.number(),
+        available: z.number(),
+        barcode: z.string().nullable(),
+        barcodeType: z.string().nullable(),
+        lowStockThreshold: z.number().nullable(),
+    }).passthrough(),
+    product: z.object({
+        id: z.string(),
+        name: z.string(),
+        slug: z.string(),
+        price: z.number(),
+        isActive: z.boolean(),
+        imageUrl: z.string().nullable(),
+    }).passthrough(),
+});
 
 // ── List Inventory ──
 
@@ -27,7 +134,10 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Inventory overview"  }
+        200: {
+            description: "Inventory overview",
+            content: { "application/json": { schema: successEnvelope(inventoryOverviewSchema) } },
+        },
     }
 });
 
@@ -65,11 +175,14 @@ const alertsRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Inventory alerts"  }
+        200: {
+            description: "Inventory alerts",
+            content: { "application/json": { schema: successEnvelope(z.object({ alerts: z.array(inventoryAlertSchema) })) } },
+        },
     }
 });
 
-app.openapi(alertsRoute, async (c) => {
+app.openapi(alertsRoute, (async (c: any) => {
     const db = c.get("db");
     const { status } = c.req.valid("query");
     const result = await getInventoryOverview(db, {
@@ -81,7 +194,7 @@ app.openapi(alertsRoute, async (c) => {
         alertStatus: status
     });
     return ok(c, result);
-});
+}) as any);
 
 // ── Acknowledge Alert ──
 
@@ -102,7 +215,10 @@ const acknowledgeAlertRoute = createRoute({
         }
     },
     responses: {
-        200: { description: "Alert acknowledged"  }
+        200: {
+            description: "Alert acknowledged",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
     }
 });
 
@@ -125,7 +241,11 @@ const adjustRoute = createRoute({
         body: { content: { "application/json": { schema: adjustInventorySchema } } }
     },
     responses: {
-        200: { description: "Inventory adjusted"  }
+        200: {
+            description: "Inventory adjusted",
+            content: { "application/json": { schema: successEnvelope(adjustResultSchema) } },
+        },
+        404: errorResponses[404],
     }
 });
 
@@ -156,8 +276,11 @@ const scannerLookupRoute = createRoute({
         }),
     },
     responses: {
-        200: { description: "Variant found with product details and image" },
-        404: { description: "No variant found with this barcode or SKU" },
+        200: {
+            description: "Variant found with product details and image",
+            content: { "application/json": { schema: successEnvelope(scannerLookupSchema) } },
+        },
+        404: errorResponses[404],
     },
 });
 
@@ -192,7 +315,11 @@ const stockAdjustRoute = createRoute({
         },
     },
     responses: {
-        200: { description: "Stock adjusted" },
+        200: {
+            description: "Stock adjusted",
+            content: { "application/json": { schema: successEnvelope(stockAdjustResultSchema) } },
+        },
+        404: errorResponses[404],
     },
 });
 
@@ -230,7 +357,11 @@ const stockSetRoute = createRoute({
         },
     },
     responses: {
-        200: { description: "Stock set" },
+        200: {
+            description: "Stock set",
+            content: { "application/json": { schema: successEnvelope(stockAdjustResultSchema) } },
+        },
+        404: errorResponses[404],
     },
 });
 

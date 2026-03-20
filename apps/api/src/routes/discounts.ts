@@ -6,6 +6,7 @@ import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/
 import { ok } from "../utils/api-response";
 import { ValidationError } from "../utils/api-error";
 import { roundPrice } from "@scalius/shared/price-utils";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Schema for validating discount code
@@ -36,15 +37,16 @@ const validateDiscountRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Discount validation result"
-
+      description: "Discount validation result",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        valid: z.boolean(),
+        discount: z.any().optional(),
+        discountAmount: z.number().optional(),
+        message: z.string().optional(),
+      }).passthrough()) } },
     },
-    400: {
-      description: "Bad request"
-    },
-    500: {
-      description: "Server error"
-    }
+    400: errorResponses[400],
+    500: errorResponses[500],
   }
 });
 

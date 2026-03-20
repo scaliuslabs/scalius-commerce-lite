@@ -29,6 +29,7 @@ import {
 import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import { getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
 import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError } from "../utils/api-error";
+import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -62,11 +63,12 @@ const sendOtpRoute = createRoute({
     }
   },
   responses: {
-    200: { description: "OTP sent successfully"  },
-    400: { description: "Invalid input"  },
-    403: { description: "Method disabled"  },
-    429: { description: "Rate limited"  }
-  }
+    200: {
+      description: "OTP sent successfully",
+      content: { "application/json": { schema: successEnvelope(z.object({ message: z.string().optional() })) } },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(sendOtpRoute, async (c) => {
@@ -138,10 +140,19 @@ const verifyOtpRoute = createRoute({
     }
   },
   responses: {
-    200: { description: "OTP verified, session created"  },
-    400: { description: "Invalid code or input"  },
-    429: { description: "Too many attempts"  }
-  }
+    200: {
+      description: "OTP verified, session created",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            customer: z.object({}).passthrough().optional(),
+            isNewUser: z.boolean().optional(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(verifyOtpRoute, async (c) => {
@@ -193,8 +204,24 @@ const getMeRoute = createRoute({
   tags: ["Customer Auth"],
   summary: "Get current customer session info",
   responses: {
-    200: { description: "Customer session info"  }
-  }
+    200: {
+      description: "Customer session info",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            authenticated: z.boolean(),
+            customer: z.object({
+              email: z.string(),
+              name: z.string(),
+              phone: z.string().nullable(),
+              customerId: z.string().nullable(),
+            }).optional(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(getMeRoute, async (c) => {
@@ -231,8 +258,12 @@ const logoutRoute = createRoute({
   tags: ["Customer Auth"],
   summary: "Logout and clear session",
   responses: {
-    200: { description: "Logged out successfully"  }
-  }
+    200: {
+      description: "Logged out successfully",
+      content: { "application/json": { schema: messageResponse } },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(logoutRoute, async (c) => {
@@ -286,9 +317,25 @@ const updateProfileRoute = createRoute({
     }
   },
   responses: {
-    200: { description: "Profile updated"  },
-    401: { description: "Authentication required"  }
-  }
+    200: {
+      description: "Profile updated",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            customer: z.object({
+              email: z.string(),
+              name: z.string(),
+              phone: z.string().optional(),
+              address: z.string().optional(),
+              cityName: z.string().optional(),
+              zoneName: z.string().optional(),
+            }),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(updateProfileRoute, async (c) => {
@@ -340,9 +387,19 @@ const getCustomerOrdersRoute = createRoute({
   tags: ["Customer Auth"],
   summary: "Get orders for authenticated customer",
   responses: {
-    200: { description: "Customer orders list"  },
-    401: { description: "Authentication required"  }
-  }
+    200: {
+      description: "Customer orders list",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            orders: z.array(z.any()),
+            customer: z.any(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(getCustomerOrdersRoute, async (c) => {

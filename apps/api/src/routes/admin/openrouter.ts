@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import { ok } from "../../utils/api-response";
 import { ValidationError } from "../../utils/api-error";
+import { successEnvelope, errorResponses } from "../../schemas/responses";
 import {
     OPENROUTER_BASE_URL,
     OPENROUTER_HEADERS,
@@ -24,11 +25,12 @@ const listModelsRoute = createRoute({
     tags: ["Admin - OpenRouter"],
     summary: "List available OpenRouter models",
     responses: {
-        200: { description: "Model list"  }
+        200: { description: "Model list", content: { "application/json": { schema: successEnvelope(z.object({ models: z.array(z.object({ id: z.string(), name: z.string(), description: z.string().nullable().optional(), context_length: z.number().optional(), supportsVision: z.boolean(), modality: z.string() }).passthrough()) })) } } },
+        ...errorResponses,
     }
 });
 
-app.openapi(listModelsRoute, async (c) => {
+app.openapi(listModelsRoute, (async (c: any) => {
     try {
         const response = await fetch("https://openrouter.ai/api/v1/models");
 
@@ -66,7 +68,7 @@ app.openapi(listModelsRoute, async (c) => {
         console.error("Error fetching OpenRouter models:", error);
         throw error;
     }
-});
+}) as any);
 
 // ── Generate ──
 
@@ -89,11 +91,12 @@ const generateRoute = createRoute({
         body: { content: { "application/json": { schema: generateSchema } } }
     },
     responses: {
-        200: { description: "Generation result"  }
+        200: { description: "Generation result", content: { "application/json": { schema: successEnvelope(z.object({}).passthrough()) } } },
+        ...errorResponses,
     }
 });
 
-app.openapi(generateRoute, async (c) => {
+app.openapi(generateRoute, (async (c: any) => {
     const db = c.get("db");
     try {
         const apiKeyRecord = await db
@@ -208,7 +211,7 @@ app.openapi(generateRoute, async (c) => {
         console.error("Error in generate endpoint:", error);
         throw error;
     }
-});
+}) as any);
 
 // ── Generate Staged ──
 
@@ -229,11 +232,12 @@ const generateStagedRoute = createRoute({
         body: { content: { "application/json": { schema: generateStagedSchema } } }
     },
     responses: {
-        200: { description: "Staged generation result"  }
+        200: { description: "Staged generation result", content: { "application/json": { schema: successEnvelope(z.object({ stage: z.string().optional(), sectionIndex: z.number().optional(), totalSections: z.number().optional() }).passthrough()) } } },
+        ...errorResponses,
     }
 });
 
-app.openapi(generateStagedRoute, async (c) => {
+app.openapi(generateStagedRoute, (async (c: any) => {
     const db = c.get("db");
     try {
         const apiKeyRecord = await db
@@ -335,6 +339,6 @@ app.openapi(generateStagedRoute, async (c) => {
         console.error("Error in staged generation endpoint:", error);
         throw error;
     }
-});
+}) as any);
 
 export { app as adminOpenRouterRoutes };

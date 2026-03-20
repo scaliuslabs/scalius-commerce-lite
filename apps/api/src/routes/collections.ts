@@ -3,6 +3,7 @@ import { collections, products, categories } from "@scalius/database/schema";
 import { eq, isNull, and, inArray, desc, sql } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 // Create an OpenAPIHono app for collection routes
@@ -44,6 +45,27 @@ const formatTimestamp = (
   return null;
 };
 
+const storefrontCollectionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+  config: z.any(),
+  sortOrder: z.number(),
+  isActive: z.boolean(),
+  createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+}).passthrough();
+
+const collectionProductSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  price: z.number(),
+  slug: z.string(),
+  discountPercentage: z.number().nullable(),
+  imageUrl: z.string().nullable(),
+  discountedPrice: z.number(),
+}).passthrough();
+
 // GET /collections — list all active collections
 const listCollectionsRoute = createRoute({
   method: "get",
@@ -52,11 +74,12 @@ const listCollectionsRoute = createRoute({
   summary: "List all active collections",
   responses: {
     200: {
-      description: "Collection list"
+      description: "Collection list",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        collections: z.array(storefrontCollectionSchema),
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -108,14 +131,16 @@ const getCollectionByIdRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Collection details with resolved products"
+      description: "Collection details with resolved products",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        collection: z.any(),
+        categories: z.array(z.any()),
+        products: z.array(z.any()),
+        featuredProduct: z.any().optional(),
+      })) } },
     },
-    404: {
-      description: "Collection not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 

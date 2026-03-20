@@ -5,6 +5,7 @@ import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for navigation routes
 const app = new OpenAPIHono();
 
@@ -47,14 +48,13 @@ const getNavigationRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Navigation data"
+      description: "Navigation data",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        navigation: z.record(z.string(), z.any()),
+      })) } },
     },
-    404: {
-      description: "Navigation configuration not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 
@@ -172,14 +172,17 @@ const getNavigationByIdRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Navigation menu data"
+      description: "Navigation menu data",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        menu: z.object({
+          id: z.string(),
+          name: z.string(),
+          items: z.array(z.any()),
+        }),
+      })) } },
     },
-    404: {
-      description: "Navigation menu not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 

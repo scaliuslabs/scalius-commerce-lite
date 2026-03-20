@@ -11,8 +11,23 @@ import {
     updateSortOrderSchema
 } from "@scalius/core/modules/products/products.types";
 import { NotFoundError, ConflictError, ValidationError } from "../../utils/api-error";
-
 import { ok, created, noContent } from "../../utils/api-response";
+import {
+    successEnvelope,
+    paginatedEnvelope,
+    paginationSchema,
+    errorResponses,
+    messageResponse,
+    idResponse,
+    noContentResponse,
+} from "../../schemas/responses";
+import {
+    productSummarySchema,
+    productDetailSchema,
+    productStatsSchema,
+    productVariantSchema,
+} from "../../schemas/entities";
+
 const app = new OpenAPIHono();
 
 // ── Product Stats ──
@@ -23,7 +38,11 @@ const statsRoute = createRoute({
     tags: ["Admin - Products"],
     summary: "Get product and category dashboard statistics",
     responses: {
-        200: { description: "Product stats" }
+        200: {
+            description: "Product stats",
+            content: { "application/json": { schema: successEnvelope(productStatsSchema) } },
+        },
+        ...errorResponses,
     },
 });
 
@@ -51,8 +70,31 @@ const barcodeLookupRoute = createRoute({
         }),
     },
     responses: {
-        200: { description: "Variant found" },
-        404: { description: "No variant found with this barcode" },
+        200: {
+            description: "Variant found",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                variant: z.object({
+                    id: z.string(),
+                    sku: z.string(),
+                    size: z.string().nullable(),
+                    color: z.string().nullable(),
+                    weight: z.number().nullable(),
+                    price: z.number(),
+                    stock: z.number(),
+                    reservedStock: z.number(),
+                    barcode: z.string().nullable(),
+                    barcodeType: z.string().nullable(),
+                }).passthrough(),
+                product: z.object({
+                    id: z.string(),
+                    name: z.string(),
+                    slug: z.string(),
+                    price: z.number(),
+                    isActive: z.boolean(),
+                }).passthrough(),
+            })) } },
+        },
+        404: errorResponses[404],
     },
 });
 
@@ -85,7 +127,11 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Product list with pagination"  }
+        200: {
+            description: "Product list with pagination",
+            content: { "application/json": { schema: paginatedEnvelope("products", productSummarySchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -115,7 +161,11 @@ const createProductRoute = createRoute({
         body: { content: { "application/json": { schema: createProductSchema } } }
     },
     responses: {
-        201: { description: "Product created"  }
+        201: {
+            description: "Product created",
+            content: { "application/json": { schema: idResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -144,7 +194,8 @@ const bulkDeleteRoute = createRoute({
         body: { content: { "application/json": { schema: bulkDeleteSchema } } }
     },
     responses: {
-        204: { description: "Products deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -173,8 +224,11 @@ const getByIdRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Product details" },
-        404: { description: "Product not found" }
+        200: {
+            description: "Product details",
+            content: { "application/json": { schema: successEnvelope(productDetailSchema) } },
+        },
+        404: errorResponses[404],
     }
 });
 
@@ -198,7 +252,11 @@ const updateProductRoute = createRoute({
         body: { content: { "application/json": { schema: updateProductSchema } } }
     },
     responses: {
-        200: { description: "Product updated"  }
+        200: {
+            description: "Product updated",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -229,7 +287,8 @@ const deleteProductRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Product deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -251,7 +310,11 @@ const restoreProductRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Product restored"  }
+        200: {
+            description: "Product restored",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -273,7 +336,8 @@ const permanentDeleteRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Product permanently deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -303,7 +367,11 @@ const createVariantRoute = createRoute({
         body: { content: { "application/json": { schema: createVariantSchema } } }
     },
     responses: {
-        201: { description: "Variant created"  }
+        201: {
+            description: "Variant created",
+            content: { "application/json": { schema: successEnvelope(productVariantSchema as z.ZodTypeAny) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -313,6 +381,7 @@ app.openapi(createVariantRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await ProductsVariants.createVariant(db, id, data);
+        if (!result) throw new NotFoundError("Failed to create variant");
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
@@ -331,7 +400,13 @@ const listVariantsRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Variant list"  }
+        200: {
+            description: "Variant list",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                variants: z.array(productVariantSchema),
+            }) as z.ZodTypeAny) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -354,7 +429,11 @@ const updateVariantRoute = createRoute({
         body: { content: { "application/json": { schema: updateVariantSchema } } }
     },
     responses: {
-        200: { description: "Variant updated"  }
+        200: {
+            description: "Variant updated",
+            content: { "application/json": { schema: successEnvelope(productVariantSchema as z.ZodTypeAny) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -364,6 +443,7 @@ app.openapi(updateVariantRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await ProductsVariants.updateVariant(db, id, variantId, data);
+        if (!result) throw new NotFoundError("Variant not found");
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -385,7 +465,8 @@ const deleteVariantRoute = createRoute({
         params: z.object({ id: z.string(), variantId: z.string() }),
     },
     responses: {
-        204: { description: "Variant deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -413,7 +494,14 @@ const bulkCreateVariantsRoute = createRoute({
         body: { content: { "application/json": { schema: bulkCreateVariantsSchema } } }
     },
     responses: {
-        201: { description: "Variants created"  }
+        201: {
+            description: "Variants created",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                variants: z.array(productVariantSchema),
+                count: z.number(),
+            }) as z.ZodTypeAny) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -442,7 +530,8 @@ const bulkDeleteVariantsRoute = createRoute({
         body: { content: { "application/json": { schema: bulkDeleteVariantsSchema } } }
     },
     responses: {
-        204: { description: "Variants deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -466,7 +555,11 @@ const bulkUpdateVariantsRoute = createRoute({
         body: { content: { "application/json": { schema: bulkUpdateVariantsSchema } } }
     },
     responses: {
-        200: { description: "Variants updated"  }
+        200: {
+            description: "Variants updated",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -490,7 +583,11 @@ const duplicateVariantRoute = createRoute({
         params: z.object({ id: z.string(), variantId: z.string() }),
     },
     responses: {
-        201: { description: "Variant duplicated"  }
+        201: {
+            description: "Variant duplicated",
+            content: { "application/json": { schema: successEnvelope(productVariantSchema as z.ZodTypeAny) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -499,6 +596,7 @@ app.openapi(duplicateVariantRoute, async (c) => {
     const { id, variantId } = c.req.valid("param");
     try {
         const variant = await ProductsVariants.duplicateVariant(db, id, variantId);
+        if (!variant) throw new NotFoundError("Failed to duplicate variant");
         return created(c, variant);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -517,7 +615,14 @@ const getVariantSortOrderRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Sort order data"  }
+        200: {
+            description: "Sort order data",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                colors: z.array(z.object({ value: z.string(), sortOrder: z.number() })),
+                sizes: z.array(z.object({ value: z.string(), sortOrder: z.number() })),
+            })) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -540,7 +645,11 @@ const updateVariantSortOrderRoute = createRoute({
         body: { content: { "application/json": { schema: updateSortOrderSchema } } }
     },
     responses: {
-        200: { description: "Sort order updated"  }
+        200: {
+            description: "Sort order updated",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 

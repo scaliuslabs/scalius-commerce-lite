@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 import { ok } from "../../../utils/api-response";
+import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono();
 const MASKED_VALUE = "••••••••••••";
 
@@ -16,7 +17,10 @@ const getOpenRouterRoute = createRoute({
     path: "/openrouter",
     tags: ["Admin - Settings"],
     summary: "Get OpenRouter API key status",
-    responses: { 200: { description: "API key status"  } }
+    responses: {
+        200: { description: "API key status", content: { "application/json": { schema: successEnvelope(z.object({ apiKey: z.string() })) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getOpenRouterRoute, async (c) => {
@@ -45,7 +49,10 @@ const saveOpenRouterRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save OpenRouter API key",
     request: { body: { content: { "application/json": { schema: saveOpenRouterSchema } } } },
-    responses: { 200: { description: "API key saved"  } }
+    responses: {
+        200: { description: "API key saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveOpenRouterRoute, async (c) => {

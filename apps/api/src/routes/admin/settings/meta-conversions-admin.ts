@@ -4,6 +4,7 @@ import { sql, eq, desc, count } from "drizzle-orm";
 import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
 
 import { ok, created } from "../../../utils/api-response";
+import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono();
 const MASKED_VALUE = "••••••••••••";
 
@@ -17,20 +18,34 @@ const metaConversionsSettingsSchema = z.object({
 
 // ── Get Settings ──
 
+const metaConversionsSettingsResponseSchema = z.object({
+    id: z.string(),
+    pixelId: z.string().nullable(),
+    accessToken: z.string().nullable(),
+    testEventCode: z.string().nullable(),
+    isEnabled: z.boolean(),
+    logRetentionDays: z.number(),
+    createdAt: z.number().nullable(),
+    updatedAt: z.number().nullable(),
+}).passthrough();
+
 const getSettingsRoute = createRoute({
     method: "get",
     path: "/",
     tags: ["Admin - Meta Conversions"],
     summary: "Get Meta Conversions API settings",
-    responses: { 200: { description: "Settings"  } }
+    responses: {
+        200: { description: "Settings", content: { "application/json": { schema: successEnvelope(z.object({ settings: metaConversionsSettingsResponseSchema.nullable() })) } } },
+        ...errorResponses,
+    }
 });
 
-app.openapi(getSettingsRoute, async (c) => {
+app.openapi(getSettingsRoute, (async (c: any) => {
     const db = c.get("db");
     const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
     const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
     return ok(c, { settings: maskedSettings });
-});
+}) as any);
 
 // ── Save Settings ──
 
@@ -40,10 +55,14 @@ const saveSettingsRoute = createRoute({
     tags: ["Admin - Meta Conversions"],
     summary: "Save Meta Conversions API settings",
     request: { body: { content: { "application/json": { schema: metaConversionsSettingsSchema } } } },
-    responses: { 200: { description: "Settings saved"  } }
+    responses: {
+        200: { description: "Settings saved", content: { "application/json": { schema: successEnvelope(metaConversionsSettingsResponseSchema) } } },
+        201: { description: "Settings created", content: { "application/json": { schema: successEnvelope(metaConversionsSettingsResponseSchema) } } },
+        ...errorResponses,
+    }
 });
 
-app.openapi(saveSettingsRoute, async (c) => {
+app.openapi(saveSettingsRoute, (async (c: any) => {
     const db = c.get("db");
     const validation = c.req.valid("json");
     let { pixelId, accessToken, testEventCode, isEnabled, logRetentionDays } = validation;
@@ -68,9 +87,19 @@ app.openapi(saveSettingsRoute, async (c) => {
     if (!result) throw new Error("Failed to save settings");
     const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
     return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
-});
+}) as any);
 
 // ── Get Logs ──
+
+const metaConversionsLogSchema = z.object({
+    id: z.string(),
+    eventName: z.string().nullable(),
+    status: z.string().nullable(),
+    requestPayload: z.string().nullable(),
+    responseBody: z.string().nullable(),
+    errorMessage: z.string().nullable(),
+    createdAt: z.number().nullable(),
+}).passthrough();
 
 const getLogsRoute = createRoute({
     method: "get",
@@ -83,10 +112,17 @@ const getLogsRoute = createRoute({
             limit: z.coerce.number().default(20).openapi({ description: "Items per page" })
         })
     },
-    responses: { 200: { description: "Logs with pagination"  } }
+    responses: {
+        200: { description: "Logs with pagination", content: { "application/json": { schema: successEnvelope(z.object({
+            logs: z.array(metaConversionsLogSchema),
+            pagination: z.object({ page: z.number(), limit: z.number(), total: z.number(), totalPages: z.number() }),
+            retention: z.object({ days: z.number(), hours: z.number() }),
+        })) } } },
+        ...errorResponses,
+    }
 });
 
-app.openapi(getLogsRoute, async (c) => {
+app.openapi(getLogsRoute, (async (c: any) => {
     const db = c.get("db");
     const query = c.req.valid("query");
     const page = query.page;
@@ -105,7 +141,7 @@ app.openapi(getLogsRoute, async (c) => {
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         retention: { days: retentionDays, hours: retentionDays * 24 }
     });
-});
+}) as any);
 
 // ── Clear Logs ──
 
@@ -114,7 +150,10 @@ const clearLogsRoute = createRoute({
     path: "/logs",
     tags: ["Admin - Meta Conversions"],
     summary: "Clear all Meta Conversions API logs",
-    responses: { 200: { description: "Logs cleared"  } }
+    responses: {
+        200: { description: "Logs cleared", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(clearLogsRoute, async (c) => {
@@ -130,7 +169,10 @@ const manualCleanupRoute = createRoute({
     path: "/logs",
     tags: ["Admin - Meta Conversions"],
     summary: "Trigger manual log cleanup",
-    responses: { 200: { description: "Cleanup result"  } }
+    responses: {
+        200: { description: "Cleanup result", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(manualCleanupRoute, async (c) => {

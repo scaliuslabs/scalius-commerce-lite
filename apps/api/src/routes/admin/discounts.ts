@@ -8,6 +8,8 @@ import { eq, sql } from "drizzle-orm";
 import { NotFoundError, ApiError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
+import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses } from "../../schemas/responses";
+import { discountSchema } from "../../schemas/entities";
 const app = new OpenAPIHono();
 
 // ── List Discounts ──
@@ -28,7 +30,8 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Discount list with pagination"  }
+        200: { description: "Discount list with pagination", content: { "application/json": { schema: paginatedEnvelope("discounts", discountSchema) } } },
+        ...errorResponses,
     }
 });
 
@@ -57,11 +60,12 @@ const createDiscountRoute = createRoute({
         body: { content: { "application/json": { schema: createDiscountSchema } } }
     },
     responses: {
-        201: { description: "Discount created"  }
+        201: { description: "Discount created", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
+        ...errorResponses,
     }
 });
 
-app.openapi(createDiscountRoute, async (c) => {
+app.openapi(createDiscountRoute, (async (c: any) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     try {
@@ -71,7 +75,7 @@ app.openapi(createDiscountRoute, async (c) => {
         const err = error as { message?: string; statusCode?: number };
         throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
-});
+}) as any);
 
 // ── Bulk Delete Discounts ──
 
@@ -93,7 +97,7 @@ const bulkDeleteRoute = createRoute({
         }
     },
     responses: {
-        204: { description: "Discounts deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -122,7 +126,7 @@ const bulkRestoreRoute = createRoute({
         }
     },
     responses: {
-        204: { description: "Discounts restored" }
+        204: noContentResponse,
     }
 });
 
@@ -145,7 +149,8 @@ const getByIdRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Discount details"  }
+        200: { description: "Discount details", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
+        ...errorResponses,
     }
 });
 
@@ -169,11 +174,12 @@ const updateDiscountRoute = createRoute({
         body: { content: { "application/json": { schema: updateDiscountSchema } } }
     },
     responses: {
-        200: { description: "Discount updated"  }
+        200: { description: "Discount updated", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
+        ...errorResponses,
     }
 });
 
-app.openapi(updateDiscountRoute, async (c) => {
+app.openapi(updateDiscountRoute, (async (c: any) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
@@ -184,7 +190,7 @@ app.openapi(updateDiscountRoute, async (c) => {
         const err = error as { message?: string; statusCode?: number };
         throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
-});
+}) as any);
 
 // ── Delete Discount ──
 
@@ -197,7 +203,7 @@ const deleteDiscountRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Discount deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -219,7 +225,7 @@ const permanentDeleteRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Discount permanently deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -250,7 +256,8 @@ const toggleStatusRoute = createRoute({
         }
     },
     responses: {
-        200: { description: "Discount status toggled" }
+        200: { description: "Discount status toggled", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), isActive: z.boolean() })) } } },
+        ...errorResponses,
     }
 });
 
@@ -275,7 +282,8 @@ const restoreDiscountRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Discount restored"  }
+        200: { description: "Discount restored", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
     }
 });
 

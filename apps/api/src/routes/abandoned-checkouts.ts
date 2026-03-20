@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { authMiddleware } from "../middleware/auth";
 import { rateLimit } from "@scalius/shared/rate-limit";
 import { RateLimitError } from "../utils/api-error";
+import { messageResponse, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -37,8 +38,12 @@ const saveAbandonedCheckoutRoute = createRoute({
     }
   },
   responses: {
-    200: { description: "Abandoned checkout saved"  }
-  }
+    200: {
+      description: "Abandoned checkout saved",
+      content: { "application/json": { schema: messageResponse } },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(saveAbandonedCheckoutRoute, async (c) => {
@@ -100,8 +105,12 @@ const cleanupRoute = createRoute({
     }
   },
   responses: {
-    200: { description: "Abandoned checkout cleaned up"  }
-  }
+    200: {
+      description: "Abandoned checkout cleaned up",
+      content: { "application/json": { schema: messageResponse } },
+    },
+    ...errorResponses,
+  },
 });
 
 // Auth middleware for cleanup

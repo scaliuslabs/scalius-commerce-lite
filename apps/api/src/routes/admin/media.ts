@@ -5,6 +5,14 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
 import { ApiError } from "../../utils/api-error";
 import {
+    successEnvelope,
+    paginatedEnvelope,
+    messageResponse,
+    noContentResponse,
+    errorResponses,
+} from "../../schemas/responses";
+import { mediaSchema, mediaFolderSchema } from "../../schemas/entities";
+import {
     listMediaFiles,
     uploadMediaFiles,
     updateMediaFile,
@@ -36,7 +44,11 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Media list with pagination"  }
+        200: {
+            description: "Media list with pagination",
+            content: { "application/json": { schema: paginatedEnvelope("files", mediaSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -56,7 +68,15 @@ const uploadRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Upload media files",
     responses: {
-        200: { description: "Upload result"  }
+        200: {
+            description: "Upload result (partial success or info)",
+            content: { "application/json": { schema: successEnvelope(z.any()) } },
+        },
+        201: {
+            description: "All files uploaded successfully",
+            content: { "application/json": { schema: successEnvelope(z.any()) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -92,7 +112,11 @@ const patchMediaRoute = createRoute({
         body: { content: { "application/json": { schema: updateMediaSchema } } }
     },
     responses: {
-        200: { description: "Media updated"  }
+        200: {
+            description: "Media updated",
+            content: { "application/json": { schema: successEnvelope(z.object({ file: z.any() })) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -121,7 +145,11 @@ const putMediaRoute = createRoute({
         body: { content: { "application/json": { schema: updateMediaSchema } } }
     },
     responses: {
-        200: { description: "Media updated"  }
+        200: {
+            description: "Media updated",
+            content: { "application/json": { schema: successEnvelope(z.object({ file: z.any() })) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -149,7 +177,11 @@ const moveRoute = createRoute({
         body: { content: { "application/json": { schema: moveMediaSchema } } }
     },
     responses: {
-        200: { description: "Files moved"  }
+        200: {
+            description: "Files moved",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -171,7 +203,8 @@ const deleteFileRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "File deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -195,7 +228,15 @@ const listFoldersRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "List all media folders",
     responses: {
-        200: { description: "Folder list"  }
+        200: {
+            description: "Folder list",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({ folders: z.array(mediaFolderSchema) })),
+                },
+            },
+        },
+        ...errorResponses,
     }
 });
 
@@ -216,7 +257,15 @@ const createFolderRoute = createRoute({
         body: { content: { "application/json": { schema: createFolderSchema } } }
     },
     responses: {
-        201: { description: "Folder created"  }
+        201: {
+            description: "Folder created",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({ folder: z.any() })),
+                },
+            },
+        },
+        ...errorResponses,
     }
 });
 
@@ -238,7 +287,8 @@ const deleteFolderRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Folder deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 

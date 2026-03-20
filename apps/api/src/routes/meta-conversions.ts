@@ -5,6 +5,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { sendCapiEvent } from "@scalius/core/integrations/meta/conversions-api";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const eventPayloadSchema = z.object({
@@ -90,7 +91,13 @@ const postEventRoute = createRoute({
     }
   },
   responses: {
-    200: { description: "Event received and processing"  }
+    200: {
+      description: "Event received and processing",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        message: z.string(),
+        eventId: z.string(),
+      })) } },
+    },
   }
 });
 

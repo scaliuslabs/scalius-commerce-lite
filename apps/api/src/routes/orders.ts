@@ -19,6 +19,7 @@ import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const unixToDate = (timestamp: number | null): Date | null => {
@@ -49,8 +50,13 @@ const getOrderRoute = createRoute({
     }),
   },
   responses: {
-    200: { description: "Order details"  },
-    404: { description: "Order not found"  }
+    200: {
+      description: "Order details",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        order: z.any(),
+      })) } },
+    },
+    404: errorResponses[404],
   }
 });
 
@@ -140,9 +146,21 @@ const getOrderStatusRoute = createRoute({
     }),
   },
   responses: {
-    200: { description: "Order status"  },
-    202: { description: "Order is processing"  },
-    400: { description: "Invalid token"  }
+    200: {
+      description: "Order status",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        status: z.string(),
+        orderId: z.string().optional(),
+      }).passthrough()) } },
+    },
+    202: {
+      description: "Order is processing",
+      content: { "application/json": { schema: z.object({
+        success: z.literal(true),
+        data: z.object({ status: z.string(), message: z.string() }),
+      }) } },
+    },
+    400: errorResponses[400],
   }
 });
 
@@ -251,8 +269,20 @@ const createOrderRoute = createRoute({
     }
   },
   responses: {
-    202: { description: "Order placed in processing queue"  },
-    400: { description: "Validation error"  }
+    202: {
+      description: "Order placed in processing queue",
+      content: { "application/json": { schema: z.object({
+        success: z.literal(true),
+        data: z.object({
+          checkoutToken: z.string(),
+          orderId: z.string(),
+          paymentMethod: z.string(),
+          totalAmount: z.number(),
+          message: z.string(),
+        }),
+      }) } },
+    },
+    400: errorResponses[400],
   }
 });
 

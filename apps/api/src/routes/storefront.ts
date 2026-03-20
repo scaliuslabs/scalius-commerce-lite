@@ -10,6 +10,7 @@ import { CACHE_TTLS } from "../utils/cache-ttls";
 import { getHomepageData, getLayoutData } from "@scalius/core/modules/storefront/storefront.service";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // GET /storefront/homepage — consolidated homepage data
@@ -20,11 +21,15 @@ const homepageRoute = createRoute({
   summary: "Get consolidated homepage data (SEO, hero, widgets, collections + products)",
   responses: {
     200: {
-      description: "Homepage data"
+      description: "Homepage data",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        seo: z.any(),
+        hero: z.any(),
+        widgets: z.array(z.any()),
+        collections: z.array(z.any()),
+      }).passthrough()) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -47,11 +52,17 @@ const layoutRoute = createRoute({
   summary: "Get consolidated layout data (analytics, header, navigation, footer, currency, theme)",
   responses: {
     200: {
-      description: "Layout data"
+      description: "Layout data",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        analytics: z.any(),
+        header: z.any(),
+        navigation: z.any(),
+        footer: z.any(),
+        currency: z.any(),
+        theme: z.any(),
+      }).passthrough()) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -74,11 +85,12 @@ const cspRoute = createRoute({
   summary: "Get CSP allowed domains configuration",
   responses: {
     200: {
-      description: "CSP configuration"
+      description: "CSP configuration",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        cspAllowedDomains: z.string(),
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 

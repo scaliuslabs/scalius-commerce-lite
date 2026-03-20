@@ -14,7 +14,126 @@ import { eq, and, isNull } from "drizzle-orm";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
+import { successEnvelope, paginatedEnvelope, messageResponse, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
+import { orderSummarySchema, orderDetailSchema, orderItemSchema, deliveryShipmentSchema, productVariantSchema } from "../../schemas/entities";
+
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+// ─── Inline response schemas (route-specific, not reusable enough for entities) ──
+
+const bulkShipResultItemSchema = z.object({
+    orderId: z.string(),
+    success: z.boolean(),
+    shipment: z.any().optional(),
+    error: z.string().optional(),
+}).passthrough();
+
+const bulkShipResponseSchema = successEnvelope(z.object({
+    totalProcessed: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
+    results: z.array(bulkShipResultItemSchema),
+}));
+
+const codTrackingSchema = z.object({
+    id: z.string(),
+    orderId: z.string(),
+    status: z.string(),
+    collectedBy: z.string().nullable(),
+    collectedAmount: z.number().nullable(),
+    receiptUrl: z.string().nullable(),
+    reason: z.string().nullable(),
+    notes: z.string().nullable(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+}).passthrough().nullable();
+
+const codActionResponseSchema = successEnvelope(z.object({
+    success: z.boolean(),
+    message: z.string(),
+}));
+
+const fulfillmentResultSchema = successEnvelope(z.object({
+    success: z.boolean(),
+    shipmentId: z.string(),
+    isFinalShipment: z.boolean(),
+    fulfillmentStatus: z.string(),
+}));
+
+const enhancedShipmentSchema = deliveryShipmentSchema.extend({
+    providerName: z.string().nullable(),
+    lastChecked: z.string().or(z.date()).nullable(),
+}).passthrough();
+
+const refreshedShipmentSchema = deliveryShipmentSchema.extend({
+    providerName: z.string().nullable(),
+    providerType: z.string().nullable(),
+    lastChecked: z.string(),
+    statusChanged: z.boolean(),
+    orderStatusUpdate: z.boolean(),
+}).passthrough();
+
+const refundResultSchema = z.object({
+    success: z.boolean(),
+    gateway: z.string(),
+    refundId: z.string().optional(),
+    amount: z.number(),
+    isFullRefund: z.boolean(),
+    error: z.string().optional(),
+}).passthrough();
+
+const returnResultSchema = successEnvelope(z.object({
+    success: z.boolean(),
+    refundResult: refundResultSchema.optional(),
+    error: z.string().optional(),
+}));
+
+const orderPaymentSchema = z.object({
+    id: z.string(),
+    orderId: z.string(),
+    paymentMethod: z.string(),
+    amount: z.number(),
+    status: z.string(),
+}).passthrough();
+
+const paymentPlanSchema = z.object({
+    id: z.string(),
+    orderId: z.string(),
+    totalAmount: z.number(),
+    paidAmount: z.number(),
+}).passthrough().nullable();
+
+const orderFormDataSchema = z.object({
+    id: z.string(),
+    customerName: z.string(),
+    customerPhone: z.string(),
+    customerEmail: z.string().nullable(),
+    shippingAddress: z.string(),
+    city: z.string(),
+    zone: z.string(),
+    area: z.string().nullable(),
+    notes: z.string().nullable(),
+    discountAmount: z.number().nullable(),
+    shippingCharge: z.number(),
+    status: z.string(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+}).passthrough();
+
+const formDataItemSchema = z.object({
+    productId: z.string(),
+    variantId: z.string().nullable(),
+    quantity: z.number(),
+    price: z.number(),
+});
+
+const formDataProductSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    price: z.number(),
+    discountPercentage: z.number(),
+    variants: z.array(productVariantSchema),
+}).passthrough();
 
 // ─── GET / (List) ────────────────────────────────────────────────────────────
 
@@ -37,7 +156,10 @@ const listOrdersRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Paginated order list"  }
+        200: {
+            description: "Paginated order list",
+            content: { "application/json": { schema: paginatedEnvelope("orders", orderSummarySchema) } },
+        },
     }
 });
 
@@ -69,7 +191,10 @@ const createOrderRoute = createRoute({
         body: { content: { "application/json": { schema: createOrderSchema } } }
     },
     responses: {
-        201: { description: "Order created"  }
+        201: {
+            description: "Order created",
+            content: { "application/json": { schema: idResponse } },
+        },
     }
 });
 
@@ -91,7 +216,7 @@ const bulkDeleteRoute = createRoute({
         body: { content: { "application/json": { schema: bulkDeleteOrderSchema } } }
     },
     responses: {
-        204: { description: "Orders deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -113,11 +238,14 @@ const bulkShipRoute = createRoute({
         body: { content: { "application/json": { schema: bulkShipOrderSchema } } }
     },
     responses: {
-        200: { description: "Bulk ship results"  }
+        200: {
+            description: "Bulk ship results",
+            content: { "application/json": { schema: bulkShipResponseSchema } },
+        },
     }
 });
 
-app.openapi(bulkShipRoute, async (c) => {
+app.openapi(bulkShipRoute, (async (c: any) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options);
@@ -128,7 +256,7 @@ app.openapi(bulkShipRoute, async (c) => {
         failureCount: results.length - successCount,
         results
     });
-});
+}) as any);
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 
@@ -141,18 +269,21 @@ const getOrderRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Order details"  },
-        404: { description: "Order not found"  }
+        200: {
+            description: "Order details",
+            content: { "application/json": { schema: successEnvelope(orderDetailSchema) } },
+        },
+        404: errorResponses[404],
     }
 });
 
-app.openapi(getOrderRoute, async (c) => {
+app.openapi(getOrderRoute, (async (c: any) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const result = await OrdersService.getOrderDetails(db, orderId);
     if (!result) throw new NotFoundError("Order not found");
     return ok(c, result);
-});
+}) as any);
 
 // ─── PUT /:id ────────────────────────────────────────────────────────────────
 
@@ -166,7 +297,10 @@ const updateOrderRoute = createRoute({
         body: { content: { "application/json": { schema: updateOrderSchema } } }
     },
     responses: {
-        200: { description: "Order updated"  }
+        200: {
+            description: "Order updated",
+            content: { "application/json": { schema: idResponse } },
+        },
     }
 });
 
@@ -193,7 +327,7 @@ const deleteOrderRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Order deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -215,7 +349,7 @@ const restoreOrderRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Order restored" }
+        204: noContentResponse,
     }
 });
 
@@ -237,7 +371,7 @@ const permanentDeleteRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Order permanently deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -259,15 +393,18 @@ const getCodRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "COD tracking info"  }
+        200: {
+            description: "COD tracking info",
+            content: { "application/json": { schema: successEnvelope(z.object({ tracking: codTrackingSchema })) } },
+        },
     }
 });
 
-app.openapi(getCodRoute, async (c) => {
+app.openapi(getCodRoute, (async (c: any) => {
     const orderId = c.req.valid("param").id;
     const tracking = await c.get("db").select().from(require("@scalius/database/schema").codTracking).where(require("drizzle-orm").eq(require("@scalius/database/schema").codTracking.orderId, orderId)).get();
     return ok(c, { tracking: tracking ?? null });
-});
+}) as any);
 
 // ─── POST /:id/cod ───────────────────────────────────────────────────────────
 
@@ -290,7 +427,10 @@ const postCodRoute = createRoute({
         body: { content: { "application/json": { schema: codActionSchema } } }
     },
     responses: {
-        200: { description: "COD action processed"  }
+        200: {
+            description: "COD action processed",
+            content: { "application/json": { schema: codActionResponseSchema } },
+        },
     }
 });
 
@@ -313,7 +453,10 @@ const getFulfillRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Order shipments"  }
+        200: {
+            description: "Order shipments",
+            content: { "application/json": { schema: successEnvelope(z.object({ shipments: z.array(deliveryShipmentSchema) })) } },
+        },
     }
 });
 
@@ -346,7 +489,10 @@ const postFulfillRoute = createRoute({
         body: { content: { "application/json": { schema: fulfillSchema } } }
     },
     responses: {
-        201: { description: "Fulfillment created"  }
+        201: {
+            description: "Fulfillment created",
+            content: { "application/json": { schema: fulfillmentResultSchema } },
+        },
     }
 });
 
@@ -370,7 +516,10 @@ const updateStatusRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ status: z.string() }) } } }
     },
     responses: {
-        200: { description: "Status updated"  }
+        200: {
+            description: "Status updated",
+            content: { "application/json": { schema: messageResponse } },
+        },
     }
 });
 
@@ -409,7 +558,10 @@ const getItemsRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Order items"  }
+        200: {
+            description: "Order items",
+            content: { "application/json": { schema: successEnvelope(z.array(orderItemSchema)) } },
+        },
     }
 });
 
@@ -455,11 +607,14 @@ const getPaymentsRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Order payments"  }
+        200: {
+            description: "Order payments",
+            content: { "application/json": { schema: successEnvelope(z.object({ payments: z.array(orderPaymentSchema), plan: paymentPlanSchema })) } },
+        },
     }
 });
 
-app.openapi(getPaymentsRoute, async (c) => {
+app.openapi(getPaymentsRoute, (async (c: any) => {
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
@@ -469,7 +624,7 @@ app.openapi(getPaymentsRoute, async (c) => {
     ]);
 
     return ok(c, { payments, plan: plan ?? null });
-});
+}) as any);
 
 // ─── GET /:id/shipments ──────────────────────────────────────────────────────
 
@@ -482,7 +637,10 @@ const getShipmentsRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Order shipments"  }
+        200: {
+            description: "Order shipments",
+            content: { "application/json": { schema: successEnvelope(z.array(enhancedShipmentSchema)) } },
+        },
     }
 });
 
@@ -522,8 +680,11 @@ const createShipmentRoute = createRoute({
         body: { content: { "application/json": { schema: createShipmentSchema } } }
     },
     responses: {
-        201: { description: "Shipment created"  },
-        400: { description: "Failed to create shipment"  }
+        201: {
+            description: "Shipment created",
+            content: { "application/json": { schema: successEnvelope(enhancedShipmentSchema) } },
+        },
+        400: errorResponses[400],
     }
 });
 
@@ -571,8 +732,11 @@ const getShipmentRoute = createRoute({
         params: z.object({ id: z.string(), shipmentId: z.string() }),
     },
     responses: {
-        200: { description: "Shipment details"  },
-        404: { description: "Shipment not found"  }
+        200: {
+            description: "Shipment details",
+            content: { "application/json": { schema: successEnvelope(deliveryShipmentSchema) } },
+        },
+        404: errorResponses[404],
     }
 });
 
@@ -598,8 +762,11 @@ const deleteShipmentRoute = createRoute({
         params: z.object({ id: z.string(), shipmentId: z.string() }),
     },
     responses: {
-        200: { description: "Shipment deleted"  },
-        404: { description: "Shipment not found"  }
+        200: {
+            description: "Shipment deleted",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
+        404: errorResponses[404],
     }
 });
 
@@ -626,12 +793,15 @@ const checkShipmentStatusRoute = createRoute({
         params: z.object({ id: z.string(), shipmentId: z.string() }),
     },
     responses: {
-        200: { description: "Status checked"  },
-        404: { description: "Shipment not found"  }
+        200: {
+            description: "Status checked",
+            content: { "application/json": { schema: successEnvelope(deliveryShipmentSchema) } },
+        },
+        404: errorResponses[404],
     }
 });
 
-app.openapi(checkShipmentStatusRoute, async (c) => {
+app.openapi(checkShipmentStatusRoute, (async (c: any) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
     const db = c.get("db");
 
@@ -643,7 +813,7 @@ app.openapi(checkShipmentStatusRoute, async (c) => {
         ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
     const updatedShipment = await checkShipmentStatus(db, shipmentId, encryptionKey);
     return ok(c, updatedShipment);
-});
+}) as any);
 
 // ─── POST /:id/shipments/{shipmentId}/refresh ─────────────────────────────────
 
@@ -656,9 +826,12 @@ const refreshShipmentRoute = createRoute({
         params: z.object({ id: z.string(), shipmentId: z.string() }),
     },
     responses: {
-        200: { description: "Shipment refreshed"  },
-        400: { description: "Failed to refresh"  },
-        404: { description: "Shipment not found"  }
+        200: {
+            description: "Shipment refreshed",
+            content: { "application/json": { schema: successEnvelope(refreshedShipmentSchema) } },
+        },
+        400: errorResponses[400],
+        404: errorResponses[404],
     }
 });
 
@@ -720,7 +893,10 @@ const returnOrderRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ reason: z.string().optional(), autoRefund: z.boolean().optional() }) } } }
     },
     responses: {
-        200: { description: "Return processed"  }
+        200: {
+            description: "Return processed",
+            content: { "application/json": { schema: returnResultSchema } },
+        },
     }
 });
 
@@ -756,7 +932,10 @@ const refundOrderRoute = createRoute({
         }
     },
     responses: {
-        200: { description: "Refund processed"  }
+        200: {
+            description: "Refund processed",
+            content: { "application/json": { schema: successEnvelope(refundResultSchema) } },
+        },
     }
 });
 
@@ -781,12 +960,26 @@ const getFormDataRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Order form data" },
-        404: { description: "Order not found" }
+        200: {
+            description: "Order form data",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        order: orderFormDataSchema,
+                        productsWithVariants: z.array(formDataProductSchema),
+                        defaultValues: orderFormDataSchema.extend({
+                            discountAmount: z.number().nullable(),
+                            items: z.array(formDataItemSchema),
+                        }),
+                    })),
+                },
+            },
+        },
+        404: errorResponses[404],
     }
 });
 
-app.openapi(getFormDataRoute, async (c) => {
+app.openapi(getFormDataRoute, (async (c: any) => {
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
@@ -836,7 +1029,7 @@ app.openapi(getFormDataRoute, async (c) => {
 
     // Fetch variants for each product
     const productsWithVariants = await Promise.all(
-        allProducts.map(async (product) => {
+        allProducts.map(async (product: any) => {
             const variants = await db
                 .select()
                 .from(productVariants)
@@ -854,7 +1047,7 @@ app.openapi(getFormDataRoute, async (c) => {
         defaultValues: {
             ...order,
             discountAmount: order.discountAmount || null,
-            items: items.map((item) => ({
+            items: items.map((item: any) => ({
                 productId: item.productId,
                 variantId: item.variantId,
                 quantity: item.quantity,
@@ -862,6 +1055,6 @@ app.openapi(getFormDataRoute, async (c) => {
             })),
         },
     });
-});
+}) as any);
 
 export { app as adminOrdersRoutes };

@@ -11,6 +11,7 @@ import { getKv } from "../../utils/kv-cache";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
+import { successEnvelope, errorResponses } from "../../schemas/responses";
 
 import { ok } from "../../utils/api-response";
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
@@ -43,10 +44,18 @@ const createPolarSessionRoute = createRoute({
         }
     },
     responses: {
-        200: { description: "Polar checkout session created"  },
-        400: { description: "Invalid request"  },
-        404: { description: "Order not found"  },
-        503: { description: "Polar not configured"  }
+        200: {
+            description: "Polar checkout session created",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        gatewayUrl: z.string().optional(),
+                        checkoutId: z.string().optional(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
     }
 });
 

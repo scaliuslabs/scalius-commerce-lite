@@ -5,6 +5,8 @@ import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
+import { pageSchema } from "../schemas/entities";
 // Create an OpenAPIHono app for pages routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -57,11 +59,13 @@ const listPagesRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Page list with pagination"
+      description: "Page list with pagination",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        pages: z.array(pageSchema),
+        pagination: paginationSchema,
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -151,17 +155,14 @@ const getPageBySlugRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Page details"
+      description: "Page details",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        page: pageSchema,
+      })) } },
     },
-    400: {
-      description: "Bad request"
-    },
-    404: {
-      description: "Page not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    400: errorResponses[400],
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 
@@ -221,14 +222,13 @@ const getPageByIdRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Page details"
+      description: "Page details",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        page: pageSchema,
+      })) } },
     },
-    404: {
-      description: "Page not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 
