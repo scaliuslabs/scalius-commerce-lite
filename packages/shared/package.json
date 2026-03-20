@@ -16,7 +16,6 @@
   "dependencies": {
     "clsx": "^2.1.1",
     "currency.js": "^2.0.4",
-    "drizzle-orm": "^0.45.1",
     "libphonenumber-js": "^1.12.40",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6"
