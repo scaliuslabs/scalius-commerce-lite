@@ -6,7 +6,21 @@ import { nanoid } from "nanoid";
 import { NotFoundError, ConflictError } from "../utils/api-error";
 
 import { ok, created, noContent } from "../utils/api-response";
+import { successEnvelope, paginatedEnvelope, noContentResponse, messageResponse, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+const checkoutLanguageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  code: z.string(),
+  languageData: z.any(),
+  fieldVisibility: z.any(),
+  isActive: z.boolean(),
+  isDefault: z.boolean(),
+  createdAt: z.any().optional(),
+  updatedAt: z.any().optional(),
+  deletedAt: z.any().nullable().optional(),
+}).passthrough();
 
 const defaultLanguageData = {
   pageTitle: "Cart & Checkout",
@@ -69,11 +83,10 @@ const getActiveRoute = createRoute({
   summary: "Get active checkout language",
   responses: {
     200: {
-      description: "Active checkout language"
+      description: "Active checkout language",
+      content: { "application/json": { schema: successEnvelope(z.object({ language: checkoutLanguageSchema })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    ...errorResponses,
   }
 });
 
@@ -150,11 +163,10 @@ const listRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Checkout language list with pagination"
+      description: "Checkout language list with pagination",
+      content: { "application/json": { schema: successEnvelope(z.object({ languages: z.array(checkoutLanguageSchema), pagination: z.object({ page: z.number(), limit: z.number(), total: z.number(), totalPages: z.number(), hasNextPage: z.boolean(), hasPrevPage: z.boolean() }) })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    ...errorResponses,
   }
 });
 
@@ -233,14 +245,10 @@ const createRoute2 = createRoute({
   },
   responses: {
     201: {
-      description: "Created checkout language"
+      description: "Created checkout language",
+      content: { "application/json": { schema: successEnvelope(z.object({ language: checkoutLanguageSchema.optional() })) } },
     },
-    409: {
-      description: "Conflict"
-    },
-    500: {
-      description: "Server error"
-    }
+    ...errorResponses,
   }
 });
 
@@ -289,12 +297,10 @@ const getByIdRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Checkout language details"
-
+      description: "Checkout language details",
+      content: { "application/json": { schema: successEnvelope(checkoutLanguageSchema) } },
     },
-    404: {
-      description: "Not found"
-    }
+    ...errorResponses,
   }
 });
 
@@ -326,14 +332,10 @@ const updateRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Updated checkout language"
+      description: "Updated checkout language",
+      content: { "application/json": { schema: successEnvelope(z.object({ language: checkoutLanguageSchema.optional() })) } },
     },
-    404: {
-      description: "Not found"
-    },
-    409: {
-      description: "Conflict"
-    }
+    ...errorResponses,
   }
 });
 
@@ -382,8 +384,10 @@ const softDeleteRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Success"
-    }
+      description: "Success",
+      content: { "application/json": { schema: successEnvelope(z.object({})) } },
+    },
+    ...errorResponses,
   }
 });
 
@@ -406,9 +410,7 @@ const hardDeleteRoute = createRoute({
     }),
   },
   responses: {
-    204: {
-      description: "No content"
-    }
+    204: noContentResponse,
   }
 });
 
@@ -432,8 +434,10 @@ const restoreRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Success"
-    }
+      description: "Success",
+      content: { "application/json": { schema: successEnvelope(z.object({})) } },
+    },
+    ...errorResponses,
   }
 });
 

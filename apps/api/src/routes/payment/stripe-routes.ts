@@ -9,6 +9,7 @@ import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settin
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
+import { successEnvelope, errorResponses } from "../../schemas/responses";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -36,11 +37,22 @@ const createIntentRoute = createRoute({
     }
   },
   responses: {
-    200: { description: "PaymentIntent created"  },
-    400: { description: "Invalid request"  },
-    404: { description: "Order not found"  },
-    503: { description: "Stripe not configured"  }
-  }
+    200: {
+      description: "PaymentIntent created",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            clientSecret: z.string().optional(),
+            paymentIntentId: z.string().optional(),
+            publishableKey: z.string(),
+            amount: z.number(),
+            currency: z.string(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(createIntentRoute, async (c) => {

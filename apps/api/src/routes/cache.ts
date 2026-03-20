@@ -9,6 +9,7 @@ import {
   getStorefrontPrefixesForGroups
 } from "../utils/cache-invalidation";
 import { ValidationError } from "../utils/api-error";
+import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -25,8 +26,12 @@ const getStatsRoute = createRoute({
   tags: ["Cache"],
   summary: "Get cache statistics",
   responses: {
-    200: { description: "Cache stats"  }
-  }
+    200: {
+      description: "Cache stats",
+      content: { "application/json": { schema: successEnvelope(z.object({ stats: z.object({}).passthrough() })) } },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(getStatsRoute, async (c) => {
@@ -42,8 +47,19 @@ const getGroupsRoute = createRoute({
   tags: ["Cache"],
   summary: "Get invalidation group definitions and path mapping",
   responses: {
-    200: { description: "Cache groups"  }
-  }
+    200: {
+      description: "Cache groups",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            groups: z.record(z.string(), z.any()),
+            pathMapping: z.record(z.string(), z.any()),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(getGroupsRoute, async (c) => {
@@ -61,8 +77,18 @@ const getLastClearedRoute = createRoute({
   tags: ["Cache"],
   summary: "Get last-cleared timestamps for each group",
   responses: {
-    200: { description: "Last cleared timestamps"  }
-  }
+    200: {
+      description: "Last cleared timestamps",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            timestamps: z.record(z.string(), z.number().nullable()),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(getLastClearedRoute, async (c) => {
@@ -90,8 +116,12 @@ const clearAllRoute = createRoute({
   tags: ["Cache"],
   summary: "Clear all cache",
   responses: {
-    200: { description: "Cache cleared"  }
-  }
+    200: {
+      description: "Cache cleared",
+      content: { "application/json": { schema: messageResponse } },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(clearAllRoute, async (c) => {
@@ -132,9 +162,20 @@ const clearGroupRoute = createRoute({
     }
   },
   responses: {
-    200: { description: "Group cache cleared"  },
-    400: { description: "Invalid groups"  }
-  }
+    200: {
+      description: "Group cache cleared",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            message: z.string(),
+            groups: z.array(z.string()),
+            bumpedHtml: z.boolean(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(clearGroupRoute, async (c) => {

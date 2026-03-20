@@ -3,6 +3,7 @@ import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for SEO routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -31,11 +32,15 @@ const getSeoSettingsRoute = createRoute({
   summary: "Get SEO settings",
   responses: {
     200: {
-      description: "SEO settings"
+      description: "SEO settings",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        siteTitle: z.string().nullable(),
+        homepageTitle: z.string().nullable(),
+        homepageMetaDescription: z.string().nullable(),
+        robotsTxt: z.string().nullable(),
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 

@@ -18,6 +18,14 @@ import {
 } from "@scalius/core/modules/categories";
 import { categories } from "@scalius/database/schema";
 import { isNull } from "drizzle-orm";
+import {
+    successEnvelope,
+    paginatedEnvelope,
+    errorResponses,
+    idResponse,
+    noContentResponse,
+} from "../../schemas/responses";
+import { categorySummarySchema } from "../../schemas/entities";
 
 const app = new OpenAPIHono();
 
@@ -29,7 +37,13 @@ const formOptionsRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Get active categories for form dropdowns",
     responses: {
-        200: { description: "Category options" }
+        200: {
+            description: "Category options",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                categories: z.array(z.object({ id: z.string(), name: z.string() })),
+            })) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -60,7 +74,11 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Category list with pagination"  }
+        200: {
+            description: "Category list with pagination",
+            content: { "application/json": { schema: paginatedEnvelope("categories", categorySummarySchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -89,7 +107,11 @@ const createCategoryRoute = createRoute({
         body: { content: { "application/json": { schema: createCategorySchema } } }
     },
     responses: {
-        201: { description: "Category created"  }
+        201: {
+            description: "Category created",
+            content: { "application/json": { schema: idResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -125,7 +147,8 @@ const bulkDeleteRoute = createRoute({
         }
     },
     responses: {
-        204: { description: "Categories deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -159,7 +182,8 @@ const bulkRestoreRoute = createRoute({
         }
     },
     responses: {
-        204: { description: "Categories restored" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -183,7 +207,11 @@ const updateCategoryRoute = createRoute({
         body: { content: { "application/json": { schema: updateCategorySchema } } }
     },
     responses: {
-        200: { description: "Category updated"  }
+        200: {
+            description: "Category updated",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -211,7 +239,8 @@ const deleteCategoryRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Category deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -238,7 +267,8 @@ const permanentDeleteRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Category permanently deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -260,7 +290,11 @@ const restoreCategoryRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Category restored"  }
+        200: {
+            description: "Category restored",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
+        ...errorResponses,
     }
 });
 

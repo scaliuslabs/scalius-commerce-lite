@@ -6,6 +6,7 @@ import { rateLimit } from "@scalius/shared/rate-limit";
 
 import { ok } from "../utils/api-response";
 import { RateLimitError } from "../utils/api-error";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for search routes
 const app = new OpenAPIHono();
 
@@ -58,14 +59,20 @@ const searchRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Search results"
+      description: "Search results",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        products: z.array(z.any()),
+        pages: z.array(z.any()),
+        categories: z.array(z.any()),
+        query: z.string(),
+        timestamp: z.string().optional(),
+      })) } },
     },
     429: {
-      description: "Rate limited"
+      description: "Rate limited",
+      content: { "application/json": { schema: errorResponses[500].content["application/json"].schema } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 

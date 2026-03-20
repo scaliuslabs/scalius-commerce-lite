@@ -6,10 +6,19 @@ import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProv
 
 import { ok, created } from "../../utils/api-response";
 import { ValidationError } from "../../utils/api-error";
+import { successEnvelope, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono();
 const MASKED_VALUE = "••••••••••••";
 
 // ── List Providers ──
+
+const fraudProviderSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    apiUrl: z.string(),
+    apiKey: z.string(),
+    isActive: z.boolean(),
+}).passthrough();
 
 const listRoute = createRoute({
     method: "get",
@@ -17,7 +26,8 @@ const listRoute = createRoute({
     tags: ["Admin - Fraud Checker"],
     summary: "List all fraud checker providers",
     responses: {
-        200: { description: "Provider list"  }
+        200: { description: "Provider list", content: { "application/json": { schema: successEnvelope(z.array(fraudProviderSchema)) } } },
+        ...errorResponses,
     }
 });
 
@@ -55,7 +65,8 @@ const createProviderRoute = createRoute({
         body: { content: { "application/json": { schema: createProviderSchema } } }
     },
     responses: {
-        201: { description: "Provider created"  }
+        201: { description: "Provider created", content: { "application/json": { schema: successEnvelope(fraudProviderSchema) } } },
+        ...errorResponses,
     }
 });
 
@@ -96,7 +107,8 @@ const updateProviderRoute = createRoute({
         body: { content: { "application/json": { schema: updateProviderSchema } } }
     },
     responses: {
-        200: { description: "Provider updated"  }
+        200: { description: "Provider updated", content: { "application/json": { schema: successEnvelope(fraudProviderSchema) } } },
+        ...errorResponses,
     }
 });
 
@@ -137,7 +149,8 @@ const deleteProviderRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Provider deleted"  }
+        200: { description: "Provider deleted", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
     }
 });
 
@@ -163,7 +176,8 @@ const testProviderRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Test result"  }
+        200: { description: "Test result", content: { "application/json": { schema: successEnvelope(z.object({ success: z.boolean(), message: z.string().optional() }).passthrough()) } } },
+        ...errorResponses,
     }
 });
 
@@ -193,7 +207,8 @@ const lookupRoute = createRoute({
         body: { content: { "application/json": { schema: lookupSchema } } }
     },
     responses: {
-        200: { description: "Lookup result" }
+        200: { description: "Lookup result", content: { "application/json": { schema: successEnvelope(z.object({}).passthrough()) } } },
+        ...errorResponses,
     }
 });
 

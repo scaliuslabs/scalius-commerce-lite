@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ValidationError, ForbiddenError } from "../utils/api-error";
+import { errorResponses } from "../schemas/responses";
 
 async function getAllowedDomainsAsync(c: { env: Env; req: { url: string } }): Promise<string[]> {
   let cspAllowed: string = typeof c.env?.CSP_ALLOWED === "string" ? c.env.CSP_ALLOWED : "";
@@ -65,9 +66,12 @@ const proxyRoute = createRoute({
     })
   },
   responses: {
-    200: { description: "Proxied response" },
-    400: { description: "Invalid URL"  },
-    403: { description: "Domain not allowed"  }
+    200: {
+      description: "Proxied response",
+      content: { "*/*": { schema: z.any() } },
+    },
+    400: errorResponses[400],
+    403: errorResponses[403],
   }
 });
 

@@ -25,8 +25,16 @@ import {
     renameAttributeValue,
     deleteAttributeValue,
 } from "@scalius/core/modules/attributes/attributes.service";
-
 import { ok, created, noContent } from "../../utils/api-response";
+import {
+    successEnvelope,
+    paginatedEnvelope,
+    paginationSchema,
+    errorResponses,
+    messageResponse,
+    noContentResponse,
+} from "../../schemas/responses";
+import { attributeSchema } from "../../schemas/entities";
 const app = new OpenAPIHono();
 
 // ── List Attributes ──
@@ -47,7 +55,11 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Attribute list with pagination"  }
+        200: {
+            description: "Attribute list with pagination",
+            content: { "application/json": { schema: paginatedEnvelope("attributes", attributeSchema.extend({ valueCount: z.number() })) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -76,7 +88,11 @@ const createAttributeRoute = createRoute({
         body: { content: { "application/json": { schema: createAttributeSchema } } }
     },
     responses: {
-        201: { description: "Attribute created"  }
+        201: {
+            description: "Attribute created",
+            content: { "application/json": { schema: successEnvelope(z.object({ attribute: attributeSchema }) as z.ZodTypeAny) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -99,7 +115,11 @@ const updateAttributeRoute = createRoute({
         body: { content: { "application/json": { schema: updateAttributeSchema } } }
     },
     responses: {
-        200: { description: "Attribute updated"  }
+        200: {
+            description: "Attribute updated",
+            content: { "application/json": { schema: successEnvelope(z.object({ attribute: attributeSchema }) as z.ZodTypeAny) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -122,7 +142,8 @@ const deleteAttributeRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Attribute deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -144,7 +165,8 @@ const permanentDeleteRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Attribute permanently deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -166,7 +188,8 @@ const bulkDeleteRoute = createRoute({
         body: { content: { "application/json": { schema: bulkActionSchema } } }
     },
     responses: {
-        204: { description: "Attributes deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -188,7 +211,8 @@ const bulkRestoreRoute = createRoute({
         body: { content: { "application/json": { schema: bulkActionSchema } } }
     },
     responses: {
-        204: { description: "Attributes restored" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -210,7 +234,11 @@ const restoreRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Attribute restored" }
+        200: {
+            description: "Attribute restored",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -238,7 +266,24 @@ const listValuesRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Attribute values"  }
+        200: {
+            description: "Attribute values",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                attributeId: z.string(),
+                attributeName: z.string(),
+                values: z.array(z.object({
+                    value: z.string(),
+                    productCount: z.number(),
+                    createdAt: z.any(),
+                    isPreset: z.boolean(),
+                    sampleProducts: z.array(z.string()),
+                })),
+                totalValues: z.number(),
+                page: z.number(),
+                totalPages: z.number(),
+            })) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -267,7 +312,11 @@ const addValueRoute = createRoute({
         body: { content: { "application/json": { schema: addValueSchema } } }
     },
     responses: {
-        200: { description: "Value added"  }
+        200: {
+            description: "Value added",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -291,7 +340,11 @@ const updateValueRoute = createRoute({
         body: { content: { "application/json": { schema: updateValueSchema } } }
     },
     responses: {
-        200: { description: "Value updated"  }
+        200: {
+            description: "Value updated",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -317,7 +370,11 @@ const deleteValueRoute = createRoute({
         body: { content: { "application/json": { schema: deleteValueSchema } } }
     },
     responses: {
-        200: { description: "Value deleted"  }
+        200: {
+            description: "Value deleted",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 

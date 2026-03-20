@@ -1,0 +1,541 @@
+// apps/api/src/schemas/entities.ts
+// Zod schemas for domain entities used in API responses.
+// Derived from the actual shapes returned by core service functions.
+//
+// All entity schemas use .passthrough() so they don't break if services add fields.
+
+import { z } from "@hono/zod-openapi";
+
+// ─────────────────────────────────────────
+// Products
+// ─────────────────────────────────────────
+
+/** Product summary — returned by listProducts (admin). */
+export const productSummarySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    price: z.number(),
+    description: z.string().nullable(),
+    isActive: z.boolean(),
+    discountPercentage: z.number(),
+    discountType: z.string(),
+    discountAmount: z.number(),
+    freeDelivery: z.boolean(),
+    createdAt: z.string().or(z.date()),
+    updatedAt: z.string().or(z.date()),
+    category: z.object({ name: z.string() }),
+    variantCount: z.number(),
+    imageCount: z.number(),
+    primaryImage: z.string().nullable(),
+    sku: z.string().optional(),
+  })
+  .passthrough();
+
+/** Product image. */
+export const productImageSchema = z
+  .object({
+    id: z.string(),
+    productId: z.string(),
+    url: z.string(),
+    alt: z.string().nullable(),
+    isPrimary: z.boolean(),
+    sortOrder: z.number(),
+    createdAt: z.string().or(z.date()),
+  })
+  .passthrough();
+
+/** Product variant — returned by variant CRUD endpoints.
+ * Uses z.any() for timestamps since Drizzle returns Date objects
+ * that get JSON-serialized to strings. */
+export const productVariantSchema = z
+  .object({
+    id: z.string(),
+    productId: z.string(),
+    size: z.string().nullable(),
+    color: z.string().nullable(),
+    weight: z.number().nullable(),
+    sku: z.string(),
+    price: z.number(),
+    stock: z.number(),
+    reservedStock: z.number(),
+    preorderStock: z.number().optional(),
+    lowStockThreshold: z.number().nullable().optional(),
+    allowPreorder: z.boolean().optional(),
+    preorderDate: z.any().nullable().optional(),
+    preorderMessage: z.string().nullable().optional(),
+    allowBackorder: z.boolean().optional(),
+    backorderLimit: z.number().optional(),
+    discountPercentage: z.number().nullable().optional(),
+    discountType: z.string().nullable().optional(),
+    discountAmount: z.number().nullable().optional(),
+    barcode: z.string().nullable().optional(),
+    barcodeType: z.string().nullable().optional(),
+    colorSortOrder: z.number().nullable().optional(),
+    sizeSortOrder: z.number().nullable().optional(),
+    createdAt: z.any().optional(),
+    updatedAt: z.any().optional(),
+    deletedAt: z.any().nullable().optional(),
+    stockVersion: z.number().optional(),
+    version: z.number().optional(),
+  });
+
+/** Rich content block for product detail. */
+export const productRichContentSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    content: z.string(),
+    sortOrder: z.number(),
+  })
+  .passthrough();
+
+/** Product attribute value. */
+export const productAttributeValueSchema = z
+  .object({
+    attributeId: z.string(),
+    value: z.string(),
+  })
+  .passthrough();
+
+/** Product detail — returned by getProductDetails (admin). */
+export const productDetailSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    description: z.string().nullable(),
+    price: z.number(),
+    categoryId: z.string().nullable(),
+    metaTitle: z.string().nullable(),
+    metaDescription: z.string().nullable(),
+    isActive: z.boolean(),
+    discountPercentage: z.number().nullable(),
+    freeDelivery: z.boolean(),
+    createdAt: z.string().or(z.date()),
+    updatedAt: z.string().or(z.date()),
+    deletedAt: z.string().or(z.date()).nullable(),
+    category: z.object({ name: z.string().nullable() }).nullable(),
+    variants: z.array(productVariantSchema),
+    images: z.array(productImageSchema),
+    additionalInfo: z.array(productRichContentSchema),
+    attributes: z.array(productAttributeValueSchema),
+  })
+  .passthrough();
+
+/** Product stats — returned by getProductStats (admin). */
+export const productStatsSchema = z
+  .object({
+    totalProducts: z.number(),
+    activeProducts: z.number(),
+    productsWithImages: z.number(),
+    categoriesCount: z.number(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Orders
+// ─────────────────────────────────────────
+
+/** Shipment summary attached to order list items. */
+export const orderShipmentSummarySchema = z
+  .object({
+    id: z.string(),
+    providerId: z.string().nullable(),
+    providerType: z.string().nullable(),
+    providerName: z.string().nullable(),
+    status: z.string(),
+    rawStatus: z.string().nullable(),
+    externalId: z.string().nullable(),
+    trackingId: z.string().nullable(),
+    lastChecked: z.string().or(z.date()).nullable(),
+    updatedAt: z.string().or(z.date()),
+    createdAt: z.string().or(z.date()),
+  })
+  .passthrough();
+
+/** Order summary — returned by listOrders (admin). */
+export const orderSummarySchema = z
+  .object({
+    id: z.string(),
+    customerName: z.string(),
+    customerPhone: z.string(),
+    customerEmail: z.string().nullable(),
+    customerId: z.string().nullable(),
+    totalAmount: z.number(),
+    shippingCharge: z.number(),
+    discountAmount: z.number(),
+    status: z.string(),
+    paymentStatus: z.string().nullable(),
+    paymentMethod: z.string().nullable(),
+    fulfillmentStatus: z.string().nullable(),
+    createdAt: z.string().or(z.date()),
+    updatedAt: z.string().or(z.date()),
+    city: z.string().nullable(),
+    zone: z.string().nullable(),
+    area: z.string().nullable(),
+    cityName: z.string().nullable(),
+    zoneName: z.string().nullable(),
+    areaName: z.string().nullable(),
+    itemCount: z.number(),
+    totalQuantity: z.number(),
+    latestShipment: orderShipmentSummarySchema.nullable(),
+  })
+  .passthrough();
+
+/** Order item — returned inside order detail. */
+export const orderItemSchema = z
+  .object({
+    id: z.string(),
+    productId: z.string(),
+    variantId: z.string().nullable(),
+    quantity: z.number(),
+    price: z.number(),
+    productName: z.string().nullable(),
+    productImage: z.string().nullable(),
+    variantSize: z.string().nullable(),
+    variantColor: z.string().nullable(),
+  })
+  .passthrough();
+
+/** Order detail — returned by getOrderDetails (admin). */
+export const orderDetailSchema = z
+  .object({
+    id: z.string(),
+    customerName: z.string(),
+    customerPhone: z.string(),
+    customerEmail: z.string().nullable(),
+    customerId: z.string().nullable(),
+    totalAmount: z.number(),
+    shippingCharge: z.number(),
+    discountAmount: z.number(),
+    status: z.string(),
+    paymentStatus: z.string().nullable(),
+    paymentMethod: z.string().nullable(),
+    fulfillmentStatus: z.string().nullable(),
+    notes: z.string().nullable(),
+    shippingAddress: z.string().nullable(),
+    city: z.string().nullable(),
+    zone: z.string().nullable(),
+    area: z.string().nullable(),
+    cityName: z.string().nullable(),
+    zoneName: z.string().nullable(),
+    areaName: z.string().nullable(),
+    paidAmount: z.number().nullable(),
+    balanceDue: z.number().nullable(),
+    createdAt: z.string().or(z.date()),
+    updatedAt: z.string().or(z.date()),
+    deletedAt: z.string().or(z.date()).nullable(),
+    itemCount: z.number(),
+    items: z.array(orderItemSchema),
+    latestShipment: orderShipmentSummarySchema.nullable(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Categories
+// ─────────────────────────────────────────
+
+/** Category summary — returned by listCategories (admin). */
+export const categorySummarySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    description: z.string().nullable(),
+    imageUrl: z.string().nullable(),
+    metaTitle: z.string().nullable(),
+    metaDescription: z.string().nullable(),
+    createdAt: z.string().nullable(),
+    updatedAt: z.string().nullable(),
+    deletedAt: z.string().nullable(),
+    productCount: z.number(),
+  })
+  .passthrough();
+
+/** Category detail — returned by getCategoryById (admin). */
+export const categoryDetailSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    description: z.string().nullable(),
+    imageUrl: z.string().nullable(),
+    metaTitle: z.string().nullable(),
+    metaDescription: z.string().nullable(),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+  })
+  .passthrough();
+
+/** Category stats — returned by getCategoryStats (admin). */
+export const categoryStatsSchema = z
+  .object({
+    totalCategories: z.number(),
+    categoriesWithImages: z.number(),
+    totalProducts: z.number(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Customers
+// ─────────────────────────────────────────
+
+/** Customer summary — returned by listCustomers (admin). */
+export const customerSummarySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().nullable(),
+    phone: z.string(),
+    address: z.string().nullable(),
+    city: z.string().nullable(),
+    zone: z.string().nullable(),
+    area: z.string().nullable(),
+    cityName: z.string().nullable(),
+    zoneName: z.string().nullable(),
+    areaName: z.string().nullable(),
+    totalOrders: z.number(),
+    totalSpent: z.number(),
+    lastOrderAt: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .passthrough();
+
+/** Customer detail — returned by getCustomerById (admin). Full DB row. */
+export const customerDetailSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().nullable(),
+    phone: z.string(),
+    address: z.string().nullable(),
+    city: z.string().nullable(),
+    zone: z.string().nullable(),
+    area: z.string().nullable(),
+    cityName: z.string().nullable(),
+    zoneName: z.string().nullable(),
+    areaName: z.string().nullable(),
+    totalOrders: z.number(),
+    totalSpent: z.number(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Collections
+// ─────────────────────────────────────────
+
+/** Collection — returned by listCollections / getCollectionById (admin). Full DB row. */
+export const collectionSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: z.enum(["manual", "dynamic"]),
+    config: z.string(),
+    sortOrder: z.number(),
+    isActive: z.boolean(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+    deletedAt: z.any().nullable(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Discounts
+// ─────────────────────────────────────────
+
+/** Discount — returned by discount service endpoints. */
+export const discountSchema = z
+  .object({
+    id: z.string(),
+    code: z.string(),
+    type: z.string(),
+    valueType: z.string(),
+    discountValue: z.number(),
+    minPurchaseAmount: z.number().nullable(),
+    minQuantity: z.number().nullable(),
+    maxUsesPerOrder: z.number().nullable(),
+    maxUses: z.number().nullable(),
+    limitOnePerCustomer: z.boolean(),
+    customerSegment: z.string().nullable(),
+    startDate: z.any(),
+    endDate: z.any().nullable(),
+    isActive: z.boolean(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+    deletedAt: z.any().nullable(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Pages
+// ─────────────────────────────────────────
+
+/** Page — returned by page service endpoints. */
+export const pageSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    slug: z.string(),
+    content: z.string(),
+    metaTitle: z.string().nullable(),
+    metaDescription: z.string().nullable(),
+    isPublished: z.boolean(),
+    hideHeader: z.boolean(),
+    hideFooter: z.boolean(),
+    hideTitle: z.boolean(),
+    sortOrder: z.number(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+    deletedAt: z.any().nullable(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Widgets
+// ─────────────────────────────────────────
+
+/** Widget — returned by widget service endpoints. */
+export const widgetSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    htmlContent: z.string(),
+    cssContent: z.string().nullable(),
+    aiContext: z.string().nullable(),
+    isActive: z.boolean(),
+    displayTarget: z.string(),
+    placementRule: z.string(),
+    referenceCollectionId: z.string().nullable(),
+    sortOrder: z.number(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+    deletedAt: z.any().nullable(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Attributes
+// ─────────────────────────────────────────
+
+/** Product attribute — returned by attributes service endpoints.
+ * Uses z.any() for timestamps since Drizzle returns Date objects. */
+export const attributeSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    filterable: z.boolean(),
+    options: z.any().nullable(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+    deletedAt: z.any().nullable(),
+  });
+
+// ─────────────────────────────────────────
+// Media
+// ─────────────────────────────────────────
+
+/** Media item — returned by media service endpoints. */
+export const mediaSchema = z
+  .object({
+    id: z.string(),
+    filename: z.string(),
+    url: z.string(),
+    size: z.number(),
+    mimeType: z.string(),
+    folderId: z.string().nullable(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+    deletedAt: z.any().nullable(),
+  })
+  .passthrough();
+
+/** Media folder. */
+export const mediaFolderSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    parentId: z.string().nullable(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+    deletedAt: z.any().nullable(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Delivery
+// ─────────────────────────────────────────
+
+/** Delivery provider. */
+export const deliveryProviderSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    isActive: z.boolean(),
+  })
+  .passthrough();
+
+/** Delivery shipment. */
+export const deliveryShipmentSchema = z
+  .object({
+    id: z.string(),
+    orderId: z.string(),
+    providerId: z.string().nullable(),
+    providerType: z.string().nullable(),
+    status: z.string(),
+    rawStatus: z.string().nullable(),
+    externalId: z.string().nullable(),
+    trackingId: z.string().nullable(),
+  })
+  .passthrough();
+
+/** Delivery location (city/zone/area). */
+export const deliveryLocationSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    parentId: z.string().nullable(),
+    isActive: z.boolean(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Settings
+// ─────────────────────────────────────────
+
+/** Generic settings key-value pair. */
+export const settingSchema = z
+  .object({
+    id: z.string(),
+    category: z.string(),
+    key: z.string(),
+    value: z.string().nullable(),
+  })
+  .passthrough();
+
+/** Site settings singleton row. */
+export const siteSettingsSchema = z
+  .object({
+    id: z.string(),
+  })
+  .passthrough();
+
+// ─────────────────────────────────────────
+// Navigation
+// ─────────────────────────────────────────
+
+/** Navigation menu item. */
+export const navigationItemSchema = z
+  .object({
+    id: z.string(),
+    label: z.string(),
+    url: z.string().nullable(),
+    type: z.string(),
+    sortOrder: z.number(),
+  })
+  .passthrough();

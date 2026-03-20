@@ -19,6 +19,8 @@ import { eq, sql, inArray, isNull, and } from "drizzle-orm";
 import { NotFoundError, ApiError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
+import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses } from "../../schemas/responses";
+import { customerSummarySchema, customerDetailSchema } from "../../schemas/entities";
 const app = new OpenAPIHono();
 
 // ── List Customers ──
@@ -39,7 +41,8 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Customer list with pagination"  }
+        200: { description: "Customer list with pagination", content: { "application/json": { schema: paginatedEnvelope("customers", customerSummarySchema) } } },
+        ...errorResponses,
     }
 });
 
@@ -68,11 +71,12 @@ const createCustomerRoute = createRoute({
         body: { content: { "application/json": { schema: createCustomerSchema } } }
     },
     responses: {
-        201: { description: "Customer created"  }
+        201: { description: "Customer created", content: { "application/json": { schema: successEnvelope(customerDetailSchema) } } },
+        ...errorResponses,
     }
 });
 
-app.openapi(createCustomerRoute, async (c) => {
+app.openapi(createCustomerRoute, (async (c: any) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     try {
@@ -82,7 +86,7 @@ app.openapi(createCustomerRoute, async (c) => {
         const err = error as { message?: string; statusCode?: number };
         throw new ApiError(err.statusCode || 400, "ERROR", err.message || "Unknown error");
     }
-});
+}) as any);
 
 // ── Bulk Delete Customers ──
 
@@ -104,7 +108,7 @@ const bulkDeleteRoute = createRoute({
         }
     },
     responses: {
-        204: { description: "Customers deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -126,7 +130,8 @@ const getByIdRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Customer details"  }
+        200: { description: "Customer details", content: { "application/json": { schema: successEnvelope(customerDetailSchema) } } },
+        ...errorResponses,
     }
 });
 
@@ -150,7 +155,8 @@ const updateCustomerRoute = createRoute({
         body: { content: { "application/json": { schema: updateCustomerSchema } } }
     },
     responses: {
-        200: { description: "Customer updated"  }
+        200: { description: "Customer updated", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
     }
 });
 
@@ -177,7 +183,7 @@ const deleteCustomerRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Customer deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -199,7 +205,7 @@ const permanentDeleteRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Customer permanently deleted" }
+        204: noContentResponse,
     }
 });
 
@@ -221,7 +227,7 @@ const restoreCustomerRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Customer restored" }
+        204: noContentResponse,
     }
 });
 
@@ -243,8 +249,8 @@ const getHistoryRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Customer history data" },
-        404: { description: "Customer not found" }
+        200: { description: "Customer history data", content: { "application/json": { schema: successEnvelope(z.object({ customer: customerDetailSchema, history: z.array(z.object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), address: z.string().nullable(), city: z.string().nullable(), zone: z.string().nullable(), area: z.string().nullable(), cityName: z.string().nullable(), zoneName: z.string().nullable(), areaName: z.string().nullable(), changeType: z.string(), createdAt: z.any() }).passthrough()), orders: z.array(z.object({ id: z.string(), totalAmount: z.number(), status: z.string(), createdAt: z.any() }).passthrough()) })) } } },
+        ...errorResponses,
     }
 });
 

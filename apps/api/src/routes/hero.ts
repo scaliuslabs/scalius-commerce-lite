@@ -6,6 +6,7 @@ import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for hero routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -33,12 +34,30 @@ const listSlidersRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Hero slider data"
-
+      description: "Hero slider data",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        desktop: z.object({
+          id: z.string(),
+          type: z.string(),
+          images: z.array(z.any()),
+          isActive: z.boolean(),
+          createdAt: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        }).nullable().optional(),
+        mobile: z.object({
+          id: z.string(),
+          type: z.string(),
+          images: z.array(z.any()),
+          isActive: z.boolean(),
+          createdAt: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        }).nullable().optional(),
+        slider: z.any().optional(),
+        images: z.array(z.any()),
+        isMobile: z.boolean().optional(),
+      }).passthrough()) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -140,14 +159,20 @@ const getSliderByIdRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Hero slider details"
+      description: "Hero slider details",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        slider: z.object({
+          id: z.string(),
+          type: z.string(),
+          images: z.array(z.any()),
+          isActive: z.boolean(),
+          createdAt: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        }),
+      })) } },
     },
-    404: {
-      description: "Slider not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 

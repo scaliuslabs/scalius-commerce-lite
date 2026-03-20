@@ -5,6 +5,7 @@ import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for footer routes
 const app = new OpenAPIHono();
 
@@ -51,14 +52,27 @@ const getFooterRoute = createRoute({
   summary: "Get footer configuration data",
   responses: {
     200: {
-      description: "Footer configuration"
+      description: "Footer configuration",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        logo: z.object({ src: z.string(), alt: z.string() }),
+        tagline: z.string(),
+        copyrightText: z.string(),
+        menus: z.array(z.object({
+          id: z.string(),
+          title: z.string(),
+          links: z.array(z.object({ id: z.string().optional(), title: z.string(), href: z.string().optional() })),
+        })),
+        social: z.array(z.object({
+          id: z.string().optional(),
+          platform: z.string(),
+          url: z.string().optional(),
+          icon: z.string().optional(),
+        })),
+        description: z.string(),
+      })) } },
     },
-    404: {
-      description: "Footer configuration not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 

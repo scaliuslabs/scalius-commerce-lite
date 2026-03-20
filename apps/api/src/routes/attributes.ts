@@ -13,6 +13,7 @@ import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Cache this endpoint as it changes infrequently
@@ -44,6 +45,8 @@ app.use(
   }),
 );
 
+const filterResponseSchema = successEnvelope(z.any());
+
 // GET /attributes/filterable
 const filterableRoute = createRoute({
   method: "get",
@@ -52,11 +55,10 @@ const filterableRoute = createRoute({
   summary: "Get all filterable product attributes with values",
   responses: {
     200: {
-      description: "Filterable attributes list"
+      description: "Filterable attributes list",
+      content: { "application/json": { schema: filterResponseSchema } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -123,11 +125,10 @@ const categoryAttributesRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Category-specific filterable attributes"
+      description: "Category-specific filterable attributes",
+      content: { "application/json": { schema: filterResponseSchema } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -200,14 +201,11 @@ const categorySlugAttributesRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Category-specific filterable attributes"
+      description: "Category-specific filterable attributes",
+      content: { "application/json": { schema: filterResponseSchema } },
     },
-    404: {
-      description: "Category not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 
@@ -294,11 +292,10 @@ const searchFiltersRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Search-specific filterable attributes"
+      description: "Search-specific filterable attributes",
+      content: { "application/json": { schema: filterResponseSchema } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 

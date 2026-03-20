@@ -5,6 +5,7 @@ import { shippingMethods } from "@scalius/database/schema";
 import { NotFoundError, ConflictError } from "../../../utils/api-error";
 
 import { ok, created, noContent } from "../../../utils/api-response";
+import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono();
 
 const createShippingMethodSchema = z.object({
@@ -25,6 +26,18 @@ const updateShippingMethodSchema = z.object({
 
 // ── List Shipping Methods ──
 
+const shippingMethodSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    fee: z.number(),
+    description: z.string().nullable(),
+    isActive: z.boolean(),
+    sortOrder: z.number(),
+    createdAt: z.number().nullable(),
+    updatedAt: z.number().nullable(),
+    deletedAt: z.number().nullable(),
+}).passthrough();
+
 const listRoute = createRoute({
     method: "get",
     path: "/",
@@ -40,7 +53,10 @@ const listRoute = createRoute({
             trashed: z.string().optional().openapi({ description: "Show trashed items" })
         })
     },
-    responses: { 200: { description: "Shipping method list"  } }
+    responses: {
+        200: { description: "Shipping method list", content: { "application/json": { schema: paginatedEnvelope("shippingMethods", shippingMethodSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -123,10 +139,13 @@ const createRoute_ = createRoute({
     request: {
         body: { content: { "application/json": { schema: createShippingMethodSchema } } }
     },
-    responses: { 201: { description: "Shipping method created"  } }
+    responses: {
+        201: { description: "Shipping method created", content: { "application/json": { schema: successEnvelope(z.object({ shippingMethod: shippingMethodSchema })) } } },
+        ...errorResponses,
+    }
 });
 
-app.openapi(createRoute_, async (c) => {
+app.openapi(createRoute_, (async (c: any) => {
     const db = c.get("db");
     try {
         const data = c.req.valid("json");
@@ -166,7 +185,7 @@ app.openapi(createRoute_, async (c) => {
         }
         throw error;
     }
-});
+}) as any);
 
 // ── Get Shipping Method ──
 
@@ -178,10 +197,13 @@ const getByIdRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
     },
-    responses: { 200: { description: "Shipping method details"  } }
+    responses: {
+        200: { description: "Shipping method details", content: { "application/json": { schema: successEnvelope(z.object({ shippingMethod: shippingMethodSchema })) } } },
+        ...errorResponses,
+    }
 });
 
-app.openapi(getByIdRoute, async (c) => {
+app.openapi(getByIdRoute, (async (c: any) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
 
@@ -198,7 +220,7 @@ app.openapi(getByIdRoute, async (c) => {
         console.error(`Error fetching shipping method ${id}:`, error);
         throw error;
     }
-});
+}) as any);
 
 // ── Update Shipping Method ──
 
@@ -211,10 +233,13 @@ const updateRoute = createRoute({
         params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateShippingMethodSchema } } }
     },
-    responses: { 200: { description: "Shipping method updated"  } }
+    responses: {
+        200: { description: "Shipping method updated", content: { "application/json": { schema: successEnvelope(z.object({ shippingMethod: shippingMethodSchema })) } } },
+        ...errorResponses,
+    }
 });
 
-app.openapi(updateRoute, async (c) => {
+app.openapi(updateRoute, (async (c: any) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
 
@@ -268,7 +293,7 @@ app.openapi(updateRoute, async (c) => {
         }
         throw error;
     }
-});
+}) as any);
 
 // ── Delete Shipping Method ──
 
@@ -280,7 +305,10 @@ const deleteRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
     },
-    responses: { 204: { description: "Shipping method deleted" } }
+    responses: {
+        204: noContentResponse,
+        404: errorResponses[404],
+    }
 });
 
 app.openapi(deleteRoute, async (c) => {
@@ -320,7 +348,10 @@ const restoreRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
     },
-    responses: { 200: { description: "Shipping method restored"  } }
+    responses: {
+        200: { description: "Shipping method restored", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(restoreRoute, async (c) => {
@@ -371,7 +402,10 @@ const permanentDeleteRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
     },
-    responses: { 204: { description: "Shipping method permanently deleted" } }
+    responses: {
+        204: noContentResponse,
+        404: errorResponses[404],
+    }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {

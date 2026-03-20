@@ -19,18 +19,28 @@ import {
 } from "@scalius/core/modules/settings/site-settings.service";
 
 import { ok } from "../../../utils/api-response";
+import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono();
 
 // ─────────────────────────────────────────
 // CURRENCY
 // ─────────────────────────────────────────
 
+const currencySettingsSchema = z.object({
+    currencyCode: z.string(),
+    currencySymbol: z.string(),
+    usdExchangeRate: z.string(),
+});
+
 const getCurrencyRoute = createRoute({
     method: "get",
     path: "/currency",
     tags: ["Admin - Settings"],
     summary: "Get currency settings",
-    responses: { 200: { description: "Currency settings"  } }
+    responses: {
+        200: { description: "Currency settings", content: { "application/json": { schema: successEnvelope(currencySettingsSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getCurrencyRoute, async (c) => {
@@ -51,7 +61,10 @@ const saveCurrencyRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save currency settings",
     request: { body: { content: { "application/json": { schema: saveCurrencySchema } } } },
-    responses: { 200: { description: "Settings saved"  } }
+    responses: {
+        200: { description: "Settings saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveCurrencyRoute, async (c) => {
@@ -74,7 +87,10 @@ const getGeneralRoute = createRoute({
     path: "/general",
     tags: ["Admin - Settings"],
     summary: "Get general settings (header + footer config)",
-    responses: { 200: { description: "General settings" } }
+    responses: {
+        200: { description: "General settings", content: { "application/json": { schema: successEnvelope(z.object({ headerConfig: z.any(), footerConfig: z.any() })) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getGeneralRoute, async (c) => {
@@ -129,7 +145,10 @@ const saveHeaderRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save header configuration",
     request: { body: { content: { "application/json": { schema: headerConfigSchema } } } },
-    responses: { 200: { description: "Header saved"  } }
+    responses: {
+        200: { description: "Header saved", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveHeaderRoute, async (c) => {
@@ -163,7 +182,10 @@ const saveFooterRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save footer configuration",
     request: { body: { content: { "application/json": { schema: footerConfigSchema } } } },
-    responses: { 200: { description: "Footer saved"  } }
+    responses: {
+        200: { description: "Footer saved", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveFooterRoute, async (c) => {
@@ -183,7 +205,10 @@ const getThemeRoute = createRoute({
     path: "/theme",
     tags: ["Admin - Settings"],
     summary: "Get theme settings",
-    responses: { 200: { description: "Theme settings"  } }
+    responses: {
+        200: { description: "Theme settings", content: { "application/json": { schema: successEnvelope(z.object({ colors: z.record(z.string(), z.any()) }).passthrough()) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getThemeRoute, async (c) => {
@@ -202,7 +227,10 @@ const saveThemeRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save theme settings",
     request: { body: { content: { "application/json": { schema: saveThemeSchema } } } },
-    responses: { 200: { description: "Theme saved"  } }
+    responses: {
+        200: { description: "Theme saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveThemeRoute, async (c) => {
@@ -221,12 +249,22 @@ app.openapi(saveThemeRoute, async (c) => {
 // SEO
 // ─────────────────────────────────────────
 
+const seoSettingsSchema = z.object({
+    siteTitle: z.string(),
+    homepageTitle: z.string(),
+    homepageMetaDescription: z.string(),
+    robotsTxt: z.string(),
+});
+
 const getSeoRoute = createRoute({
     method: "get",
     path: "/seo",
     tags: ["Admin - Settings"],
     summary: "Get SEO settings",
-    responses: { 200: { description: "SEO settings"  } }
+    responses: {
+        200: { description: "SEO settings", content: { "application/json": { schema: successEnvelope(seoSettingsSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getSeoRoute, async (c) => {
@@ -252,7 +290,10 @@ const saveSeoRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save SEO settings",
     request: { body: { content: { "application/json": { schema: saveSeoSchema } } } },
-    responses: { 200: { description: "SEO saved"  } }
+    responses: {
+        200: { description: "SEO saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveSeoRoute, async (c) => {
@@ -272,7 +313,10 @@ const getStorefrontUrlRoute = createRoute({
     path: "/storefront-url",
     tags: ["Admin - Settings"],
     summary: "Get storefront URL",
-    responses: { 200: { description: "Storefront URL"  } }
+    responses: {
+        200: { description: "Storefront URL", content: { "application/json": { schema: successEnvelope(z.object({ storefrontUrl: z.string() })) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getStorefrontUrlRoute, async (c) => {
@@ -295,7 +339,10 @@ const saveStorefrontUrlRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save storefront URL",
     request: { body: { content: { "application/json": { schema: saveStorefrontUrlSchema } } } },
-    responses: { 200: { description: "URL saved"  } }
+    responses: {
+        200: { description: "URL saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveStorefrontUrlRoute, async (c) => {
@@ -314,7 +361,10 @@ const getAllowedCountriesRoute = createRoute({
     path: "/allowed-countries",
     tags: ["Admin - Settings"],
     summary: "Get allowed countries for phone numbers",
-    responses: { 200: { description: "Allowed countries list" } }
+    responses: {
+        200: { description: "Allowed countries list", content: { "application/json": { schema: successEnvelope(z.object({ allowedCountries: z.array(z.string()), allowedCountriesMode: z.string() }).passthrough()) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getAllowedCountriesRoute, async (c) => {
@@ -340,7 +390,10 @@ const saveAllowedCountriesRoute = createRoute({
             }
         }
     },
-    responses: { 200: { description: "Countries saved" } }
+    responses: {
+        200: { description: "Countries saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveAllowedCountriesRoute, async (c) => {

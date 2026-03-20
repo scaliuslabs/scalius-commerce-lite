@@ -16,6 +16,15 @@ import {
     updatePageSchema
 } from "@scalius/core/modules/pages";
 import { NotFoundError, ApiError } from "../../utils/api-error";
+import {
+    successEnvelope,
+    paginatedEnvelope,
+    messageResponse,
+    idResponse,
+    noContentResponse,
+    errorResponses,
+} from "../../schemas/responses";
+import { pageSchema } from "../../schemas/entities";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono();
@@ -38,7 +47,11 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Page list with pagination"  }
+        200: {
+            description: "Page list with pagination",
+            content: { "application/json": { schema: paginatedEnvelope("pages", pageSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -67,7 +80,11 @@ const createPageRoute = createRoute({
         body: { content: { "application/json": { schema: createPageSchema } } }
     },
     responses: {
-        201: { description: "Page created"  }
+        201: {
+            description: "Page created",
+            content: { "application/json": { schema: idResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -102,7 +119,8 @@ const bulkDeleteRoute = createRoute({
         }
     },
     responses: {
-        204: { description: "Pages deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -124,7 +142,8 @@ const bulkPublishRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Pages published" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -145,7 +164,8 @@ const bulkUnpublishRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Pages unpublished" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -166,7 +186,8 @@ const bulkRestoreRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Pages restored" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -187,7 +208,11 @@ const restoreRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Page restored" }
+        200: {
+            description: "Page restored",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -211,7 +236,11 @@ const getByIdRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Page details"  }
+        200: {
+            description: "Page details",
+            content: { "application/json": { schema: successEnvelope(pageSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -235,7 +264,11 @@ const updatePageRoute = createRoute({
         body: { content: { "application/json": { schema: updatePageSchema } } }
     },
     responses: {
-        200: { description: "Page updated"  }
+        200: {
+            description: "Page updated",
+            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -262,7 +295,8 @@ const deletePageRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Page deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -284,7 +318,8 @@ const permanentDeleteRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Page permanently deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 

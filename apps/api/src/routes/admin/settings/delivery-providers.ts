@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 
 import { ok, created } from "../../../utils/api-response";
+import { successEnvelope, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono();
 
 const MASKED_VALUE = "••••••••••••";
@@ -56,12 +57,26 @@ function maskCredentialsForClient(credentialsJson: string): string {
 
 // ── List Providers ──
 
+const deliveryProviderSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    credentials: z.string(),
+    config: z.string(),
+    isActive: z.boolean(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+}).passthrough();
+
 const listRoute = createRoute({
     method: "get",
     path: "/",
     tags: ["Admin - Delivery Providers"],
     summary: "List all delivery providers",
-    responses: { 200: { description: "Provider list"  } }
+    responses: {
+        200: { description: "Provider list", content: { "application/json": { schema: successEnvelope(z.array(deliveryProviderSchema)) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -97,10 +112,13 @@ const createProviderRoute = createRoute({
     request: {
         body: { content: { "application/json": { schema: createDeliveryProviderSchema } } }
     },
-    responses: { 201: { description: "Provider created"  } }
+    responses: {
+        201: { description: "Provider created", content: { "application/json": { schema: successEnvelope(deliveryProviderSchema) } } },
+        ...errorResponses,
+    }
 });
 
-app.openapi(createProviderRoute, async (c) => {
+app.openapi(createProviderRoute, (async (c: any) => {
     try {
         const db = c.get("db");
         const validated = c.req.valid("json");
@@ -133,7 +151,7 @@ app.openapi(createProviderRoute, async (c) => {
     } catch (error: unknown) {
         throw error;
     }
-});
+}) as any);
 
 // ── Update Provider ──
 
@@ -154,10 +172,13 @@ const updateProviderRoute = createRoute({
     request: {
         body: { content: { "application/json": { schema: updateDeliveryProviderSchema } } }
     },
-    responses: { 200: { description: "Provider updated"  } }
+    responses: {
+        200: { description: "Provider updated", content: { "application/json": { schema: successEnvelope(deliveryProviderSchema) } } },
+        ...errorResponses,
+    }
 });
 
-app.openapi(updateProviderRoute, async (c) => {
+app.openapi(updateProviderRoute, (async (c: any) => {
     try {
         const db = c.get("db");
         const validated = c.req.valid("json");
@@ -215,7 +236,7 @@ app.openapi(updateProviderRoute, async (c) => {
     } catch (error: unknown) {
         throw error;
     }
-});
+}) as any);
 
 // ── Create Test Provider ──
 
@@ -226,6 +247,11 @@ const createTestSchema = z.object({
     name: z.string().optional().default("Test Provider"),
 });
 
+const testResultSchema = z.object({
+    success: z.boolean(),
+    message: z.string().optional(),
+}).passthrough();
+
 const createTestRoute = createRoute({
     method: "post",
     path: "/create-test",
@@ -234,7 +260,10 @@ const createTestRoute = createRoute({
     request: {
         body: { content: { "application/json": { schema: createTestSchema } } }
     },
-    responses: { 200: { description: "Test result"  } }
+    responses: {
+        200: { description: "Test result", content: { "application/json": { schema: successEnvelope(testResultSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(createTestRoute, async (c) => {
@@ -281,7 +310,10 @@ const getProviderRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
     },
-    responses: { 200: { description: "Provider details"  } }
+    responses: {
+        200: { description: "Provider details", content: { "application/json": { schema: successEnvelope(deliveryProviderSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getProviderRoute, async (c) => {
@@ -310,7 +342,10 @@ const testExistingRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
     },
-    responses: { 200: { description: "Test result"  } }
+    responses: {
+        200: { description: "Test result", content: { "application/json": { schema: successEnvelope(testResultSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(testExistingRoute, async (c) => {
@@ -346,7 +381,10 @@ const deleteProviderRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
     },
-    responses: { 200: { description: "Provider deleted"  } }
+    responses: {
+        200: { description: "Provider deleted", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(deleteProviderRoute, async (c) => {

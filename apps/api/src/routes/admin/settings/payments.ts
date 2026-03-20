@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getKv } from "../../../utils/kv-cache";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
+import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 import {
     upsertSetting,
     getActivePaymentMethods,
@@ -49,12 +50,31 @@ const savePolarSchema = z.object({
     enabled: z.boolean().optional()
 });
 
+const gatewayStatusSchema = z.object({
+    configured: z.boolean(),
+    enabled: z.boolean(),
+});
+
+const paymentMethodsResponseSchema = z.object({
+    enabledMethods: z.array(z.string()),
+    defaultMethod: z.string(),
+    gatewayStatus: z.object({
+        stripe: gatewayStatusSchema,
+        sslcommerz: gatewayStatusSchema,
+        polar: gatewayStatusSchema,
+        cod: gatewayStatusSchema,
+    }),
+}).passthrough();
+
 const getPaymentMethodsRoute = createRoute({
     method: "get",
     path: "/payment-methods",
     tags: ["Admin - Settings"],
     summary: "Get active payment methods",
-    responses: { 200: { description: "Payment methods config"  } }
+    responses: {
+        200: { description: "Payment methods config", content: { "application/json": { schema: successEnvelope(paymentMethodsResponseSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getPaymentMethodsRoute, async (c) => {
@@ -87,7 +107,10 @@ const savePaymentMethodsRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save payment methods configuration",
     request: { body: { content: { "application/json": { schema: updateMethodsSchema } } } },
-    responses: { 200: { description: "Payment methods saved"  } }
+    responses: {
+        200: { description: "Payment methods saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(savePaymentMethodsRoute, async (c) => {
@@ -113,12 +136,22 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
 // STRIPE
 // ─────────────────────────────────────────
 
+const stripeSettingsResponseSchema = z.object({
+    secretKey: z.string(),
+    publishableKey: z.string(),
+    webhookSecret: z.string(),
+    enabled: z.boolean(),
+});
+
 const getStripeRoute = createRoute({
     method: "get",
     path: "/stripe",
     tags: ["Admin - Settings"],
     summary: "Get Stripe settings",
-    responses: { 200: { description: "Stripe settings"  } }
+    responses: {
+        200: { description: "Stripe settings", content: { "application/json": { schema: successEnvelope(stripeSettingsResponseSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getStripeRoute, async (c) => {
@@ -144,7 +177,10 @@ const saveStripeRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save Stripe settings",
     request: { body: { content: { "application/json": { schema: saveStripeSchema } } } },
-    responses: { 200: { description: "Stripe settings saved"  } }
+    responses: {
+        200: { description: "Stripe settings saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveStripeRoute, async (c) => {
@@ -173,12 +209,22 @@ app.openapi(saveStripeRoute, async (c) => {
 // SSLCOMMERZ
 // ─────────────────────────────────────────
 
+const sslCommerzSettingsResponseSchema = z.object({
+    storeId: z.string(),
+    storePassword: z.string(),
+    sandbox: z.boolean(),
+    enabled: z.boolean(),
+});
+
 const getSSLCommerzRoute = createRoute({
     method: "get",
     path: "/sslcommerz",
     tags: ["Admin - Settings"],
     summary: "Get SSLCommerz settings",
-    responses: { 200: { description: "SSLCommerz settings"  } }
+    responses: {
+        200: { description: "SSLCommerz settings", content: { "application/json": { schema: successEnvelope(sslCommerzSettingsResponseSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getSSLCommerzRoute, async (c) => {
@@ -204,7 +250,10 @@ const saveSSLCommerzRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save SSLCommerz settings",
     request: { body: { content: { "application/json": { schema: saveSSLCommerzSchema } } } },
-    responses: { 200: { description: "SSLCommerz settings saved"  } }
+    responses: {
+        200: { description: "SSLCommerz settings saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(saveSSLCommerzRoute, async (c) => {
@@ -233,12 +282,23 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
 // POLAR
 // ─────────────────────────────────────────
 
+const polarSettingsResponseSchema = z.object({
+    accessToken: z.string(),
+    webhookSecret: z.string(),
+    productId: z.string(),
+    sandbox: z.boolean(),
+    enabled: z.boolean(),
+});
+
 const getPolarRoute = createRoute({
     method: "get",
     path: "/polar",
     tags: ["Admin - Settings"],
     summary: "Get Polar settings",
-    responses: { 200: { description: "Polar settings"  } }
+    responses: {
+        200: { description: "Polar settings", content: { "application/json": { schema: successEnvelope(polarSettingsResponseSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getPolarRoute, async (c) => {
@@ -265,7 +325,10 @@ const savePolarRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Save Polar settings",
     request: { body: { content: { "application/json": { schema: savePolarSchema } } } },
-    responses: { 200: { description: "Polar settings saved"  } }
+    responses: {
+        200: { description: "Polar settings saved", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(savePolarRoute, async (c) => {

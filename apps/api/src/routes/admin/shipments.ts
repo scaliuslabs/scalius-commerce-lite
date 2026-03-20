@@ -7,7 +7,24 @@ import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
+import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
+import { deliveryShipmentSchema } from "../../schemas/entities";
+
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+// ─── Inline schemas ──
+
+const statusCheckSchema = z.object({
+    status: z.string(),
+    statusChanged: z.boolean(),
+    orderStatusUpdate: z.any(),
+    lastChecked: z.string(),
+}).passthrough();
+
+const checkStatusResponseSchema = successEnvelope(z.object({
+    message: z.string(),
+    statusCheck: statusCheckSchema,
+}));
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 
@@ -20,8 +37,11 @@ const getShipmentRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Shipment details"  },
-        404: { description: "Shipment not found"  }
+        200: {
+            description: "Shipment details",
+            content: { "application/json": { schema: successEnvelope(deliveryShipmentSchema) } },
+        },
+        404: errorResponses[404],
     }
 });
 
@@ -47,8 +67,11 @@ const deleteShipmentRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Shipment deleted"  },
-        404: { description: "Shipment not found"  }
+        200: {
+            description: "Shipment deleted",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        404: errorResponses[404],
     }
 });
 
@@ -76,12 +99,15 @@ const checkStatusRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Status checked"  },
-        404: { description: "Shipment not found"  }
+        200: {
+            description: "Status checked",
+            content: { "application/json": { schema: checkStatusResponseSchema } },
+        },
+        404: errorResponses[404],
     }
 });
 
-app.openapi(checkStatusRoute, async (c) => {
+app.openapi(checkStatusRoute, (async (c: any) => {
     const db = c.get("db");
     const shipmentId = c.req.valid("param").id;
 
@@ -138,6 +164,6 @@ app.openapi(checkStatusRoute, async (c) => {
             lastChecked: now.toISOString()
         }
     });
-});
+}) as any);
 
 export { app as adminShipmentRoutes };

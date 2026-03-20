@@ -20,8 +20,49 @@ import {
     deleteHistoryEntry,
 } from "@scalius/core/modules/widgets";
 import { NotFoundError, ApiError } from "../../utils/api-error";
+import {
+    successEnvelope,
+    messageResponse,
+    noContentResponse,
+    errorResponses,
+} from "../../schemas/responses";
+import { widgetSchema } from "../../schemas/entities";
 
 import { ok, created, noContent } from "../../utils/api-response";
+
+// Widget list item — uses casted timestamps from the list query
+const widgetListItemSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    htmlContent: z.string(),
+    cssContent: z.string().nullable(),
+    aiContext: z.string().nullable(),
+    isActive: z.boolean(),
+    displayTarget: z.string(),
+    placementRule: z.string(),
+    referenceCollectionId: z.string().nullable(),
+    sortOrder: z.number(),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+    deletedAt: z.number().nullable(),
+}).passthrough();
+
+const collectionSummarySchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    sortOrder: z.number(),
+    type: z.string(),
+}).passthrough();
+
+const widgetHistoryEntrySchema = z.object({
+    id: z.string(),
+    widgetId: z.string(),
+    htmlContent: z.string(),
+    cssContent: z.string().nullable(),
+    reason: z.string(),
+    createdAt: z.any(),
+}).passthrough();
+
 const app = new OpenAPIHono();
 
 // ── List Widgets ──
@@ -37,7 +78,18 @@ const listRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Widget list"  }
+        200: {
+            description: "Widget list",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        widgets: z.array(widgetListItemSchema),
+                        availableCollections: z.array(collectionSummarySchema),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
     }
 });
 
@@ -59,7 +111,11 @@ const createWidgetRoute = createRoute({
         body: { content: { "application/json": { schema: createWidgetSchema } } }
     },
     responses: {
-        201: { description: "Widget created"  }
+        201: {
+            description: "Widget created",
+            content: { "application/json": { schema: successEnvelope(widgetSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -86,7 +142,8 @@ const bulkDeleteRoute = createRoute({
         }
     },
     responses: {
-        204: { description: "Widgets deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -108,7 +165,8 @@ const bulkActivateRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Widgets activated" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -129,7 +187,8 @@ const bulkDeactivateRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Widgets deactivated" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -150,7 +209,8 @@ const bulkRestoreRoute = createRoute({
         body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
     },
     responses: {
-        204: { description: "Widgets restored" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -171,7 +231,11 @@ const getByIdRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Widget details"  }
+        200: {
+            description: "Widget details",
+            content: { "application/json": { schema: successEnvelope(widgetSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -195,7 +259,11 @@ const updateWidgetRoute = createRoute({
         body: { content: { "application/json": { schema: updateWidgetSchema } } }
     },
     responses: {
-        200: { description: "Widget updated"  }
+        200: {
+            description: "Widget updated",
+            content: { "application/json": { schema: successEnvelope(widgetSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -222,7 +290,8 @@ const deleteWidgetRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Widget deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -244,7 +313,8 @@ const permanentDeleteRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Widget permanently deleted" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -266,7 +336,8 @@ const restoreWidgetRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        204: { description: "Widget restored" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 
@@ -288,7 +359,11 @@ const toggleStatusRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Widget status toggled"  }
+        200: {
+            description: "Widget status toggled",
+            content: { "application/json": { schema: successEnvelope(widgetSchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -312,8 +387,11 @@ const getHistoryRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Widget history entries" },
-        404: { description: "Widget not found" }
+        200: {
+            description: "Widget history entries",
+            content: { "application/json": { schema: successEnvelope(z.array(widgetHistoryEntrySchema)) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -342,8 +420,11 @@ const createHistoryRoute = createRoute({
         }
     },
     responses: {
-        201: { description: "History entry created" },
-        404: { description: "Widget not found" }
+        201: {
+            description: "History entry created",
+            content: { "application/json": { schema: successEnvelope(widgetHistoryEntrySchema) } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -373,8 +454,11 @@ const restoreHistoryRoute = createRoute({
         }
     },
     responses: {
-        200: { description: "Widget restored from history" },
-        404: { description: "Widget or history entry not found" }
+        200: {
+            description: "Widget restored from history",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -397,8 +481,8 @@ const deleteHistoryRoute = createRoute({
         params: z.object({ id: z.string(), versionId: z.string() }),
     },
     responses: {
-        204: { description: "History entry deleted" },
-        404: { description: "History entry not found" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 

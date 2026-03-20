@@ -6,6 +6,8 @@ import type { Widget } from "@scalius/database/schema";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
+import { widgetSchema } from "../schemas/entities";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use(
@@ -70,17 +72,14 @@ const getWidgetByIdRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Widget details"
+      description: "Widget details",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        widget: widgetSchema,
+      })) } },
     },
-    400: {
-      description: "Bad request"
-    },
-    404: {
-      description: "Widget not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    400: errorResponses[400],
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 
@@ -124,11 +123,12 @@ const getActiveHomepageWidgetsRoute = createRoute({
   summary: "Get active widgets for the homepage",
   responses: {
     200: {
-      description: "Active homepage widgets"
+      description: "Active homepage widgets",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        widgets: z.array(widgetSchema),
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 

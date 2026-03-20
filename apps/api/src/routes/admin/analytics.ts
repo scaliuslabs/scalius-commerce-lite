@@ -6,6 +6,7 @@ import { listAnalyticsScripts, getAnalyticsScript, createAnalyticsScript, update
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
+import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono();
 
 // ── List Analytics Scripts ──
@@ -16,7 +17,8 @@ const listRoute = createRoute({
     tags: ["Admin - Analytics"],
     summary: "List all analytics scripts",
     responses: {
-        200: { description: "Analytics script list"  }
+        200: { description: "Analytics script list", content: { "application/json": { schema: successEnvelope(z.array(z.object({ id: z.string(), name: z.string(), type: z.string(), config: z.string(), isActive: z.boolean(), usePartytown: z.boolean(), location: z.string(), createdAt: z.any(), updatedAt: z.any() }).passthrough().nullable())) } } },
+        ...errorResponses,
     }
 });
 
@@ -37,16 +39,17 @@ const createScriptRoute = createRoute({
         body: { content: { "application/json": { schema: createAnalyticsSchema } } }
     },
     responses: {
-        201: { description: "Script created"  }
+        201: { description: "Script created", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), name: z.string(), type: z.string(), isActive: z.boolean() }).passthrough()) } } },
+        ...errorResponses,
     }
 });
 
-app.openapi(createScriptRoute, async (c) => {
+app.openapi(createScriptRoute, (async (c: any) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createAnalyticsScript(db, data);
     return created(c, result);
-});
+}) as any);
 
 // ── Get Analytics Script ──
 
@@ -59,7 +62,8 @@ const getByIdRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Script details"  }
+        200: { description: "Script details", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), name: z.string(), type: z.string(), config: z.string(), isActive: z.boolean(), usePartytown: z.boolean(), location: z.string() }).passthrough()) } } },
+        ...errorResponses,
     }
 });
 
@@ -83,7 +87,8 @@ const updateScriptRoute = createRoute({
         body: { content: { "application/json": { schema: updateAnalyticsSchema } } }
     },
     responses: {
-        200: { description: "Script updated"  }
+        200: { description: "Script updated", content: { "application/json": { schema: successEnvelope(z.object({ script: z.object({ id: z.string(), name: z.string(), type: z.string(), isActive: z.boolean() }).passthrough() })) } } },
+        ...errorResponses,
     }
 });
 
@@ -112,7 +117,8 @@ const deleteScriptRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Script deleted"  }
+        200: { description: "Script deleted", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), deletedScript: z.object({ id: z.string() }).passthrough() })) } } },
+        ...errorResponses,
     }
 });
 
@@ -136,7 +142,8 @@ const toggleScriptRoute = createRoute({
         body: { content: { "application/json": { schema: toggleAnalyticsSchema } } }
     },
     responses: {
-        200: { description: "Script toggled"  }
+        200: { description: "Script toggled", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), script: z.object({ id: z.string(), isActive: z.boolean() }).passthrough() })) } } },
+        ...errorResponses,
     }
 });
 

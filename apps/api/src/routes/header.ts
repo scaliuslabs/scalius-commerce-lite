@@ -5,6 +5,7 @@ import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for header routes
 const app = new OpenAPIHono();
 
@@ -50,14 +51,20 @@ const getHeaderRoute = createRoute({
   summary: "Get header configuration data",
   responses: {
     200: {
-      description: "Header configuration"
+      description: "Header configuration",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        header: z.object({
+          topBar: z.object({ text: z.string() }),
+          logo: z.object({ src: z.string(), alt: z.string() }),
+          favicon: z.object({ src: z.string(), alt: z.string() }).optional(),
+          contact: z.object({ phone: z.string(), text: z.string() }),
+          social: z.object({ facebook: z.string() }),
+          cartTotal: z.string().optional(),
+        }),
+      })) } },
     },
-    404: {
-      description: "Header configuration not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 

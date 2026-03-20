@@ -9,6 +9,7 @@ import {
   searchStorefrontProducts
 } from "@scalius/core/modules/products/products.storefront";
 import { NotFoundError } from "../utils/api-error";
+import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono();
@@ -46,6 +47,25 @@ const productSearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(10).openapi({ description: "Items per page" })
 });
 
+// Storefront product list item
+const storefrontProductSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  price: z.number(),
+  slug: z.string(),
+  discountType: z.string().nullable(),
+  discountPercentage: z.number().nullable(),
+  discountAmount: z.number().nullable(),
+  freeDelivery: z.boolean(),
+  categoryId: z.string().nullable(),
+  hasVariants: z.boolean(),
+  imageUrl: z.string().nullable(),
+  category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
+  createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+  discountedPrice: z.number(),
+}).passthrough();
+
 // GET /api/storefront/products
 const listProductsRoute = createRoute({
   method: "get",
@@ -57,11 +77,13 @@ const listProductsRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Product list with pagination"
+      description: "Product list with pagination",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        products: z.array(storefrontProductSchema),
+        pagination: paginationSchema,
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -88,11 +110,20 @@ const searchProductsRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Search results"
+      description: "Search results",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        data: z.array(z.object({
+          id: z.string(),
+          name: z.string(),
+          price: z.number(),
+          slug: z.string(),
+          imageUrl: z.string().nullable(),
+          variants: z.array(z.any()),
+        }).passthrough()),
+        pagination: paginationSchema.extend({ hasNextPage: z.boolean(), hasPrevPage: z.boolean() }),
+      })) } },
     },
-    500: {
-      description: "Server error"
-    }
+    500: errorResponses[500],
   }
 });
 
@@ -116,14 +147,17 @@ const getProductBySlugRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Product details"
+      description: "Product details",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        product: z.any(),
+        category: z.any().nullable(),
+        images: z.array(z.any()),
+        variants: z.array(z.any()),
+        relatedProducts: z.array(z.any()),
+      })) } },
     },
-    404: {
-      description: "Product not found"
-    },
-    500: {
-      description: "Server error"
-    }
+    404: errorResponses[404],
+    500: errorResponses[500],
   }
 });
 

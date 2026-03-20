@@ -4,6 +4,7 @@ import { authMiddleware } from "../middleware/auth";
 import { settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
+import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 // Define the user type for type safety
@@ -46,9 +47,12 @@ const getTokenRoute = createRoute({
   tags: ["Auth"],
   summary: "Get JWT token for service-to-service communication",
   responses: {
-    200: { description: "Token generated"  },
-    401: { description: "Unauthorized"  }
-  }
+    200: {
+      description: "Token generated",
+      content: { "application/json": { schema: successEnvelope(z.object({ token: z.string() })) } },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(getTokenRoute, async (c) => {
@@ -84,8 +88,12 @@ const firebaseConfigRoute = createRoute({
   tags: ["Auth"],
   summary: "Get public Firebase config for client setup",
   responses: {
-    200: { description: "Firebase config"  }
-  }
+    200: {
+      description: "Firebase config",
+      content: { "application/json": { schema: successEnvelope(z.object({}).passthrough()) } },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(firebaseConfigRoute, async (c) => {
@@ -120,8 +128,23 @@ const getMeRoute = createRoute({
   tags: ["Auth"],
   summary: "Get current user/service info",
   responses: {
-    200: { description: "Current user info"  }
-  }
+    200: {
+      description: "Current user info",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            user: z.object({
+              id: z.string(),
+              email: z.string(),
+              name: z.string(),
+              role: z.string(),
+            }),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(getMeRoute, (c) => {
@@ -137,9 +160,12 @@ const revokeRoute = createRoute({
   tags: ["Auth"],
   summary: "Revoke current token",
   responses: {
-    200: { description: "Token revoked"  },
-    400: { description: "Invalid token"  }
-  }
+    200: {
+      description: "Token revoked",
+      content: { "application/json": { schema: messageResponse } },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(revokeRoute, async (c) => {
@@ -165,9 +191,12 @@ const tokenStatsRoute = createRoute({
   tags: ["Auth"],
   summary: "Get token stats (admin/system only)",
   responses: {
-    200: { description: "Token stats"  },
-    403: { description: "Forbidden"  }
-  }
+    200: {
+      description: "Token stats",
+      content: { "application/json": { schema: successEnvelope(z.object({}).passthrough()) } },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(tokenStatsRoute, (c) => {

@@ -1,11 +1,12 @@
 // src/server/routes/checkout.ts
 // Public endpoint for storefront checkout configuration.
 
-import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 // Side-effect import: registers all gateway metadata in the registry
 import "@scalius/core/modules/payments/gateway-settings";
 import { getCheckoutConfig } from "@scalius/core/modules/settings/checkout-config.service";
 import { cacheMiddleware } from "../middleware/cache";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -18,7 +19,11 @@ const getCheckoutConfigRoute = createRoute({
   tags: ["Checkout"],
   summary: "Get checkout configuration (payment gateways, auth settings)",
   responses: {
-    200: { description: "Checkout configuration"  }
+    200: {
+      description: "Checkout configuration",
+      content: { "application/json": { schema: successEnvelope(z.any()) } },
+    },
+    500: errorResponses[500],
   }
 });
 

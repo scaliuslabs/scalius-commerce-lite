@@ -8,6 +8,7 @@ import { initSSLCommerzSession } from "@scalius/core/modules/payments/sslcommerz
 import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
+import { successEnvelope, errorResponses } from "../../schemas/responses";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -35,11 +36,19 @@ const createSessionRoute = createRoute({
     }
   },
   responses: {
-    200: { description: "Session created"  },
-    400: { description: "Invalid request"  },
-    404: { description: "Order not found"  },
-    503: { description: "SSLCommerz not configured"  }
-  }
+    200: {
+      description: "Session created",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            gatewayUrl: z.string().optional(),
+            sessionKey: z.string().optional(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
 });
 
 app.openapi(createSessionRoute, async (c) => {

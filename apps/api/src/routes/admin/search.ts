@@ -5,6 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { search } from "@scalius/core/search";
 
 import { ok } from "../../utils/api-response";
+import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono();
 
 // ── Search ──
@@ -26,7 +27,8 @@ const searchRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Search results"  }
+        200: { description: "Search results", content: { "application/json": { schema: successEnvelope(z.object({ products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number() }).passthrough()), pages: z.array(z.object({ id: z.string(), title: z.string(), slug: z.string() }).passthrough()), categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough()), query: z.string(), timestamp: z.string().optional() })) } } },
+        ...errorResponses,
     }
 });
 
@@ -86,7 +88,7 @@ const reindexRoute = createRoute({
     tags: ["Admin - Search"],
     summary: "Trigger search reindex",
     responses: {
-        200: { description: "Reindex initiated"  }
+        200: { description: "Reindex initiated", content: { "application/json": { schema: messageResponse } } },
     }
 });
 

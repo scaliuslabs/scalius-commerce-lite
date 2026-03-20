@@ -11,6 +11,22 @@ import { getKv } from "../../utils/kv-cache";
 
 import { ok, noContent } from "../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
+import {
+    successEnvelope,
+    messageResponse,
+    noContentResponse,
+    errorResponses,
+} from "../../schemas/responses";
+
+// Navigation items returned by getNavigationItems service
+const navSourceItemSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    type: z.string(),
+    url: z.string(),
+});
+
 const app = new OpenAPIHono();
 
 // ── List Navigation Items ──
@@ -21,7 +37,20 @@ const listItemsRoute = createRoute({
     tags: ["Admin - Navigation"],
     summary: "Get navigation items",
     responses: {
-        200: { description: "Navigation items list"  }
+        200: {
+            description: "Navigation items list",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        items: z.object({
+                            categories: z.array(navSourceItemSchema),
+                            pages: z.array(navSourceItemSchema),
+                        }),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
     }
 });
 
@@ -39,7 +68,18 @@ const getConfigRoute = createRoute({
     tags: ["Admin - Navigation"],
     summary: "Get header and footer navigation config",
     responses: {
-        200: { description: "Navigation configuration" }
+        200: {
+            description: "Navigation configuration",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        headerConfig: z.any(),
+                        footerConfig: z.any(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
     }
 });
 
@@ -89,7 +129,11 @@ const saveConfigRoute = createRoute({
         body: { content: { "application/json": { schema: saveConfigSchema } } }
     },
     responses: {
-        200: { description: "Navigation config saved" }
+        200: {
+            description: "Navigation config saved",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -134,8 +178,11 @@ const updateConfigRoute = createRoute({
         body: { content: { "application/json": { schema: saveConfigSchema } } }
     },
     responses: {
-        200: { description: "Navigation config updated" },
-        404: { description: "Settings not found" }
+        200: {
+            description: "Navigation config updated",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
     }
 });
 
@@ -177,8 +224,8 @@ const deleteConfigRoute = createRoute({
         }
     },
     responses: {
-        204: { description: "Navigation config reset" },
-        404: { description: "Settings not found" }
+        204: noContentResponse,
+        ...errorResponses,
     }
 });
 

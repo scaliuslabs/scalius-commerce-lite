@@ -30,8 +30,8 @@ export interface ApiErrorResponse {
  *   ok(c, { products: items, pagination })
  * NOT as a bare array — the admin proxy unwrapper cannot flatten arrays.
  */
-export function ok<T>(c: Context, data: T, status: 200 | 201 = 200) {
-  return c.json({ success: true as const, data }, status);
+export function ok<T>(c: Context, data: T) {
+  return c.json({ success: true as const, data }, 200);
 }
 
 /** Return a standard created response (201) */

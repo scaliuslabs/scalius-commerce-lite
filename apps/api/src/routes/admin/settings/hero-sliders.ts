@@ -5,6 +5,7 @@ import { sql, and, eq, isNull } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "../../../utils/api-error";
 
 import { ok, created } from "../../../utils/api-response";
+import { successEnvelope, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono();
 
 const sliderImageSchema = z.object({
@@ -28,12 +29,25 @@ const updateHeroSliderSchema = z.object({
 
 // ── List Sliders ──
 
+const heroSliderSchema = z.object({
+    id: z.string(),
+    type: z.enum(["desktop", "mobile"]),
+    images: z.array(sliderImageSchema),
+    isActive: z.boolean(),
+    createdAt: z.any(),
+    updatedAt: z.any(),
+    deletedAt: z.any().nullable(),
+}).passthrough();
+
 const listRoute = createRoute({
     method: "get",
     path: "/",
     tags: ["Admin - Hero Sliders"],
     summary: "List all hero sliders",
-    responses: { 200: { description: "Slider list"  } }
+    responses: {
+        200: { description: "Slider list", content: { "application/json": { schema: successEnvelope(z.array(heroSliderSchema)) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(listRoute, async (c) => {
@@ -55,7 +69,10 @@ const createSliderRoute = createRoute({
     tags: ["Admin - Hero Sliders"],
     summary: "Create a hero slider",
     request: { body: { content: { "application/json": { schema: createHeroSliderSchema } } } },
-    responses: { 201: { description: "Slider created"  } }
+    responses: {
+        201: { description: "Slider created", content: { "application/json": { schema: successEnvelope(heroSliderSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(createSliderRoute, async (c) => {
@@ -96,7 +113,10 @@ const getByIdRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
     },
-    responses: { 200: { description: "Slider details"  } }
+    responses: {
+        200: { description: "Slider details", content: { "application/json": { schema: successEnvelope(heroSliderSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(getByIdRoute, async (c) => {
@@ -123,7 +143,10 @@ const updateSliderRoute = createRoute({
         params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateHeroSliderSchema } } }
     },
-    responses: { 200: { description: "Slider updated"  } }
+    responses: {
+        200: { description: "Slider updated", content: { "application/json": { schema: successEnvelope(heroSliderSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(updateSliderRoute, async (c) => {
@@ -160,7 +183,10 @@ const deleteSliderRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
     },
-    responses: { 200: { description: "Slider deleted"  } }
+    responses: {
+        200: { description: "Slider deleted", content: { "application/json": { schema: successEnvelope(heroSliderSchema) } } },
+        ...errorResponses,
+    }
 });
 
 app.openapi(deleteSliderRoute, async (c) => {
