@@ -16,7 +16,7 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
     id: text("id").primaryKey(),
     variantId: text("variant_id")
         .notNull()
-        .references(() => productVariants.id, { onDelete: "restrict" }),
+        .references(() => productVariants.id, { onDelete: "set null" }),
     orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
     type: text("type").notNull(),
     quantity: integer("quantity").notNull(),

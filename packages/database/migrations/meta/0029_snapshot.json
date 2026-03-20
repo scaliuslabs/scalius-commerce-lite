@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5506f64c-94e1-491f-9656-5137a24a57ae",
+  "id": "31c68673-ee9c-4321-942c-e609e0ab0c29",
   "prevId": "b9f86002-635c-428b-bf4c-ae3d7d598707",
   "tables": {
     "account": {
@@ -566,7 +566,7 @@
           "name": "updated_at",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
         }
@@ -3491,7 +3491,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "inventory_movements_order_id_orders_id_fk": {
