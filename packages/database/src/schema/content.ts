@@ -1,7 +1,7 @@
 // src/db/schema/content.ts
 // Site content tables: pages, widgets, widgetHistory, heroSections, heroSliders, pageTemplates.
 
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { collections } from "./products";
@@ -31,7 +31,7 @@ export const pages = sqliteTable(
         deletedAt: integer("deleted_at", { mode: "timestamp" }),
     },
     (table) => [
-        index("pages_slug_idx").on(table.slug),
+        uniqueIndex("pages_slug_idx").on(table.slug),
         index("pages_deleted_at_idx").on(table.deletedAt),
     ],
 );

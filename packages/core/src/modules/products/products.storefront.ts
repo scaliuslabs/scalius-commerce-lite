@@ -70,24 +70,34 @@ export async function getStorefrontProducts(db: DrizzleD1Database<typeof schema>
     if (maxPrice !== undefined) conditions.push(sql`${products.price} <= ${maxPrice}`);
     if (freeDelivery === "true") conditions.push(eq(products.freeDelivery, true));
     else if (freeDelivery === "false") conditions.push(eq(products.freeDelivery, false));
-    if (hasDiscount === "true") conditions.push(sql`${products.discountPercentage} > 0`);
-    else if (hasDiscount === "false") conditions.push(sql`${products.discountPercentage} = 0 OR ${products.discountPercentage} IS NULL`);
+    if (hasDiscount === "true") conditions.push(sql`(${products.discountPercentage} > 0 OR ${products.discountAmount} > 0)`);
+    else if (hasDiscount === "false") conditions.push(sql`(${products.discountPercentage} IS NULL OR ${products.discountPercentage} = 0) AND (${products.discountAmount} IS NULL OR ${products.discountAmount} = 0)`);
     if (ids) {
         const productIds = ids.split(",");
         conditions.push(inArray(products.id, productIds));
     }
 
     let orderBy: SQL | ReturnType<typeof desc> | typeof products.name;
+    const effectivePriceSql = sql`CASE
+        WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN MAX(${products.price} - ${products.discountAmount}, 0)
+        WHEN ${products.discountPercentage} > 0 THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100.0))
+        ELSE ${products.price}
+    END`;
     if (sort === "price-asc") {
-        orderBy = sql`CASE WHEN ${products.discountPercentage} > 0 THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100)) ELSE ${products.price} END`;
+        orderBy = effectivePriceSql;
     } else if (sort === "price-desc") {
-        orderBy = desc(sql`CASE WHEN ${products.discountPercentage} > 0 THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100)) ELSE ${products.price} END`);
+        orderBy = desc(effectivePriceSql);
     } else if (sort === "name-asc") {
         orderBy = products.name;
     } else if (sort === "name-desc") {
         orderBy = desc(products.name);
     } else if (sort === "discount") {
-        orderBy = desc(products.discountPercentage);
+        // Sort by effective savings ratio (higher savings first)
+        orderBy = desc(sql`CASE
+            WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN ${products.discountAmount} / ${products.price} * 100
+            WHEN ${products.discountPercentage} > 0 THEN ${products.discountPercentage}
+            ELSE 0
+        END`);
     } else {
         orderBy = desc(products.createdAt);
     }

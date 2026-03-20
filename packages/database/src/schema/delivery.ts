@@ -62,7 +62,7 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     lastChecked: integer("last_checked", { mode: "timestamp" }),
     shipmentItems: text("shipment_items"),
     shipmentAmount: real("shipment_amount"),
-    isFinalShipment: integer("is_final_shipment", { mode: "boolean" }).default(false),
+    isFinalShipment: integer("is_final_shipment", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -71,6 +71,8 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
         .default(UNIX_NOW),
 }, (table) => [
     index("delivery_shipments_provider_status_idx").on(table.providerId, table.status),
+    index("delivery_shipments_order_id_idx").on(table.orderId),
+    index("delivery_shipments_external_id_idx").on(table.externalId),
 ]);
 
 export type DeliveryLocation = InferSelectModel<typeof deliveryLocations>;

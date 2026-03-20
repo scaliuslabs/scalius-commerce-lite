@@ -4,7 +4,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { validateSSLCommerzIPN } from "@scalius/core/modules/payments/sslcommerz";
 import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
-import { getDb } from "@scalius/database/client";
 import type { SSLCommerzIPNPayload } from "@scalius/core/modules/payments/types";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 
@@ -14,7 +13,7 @@ const KV_WEBHOOK_PREFIX = "ssl_wh:";
 const KV_WEBHOOK_TTL = 86400; // 24 hours
 
 app.post("/", async (c) => {
-  const db = getDb(c.env);
+  const db = c.get("db");
   const ssl = await getSSLCommerzSettings(db, c.env.CACHE);
 
   if (!ssl) {

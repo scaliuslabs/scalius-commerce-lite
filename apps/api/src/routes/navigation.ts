@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { db } from "@scalius/database/client";
 import { categories, pages, siteSettings } from "@scalius/database/schema";
 import { sql, isNull } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
@@ -60,6 +59,7 @@ const getNavigationRoute = createRoute({
 });
 
 app.openapi(getNavigationRoute, async (c) => {
+  const db = c.get("db");
   const { type } = c.req.valid("query");
 
   // Get site settings from database
@@ -184,6 +184,7 @@ const getNavigationByIdRoute = createRoute({
 });
 
 app.openapi(getNavigationByIdRoute, async (c) => {
+  const db = c.get("db");
   const { id } = c.req.valid("param");
 
   // Get site settings from database

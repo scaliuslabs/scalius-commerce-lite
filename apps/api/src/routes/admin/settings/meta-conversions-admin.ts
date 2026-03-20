@@ -1,7 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
 import { sql, eq, desc, count } from "drizzle-orm";
-import { getLogRetentionHours, getCleanupCheckIntervalHours } from "@scalius/core/integrations/meta/conversions-api";
 import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
 
 import { ok, created } from "../../../utils/api-response";
@@ -98,10 +97,13 @@ app.openapi(getLogsRoute, async (c) => {
     const total = totalResult?.count ?? 0;
     const logs = await db.select().from(metaConversionsLogs).orderBy(desc(metaConversionsLogs.createdAt)).limit(limit).offset(offset).all();
 
+    const settings = await db.select({ logRetentionDays: metaConversionsSettings.logRetentionDays }).from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
+    const retentionDays = settings?.logRetentionDays ?? 30;
+
     return ok(c, {
         logs: logs,
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-        retention: { hours: getLogRetentionHours(), cleanupIntervalHours: getCleanupCheckIntervalHours(), nextCleanupMessage: "Cleanup active" }
+        retention: { days: retentionDays, hours: retentionDays * 24 }
     });
 });
 
@@ -133,7 +135,9 @@ const manualCleanupRoute = createRoute({
 
 app.openapi(manualCleanupRoute, async (c) => {
     const db = c.get("db");
-    const result = await manualLogCleanup(db, getLogRetentionHours());
+    const settings = await db.select({ logRetentionDays: metaConversionsSettings.logRetentionDays }).from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
+    const retentionHours = (settings?.logRetentionDays ?? 30) * 24;
+    const result = await manualLogCleanup(db, retentionHours);
     if (result.success) return ok(c, { message: result.message });
     throw new Error(result.message);
 });

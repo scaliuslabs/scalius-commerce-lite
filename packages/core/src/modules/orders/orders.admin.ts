@@ -646,6 +646,87 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
 
+    const totalAmount = subtractPrice(
+        addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
+        data.discountAmount || 0,
+    );
+    let customerId = existingOrder.customerId;
+
+    if (data.customerPhone !== existingOrder.customerPhone) {
+        const customer = await db.select().from(customers).where(eq(customers.phone, data.customerPhone)).get();
+        if (customer) {
+            customerId = customer.id;
+        } else {
+            const [newCustomer] = await db.insert(customers).values({
+                id: "cust_" + nanoid(),
+                name: data.customerName,
+                phone: data.customerPhone,
+                email: data.customerEmail,
+                address: data.shippingAddress,
+                city: data.city,
+                zone: data.zone,
+                area: data.area,
+                totalOrders: 1,
+                totalSpent: totalAmount,
+                lastOrderAt: sql`unixepoch()`,
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            }).returning();
+            if (newCustomer) customerId = newCustomer.id;
+        }
+    }
+
+    // ── CAS check FIRST — before any inventory mutations ────────────────
+    // Optimistic locking: only update if the version hasn't changed since we read it.
+    // We write the order row before touching inventory so that a concurrent edit
+    // is detected before any irreversible stock changes are made.
+    // inventoryAction is updated after inventory ops below via a second UPDATE.
+    const updateResult = await db.update(orders).set({
+        customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        customerEmail: data.customerEmail,
+        shippingAddress: data.shippingAddress,
+        city: data.city,
+        zone: data.zone,
+        area: data.area,
+        cityName,
+        zoneName,
+        areaName,
+        notes: data.notes,
+        totalAmount,
+        shippingCharge: data.shippingCharge,
+        discountAmount: data.discountAmount,
+        status: data.status,
+        customerId,
+        version: existingOrder.version + 1,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(eq(orders.id, id), eq(orders.version, existingOrder.version))).returning();
+
+    if (updateResult.length === 0) {
+        throw new ConflictError("Order was modified by another request. Please reload and try again.");
+    }
+    const order = updateResult[0];
+    if (!order) {
+        throw new ConflictError("Order update failed unexpectedly.");
+    }
+
+    // ── Replace order items ─────────────────────────────────────────────
+    await db.delete(orderItems).where(eq(orderItems.orderId, id));
+
+    if (data.items.length > 0) {
+        await db.insert(orderItems).values(data.items.map((item) => ({
+            id: "item_" + nanoid(),
+            orderId: order.id,
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: item.price,
+            createdAt: sql`unixepoch()`,
+        })));
+    }
+
+    // ── Inventory adjustments AFTER CAS success ─────────────────────────
+    // Now safe to mutate stock — we own this version of the order.
     if (existingOrder.inventoryAction === "reserved") {
         const oldEntries: ReservationEntry[] = existingItems
             .filter((i) => i.variantId)
@@ -664,7 +745,6 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             }
         }
     } else if (existingOrder.inventoryAction === "deducted") {
-        // Direct quantity comparisons
         for (const existingItem of existingItems) {
             if (existingItem.variantId) {
                 const matchingNewItem = data.items.find(
@@ -696,84 +776,12 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         }
     }
 
-    const totalAmount = subtractPrice(
-        addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
-        data.discountAmount || 0,
-    );
-    let customerId = existingOrder.customerId;
-
-    if (data.customerPhone !== existingOrder.customerPhone) {
-        const customer = await db.select().from(customers).where(eq(customers.phone, data.customerPhone)).get();
-        if (customer) {
-            customerId = customer.id;
-        } else {
-            const [newCustomer] = await db.insert(customers).values({
-                id: "cust_" + nanoid(),
-                name: data.customerName,
-                phone: data.customerPhone,
-                email: data.customerEmail,
-                address: data.shippingAddress,
-                city: data.city,
-                zone: data.zone,
-                area: data.area,
-                totalOrders: 1,
-                totalSpent: totalAmount,
-                lastOrderAt: sql`unixepoch()`,
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            }).returning();
-            if (newCustomer) customerId = newCustomer.id;
-        }
-    }
-
-    let newInventoryAction = existingOrder.inventoryAction;
+    // ── Status-driven inventory transitions ─────────────────────────────
     if (data.status !== existingOrder.status) {
-        newInventoryAction = await applyInventoryForStatusChange(db, id, data.status);
-    }
-
-    // Optimistic locking: only update if the version hasn't changed since we read it
-    const updateResult = await db.update(orders).set({
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        customerEmail: data.customerEmail,
-        shippingAddress: data.shippingAddress,
-        city: data.city,
-        zone: data.zone,
-        area: data.area,
-        cityName,
-        zoneName,
-        areaName,
-        notes: data.notes,
-        totalAmount,
-        shippingCharge: data.shippingCharge,
-        discountAmount: data.discountAmount,
-        status: data.status,
-        inventoryAction: newInventoryAction,
-        customerId,
-        version: existingOrder.version + 1,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(eq(orders.id, id), eq(orders.version, existingOrder.version))).returning();
-
-    if (updateResult.length === 0) {
-        throw new ConflictError("Order was modified by another request. Please reload and try again.");
-    }
-    const order = updateResult[0];
-    if (!order) {
-        throw new ConflictError("Order update failed unexpectedly.");
-    }
-
-    await db.delete(orderItems).where(eq(orderItems.orderId, id));
-
-    if (data.items.length > 0) {
-        await db.insert(orderItems).values(data.items.map((item) => ({
-            id: "item_" + nanoid(),
-            orderId: order.id,
-            productId: item.productId,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            price: item.price,
-            createdAt: sql`unixepoch()`,
-        })));
+        const newInventoryAction = await applyInventoryForStatusChange(db, id, data.status);
+        await db.update(orders)
+            .set({ inventoryAction: newInventoryAction })
+            .where(eq(orders.id, id));
     }
 
     if (existingOrder.customerId) {

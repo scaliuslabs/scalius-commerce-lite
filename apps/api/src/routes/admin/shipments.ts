@@ -95,7 +95,9 @@ app.openapi(checkStatusRoute, async (c) => {
     }
 
     const previousStatus = currentShipment.status;
-    const result = await checkShipmentStatus(db, shipmentId);
+    const encryptionKey = (c.env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY as string | undefined
+        ?? (c.env as Record<string, unknown>).JWT_SECRET as string | undefined;
+    const result = await checkShipmentStatus(db, shipmentId, encryptionKey);
     const now = new Date();
 
     await db

@@ -4,6 +4,7 @@ import {
   verifyToken,
   refreshTokenIfNeeded,
 } from "../utils/jwt";
+import { UnauthorizedError } from "../utils/api-error";
 
 // Define the user type for type safety
 interface User {
@@ -34,66 +35,36 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     return next();
   }
 
+  // Get authorization header
+  const authHeader = c.req.header("Authorization") || null;
+
+  // Extract token from header
+  const token = extractTokenFromHeader(authHeader);
+
+  if (!token) {
+    throw new UnauthorizedError("Authentication required");
+  }
+
   try {
-    // Get authorization header
-    const authHeader = c.req.header("Authorization") || null;
+    // Verify token (async - checks Redis blacklist)
+    const decoded = (await verifyToken(token)) as User;
 
-    // Extract token from header
-    const token = extractTokenFromHeader(authHeader);
+    // Store user info in context
+    c.set("user", decoded);
 
-    if (!token) {
-      return c.json(
-        {
-          success: false,
-          error: "Authentication required",
-          message: "Please provide a valid authentication token",
-        },
-        401,
-      );
+    // Check if token needs to be refreshed
+    const refreshedToken = refreshTokenIfNeeded(token);
+
+    // If token was refreshed, set new token in response header
+    if (refreshedToken !== token) {
+      c.header("X-New-Token", refreshedToken);
     }
 
-    try {
-      // Verify token (async - checks Redis blacklist)
-      const decoded = (await verifyToken(token)) as User;
-
-      // Store user info in context
-      c.set("user", decoded);
-
-      // Check if token needs to be refreshed
-      const refreshedToken = refreshTokenIfNeeded(token);
-
-      // If token was refreshed, set new token in response header
-      if (refreshedToken !== token) {
-        c.header("X-New-Token", refreshedToken);
-      }
-
-      // Continue to next middleware/handler
-      await next();
-    } catch (error: unknown) {
-      // SECURITY: Use generic error message to prevent token enumeration
-      return c.json(
-        {
-          success: false,
-          error: "Invalid token",
-          message: "The provided authentication token is invalid. Please log in again.",
-        },
-        401,
-      );
-    }
+    // Continue to next middleware/handler
+    await next();
   } catch (error: unknown) {
-    // Log unexpected errors in production
-    if (process.env.NODE_ENV === "production") {
-      console.error("Auth middleware error:", error);
-    }
-
-    // Return generic error
-    return c.json(
-      {
-        success: false,
-        error: "Server error",
-        message: "An unexpected error occurred during authentication",
-      },
-      500,
-    );
+    if (error instanceof UnauthorizedError) throw error;
+    // SECURITY: Use generic error message to prevent token enumeration
+    throw new UnauthorizedError("Invalid or expired token");
   }
 };

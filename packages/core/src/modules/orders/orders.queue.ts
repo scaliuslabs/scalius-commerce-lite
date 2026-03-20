@@ -9,7 +9,7 @@
 //   - Cloudflare KV checkout status updates
 
 import { sql, eq, and } from "drizzle-orm";
-import { orders, orderItems, customers, customerHistory, discountUsage } from "@scalius/database/schema";
+import { orders, orderItems, customers, customerHistory, discounts, discountUsage } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 import { reserveStockBatch, releaseMultiple } from "../inventory";
 import { initCODTracking } from "../payments/cod";
@@ -246,31 +246,60 @@ export async function handleOrderIngestBatch(
     // ── Phase 1b: Final discount usage check ──────────────────────────────
     // Re-check discount usage limits to narrow the race window between
     // validation time (HTTP handler) and queue processing time (here).
+    // Uses customerPhone (consistent with eligibility check) rather than
+    // customerId, which may not exist yet for new customers.
     for (let i = successMessages.length - 1; i >= 0; i--) {
         const msg = successMessages[i];
         if (!msg) continue;
         const payload = msg.body;
         if (!payload.discountUsage) continue;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- orderData shape varies by queue message type
-        const customerId = (payload.orderData as any).customerId;
-        if (!customerId) continue;
+        const discountId = payload.discountUsage.discountId;
+        const customerPhone = payload.orderData.customerPhone as string | undefined;
 
-        const customerUsage = await db
-            .select({ count: sql<number>`COUNT(*)` })
-            .from(discountUsage)
-            .where(
-                and(
-                    eq(discountUsage.discountId, payload.discountUsage.discountId),
-                    eq(discountUsage.customerId, customerId),
-                ),
-            )
+        // Re-check per-customer limit using phone (matches eligibility check)
+        if (customerPhone) {
+            const customerUsage = await db
+                .select({ id: discountUsage.id })
+                .from(discountUsage)
+                .leftJoin(orders, eq(discountUsage.orderId, orders.id))
+                .where(
+                    and(
+                        eq(discountUsage.discountId, discountId),
+                        eq(orders.customerPhone, customerPhone),
+                    ),
+                )
+                .limit(1)
+                .get();
+
+            if (customerUsage) {
+                await setCheckoutStatus(env, payload.checkoutToken, "failed", "Discount already used by this customer");
+                successMessages.splice(i, 1);
+                failedMessages.push({ msg, reason: "Discount already used" });
+                continue;
+            }
+        }
+
+        // Re-check global maxUses limit
+        const discount = await db
+            .select({ maxUses: discounts.maxUses })
+            .from(discounts)
+            .where(eq(discounts.id, discountId))
             .get();
 
-        if ((customerUsage?.count ?? 0) > 0) {
-            await setCheckoutStatus(env, payload.checkoutToken, "failed", "Discount already used by this customer");
-            successMessages.splice(i, 1);
-            failedMessages.push({ msg, reason: "Discount already used" });
+        if (discount?.maxUses) {
+            const totalUsage = await db
+                .select({ count: sql<number>`COUNT(*)` })
+                .from(discountUsage)
+                .where(eq(discountUsage.discountId, discountId))
+                .get();
+
+            if ((totalUsage?.count ?? 0) >= discount.maxUses) {
+                await setCheckoutStatus(env, payload.checkoutToken, "failed", "Discount code has reached its usage limit");
+                successMessages.splice(i, 1);
+                failedMessages.push({ msg, reason: "Discount maxUses exceeded" });
+                continue;
+            }
         }
     }
 

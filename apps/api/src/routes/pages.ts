@@ -239,6 +239,7 @@ app.openapi(getPageByIdRoute, async (c) => {
   // Create an array of conditions for better type safety
   const conditions: SQL<unknown>[] = [
     eq(pages.id, id),
+    eq(pages.isPublished, true),
     isNull(pages.deletedAt),
   ];
 

@@ -4,7 +4,7 @@
 
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   NotFoundError,
@@ -104,7 +104,6 @@ export async function saveFraudProvider(
   }
 
   const providerId = provider.id || nanoid();
-  const now = new Date();
 
   const providerData = {
     name: provider.name,
@@ -123,7 +122,7 @@ export async function saveFraudProvider(
       .update(settings)
       .set({
         value: JSON.stringify(providerData),
-        updatedAt: now,
+        updatedAt: sql`unixepoch()`,
       })
       .where(
         and(eq(settings.category, CATEGORY), eq(settings.key, providerId)),
@@ -136,7 +135,7 @@ export async function saveFraudProvider(
       category: CATEGORY,
       type: "json",
       value: JSON.stringify(providerData),
-      updatedAt: now,
+      updatedAt: sql`unixepoch()`,
     });
   }
 

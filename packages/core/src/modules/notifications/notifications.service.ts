@@ -5,7 +5,7 @@
 import type { Database } from "@scalius/database/client";
 import { adminFcmTokens, settings } from "@scalius/database/schema";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql, and, inArray } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 
 // ─────────────────────────────────────────
@@ -85,10 +85,6 @@ export async function sendOrderNotification(
             tokens,
         };
 
-        if (process.env.NODE_ENV !== "production") {
-            console.log("Sending FCM background notification for order:", order.id);
-        }
-
         const response = await messaging.sendEachForMulticast(messagePayload);
 
         // Handle invalid tokens to keep the list clean
@@ -117,7 +113,7 @@ export async function sendOrderNotification(
                         isActive: false,
                         updatedAt: sql`(cast(strftime('%s','now') as int))`,
                     })
-                    .where(sql`${adminFcmTokens.token} IN ${invalidTokens}`);
+                    .where(inArray(adminFcmTokens.token, invalidTokens));
             }
         }
     } catch (error: unknown) {
