@@ -42,5 +42,4 @@ DROP TABLE `permissions`;--> statement-breakpoint
 ALTER TABLE `__new_permissions` RENAME TO `permissions`;--> statement-breakpoint
 CREATE UNIQUE INDEX `permissions_name_unique` ON `permissions` (`name`);--> statement-breakpoint
 CREATE UNIQUE INDEX `meta_conversions_settings_singleton_idx` ON `meta_conversions_settings` (`singleton_key`);--> statement-breakpoint
-CREATE UNIQUE INDEX `site_settings_singleton_idx` ON `site_settings` (`singleton_key`);--> statement-breakpoint
-PRAGMA foreign_keys=ON;
+CREATE UNIQUE INDEX `site_settings_singleton_idx` ON `site_settings` (`singleton_key`);
