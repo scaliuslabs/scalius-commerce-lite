@@ -4,7 +4,13 @@ Batched D1 queries for the public storefront API. Shapes homepage and layout dat
 
 ## Files
 
+- `index.ts` -- barrel exports (re-exports everything from `storefront.service.ts`)
 - `storefront.service.ts` -- `getHomepageData()`, `getLayoutData()`
+
+## Local Helpers
+
+- `safeJsonParse<T>(json, fallback)` -- JSON.parse with fallback on null/undefined/error
+- `unixToISO(timestamp)` -- converts Unix epoch seconds to ISO 8601 string; returns null for invalid values
 
 ## Service Functions
 
@@ -18,19 +24,21 @@ Fetches and shapes all homepage data in **two batched D1 round-trips**.
 3. Active homepage widgets from `widgets` (displayTarget = "homepage", ordered by placementRule + sortOrder)
 4. Active collections metadata from `collections` (ordered by sortOrder)
 
-**Batch 2** (4 parallel queries, driven by Batch 1 results):
-1. Products by explicit ID (from collection configs)
-2. Products by category ID (from collection configs)
-3. Category metadata (names, slugs)
-4. Featured products (from collection configs)
+**Batch 2** (driven by Batch 1 results):
+- `resolveCollectionProductsBatch()` from the collections service resolves products, categories, and featured products for all collections in a batched operation.
 
-Returns: `{ seo, hero, widgets, collections }` with computed `discountedPrice` on all products.
+Returns: `{ seo, hero, widgets, collections }`.
+
+- **SEO**: Defaults to "Scalius Commerce" / "Welcome to Scalius Commerce" if no settings row exists.
+- **Hero**: Separate `desktop` and `mobile` sliders. Images are JSON-parsed from the `images` column via `safeJsonParse()`.
+- **Widgets**: Shaped with `id`, `name`, `htmlContent`, `cssContent`, `isActive`, `displayTarget`, `placementRule`, `referenceCollectionId`, `sortOrder`.
+- **Collections**: Filtered to only include collections with resolved products. Config is JSON-parsed via `safeJsonParse()`. Includes `categories`, `products`, and `featuredProduct` from resolution.
 
 ### `getLayoutData(db)`
 
 Fetches and shapes all layout data in a **single batched D1 round-trip** (6 parallel queries):
 
-1. Active analytics scripts -- applies Partytown processing via `processAnalyticsScript()`
+1. Active analytics scripts -- applies Partytown processing via `processAnalyticsScript()` from `@scalius/core/integrations/analytics`
 2. Site settings (headerConfig, footerConfig JSON)
 3. Categories (for navigation fallback when no custom nav configured)
 4. Published pages (for navigation fallback)
@@ -39,9 +47,15 @@ Fetches and shapes all layout data in a **single batched D1 round-trip** (6 para
 
 Returns: `{ analytics, header, navigation, footer, currency, theme }`
 
-**Header processing**: Normalizes social links (supports both array and legacy `{ facebook: "url" }` format). Falls back to auto-generated navigation from categories + pages when no custom navigation is configured.
+**Analytics processing**: Each active analytics script is processed -- if `usePartytown` is true and the script matches Partytown criteria (`shouldUsePartytown()`), the config is modified via `processAnalyticsScript()`. Timestamps are converted to ISO 8601 via `unixToISO()`.
 
-**Footer processing**: Normalizes social links, menus with nanoid-generated IDs for entries missing them.
+**Header processing**: Normalizes social links (supports both array format and legacy `{ facebook: "url" }` object format). Falls back to auto-generated navigation from categories + pages when no custom navigation is configured in `headerConfig`. Includes topBar, logo, favicon, contact, and social fields with sensible defaults.
+
+**Footer processing**: Normalizes social links and menus. Uses `nanoid()` to generate IDs for menu/link entries missing them. Includes logo, favicon, tagline, description, copyrightText, menus, and social fields.
+
+**Currency**: Reads `currency_code`, `currency_symbol`, `usd_exchange_rate` from the settings table. Defaults to BDT.
+
+**Theme**: Reads storefront color overrides from the `settings` table. Returns as `{ colors: Record<string, string> }`.
 
 ## API Endpoints
 
@@ -102,10 +116,10 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 
 ## Dependencies
 
-- `@scalius/database` -- `siteSettings`, `products`, `categories`, `collections`, `widgets`, `heroSliders`, `analytics`, `pages`, `settings`, `checkoutLanguages`, `abandonedCheckouts`
+- `@scalius/database` -- `siteSettings`, `categories`, `collections`, `widgets`, `heroSliders`, `analytics`, `pages`, `settings`
 - `@scalius/core/integrations/analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
+- `@scalius/core/modules/collections/collections.service` -- `resolveCollectionProductsBatch()`
 - `nanoid` -- fallback ID generation for footer social links/menus
-- `currency.js` -- discount price calculation in `getHomepageData()`
 
 ## Known Gaps
 

@@ -1,40 +1,66 @@
 # Navigation
 
-Data layer for storefront navigation menus. Provides available linkable entities (categories, pages) that the admin navigation builder can reference.
+Data layer for storefront navigation menus. Provides linkable entities (categories, pages), CRUD for saved navigation configurations, and default navigation generation.
 
 ## Files
 
-- `index.ts` -- barrel re-exports everything from `navigation.service.ts`
-- `navigation.service.ts` -- `NavigationService.getNavigationItems(db)`
+- `index.ts` -- barrel re-exports everything from `navigation.service.ts` and `navigation.validation.ts`
+- `navigation.service.ts` -- service functions for navigation items and configuration management
+- `navigation.validation.ts` -- Zod schemas for navigation configuration
 
-## NavigationService.getNavigationItems(db)
+## Service Functions
 
-Single method. Returns `{ categories, pages }` where each entry is `{ id, name, slug, type, url }`.
+### `getNavigationItems(db)`
+
+Returns `{ categories, pages }` where each entry is `{ id, name, slug, type, url }`.
 
 - **Categories**: selects `id, name, slug` from `categories` where `deletedAt IS NULL`, ordered by `name`. URL pattern: `/categories/{slug}`.
 - **Pages**: selects `id, title, slug` from `pages` where `deletedAt IS NULL AND isPublished = true`, ordered by `title`. URL pattern: `/{slug}`.
 
 The `type` field is a SQL literal (`'category'` or `'page'`), not a DB column.
 
-## How It Is Used
+### `getNavigationMenus(db)`
 
-### Admin Side
+Returns header and footer configs from the `siteSettings` singleton. Each is JSON-parsed from `headerConfig` / `footerConfig`. Returns `{ header, footer }`.
 
-The `AddNavItemDialog` component (`apps/admin/src/components/admin/navigation/AddNavItemDialog.tsx`) fetches these items via `GET /api/v1/admin/navigation/items` to populate the category and page picker lists when adding navigation items to the header or footer builders.
+### `getNavigationMenu(db, id)`
 
-### Admin API Route (`apps/api/src/routes/admin/navigation.ts`)
+Returns a single navigation config by ID. Accepts `"header"` or `"footer"` as the ID.
 
-Manages navigation configuration stored in `siteSettings.headerConfig` / `siteSettings.footerConfig`:
+### `saveNavigationConfig(db, data)`
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/admin/navigation/items` | Fetch categories + pages via `NavigationService.getNavigationItems(db)` |
-| GET | `/admin/navigation` | Get header and footer config from `siteSettings` |
-| POST | `/admin/navigation` | Save header or footer config (`{ type, config }`) -- creates settings row if none exists |
-| PUT | `/admin/navigation/{id}` | Update config by settings ID |
-| DELETE | `/admin/navigation/{id}` | Reset config to empty (`{ type }` in body) |
+Saves a navigation configuration. Uses `siteSettings` singleton upsert (insert with `onConflictDoUpdate` targeting `singletonKey`). Accepts `{ type: "header" | "footer", config }`. Generates a `settings_` prefixed nanoid for new rows.
 
-The recursive `NavigationItem` schema uses `z.lazy()` for type-safe recursive validation:
+### `updateNavigationConfig(db, id, data)`
+
+Updates an existing navigation config by settings ID. Updates either `headerConfig` or `footerConfig` based on `data.type`.
+
+### `deleteNavigationConfig(db, id, type)`
+
+Resets a navigation config to empty. Sets the corresponding config column (headerConfig or footerConfig) to `"{}"`.
+
+### `buildDefaultNavigation(db)`
+
+Generates default navigation from categories and pages when no custom navigation is configured. Returns `NestedNavigationItem[]` with a "Home" link, a "Categories" dropdown (if categories exist), and individual page links.
+
+### `NavigationItem` interface
+
+```typescript
+interface NavigationItem {
+    id: string;
+    title: string;
+    href?: string;
+    subMenu?: NavigationItem[];
+}
+```
+
+## Validation Schemas
+
+From `navigation.validation.ts`:
+
+### `navigationItemSchema`
+
+Recursive schema using `z.lazy()` for type-safe nested navigation items:
 
 ```typescript
 const navigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() =>
@@ -47,11 +73,37 @@ const navigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() =>
 );
 ```
 
-The save config body uses `z.record(z.string(), z.any())` for the config field to accommodate the flexible JSON structure. After saving, `invalidateSiteSettingsCache(getKv())` is called to bust the KV cache.
+### `headerConfigSchema` / `footerConfigSchema`
+
+Schemas for header and footer configuration. The header config includes `topBar`, `logo`, `favicon`, `contact`, `social`, and `navigation` fields. The footer config includes `logo`, `tagline`, `description`, `copyrightText`, `menus`, and `social` fields.
+
+### `saveNavigationConfigSchema`
+
+Schema for the save operation: `{ type: "header" | "footer", config: z.record(z.string(), z.unknown()) }`. Uses `z.record()` for the config field to accommodate the flexible JSON structure.
+
+Exported type: `SaveNavigationConfigInput`.
+
+## How It Is Used
+
+### Admin Side
+
+The `AddNavItemDialog` component (`apps/admin/src/components/admin/navigation/AddNavItemDialog.tsx`) fetches items via `GET /api/v1/admin/navigation/items` to populate the category and page picker lists.
+
+### Admin API Route (`apps/api/src/routes/admin/navigation.ts`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/navigation/items` | Fetch categories + pages via `getNavigationItems(db)` |
+| GET | `/admin/navigation` | Get header and footer config via `getNavigationMenus(db)` |
+| POST | `/admin/navigation` | Save config via `saveNavigationConfig(db, data)` -- creates settings row if none exists |
+| PUT | `/admin/navigation/{id}` | Update config via `updateNavigationConfig(db, id, data)` |
+| DELETE | `/admin/navigation/{id}` | Reset config via `deleteNavigationConfig(db, id, type)` (`{ type }` in body) |
+
+After saving, `invalidateSiteSettingsCache(getKv())` is called to bust the KV cache.
 
 ### Public Routes (Storefront)
 
-The public `apps/api/src/routes/navigation.ts` does NOT use `NavigationService`. Instead, it reads `siteSettings.headerConfig` / `siteSettings.footerConfig` JSON directly. If no saved config exists, it falls back to building a default nav from categories + pages using inline queries (duplicating the logic).
+The public `apps/api/src/routes/navigation.ts` does NOT use this service. Instead, it reads `siteSettings.headerConfig` / `siteSettings.footerConfig` JSON directly. If no saved config exists, it falls back to building a default nav from categories + pages using inline queries (duplicating the logic).
 
 Two endpoints:
 - `GET /navigation` -- returns navigation by type (`header`, `footer`, or `all`). Falls back to auto-generated nav from categories + pages if no config saved. Cached 1h.
@@ -60,7 +112,7 @@ Two endpoints:
 ## Data Flow
 
 ```
-NavigationService.getNavigationItems(db)
+getNavigationItems(db)
     |
     v
 API: GET /admin/navigation/items  -->  Admin AddNavItemDialog (picker)
@@ -85,8 +137,8 @@ API: GET /admin/navigation/items  -->  Admin AddNavItemDialog (picker)
 
 - `@scalius/database` -- `categories`, `pages`, `siteSettings` schemas
 - `drizzle-orm` -- `isNull`, `sql`, `eq`
-- `@scalius/core/modules/settings` -- `invalidateSiteSettingsCache`
 - `nanoid` -- ID generation for new settings rows
+- `zod` -- validation schemas
 
 ## Known Gaps
 

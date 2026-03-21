@@ -131,14 +131,15 @@ The function is **idempotent** -- the "released" movement it creates excludes th
 | `types.ts`                 | `StockOperationResult`, `ReservationEntry`, `MovementEntry` interfaces                             |
 | `reserve.ts`               | `reserveStock()` -- single variant CAS reservation; `reserveMultiple()` -- sequential with rollback; `reserveStockBatch()` -- atomic D1 batch with CAS verification and batch rollback |
 | `deduct.ts`                | `deductStock()` -- single variant CAS deduction; `deductMultiple()` -- sequential with rollback via `restoreDeductedStock()` |
-| `release.ts`               | `releaseReservation()` -- single variant (no CAS, safe to apply unconditionally with MAX(0,...)); `releaseMultiple()` -- best-effort, continues on individual failures |
+| `restore.ts`               | `restoreDeductedStock()` -- restores deducted stock for a single variant (regular: increments `stock`, preorder: restores `preorderStock`, backorder: no-op); `restoreDeductedMultiple()` -- sequential restore with low stock alert check |
+| `release.ts`               | `releaseReservation()` -- single variant (no CAS, safe to apply unconditionally with MAX(0,...)); `releaseMultiple()` -- best-effort, continues on individual failures, checks low stock alerts after release |
 | `expiry.ts`                | `releaseExpiredReservations()` -- cron sweep; `ExpiryResult` interface                             |
 | `movements.ts`             | `recordMovement()` -- best-effort audit log insert (errors logged, not thrown)                      |
 | `alerts.ts`                | `checkAndAlertLowStock()` -- creates/reactivates/resolves `productLowStockAlerts`; `acknowledgeLowStockAlert()` -- marks alert as acknowledged |
 | `stock-adjustment.ts`      | `adjustStock()` -- relative delta adjustment with `stockVersion` CAS; `setStock()` -- absolute stocktake; `lookupByBarcodeOrSku()` -- barcode/SKU lookup with product image |
 | `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated variants/movements/alerts query; `InventoryService.adjustInventory()` -- admin adjustment with `stockVersion` CAS + retry (3 attempts, exponential backoff) |
-| `inventory.schema.ts`      | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
-| `inventory-transitions.ts` | `buildInventoryStatements()` -- returns SQL statements for batching; `applyInventoryForStatusChange()` -- standalone wrapper; single source of truth for order-status-driven inventory changes |
+| `inventory.validation.ts`  | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
+| `inventory-transitions.ts` | `buildInventoryStatements()` -- returns SQL statements for batching; `applyInventoryForStatusChange()` -- standalone wrapper; single source of truth for order-status-driven inventory changes; `InventoryAction` type |
 | `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()` |
 
 ## Database Schema
@@ -211,7 +212,7 @@ Indexes: `product_id`, `alert_status`
      └── Active alert ──> status: acknowledged
 ```
 
-Alerts are checked after: manual adjustments (negative delta), stock deductions on shipment, and scanner adjustments.
+Alerts are checked after: manual adjustments (negative delta), stock deductions on shipment, scanner adjustments, reservation releases, and stock restorations.
 
 ## Concurrency Control Details
 
@@ -227,7 +228,11 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 
 ### Release
 
-`releaseMultiple()` -- Best-effort. Does NOT use CAS because releasing is always safe (uses `MAX(0, ...)` to guard underflow). Continues processing even if individual releases fail. A missed release only over-reserves, never causes overselling.
+`releaseMultiple()` -- Best-effort. Does NOT use CAS because releasing is always safe (uses `MAX(0, ...)` to guard underflow). Continues processing even if individual releases fail. A missed release only over-reserves, never causes overselling. Checks low stock alerts after each release.
+
+### Restore
+
+`restoreDeductedStock()` -- Restores stock after a post-shipment cancellation or return. For regular pool: increments `stock` (undoes the deduction). For preorder pool: restores `preorderStock`. For backorder pool: no-op on stock counters (backorder never decremented physical stock). `restoreDeductedMultiple()` processes sequentially and checks low stock alerts after each restore.
 
 ### adjustInventory (InventoryService)
 

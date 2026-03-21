@@ -22,7 +22,6 @@ import { rateLimit } from "@scalius/shared/rate-limit";
 import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { validateAndFormatPhone, phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { safeErrorResponse, honoSafeError } from "@scalius/shared/error-utils";
 import { parseJSONSafely, validateWidgetJSON } from "@scalius/shared/json-repair";
 import { parseTagBasedResponse, StreamingTagParser } from "@scalius/shared/tag-parser";
 import { parseHtmlIntoSections } from "@scalius/shared/html-section-parser";
@@ -30,6 +29,10 @@ import { generateEAN13, validateEAN13 } from "@scalius/shared/barcode-utils";
 import { generateBarcodeSvg } from "@scalius/shared/barcode-svg";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
+import { escapeHtml } from "@scalius/shared/html-escape";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { scopeCss } from "@scalius/shared/css-scope";
+import { toISOString, fromUnixSeconds, nowUnixSeconds } from "@scalius/shared/timestamps";
 ```
 
 ## Files
@@ -45,12 +48,15 @@ import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 | `rate-limit.ts` | 74 | In-memory IP-based rate limiter | `rateLimit()` |
 | `customer-utils.ts` | 78 | Phone validation (E.164), customer stats | `validateAndFormatPhone()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
 | `order-utils.ts` | 9 | Random order ID generation (6 chars, A-Z0-9) | `generateOrderId()` |
-| `error-utils.ts` | 83 | Safe error responses that prevent stack trace leakage | `safeErrorResponse()`, `zodErrorResponse()`, `honoSafeError()` |
 | `json-repair.ts` | 171 | Multi-strategy JSON parsing for LLM responses | `extractAndParseJSON()`, `repairJSON()`, `aggressiveRepairJSON()`, `parseJSONSafely()`, `validateWidgetJSON()` |
 | `tag-parser.ts` | 272 | XML-like tag extraction for LLM widget responses | `parseTagBasedResponse()`, `validateParsedWidget()`, `StreamingTagParser`, `getTagBasedExampleFormat()` |
 | `html-section-parser.ts` | 331 | DOM-based HTML section extraction for widget editing | `parseHtmlIntoSections()`, `reconstructWidgetFromSections()` |
+| `html-escape.ts` | 22 | HTML entity escaping for user values in templates | `escapeHtml()` -- escapes `&`, `<`, `>`, `"`, `'` |
+| `html-sanitize.ts` | 27 | Lightweight XSS sanitizer for admin-authored widget content | `sanitizeHtml()` -- strips `<script>` tags, `on*` handlers, `javascript:` URLs |
+| `css-scope.ts` | 223 | Scopes CSS selectors under a wrapper class | `scopeCss()` -- prevents widget styles from leaking; handles `@media`, `@keyframes`, comma-separated selectors, `body`/`html`/`*` rewriting |
+| `timestamps.ts` | 21 | Unix epoch seconds utilities for service layer | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()` |
 | `barcode-utils.ts` | 30 | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
-| `barcode-svg.ts` | 206 | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` |
+| `barcode-svg.ts` | 206 | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` -- uses `escapeHtml()` for label text |
 | `storefront-url.ts` | 29 | Storefront URL path construction | `buildStorefrontPath()` |
 | `layout-cache.ts` | 40 | In-memory TTL cache (5 min) for admin layout data | `layoutCache`, `CACHE_KEYS` |
 
@@ -83,9 +89,22 @@ Runtime dependencies (listed in `package.json`):
 
 `json-repair.ts` and `tag-parser.ts` work together for AI-generated widget content. `tag-parser.ts` is preferred (tag-based extraction is more reliable than JSON from LLMs), with `json-repair.ts` as a fallback. Both support multi-strategy parsing: direct parse, markdown extraction, tag extraction, aggressive repair.
 
+### HTML Security
+
+Two complementary utilities:
+- `html-escape.ts` (`escapeHtml`) -- for escaping user-supplied values inserted into HTML templates (email templates, barcode labels). Prevents HTML injection.
+- `html-sanitize.ts` (`sanitizeHtml`) -- for sanitizing admin-authored HTML content (widgets). Strips XSS vectors (`<script>`, event handlers, `javascript:` URLs) while preserving all other HTML structure.
+
+### CSS Scoping
+
+`css-scope.ts` (`scopeCss`) prefixes all CSS selectors with a unique wrapper class to prevent widget styles from leaking into the rest of the page. Handles `@media`/`@supports`/`@layer`/`@container` at-rules (prefixes inner selectors), passes through `@keyframes`/`@font-face`, and rewrites `body`/`html`/`*`/`:root` selectors to the scope class.
+
+### Timestamps
+
+`timestamps.ts` provides utilities for working with Unix epoch seconds at the service/application layer. For Drizzle schema defaults, use `UNIX_NOW` from `@scalius/database/schema` instead.
+
 ## Known Gaps
 
-- `drizzle-orm` is listed as a dependency in `package.json` but is not imported by any source file in this package. It may be a vestigial dependency.
 - `rate-limit.ts` uses in-memory state that resets on Worker isolate restart.
 - `layout-cache.ts` also uses in-memory state with the same limitation.
 - `html-section-parser.ts` requires a browser DOM (`DOMParser`); it falls back to a single-section result on the server.

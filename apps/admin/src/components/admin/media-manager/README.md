@@ -22,6 +22,7 @@ media-manager/
     FolderBrowser.tsx       -- collapsible sidebar: "All Files", "Uncategorized", named folders with color-coded icons
   hooks/
     index.ts               -- re-exports all hooks
+    useMediaManager.ts     -- shared orchestrator hook: composes useMediaFiles + useMediaUpload + useFolders into unified state
     useMediaFiles.ts       -- file list state, pagination, search, delete (optimistic), race-condition prevention via requestId ref
     useMediaUpload.ts      -- upload orchestration with client-side validation, progress tracking, partial-success handling
     useFolders.ts          -- folder CRUD, currentFolderId state, auto-load option
@@ -90,23 +91,41 @@ Drag-and-drop reorderable image grid for product forms. Uses `@dnd-kit/core` + `
 
 ## MediaApiClient Methods
 
-All calls go through admin proxy at `/api/v1/admin/media/*`.
+All calls go through admin proxy at `/api/v1/admin/media/*`. Uses `unwrapEnvelope()` and `extractApiError()` from `@/lib/api-helpers` for response handling.
 
 | Method               | HTTP                            | Notes                                                                 |
 |----------------------|---------------------------------|-----------------------------------------------------------------------|
-| `fetchFiles`         | `GET /`                         | Handles both raw API envelope and proxy-unwrapped response. Page size default: 12 (set in hook, not client). |
+| `fetchFiles`         | `GET /`                         | Page size default: 12 (set in hook, not client). Uses `unwrapEnvelope`. |
 | `uploadFiles`        | `POST /upload`                  | Multipart FormData. Returns `MediaFile[]` or `{files, warnings, summary}`. Handles 201/207/4xx/5xx. |
 | `deleteFile`         | `DELETE /{id}`                  | Single file.                                                          |
 | `deleteFiles`        | Sequential `DELETE /{id}` loop  | No batch endpoint. Returns `{success, failed}` counts.                |
-| `fetchFolders`       | `GET /folders`                  | Handles both envelope formats.                                        |
+| `fetchFolders`       | `GET /folders`                  | Uses `unwrapEnvelope`.                                                |
 | `createFolder`       | `POST /folders`                 | Body: `{name, parentId?}`.                                            |
 | `deleteFolder`       | `DELETE /folders/{id}`          |                                                                       |
 | `moveFilesToFolder`  | `POST /move`                    | Body: `{fileIds[], folderId}`.                                        |
 | `updateFileMetadata` | `PATCH /{id}`                   | Body: `{filename?, folderId?}`. Not used in current UI flow.          |
 
-Envelope handling: all `fetchFiles`/`fetchFolders`/`updateFileMetadata` methods check for `json.data` (raw API envelope) vs top-level fields (proxy-unwrapped), handling both transparently.
-
 ## Hooks
+
+### useMediaManager(options)
+
+Shared orchestrator hook used by both `MediaManager` (dialog) and `MediaManagerPage` (standalone). Composes `useMediaFiles`, `useMediaUpload`, and `useFolders` into a single unified API.
+
+Options (`UseMediaManagerOptions`):
+- `autoLoad: boolean` -- auto-load files and folders on mount (`false` for dialog, `true` for page)
+- `maxFileSize?: number` -- max upload size in MB (default: 10)
+- `acceptedFileTypes?: string` -- MIME filter (default: `"image/*"`)
+- `onSelect?: (file: MediaFile) => void` -- single file callback (dialog mode)
+- `onSelectMultiple?: (files: MediaFile[]) => void` -- multi-select callback (dialog mode)
+
+Key behaviors:
+- Debounced search using refs to avoid recreating timers on dependency changes (500ms delay)
+- Auto-reloads file list when `currentFolderId` changes (page mode only)
+- After upload: auto-selects newly uploaded files in selection mode, or auto-selects single file via `onSelect`
+- Uses `mountedRef` to prevent state updates after unmount
+- Handles folder-aware file operations (passes `currentFolderId` as `folderId` filter)
+
+Returns all state, setters, and action handlers consumed by `MediaManager` and `MediaManagerPage`.
 
 ### useMediaFiles(autoLoad)
 
@@ -194,7 +213,7 @@ When files are selected (single or multi), their IDs are prefixed with `"temp_"`
 - **No file rename UI** -- `MediaApiClient.updateFileMetadata` exists but no component exposes it (no inline rename in MediaCard).
 - **Upload progress is fake** -- `uploadProgress` state is initialized but never updated with real progress. The upload is a single fetch call, not chunked. The progress bar shows 100% with pulse animation.
 - **MediaUploadZone is orphaned** -- the component exists but is not used in either MediaManager or MediaManagerPage. Upload is handled by the MediaFilterBar button and dialog-level drag-and-drop handlers.
-- **No sort controls** -- `MediaFilterOptions` defines `sortBy`/`sortOrder` fields and `MediaApiClient.fetchFiles` sends them as query params, but the API ignores them (always `createdAt DESC`) and no UI sort controls exist.
+- **No sort controls** -- `MediaFilterOptions` defines `sortBy`/`sortOrder` fields and `MediaApiClient.fetchFiles` sends them as query params, but no UI sort controls exist.
 - **No file type filter** -- `MediaFilterOptions.fileType` exists in types but is never set or used.
 - **No date range filter** -- `MediaFilterOptions.dateFrom`/`dateTo` exist in types but are never set or used.
 - **Bulk delete is sequential** -- no batch delete API endpoint; files are deleted one at a time.

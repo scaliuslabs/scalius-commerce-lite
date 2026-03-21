@@ -1,6 +1,6 @@
 # Pages
 
-CMS page management with TipTap rich text editing, publish/unpublish workflow, SEO metadata, shortcode processing, and bulk operations.
+CMS page management with TipTap rich text editing, publish/unpublish workflow, SEO metadata, shortcode processing, public query functions, and bulk operations.
 
 ## Content System
 
@@ -51,10 +51,15 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 
 ### Service Functions
 
-**Queries:**
+**Admin Queries:**
 - `listPages(db, options)` -- paginated list with FTS5 search, sort (`title`/`createdAt`/`updatedAt`/`sortOrder`), trash filter. Defaults: page 1, limit 10, sort by `updatedAt` desc.
 - `getPageById(db, id)` -- single page by ID (non-deleted only)
 - `getPageBySlug(db, slug)` -- single page by slug (non-deleted only)
+
+**Public Queries:**
+- `getPublicPageById(db, id)` -- single published page by ID (non-deleted, `isPublished = true`)
+- `getPublicPageBySlug(db, slug)` -- single published page by slug (non-deleted, `isPublished = true`)
+- `getPublicPages(db, options?)` -- paginated list of published pages. Sort options: `title`, `createdAt`, `-title`, `-createdAt` (prefix `-` for descending). Defaults: page 1, limit 10, sort by `title` asc.
 
 **Mutations:**
 - `createPage(db, data)` -- inserts with `page_` prefixed nanoid; checks slug uniqueness among non-deleted pages; returns `{ id }`
@@ -74,6 +79,8 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 - `publishedAt`: optional date (auto-set on publish if not provided)
 - `sortOrder`: number (default 0)
 - `hideHeader`, `hideFooter`, `hideTitle`: boolean (default false)
+
+Exported types: `CreatePageInput`, `UpdatePageInput`.
 
 ## API Endpoints
 

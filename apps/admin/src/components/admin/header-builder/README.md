@@ -7,7 +7,7 @@ Admin UI for configuring the storefront header. Manages logo, favicon, announcem
 | File | Purpose |
 |------|---------|
 | `index.ts` | Barrel exports: `HeaderBuilder`, all section components, all types |
-| `types.ts` | `HeaderConfig`, `SocialLink`, `TopBarConfig`, `LogoConfig`, `FaviconConfig`, `ContactConfig`, `NavigationItem`, `HeaderBuilderProps`, `defaultHeaderConfig`, `MediaFile` |
+| `types.ts` | `HeaderConfig`, `TopBarConfig`, `FaviconConfig`, `ContactConfig`, `HeaderBuilderProps`, `defaultHeaderConfig`. Re-exports `SocialLink`, `LogoConfig` from `@/components/admin/shared/builder-types`, `NavigationItem` from `@/components/admin/navigation/types`, `MediaFile` from `@/components/admin/media-manager/types` |
 | `HeaderBuilder.tsx` | Main component: tabbed UI (Branding, Announcement, Contact & Social, Navigation), legacy config migration, save handler |
 | `BrandingSection.tsx` | Logo + favicon upload via `MediaManager`, preview, alt text input. Logo is required (blocks save if missing) |
 | `TopBarSection.tsx` | Announcement bar: enable/disable switch + text input |
@@ -19,14 +19,21 @@ Admin UI for configuring the storefront header. Manages logo, favicon, announcem
 
 ```typescript
 interface HeaderConfig {
-  topBar: { text: string; isEnabled: boolean };
-  logo: { src: string; alt: string };
-  favicon: { src: string; alt: string };
-  contact: { phone: string; text: string; isEnabled: boolean };
-  social: SocialLink[];        // { id, label, url, iconUrl? }
+  topBar: TopBarConfig;       // { text, isEnabled }
+  logo: LogoConfig;           // { src, alt }
+  favicon: FaviconConfig;     // { src, alt }
+  contact: ContactConfig;     // { phone, text, isEnabled }
+  social: SocialLink[];       // { id, label, url, iconUrl? }
   navigation: NavigationItem[]; // Recursive menu tree
 }
 ```
+
+## Shared Types
+
+Types are imported from shared locations (no longer duplicated):
+- `SocialLink`, `LogoConfig` from `@/components/admin/shared/builder-types`
+- `NavigationItem` from `@/components/admin/navigation/types`
+- `MediaFile` from `@/components/admin/media-manager/types`
 
 ## Legacy Config Migration
 
@@ -46,22 +53,20 @@ interface HeaderConfig {
 4. If `onSave` is a string, POSTs to that URL
 5. Default: POSTs to `/api/v1/admin/settings/header`
 
-The save endpoint is NOT the navigation admin route (`/admin/navigation`). The header builder uses a different settings endpoint that stores the entire header config blob.
-
 ## API Endpoints Used
 
-| Endpoint | Method | Used By | Purpose |
-|----------|--------|---------|---------|
-| `/api/v1/admin/settings/header` | POST | HeaderBuilder save | Persist entire header config |
-| `/api/v1/admin/navigation/items` | GET | AddNavItemDialog | Fetch categories + pages for picker |
-| `/api/v1/admin/attributes?limit=100` | GET | AddNavItemDialog | Fetch filterable attributes for dynamic links |
-| `/api/v1/admin/attributes/{id}/values` | GET | AddNavItemDialog | Fetch values for a specific attribute |
-| `/api/v1/admin/navigation/preview-products` | GET | AddNavItemDialog | Preview product count for dynamic link |
-| `/api/v1/admin/settings/storefront-url` | GET | `useStorefrontUrl` hook | Base URL for preview links |
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/admin/settings/header` | POST | Persist entire header config |
+| `/api/v1/admin/navigation/items` | GET | Fetch categories + pages for picker |
+| `/api/v1/admin/attributes?limit=100` | GET | Fetch filterable attributes for dynamic links |
+| `/api/v1/admin/attributes/{id}/values` | GET | Fetch values for a specific attribute |
+| `/api/v1/admin/navigation/preview-products` | GET | Preview product count for dynamic link |
+| `/api/v1/admin/settings/storefront-url` | GET | Base URL for preview links |
 
 ## Where It Is Used
 
-`apps/admin/src/pages/admin/settings/index.astro` renders `GeneralSettingsPage` which lazy-loads `HeaderBuilder` in the "Header" tab. Initial config is fetched server-side by `getGeneralSettingsData()` in `apps/admin/src/loaders/admin/settings.ts` via `GET /settings/general`.
+`apps/admin/src/pages/admin/settings/index.astro` renders `GeneralSettingsPage` which lazy-loads `HeaderBuilder` in the "Header" tab.
 
 ## Storefront Consumption
 
@@ -74,16 +79,8 @@ Storefront clients:
 - `apps/storefront/src/lib/api/header.ts` -- `getHeaderData()`, edge-cached
 - `apps/storefront/src/lib/api/navigation.ts` -- `getNavigationData("header")`, edge-cached
 
-Storefront components:
-- `apps/storefront/src/components/header/header.astro` -- orchestrator
-- `apps/storefront/src/components/header/HeaderLayout.astro` -- top bar, logo, contact, social, search, cart, scroll behavior
-- `apps/storefront/src/components/header/DesktopNav.astro` -- horizontal nav with overflow "More" dropdown, `DynamicNav` class for responsive overflow
-- `apps/storefront/src/components/header/RecursiveDesktopNav.astro` -- recursive flyout submenus (unlimited depth)
-- `apps/storefront/src/components/header/MobileMenu.astro` -- slide-out panel with accordion submenus (3 levels hardcoded)
-
 ## Known Gaps
 
-- **Social links format mismatch**: The admin saves `SocialLink` as `{ id, label, url, iconUrl? }`. The public header API route (`apps/api/src/routes/header.ts`) returns `social: { facebook: string }` -- it reads only `headerConfig.social?.facebook`, ignoring the new array format. The storefront `HeaderLayout.astro` handles both old and new formats by checking for `.label || .platform`.
-- **TopBar.isEnabled not in public API**: The header API route returns only `topBar.text`, not `isEnabled`. The storefront `header.astro` defaults `isEnabled` to `true` if missing, so disabling the top bar in the admin may not take effect via the public header API. However, the storefront also reads the full config via the navigation route which may include the full headerConfig.
-- **Mobile menu depth limit**: `MobileMenu.astro` hardcodes 3 levels of nesting. The admin builder supports 10 levels. Items deeper than level 3 are silently dropped in the mobile view.
-- **Favicon not served**: The favicon config is saved but the storefront does not currently read it from the header API to set the HTML `<link rel="icon">` -- the storefront uses a static favicon.
+- **TopBar.isEnabled not in public API**: The header API route returns only `topBar.text`, not `isEnabled`. The storefront defaults `isEnabled` to `true` if missing.
+- **Mobile menu depth limit**: `MobileMenu.astro` hardcodes 3 levels. The admin builder supports 10 levels. Items deeper than level 3 are silently dropped.
+- **Favicon not served**: The favicon config is saved but the storefront does not read it from the header API to set `<link rel="icon">` -- uses a static favicon.
