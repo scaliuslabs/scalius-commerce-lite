@@ -16,6 +16,8 @@ import {
 import CategoryFilters from "@/components/CategoryFilters";
 import RichContent from "@/components/RichContent.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
+import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   SlidersHorizontal,
   X,
@@ -138,9 +140,46 @@ const analyticsProductData = products.map((p) => ({
   name: p.name,
   price: p.discountedPrice,
 }));
+
+// --- SEO: per SEO-03, SEO-04, OG-02 ---
+const storefrontUrl = getRuntimeStorefrontUrl();
+// Canonical always points to page 1 -- strips ?page, ?sortBy, and filter params (per CAN-01)
+const canonicalUrl = `${storefrontUrl}/categories/${slug}`;
+
+// OG image from category image (per OG-02, OG-05)
+const ogImageUrl = category?.imageUrl
+  ? getOptimizedImageUrl(category.imageUrl, { width: 1200, height: 630, quality: 85, format: "auto", fit: "cover" })
+  : null;
+
+// CollectionPage JSON-LD with embedded BreadcrumbList (per SEO-03, SEO-04)
+const collectionJsonLd = category ? JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "name": category.name,
+  "description": category.metaDescription || `Browse products in ${category.name}`,
+  "url": canonicalUrl,
+  "numberOfItems": pagination.total,
+  "breadcrumb": {
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": `${storefrontUrl}/` },
+      { "@type": "ListItem", "position": 2, "name": category.name, "item": canonicalUrl }
+    ]
+  }
+}) : null;
 ---
 
-<Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>
+<Layout
+  title={pageTitle}
+  description={pageDescription}
+  layoutData={layoutData}
+  canonicalUrl={canonicalUrl}
+  ogImage={ogImageUrl ?? undefined}
+  ogType="website"
+>
+  <Fragment slot="head">
+    {collectionJsonLd && <script type="application/ld+json" set:html={collectionJsonLd} />}
+  </Fragment>
   <main
     class="min-h-screen bg-gray-50"
     data-category-name={category?.name}
