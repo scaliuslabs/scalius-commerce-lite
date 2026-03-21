@@ -81,7 +81,7 @@ Plans:
 Plans:
 - [x] 04-01-PLAN.md — Business settings service + API route (GET/POST /admin/settings/business)
 - [x] 04-02-PLAN.md — DB migration (invoice_number column) + invoice numbering service with CAS counter
-- [ ] 04-03-PLAN.md — Business settings admin UI tab in GeneralSettingsPage
+- [x] 04-03-PLAN.md — Business settings admin UI tab in GeneralSettingsPage
 - [ ] 04-04-PLAN.md — Invoice API endpoint, Astro page, React actions, Print Invoice button on order view
 
 ## Progress
