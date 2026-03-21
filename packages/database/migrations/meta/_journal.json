@@ -225,6 +225,13 @@
       "when": 1774310400000,
       "tag": "0031_bengali_fts5_tokenizer",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1774130915687,
+      "tag": "0032_lyrical_adam_warlock",
+      "breakpoints": true
     }
   ]
 }
