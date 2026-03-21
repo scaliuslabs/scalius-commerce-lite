@@ -58,6 +58,7 @@ export const orders = sqliteTable("orders", {
         .notNull()
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
+    invoiceNumber: integer("invoice_number"),
 }, (table) => [
     index("orders_status_idx").on(table.status),
     index("orders_payment_status_idx").on(table.paymentStatus),
