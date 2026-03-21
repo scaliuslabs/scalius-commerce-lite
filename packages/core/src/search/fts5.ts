@@ -1,6 +1,6 @@
 import { sql, type SQL } from "drizzle-orm";
 
-const FTS5_SPECIAL_CHARS = /["\-*(){}[\]^~:\\/<>|@#&+!?.,'=]/g;
+const FTS5_SPECIAL_CHARS = /["\-*(){}[\]^~:\\/<>|@#&+!?.,'=\u0964\u0965]/g;
 
 /**
  * Sanitize user input for use in an FTS5 MATCH expression.
