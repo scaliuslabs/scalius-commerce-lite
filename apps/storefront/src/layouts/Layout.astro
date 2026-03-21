@@ -8,6 +8,8 @@ import { getLayoutData, type LayoutData } from "@/lib/api";
 import type { AnalyticsConfig } from "@/lib/api";
 import CommandPalette from "@/components/search/CommandPalette";
 import AuthModal from "@/components/AuthModal";
+import { resolveMediaUrl } from "@/lib/media-url";
+import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
 
 interface Props {
   title: string;
@@ -16,6 +18,13 @@ interface Props {
   hideFooter?: boolean;
   /** Pre-fetched layout data for parallel loading optimization */
   layoutData?: LayoutData | null;
+  // SEO props — per CAN-01, CAN-02, OG-01 through OG-05, SEO-05, SEO-06
+  canonicalUrl?: string;
+  ogImage?: string;
+  ogType?: "website" | "product";
+  ogPrice?: string;
+  ogCurrency?: string;
+  noindex?: boolean;
 }
 
 const {
@@ -24,6 +33,12 @@ const {
   hideHeader = false,
   hideFooter = false,
   layoutData: providedLayoutData,
+  canonicalUrl,
+  ogImage,
+  ogType = "website",
+  ogPrice,
+  ogCurrency,
+  noindex,
 } = Astro.props;
 
 // Use provided layout data if available (parallel fetch), otherwise fetch here (backward compat)
@@ -52,6 +67,38 @@ const footerData = layoutData?.footer ?? {
 };
 
 const faviconUrl = headerData?.favicon?.src || "/favicon.svg";
+
+// --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
+const storeName = footerData.copyrightText || headerData.logo.alt || "Store";
+const storefrontUrl = getRuntimeStorefrontUrl();
+
+// Organization JSON-LD — only emit when we have a logo (per SEO-05)
+const logoUrl = headerData.logo.src ? resolveMediaUrl(headerData.logo.src) : null;
+const socialUrls = (footerData.social || []).map((s: { url?: string }) => s.url).filter(Boolean);
+const orgJsonLd = logoUrl ? JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": storeName,
+  "url": storefrontUrl,
+  "logo": { "@type": "ImageObject", "url": logoUrl },
+  ...(socialUrls.length > 0 ? { "sameAs": socialUrls } : {}),
+}) : null;
+
+// WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
+const websiteJsonLd = storefrontUrl ? JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": storeName,
+  "url": storefrontUrl,
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": {
+      "@type": "EntryPoint",
+      "urlTemplate": `${storefrontUrl}/search?q={search_term_string}`
+    },
+    "query-input": "required name=search_term_string"
+  }
+}) : null;
 
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
@@ -161,6 +208,36 @@ const cdnDomain = cdnDomainUrl || null;
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
     {description && <meta name="description" content={description} />}
+
+    {/* Canonical URL — per CAN-01, CAN-02 */}
+    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+
+    {/* Open Graph tags — per OG-01 through OG-05 */}
+    <meta property="og:site_name" content={storeName} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={title} />
+    {description && <meta property="og:description" content={description} />}
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    {ogImage && <meta property="og:image" content={ogImage} />}
+    {ogImage && <meta property="og:image:width" content="1200" />}
+    {ogImage && <meta property="og:image:height" content="630" />}
+    {ogImage && <meta property="og:image:alt" content={title} />}
+    {ogPrice && <meta property="og:price:amount" content={ogPrice} />}
+    {ogCurrency && <meta property="og:price:currency" content={ogCurrency} />}
+
+    {/* Twitter Card — per OG-04 */}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    {description && <meta name="twitter:description" content={description} />}
+    {ogImage && <meta name="twitter:image" content={ogImage} />}
+    {ogImage && <meta name="twitter:image:alt" content={title} />}
+
+    {/* Robots — noindex for pages that should be excluded */}
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+
+    {/* Global JSON-LD: Organization + WebSite — per SEO-05, SEO-06 */}
+    {orgJsonLd && <script type="application/ld+json" set:html={orgJsonLd} />}
+    {websiteJsonLd && <script type="application/ld+json" set:html={websiteJsonLd} />}
 
     {headScripts.map((script) => <Fragment set:html={script.config} />)}
 
