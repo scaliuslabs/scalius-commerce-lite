@@ -28,10 +28,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Admin can search products, categories, customers, and pages using Bengali text in the admin dashboard
   3. Searching in English continues to return correct results with no degradation
   4. Bengali vowel signs remain attached to their consonants in search results (no syllable splitting)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: TBD
+- [ ] 01-01-PLAN.md — Create Bengali FTS5 tokenizer migration and harden query sanitizer
+- [ ] 01-02-PLAN.md — Validate migration on local D1 and verify Bengali + English search
 
 ### Phase 2: Storefront SEO
 **Goal**: Storefront pages are discoverable by search engines and shareable on social platforms with rich previews
@@ -86,7 +87,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Bengali FTS5 Search | 0/0 | Not started | - |
+| 1. Bengali FTS5 Search | 0/2 | Planning complete | - |
 | 2. Storefront SEO | 0/0 | Not started | - |
 | 3. SMS OTP Providers | 0/0 | Not started | - |
 | 4. Invoice & Business Settings | 0/0 | Not started | - |
