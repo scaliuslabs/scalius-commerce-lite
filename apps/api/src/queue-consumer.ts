@@ -25,6 +25,8 @@ import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core
 import { sendEmail } from "@scalius/core/integrations/email";
 import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
+import { getEncryptionKey } from "./utils/encryption-key";
 
 // Re-export so webhook routes can import message types from one place.
 export type { OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
@@ -224,8 +226,20 @@ async function processQueueMessage(
         }
         console.log(`[Queue] Sent WhatsApp OTP to ${payload.identifier}`);
       } else {
-        // SMS provider logic pending — see TODO above
-        console.log(`[Queue] SMS OTP requested to ${payload.identifier}. Provider logic pending.`);
+        // SMS OTP via configured BD SMS gateway
+        const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+        const smsProvider = await getActiveSmsProvider(db, encryptionKey);
+        if (!smsProvider) {
+          throw new Error("SMS OTP requested but no SMS provider is configured. Configure an SMS provider in Auth & Access settings.");
+        }
+        const result = await smsProvider.sendSms({
+          to: payload.identifier,  // Already E.164 from customers.phone
+          message: `Your login code: ${payload.code}\n\nValid for 5 minutes. Do not share.`,
+        });
+        if (!result.success) {
+          throw new Error(`SMS OTP delivery failed via ${smsProvider.name}: ${result.rawStatus}`);
+        }
+        console.log(`[Queue] SMS OTP sent via ${smsProvider.name} to ${payload.identifier}, ref=${result.providerRef}`);
       }
       break;
     }
