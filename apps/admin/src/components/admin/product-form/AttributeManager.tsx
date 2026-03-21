@@ -54,7 +54,7 @@ export function AttributeManager({
 
   const fetchAllAttributes = useCallback(async () => {
     try {
-      const response = await fetch("/api/v1/admin/attributes?limit=999");
+      const response = await fetch("/api/v1/admin/attributes?limit=500");
       if (!response.ok) {
         const errorJson = await response.json().catch(() => ({}));
         throw new Error(extractApiError(errorJson, "Failed to load attributes"));
