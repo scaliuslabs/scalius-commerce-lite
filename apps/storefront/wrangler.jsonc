@@ -10,7 +10,8 @@
 	"limits": {
 		"cpu_ms": 300000
 	},
-	"workers_dev": true,
+	// workers_dev: false — Workers only accessible via custom domains, not *.workers.dev
+	"workers_dev": false,
 	"preview_urls": false,
 	"observability": {
 		"enabled": true

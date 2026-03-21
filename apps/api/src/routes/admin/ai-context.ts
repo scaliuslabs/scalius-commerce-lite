@@ -20,7 +20,7 @@ import * as SettingsService from "@scalius/core/modules/settings/settings.servic
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 interface VariantWithBuyNowUrl extends ProductVariant {
     buyNowUrl: string;

@@ -5,6 +5,7 @@ import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { ok } from "../utils/api-response";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 import { resolveCollectionProducts } from "@scalius/core/modules/collections/collections.service";
 
 // Create an OpenAPIHono app for collection routes
@@ -14,7 +15,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 3600,
+    ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:collections:",
     varyByQuery: true,
     methods: ["GET"]

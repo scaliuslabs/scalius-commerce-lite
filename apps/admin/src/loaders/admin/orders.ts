@@ -49,43 +49,70 @@ export async function getOrdersIndexData(options: {
 
 export async function getOrderFormProducts() {
   try {
+    // Limit to 100 products to avoid excessive API calls.
+    // Each product requires a detail fetch for variant data (no batch endpoint).
+    const MAX_PRODUCTS = 100;
+    const BATCH_SIZE = 10;
+
     const result = await apiGet<{ products: ProductListItem[]; pagination: PaginationResponse }>("/products", {
       page: "1",
-      limit: "999",
+      limit: String(MAX_PRODUCTS),
     });
 
-    const productsWithVariants = await Promise.all(
-      (result.products || []).map(async (product) => {
-        try {
-          const detail = await apiGet<ProductDetail>("/products/" + product.id);
-          return {
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            discountPercentage: product.discountPercentage ?? null,
-            variants: (detail.variants || [])
-              .filter((v: ProductVariant) => !v.deletedAt)
-              .map((v: ProductVariant) => ({
-                id: v.id,
-                size: v.size,
-                color: v.color,
-                weight: v.weight,
-                sku: v.sku || "",
-                price: v.price ?? 0,
-                stock: v.stock,
-              })),
-          };
-        } catch {
-          return {
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            discountPercentage: product.discountPercentage ?? null,
-            variants: [],
-          };
-        }
-      }),
-    );
+    const products = result.products || [];
+    const productsWithVariants: Array<{
+      id: string;
+      name: string;
+      price: number;
+      discountPercentage: number | null;
+      variants: Array<{
+        id: string;
+        size: string | null;
+        color: string | null;
+        weight: number | null;
+        sku: string;
+        price: number;
+        stock: number;
+      }>;
+    }> = [];
+
+    // Fetch variant details in batches to avoid overwhelming the API
+    for (let i = 0; i < products.length; i += BATCH_SIZE) {
+      const batch = products.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (product) => {
+          try {
+            const detail = await apiGet<ProductDetail>("/products/" + product.id);
+            return {
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              discountPercentage: product.discountPercentage ?? null,
+              variants: (detail.variants || [])
+                .filter((v: ProductVariant) => !v.deletedAt)
+                .map((v: ProductVariant) => ({
+                  id: v.id,
+                  size: v.size,
+                  color: v.color,
+                  weight: typeof v.weight === "string" ? parseFloat(v.weight) || null : (v.weight ?? null),
+                  sku: v.sku || "",
+                  price: v.price ?? 0,
+                  stock: v.stock ?? 0,
+                })),
+            };
+          } catch {
+            return {
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              discountPercentage: product.discountPercentage ?? null,
+              variants: [],
+            };
+          }
+        }),
+      );
+      productsWithVariants.push(...batchResults);
+    }
 
     return productsWithVariants;
   } catch {

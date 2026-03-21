@@ -5,7 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { errorResponses } from "../../schemas/responses";
 import { ServiceUnavailableError } from "../../utils/api-error";
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const PROMPT_URLS = {
     widget: "https://text.wrygo.com/home-page-prompt.txt",

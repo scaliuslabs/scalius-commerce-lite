@@ -7,7 +7,7 @@ import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProv
 import { ok, created } from "../../utils/api-response";
 import { ValidationError } from "../../utils/api-error";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
 
 // ── List Providers ──
@@ -32,19 +32,15 @@ const listRoute = createRoute({
 });
 
 app.openapi(listRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const providers = await getFraudProviders(db);
+    const db = c.get("db");
+    const providers = await getFraudProviders(db);
 
-        const maskedProviders = providers.map((provider) => ({
-            ...provider,
-            apiKey: provider.apiKey ? MASKED_VALUE : ""
-        }));
+    const maskedProviders = providers.map((provider) => ({
+        ...provider,
+        apiKey: provider.apiKey ? MASKED_VALUE : ""
+    }));
 
-        return ok(c, maskedProviders);
-    } catch (error: unknown) {
-        throw error;
-    }
+    return ok(c, maskedProviders);
 });
 
 // ── Create Provider ──
@@ -71,21 +67,17 @@ const createProviderRoute = createRoute({
 });
 
 app.openapi(createProviderRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const provider = c.req.valid("json");
+    const db = c.get("db");
+    const provider = c.req.valid("json");
 
-        const savedProvider = await saveFraudProvider(db, provider);
+    const savedProvider = await saveFraudProvider(db, provider);
 
-        const maskedResponse = {
-            ...savedProvider,
-            apiKey: savedProvider.apiKey ? MASKED_VALUE : ""
-        };
+    const maskedResponse = {
+        ...savedProvider,
+        apiKey: savedProvider.apiKey ? MASKED_VALUE : ""
+    };
 
-        return created(c, maskedResponse);
-    } catch (error: unknown) {
-        throw error;
-    }
+    return created(c, maskedResponse);
 });
 
 // ── Update Provider ──
@@ -113,29 +105,25 @@ const updateProviderRoute = createRoute({
 });
 
 app.openapi(updateProviderRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const validated = c.req.valid("json");
-        let apiKey = validated.apiKey;
+    const db = c.get("db");
+    const validated = c.req.valid("json");
+    let apiKey = validated.apiKey;
 
-        if (apiKey === MASKED_VALUE) {
-            const existingProvider = await getFraudProvider(db, validated.id);
-            if (existingProvider?.apiKey) {
-                apiKey = existingProvider.apiKey;
-            }
+    if (apiKey === MASKED_VALUE) {
+        const existingProvider = await getFraudProvider(db, validated.id);
+        if (existingProvider?.apiKey) {
+            apiKey = existingProvider.apiKey;
         }
-
-        const savedProvider = await saveFraudProvider(db, { ...validated, apiKey });
-
-        const maskedResponse = {
-            ...savedProvider,
-            apiKey: savedProvider.apiKey ? MASKED_VALUE : ""
-        };
-
-        return ok(c, maskedResponse);
-    } catch (error: unknown) {
-        throw error;
     }
+
+    const savedProvider = await saveFraudProvider(db, { ...validated, apiKey });
+
+    const maskedResponse = {
+        ...savedProvider,
+        apiKey: savedProvider.apiKey ? MASKED_VALUE : ""
+    };
+
+    return ok(c, maskedResponse);
 });
 
 // ── Delete Provider ──
@@ -155,14 +143,10 @@ const deleteProviderRoute = createRoute({
 });
 
 app.openapi(deleteProviderRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const { id } = c.req.valid("param");
-        await deleteFraudProvider(db, id);
-        return ok(c, {});
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    await deleteFraudProvider(db, id);
+    return ok(c, {});
 });
 
 // ── Test Provider ──
@@ -182,14 +166,10 @@ const testProviderRoute = createRoute({
 });
 
 app.openapi(testProviderRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const { id } = c.req.valid("param");
-        const result = await testFraudProvider(db, id);
-        return ok(c, result);
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const result = await testFraudProvider(db, id);
+    return ok(c, result);
 });
 
 // ── Lookup (phone) ──

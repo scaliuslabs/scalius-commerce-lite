@@ -15,7 +15,7 @@ import {
     ERROR_MESSAGES
 } from "@scalius/core/modules/ai/ai-config";
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── List Models ──
 

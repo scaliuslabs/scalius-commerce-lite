@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 import {
   processAnalyticsScript,
   shouldUsePartytown
@@ -16,7 +17,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 0,
+    ttl: CACHE_TTLS.NONE,
     keyPrefix: "api:analytics:",
     varyByQuery: false,
     methods: ["GET"]

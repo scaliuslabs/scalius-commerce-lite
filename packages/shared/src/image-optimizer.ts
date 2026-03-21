@@ -11,8 +11,11 @@
  *
  * NOTE: Bypasses optimization on localhost since /cdn-cgi/ only works on Cloudflare.
  *
- * This module is PURE — it does not read environment variables. Callers must
- * supply cdnBase and isDev context via the options parameter or wrapper functions.
+ * PURITY: The public API functions (getOptimizedImageUrl, getOriginalImageUrl, etc.)
+ * are pure when an explicit ImageContext is provided. When context is omitted, they
+ * fall back to detectIsDev() and detectCdnBase() which probe the runtime environment
+ * (import.meta.env, window.location, globalThis.process). Prefer passing explicit
+ * context for predictable behavior.
  */
 
 import { resolveMediaUrl } from "./media-url";
@@ -59,9 +62,10 @@ const DEFAULT_OPTIONS: ImageOptimizationOptions = {
 };
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Internal helpers (pure)
 // ---------------------------------------------------------------------------
 
+/** @internal Pure — builds the Cloudflare Image Resizing parameter string. */
 function buildParams(opts: ImageOptimizationOptions): string {
   const parts: string[] = ["onerror=redirect"];
   if (opts.width) parts.push(`width=${opts.width}`);
@@ -75,37 +79,70 @@ function buildParams(opts: ImageOptimizationOptions): string {
   return parts.join(",");
 }
 
+// ---------------------------------------------------------------------------
+// Environment detection helpers (NOT pure — probe runtime globals)
+// ---------------------------------------------------------------------------
+
 /**
  * Detect development environment via standard signals.
- * Used as a fallback when the caller does not explicitly pass isDev.
+ * Used as a fallback when the caller does not explicitly pass `isDev`.
+ *
+ * **Not pure** — reads `import.meta.env`, `window.location`, and
+ * `globalThis.process` to infer the environment.
+ *
+ * @internal
  */
 function detectIsDev(): boolean {
-  return (
-    (typeof import.meta !== "undefined" &&
-      (import.meta as any).env?.MODE === "development") ||
-    (typeof import.meta !== "undefined" && (import.meta as any).env?.DEV === true) ||
-    (typeof window !== "undefined" &&
-      (window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1" ||
-        window.location.hostname.startsWith("192.168.") ||
-        window.location.hostname.includes("local"))) ||
-    (typeof (globalThis as any).process !== "undefined" && (globalThis as any).process.env?.NODE_ENV === "development")
-  );
+  // Vite / Astro — import.meta.env.MODE or import.meta.env.DEV
+  if (typeof import.meta !== "undefined") {
+    const meta = import.meta as { env?: { MODE?: string; DEV?: boolean } };
+    if (meta.env?.MODE === "development") return true;
+    if (meta.env?.DEV === true) return true;
+  }
+
+  // Browser — localhost or local network
+  if (typeof window !== "undefined" && "location" in window) {
+    const hostname = window.location.hostname;
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.startsWith("192.168.") ||
+      hostname.includes("local")
+    ) {
+      return true;
+    }
+  }
+
+  // Node.js / Wrangler — process.env.NODE_ENV
+  if (typeof globalThis !== "undefined" && "process" in globalThis) {
+    const proc = globalThis as { process?: { env?: { NODE_ENV?: string } } };
+    if (proc.process?.env?.NODE_ENV === "development") return true;
+  }
+
+  return false;
 }
 
 /**
- * Detect CDN base from legacy env vars.
- * Used as a fallback when the caller does not explicitly pass cdnBase.
+ * Detect CDN base from legacy env vars (R2_PUBLIC_URL, CDN_DOMAIN_URL).
+ * Used as a fallback when the caller does not explicitly pass `cdnBase`.
+ *
+ * **Not pure** — reads `import.meta.env` to find CDN configuration.
+ *
+ * @internal
  */
 function detectCdnBase(): string {
-  const r2Url =
-    typeof import.meta !== "undefined" && (import.meta as any).env?.R2_PUBLIC_URL;
-  if (r2Url) return (r2Url as string).replace(/\/$/, "");
+  if (typeof import.meta === "undefined") return "";
 
-  const cdnDomain =
-    typeof import.meta !== "undefined" && (import.meta as any).env?.CDN_DOMAIN_URL;
+  const meta = import.meta as {
+    env?: { R2_PUBLIC_URL?: string; CDN_DOMAIN_URL?: string };
+  };
+
+  const r2Url = meta.env?.R2_PUBLIC_URL;
+  if (r2Url) return r2Url.replace(/\/$/, "");
+
+  const cdnDomain = meta.env?.CDN_DOMAIN_URL;
   if (cdnDomain) {
-    const d = (cdnDomain as string).replace(/^https?:\/\//, "");
+    const d = cdnDomain.replace(/^https?:\/\//, "");
     return `https://${d}`;
   }
 
@@ -118,6 +155,8 @@ function detectCdnBase(): string {
 
 /**
  * Generates an optimized image URL using Cloudflare Image Resizing.
+ *
+ * **Pure when `ctx` is provided.** Falls back to environment detection otherwise.
  *
  * @param originalUrl - The original image URL from R2 (full URL or bare key)
  * @param options - Cloudflare image transformation options (optional)
@@ -164,6 +203,8 @@ export function getOptimizedImageUrl(
  * Get the original (non-optimized) URL.
  * Use this for download links, full-resolution views, and image editing.
  *
+ * **Pure when `cdnBase` is provided.** Falls back to environment detection otherwise.
+ *
  * @param url - Any image URL (optimized or original)
  * @param cdnBase - CDN base URL for resolving bare keys (optional)
  * @returns The original URL without Cloudflare transformations
@@ -198,6 +239,8 @@ export function getOriginalImageUrl(
 /**
  * Check if an image URL is from R2 storage.
  *
+ * **Pure when `cdnBase` is provided.** Falls back to environment detection otherwise.
+ *
  * @param url - The image URL to check
  * @param cdnBase - CDN base URL (e.g. "https://cloud.scalius.com")
  * @returns true if the image is hosted on the CDN
@@ -226,6 +269,8 @@ export function isR2Image(
  * Optimized Image Component Props Helper.
  * Returns standardized props for image elements.
  *
+ * **Pure when `ctx` is provided.**
+ *
  * @param originalUrl - The original image URL
  * @param alt - Alt text for the image
  * @param options - Cloudflare image transformation options (optional)
@@ -252,6 +297,8 @@ export function getOptimizedImageProps(
 
 /**
  * Generates responsive srcset for Cloudflare-optimized images.
+ *
+ * **Pure when `ctx` is provided.**
  *
  * @param imageUrl - The original CDN image URL
  * @param widths - Array of widths for srcset (defaults to [320, 640, 768, 1024, 1280])
@@ -281,6 +328,7 @@ export function getResponsiveSrcSet(
 
 /**
  * Presets for common image use cases.
+ * **Pure when `ctx` is provided.**
  */
 export const ImagePresets = {
   productThumbnail: (

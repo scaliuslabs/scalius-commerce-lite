@@ -1,6 +1,7 @@
 // Standalone MediaManager page component — uses shared useMediaManager hook
 
 import { useState } from "react";
+import { ErrorBoundary } from "../ErrorBoundary";
 import { Card, CardContent } from "@/components/ui/card";
 import { Upload, Loader2 } from "lucide-react";
 import {
@@ -28,6 +29,7 @@ export function MediaManagerPage() {
   const mm = useMediaManager({ autoLoad: true });
 
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the media manager. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <>
       <Card className="w-full">
         <CardContent className="p-0">
@@ -259,5 +261,6 @@ export function MediaManagerPage() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+    </ErrorBoundary>
   );
 }

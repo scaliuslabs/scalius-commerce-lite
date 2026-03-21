@@ -1,4 +1,5 @@
 import type { DeliveryProviderType, Order } from "@scalius/database/schema";
+import { ServiceUnavailableError } from "@scalius/core/errors";
 import type {
   PathaoCredentials,
   PathaoConfig,
@@ -83,7 +84,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({})) as Record<string, unknown>;
-        throw new Error(
+        throw new ServiceUnavailableError(
           `Failed to get access token: ${errorData.message || response.statusText
           }`,
         );
@@ -99,7 +100,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
 
       return this.accessToken;
     } catch (error: unknown) {
-      throw new Error(
+      throw new ServiceUnavailableError(
         `Failed to obtain Pathao access token: ${error instanceof Error ? error.message : String(error)
         }`,
       );
@@ -308,11 +309,11 @@ export class PathaoProvider implements DeliveryProviderInterface {
           const titleMatch = responseText.match(/<title>(.*?)<\/title>/);
           if (titleMatch?.[1]) errorMessage = `Pathao server error: ${titleMatch[1]}`;
         }
-        throw new Error(errorMessage);
+        throw new ServiceUnavailableError(errorMessage);
       }
 
       if (!response.ok || responseData.code !== 200) {
-        throw new Error(
+        throw new ServiceUnavailableError(
           `Failed to check status: ${responseData.message || response.statusText}`,
         );
       }

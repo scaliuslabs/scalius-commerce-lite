@@ -4,6 +4,7 @@ import { cacheMiddleware } from "../middleware/cache";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 // Create an OpenAPIHono app for SEO routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -11,7 +12,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 0,
+    ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:seo:",
     methods: ["GET"]
   }),

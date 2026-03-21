@@ -93,11 +93,15 @@ export async function sendOrderNotification(
             const invalidTokens: string[] = [];
             response.responses.forEach((resp, index) => {
                 if (resp.error) {
-                    console.error(`FCM send failed for token #${index}:`, resp.error);
-                    if (
+                    const isExpiredToken =
                         resp.error.code === "messaging/registration-token-not-registered" ||
-                        resp.error.code === "messaging/invalid-registration-token"
-                    ) {
+                        resp.error.code === "messaging/invalid-registration-token";
+                    if (isExpiredToken) {
+                        console.warn(`[Notifications] FCM token #${index} expired/invalid (${resp.error.code}) — will deactivate`);
+                    } else {
+                        console.error(`[Notifications] FCM send failed for token #${index}:`, resp.error.code, resp.error.message);
+                    }
+                    if (isExpiredToken) {
                         const failedToken = tokens[index];
                         if (failedToken) {
                             invalidTokens.push(failedToken);
@@ -118,8 +122,8 @@ export async function sendOrderNotification(
             }
         }
     } catch (error: unknown) {
-        // Log but don't crash — this runs in background
-        console.error("Error in background order notification:", error);
+        // Log but don't crash — this runs in background via ctx.waitUntil
+        console.error("[Notifications] Push notification failed for order", order.id, ":", error instanceof Error ? error.message : error);
     }
 }
 

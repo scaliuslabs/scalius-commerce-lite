@@ -143,6 +143,19 @@ interface Window {
   __CURRENCY_CODE__?: string;
   __CURRENCY_DECIMAL_PLACES__?: number;
   __BUILD_ID__?: string;
+  __CHECKOUT_CONFIG__?: unknown;
   dataLayer?: Record<string, unknown>[];
-  fbq?: (...args: unknown[]) => void;
+  fbq?: ((...args: unknown[]) => void) & { q?: unknown[] };
+
+  // Cart interaction handlers (set by lib/cart/client.ts initCartFunctionality)
+  lastShippingEventDetail?: { id: string; fee: number; name?: string };
+  handleAbandonedCheckout?: () => void;
+  updateCartQuantity?: (id: string, variantId: string, quantity: number) => void;
+  removeFromCart?: (id: string, variantId: string) => void;
+  removeDiscountCode?: () => void;
+
+  // Note: Stripe type is declared in checkout/handlers/stripe.ts with its full interface
+
+  // Browser APIs that may not be in all TS lib targets
+  requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
 }

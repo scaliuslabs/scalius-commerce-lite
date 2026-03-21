@@ -2,6 +2,7 @@ import { PathaoProvider } from "./providers/pathao";
 import { SteadfastProvider } from "./providers/steadfast";
 import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
 import type { Database } from "@scalius/database/client";
+import { ValidationError, NotFoundError, ServiceUnavailableError } from "@scalius/core/errors";
 import type { DeliveryProviderRecord, DeliveryProviderType } from "@scalius/database/schema";
 import type { DeliveryProviderInterface } from "./provider";
 import type {
@@ -37,7 +38,7 @@ export async function createProvider(
         `Failed to parse credentials for ${provider.type} provider:`,
         credError,
       );
-      throw new Error(
+      throw new ValidationError(
         `Invalid credentials format: ${credError instanceof Error ? credError.message : String(credError)}`,
       );
     }
@@ -49,14 +50,14 @@ export async function createProvider(
         `Failed to parse config for ${provider.type} provider:`,
         configError,
       );
-      throw new Error(
+      throw new ValidationError(
         `Invalid config format: ${configError instanceof Error ? configError.message : String(configError)}`,
       );
     }
 
     switch (provider.type as DeliveryProviderType) {
       case "pathao":
-        if (!db) throw new Error("PathaoProvider requires a database instance");
+        if (!db) throw new ValidationError("PathaoProvider requires a database instance");
         return new PathaoProvider(
           credentials as PathaoCredentials,
           config as PathaoConfig,
@@ -68,11 +69,11 @@ export async function createProvider(
           config as SteadfastConfig,
         );
       default:
-        throw new Error(`Unsupported provider type: ${provider.type}`);
+        throw new NotFoundError(`Unsupported provider type: ${provider.type}`);
     }
   } catch (error: unknown) {
     console.error(`Error creating provider:`, error);
-    throw new Error(
+    throw new ServiceUnavailableError(
       `Failed to create provider: ${error instanceof Error ? error.message : String(error)}`,
     );
   }

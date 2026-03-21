@@ -1,5 +1,6 @@
 // src/components/admin/RecentOrders.tsx
 import React from "react";
+import { ErrorBoundary } from "./ErrorBoundary";
 import {
   Table,
   TableBody,
@@ -116,6 +117,7 @@ const parseOrderDate = (date: string | Date): Date | null => {
 export function RecentOrders({ orders }: RecentOrdersProps) {
   const { symbol } = useCurrency();
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading recent orders. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <Card className="border-0 shadow-none bg-transparent">
       {/* --- Enhanced Card Header --- */}
       <CardHeader className="px-6 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800/50 bg-white dark:bg-gray-900/50 rounded-t-2xl">
@@ -289,5 +291,6 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
         </div>
       </CardContent>
     </Card>
+    </ErrorBoundary>
   );
 }

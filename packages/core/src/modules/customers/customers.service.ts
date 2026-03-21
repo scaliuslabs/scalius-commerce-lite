@@ -34,12 +34,13 @@ export async function listCustomers(
 ) {
     const {
         page = 1,
-        limit = 10,
+        limit: rawLimit = 10,
         search = "",
         showTrashed = false,
         sort = "updatedAt",
         order = "desc",
     } = options;
+    const limit = Math.min(Math.max(rawLimit, 1), 100);
 
     const whereConditions: (SQL | undefined)[] = [];
     if (showTrashed) {
@@ -97,8 +98,26 @@ export async function listCustomers(
         .offset(offset)
         .orderBy(order === "asc" ? asc(sortField) : desc(sortField));
 
-    const [countArr, results] = await db.batch([countQuery, resultsQuery]);
+    // Batch customer count, results, and all location names in a single D1 round-trip
+    const locationQuery = db
+        .select({ id: deliveryLocations.id, name: deliveryLocations.name })
+        .from(deliveryLocations)
+        .where(isNull(deliveryLocations.deletedAt));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    const [countArr, results, locationResults] = await db.batch([
+        countQuery,
+        resultsQuery,
+        locationQuery,
+    ] as any) as [
+        { count: number }[],
+        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; totalOrders: number; totalSpent: number; lastOrderAt: number; createdAt: number; updatedAt: number }[],
+        { id: string; name: string }[],
+    ];
     const count = countArr[0]?.count ?? 0;
+
+    const locationMap = new Map<string, string>();
+    locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
 
     const formattedCustomers = results.map((c) => ({
         ...c,
@@ -106,20 +125,6 @@ export async function listCustomers(
         createdAt: new Date(c.createdAt * 1000).toISOString(),
         updatedAt: new Date(c.updatedAt * 1000).toISOString(),
     }));
-
-    // Enrich with location names
-    const allLocationIds = [
-        ...new Set(formattedCustomers.flatMap((c) => [c.city, c.zone, c.area]).filter(Boolean)),
-    ] as string[];
-
-    let locationMap = new Map<string, string>();
-    if (allLocationIds.length > 0) {
-        const locationResults = await db
-            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
-            .from(deliveryLocations)
-            .where(and(inArray(deliveryLocations.id, allLocationIds), isNull(deliveryLocations.deletedAt)));
-        locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
-    }
 
     const enhanced = formattedCustomers.map((c) => ({
         ...c,

@@ -15,13 +15,14 @@ import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Cache this endpoint as it changes infrequently
 app.use(
   "/filterable",
   cacheMiddleware({
-    ttl: 3600, // 1 hour
+    ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:attributes:filterable"
   }),
 );
@@ -30,7 +31,7 @@ app.use(
 app.use(
   "/category/:categoryId",
   cacheMiddleware({
-    ttl: 1800, // 30 minutes
+    ttl: CACHE_TTLS.ATTRIBUTES,
     keyPrefix: "api:attributes:category",
     varyByQuery: false
   }),
@@ -40,7 +41,7 @@ app.use(
 app.use(
   "/category-slug/:categorySlug",
   cacheMiddleware({
-    ttl: 1800, // 30 minutes
+    ttl: CACHE_TTLS.ATTRIBUTES,
     keyPrefix: "api:attributes:category-slug",
     varyByQuery: false
   }),

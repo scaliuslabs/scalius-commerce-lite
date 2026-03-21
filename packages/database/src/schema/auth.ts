@@ -103,7 +103,9 @@ export const twoFactor = sqliteTable("two_factor", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
-});
+}, (table) => [
+    index("two_factor_user_id_idx").on(table.userId),
+]);
 
 export type User = InferSelectModel<typeof user>;
 export type Session = InferSelectModel<typeof session>;

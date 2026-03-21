@@ -28,7 +28,7 @@ import {
     productVariantSchema,
 } from "../../schemas/entities";
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── Product Stats ──
 
@@ -118,7 +118,7 @@ const listRoute = createRoute({
     request: {
         query: z.object({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(10).openapi({ description: "Items per page" }),
+            limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().openapi({ description: "Search term" }),
             category: z.string().optional().openapi({ description: "Category ID filter" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),

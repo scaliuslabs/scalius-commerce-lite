@@ -20,7 +20,7 @@ import {
 
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─────────────────────────────────────────
 // CURRENCY

@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form } from "../ui/form";
@@ -135,6 +136,7 @@ export function ProductForm({
   }, [form, isEdit]);
 
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the product form. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <>
       <ProductStickyHeader
         productName={form.watch("name")}
@@ -218,5 +220,6 @@ export function ProductForm({
         </form>
       </Form>
     </>
+    </ErrorBoundary>
   );
 }

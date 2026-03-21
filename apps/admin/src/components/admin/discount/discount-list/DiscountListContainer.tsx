@@ -1,4 +1,5 @@
 import React from "react";
+import { ErrorBoundary } from "../../ErrorBoundary";
 import {
   Table,
   TableBody,
@@ -91,6 +92,7 @@ export function DiscountListContainer({
   );
 
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading discounts. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <Card className="overflow-hidden border border-border bg-card shadow-sm transition-all duration-300 hover:border-border hover:shadow-md">
       <CardHeader className="space-y-1.5 pb-6">
         <div className="flex items-center justify-between">
@@ -452,5 +454,6 @@ export function DiscountListContainer({
         onBulkConfirm={filters.handleBulkActionConfirm}
       />
     </Card>
+    </ErrorBoundary>
   );
 }

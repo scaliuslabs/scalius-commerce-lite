@@ -6,7 +6,7 @@ import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
 import { ok, created } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
 
 const metaConversionsSettingsSchema = z.object({
@@ -110,7 +110,7 @@ const getLogsRoute = createRoute({
     request: {
         query: z.object({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(20).openapi({ description: "Items per page" })
+            limit: z.coerce.number().max(100).default(20).openapi({ description: "Items per page" })
         })
     },
     responses: {

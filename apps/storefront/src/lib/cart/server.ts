@@ -26,6 +26,88 @@ export async function getCities(): Promise<LocationData[]> {
   }
 }
 
+/**
+ * Validates a parsed cart item has the required shape and safe value ranges.
+ * Rejects items with missing/malformed fields to prevent price manipulation
+ * or injection via crafted form data.
+ */
+interface ValidatedCartItem {
+  id: string;
+  slug?: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image?: string;
+  variantId?: string;
+  size?: string;
+  color?: string;
+  freeDelivery?: boolean;
+}
+
+function validateCartItems(raw: unknown): ValidatedCartItem[] {
+  if (raw === null || typeof raw !== "object") {
+    throw new Error("Cart data must be a non-null object.");
+  }
+
+  const entries = Object.values(raw as Record<string, unknown>);
+  if (entries.length === 0) {
+    throw new Error("Cart is empty.");
+  }
+
+  return entries.map((entry, idx) => {
+    if (entry === null || typeof entry !== "object") {
+      throw new Error(`Cart item at index ${idx} is not an object.`);
+    }
+
+    const item = entry as Record<string, unknown>;
+
+    // Required string fields
+    if (typeof item.id !== "string" || item.id.length === 0) {
+      throw new Error(`Cart item at index ${idx} has an invalid or missing id.`);
+    }
+    if (typeof item.name !== "string" || item.name.length === 0) {
+      throw new Error(`Cart item at index ${idx} has an invalid or missing name.`);
+    }
+
+    // Required numeric fields
+    if (typeof item.price !== "number" || !Number.isFinite(item.price) || item.price < 0) {
+      throw new Error(`Cart item "${item.name || idx}" has an invalid price.`);
+    }
+    if (
+      typeof item.quantity !== "number" ||
+      !Number.isInteger(item.quantity) ||
+      item.quantity < 1 ||
+      item.quantity > 99
+    ) {
+      throw new Error(
+        `Cart item "${item.name || idx}" has an invalid quantity. Must be an integer between 1 and 99.`,
+      );
+    }
+
+    // Optional string fields — must be strings if present
+    const optionalStr = (key: string): string | undefined => {
+      if (item[key] === undefined || item[key] === null || item[key] === "") return undefined;
+      if (typeof item[key] !== "string") {
+        throw new Error(`Cart item "${item.name}" has an invalid ${key} (expected string).`);
+      }
+      return item[key] as string;
+    };
+
+    return {
+      id: item.id as string,
+      slug: optionalStr("slug"),
+      name: item.name as string,
+      price: item.price as number,
+      quantity: item.quantity as number,
+      image: optionalStr("image"),
+      variantId: optionalStr("variantId"),
+      size: optionalStr("size"),
+      color: optionalStr("color"),
+      freeDelivery: typeof item.freeDelivery === "boolean" ? item.freeDelivery : undefined,
+    };
+  });
+}
+
 export async function processOrder(formData: FormData) {
   try {
     const customerName = formData.get("customerName") as string;
@@ -51,7 +133,8 @@ export async function processOrder(formData: FormData) {
     const checkoutId = formData.get("checkoutId") as string | null;
 
     const cartItems = JSON.parse(cartItemsJson);
-    const cartItemsArray = Object.values(cartItems) as any[];
+    // Validate cart item shape and value ranges (defense against crafted form data)
+    const cartItemsArray = validateCartItems(cartItems);
 
     if (
       !customerName ||
@@ -115,16 +198,7 @@ export async function processOrder(formData: FormData) {
       const item = cartItemsArray[i];
       const productData = productDataResults[i];
 
-      // Validate quantity bounds (defense-in-depth; backend Zod also checks >= 1)
-      if (
-        !Number.isInteger(item.quantity) ||
-        item.quantity < 1 ||
-        item.quantity > 99
-      ) {
-        throw new Error(
-          `Invalid quantity for "${item.name || "item"}". Must be between 1 and 99.`,
-        );
-      }
+      // Quantity bounds already validated by validateCartItems()
 
       if (!productData) {
         throw new Error(`Product "${item.name}" is no longer available.`);

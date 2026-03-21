@@ -94,9 +94,12 @@ app.openapi(proxyRoute, async (c) => {
   }
 
   const allowedDomains = await getAllowedDomainsAsync(c);
+  const escapeRegex = (str: string): string =>
+    str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
   const isAllowed = allowedDomains.some((domain) => {
     if (domain.includes("*")) {
-      const domainPattern = domain.replace(/\*/g, ".*");
+      const domainPattern = escapeRegex(domain).replace(/\\\*/g, ".*");
       return new RegExp(`^${domainPattern}$`).test(targetUrl.hostname);
     }
     return targetUrl.hostname === domain;

@@ -19,7 +19,7 @@ import {
     invalidatePolarCache
 } from "@scalius/core/modules/payments/gateway-settings";
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
 
 // ─────────────────────────────────────────
@@ -80,15 +80,16 @@ const getPaymentMethodsRoute = createRoute({
 });
 
 app.openapi(getPaymentMethodsRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const kv = getKv();
         const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const config = await getActivePaymentMethods(db, kv, encKey);
 
-        const stripeSettings = await getStripeSettings(db, undefined, encKey);
-        const sslSettings = await getSSLCommerzSettings(db, undefined, encKey);
-        const polarSettings = await getPolarSettings(db, undefined, encKey);
+        const [stripeSettings, sslSettings, polarSettings] = await Promise.all([
+            getStripeSettings(db, undefined, encKey),
+            getSSLCommerzSettings(db, undefined, encKey),
+            getPolarSettings(db, undefined, encKey),
+        ]);
 
         return ok(c, {
             ...config,
@@ -99,9 +100,6 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
                 cod: { configured: true, enabled: true }
             }
         });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 const savePaymentMethodsRoute = createRoute({
@@ -158,8 +156,7 @@ const getStripeRoute = createRoute({
 });
 
 app.openapi(getStripeRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const rows = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "stripe")).all();
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
@@ -169,9 +166,6 @@ app.openapi(getStripeRoute, async (c) => {
             webhookSecret: map.webhook_secret ? MASKED : "",
             enabled: map.enabled !== "false"
         });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 const saveStripeRoute = createRoute({
@@ -187,8 +181,7 @@ const saveStripeRoute = createRoute({
 });
 
 app.openapi(saveStripeRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const body = c.req.valid("json");
         const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const ops: Promise<void>[] = [];
@@ -204,9 +197,6 @@ app.openapi(saveStripeRoute, async (c) => {
         await Promise.all([invalidateStripeCache(kv), invalidatePaymentMethodsCache(kv)]);
 
         return ok(c, { message: "Stripe settings saved successfully" });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 // ─────────────────────────────────────────
@@ -232,8 +222,7 @@ const getSSLCommerzRoute = createRoute({
 });
 
 app.openapi(getSSLCommerzRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const rows = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "sslcommerz")).all();
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
@@ -243,9 +232,6 @@ app.openapi(getSSLCommerzRoute, async (c) => {
             sandbox: map.sandbox !== "false",
             enabled: map.enabled !== "false"
         });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 const saveSSLCommerzRoute = createRoute({
@@ -261,8 +247,7 @@ const saveSSLCommerzRoute = createRoute({
 });
 
 app.openapi(saveSSLCommerzRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const body = c.req.valid("json");
         const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const ops: Promise<void>[] = [];
@@ -278,9 +263,6 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         await Promise.all([invalidateSSLCommerzCache(kv), invalidatePaymentMethodsCache(kv)]);
 
         return ok(c, { message: "SSLCommerz settings saved successfully" });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 // ─────────────────────────────────────────
@@ -307,8 +289,7 @@ const getPolarRoute = createRoute({
 });
 
 app.openapi(getPolarRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const rows = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "polar")).all();
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
@@ -319,9 +300,6 @@ app.openapi(getPolarRoute, async (c) => {
             sandbox: map.sandbox !== "false",
             enabled: map.enabled !== "false"
         });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 const savePolarRoute = createRoute({
@@ -337,8 +315,7 @@ const savePolarRoute = createRoute({
 });
 
 app.openapi(savePolarRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const body = c.req.valid("json");
         const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const ops: Promise<void>[] = [];
@@ -355,9 +332,6 @@ app.openapi(savePolarRoute, async (c) => {
         await Promise.all([invalidatePolarCache(kv), invalidatePaymentMethodsCache(kv)]);
 
         return ok(c, { message: "Polar settings saved successfully" });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 export { app as paymentSettingsRoutes };

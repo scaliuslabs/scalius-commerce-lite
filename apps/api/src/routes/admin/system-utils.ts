@@ -10,7 +10,7 @@ import { ftsMatch } from "@scalius/core/search";
 import { ok, noContent } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError } from "../../utils/api-error";
 import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse, errorResponses } from "../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // --- Abandoned Checkouts ---
 const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string | null }): boolean => {
@@ -39,7 +39,7 @@ const listAbandonedCheckoutsRoute = createRoute({
     request: {
         query: z.object({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(20).openapi({ description: "Items per page" }),
+            limit: z.coerce.number().max(100).default(20).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
             order: z.string().optional().default("desc").openapi({ description: "Sort order" })

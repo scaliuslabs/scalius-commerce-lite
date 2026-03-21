@@ -9,7 +9,7 @@ import { heroSlidersRoutes } from "./settings/hero-sliders";
 import { metaConversionsAdminRoutes } from "./settings/meta-conversions-admin";
 import { notificationChannelsRoutes } from "./settings/notification-channels";
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Mount the modular settings routes on the root so they match frontend expectations
 // (Frontend expects /api/v1/admin/settings/stripe, not /api/v1/admin/settings/payments/stripe)

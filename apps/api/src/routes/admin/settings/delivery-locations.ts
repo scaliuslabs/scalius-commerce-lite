@@ -7,7 +7,7 @@ import { getEncryptionKey } from "../../../utils/encryption-key";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const locationSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -53,7 +53,7 @@ const listRoute = createRoute({
             parentId: z.string().optional().openapi({ description: "Parent ID filter" }),
             search: z.string().optional().openapi({ description: "Search term" }),
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(100).openapi({ description: "Items per page" })
+            limit: z.coerce.number().max(500).default(100).openapi({ description: "Items per page" })
         })
     },
     responses: {
@@ -96,12 +96,18 @@ app.openapi(listRoute, async (c) => {
             .get();
         const totalCount = countResult?.count || 0;
 
-        const formattedLocations = locations.map((location) => ({
-            ...location,
-            externalIds: location.externalIds ? JSON.parse(location.externalIds) : {},
-            metadata: location.metadata ? JSON.parse(location.metadata) : {},
-            displayName: `${location.name}`
-        }));
+        const formattedLocations = locations.map((location) => {
+            let externalIds = {};
+            let metadata = {};
+            try { externalIds = location.externalIds ? JSON.parse(location.externalIds) : {}; } catch { externalIds = {}; }
+            try { metadata = location.metadata ? JSON.parse(location.metadata) : {}; } catch { metadata = {}; }
+            return {
+                ...location,
+                externalIds,
+                metadata,
+                displayName: `${location.name}`
+            };
+        });
 
         return ok(c, {
             locations: formattedLocations,
@@ -273,10 +279,14 @@ app.openapi(updateLocationRoute, async (c) => {
 
         if (!updatedLocation) throw new NotFoundError("Location not found");
 
+        let externalIds = {};
+        let metadata = {};
+        try { externalIds = updatedLocation.externalIds ? JSON.parse(updatedLocation.externalIds) : {}; } catch { externalIds = {}; }
+        try { metadata = updatedLocation.metadata ? JSON.parse(updatedLocation.metadata) : {}; } catch { metadata = {}; }
         return ok(c, {
             ...updatedLocation,
-            externalIds: updatedLocation.externalIds ? JSON.parse(updatedLocation.externalIds) : {},
-            metadata: updatedLocation.metadata ? JSON.parse(updatedLocation.metadata) : {}
+            externalIds,
+            metadata
         });
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;

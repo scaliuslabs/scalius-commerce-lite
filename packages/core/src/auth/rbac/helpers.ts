@@ -1,6 +1,7 @@
 // src/lib/rbac/helpers.ts
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError } from "@scalius/core/errors";
 import {
   user,
   permissions,
@@ -439,12 +440,12 @@ export async function setUserPermissionOverride(
     .limit(1);
 
   if (permResult.length === 0) {
-    throw new Error(`Permission "${permissionName}" not found`);
+    throw new NotFoundError(`Permission "${permissionName}" not found`);
   }
 
   const permissionId = permResult[0]?.id;
   if (!permissionId) {
-    throw new Error(`Permission "${permissionName}" not found`);
+    throw new NotFoundError(`Permission "${permissionName}" not found`);
   }
 
   // Check if override already exists

@@ -11,9 +11,11 @@ import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError } from "@scalius/core/errors";
+import type { CreateDiscountInput, UpdateDiscountInput } from "./discounts.validation";
 
 export async function listDiscounts(db: Database, options: { page: number; limit: number; search: string; showTrashed: boolean; sort: string; order: "asc" | "desc" }) {
-    const { page, limit, search, showTrashed, sort, order } = options;
+    const { page, limit: rawLimit, search, showTrashed, sort, order } = options;
+    const limit = Math.min(Math.max(rawLimit || 10, 1), 100);
     const offset = (page - 1) * limit;
 
     let conditions = [];
@@ -150,7 +152,7 @@ export async function getDiscountById(db: Database, id: string) {
     };
 }
 
-export async function createDiscount(db: Database, data: Record<string, unknown>) {
+export async function createDiscount(db: Database, data: CreateDiscountInput) {
     const existingCode = await db
         .select({ id: discounts.id })
         .from(discounts)
@@ -210,7 +212,7 @@ export async function createDiscount(db: Database, data: Record<string, unknown>
     return { id: discountId };
 }
 
-export async function updateDiscount(db: Database, id: string, data: Record<string, unknown>) {
+export async function updateDiscount(db: Database, id: string, data: UpdateDiscountInput) {
     const existingDiscount = await db.select({ id: discounts.id }).from(discounts).where(eq(discounts.id, id)).get();
     if (!existingDiscount) {
         throw new NotFoundError("Discount not found");

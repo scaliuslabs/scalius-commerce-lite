@@ -226,6 +226,7 @@ export function useOrderListApi(
   }, [displayOrders, setDisplayOrders, setIsDeleting, setSelectedOrders, setCurrentPagination, setOrderToDelete, setIsBulkDeleteOpen]);
 
   const handleRestore = React.useCallback(async (id: string) => {
+    const snapshot = [...displayOrders]; // capture current state before optimistic update
     setDisplayOrders((prev) => prev.filter((order) => order.id !== id));
     try {
       const response = await fetch(`/api/v1/admin/orders/${id}/restore`, {
@@ -245,9 +246,9 @@ export function useOrderListApi(
     } catch (error) {
       console.error("Error restoring order:", error);
       toast.error(error instanceof Error ? error.message : "Error restoring order");
-      setDisplayOrders(initialOrders);
+      setDisplayOrders(snapshot); // rollback to snapshot, not stale initialOrders
     }
-  }, [initialOrders, setDisplayOrders, setCurrentPagination]);
+  }, [displayOrders, setDisplayOrders, setCurrentPagination]);
 
   const handleBulkShipmentSubmit = React.useCallback(async (providerId: string) => {
     setIsShipping(true);

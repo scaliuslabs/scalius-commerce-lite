@@ -91,7 +91,7 @@
     "react-window": "^2.2.7",
     "react-window-infinite-loader": "^2.0.1",
     "recharts": "^3.0.0",
-    "sharp": "^0.33.5",
+    "sharp": "^0.34.5",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwind-variants": "^1.0.0",

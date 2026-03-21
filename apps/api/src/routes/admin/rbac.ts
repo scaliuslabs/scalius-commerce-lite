@@ -20,7 +20,7 @@ import { PERMISSIONS, getPermissionsByCategory } from "@scalius/core/auth/rbac/p
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // -- Validation Schemas --
 

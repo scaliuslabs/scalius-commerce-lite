@@ -1,7 +1,5 @@
 // src/modules/products/products.admin.ts
 // Admin product queries and CRUD mutations.
-import type { DrizzleD1Database } from "drizzle-orm/d1";
-import * as schema from "@scalius/database/schema";
 import {
     products,
     categories,
@@ -18,8 +16,7 @@ import type { CreateProductInput, UpdateProductInput } from "./products.validati
 import { nanoid } from "nanoid";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { ProductWithDetails } from "./products.types";
-
-type Database = DrizzleD1Database<typeof schema>;
+import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Admin read queries
@@ -29,7 +26,7 @@ type Database = DrizzleD1Database<typeof schema>;
  * Returns a paginated, searchable list of products for the admin dashboard.
  * Includes variant counts, image counts, and primary image URLs.
  */
-export async function listProducts(db: DrizzleD1Database<typeof schema>, options: {
+export async function listProducts(db: Database, options: {
     search?: string;
     categoryId?: string;
     page?: number;
@@ -342,7 +339,7 @@ export async function getProductDetails(
 }
 
 /** Returns aggregate product and category counts for the products dashboard. */
-export async function getProductStats(db: DrizzleD1Database<typeof schema>) {
+export async function getProductStats(db: Database) {
     const [totalProductsArr, activeProductsArr, productsWithImagesArr, categoriesCountArr] = await db.batch([
         db
             .select({ count: sql<number>`count(*)` })
@@ -380,7 +377,7 @@ export async function getProductStats(db: DrizzleD1Database<typeof schema>) {
 }
 
 /** Returns category-level stats for the categories admin page. */
-export async function getCategoryStats(db: DrizzleD1Database<typeof schema>) {
+export async function getCategoryStats(db: Database) {
     const [totalCategoriesArr, categoriesWithImagesArr, totalProductsArr] = await db.batch([
         db
             .select({ count: sql<number>`count(*)` })
@@ -414,7 +411,7 @@ export async function getCategoryStats(db: DrizzleD1Database<typeof schema>) {
  * Checks for slug uniqueness before inserting.
  * Returns the new product ID on success.
  */
-export async function createProduct(db: DrizzleD1Database<typeof schema>, data: CreateProductInput): Promise<{ id: string }> {
+export async function createProduct(db: Database, data: CreateProductInput): Promise<{ id: string }> {
     const existingProduct = await db
         .select({ id: products.id })
         .from(products)
@@ -502,7 +499,7 @@ export async function createProduct(db: DrizzleD1Database<typeof schema>, data: 
  * Updates an existing product, replacing images, rich content, and attributes.
  * Validates that the product exists and the slug is not taken by another product.
  */
-export async function updateProduct(db: DrizzleD1Database<typeof schema>, id: string, data: UpdateProductInput): Promise<void> {
+export async function updateProduct(db: Database, id: string, data: UpdateProductInput): Promise<void> {
     const existingProduct = await db
         .select({ id: products.id })
         .from(products)
@@ -603,7 +600,7 @@ export async function updateProduct(db: DrizzleD1Database<typeof schema>, id: st
 /**
  * Soft-deletes a product by setting deletedAt.
  */
-export async function deleteProduct(db: DrizzleD1Database<typeof schema>, id: string): Promise<void> {
+export async function deleteProduct(db: Database, id: string): Promise<void> {
     await db
         .update(products)
         .set({ deletedAt: sql`unixepoch()` })
@@ -613,7 +610,7 @@ export async function deleteProduct(db: DrizzleD1Database<typeof schema>, id: st
 /**
  * Restores a soft-deleted product by setting deletedAt to null.
  */
-export async function restoreProduct(db: DrizzleD1Database<typeof schema>, id: string): Promise<void> {
+export async function restoreProduct(db: Database, id: string): Promise<void> {
     await db
         .update(products)
         .set({
@@ -627,7 +624,7 @@ export async function restoreProduct(db: DrizzleD1Database<typeof schema>, id: s
  * Permanently deletes a product and all of its related data (variants, images, attributes, rich content).
  * Throws an error if the product is linked to any existing orders or discounts.
  */
-export async function permanentlyDeleteProduct(db: DrizzleD1Database<typeof schema>, id: string): Promise<void> {
+export async function permanentlyDeleteProduct(db: Database, id: string): Promise<void> {
     const orderCheckArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(orderItems)
@@ -660,7 +657,7 @@ export async function permanentlyDeleteProduct(db: DrizzleD1Database<typeof sche
 /**
  * Bulk soft-deletes or permanently deletes multiple products.
  */
-export async function bulkDeleteProducts(db: DrizzleD1Database<typeof schema>, productIds: string[], permanent: boolean = false) {
+export async function bulkDeleteProducts(db: Database, productIds: string[], permanent: boolean = false) {
     if (productIds.length === 0) throw new ValidationError("No product IDs provided");
 
     if (permanent) {
@@ -700,7 +697,7 @@ export async function bulkDeleteProducts(db: DrizzleD1Database<typeof schema>, p
 /**
  * Bulk updates given product variants using an array of updates.
  */
-export async function bulkUpdateVariants(db: DrizzleD1Database<typeof schema>, productId: string, updates: Array<{ id: string; size?: string | null; color?: string | null; weight?: number | null; sku?: string; price?: number; stock?: number }>) {
+export async function bulkUpdateVariants(db: Database, productId: string, updates: Array<{ id: string; size?: string | null; color?: string | null; weight?: number | null; sku?: string; price?: number; stock?: number }>) {
     const statements = [];
     for (const update of updates) {
         const { id, ...fieldsToUpdate } = update;

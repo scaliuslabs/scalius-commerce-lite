@@ -7,7 +7,7 @@ import { NotFoundError, ValidationError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for header routes
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware to all routes
 app.use(
@@ -78,9 +78,8 @@ app.openapi(getHeaderRoute, async (c) => {
   }
 
   // Parse header config
-  const headerConfig = settings.headerConfig
-    ? JSON.parse(settings.headerConfig)
-    : null;
+  let headerConfig: Partial<HeaderData> | null = null;
+  try { headerConfig = settings.headerConfig ? JSON.parse(settings.headerConfig) as Partial<HeaderData> : null; } catch { headerConfig = null; }
 
   if (!headerConfig) {
     throw new ValidationError("Invalid header configuration");

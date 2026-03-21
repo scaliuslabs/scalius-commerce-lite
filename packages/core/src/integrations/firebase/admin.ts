@@ -2,6 +2,8 @@
 // FCM REST API implementation for Cloudflare Workers
 // Replaces firebase-admin SDK with direct HTTP calls
 
+import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+
 interface ServiceAccount {
   client_email: string;
   private_key: string;
@@ -17,7 +19,7 @@ function getEnv(contextEnv?: Record<string, unknown>) {
   if (typeof process !== "undefined" && process.env) {
     return process.env;
   }
-  throw new Error(
+  throw new ServiceUnavailableError(
     "Environment variables not available - should be provided by runtime context",
   );
 }
@@ -65,7 +67,7 @@ async function createJWT(serviceAccount: ServiceAccount): Promise<string> {
     );
   } catch (error: unknown) {
     console.error("Failed to import private key:", error);
-    throw new Error(
+    throw new ServiceUnavailableError(
       `Private key import failed: ${
         error instanceof Error ? error.message : String(error)
       }`,
@@ -103,7 +105,7 @@ function pemToArrayBuffer(pem: string): ArrayBuffer {
     return bytes.buffer;
   } catch (e: unknown) {
     console.error("Failed to decode base64 PEM key:", e);
-    throw new Error("Invalid PEM private key format. Check your secret value.");
+    throw new ValidationError("Invalid PEM private key format. Check your secret value.");
   }
 }
 
@@ -123,7 +125,7 @@ async function getAccessToken(serviceAccount: ServiceAccount): Promise<string> {
   if (!response.ok) {
     const error = await response.text();
     console.error("Google OAuth Error:", error);
-    throw new Error(`Failed to get access token: ${error}`);
+    throw new ServiceUnavailableError(`Failed to get access token: ${error}`);
   }
 
   const tokenData: { access_token: string } = await response.json();
@@ -224,7 +226,7 @@ function initializeFCMService(environment?: Record<string, unknown>, serviceAcco
     serviceAccountJson || env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON;
 
   if (!firebaseServiceAccountJson) {
-    throw new Error(
+    throw new ServiceUnavailableError(
       "FIREBASE_SERVICE_ACCOUNT_CRED_JSON is not set and no service account provided",
     );
   }
@@ -257,7 +259,7 @@ function initializeFCMService(environment?: Record<string, unknown>, serviceAcco
       !serviceAccount.client_email ||
       !serviceAccount.project_id
     ) {
-      throw new Error(
+      throw new ValidationError(
         "Firebase service account JSON is missing required fields",
       );
     }
@@ -267,7 +269,7 @@ function initializeFCMService(environment?: Record<string, unknown>, serviceAcco
     };
   } catch (error: unknown) {
     console.error("Error initializing FCM service:", error);
-    throw new Error(
+    throw new ServiceUnavailableError(
       `Failed to parse or initialize Firebase service account: ${
         error instanceof Error ? error.message : String(error)
       }`,

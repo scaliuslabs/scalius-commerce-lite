@@ -14,14 +14,15 @@ import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 // Create an OpenAPIHono app for category routes
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware to all routes
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 3600,
+    ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:categories:",
     varyByQuery: true,
     methods: ["GET"]

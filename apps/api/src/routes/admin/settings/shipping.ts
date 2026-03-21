@@ -6,7 +6,7 @@ import { NotFoundError, ConflictError } from "../../../utils/api-error";
 
 import { ok, created, noContent } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse, errorResponses } from "../../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const createShippingMethodSchema = z.object({
     name: z.string().min(1, "Name is required").max(100),
@@ -46,7 +46,7 @@ const listRoute = createRoute({
     request: {
         query: z.object({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(10).openapi({ description: "Items per page" }),
+            limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             sort: z.string().optional().default("sortOrder").openapi({ description: "Sort field" }),
             order: z.string().optional().default("asc").openapi({ description: "Sort order" }),

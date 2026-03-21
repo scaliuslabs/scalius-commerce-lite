@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "../ErrorBoundary";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,6 +66,7 @@ export function CategoryList({
   });
 
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading categories. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <Card className="border-none shadow-none">
       <CategoryHeader
         showTrashed={showTrashed}
@@ -266,5 +268,6 @@ export function CategoryList({
         </AlertDialogContent>
       </AlertDialog>
     </Card>
+    </ErrorBoundary>
   );
 }

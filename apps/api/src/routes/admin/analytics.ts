@@ -7,7 +7,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── List Analytics Scripts ──
 

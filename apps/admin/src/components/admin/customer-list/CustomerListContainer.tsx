@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "../ErrorBoundary";
 import {
   Card,
   CardContent,
@@ -80,6 +81,7 @@ export function CustomerListContainer({
   });
 
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading customers. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <>
       <Card>
         <CardHeader className="p-4 border-b">
@@ -258,5 +260,6 @@ export function CustomerListContainer({
         onConfirmBulk={actions.handleBulkAction}
       />
     </>
+    </ErrorBoundary>
   );
 }

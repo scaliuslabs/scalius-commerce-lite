@@ -10,7 +10,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses } from "../../schemas/responses";
 import { discountSchema } from "../../schemas/entities";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── List Discounts ──
 
@@ -22,7 +22,7 @@ const listRoute = createRoute({
     request: {
         query: z.object({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(10).openapi({ description: "Items per page" }),
+            limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),

@@ -16,7 +16,8 @@ import { getShipments, getActiveDeliveryProviders } from "@scalius/core/modules/
 import { createStorefrontOrder } from "@scalius/core/modules/orders";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
-import { NotFoundError, ValidationError } from "../utils/api-error";
+import { NotFoundError, ValidationError, RateLimitError } from "../utils/api-error";
+import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -287,6 +288,16 @@ const createOrderRoute = createRoute({
 });
 
 app.openapi(createOrderRoute, async (c) => {
+  // Rate limit: 5 order creations per minute per IP
+  const kv = c.env.CACHE as KVNamespace | undefined;
+  if (kv) {
+    const ip = getClientIp(c.req.raw);
+    const result = await rateLimit({ kv, key: `order:${ip}`, limit: 5, windowMs: 60_000 });
+    if (!result.allowed) {
+      throw new RateLimitError("Too many order requests. Please try again later.");
+    }
+  }
+
   const db = c.get("db");
   const data = c.req.valid("json");
   const requestUrl = c.req.url;

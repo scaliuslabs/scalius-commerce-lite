@@ -7,7 +7,7 @@ import { getDashboardStats, getRecentOrders, getDailyActivityData } from "@scali
 import { ok } from "../../utils/api-response";
 import { successEnvelope } from "../../schemas/responses";
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── Inline response schemas ──
 

@@ -178,7 +178,7 @@ export async function moveMediaFiles(dbOp: Database, fileIds: string[], folderId
 }
 
 export async function listMediaFolders(dbOp: Database) {
-    return await dbOp.select().from(mediaFolders).where(isNull(mediaFolders.deletedAt)).orderBy(desc(mediaFolders.createdAt));
+    return await dbOp.select().from(mediaFolders).where(isNull(mediaFolders.deletedAt)).orderBy(desc(mediaFolders.createdAt)).limit(200);
 }
 
 export async function createMediaFolder(dbOp: Database, name: string, parentId?: string | null) {

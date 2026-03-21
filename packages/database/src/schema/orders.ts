@@ -14,6 +14,9 @@ import {
     FulfillmentStatus,
     InventoryPool,
     ItemFulfillmentStatus,
+    PaymentRecordStatus,
+    CodStatus,
+    PaymentPlanStatus,
 } from "./enums";
 
 export const orders = sqliteTable("orders", {
@@ -61,6 +64,8 @@ export const orders = sqliteTable("orders", {
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_created_at_idx").on(table.createdAt),
     index("orders_deleted_at_idx").on(table.deletedAt),
+    index("orders_dashboard_agg_idx").on(table.deletedAt, table.createdAt, table.status),
+    index("orders_customer_phone_idx").on(table.customerPhone),
 ]);
 
 export const orderItems = sqliteTable("order_items", {
@@ -95,8 +100,8 @@ export const orderPayments = sqliteTable("order_payments", {
     currency: text("currency").notNull().default("BDT"),
     paymentMethod: text("payment_method").notNull(),
     paymentType: text("payment_type").notNull().default("full"),
-    /** Valid: pending | confirmed | failed | refunded | cancelled */
-    status: text("status").notNull().default("pending"),
+    /** Valid: pending | confirmed | failed | refunded | cancelled (see PaymentRecordStatus enum) */
+    status: text("status").notNull().default(PaymentRecordStatus.PENDING),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
     stripeChargeId: text("stripe_charge_id"),
     sslcommerzTranId: text("sslcommerz_tran_id"),
@@ -136,7 +141,8 @@ export const paymentPlans = sqliteTable("payment_plans", {
     depositPaidAt: integer("deposit_paid_at", { mode: "timestamp" }),
     balancePaidAt: integer("balance_paid_at", { mode: "timestamp" }),
     balanceDueDate: text("balance_due_date"),
-    status: text("status").notNull().default("pending"),
+    /** Valid: pending | deposit_paid | completed | cancelled (see PaymentPlanStatus enum) */
+    status: text("status").notNull().default(PaymentPlanStatus.PENDING),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -153,8 +159,8 @@ export const codTracking = sqliteTable("cod_tracking", {
         .unique(),
     deliveryAttempts: integer("delivery_attempts").notNull().default(0),
     lastAttemptAt: integer("last_attempt_at", { mode: "timestamp" }),
-    /** Valid: pending | collected | failed | returned */
-    codStatus: text("cod_status").notNull().default("pending"),
+    /** Valid: pending | collected | failed | returned (see CodStatus enum) */
+    codStatus: text("cod_status").notNull().default(CodStatus.PENDING),
     failureReason: text("failure_reason"),
     collectedBy: text("collected_by"),
     collectedAmount: real("collected_amount"),

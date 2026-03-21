@@ -1,4 +1,5 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ErrorBoundary } from "./ErrorBoundary";
 import type { Order } from "./orderview/types";
 
 // Import the new, refactored components
@@ -15,6 +16,7 @@ interface OrderViewProps {
 
 export function OrderView({ order }: OrderViewProps) {
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the order. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <TooltipProvider>
       <div className="container mx-auto max-w-7xl space-y-4 px-4 py-6 sm:space-y-6 sm:px-6 lg:px-8">
         {/* Main Header Card */}
@@ -36,5 +38,6 @@ export function OrderView({ order }: OrderViewProps) {
         </div>
       </div>
     </TooltipProvider>
+    </ErrorBoundary>
   );
 }

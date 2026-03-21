@@ -63,7 +63,7 @@ const widgetHistoryEntrySchema = z.object({
     createdAt: z.union([z.string(), z.number()]),
 }).passthrough();
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── List Widgets ──
 

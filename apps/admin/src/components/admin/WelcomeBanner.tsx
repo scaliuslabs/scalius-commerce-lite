@@ -2,6 +2,7 @@
 "use client"; // Ensure this runs client-side
 
 import React from "react";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { X as CloseIcon, PartyPopper } from "lucide-react";
 import { BackgroundGradient } from "../ui/background-gradient"; // Import the new component
 import { ContainerTextFlip } from "../ui/container-text-flip"; // Import Text Flip
@@ -57,6 +58,7 @@ export function WelcomeBanner() {
   }
 
   return (
+    <ErrorBoundary fallback={null}>
     <div className="relative mb-4 rounded-2xl overflow-hidden">
       <BackgroundGradient
         containerClassName="rounded-2xl"
@@ -98,5 +100,6 @@ export function WelcomeBanner() {
         </div>
       </BackgroundGradient>
     </div>
+    </ErrorBoundary>
   );
 }
