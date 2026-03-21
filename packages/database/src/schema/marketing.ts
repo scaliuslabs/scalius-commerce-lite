@@ -98,7 +98,7 @@ export const discountUsage = sqliteTable("discount_usage", {
     orderId: text("order_id")
         .notNull()
         .references(() => orders.id, { onDelete: "cascade" }),
-    customerId: text("customer_id").references(() => customers.id),
+    customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
     amountDiscounted: real("amount_discounted").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()

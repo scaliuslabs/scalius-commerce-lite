@@ -298,6 +298,29 @@ export async function bulkDeleteDiscounts(db: Database, discountIds: string[], p
 }
 
 export async function restoreDiscounts(db: Database, discountIds: string[]) {
+    // Check for code conflicts before restoring: ensure no active discount
+    // already uses any of the codes that would be restored
+    const toRestore = await db
+        .select({ id: discounts.id, code: discounts.code })
+        .from(discounts)
+        .where(inArray(discounts.id, discountIds));
+
+    for (const disc of toRestore) {
+        const conflict = await db
+            .select({ id: discounts.id })
+            .from(discounts)
+            .where(and(
+                eq(discounts.code, disc.code),
+                isNull(discounts.deletedAt),
+                sql`${discounts.id} != ${disc.id}`,
+            ))
+            .get();
+
+        if (conflict) {
+            throw new ConflictError(`Cannot restore discount "${disc.code}": an active discount with this code already exists`);
+        }
+    }
+
     await db.update(discounts).set({ deletedAt: null }).where(inArray(discounts.id, discountIds));
 }
 

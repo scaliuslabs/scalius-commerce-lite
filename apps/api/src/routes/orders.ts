@@ -332,19 +332,10 @@ app.openapi(createOrderRoute, async (c) => {
       202,
     );
   } catch (error: unknown) {
-    if (error instanceof Error && error.message.startsWith("VALIDATION_ERROR:")) {
-      throw new ValidationError(error.message.replace("VALIDATION_ERROR:", ""));
-    }
-
-    if (error instanceof Error && error.message.startsWith("INSUFFICIENT_STOCK:")) {
-      throw new ValidationError(error.message.replace("INSUFFICIENT_STOCK:", ""));
-    }
-
     if (error instanceof z.ZodError) {
       throw new ValidationError("Invalid input data", error.issues);
     }
 
-    // Re-throw for global error handler
     throw error;
   }
 });

@@ -331,13 +331,17 @@ export async function checkShipmentStatus(db: Database, shipmentId: string, encr
     throw new NotFoundError(`Provider with ID ${shipment.providerId} not found`);
   }
 
+  if (!shipment.externalId) {
+    throw new ValidationError(`Shipment ${shipmentId} has no external ID (not yet submitted to provider)`);
+  }
+
   try {
     // Create provider instance
     const providerInstance = await createProvider(provider, encryptionKey, db);
 
     // Check status
     const statusResult = await providerInstance.checkShipmentStatus(
-      shipment.externalId as string,
+      shipment.externalId,
     );
 
     // Update shipment in database

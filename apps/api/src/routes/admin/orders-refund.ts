@@ -19,9 +19,7 @@ const refundResultSchema = z.object({
 }).passthrough();
 
 const returnResultSchema = successEnvelope(z.object({
-    success: z.boolean(),
     refundResult: refundResultSchema.optional(),
-    error: z.string().optional(),
 }));
 
 // ─── POST /:id/return ────────────────────────────────────────────────────────
@@ -50,7 +48,6 @@ app.openapi(returnOrderRoute, async (c) => {
     const envCache = c.env?.CACHE;
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false }, encryptionKey);
-    if (!result.success) throw new ValidationError(result.error || "Return processing failed");
     return ok(c, result);
 });
 

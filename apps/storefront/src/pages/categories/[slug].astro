@@ -11,6 +11,7 @@ import {
   type PaginatedResponse,
   type FilterableAttribute,
   type LayoutData,
+  type Category,
 } from "@/lib/api";
 import CategoryFilters from "@/components/CategoryFilters";
 import RichContent from "@/components/RichContent.astro";
@@ -32,7 +33,7 @@ const params = Astro.url.searchParams;
 const page = parseInt(params.get("page") || "1");
 const sortBy = params.get("sortBy") || "newest";
 
-let category: any = null;
+let category: Category | null = null;
 let productsResponse: PaginatedResponse<Product> | null = null;
 let attributes: FilterableAttribute[] = [];
 let layoutData: LayoutData | null = null;

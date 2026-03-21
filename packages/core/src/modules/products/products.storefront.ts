@@ -448,8 +448,6 @@ export async function searchStorefrontProducts(
 ) {
     const { search, page, limit } = params;
     const offset = (page - 1) * limit;
-    const { ftsMatch } = await import("../../search/fts5");
-    const { eq, and, isNull, desc, inArray, sql } = await import("drizzle-orm");
 
     const conditions: Array<ReturnType<typeof eq>> = [
         eq(products.isActive, true),

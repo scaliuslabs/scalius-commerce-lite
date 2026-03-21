@@ -3,16 +3,9 @@
 
 import { navigateTo } from "@/lib/client/navigate";
 
-type AdminNavWindow = Window & {
-  __adminNavProgressBound__?: boolean;
-  __adminPendingDestination__?: string | null;
-};
-
 export function initNavProgress(): void {
-  const navWindow = window as AdminNavWindow;
-
-  if (navWindow.__adminNavProgressBound__) return;
-  navWindow.__adminNavProgressBound__ = true;
+  if (window.__adminNavProgressBound__) return;
+  window.__adminNavProgressBound__ = true;
 
   const root = document.documentElement;
   let resetTimer: number | undefined;
@@ -20,7 +13,7 @@ export function initNavProgress(): void {
   const MIN_LOADER_VISIBLE_MS = 150;
 
   const clearPendingState = () => {
-    navWindow.__adminPendingDestination__ = null;
+    window.__adminPendingDestination__ = null;
     root.classList.remove("admin-nav-pending");
   };
 
@@ -99,12 +92,12 @@ export function initNavProgress(): void {
     const destination = getInternalAdminDestination(anchor);
     if (!destination) return;
 
-    if (navWindow.__adminPendingDestination__ === destination) {
+    if (window.__adminPendingDestination__ === destination) {
       event.preventDefault();
       return;
     }
 
-    navWindow.__adminPendingDestination__ = destination;
+    window.__adminPendingDestination__ = destination;
     root.classList.remove("admin-nav-loaded");
     root.classList.add("admin-nav-pending");
     event.preventDefault();

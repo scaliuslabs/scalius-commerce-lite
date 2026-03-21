@@ -1,6 +1,5 @@
 // src/modules/notifications/notifications.service.ts
 // Centralized notification service for admin push + order email notifications.
-// Extracted from src/lib/notification-utils.ts and src/queue-consumer.ts.
 
 import type { Database } from "@scalius/database/client";
 import { adminFcmTokens, settings } from "@scalius/database/schema";
@@ -128,7 +127,7 @@ export async function sendOrderNotification(
 // Order email notifications
 // ─────────────────────────────────────────
 
-type OrderEmailType = "order_created" | "order_confirmed" | "order_shipped" | "order_delivered";
+type OrderEmailType = "order_created" | "order_confirmed" | "order_processing" | "order_shipped" | "order_delivered" | "order_cancelled";
 
 /**
  * Sends a transactional order update email to a customer.
@@ -173,8 +172,10 @@ export async function sendOrderNotificationEmail(
     const subjects: Record<string, string> = {
         order_created: `Order #${orderId} Received`,
         order_confirmed: `Order #${orderId} Confirmed`,
+        order_processing: `Order #${orderId} Processing`,
         order_shipped: `Order #${orderId} Shipped`,
         order_delivered: `Order #${orderId} Delivered`,
+        order_cancelled: `Order #${orderId} Cancelled`,
     };
 
     const safeName = escapeHtml(name);
@@ -182,8 +183,10 @@ export async function sendOrderNotificationEmail(
     const messages: Record<string, string> = {
         order_created: `Thank you for your order, ${safeName}! We've received your order <strong>#${orderId}</strong> and will process it shortly.`,
         order_confirmed: `Great news, ${safeName}! Your order <strong>#${orderId}</strong> has been confirmed and is being prepared.`,
+        order_processing: `Your order <strong>#${orderId}</strong> is being processed, ${safeName}! We'll update you when it ships.`,
         order_shipped: `Your order <strong>#${orderId}</strong> is on its way, ${safeName}! ${safeTrackingId ? `Tracking ID: <strong>${safeTrackingId}</strong>` : ""}`,
         order_delivered: `Your order <strong>#${orderId}</strong> has been delivered, ${safeName}! We hope you love your purchase.`,
+        order_cancelled: `Your order <strong>#${orderId}</strong> has been cancelled, ${safeName}. If you have questions, please contact our support team.`,
     };
 
     await sendEmail({

@@ -4,6 +4,11 @@ import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import type { Analytics } from "@scalius/database/schema";
+import type { z } from "zod";
+import type { createAnalyticsSchema, updateAnalyticsSchema } from "./analytics.validation";
+
+type CreateAnalyticsInput = z.infer<typeof createAnalyticsSchema>;
+type UpdateAnalyticsInput = z.infer<typeof updateAnalyticsSchema>;
 
 /**
  * Format dates for consistent API responses.
@@ -37,19 +42,19 @@ export async function getAnalyticsScript(db: Database, id: string) {
     return formatScriptResponse(script);
 }
 
-export async function createAnalyticsScript(db: Database, data: Record<string, unknown>) {
+export async function createAnalyticsScript(db: Database, data: CreateAnalyticsInput) {
     const analyticsId = "analytics_" + nanoid();
 
     const [script] = await db
         .insert(analytics)
         .values({
             id: analyticsId,
-            name: data.name as string,
-            type: data.type as string,
-            isActive: data.isActive as boolean,
-            usePartytown: data.usePartytown as boolean,
-            config: data.config as string,
-            location: data.location as string,
+            name: data.name,
+            type: data.type,
+            isActive: data.isActive,
+            usePartytown: data.usePartytown,
+            config: data.config,
+            location: data.location,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         })
@@ -58,7 +63,7 @@ export async function createAnalyticsScript(db: Database, data: Record<string, u
     return { id: analyticsId, script: formatScriptResponse(script) };
 }
 
-export async function updateAnalyticsScript(db: Database, id: string, data: Record<string, unknown>) {
+export async function updateAnalyticsScript(db: Database, id: string, data: UpdateAnalyticsInput) {
     const existingScript = await db
         .select({ id: analytics.id })
         .from(analytics)
@@ -72,12 +77,12 @@ export async function updateAnalyticsScript(db: Database, id: string, data: Reco
     await db
         .update(analytics)
         .set({
-            name: data.name as string,
-            type: data.type as string,
-            isActive: data.isActive as boolean,
-            usePartytown: data.usePartytown as boolean,
-            config: data.config as string,
-            location: data.location as string,
+            name: data.name,
+            type: data.type,
+            isActive: data.isActive,
+            usePartytown: data.usePartytown,
+            config: data.config,
+            location: data.location,
             updatedAt: sql`unixepoch()`,
         })
         .where(eq(analytics.id, id));

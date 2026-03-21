@@ -2,14 +2,6 @@
 import { createContext, useContext, useMemo, useState, useEffect, type ReactNode } from "react";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
 
-// Extend Window interface for TypeScript
-declare global {
-  interface Window {
-    __USER_PERMISSIONS__?: string[];
-    __IS_SUPER_ADMIN__?: boolean;
-  }
-}
-
 interface PermissionContextValue {
   permissions: Set<string>;
   isSuperAdmin: boolean;

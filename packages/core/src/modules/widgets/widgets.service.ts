@@ -77,7 +77,9 @@ export async function getWidgetById(db: Database, id: string) {
         .get() ?? null;
 }
 
-/** Get active widget by ID with sanitized HTML for storefront rendering */
+/** Get active widget by ID with sanitized HTML for storefront rendering.
+ *  WIRE: api-app should call this from routes/widgets.ts (getWidgetByIdRoute handler)
+ *  replacing the inline DB query at lines 90-100. Same query shape + sanitization. */
 export async function getActiveWidgetById(db: Database, id: string) {
     const widget = await db
         .select()
@@ -91,12 +93,14 @@ export async function getActiveWidgetById(db: Database, id: string) {
     return widget;
 }
 
-/** Get all active homepage widgets with sanitized HTML for storefront rendering */
+/** Get all active homepage widgets with sanitized HTML for storefront rendering.
+ *  WIRE: api-app should call this from routes/widgets.ts (getActiveHomepageWidgetsRoute handler)
+ *  replacing the inline DB query at lines 137-147. Same query shape + sanitization. */
 export async function getActiveHomepageWidgets(db: Database) {
     const result = await db
         .select()
         .from(widgets)
-        .where(and(eq(widgets.isActive, true), isNull(widgets.deletedAt)))
+        .where(and(eq(widgets.isActive, true), eq(widgets.displayTarget, "homepage"), isNull(widgets.deletedAt)))
         .orderBy(asc(widgets.placementRule), asc(widgets.sortOrder));
 
     return result.map((w) => ({
@@ -180,7 +184,7 @@ export async function bulkDeactivateWidgets(db: Database, ids: string[]): Promis
 
 export async function restoreWidgets(db: Database, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
-    await db.update(widgets).set({ deletedAt: null }).where(inArray(widgets.id, ids));
+    await db.update(widgets).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(inArray(widgets.id, ids));
 }
 
 // ─────────────────────────────────────────

@@ -2,17 +2,14 @@
 // Public/storefront category queries for use by API routes.
 
 import { categories } from "@scalius/database/schema";
-import { sql, eq, isNull } from "drizzle-orm";
+import { sql, eq, and, isNull } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 
 /**
  * Returns all active categories for the storefront (navigation, listing).
  * No pagination — categories are typically <100 rows and cached aggressively.
  */
-export async function getPublicCategories(
-    db: Database,
-    options: { parentId?: string } = {},
-) {
+export async function getPublicCategories(db: Database) {
     const categoriesList = await db
         .select({
             id: categories.id,
@@ -23,6 +20,7 @@ export async function getPublicCategories(
             metaTitle: categories.metaTitle,
             metaDescription: categories.metaDescription,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
+            updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
         .from(categories)
         .where(isNull(categories.deletedAt))
@@ -32,6 +30,7 @@ export async function getPublicCategories(
     return categoriesList.map((c) => ({
         ...c,
         createdAt: c.createdAt ? new Date(c.createdAt * 1000).toISOString() : null,
+        updatedAt: c.updatedAt ? new Date(c.updatedAt * 1000).toISOString() : null,
     }));
 }
 
@@ -50,9 +49,10 @@ export async function getPublicCategoryBySlug(db: Database, slug: string) {
             metaTitle: categories.metaTitle,
             metaDescription: categories.metaDescription,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
+            updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
         .from(categories)
-        .where(eq(categories.slug, slug))
+        .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
         .get();
 
     if (!category) return null;
@@ -60,12 +60,13 @@ export async function getPublicCategoryBySlug(db: Database, slug: string) {
     return {
         ...category,
         createdAt: category.createdAt ? new Date(category.createdAt * 1000).toISOString() : null,
+        updatedAt: category.updatedAt ? new Date(category.updatedAt * 1000).toISOString() : null,
     };
 }
 
 /**
- * Returns a single category by ID for admin loaders and public routes.
- * Includes both createdAt and updatedAt.
+ * Returns a single category by ID for public routes.
+ * Filters out soft-deleted categories. Includes both createdAt and updatedAt.
  */
 export async function getPublicCategoryById(db: Database, id: string) {
     return db
@@ -81,7 +82,7 @@ export async function getPublicCategoryById(db: Database, id: string) {
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
         .from(categories)
-        .where(eq(categories.id, id))
+        .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
         .get();
 }
 

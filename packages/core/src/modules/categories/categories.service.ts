@@ -126,32 +126,6 @@ export async function listCategories(
 }
 
 /**
- * Returns a list of all active categories for the public storefront.
- */
-export async function listPublicCategories(db: Database) {
-    const categoriesList = await db
-        .select({
-            id: categories.id,
-            name: categories.name,
-            slug: categories.slug,
-            description: categories.description,
-            imageUrl: categories.imageUrl,
-            metaTitle: categories.metaTitle,
-            metaDescription: categories.metaDescription,
-            createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
-        })
-        .from(categories)
-        .where(isNull(categories.deletedAt))
-        .orderBy(categories.name)
-        .all();
-
-    return categoriesList.map((c) => ({
-        ...c,
-        createdAt: c.createdAt ? new Date(c.createdAt * 1000).toISOString() : null,
-    }));
-}
-
-/**
  * Returns a single category by slug (public storefront).
  */
 export async function getCategoryBySlug(db: Database, slug: string) {
@@ -278,7 +252,7 @@ export async function deleteCategory(db: Database, id: string): Promise<void> {
     const referencedProducts = await db
         .select({ id: products.id, name: products.name })
         .from(products)
-        .where(eq(products.categoryId, id))
+        .where(and(eq(products.categoryId, id), isNull(products.deletedAt)))
         .limit(5)
         .all();
 
@@ -313,7 +287,7 @@ export async function bulkDeleteCategories(
     const referencedProducts = await db
         .select({ id: products.id, name: products.name, categoryId: products.categoryId })
         .from(products)
-        .where(inArray(products.categoryId, categoryIds))
+        .where(and(inArray(products.categoryId, categoryIds), isNull(products.deletedAt)))
         .limit(5)
         .all();
 
@@ -350,7 +324,9 @@ export async function bulkDeleteCategories(
                             .where(eq(collections.id, collection.id));
                     }
                 }
-            } catch { }
+            } catch (e) {
+                console.warn(`Failed to parse collection config for ${collection.id}:`, e);
+            }
         }
 
         await db.delete(categories).where(inArray(categories.id, categoryIds));
@@ -379,7 +355,7 @@ export async function restoreCategories(db: Database, categoryIds: string[]): Pr
  * Throws ConflictError if products still reference this category.
  */
 export async function permanentlyDeleteCategory(db: Database, id: string): Promise<void> {
-    const productCount = await db.select({ count: sql<number>`count(*)` }).from(products).where(eq(products.categoryId, id)).get();
+    const productCount = await db.select({ count: sql<number>`count(*)` }).from(products).where(and(eq(products.categoryId, id), isNull(products.deletedAt))).get();
     if (productCount && productCount.count > 0) {
         throw new ConflictError(`Cannot permanently delete: ${productCount.count} products still use this category`);
     }

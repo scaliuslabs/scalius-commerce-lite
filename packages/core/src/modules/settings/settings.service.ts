@@ -191,7 +191,11 @@ const DEFAULT_NOTIFICATION_CHANNELS: Record<string, string[]> = {
 
 /**
  * Get notification channel preferences per order status.
- * Returns a map of status -> enabled channels.
+ * Returns a map of status -> enabled channels (string arrays).
+ *
+ * The admin UI stores channels as boolean maps (Record<StatusKey, Record<ChannelKey, boolean>>).
+ * This function normalizes stored data back to string arrays for the notification service,
+ * and the API route wraps it as { channels: ... } for the UI to consume.
  */
 export async function getNotificationChannels(
     db: Database,
@@ -204,21 +208,54 @@ export async function getNotificationChannels(
 
     if (!row?.value) return DEFAULT_NOTIFICATION_CHANNELS;
     try {
-        return JSON.parse(row.value);
+        const parsed = JSON.parse(row.value);
+        // Normalize: the UI may have stored boolean maps instead of string arrays
+        return normalizeParsedChannels(parsed);
     } catch {
         return DEFAULT_NOTIFICATION_CHANNELS;
     }
 }
 
 /**
+ * Normalize channel data which may be in boolean-map format (from the UI)
+ * or string-array format (canonical). Returns string-array format.
+ */
+function normalizeParsedChannels(parsed: unknown): Record<string, string[]> {
+    if (!parsed || typeof parsed !== "object") return DEFAULT_NOTIFICATION_CHANNELS;
+
+    // If the UI wrapped it in { channels: ... }, unwrap
+    const record = (parsed as Record<string, unknown>).channels
+        ? (parsed as Record<string, unknown>).channels as Record<string, unknown>
+        : parsed as Record<string, unknown>;
+
+    const result: Record<string, string[]> = {};
+    for (const [status, value] of Object.entries(record)) {
+        if (Array.isArray(value)) {
+            // Already in string array format
+            result[status] = value.filter((v): v is string => typeof v === "string");
+        } else if (value && typeof value === "object") {
+            // Boolean map format from UI: { email: true, sms: false, ... }
+            result[status] = Object.entries(value as Record<string, boolean>)
+                .filter(([, enabled]) => enabled)
+                .map(([channel]) => channel);
+        }
+    }
+    return result;
+}
+
+/**
  * Update notification channel preferences.
- * Validates channel values against the known set.
+ * Accepts both UI format (boolean maps, possibly wrapped in { channels: ... })
+ * and canonical format (string arrays). Normalizes and validates before saving.
  */
 export async function updateNotificationChannels(
     db: Database,
-    channels: Record<string, string[]>,
+    input: Record<string, unknown>,
 ): Promise<Record<string, string[]>> {
-    // Validate and filter channel values
+    // Normalize from whatever format the UI sends
+    const channels = normalizeParsedChannels(input);
+
+    // Validate channel values against the known set
     for (const [status, statusChannels] of Object.entries(channels)) {
         channels[status] = statusChannels.filter((c) =>
             (VALID_NOTIFICATION_CHANNELS as readonly string[]).includes(c),

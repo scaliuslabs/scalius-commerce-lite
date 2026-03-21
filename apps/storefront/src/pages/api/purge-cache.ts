@@ -158,7 +158,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   // Token can be in URL params or request body
   let providedToken = url.searchParams.get("token");
 
-  let body: { groups?: string[]; prefixes?: string[]; bumpVersion?: boolean } = {};
+  let body: { groups?: string[]; prefixes?: string[]; bumpVersion?: boolean; token?: string } = {};
   try {
     body = await request.json();
   } catch {
@@ -170,7 +170,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
 
   if (!providedToken) {
     // Also check body for token as fallback
-    providedToken = (body as any).token;
+    providedToken = body.token ?? null;
   }
 
   if (!providedToken || providedToken !== secretToken) {

@@ -38,14 +38,16 @@ import { toast } from "sonner";
 import { useCurrency } from "@/hooks/use-currency";
 import { navigateTo } from "@/lib/client/navigate";
 import { generateDiscountCode } from "./utils";
-import { discountCodeSchema, sharedDiscountFields } from "./shared-validation";
+import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart } from "./shared-validation";
 
-const formSchema = z.object({
-  code: discountCodeSchema,
-  ...sharedDiscountFields,
-  combineWithProductDiscounts: z.boolean(),
-  combineWithOrderDiscounts: z.boolean(),
-});
+const formSchema = refineEndDateAfterStart(
+  z.object({
+    code: discountCodeSchema,
+    ...sharedDiscountFields,
+    combineWithProductDiscounts: z.boolean(),
+    combineWithOrderDiscounts: z.boolean(),
+  }),
+);
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -109,8 +111,8 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
         type: "free_shipping",
         valueType: "free",
         discountValue: 100,
-        startDate: ensuredValues.startDate,
-        endDate: values.endDate,
+        startDate: ensuredValues.startDate.toISOString(),
+        endDate: values.endDate ? values.endDate.toISOString() : null,
       };
 
       const response = await fetch(url, {
@@ -292,15 +294,12 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                               : undefined
                           }
                           onSelect={field.onChange}
-                          disabled={(date) =>
-                            date <
-                            new Date(
-                              form
-                                .getValues("startDate")
-                                ?.setHours(0, 0, 0, 0) ||
-                              new Date().setHours(0, 0, 0, 0),
-                            )
-                          }
+                          disabled={(date) => {
+                            const start = form.getValues("startDate");
+                            const ref = start ? new Date(start.getTime()) : new Date();
+                            ref.setHours(0, 0, 0, 0);
+                            return date < ref;
+                          }}
                           autoFocus
                         />
                       </PopoverContent>

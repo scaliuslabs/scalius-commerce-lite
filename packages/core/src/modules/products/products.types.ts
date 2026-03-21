@@ -90,7 +90,9 @@ export interface ProductListItem {
     price: number;
     description: string | null;
     isActive: boolean;
-    discountPercentage: number | null;
+    discountPercentage: number;
+    discountType: string;
+    discountAmount: number;
     freeDelivery: boolean;
     createdAt: Date;
     updatedAt: Date;

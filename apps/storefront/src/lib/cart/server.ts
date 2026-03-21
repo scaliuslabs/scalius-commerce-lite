@@ -13,7 +13,7 @@ import {
   type LocationData,
   deleteAbandonedCheckout,
 } from "@/lib/api";
-import { roundPrice, addPrices } from "@scalius/shared/price-utils";
+import { roundPrice } from "@scalius/shared/price-utils";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 
 export async function getCities(): Promise<LocationData[]> {

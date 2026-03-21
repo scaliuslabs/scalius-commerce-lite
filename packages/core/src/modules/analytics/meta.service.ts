@@ -72,26 +72,19 @@ export async function performLogCleanup(db: Database, retentionHours: number): P
 
 /**
  * Manually trigger log cleanup (for admin use).
+ * Delegates to performLogCleanup for the actual deletion.
  */
 export async function manualLogCleanup(
     db: Database,
     retentionHours: number
 ): Promise<{ success: boolean; message: string }> {
     try {
-        const now = Date.now();
-        const retentionMs = retentionHours * 60 * 60 * 1000;
-        const cutoffTime = new Date(now - retentionMs);
-
-        await db
-            .delete(metaConversionsLogs)
-            .where(lt(metaConversionsLogs.createdAt, cutoffTime));
-
+        await performLogCleanup(db, retentionHours);
         return {
             success: true,
             message: `Log cleanup completed. Retention period: ${retentionHours} hours.`,
         };
     } catch (error: unknown) {
-        console.error("Error during manual Meta CAPI log cleanup:", error);
         return {
             success: false,
             message: `Log cleanup failed: ${error instanceof Error ? error.message : String(error)}`,

@@ -291,31 +291,30 @@ export async function getProductDetails(
 
     if (!result) return null;
 
-    const variants = await db
-        .select()
-        .from(productVariants)
-        .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt)));
-
-    const images = await db
-        .select()
-        .from(productImages)
-        .where(eq(productImages.productId, id))
-        .orderBy(productImages.sortOrder);
-
-    const richContent = await db
-        .select()
-        .from(productRichContent)
-        .where(eq(productRichContent.productId, id))
-        .orderBy(asc(productRichContent.sortOrder));
-
-    const attributeValues = await db
-        .select({
-            id: productAttributeValues.id,
-            attributeId: productAttributeValues.attributeId,
-            value: productAttributeValues.value,
-        })
-        .from(productAttributeValues)
-        .where(eq(productAttributeValues.productId, id));
+    const [variants, images, richContent, attributeValues] = await Promise.all([
+        db
+            .select()
+            .from(productVariants)
+            .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt))),
+        db
+            .select()
+            .from(productImages)
+            .where(eq(productImages.productId, id))
+            .orderBy(productImages.sortOrder),
+        db
+            .select()
+            .from(productRichContent)
+            .where(eq(productRichContent.productId, id))
+            .orderBy(asc(productRichContent.sortOrder)),
+        db
+            .select({
+                id: productAttributeValues.id,
+                attributeId: productAttributeValues.attributeId,
+                value: productAttributeValues.value,
+            })
+            .from(productAttributeValues)
+            .where(eq(productAttributeValues.productId, id)),
+    ]);
 
     return {
         ...result,
@@ -344,73 +343,65 @@ export async function getProductDetails(
 
 /** Returns aggregate product and category counts for the products dashboard. */
 export async function getProductStats(db: DrizzleD1Database<typeof schema>) {
-    const totalProductsArr = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(products)
-        .where(sql`${products.deletedAt} IS NULL`);
-    const totalProducts = totalProductsArr[0]?.count ?? 0;
-
-    const activeProductsArr = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(products)
-        .where(sql`${products.deletedAt} IS NULL AND ${products.isActive} = 1`);
-    const activeProducts = activeProductsArr[0]?.count ?? 0;
-
-    const productsWithImagesArr = await db
-        .select({
-            count: sql<number>`count(DISTINCT ${products.id})`,
-        })
-        .from(products)
-        .innerJoin(
-            productImages,
-            and(
-                eq(productImages.productId, products.id),
-                eq(productImages.isPrimary, true),
-            ),
-        )
-        .where(sql`${products.deletedAt} IS NULL`);
-    const productsWithImages = productsWithImagesArr[0]?.count ?? 0;
-
-    const categoriesCountArr = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(categories)
-        .where(sql`${categories.deletedAt} IS NULL`);
-    const categoriesCount = categoriesCountArr[0]?.count ?? 0;
+    const [totalProductsArr, activeProductsArr, productsWithImagesArr, categoriesCountArr] = await db.batch([
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(products)
+            .where(sql`${products.deletedAt} IS NULL`),
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(products)
+            .where(sql`${products.deletedAt} IS NULL AND ${products.isActive} = 1`),
+        db
+            .select({
+                count: sql<number>`count(DISTINCT ${products.id})`,
+            })
+            .from(products)
+            .innerJoin(
+                productImages,
+                and(
+                    eq(productImages.productId, products.id),
+                    eq(productImages.isPrimary, true),
+                ),
+            )
+            .where(sql`${products.deletedAt} IS NULL`),
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(categories)
+            .where(sql`${categories.deletedAt} IS NULL`),
+    ]);
 
     return {
-        totalProducts,
-        activeProducts,
-        productsWithImages,
-        categoriesCount,
+        totalProducts: totalProductsArr[0]?.count ?? 0,
+        activeProducts: activeProductsArr[0]?.count ?? 0,
+        productsWithImages: productsWithImagesArr[0]?.count ?? 0,
+        categoriesCount: categoriesCountArr[0]?.count ?? 0,
     };
 }
 
 /** Returns category-level stats for the categories admin page. */
 export async function getCategoryStats(db: DrizzleD1Database<typeof schema>) {
-    const totalCategoriesArr = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(categories)
-        .where(sql`${categories.deletedAt} IS NULL`);
-    const totalCategories = totalCategoriesArr[0]?.count ?? 0;
-
-    const categoriesWithImagesArr = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(categories)
-        .where(
-            sql`${categories.deletedAt} IS NULL AND ${categories.imageUrl} IS NOT NULL`,
-        );
-    const categoriesWithImages = categoriesWithImagesArr[0]?.count ?? 0;
-
-    const totalProductsArr = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(products)
-        .where(sql`${products.deletedAt} IS NULL`);
-    const totalProducts = totalProductsArr[0]?.count ?? 0;
+    const [totalCategoriesArr, categoriesWithImagesArr, totalProductsArr] = await db.batch([
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(categories)
+            .where(sql`${categories.deletedAt} IS NULL`),
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(categories)
+            .where(
+                sql`${categories.deletedAt} IS NULL AND ${categories.imageUrl} IS NOT NULL`,
+            ),
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(products)
+            .where(sql`${products.deletedAt} IS NULL`),
+    ]);
 
     return {
-        totalCategories,
-        categoriesWithImages,
-        totalProducts,
+        totalCategories: totalCategoriesArr[0]?.count ?? 0,
+        categoriesWithImages: categoriesWithImagesArr[0]?.count ?? 0,
+        totalProducts: totalProductsArr[0]?.count ?? 0,
     };
 }
 

@@ -208,7 +208,9 @@ export const mediaFolders = sqliteTable("media_folders", {
         .notNull()
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+    index("media_folders_parent_id_idx").on(table.parentId),
+]);
 
 export const media = sqliteTable("media", {
     id: text("id").primaryKey(),

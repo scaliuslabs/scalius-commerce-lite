@@ -7,7 +7,7 @@ import { generateSitemap, getSitemapHeaders } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getAllPages } from '@/lib/api/pages';
 import type { Page } from '@/lib/api/types';
-import { getRuntimeStorefrontUrl } from '@/lib/runtime-env';
+import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext, APIRoute } from 'astro';
 
 export const prerender = false;

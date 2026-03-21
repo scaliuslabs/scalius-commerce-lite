@@ -33,12 +33,18 @@ export async function createOrder(
       true,
     );
 
-    const data: any = await response.json();
+    const data = await response.json() as {
+      success?: boolean;
+      error?: string | { message?: string };
+      details?: string;
+      message?: string;
+      data?: { id?: string; orderId?: string; checkoutToken?: string };
+    };
 
     if (!response.ok || !data.success) {
       const errorMsg = typeof data.error === 'string'
         ? data.error
-        : (data.error as any)?.message || (data.details as string) || (data.message as string) || "Order creation failed";
+        : (typeof data.error === 'object' && data.error?.message) || data.details || data.message || "Order creation failed";
 
       console.error("Failed to create order:", errorMsg);
       return { success: false, error: errorMsg };

@@ -13,6 +13,9 @@ import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 // Admin queries
 // ─────────────────────────────────────────
 
+const ALLOWED_COLLECTION_SORT_FIELDS = ["name", "type", "isActive", "updatedAt", "sortOrder"] as const;
+type CollectionSortField = typeof ALLOWED_COLLECTION_SORT_FIELDS[number];
+
 export async function listCollections(
     db: Database,
     options: {
@@ -20,7 +23,7 @@ export async function listCollections(
         limit?: number;
         search?: string;
         showTrashed?: boolean;
-        sort?: "name" | "type" | "isActive" | "updatedAt" | "sortOrder";
+        sort?: CollectionSortField;
         order?: "asc" | "desc";
     } = {},
 ) {
@@ -29,9 +32,11 @@ export async function listCollections(
         limit = 20,
         search = "",
         showTrashed = false,
-        sort = "sortOrder",
         order = "asc",
     } = options;
+    const sort: CollectionSortField = ALLOWED_COLLECTION_SORT_FIELDS.includes(options.sort as CollectionSortField)
+        ? (options.sort as CollectionSortField)
+        : "sortOrder";
 
     const whereConditions: (SQL | undefined)[] = [];
     if (showTrashed) {
@@ -232,8 +237,8 @@ const buildCollectionProductSelect = () => ({
         ORDER BY "product_images"."sort_order" ASC
         LIMIT 1
     )`.as("imageUrl"),
-    hasVariants: sql<boolean>`(
-        SELECT COUNT(*) > 0
+    hasVariants: sql<boolean>`EXISTS(
+        SELECT 1
         FROM "product_variants"
         WHERE "product_variants"."product_id" = "products"."id"
           AND "product_variants"."deleted_at" IS NULL

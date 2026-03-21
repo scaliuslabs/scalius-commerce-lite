@@ -6,6 +6,7 @@ import { sql, and, isNull, inArray, asc, desc, eq, type SQL } from "drizzle-orm"
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
 
 // Re-export schemas from the canonical validation module
 export {
@@ -147,7 +148,7 @@ export async function createCustomer(
         .where(sql`${customers.phone} = ${data.phone}`)
         .get();
 
-    if (existing) throw Object.assign(new Error("Customer with this phone number already exists"), { statusCode: 400 });
+    if (existing) throw new ValidationError("Customer with this phone number already exists");
 
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
     let cityName = null, zoneName = null, areaName = null;
@@ -213,7 +214,7 @@ export async function updateCustomer(
     data: UpdateCustomerInput,
 ) {
     const existing = await getCustomerById(db, id);
-    if (!existing) throw Object.assign(new Error("Customer not found"), { statusCode: 404 });
+    if (!existing) throw new NotFoundError("Customer not found");
 
     if (data.phone && data.phone !== existing.phone) {
         const phoneConflict = await db
@@ -221,7 +222,7 @@ export async function updateCustomer(
             .from(customers)
             .where(sql`${customers.phone} = ${data.phone} AND ${customers.id} != ${id}`)
             .get();
-        if (phoneConflict) throw Object.assign(new Error("Another customer with this phone number already exists"), { statusCode: 400 });
+        if (phoneConflict) throw new ValidationError("Another customer with this phone number already exists");
     }
 
     let cityName = existing.cityName, zoneName = existing.zoneName, areaName = existing.areaName;
@@ -271,7 +272,7 @@ export async function updateCustomer(
 
 export async function deleteCustomer(db: Database, id: string): Promise<void> {
     const existing = await getCustomerById(db, id);
-    if (!existing) throw Object.assign(new Error("Customer not found"), { statusCode: 404 });
+    if (!existing) throw new NotFoundError("Customer not found");
 
     await db.batch([
         db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
@@ -295,8 +296,10 @@ export async function deleteCustomer(db: Database, id: string): Promise<void> {
 }
 
 export async function permanentlyDeleteCustomer(db: Database, id: string): Promise<void> {
-    await db.delete(customerHistory).where(eq(customerHistory.customerId, id));
-    await db.delete(customers).where(eq(customers.id, id));
+    await db.batch([
+        db.delete(customerHistory).where(eq(customerHistory.customerId, id)),
+        db.delete(customers).where(eq(customers.id, id)),
+    ] as any);
 }
 
 export async function restoreCustomer(db: Database, id: string): Promise<void> {

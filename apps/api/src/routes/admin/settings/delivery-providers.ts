@@ -217,7 +217,7 @@ app.openapi(updateProviderRoute, (async (c: any) => {
             isActive: validated.isActive !== undefined ? validated.isActive : existingProvider.isActive,
             credentials: unmaskedCreds,
             config: config || (typeof existingProvider.config === 'string' ? existingProvider.config : JSON.stringify(existingProvider.config)),
-        });
+        }, getEncryptionKey(c.env as Record<string, unknown>));
 
         const updatedCredentials = typeof savedProvider.credentials === 'string'
             ? savedProvider.credentials

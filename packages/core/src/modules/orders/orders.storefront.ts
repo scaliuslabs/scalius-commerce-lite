@@ -9,7 +9,14 @@ import {
     productVariants,
     deliveryLocations,
     discounts,
+    siteSettings,
+    shippingMethods,
+    PaymentMethod,
+    PaymentStatus,
+    OrderStatus,
+    FulfillmentStatus,
 } from "@scalius/database/schema";
+import { nanoid } from "nanoid";
 
 import { sql, eq, and, isNull } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
@@ -138,19 +145,18 @@ export async function createStorefrontOrder(
     }
 
     // 6. Settings (for partial payment checks)
-    const { siteSettings: siteSettingsTable, shippingMethods: shippingMethodsTable, discounts: discountsTable } = await import("@scalius/database/schema");
-    readBatch.push(storefrontDb.select().from(siteSettingsTable).limit(1));
+    readBatch.push(storefrontDb.select().from(siteSettings).limit(1));
 
     // 7. Shipping Method
     if (data.shippingMethodId) {
         readBatch.push(
             storefrontDb
                 .select()
-                .from(shippingMethodsTable)
-                .where(eq(shippingMethodsTable.id, data.shippingMethodId)),
+                .from(shippingMethods)
+                .where(eq(shippingMethods.id, data.shippingMethodId)),
         );
     } else {
-        readBatch.push(storefrontDb.select().from(shippingMethodsTable).limit(0));
+        readBatch.push(storefrontDb.select().from(shippingMethods).limit(0));
     }
 
     // Execute Read Batch
@@ -206,6 +212,8 @@ export async function createStorefrontOrder(
     // SERVER-SIDE PRICE VERIFICATION
     // ------------------------------------------------------------------
     let serverItemTotal = 0;
+    // Build server-verified unit prices per item index for use in queue payload
+    const serverUnitPrices: number[] = [];
     for (const item of data.items) {
         let unitPrice: number;
 
@@ -229,6 +237,8 @@ export async function createStorefrontOrder(
             }
         }
 
+        unitPrice = roundPrice(unitPrice);
+        serverUnitPrices.push(unitPrice);
         serverItemTotal += unitPrice * item.quantity;
     }
 
@@ -277,9 +287,8 @@ export async function createStorefrontOrder(
     // ------------------------------------------------------------------
     // PARTIAL PAYMENT SECURITY CHECK
     // ------------------------------------------------------------------
-    const { PaymentMethod: PaymentMethodEnum, PaymentStatus: PaymentStatusEnum, OrderStatus: OrderStatusEnum, FulfillmentStatus: FulfillmentStatusEnum } = await import("@scalius/database/schema");
     const isPartialEnabled = (settings?.partialPaymentEnabled as boolean) ?? false;
-    if (isPartialEnabled && data.paymentMethod === PaymentMethodEnum.COD) {
+    if (isPartialEnabled && data.paymentMethod === PaymentMethod.COD) {
         throw new ValidationError("Advance deposit is required. COD cannot be selected for the full amount directly.");
     }
 
@@ -293,11 +302,10 @@ export async function createStorefrontOrder(
     // Build Queue Payload
     // ------------------------------------------------------------------
     const orderId = generateOrderId();
-    const { nanoid: nanoIdFn } = await import("nanoid");
-    const checkoutToken = `chk_${nanoIdFn()}`;
+    const checkoutToken = `chk_${nanoid()}`;
 
     const queuePayload = {
-        type: "order.ingest",
+        type: "order.ingest" as const,
         checkoutToken,
         existingCustomer: existingCustomer ? { id: existingCustomer.id } : null,
         orderData: {
@@ -316,28 +324,26 @@ export async function createStorefrontOrder(
             totalAmount,
             shippingCharge: verifiedShippingCharge,
             discountAmount: verifiedDiscountAmount,
-            status: (isPartialEnabled && data.paymentMethod === PaymentMethodEnum.COD)
-                ? OrderStatusEnum.INCOMPLETE
-                : data.paymentMethod === PaymentMethodEnum.COD ? OrderStatusEnum.PENDING : OrderStatusEnum.INCOMPLETE,
+            status: data.paymentMethod === PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.INCOMPLETE,
             paymentMethod: data.paymentMethod,
-            paymentStatus: PaymentStatusEnum.UNPAID,
+            paymentStatus: PaymentStatus.UNPAID,
             paidAmount: 0,
             balanceDue: totalAmount,
-            fulfillmentStatus: FulfillmentStatusEnum.PENDING,
+            fulfillmentStatus: FulfillmentStatus.PENDING,
             inventoryPool: data.inventoryPool,
             inventoryAction: data.items.some(item => item.variantId !== null) ? "reserved" : "none",
         },
-        items: data.items.map(item => ({
+        items: data.items.map((item, idx) => ({
             productId: item.productId,
             variantId: item.variantId,
             quantity: item.quantity,
-            price: item.price,
+            price: serverUnitPrices[idx] ?? item.price,
             productName: item.productName ?? null,
             variantLabel: item.variantLabel ?? null,
         })),
-        discountUsage: appliedDiscount && data.discountAmount && data.discountAmount > 0 ? {
+        discountUsage: appliedDiscount && verifiedDiscountAmount > 0 ? {
             discountId: appliedDiscount.id,
-            amountDiscounted: data.discountAmount,
+            amountDiscounted: verifiedDiscountAmount,
         } : null,
         requestUrl,
     };

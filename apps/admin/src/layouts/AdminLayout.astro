@@ -38,7 +38,7 @@ const userData = user ? {
   image: user.image ?? null,
   role: user.role ?? "",
   twoFactorEnabled: user.twoFactorEnabled ?? false,
-  isSuperAdmin: (user as any).isSuperAdmin ?? false,
+  isSuperAdmin: user.isSuperAdmin ?? false,
 } : {
   id: "",
   name: "",

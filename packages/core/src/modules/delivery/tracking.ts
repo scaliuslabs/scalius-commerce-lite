@@ -1,5 +1,5 @@
 import { deliveryShipments, orders } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
 
@@ -104,7 +104,7 @@ export async function updateOrderStatusFromShipment(
         .update(orders)
         .set({
           status: newOrderStatus,
-          updatedAt: new Date(),
+          updatedAt: sql`(unixepoch())`,
         })
         .where(eq(orders.id, order.id));
 

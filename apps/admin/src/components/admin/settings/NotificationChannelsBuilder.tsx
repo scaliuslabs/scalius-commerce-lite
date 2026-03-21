@@ -56,9 +56,20 @@ export function NotificationChannelsBuilder() {
         const res = await fetch("/api/v1/admin/settings/notification-channels");
         if (res.ok) {
           const json = await res.json();
-          const data = unwrapEnvelope<{ channels?: ChannelConfig }>(json);
-          if (data?.channels) {
-            setChannels({ ...getDefaultConfig(), ...data.channels });
+          const data = unwrapEnvelope<Record<string, string[]>>(json);
+          if (data && typeof data === "object") {
+            // Transform API format (Record<status, string[]>) to UI format
+            // (Record<status, Record<channel, boolean>>)
+            const config = getDefaultConfig();
+            for (const status of ORDER_STATUSES) {
+              const enabledChannels = data[status.key];
+              if (Array.isArray(enabledChannels)) {
+                for (const ch of CHANNELS) {
+                  config[status.key][ch.key] = enabledChannels.includes(ch.key);
+                }
+              }
+            }
+            setChannels(config);
           }
         }
       } catch {
@@ -83,10 +94,19 @@ export function NotificationChannelsBuilder() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // Transform UI format (Record<status, Record<channel, boolean>>)
+      // to API format (Record<status, string[]>) -- array of enabled channel keys
+      const apiChannels: Record<string, string[]> = {};
+      for (const status of ORDER_STATUSES) {
+        const statusChannels = channels[status.key];
+        apiChannels[status.key] = CHANNELS
+          .filter((ch) => statusChannels?.[ch.key])
+          .map((ch) => ch.key);
+      }
       const res = await fetch("/api/v1/admin/settings/notification-channels", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channels }),
+        body: JSON.stringify(apiChannels),
       });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));

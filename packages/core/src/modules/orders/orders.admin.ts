@@ -382,7 +382,7 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
             .select({ id: deliveryLocations.id, name: deliveryLocations.name })
             .from(deliveryLocations)
             .where(and(
-                sql`${deliveryLocations.id} IN (${locationIds.join(",")})`,
+                inArray(deliveryLocations.id, locationIds),
                 isNull(deliveryLocations.deletedAt),
             ));
         locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
@@ -612,7 +612,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             .select({ id: deliveryLocations.id, name: deliveryLocations.name })
             .from(deliveryLocations)
             .where(and(
-                sql`${deliveryLocations.id} IN (${locationIds.join(",")})`,
+                inArray(deliveryLocations.id, locationIds),
                 isNull(deliveryLocations.deletedAt),
             ));
         locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
@@ -815,7 +815,7 @@ export async function deleteOrder(db: Database, id: string) {
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
     }
-    await db.update(orders).set({ deletedAt: sql`unixepoch()`, inventoryAction: "restored" }).where(eq(orders.id, id));
+    await db.update(orders).set({ deletedAt: sql`unixepoch()`, inventoryAction: "restored", version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` }).where(eq(orders.id, id));
 }
 
 export async function restoreOrder(db: Database, id: string) {
@@ -861,18 +861,20 @@ export async function restoreOrder(db: Database, id: string) {
         }
 
         await db.update(orders)
-            .set({ deletedAt: null, inventoryAction: "reserved", updatedAt: sql`unixepoch()` })
+            .set({ deletedAt: null, inventoryAction: "reserved", version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
             .where(eq(orders.id, id));
     } else {
         await db.update(orders)
-            .set({ deletedAt: null, updatedAt: sql`unixepoch()` })
+            .set({ deletedAt: null, version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
             .where(eq(orders.id, id));
     }
 }
 
 export async function permanentlyDeleteOrder(db: Database, id: string) {
-    const orderToDelete = await db.select({ inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, id)).get();
-    if (orderToDelete && (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted")) {
+    const orderToDelete = await db.select({ inventoryAction: orders.inventoryAction, deletedAt: orders.deletedAt }).from(orders).where(eq(orders.id, id)).get();
+    if (!orderToDelete) throw new NotFoundError("Order not found");
+    if (!orderToDelete.deletedAt) throw new ValidationError("Order must be soft-deleted before permanent deletion");
+    if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
     }
     await db.delete(orderItems).where(eq(orderItems.orderId, id));

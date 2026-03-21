@@ -241,7 +241,5 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 
 ## Known Gaps
 
-- **Movement type `restored`** is defined in `MovementEntry.type` but never written by any operation -- `restoreDeductedStock()` logs as `adjusted` instead
 - **Batch deduction not implemented** -- `deductMultiple()` is sequential (no batch equivalent like `reserveStockBatch()`)
-- **Alert check timing** -- `checkAndAlertLowStock()` is called after adjustments and deductions but not after releases, so alerts are not auto-resolved when stock is released back
 - **Expiry sweep has no batch limit** -- `releaseExpiredReservations()` processes all expired reservations in a single invocation with no cap, which could be slow if many reservations expire simultaneously

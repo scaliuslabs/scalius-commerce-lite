@@ -66,19 +66,19 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy as string, collectedAmount: body.collectedAmount as number, receiptUrl: body.receiptUrl as string | undefined });
             if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
             await db.update(orders).set({ status: OrderStatus.DELIVERED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
-            return { success: true, message: "COD collection recorded" };
+            return { message: "COD collection recorded" };
         }
         case "failed": {
             const failResult = await recordCODFailure(db, { orderId, reason: body.reason as "other" | "not_home" | "refused" | "no_cash" | "wrong_address", notes: body.notes as string | undefined });
             if (!failResult.success) throw new ValidationError(failResult.error || "COD failure recording failed");
-            return { success: true, message: "COD failure recorded" };
+            return { message: "COD failure recorded" };
         }
         case "returned": {
             const retResult = await markCODReturned(db, orderId);
             if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
             await applyInventoryForStatusChange(db, orderId, OrderStatus.RETURNED);
             await db.update(orders).set({ status: OrderStatus.RETURNED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
-            return { success: true, message: "Order marked as returned" };
+            return { message: "Order marked as returned" };
         }
         default:
             throw new ValidationError("Invalid action");
@@ -135,7 +135,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(writes as any);
 
-    return { success: true, shipmentId, isFinalShipment, fulfillmentStatus: newFulfillmentStatus };
+    return { shipmentId, isFinalShipment, fulfillmentStatus: newFulfillmentStatus };
 }
 
 // Statuses that warrant a customer notification email
