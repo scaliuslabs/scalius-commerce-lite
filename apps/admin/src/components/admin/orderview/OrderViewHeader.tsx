@@ -11,6 +11,7 @@ import {
   History,
   CreditCard,
   Package,
+  Printer,
 } from "lucide-react";
 import type { Order } from "./types";
 import { getStatusBadgeClass, formatDate } from "@scalius/shared/utils";
@@ -188,7 +189,18 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
         </div>
 
         {/* Actions */}
-        <div className="lg:col-span-3 flex items-start justify-start lg:justify-end">
+        <div className="lg:col-span-3 flex items-start justify-start lg:justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="h-9 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
+          >
+            <a href={`/admin/orders/${order.id}/invoice`} target="_blank" rel="noopener noreferrer">
+              <Printer className="h-4 w-4" />
+              Print Invoice
+            </a>
+          </Button>
           <Button
             variant="outline"
             size="sm"
