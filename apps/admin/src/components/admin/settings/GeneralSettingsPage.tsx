@@ -35,6 +35,7 @@ const AuthSettingsBuilder = lazy(() => import("./AuthSettingsBuilder"));
 const CurrencySettingsBuilder = lazy(() => import("./CurrencySettingsBuilder"));
 const AllowedCountriesBuilder = lazy(() => import("./AllowedCountriesBuilder"));
 const ScannerTokenGenerator = lazy(() => import("./ScannerTokenGenerator").then(m => ({ default: m.ScannerTokenGenerator })));
+const BusinessSettingsBuilder = lazy(() => import("./BusinessSettingsBuilder"));
 const NotificationChannelsBuilder = lazy(() => import("./NotificationChannelsBuilder"));
 
 function TabSpinner() {
@@ -57,6 +58,7 @@ const tabs = [
     { value: "storefront", label: "Storefront" },
     { value: "email", label: "Email" },
     { value: "currency", label: "Currency" },
+    { value: "business", label: "Business" },
     { value: "countries", label: "Countries" },
     { value: "auth", label: "Auth & Access" },
     { value: "security", label: "Security" },
@@ -156,6 +158,14 @@ export default function GeneralSettingsPage({
                         {mountedTabs.has("currency") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <CurrencySettingsBuilder />
+                            </Suspense>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="business" className="mt-0">
+                        {mountedTabs.has("business") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <BusinessSettingsBuilder />
                             </Suspense>
                         )}
                     </TabsContent>
