@@ -59,10 +59,11 @@ Plans:
   3. Customer receives an actual SMS with OTP code when signing up or logging in with SMS OTP enabled
   4. SMS delivery failures are logged and visible to the merchant (not silently swallowed)
   5. Provider credentials are stored encrypted and displayed masked in the settings UI
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: TBD
+- [ ] 03-01-PLAN.md — Core SMS provider interface, registry, 4 BD provider implementations, encrypted settings service
+- [ ] 03-02-PLAN.md — API endpoints, queue consumer dispatch, notification service SMS, admin UI provider configuration
 
 ### Phase 4: Invoice & Business Settings
 **Goal**: Merchants can print invoices for orders with their business branding and sequential numbering
@@ -89,5 +90,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Bengali FTS5 Search | 0/2 | Planning complete | - |
 | 2. Storefront SEO | 0/0 | Not started | - |
-| 3. SMS OTP Providers | 0/0 | Not started | - |
+| 3. SMS OTP Providers | 0/2 | Planning complete | - |
 | 4. Invoice & Business Settings | 0/0 | Not started | - |
