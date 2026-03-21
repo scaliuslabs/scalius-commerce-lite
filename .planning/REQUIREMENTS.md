@@ -19,11 +19,11 @@ Requirements for milestone v1.0. Each maps to roadmap phases.
 
 ### Business Information Settings
 
-- [ ] **BIZ-01**: Merchant can configure business details (company name, legal name, address, phone, email) from admin settings
-- [ ] **BIZ-02**: Merchant can upload a business logo that appears on invoices and structured data
-- [ ] **BIZ-03**: Merchant can set tax registration details (TIN/BIN number, tax label)
-- [ ] **BIZ-04**: Merchant can configure invoice-specific settings (number prefix, footer text)
-- [ ] **BIZ-05**: Business information feeds into invoice header, email footers, and Organization JSON-LD
+- [x] **BIZ-01**: Merchant can configure business details (company name, legal name, address, phone, email) from admin settings
+- [x] **BIZ-02**: Merchant can upload a business logo that appears on invoices and structured data
+- [x] **BIZ-03**: Merchant can set tax registration details (TIN/BIN number, tax label)
+- [x] **BIZ-04**: Merchant can configure invoice-specific settings (number prefix, footer text)
+- [x] **BIZ-05**: Business information feeds into invoice header, email footers, and Organization JSON-LD
 
 ### Storefront SEO — Structured Data
 
@@ -136,11 +136,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INV-05 | Phase 4: Invoice & Business Settings | Pending |
 | INV-06 | Phase 4: Invoice & Business Settings | Pending |
 | INV-07 | Phase 4: Invoice & Business Settings | Pending |
-| BIZ-01 | Phase 4: Invoice & Business Settings | Pending |
-| BIZ-02 | Phase 4: Invoice & Business Settings | Pending |
-| BIZ-03 | Phase 4: Invoice & Business Settings | Pending |
-| BIZ-04 | Phase 4: Invoice & Business Settings | Pending |
-| BIZ-05 | Phase 4: Invoice & Business Settings | Pending |
+| BIZ-01 | Phase 4: Invoice & Business Settings | Complete |
+| BIZ-02 | Phase 4: Invoice & Business Settings | Complete |
+| BIZ-03 | Phase 4: Invoice & Business Settings | Complete |
+| BIZ-04 | Phase 4: Invoice & Business Settings | Complete |
+| BIZ-05 | Phase 4: Invoice & Business Settings | Complete |
 
 **Coverage:**
 - v1 requirements: 28 total
