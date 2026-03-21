@@ -49,11 +49,6 @@ const KEY_MAP: Record<keyof BusinessInfo, string> = {
     invoiceLogoUrl: "invoice_logo_url",
 };
 
-const DEFAULTS: Record<string, string> = {
-    country: "Bangladesh",
-    invoice_prefix: "INV",
-};
-
 const CATEGORY = "business_info";
 
 // ─────────────────────────────────────────
@@ -77,11 +72,11 @@ export async function getBusinessSettings(db: Database): Promise<BusinessInfo> {
         city: map["city"] ?? "",
         stateRegion: map["state_region"] ?? "",
         postalCode: map["postal_code"] ?? "",
-        country: map["country"] ?? DEFAULTS["country"],
+        country: map["country"] ?? "Bangladesh",
         phone: map["phone"] ?? "",
         email: map["email"] ?? "",
         taxId: map["tax_id"] ?? "",
-        invoicePrefix: map["invoice_prefix"] ?? DEFAULTS["invoice_prefix"],
+        invoicePrefix: map["invoice_prefix"] ?? "INV",
         invoiceFooterText: map["invoice_footer_text"] ?? "",
         invoiceLogoUrl: map["invoice_logo_url"] ?? "",
     };

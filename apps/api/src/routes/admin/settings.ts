@@ -8,12 +8,15 @@ import { deliveryProvidersRoutes } from "./settings/delivery-providers";
 import { heroSlidersRoutes } from "./settings/hero-sliders";
 import { metaConversionsAdminRoutes } from "./settings/meta-conversions-admin";
 import { notificationChannelsRoutes } from "./settings/notification-channels";
+import { smsSettingsRoutes } from "./settings/sms";
+import { businessSettingsRoutes } from "./settings/business";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Mount the modular settings routes on the root so they match frontend expectations
 // (Frontend expects /api/v1/admin/settings/stripe, not /api/v1/admin/settings/payments/stripe)
 app.route("/", siteSettingsRoutes);
+app.route("/", businessSettingsRoutes);
 app.route("/", integrationSettingsRoutes);
 app.route("/", paymentSettingsRoutes);
 app.route("/", systemSettingsRoutes);
@@ -22,5 +25,6 @@ app.route("/delivery-providers", deliveryProvidersRoutes);
 app.route("/hero-sliders", heroSlidersRoutes);
 app.route("/meta-conversions", metaConversionsAdminRoutes);
 app.route("/notification-channels", notificationChannelsRoutes);
+app.route("/", smsSettingsRoutes);
 
 export { app as adminSettingsRoutes };
