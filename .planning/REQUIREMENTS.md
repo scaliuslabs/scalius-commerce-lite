@@ -49,12 +49,12 @@ Requirements for milestone v1.0. Each maps to roadmap phases.
 
 ### SMS OTP Providers
 
-- [ ] **SMS-01**: Merchant can select SMS OTP as the customer verification method in Auth & Access settings
-- [ ] **SMS-02**: When SMS OTP is selected, merchant can choose from available SMS providers (SMS.net.bd, BDBulkSMS, MIM SMS, Gennet iSMS)
-- [ ] **SMS-03**: Each SMS provider has its own credential fields shown conditionally when selected (API keys, tokens, sender IDs)
+- [x] **SMS-01**: Merchant can select SMS OTP as the customer verification method in Auth & Access settings
+- [x] **SMS-02**: When SMS OTP is selected, merchant can choose from available SMS providers (SMS.net.bd, BDBulkSMS, MIM SMS, Gennet iSMS)
+- [x] **SMS-03**: Each SMS provider has its own credential fields shown conditionally when selected (API keys, tokens, sender IDs)
 - [x] **SMS-04**: SMS provider credentials are stored encrypted (AES-GCM) in the database, consistent with existing credential handling
 - [x] **SMS-05**: Customer receives OTP via SMS when signing up or logging in with SMS OTP enabled
-- [ ] **SMS-06**: SMS provider settings UI follows the same pattern as WhatsApp settings in Auth & Access (conditional card, masked credentials, status indicator)
+- [x] **SMS-06**: SMS provider settings UI follows the same pattern as WhatsApp settings in Auth & Access (conditional card, masked credentials, status indicator)
 - [x] **SMS-07**: SMS delivery errors are logged and surfaced to the merchant (not silently swallowed)
 
 ### Bengali Text Search
@@ -122,12 +122,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OG-05 | Phase 2: Storefront SEO | Complete |
 | CAN-01 | Phase 2: Storefront SEO | Complete |
 | CAN-02 | Phase 2: Storefront SEO | Complete |
-| SMS-01 | Phase 3: SMS OTP Providers | Pending |
-| SMS-02 | Phase 3: SMS OTP Providers | Pending |
-| SMS-03 | Phase 3: SMS OTP Providers | Pending |
+| SMS-01 | Phase 3: SMS OTP Providers | Complete |
+| SMS-02 | Phase 3: SMS OTP Providers | Complete |
+| SMS-03 | Phase 3: SMS OTP Providers | Complete |
 | SMS-04 | Phase 3: SMS OTP Providers | Complete |
 | SMS-05 | Phase 3: SMS OTP Providers | Complete |
-| SMS-06 | Phase 3: SMS OTP Providers | Pending |
+| SMS-06 | Phase 3: SMS OTP Providers | Complete |
 | SMS-07 | Phase 3: SMS OTP Providers | Complete |
 | INV-01 | Phase 4: Invoice & Business Settings | Pending |
 | INV-02 | Phase 4: Invoice & Business Settings | Pending |

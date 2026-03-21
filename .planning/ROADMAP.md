@@ -64,7 +64,7 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md — Core SMS provider interface, registry, 4 BD provider implementations, encrypted settings service
-- [ ] 03-02-PLAN.md — API endpoints, queue consumer dispatch, notification service SMS, admin UI provider configuration
+- [x] 03-02-PLAN.md — API endpoints, queue consumer dispatch, notification service SMS, admin UI provider configuration
 
 ### Phase 4: Invoice & Business Settings
 **Goal**: Merchants can print invoices for orders with their business branding and sequential numbering

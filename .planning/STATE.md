@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-21T22:13:52.742Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-21T22:14:36.724Z"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Plan: 2 of 2
 | Phase 04 P01 | 2min | 2 tasks | 3 files |
 | Phase 02-storefront-seo P02 | 4min | 2 tasks | 4 files |
 | Phase 04 P02 | 4min | 2 tasks | 3 files |
+| Phase 03 P02 | 5min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Phase 04]: Business info stored in settings KV table (category=business_info), not siteSettings singleton
 - [Phase 02-storefront-seo]: Product JSON-LD uses merchant listing spec; BreadcrumbList positions adjust dynamically; category canonical strips query params
 - [Phase 04]: Stripped Drizzle migration drift artifacts to keep migration safe; used .returning() for CAS conflict detection
+- [Phase 03]: Queue consumer throws on SMS failure for Cloudflare retry; notification service SMS is fire-and-forget with try/catch
+- [Phase 03]: SMS settings stored separately from auth settings (settings table category sms vs siteSettings)
 
 ### Pending Todos
 
@@ -85,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T22:13:52.740Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-03-21T22:14:36.721Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
