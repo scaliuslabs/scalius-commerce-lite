@@ -28,12 +28,10 @@ const codTrackingSchema = z.object({
 }).passthrough().nullable();
 
 const codActionResponseSchema = successEnvelope(z.object({
-    success: z.boolean(),
     message: z.string(),
 }));
 
 const fulfillmentResultSchema = successEnvelope(z.object({
-    success: z.boolean(),
     shipmentId: z.string(),
     isFinalShipment: z.boolean(),
     fulfillmentStatus: z.string(),
@@ -86,7 +84,9 @@ app.openapi(updateStatusRoute, async (c) => {
                 customerEmail: result.notification.customerEmail,
                 customerName: result.notification.customerName,
                 notificationType: result.notification.notificationType,
-                trackingId: data.status === "shipped" ? result.notification.trackingId : undefined,
+                data: data.status === "shipped" && result.notification.trackingId
+                    ? { trackingId: result.notification.trackingId }
+                    : undefined,
             });
         } catch (err: unknown) {
             console.error(`[orders] Failed to enqueue notification for ${orderId}:`, err);

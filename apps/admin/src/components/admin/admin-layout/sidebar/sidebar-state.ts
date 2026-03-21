@@ -3,12 +3,6 @@
  * collapse state, and global sidebar state singleton.
  */
 
-declare global {
-  interface Window {
-    __adminSidebarState: SidebarState;
-  }
-}
-
 export interface SidebarState {
   globalListenersBound: boolean;
   isCollapsed: boolean;

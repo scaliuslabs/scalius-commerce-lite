@@ -9,7 +9,7 @@ const user = Astro.locals.user;
 
 // If user is fully authenticated (session exists, 2FA verified or not required), go to admin
 if (session && user) {
-  const twoFactorVerified = (session as any).twoFactorVerified;
+  const twoFactorVerified = session.twoFactorVerified;
 
   // If 2FA is not enabled OR 2FA is already verified, redirect to admin
   if (!user.twoFactorEnabled || twoFactorVerified) {

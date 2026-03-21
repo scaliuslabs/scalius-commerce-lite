@@ -283,7 +283,7 @@ export async function processReturn(
         autoRefund: boolean;
     },
     encryptionKey?: string,
-): Promise<{ success: boolean; refundResult?: RefundResult; error?: string }> {
+): Promise<{ refundResult?: RefundResult }> {
     // Verify order exists and is in a returnable state
     const order = await db
         .select({
@@ -326,5 +326,5 @@ export async function processReturn(
         }, encryptionKey);
     }
 
-    return { success: true, refundResult };
+    return { refundResult };
 }

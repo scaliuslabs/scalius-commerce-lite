@@ -60,6 +60,7 @@ export const orders = sqliteTable("orders", {
     index("orders_payment_status_idx").on(table.paymentStatus),
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_created_at_idx").on(table.createdAt),
+    index("orders_deleted_at_idx").on(table.deletedAt),
 ]);
 
 export const orderItems = sqliteTable("order_items", {
@@ -117,6 +118,10 @@ export const orderPayments = sqliteTable("order_payments", {
     index("order_payments_stripe_pi_idx").on(table.stripePaymentIntentId),
     index("order_payments_ssl_tran_idx").on(table.sslcommerzTranId),
     index("order_payments_polar_checkout_idx").on(table.polarCheckoutId),
+    // Migration 0030 also creates these unique partial indexes (not expressible in Drizzle):
+    // idx_order_payments_stripe_unique ON (order_id, stripe_payment_intent_id) WHERE stripe_payment_intent_id IS NOT NULL
+    // idx_order_payments_sslcommerz_unique ON (order_id, sslcommerz_tran_id) WHERE sslcommerz_tran_id IS NOT NULL
+    // idx_order_payments_polar_unique ON (order_id, polar_checkout_id) WHERE polar_checkout_id IS NOT NULL
 ]);
 
 export const paymentPlans = sqliteTable("payment_plans", {

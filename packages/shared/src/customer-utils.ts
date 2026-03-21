@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
+import { addPrices } from "./price-utils";
 
 // Re-export for consumers that need direct validation (e.g. customer-auth)
 export { isValidPhoneNumber } from "libphonenumber-js";
@@ -78,7 +79,7 @@ export function calculateCustomerStats(
   }[],
 ) {
   const totalOrders = orders.length;
-  const totalSpent = orders.reduce((sum, order) => sum + order.totalAmount, 0);
+  const totalSpent = addPrices(...orders.map((order) => order.totalAmount));
   const lastOrderAt =
     orders.length > 0
       ? Math.max(

@@ -105,7 +105,7 @@ export type PaymentQueueMessage =
     orderId: string;
     customerEmail?: string;
     customerName: string;
-    notificationType: "order_created" | "order_confirmed" | "order_shipped" | "order_delivered";
+    notificationType: "order_created" | "order_confirmed" | "order_processing" | "order_shipped" | "order_delivered" | "order_cancelled";
     data?: Record<string, unknown>;
   };
 
@@ -251,7 +251,7 @@ async function processQueueMessage(
     }
 
     case "payment.stripe.failed": {
-      await processPaymentFailed(db, payload.orderId, "stripe");
+      await processPaymentFailed(db, payload.orderId, "stripe", payload.paymentIntentId);
       console.log(`[Queue] Stripe payment failed for order ${payload.orderId}`);
       break;
     }
@@ -287,7 +287,7 @@ async function processQueueMessage(
     }
 
     case "payment.sslcommerz.failed": {
-      await processPaymentFailed(db, payload.orderId, "sslcommerz");
+      await processPaymentFailed(db, payload.orderId, "sslcommerz", payload.tranId);
       console.log(`[Queue] SSLCommerz payment failed for order ${payload.orderId}`);
       break;
     }
@@ -312,7 +312,7 @@ async function processQueueMessage(
     }
 
     case "payment.polar.failed": {
-      await processPaymentFailed(db, payload.orderId, "polar");
+      await processPaymentFailed(db, payload.orderId, "polar", payload.checkoutId);
       console.log(`[Queue] Polar payment failed for order ${payload.orderId}`);
       break;
     }
@@ -346,6 +346,7 @@ async function processQueueMessage(
           payload.orderId,
           payload.notificationType,
           payload.data,
+          db,
         );
       }
 

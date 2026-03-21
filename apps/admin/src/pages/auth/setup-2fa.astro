@@ -15,7 +15,7 @@ if (!session || !user) {
 
 // If 2FA is already enabled, redirect to admin (or two-factor if not verified)
 if (user.twoFactorEnabled) {
-  const twoFactorVerified = (session as any).twoFactorVerified;
+  const twoFactorVerified = session.twoFactorVerified;
   if (twoFactorVerified) {
     return Astro.redirect("/admin");
   } else {

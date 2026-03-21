@@ -22,7 +22,8 @@ export interface NavigationItem {
 // Admin Queries
 // ─────────────────────────────────────────
 
-/** Get available categories + pages for the admin nav item picker */
+/** Get available categories + pages for the admin nav item picker.
+ *  Called by admin route: apps/api/src/routes/admin/navigation.ts (listItemsRoute handler) */
 export async function getNavigationItems(db: Database) {
     const categoriesData = await db
         .select({
@@ -69,7 +70,11 @@ export async function getNavigationItems(db: Database) {
     };
 }
 
-/** Get navigation configs (header + footer) from siteSettings */
+/** Get navigation configs (header + footer) from siteSettings with safe JSON.parse.
+ *  WIRE: api-app should call this from routes/admin/navigation.ts (getConfigRoute handler)
+ *  replacing the inline DB query + raw JSON.parse at lines 88-96.
+ *  Swap: `const { headerConfig, footerConfig } = await getNavigationMenus(db);`
+ *  then `return ok(c, { headerConfig, footerConfig });` */
 export async function getNavigationMenus(db: Database) {
     const [row] = await db
         .select({ headerConfig: siteSettings.headerConfig, footerConfig: siteSettings.footerConfig })
@@ -85,45 +90,52 @@ export async function getNavigationMenus(db: Database) {
     return { headerConfig, footerConfig };
 }
 
-/** Get a single navigation menu by type (header/footer) */
+/** Get a single navigation menu by type (header/footer/footer-menu-id).
+ *  WIRE: api-app should call this from routes/navigation.ts (getNavigationByIdRoute handler)
+ *  replacing the inline logic at lines 189-249.
+ *  Swap: `const menu = await getNavigationMenu(db, id);`
+ *  then `if (!menu) throw new NotFoundError(...);` + `return ok(c, { menu });` */
 export async function getNavigationMenu(db: Database, id: string) {
     const { headerConfig, footerConfig } = await getNavigationMenus(db);
 
-    if (id === "header" && headerConfig) {
-        return {
-            id: "header",
-            name: "Header Navigation",
-            items: (headerConfig as Record<string, unknown>).navigation ?? [],
-        };
+    if (id === "header") {
+        const navigation = (headerConfig && typeof headerConfig === "object")
+            ? (headerConfig as { navigation?: unknown }).navigation ?? []
+            : [];
+        return { id: "header", name: "Header Navigation", items: navigation };
     }
 
-    if (id === "footer" && footerConfig) {
-        return {
-            id: "footer",
-            name: "Footer Navigation",
-            items: (footerConfig as Record<string, unknown>).menus ?? [],
-        };
+    if (id === "footer") {
+        const menus = (footerConfig && typeof footerConfig === "object")
+            ? (footerConfig as { menus?: unknown }).menus ?? []
+            : [];
+        return { id: "footer", name: "Footer Navigation", items: menus };
     }
 
     // Try to find a specific footer menu by id
-    const menus = (footerConfig as Record<string, unknown>).menus;
-    if (Array.isArray(menus)) {
-        const footerMenu = menus.find(
-            (m: Record<string, unknown>) => m.id === id || m.title === id,
-        );
-        if (footerMenu) {
-            return {
-                id: (footerMenu as Record<string, unknown>).id as string || id,
-                name: (footerMenu as Record<string, unknown>).title as string,
-                items: (footerMenu as Record<string, unknown>).links ?? [],
-            };
+    if (footerConfig && typeof footerConfig === "object") {
+        const menus = (footerConfig as { menus?: Array<{ id?: string; title?: string; links?: unknown[] }> }).menus;
+        if (Array.isArray(menus)) {
+            const footerMenu = menus.find((m) => m.id === id || m.title === id);
+            if (footerMenu) {
+                return {
+                    id: footerMenu.id || id,
+                    name: footerMenu.title || "",
+                    items: footerMenu.links ?? [],
+                };
+            }
         }
     }
 
     return null;
 }
 
-/** Save (create or update) navigation config for header or footer */
+/** Save (create or update) navigation config for header or footer.
+ *  WIRE: api-app should call this from routes/admin/navigation.ts (saveConfigRoute handler)
+ *  replacing the inline DB query at lines 146-163.
+ *  Route must still call `invalidateSiteSettingsCache(getKv())` after this function.
+ *  Swap: `await saveNavigationConfig(db, type, config);`
+ *  then `await invalidateSiteSettingsCache(getKv());` + `return ok(c, { message: ... });` */
 export async function saveNavigationConfig(
     db: Database,
     type: "header" | "footer",
@@ -132,7 +144,10 @@ export async function saveNavigationConfig(
     const configField = type === "header" ? "headerConfig" : "footerConfig";
     const configJson = JSON.stringify(config);
 
-    const [existing] = await db.select().from(siteSettings).limit(1);
+    const [existing] = await db
+        .select({ id: siteSettings.id })
+        .from(siteSettings)
+        .limit(1);
 
     if (existing) {
         await db
@@ -152,14 +167,22 @@ export async function saveNavigationConfig(
     }
 }
 
-/** Update navigation config by site settings ID */
+/** Update navigation config by site settings ID.
+ *  WIRE: api-app should call this from routes/admin/navigation.ts (updateConfigRoute handler)
+ *  replacing the inline DB query at lines 194-201.
+ *  Route must still call `invalidateSiteSettingsCache(getKv())` after this function.
+ *  Swap: `await updateNavigationConfig(db, id, type, config);`
+ *  then `await invalidateSiteSettingsCache(getKv());` + `return ok(c, { message: ... });` */
 export async function updateNavigationConfig(
     db: Database,
     id: string,
     type: "header" | "footer",
     config: Record<string, unknown>,
 ) {
-    const [existing] = await db.select().from(siteSettings).where(eq(siteSettings.id, id));
+    const [existing] = await db
+        .select({ id: siteSettings.id })
+        .from(siteSettings)
+        .where(eq(siteSettings.id, id));
     if (!existing) throw new NotFoundError("Navigation settings not found");
 
     const configField = type === "header" ? "headerConfig" : "footerConfig";
@@ -169,13 +192,21 @@ export async function updateNavigationConfig(
         .where(eq(siteSettings.id, id));
 }
 
-/** Reset navigation config to empty by site settings ID */
+/** Reset navigation config to empty by site settings ID.
+ *  WIRE: api-app should call this from routes/admin/navigation.ts (deleteConfigRoute handler)
+ *  replacing the inline DB query at lines 237-244.
+ *  Route must still call `invalidateSiteSettingsCache(getKv())` after this function.
+ *  Swap: `await deleteNavigationConfig(db, id, type);`
+ *  then `await invalidateSiteSettingsCache(getKv());` + `return noContent(c);` */
 export async function deleteNavigationConfig(
     db: Database,
     id: string,
     type: "header" | "footer",
 ) {
-    const [existing] = await db.select().from(siteSettings).where(eq(siteSettings.id, id));
+    const [existing] = await db
+        .select({ id: siteSettings.id })
+        .from(siteSettings)
+        .where(eq(siteSettings.id, id));
     if (!existing) throw new NotFoundError("Navigation settings not found");
 
     const configField = type === "header" ? "headerConfig" : "footerConfig";
@@ -190,7 +221,9 @@ export async function deleteNavigationConfig(
 // ─────────────────────────────────────────
 
 /** Build default navigation from categories + pages when no saved config exists.
- *  Used by both the public navigation route and the storefront layout service. */
+ *  WIRE: api-app should call this from routes/navigation.ts (getNavigationRoute handler)
+ *  replacing the inline default nav builder at lines 103-153.
+ *  Also usable by storefront.service.ts to replace its inline copy at lines 254-271. */
 export async function buildDefaultNavigation(db: Database): Promise<NavigationItem[]> {
     const categoriesData = await db
         .select({ id: categories.id, name: categories.name, slug: categories.slug })

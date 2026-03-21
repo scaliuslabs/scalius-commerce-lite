@@ -95,7 +95,7 @@ export async function recordDiscountUsage(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       },
-      2,
+      0, // No retries — backend has unique constraint on (discountId, orderId)
       8000,
       true
     );

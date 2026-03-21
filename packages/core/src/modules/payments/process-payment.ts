@@ -232,6 +232,7 @@ export async function processPaymentFailed(
     });
   } catch (err: unknown) {
     console.error(`[process-payment] Failed payment recording error:`, err);
+    throw err;
   }
 }
 
@@ -282,6 +283,7 @@ export async function releaseOrderInventory(
       .where(eq(orders.id, orderId));
   } catch (err: unknown) {
     console.error(`[process-payment] Inventory release error for order ${orderId}:`, err);
+    throw err;
   }
 }
 

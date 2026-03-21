@@ -169,7 +169,7 @@ function generateFacebookFeed(products: Product[], baseUrl: string, currencyCode
   return xml;
 }
 
-import { getRuntimeStorefrontUrl } from "@/lib/runtime-env";
+import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
 import type { APIContext } from 'astro';
 
 export const GET: APIRoute = async ({ url }: APIContext) => {

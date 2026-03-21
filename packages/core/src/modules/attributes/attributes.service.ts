@@ -123,7 +123,7 @@ export async function createAttribute(
     const { name, slug, filterable, options } = data;
 
     const existingAttribute = await db
-        .select()
+        .select({ id: productAttributes.id, deletedAt: productAttributes.deletedAt })
         .from(productAttributes)
         .where(
             or(eq(productAttributes.name, name), eq(productAttributes.slug, slug)),
@@ -131,6 +131,11 @@ export async function createAttribute(
         .get();
 
     if (existingAttribute) {
+        if (existingAttribute.deletedAt) {
+            throw new ConflictError(
+                "A deleted attribute with that name or slug exists. Restore it from the trash or permanently delete it first."
+            );
+        }
         throw new ConflictError("An attribute with that name or slug already exists.");
     }
 
@@ -223,6 +228,25 @@ export async function restoreAttribute(db: Database, id: string) {
         .get();
 
     if (!attribute) throw new NotFoundError("Attribute not found");
+
+    const conflict = await db
+        .select({ id: productAttributes.id })
+        .from(productAttributes)
+        .where(
+            and(
+                or(
+                    eq(productAttributes.name, attribute.name),
+                    eq(productAttributes.slug, attribute.slug),
+                ),
+                isNull(productAttributes.deletedAt),
+                sql`${productAttributes.id} != ${id}`,
+            ),
+        )
+        .get();
+
+    if (conflict) {
+        throw new ConflictError("Cannot restore: an active attribute with the same name or slug already exists");
+    }
 
     await db
         .update(productAttributes)
@@ -425,13 +449,15 @@ export async function addAttributeValue(
     if (!attribute) throw new NotFoundError("Attribute not found");
 
     const currentOptions = (attribute.options as string[]) || [];
-    if (!currentOptions.includes(value)) {
-        const newOptions = [...currentOptions, value];
-        await db
-            .update(productAttributes)
-            .set({ options: newOptions })
-            .where(eq(productAttributes.id, attributeId));
+    if (currentOptions.includes(value)) {
+        throw new ConflictError(`Value "${value}" already exists for this attribute`);
     }
+
+    const newOptions = [...currentOptions, value];
+    await db
+        .update(productAttributes)
+        .set({ options: newOptions })
+        .where(eq(productAttributes.id, attributeId));
 }
 
 export async function renameAttributeValue(
@@ -440,34 +466,41 @@ export async function renameAttributeValue(
     oldValue: string,
     newValue: string,
 ) {
-    await db
-        .update(productAttributeValues)
-        .set({ value: newValue })
-        .where(
-            and(
-                eq(productAttributeValues.attributeId, attributeId),
-                eq(productAttributeValues.value, oldValue)
-            )
-        );
-
     const attribute = await db
         .select()
         .from(productAttributes)
         .where(eq(productAttributes.id, attributeId))
         .get();
 
-    if (attribute) {
-        const currentOptions = (attribute.options as string[]) || [];
-        if (currentOptions.includes(oldValue)) {
-            const newOptions = currentOptions.map((o) =>
-                o === oldValue ? newValue : o
-            );
-            await db
+    if (!attribute) throw new NotFoundError("Attribute not found");
+
+    const batchOps: unknown[] = [
+        db
+            .update(productAttributeValues)
+            .set({ value: newValue })
+            .where(
+                and(
+                    eq(productAttributeValues.attributeId, attributeId),
+                    eq(productAttributeValues.value, oldValue)
+                )
+            ),
+    ];
+
+    const currentOptions = (attribute.options as string[]) || [];
+    if (currentOptions.includes(oldValue)) {
+        const newOptions = currentOptions.map((o) =>
+            o === oldValue ? newValue : o
+        );
+        batchOps.push(
+            db
                 .update(productAttributes)
                 .set({ options: newOptions })
-                .where(eq(productAttributes.id, attributeId));
-        }
+                .where(eq(productAttributes.id, attributeId))
+        );
     }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    await db.batch(batchOps as any);
 }
 
 export async function deleteAttributeValue(
@@ -475,29 +508,36 @@ export async function deleteAttributeValue(
     attributeId: string,
     value: string,
 ) {
-    await db
-        .delete(productAttributeValues)
-        .where(
-            and(
-                eq(productAttributeValues.attributeId, attributeId),
-                eq(productAttributeValues.value, value)
-            )
-        );
-
     const attribute = await db
         .select()
         .from(productAttributes)
         .where(eq(productAttributes.id, attributeId))
         .get();
 
-    if (attribute) {
-        const currentOptions = (attribute.options as string[]) || [];
-        if (currentOptions.includes(value)) {
-            const newOptions = currentOptions.filter((o) => o !== value);
-            await db
+    if (!attribute) throw new NotFoundError("Attribute not found");
+
+    const batchOps: unknown[] = [
+        db
+            .delete(productAttributeValues)
+            .where(
+                and(
+                    eq(productAttributeValues.attributeId, attributeId),
+                    eq(productAttributeValues.value, value)
+                )
+            ),
+    ];
+
+    const currentOptions = (attribute.options as string[]) || [];
+    if (currentOptions.includes(value)) {
+        const newOptions = currentOptions.filter((o) => o !== value);
+        batchOps.push(
+            db
                 .update(productAttributes)
                 .set({ options: newOptions })
-                .where(eq(productAttributes.id, attributeId));
-        }
+                .where(eq(productAttributes.id, attributeId))
+        );
     }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    await db.batch(batchOps as any);
 }

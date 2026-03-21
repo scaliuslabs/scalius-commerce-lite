@@ -68,14 +68,6 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         headers: this.getHeaders(),
       });
 
-      // Attempt to read the body once to avoid issues if needed later
-      // but don't log it. We primarily care about the status code here.
-      try {
-        await response.text();
-      } catch (readError: unknown) {
-        // Ignore error reading body for test connection
-      }
-
       if (response.status === 200 || response.status === 404) {
         return { success: true, message: "Connection successful" };
       } else {
@@ -85,7 +77,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
             success: false,
             message: `Connection failed: ${data.message || response.statusText}`,
           };
-        } catch (e: unknown) {
+        } catch {
           return {
             success: false,
             message: `Connection failed with status: ${response.status} ${response.statusText}`,

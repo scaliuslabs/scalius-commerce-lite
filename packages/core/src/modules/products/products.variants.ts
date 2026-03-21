@@ -360,37 +360,46 @@ export async function getVariantSortOrder(db: DrizzleD1Database<typeof schema>, 
 }
 
 export async function updateVariantSortOrder(db: DrizzleD1Database<typeof schema>, productId: string, data: z.infer<typeof updateSortOrderSchema>) {
-    // Update color sort orders
+    const batchOps: unknown[] = [];
+
     for (const color of data.colors) {
-        await db
-            .update(productVariants)
-            .set({
-                colorSortOrder: color.sortOrder,
-                updatedAt: sql`unixepoch()`,
-            })
-            .where(
-                and(
-                    eq(productVariants.productId, productId),
-                    eq(productVariants.color, color.value),
-                    isNull(productVariants.deletedAt)
+        batchOps.push(
+            db
+                .update(productVariants)
+                .set({
+                    colorSortOrder: color.sortOrder,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(
+                    and(
+                        eq(productVariants.productId, productId),
+                        eq(productVariants.color, color.value),
+                        isNull(productVariants.deletedAt)
+                    )
                 )
-            );
+        );
     }
 
-    // Update size sort orders
     for (const size of data.sizes) {
-        await db
-            .update(productVariants)
-            .set({
-                sizeSortOrder: size.sortOrder,
-                updatedAt: sql`unixepoch()`,
-            })
-            .where(
-                and(
-                    eq(productVariants.productId, productId),
-                    eq(productVariants.size, size.value),
-                    isNull(productVariants.deletedAt)
+        batchOps.push(
+            db
+                .update(productVariants)
+                .set({
+                    sizeSortOrder: size.sortOrder,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(
+                    and(
+                        eq(productVariants.productId, productId),
+                        eq(productVariants.size, size.value),
+                        isNull(productVariants.deletedAt)
+                    )
                 )
-            );
+        );
+    }
+
+    if (batchOps.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+        await db.batch(batchOps as any);
     }
 }

@@ -38,7 +38,7 @@ export function BulkActionDialog({
   open,
   onOpenChange,
   currentAction,
-  selectedCount: _selectedCount,
+  selectedCount,
   actionConfigs,
   onConfirm,
   isLoading = false,
@@ -52,7 +52,10 @@ export function BulkActionDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{config.title}</AlertDialogTitle>
-          <AlertDialogDescription>{config.description}</AlertDialogDescription>
+          <AlertDialogDescription>
+            {config.description}
+            {selectedCount > 0 && ` This will affect ${selectedCount} item${selectedCount !== 1 ? "s" : ""}.`}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>

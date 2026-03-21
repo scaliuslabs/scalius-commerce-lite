@@ -2,11 +2,10 @@
  * Shared media manager state and handlers used by both
  * MediaManager (dialog picker) and MediaManagerPage (standalone page).
  */
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { MediaApiClient } from "../api";
 import { useMediaFiles, useMediaUpload, useFolders } from ".";
-import { debounce } from "../utils";
 import type { MediaFile } from "../types";
 
 interface UseMediaManagerOptions {
@@ -36,6 +35,12 @@ export function useMediaManager({
   const [pendingDeleteFileId, setPendingDeleteFileId] = useState<string | null>(null);
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [folderSidebarCollapsed, setFolderSidebarCollapsed] = useState(false);
+
+  // Track mount state for safe async updates
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const {
     files,
@@ -76,6 +81,7 @@ export function useMediaManager({
         if (onSelectMultiple && uploadedFiles.length > 0) {
           const newFileIds = uploadedFiles.map((f) => f.id);
           setTimeout(() => {
+            if (!mountedRef.current) return;
             setSelectedFileIds(newFileIds);
             setSelectionMode(true);
             toast.success("Upload Complete", { description: "Files uploaded. Click 'Add' to insert them." });
@@ -96,6 +102,7 @@ export function useMediaManager({
         } else if (uploadedFiles.length > 0) {
           const newFileIds = uploadedFiles.map((f) => f.id);
           setTimeout(() => {
+            if (!mountedRef.current) return;
             setSelectedFileIds(newFileIds);
             setSelectionMode(true);
           }, 400);
@@ -111,14 +118,31 @@ export function useMediaManager({
     }
   }, [currentFolderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced search
+  // Debounced search — use refs to avoid recreating the debounce timer
+  // when dependencies change (which would cancel in-flight searches)
+  const applyFiltersRef = useRef(applyFilters);
+  const currentFolderIdRef = useRef(currentFolderId);
+  applyFiltersRef.current = applyFilters;
+  currentFolderIdRef.current = currentFolderId;
+
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedApplyFilters = useCallback(
-    debounce((newFilters: typeof filters) => {
-      const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
-      applyFilters({ ...newFilters, folderId: folderParam });
-    }, 500),
-    [applyFilters, currentFolderId],
+    (newFilters: typeof filters) => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        const folderParam = currentFolderIdRef.current === "all" ? "all" : currentFolderIdRef.current;
+        applyFiltersRef.current({ ...newFilters, folderId: folderParam });
+      }, 500);
+    },
+    [], // stable — reads latest values from refs
   );
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, []);
 
   // Selection handlers
   const toggleFileSelection = (fileId: string) => {

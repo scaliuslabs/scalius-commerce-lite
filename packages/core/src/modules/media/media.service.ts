@@ -1,6 +1,6 @@
 // src/modules/media/media.service.ts
 import { media, mediaFolders } from "@scalius/database/schema";
-import { deleteFile, uploadFile } from "../../integrations/storage";
+import { deleteFile, uploadFile, extractKeyFromUrl } from "../../integrations/storage";
 import { desc, isNull, sql, like, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
@@ -59,7 +59,6 @@ export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: 
 
     const uploadedFiles = [];
     const errors: Array<{ filename: string; error: string; index: number }> = [];
-    const now = new Date();
 
     for (let batchStart = 0; batchStart < files.length; batchStart += BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, files.length);
@@ -94,8 +93,8 @@ export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: 
                     size: uploadResult.size,
                     mimeType: uploadResult.mimeType,
                     folderId: folderId || null,
-                    createdAt: now,
-                    updatedAt: now,
+                    createdAt: sql`(unixepoch())`,
+                    updatedAt: sql`(unixepoch())`,
                 }).returning();
 
                 const mediaFile = mediaFileArr[0];
@@ -106,7 +105,7 @@ export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: 
                         filename: mediaFile.filename,
                         size: mediaFile.size,
                         mimeType: mediaFile.mimeType,
-                        createdAt: now,
+                        createdAt: mediaFile.createdAt,
                     });
                 }
             } catch (fileError: unknown) {
@@ -155,7 +154,7 @@ export async function updateMediaFile(dbOp: Database, id: string, data: { filena
         throw new NotFoundError("File not found");
     }
 
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const updates: Record<string, unknown> = { updatedAt: sql`(unixepoch())` };
     if (data.filename !== undefined) updates.filename = data.filename;
     if (data.folderId !== undefined) updates.folderId = data.folderId || null;
 
@@ -168,13 +167,14 @@ export async function deleteMediaFile(dbOp: Database, id: string) {
     if (!file) {
         throw new NotFoundError("File not found");
     }
-    const key = file.url.split("/").pop()!;
-    await deleteFile(key);
+    const key = extractKeyFromUrl(file.url) || file.url.split("/").pop()!;
+    // Delete DB record first (atomic concern), then R2 (orphan is acceptable, broken ref is not)
     await dbOp.delete(media).where(eq(media.id, id));
+    await deleteFile(key);
 }
 
 export async function moveMediaFiles(dbOp: Database, fileIds: string[], folderId: string | null) {
-    await dbOp.update(media).set({ folderId: folderId || null, updatedAt: new Date() }).where(inArray(media.id, fileIds));
+    await dbOp.update(media).set({ folderId: folderId || null, updatedAt: sql`(unixepoch())` }).where(inArray(media.id, fileIds));
 }
 
 export async function listMediaFolders(dbOp: Database) {
@@ -182,18 +182,17 @@ export async function listMediaFolders(dbOp: Database) {
 }
 
 export async function createMediaFolder(dbOp: Database, name: string, parentId?: string | null) {
-    const now = new Date();
     const [folder] = await dbOp.insert(mediaFolders).values({
         id: "folder_" + nanoid(),
         name,
         parentId: parentId || null,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: sql`(unixepoch())`,
+        updatedAt: sql`(unixepoch())`,
     }).returning();
     return folder;
 }
 
 export async function deleteMediaFolder(dbOp: Database, id: string) {
-    await dbOp.update(media).set({ folderId: null, updatedAt: new Date() }).where(eq(media.folderId, id));
-    await dbOp.update(mediaFolders).set({ deletedAt: new Date() }).where(eq(mediaFolders.id, id));
+    await dbOp.update(media).set({ folderId: null, updatedAt: sql`(unixepoch())` }).where(eq(media.folderId, id));
+    await dbOp.update(mediaFolders).set({ deletedAt: sql`(unixepoch())` }).where(eq(mediaFolders.id, id));
 }

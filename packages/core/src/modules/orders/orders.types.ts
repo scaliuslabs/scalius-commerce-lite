@@ -1,8 +1,6 @@
 // src/modules/orders/orders.types.ts
 // Shared TypeScript interfaces for the orders module.
 
-import type { Database } from "@scalius/database/client";
-
 // ─────────────────────────────────────────
 // Admin types
 // ─────────────────────────────────────────
@@ -105,7 +103,49 @@ export interface CreateStorefrontOrderResult {
     orderId: string;
     paymentMethod: string;
     totalAmount: number;
-    queuePayload: Record<string, unknown>;
+    queuePayload: OrderIngestQueuePayload;
+}
+
+/** Shape of the queue payload built by createStorefrontOrder and consumed by handleOrderIngestBatch. */
+export interface OrderIngestQueuePayload {
+    type: "order.ingest";
+    checkoutToken: string;
+    existingCustomer: { id: string } | null;
+    orderData: {
+        id: string;
+        customerName: string;
+        customerPhone: string;
+        customerEmail: string | null;
+        shippingAddress: string;
+        city: string;
+        zone: string;
+        area: string | null;
+        cityName: string | null;
+        zoneName: string | null;
+        areaName: string | null;
+        notes: string | null;
+        totalAmount: number;
+        shippingCharge: number;
+        discountAmount: number;
+        status: string;
+        paymentMethod: string;
+        paymentStatus: string;
+        paidAmount: number;
+        balanceDue: number;
+        fulfillmentStatus: string;
+        inventoryPool: string;
+        inventoryAction: string;
+    };
+    items: {
+        productId: string;
+        variantId: string | null;
+        quantity: number;
+        price: number;
+        productName: string | null;
+        variantLabel: string | null;
+    }[];
+    discountUsage: { discountId: string; amountDiscounted: number } | null;
+    requestUrl: string;
 }
 
 // ─────────────────────────────────────────

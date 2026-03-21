@@ -1,10 +1,23 @@
 import type { APIRoute } from "astro";
+import { getCfEnv } from "@/lib/cf-env";
 
 export const GET: APIRoute = async () => {
-  // 1. Fetch Firebase config from API
+  // 1. Fetch Firebase config from API using service binding (production)
+  //    or HTTP (local dev). Relative fetch() has no origin in Cloudflare Workers SSR.
   let publicConfig: Record<string, string> = {};
   try {
-    const response = await fetch("/api/v1/auth/firebase-config");
+    const env = getCfEnv();
+    let response: Response;
+    if (env?.API) {
+      // Production: use service binding
+      response = await env.API.fetch(
+        new URL("/api/v1/auth/firebase-config", "http://api.internal").toString(),
+      );
+    } else {
+      // Local dev: forward to API worker via HTTP
+      const apiBase = (env?.PUBLIC_API_BASE_URL as string | undefined) || "http://localhost:8787";
+      response = await fetch(new URL("/api/v1/auth/firebase-config", apiBase).toString());
+    }
     if (response.ok) {
       const body = (await response.json()) as { data?: Record<string, string> };
       // API returns { success: true, data: { ...config } }

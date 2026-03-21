@@ -8,7 +8,7 @@
 import { generateSitemap, getSitemapHeaders } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getAllProducts } from '@/lib/api/products';
-import { getRuntimeStorefrontUrl } from '@/lib/runtime-env';
+import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext, APIRoute } from 'astro';
 import type { Product } from '@/lib/api/types';
 

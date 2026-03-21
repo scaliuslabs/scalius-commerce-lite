@@ -2,15 +2,22 @@
 // Admin OpenAPI routes for navigation.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getNavigationItems } from "@scalius/core/modules/navigation";
-import { siteSettings } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import {
+    getNavigationItems,
+    getNavigationMenus,
+    saveNavigationConfig,
+    updateNavigationConfig,
+    deleteNavigationConfig,
+} from "@scalius/core/modules/navigation";
+import {
+    saveNavigationConfigSchema,
+    headerConfigSchema,
+    footerConfigSchema,
+} from "@scalius/core/modules/navigation";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getKv } from "../../utils/kv-cache";
 
 import { ok, noContent } from "../../utils/api-response";
-import { NotFoundError, ValidationError } from "../../utils/api-error";
 import {
     successEnvelope,
     messageResponse,
@@ -27,7 +34,7 @@ const navSourceItemSchema = z.object({
     url: z.string(),
 });
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── List Navigation Items ──
 
@@ -73,8 +80,8 @@ const getConfigRoute = createRoute({
             content: {
                 "application/json": {
                     schema: successEnvelope(z.object({
-                        headerConfig: z.record(z.string(), z.unknown()),
-                        footerConfig: z.record(z.string(), z.unknown()),
+                        headerConfig: headerConfigSchema,
+                        footerConfig: footerConfigSchema,
                     })),
                 },
             },
@@ -85,40 +92,11 @@ const getConfigRoute = createRoute({
 
 app.openapi(getConfigRoute, async (c) => {
     const db = c.get("db");
-    const [row] = await db
-        .select({ headerConfig: siteSettings.headerConfig, footerConfig: siteSettings.footerConfig })
-        .from(siteSettings)
-        .limit(1);
-
-    const headerConfig = row?.headerConfig ? JSON.parse(row.headerConfig) : {};
-    const footerConfig = row?.footerConfig ? JSON.parse(row.footerConfig) : {};
-
+    const { headerConfig, footerConfig } = await getNavigationMenus(db);
     return ok(c, { headerConfig, footerConfig });
 });
 
 // ── Save Navigation Config (Create/Update) ──
-
-type NavigationItem = {
-    id: string;
-    title: string;
-    href?: string;
-    subMenu?: NavigationItem[];
-};
-
-const navigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() =>
-    z.object({
-        id: z.string(),
-        title: z.string(),
-        href: z.string().optional(),
-        subMenu: z.array(navigationItemSchema).optional(),
-    })
-);
-
-const saveConfigSchema = z.object({
-    type: z.enum(["header", "footer"]),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Navigation config is intentionally flexible
-    config: z.record(z.string(), z.unknown()),
-});
 
 const saveConfigRoute = createRoute({
     method: "post",
@@ -126,7 +104,7 @@ const saveConfigRoute = createRoute({
     tags: ["Admin - Navigation"],
     summary: "Save navigation config (header or footer)",
     request: {
-        body: { content: { "application/json": { schema: saveConfigSchema } } }
+        body: { content: { "application/json": { schema: saveNavigationConfigSchema } } }
     },
     responses: {
         200: {
@@ -140,28 +118,7 @@ const saveConfigRoute = createRoute({
 app.openapi(saveConfigRoute, async (c) => {
     const db = c.get("db");
     const { type, config } = c.req.valid("json");
-    const configField = type === "header" ? "headerConfig" : "footerConfig";
-    const configJson = JSON.stringify(config);
-
-    const [existing] = await db.select().from(siteSettings).limit(1);
-
-    if (existing) {
-        await db
-            .update(siteSettings)
-            .set({ [configField]: configJson, updatedAt: sql`unixepoch()` })
-            .where(eq(siteSettings.id, existing.id));
-    } else {
-        await db.insert(siteSettings).values({
-            id: "settings_" + nanoid(),
-            siteName: "My Store",
-            siteDescription: "",
-            headerConfig: type === "header" ? configJson : JSON.stringify({}),
-            footerConfig: type === "footer" ? configJson : JSON.stringify({}),
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        });
-    }
-
+    await saveNavigationConfig(db, type, config as Record<string, unknown>);
     await invalidateSiteSettingsCache(getKv());
     return ok(c, { message: `${type} navigation config saved` });
 });
@@ -175,7 +132,7 @@ const updateConfigRoute = createRoute({
     summary: "Update navigation config by site settings ID",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: saveConfigSchema } } }
+        body: { content: { "application/json": { schema: saveNavigationConfigSchema } } }
     },
     responses: {
         200: {
@@ -190,16 +147,7 @@ app.openapi(updateConfigRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { type, config } = c.req.valid("json");
-
-    const [existing] = await db.select().from(siteSettings).where(eq(siteSettings.id, id));
-    if (!existing) throw new NotFoundError("Navigation settings not found");
-
-    const configField = type === "header" ? "headerConfig" : "footerConfig";
-    await db
-        .update(siteSettings)
-        .set({ [configField]: JSON.stringify(config), updatedAt: sql`unixepoch()` })
-        .where(eq(siteSettings.id, id));
-
+    await updateNavigationConfig(db, id, type, config as Record<string, unknown>);
     await invalidateSiteSettingsCache(getKv());
     return ok(c, { message: `${type} navigation config updated` });
 });
@@ -233,16 +181,7 @@ app.openapi(deleteConfigRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { type } = c.req.valid("json");
-
-    const [existing] = await db.select().from(siteSettings).where(eq(siteSettings.id, id));
-    if (!existing) throw new NotFoundError("Navigation settings not found");
-
-    const configField = type === "header" ? "headerConfig" : "footerConfig";
-    await db
-        .update(siteSettings)
-        .set({ [configField]: JSON.stringify({}), updatedAt: sql`unixepoch()` })
-        .where(eq(siteSettings.id, id));
-
+    await deleteNavigationConfig(db, id, type);
     await invalidateSiteSettingsCache(getKv());
     return noContent(c);
 });

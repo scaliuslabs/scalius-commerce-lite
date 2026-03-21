@@ -57,12 +57,12 @@ export function calculateDiscountedPrice(
   discountAmount: number | null,
 ): number {
   if (!discountType) return price;
-  if (discountType === "percentage" && discountPercentage) {
+  if (discountType === "percentage" && discountPercentage != null && discountPercentage > 0) {
     return Currency(price)
       .subtract(Currency(price).multiply(discountPercentage / 100))
       .value;
   }
-  if (discountType === "flat" && discountAmount) {
+  if (discountType === "flat" && discountAmount != null && discountAmount > 0) {
     return Math.max(Currency(price).subtract(discountAmount).value, 0);
   }
   return price;

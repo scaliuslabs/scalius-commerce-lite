@@ -99,6 +99,19 @@ export async function getPageBySlug(db: Database, slug: string) {
 // Public Queries
 // ─────────────────────────────────────────
 
+/** WIRE: api-app should call this from routes/pages.ts (getPageByIdRoute handler)
+ *  replacing the inline 14-column SELECT at lines 140-167.
+ *  Swap: `const page = await getPublicPageById(db, id);`
+ *  then `if (!page) throw new NotFoundError("Page not found");` + `return ok(c, { page });`
+ *  This also eliminates unused imports: pages, isNull, eq, and, SQL from drizzle-orm. */
+export async function getPublicPageById(db: Database, id: string) {
+    return db
+        .select()
+        .from(pages)
+        .where(and(eq(pages.id, id), eq(pages.isPublished, true), isNull(pages.deletedAt)))
+        .get() ?? null;
+}
+
 export async function getPublicPageBySlug(db: Database, slug: string) {
     return db
         .select()
@@ -202,6 +215,7 @@ export async function deletePage(db: Database, id: string): Promise<void> {
 }
 
 export async function bulkDeletePages(db: Database, ids: string[], permanent = false): Promise<void> {
+    if (ids.length === 0) return;
     if (permanent) {
         await db.delete(pages).where(inArray(pages.id, ids));
     } else {
@@ -210,13 +224,16 @@ export async function bulkDeletePages(db: Database, ids: string[], permanent = f
 }
 
 export async function bulkPublishPages(db: Database, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
     await db.update(pages).set({ isPublished: true, updatedAt: sql`unixepoch()` }).where(inArray(pages.id, ids));
 }
 
 export async function bulkUnpublishPages(db: Database, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
     await db.update(pages).set({ isPublished: false, updatedAt: sql`unixepoch()` }).where(inArray(pages.id, ids));
 }
 
 export async function restorePages(db: Database, ids: string[]): Promise<void> {
-    await db.update(pages).set({ deletedAt: null }).where(inArray(pages.id, ids));
+    if (ids.length === 0) return;
+    await db.update(pages).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(inArray(pages.id, ids));
 }

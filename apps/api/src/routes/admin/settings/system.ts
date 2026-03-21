@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { settings, siteSettings } from "@scalius/database/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 import { getKv } from "../../../utils/kv-cache";
@@ -187,7 +187,7 @@ app.openapi(saveSecurityRoute, async (c) => {
                 })
                 .onConflictDoUpdate({
                     target: [settings.key, settings.category],
-                    set: { value: cspAllowedDomains, updatedAt: new Date() }
+                    set: { value: cspAllowedDomains, updatedAt: sql`(unixepoch())` }
                 });
 
             const env = c.env as Env | undefined;
@@ -261,7 +261,7 @@ app.openapi(saveEmailRoute, async (c) => {
             updates.push(
                 db.insert(settings)
                     .values({ id: `set_${nanoid(10)}`, key: "resend_api_key", value: apiKey, type: "string", category: "email" })
-                    .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: apiKey, updatedAt: new Date() } })
+                    .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: apiKey, updatedAt: sql`(unixepoch())` } })
             );
         }
 
@@ -269,7 +269,7 @@ app.openapi(saveEmailRoute, async (c) => {
             updates.push(
                 db.insert(settings)
                     .values({ id: `set_${nanoid(10)}`, key: "email_sender", value: sender, type: "string", category: "email" })
-                    .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: sender, updatedAt: new Date() } })
+                    .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: sender, updatedAt: sql`(unixepoch())` } })
             );
         }
 
@@ -344,7 +344,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
                 updates.push(
                     db.insert(settings)
                         .values({ id: `set_${nanoid(10)}`, key: "service_account", value: serviceAccount, type: "json", category: "firebase" })
-                        .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: serviceAccount, updatedAt: new Date() } })
+                        .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: serviceAccount, updatedAt: sql`(unixepoch())` } })
                 );
             } catch (e: unknown) {
                 throw new ValidationError("Invalid Service Account JSON");
@@ -355,7 +355,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
             updates.push(
                 db.insert(settings)
                     .values({ id: `set_${nanoid(10)}`, key: "public_config", value: JSON.stringify(publicConfig), type: "json", category: "firebase" })
-                    .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: JSON.stringify(publicConfig), updatedAt: new Date() } })
+                    .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: JSON.stringify(publicConfig), updatedAt: sql`(unixepoch())` } })
             );
         }
 

@@ -14,18 +14,13 @@ import { nanoid } from "nanoid";
 import { reserveStockBatch, releaseMultiple } from "../inventory";
 import { initCODTracking } from "../payments/cod";
 import type { getDb } from "@scalius/database/client";
+import type { OrderIngestQueuePayload } from "./orders.types";
 
 // ── Message type ────────────────────────────────────────────────────────────
 
-export type OrderIngestQueueMessage = {
-    type: "order.ingest";
-    checkoutToken: string;
-    existingCustomer: { id: string } | null;
-    orderData: Record<string, unknown>;
-    items: Record<string, unknown>[];
-    discountUsage: { discountId: string; amountDiscounted: number } | null;
-    requestUrl: string;
-};
+export type OrderIngestQueueMessage = OrderIngestQueuePayload;
+
+type OrderIngestItem = OrderIngestQueuePayload["items"][number];
 
 // ── KV checkout status helper ───────────────────────────────────────────────
 
@@ -100,17 +95,16 @@ export async function handleOrderIngestBatch(
 
             // Accumulate inventory reservation entries for this order
             const orderReservationEntries = payload.items
-                .filter((item) => item.variantId !== null)
+                .filter((item): item is OrderIngestItem & { variantId: string } => item.variantId !== null)
                 .map((item) => ({
-                    variantId: item.variantId as string,
-                    quantity: item.quantity as number,
+                    variantId: item.variantId,
+                    quantity: item.quantity,
                     pool: payload.orderData.inventoryPool as "regular" | "preorder" | "backorder",
                 }));
 
             if (orderReservationEntries.length > 0) {
-                const oid = payload.orderData.id as string;
                 reservationEntries.push(
-                    ...orderReservationEntries.map((e) => ({ ...e, orderId: oid })),
+                    ...orderReservationEntries.map((e) => ({ ...e, orderId: payload.orderData.id })),
                 );
             }
 
@@ -124,18 +118,18 @@ export async function handleOrderIngestBatch(
                 writeBatch.push(
                     db.insert(customers).values({
                         id: customerId,
-                        name: od.customerName as string,
-                        phone: od.customerPhone as string,
-                        email: od.customerEmail as string | undefined,
-                        address: od.shippingAddress as string | undefined,
-                        city: od.city as string | undefined,
-                        zone: od.zone as string | undefined,
-                        area: od.area as string | undefined,
-                        cityName: od.cityName as string | undefined,
-                        zoneName: od.zoneName as string | undefined,
-                        areaName: od.areaName as string | undefined,
+                        name: od.customerName,
+                        phone: od.customerPhone,
+                        email: od.customerEmail,
+                        address: od.shippingAddress,
+                        city: od.city,
+                        zone: od.zone,
+                        area: od.area,
+                        cityName: od.cityName,
+                        zoneName: od.zoneName,
+                        areaName: od.areaName,
                         totalOrders: 1,
-                        totalSpent: od.totalAmount as number,
+                        totalSpent: od.totalAmount,
                         lastOrderAt: sql`unixepoch()`,
                         createdAt: sql`unixepoch()`,
                         updatedAt: sql`unixepoch()`,
@@ -145,16 +139,16 @@ export async function handleOrderIngestBatch(
                     db.insert(customerHistory).values({
                         id: "hist_" + nanoid(),
                         customerId: customerId,
-                        name: od.customerName as string,
-                        email: od.customerEmail as string | undefined,
-                        phone: od.customerPhone as string,
-                        address: od.shippingAddress as string | undefined,
-                        city: od.city as string | undefined,
-                        zone: od.zone as string | undefined,
-                        area: od.area as string | undefined,
-                        cityName: od.cityName as string | undefined,
-                        zoneName: od.zoneName as string | undefined,
-                        areaName: od.areaName as string | undefined,
+                        name: od.customerName,
+                        email: od.customerEmail,
+                        phone: od.customerPhone,
+                        address: od.shippingAddress,
+                        city: od.city,
+                        zone: od.zone,
+                        area: od.area,
+                        cityName: od.cityName,
+                        zoneName: od.zoneName,
+                        areaName: od.areaName,
                         changeType: "created",
                         createdAt: sql`unixepoch()`,
                     }),
@@ -165,7 +159,7 @@ export async function handleOrderIngestBatch(
                         .update(customers)
                         .set({
                             totalOrders: sql`${customers.totalOrders} + 1`,
-                            totalSpent: sql`${customers.totalSpent} + ${od.totalAmount as number}`,
+                            totalSpent: sql`${customers.totalSpent} + ${od.totalAmount}`,
                             lastOrderAt: sql`unixepoch()`,
                             updatedAt: sql`unixepoch()`,
                         })
@@ -173,32 +167,32 @@ export async function handleOrderIngestBatch(
                 );
             }
 
-            // Order record - cast orderData fields for Drizzle insert
+            // Order record
             writeBatch.push(
                 db.insert(orders).values({
-                    id: od.id as string,
-                    customerName: od.customerName as string,
-                    customerPhone: od.customerPhone as string,
-                    customerEmail: od.customerEmail as string | undefined,
-                    shippingAddress: od.shippingAddress as string,
-                    city: od.city as string,
-                    zone: od.zone as string,
-                    area: od.area as string | undefined,
-                    cityName: od.cityName as string | undefined,
-                    zoneName: od.zoneName as string | undefined,
-                    areaName: od.areaName as string | undefined,
-                    notes: od.notes as string | undefined,
-                    totalAmount: od.totalAmount as number,
-                    shippingCharge: od.shippingCharge as number,
-                    discountAmount: od.discountAmount as number | undefined,
-                    status: od.status as string,
-                    paymentMethod: od.paymentMethod as string,
-                    paymentStatus: od.paymentStatus as string,
-                    paidAmount: od.paidAmount as number,
-                    balanceDue: od.balanceDue as number,
-                    fulfillmentStatus: od.fulfillmentStatus as string,
-                    inventoryPool: od.inventoryPool as string,
-                    inventoryAction: od.inventoryAction as string,
+                    id: od.id,
+                    customerName: od.customerName,
+                    customerPhone: od.customerPhone,
+                    customerEmail: od.customerEmail,
+                    shippingAddress: od.shippingAddress,
+                    city: od.city,
+                    zone: od.zone,
+                    area: od.area,
+                    cityName: od.cityName,
+                    zoneName: od.zoneName,
+                    areaName: od.areaName,
+                    notes: od.notes,
+                    totalAmount: od.totalAmount,
+                    shippingCharge: od.shippingCharge,
+                    discountAmount: od.discountAmount,
+                    status: od.status,
+                    paymentMethod: od.paymentMethod,
+                    paymentStatus: od.paymentStatus,
+                    paidAmount: od.paidAmount,
+                    balanceDue: od.balanceDue,
+                    fulfillmentStatus: od.fulfillmentStatus,
+                    inventoryPool: od.inventoryPool,
+                    inventoryAction: od.inventoryAction,
                     customerId,
                     createdAt: sql`unixepoch()`,
                     updatedAt: sql`unixepoch()`,
@@ -211,13 +205,13 @@ export async function handleOrderIngestBatch(
                     db.insert(orderItems).values(
                         payload.items.map((item) => ({
                             id: "item_" + nanoid(),
-                            orderId: od.id as string,
-                            productId: item.productId as string,
-                            variantId: item.variantId as string | undefined,
-                            quantity: item.quantity as number,
-                            price: item.price as number,
-                            productName: item.productName as string | undefined,
-                            variantLabel: item.variantLabel as string | undefined,
+                            orderId: od.id,
+                            productId: item.productId,
+                            variantId: item.variantId,
+                            quantity: item.quantity,
+                            price: item.price,
+                            productName: item.productName,
+                            variantLabel: item.variantLabel,
                             fulfillmentStatus: "pending" as const,
                             createdAt: sql`unixepoch()`,
                         })),
@@ -239,10 +233,10 @@ export async function handleOrderIngestBatch(
                 );
             }
 
-            orderWriteRanges.set(od.id as string, { start: writeStart, end: writeBatch.length });
+            orderWriteRanges.set(od.id, { start: writeStart, end: writeBatch.length });
             successMessages.push(msg);
         } catch (e: unknown) {
-            console.error(`[Queue] Error preparing order ${payload.orderData.id as string}:`, e);
+            console.error(`[Queue] Error preparing order ${payload.orderData.id}:`, e);
             failedMessages.push({ msg, reason: String(e) });
         }
     }
@@ -263,8 +257,8 @@ export async function handleOrderIngestBatch(
         if (!payload.discountUsage) continue;
 
         const discountId = payload.discountUsage.discountId;
-        const customerPhone = payload.orderData.customerPhone as string | undefined;
-        const orderId = payload.orderData.id as string;
+        const customerPhone = payload.orderData.customerPhone;
+        const orderId = payload.orderData.id;
 
         // Re-check per-customer limit using phone (matches eligibility check)
         if (customerPhone) {
@@ -374,7 +368,7 @@ export async function handleOrderIngestBatch(
 
             // Initialize COD tracking record for cash-on-delivery orders
             if (payload.orderData.paymentMethod === "cod") {
-                await initCODTracking(db, { orderId: payload.orderData.id as string }).catch((err: unknown) =>
+                await initCODTracking(db, { orderId: payload.orderData.id }).catch((err: unknown) =>
                     console.error("[Queue] COD tracking init failed for order", payload.orderData.id, err),
                 );
             }

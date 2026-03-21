@@ -42,6 +42,14 @@ export async function getPublicFilterableAttributes(db: Database): Promise<{ fil
             value: productAttributeValues.value,
         })
         .from(productAttributeValues)
+        .innerJoin(
+            products,
+            and(
+                eq(productAttributeValues.productId, products.id),
+                eq(products.isActive, true),
+                isNull(products.deletedAt),
+            ),
+        )
         .where(inArray(productAttributeValues.attributeId, attributeIds));
 
     const filters = filterableAttributes
