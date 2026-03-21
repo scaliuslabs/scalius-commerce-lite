@@ -159,9 +159,42 @@ export async function sendOrderNotificationEmail(
                 return; // Email channel disabled for this status
             }
 
-            // Log stubs for future channels
+            // SMS notification dispatch
             if (enabledChannels.includes("sms")) {
-                console.log(`[Notifications] SMS not yet implemented for ${type} (order ${orderId})`);
+                try {
+                    const { getActiveSmsProvider } = await import("../../integrations/sms");
+                    const { orders } = await import("@scalius/database/schema");
+                    const { eq: eqOp } = await import("drizzle-orm");
+                    const orderRow = await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eqOp(orders.id, orderId)).get();
+                    const customerPhone = orderRow?.customerPhone;
+                    if (customerPhone) {
+                        const smsProvider = await getActiveSmsProvider(db);
+                        if (smsProvider) {
+                            const smsMessages: Record<string, string> = {
+                                order_created: `Hi ${name}, your order #${orderId} has been received. We'll process it shortly.`,
+                                order_confirmed: `Hi ${name}, your order #${orderId} has been confirmed and is being prepared.`,
+                                order_processing: `Hi ${name}, your order #${orderId} is being processed. We'll update you when it ships.`,
+                                order_shipped: `Hi ${name}, your order #${orderId} is on its way!${data?.trackingId ? ` Tracking: ${data.trackingId}` : ""}`,
+                                order_delivered: `Hi ${name}, your order #${orderId} has been delivered. Enjoy!`,
+                                order_cancelled: `Hi ${name}, your order #${orderId} has been cancelled. Contact us if you have questions.`,
+                            };
+                            const msg = smsMessages[type] || `Hi ${name}, your order #${orderId} status has been updated.`;
+                            const smsResult = await smsProvider.sendSms({ to: customerPhone, message: msg });
+                            if (smsResult.success) {
+                                console.log(`[Notifications] SMS sent via ${smsProvider.name} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
+                            } else {
+                                console.error(`[Notifications] SMS failed via ${smsProvider.name} for ${type} (order ${orderId}): ${smsResult.rawStatus}`);
+                            }
+                        } else {
+                            console.warn(`[Notifications] SMS channel enabled for ${type} but no SMS provider configured`);
+                        }
+                    } else {
+                        console.warn(`[Notifications] SMS channel enabled for ${type} (order ${orderId}) but customer has no phone number`);
+                    }
+                } catch (smsError: unknown) {
+                    console.error(`[Notifications] SMS dispatch failed for ${type} (order ${orderId}):`, smsError);
+                    // SMS failure must not block email delivery — continue
+                }
             }
             if (enabledChannels.includes("whatsapp")) {
                 console.log(`[Notifications] WhatsApp not yet implemented for ${type} (order ${orderId})`);
