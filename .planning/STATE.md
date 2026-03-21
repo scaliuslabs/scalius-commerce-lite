@@ -1,3 +1,17 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: unknown
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-03-21T21:32:14.985Z"
+progress:
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 2
+  completed_plans: 1
+---
+
 # Project State
 
 ## Project Reference
@@ -5,20 +19,17 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** BD merchants can manage their entire e-commerce operation from a single platform optimized for the BD market
-**Current focus:** Phase 1 — Bengali FTS5 Search
+**Current focus:** Phase 01 — Bengali FTS5 Search
 
 ## Current Position
 
-Phase: 1 of 4 (Bengali FTS5 Search)
-Plan: 0 of 0 in current phase
-Status: Ready to plan
-Last activity: 2026-03-22 — Roadmap created with 4 phases, 28 requirements mapped
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 01 (Bengali FTS5 Search) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: --
 - Total execution time: 0 hours
@@ -30,10 +41,12 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 **Recent Trend:**
+
 - Last 5 plans: --
 - Trend: --
 
 *Updated after each plan completion*
+| Phase 01 P01 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -45,6 +58,8 @@ Recent decisions affecting current work:
 - [Roadmap]: Bengali FTS5 first (highest risk, shortest implementation, reveals D1 blocker earliest)
 - [Roadmap]: BIZ-* grouped with Invoice (Phase 4) since invoices are the primary consumer; SEO-05 Organization JSON-LD gracefully degrades if no business settings exist yet
 - [Roadmap]: All 4 phases are technically independent; 1+2 concurrent, 3+4 concurrent
+- [Phase 01]: Preserved all 20 FTS5 triggers identically from migration 0016; only CREATE VIRTUAL TABLE definitions changed
+- [Phase 01]: Left 3 ASCII-only FTS tables (product_variants_fts, discounts_fts, abandoned_checkouts_fts) unchanged
 
 ### Pending Todos
 
@@ -58,6 +73,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22
-Stopped at: Roadmap created, ready to plan Phase 1
+Last session: 2026-03-21T21:32:14.983Z
+Stopped at: Completed 01-01-PLAN.md
 Resume file: None
