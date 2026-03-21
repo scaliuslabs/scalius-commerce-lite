@@ -44,10 +44,11 @@ Plans:
   3. WhatsApp link preview displays a 1200x630 JPEG image when a product URL is shared
   4. Every storefront page has a canonical URL tag using the runtime storefront URL from settings
   5. Homepage includes WebSite JSON-LD with SearchAction for Google Sitelinks Search Box
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md — Layout.astro SEO infrastructure: extended Props, canonical URL, OG tags, Twitter Cards, Organization + WebSite JSON-LD
+- [ ] 02-02-PLAN.md — Per-page SEO: Product + BreadcrumbList JSON-LD, CollectionPage JSON-LD, OG props for all four page types
 
 ### Phase 3: SMS OTP Providers
 **Goal**: Merchants can enable SMS-based customer verification using BD SMS gateways
@@ -89,6 +90,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Bengali FTS5 Search | 0/2 | Planning complete | - |
-| 2. Storefront SEO | 0/0 | Not started | - |
+| 2. Storefront SEO | 0/2 | Planning complete | - |
 | 3. SMS OTP Providers | 0/2 | Planning complete | - |
 | 4. Invoice & Business Settings | 0/0 | Not started | - |
