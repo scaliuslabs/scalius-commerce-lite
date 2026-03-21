@@ -27,18 +27,18 @@ Requirements for milestone v1.0. Each maps to roadmap phases.
 
 ### Storefront SEO — Structured Data
 
-- [ ] **SEO-01**: Product pages output JSON-LD Product schema with name, description, image, price, currency, availability, and SKU
-- [ ] **SEO-02**: Product pages output JSON-LD BreadcrumbList schema matching the visible breadcrumb navigation
-- [ ] **SEO-03**: Category pages output JSON-LD CollectionPage schema with name, description, and item count
-- [ ] **SEO-04**: Category pages output JSON-LD BreadcrumbList schema
+- [x] **SEO-01**: Product pages output JSON-LD Product schema with name, description, image, price, currency, availability, and SKU
+- [x] **SEO-02**: Product pages output JSON-LD BreadcrumbList schema matching the visible breadcrumb navigation
+- [x] **SEO-03**: Category pages output JSON-LD CollectionPage schema with name, description, and item count
+- [x] **SEO-04**: Category pages output JSON-LD BreadcrumbList schema
 - [x] **SEO-05**: All pages output JSON-LD Organization schema using business settings (name, logo, contact info)
 - [x] **SEO-06**: Homepage outputs JSON-LD WebSite schema with SearchAction for Google Sitelinks Search Box
 
 ### Storefront SEO — Social Cards
 
-- [ ] **OG-01**: Product pages output Open Graph meta tags (og:title, og:description, og:image, og:url, og:type=product, og:price:amount, og:price:currency)
-- [ ] **OG-02**: Category pages output Open Graph meta tags with category name, description, and representative image
-- [ ] **OG-03**: CMS pages output Open Graph meta tags with page title, description, and featured image
+- [x] **OG-01**: Product pages output Open Graph meta tags (og:title, og:description, og:image, og:url, og:type=product, og:price:amount, og:price:currency)
+- [x] **OG-02**: Category pages output Open Graph meta tags with category name, description, and representative image
+- [x] **OG-03**: CMS pages output Open Graph meta tags with page title, description, and featured image
 - [x] **OG-04**: All pages output Twitter Card meta tags (summary_large_image card type)
 - [x] **OG-05**: OG images are served as 1200x630 JPEG via Cloudflare Image Resizing (WhatsApp/Facebook compatible)
 
@@ -109,15 +109,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BEN-02 | Phase 1: Bengali FTS5 Search | Pending |
 | BEN-03 | Phase 1: Bengali FTS5 Search | Pending |
 | BEN-04 | Phase 1: Bengali FTS5 Search | Complete |
-| SEO-01 | Phase 2: Storefront SEO | Pending |
-| SEO-02 | Phase 2: Storefront SEO | Pending |
-| SEO-03 | Phase 2: Storefront SEO | Pending |
-| SEO-04 | Phase 2: Storefront SEO | Pending |
+| SEO-01 | Phase 2: Storefront SEO | Complete |
+| SEO-02 | Phase 2: Storefront SEO | Complete |
+| SEO-03 | Phase 2: Storefront SEO | Complete |
+| SEO-04 | Phase 2: Storefront SEO | Complete |
 | SEO-05 | Phase 2: Storefront SEO | Complete |
 | SEO-06 | Phase 2: Storefront SEO | Complete |
-| OG-01 | Phase 2: Storefront SEO | Pending |
-| OG-02 | Phase 2: Storefront SEO | Pending |
-| OG-03 | Phase 2: Storefront SEO | Pending |
+| OG-01 | Phase 2: Storefront SEO | Complete |
+| OG-02 | Phase 2: Storefront SEO | Complete |
+| OG-03 | Phase 2: Storefront SEO | Complete |
 | OG-04 | Phase 2: Storefront SEO | Complete |
 | OG-05 | Phase 2: Storefront SEO | Complete |
 | CAN-01 | Phase 2: Storefront SEO | Complete |
