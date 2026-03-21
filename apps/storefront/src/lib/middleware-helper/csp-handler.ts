@@ -85,7 +85,6 @@ const ESSENTIAL_SCRIPT_SRC = [
   "'self'",
   "'unsafe-inline'", // Consider reducing usage if possible
   "data:",
-  "'unsafe-eval'", // Often needed by frameworks, but review alternatives
 ];
 
 const ESSENTIAL_CONNECT_SRC = [
@@ -130,8 +129,7 @@ const COMMON_THIRD_PARTY_DOMAINS = [
 ];
 
 // Generate script-src directives
-async function getScriptSrcDirectives(env?: CspEnv): Promise<string[]> {
-  const additionalDomains = await parseAdditionalDomains(env);
+function getScriptSrcDirectives(additionalDomains: string[]): string[] {
   return [
     ...ESSENTIAL_SCRIPT_SRC,
     ...COMMON_THIRD_PARTY_DOMAINS,
@@ -140,8 +138,7 @@ async function getScriptSrcDirectives(env?: CspEnv): Promise<string[]> {
 }
 
 // Generate connect-src directives
-async function getConnectSrcDirectives(env?: CspEnv): Promise<string[]> {
-  const additionalDomains = await parseAdditionalDomains(env);
+function getConnectSrcDirectives(additionalDomains: string[], env?: CspEnv): string[] {
   const apiUrl = (env?.PUBLIC_API_BASE_URL || import.meta.env.PUBLIC_API_BASE_URL || "")?.trim();
   const directives = [
     ...ESSENTIAL_CONNECT_SRC,
@@ -164,8 +161,7 @@ async function getConnectSrcDirectives(env?: CspEnv): Promise<string[]> {
 }
 
 // Generate frame-src directives
-async function getFrameSrcDirectives(env?: CspEnv): Promise<string[]> {
-  const additionalDomains = await parseAdditionalDomains(env);
+function getFrameSrcDirectives(additionalDomains: string[]): string[] {
   return [
     ...ESSENTIAL_FRAME_SRC,
     "https://*.google.com", // For Google services like reCAPTCHA
@@ -178,8 +174,7 @@ async function getFrameSrcDirectives(env?: CspEnv): Promise<string[]> {
 }
 
 // Generate img-src directives
-async function getImgSrcDirectives(env?: CspEnv): Promise<string[]> {
-  const additionalDomains = await parseAdditionalDomains(env);
+function getImgSrcDirectives(additionalDomains: string[], env?: CspEnv): string[] {
   const cdnUrl = (env?.CDN_DOMAIN_URL || "")?.trim();
   const directives = [
     ...ESSENTIAL_IMG_SRC,
@@ -196,8 +191,7 @@ async function getImgSrcDirectives(env?: CspEnv): Promise<string[]> {
 }
 
 // Generate worker-src directives
-async function getWorkerSrcDirectives(env?: CspEnv): Promise<string[]> {
-  const additionalDomains = await parseAdditionalDomains(env);
+function getWorkerSrcDirectives(additionalDomains: string[]): string[] {
   return [...ESSENTIAL_WORKER_SRC, ...additionalDomains];
 }
 
@@ -209,13 +203,16 @@ async function getWorkerSrcDirectives(env?: CspEnv): Promise<string[]> {
  * @returns The Response object with CSP headers applied.
  */
 export async function setPageCspHeader(response: Response, env?: CspEnv): Promise<Response> {
+  // Compute additional domains ONCE (was previously called 5 times, once per directive builder)
+  const additionalDomains = await parseAdditionalDomains(env);
+
   const cspDirectives = [
-    `script-src ${(await getScriptSrcDirectives(env)).join(" ")}`,
-    `connect-src ${(await getConnectSrcDirectives(env)).join(" ")}`,
-    `frame-src ${(await getFrameSrcDirectives(env)).join(" ")}`,
-    `img-src ${(await getImgSrcDirectives(env)).join(" ")}`,
+    `script-src ${getScriptSrcDirectives(additionalDomains).join(" ")}`,
+    `connect-src ${getConnectSrcDirectives(additionalDomains, env).join(" ")}`,
+    `frame-src ${getFrameSrcDirectives(additionalDomains).join(" ")}`,
+    `img-src ${getImgSrcDirectives(additionalDomains, env).join(" ")}`,
     "object-src 'none'", // Disallow plugins like Flash
-    `worker-src ${(await getWorkerSrcDirectives(env)).join(" ")}`,
+    `worker-src ${getWorkerSrcDirectives(additionalDomains).join(" ")}`,
     "base-uri 'self'",
     "form-action 'self' https://www.facebook.com https://*.sslcommerz.com https://*.stripe.com", // Allow form submissions
     "frame-ancestors 'self'", // Prevent clickjacking

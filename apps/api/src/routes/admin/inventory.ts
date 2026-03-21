@@ -9,7 +9,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses } from "../../schemas/responses";
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── Inline response schemas ──
 
@@ -128,7 +128,7 @@ const listRoute = createRoute({
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             status: z.string().optional().default("all").openapi({ description: "Status filter" }),
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().default(50).openapi({ description: "Items per page" }),
+            limit: z.coerce.number().max(100).default(50).openapi({ description: "Items per page" }),
             alertStatus: z.string().optional().openapi({ description: "Alert status filter" })
         })
     },

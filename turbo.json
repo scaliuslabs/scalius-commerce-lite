@@ -1,5 +1,6 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
+  "globalDependencies": [".env*", "pnpm-lock.yaml"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -16,7 +17,9 @@
       "cache": false
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "tsconfig.json", "*.config.*"],
+      "outputs": []
     },
     "lint": {
       "dependsOn": ["^build"],

@@ -7,7 +7,7 @@ import { NotFoundError, ValidationError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for footer routes
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware to all routes
 app.use(
@@ -86,9 +86,8 @@ app.openapi(getFooterRoute, async (c) => {
   }
 
   // Parse footer config
-  const footerConfig = settings.footerConfig
-    ? JSON.parse(settings.footerConfig)
-    : null;
+  let footerConfig: Partial<FooterData> | null = null;
+  try { footerConfig = settings.footerConfig ? JSON.parse(settings.footerConfig) as Partial<FooterData> : null; } catch { footerConfig = null; }
 
   if (!footerConfig) {
     throw new ValidationError("Invalid footer configuration");

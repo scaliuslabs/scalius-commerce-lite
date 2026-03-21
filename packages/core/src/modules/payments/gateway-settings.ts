@@ -1,6 +1,10 @@
 // src/modules/payments/gateway-settings.ts
 // Reads payment gateway credentials from the `settings` DB table.
-// Results are cached in KV for 5 minutes to avoid a DB hit on every request.
+// Results are cached in-memory (per isolate) for 5 minutes.
+//
+// SECURITY: Decrypted credentials are NEVER written to KV or any persistent
+// store. In-memory cache is scoped to the Worker isolate lifetime and is
+// automatically cleared on cold start — this is the correct behavior.
 //
 // Settings are set by the admin dashboard (not environment variables).
 
@@ -10,7 +14,27 @@ import type { Database } from "@scalius/database/client";
 import { registerGateway } from "./gateway-registry";
 import { encryptCredentials, decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
 
-const CACHE_TTL = 300; // 5 minutes
+// ---------------------------------------------------------------------------
+// In-memory credential cache (per-isolate, lost on cold start)
+// ---------------------------------------------------------------------------
+
+const credentialCache = new Map<string, { data: unknown; expiry: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCachedCredential<T>(key: string): T | null {
+  const entry = credentialCache.get(key);
+  if (entry && Date.now() < entry.expiry) return entry.data as T;
+  credentialCache.delete(key);
+  return null;
+}
+
+function setCachedCredential(key: string, data: unknown): void {
+  credentialCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
+}
+
+function invalidateCachedCredential(key: string): void {
+  credentialCache.delete(key);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,10 +91,14 @@ export async function getStripeSettings(
   kv?: KVNamespace,
   encryptionKey?: string
 ): Promise<StripeSettings | null> {
-  // Try KV cache first (stores decrypted values)
+  // Try in-memory cache first
+  const cached = getCachedCredential<StripeSettings>(STRIPE_CACHE_KEY);
+  if (cached) return cached;
+
+  // Migration path: if KV has a stale entry from before this fix, delete it
   if (kv) {
-    const cached = await kv.get<StripeSettings>(STRIPE_CACHE_KEY, "json");
-    if (cached) return cached;
+    const kvEntry = await kv.get(STRIPE_CACHE_KEY);
+    if (kvEntry) await kv.delete(STRIPE_CACHE_KEY);
   }
 
   const values = await readCategory(db, STRIPE_CATEGORY);
@@ -83,18 +111,16 @@ export async function getStripeSettings(
     enabled: values.enabled !== "false",
   };
 
-  // Cache in KV (decrypted — KV is ephemeral, not at-rest)
-  if (kv) {
-    await kv.put(STRIPE_CACHE_KEY, JSON.stringify(stripeSettings), {
-      expirationTtl: CACHE_TTL,
-    });
-  }
+  // Cache in memory only — never persist decrypted credentials
+  setCachedCredential(STRIPE_CACHE_KEY, stripeSettings);
 
   return stripeSettings;
 }
 
-/** Invalidate the Stripe settings KV cache (call after saving new settings). */
+/** Invalidate the Stripe settings cache (call after saving new settings). */
 export async function invalidateStripeCache(kv?: KVNamespace): Promise<void> {
+  invalidateCachedCredential(STRIPE_CACHE_KEY);
+  // Also clean up any legacy KV entries
   await kv?.delete(STRIPE_CACHE_KEY);
 }
 
@@ -110,9 +136,14 @@ export async function getSSLCommerzSettings(
   kv?: KVNamespace,
   encryptionKey?: string
 ): Promise<SSLCommerzSettings | null> {
+  // Try in-memory cache first
+  const cached = getCachedCredential<SSLCommerzSettings>(SSL_CACHE_KEY);
+  if (cached) return cached;
+
+  // Migration path: clean up stale KV entries
   if (kv) {
-    const cached = await kv.get<SSLCommerzSettings>(SSL_CACHE_KEY, "json");
-    if (cached) return cached;
+    const kvEntry = await kv.get(SSL_CACHE_KEY);
+    if (kvEntry) await kv.delete(SSL_CACHE_KEY);
   }
 
   const values = await readCategory(db, SSL_CATEGORY);
@@ -125,17 +156,16 @@ export async function getSSLCommerzSettings(
     enabled: values.enabled !== "false",
   };
 
-  if (kv) {
-    await kv.put(SSL_CACHE_KEY, JSON.stringify(sslSettings), {
-      expirationTtl: CACHE_TTL,
-    });
-  }
+  // Cache in memory only — never persist decrypted credentials
+  setCachedCredential(SSL_CACHE_KEY, sslSettings);
 
   return sslSettings;
 }
 
-/** Invalidate the SSLCommerz settings KV cache. */
+/** Invalidate the SSLCommerz settings cache. */
 export async function invalidateSSLCommerzCache(kv?: KVNamespace): Promise<void> {
+  invalidateCachedCredential(SSL_CACHE_KEY);
+  // Also clean up any legacy KV entries
   await kv?.delete(SSL_CACHE_KEY);
 }
 
@@ -151,9 +181,14 @@ export async function getPolarSettings(
   kv?: KVNamespace,
   encryptionKey?: string
 ): Promise<PolarSettings | null> {
+  // Try in-memory cache first
+  const cached = getCachedCredential<PolarSettings>(POLAR_CACHE_KEY);
+  if (cached) return cached;
+
+  // Migration path: clean up stale KV entries
   if (kv) {
-    const cached = await kv.get<PolarSettings>(POLAR_CACHE_KEY, "json");
-    if (cached) return cached;
+    const kvEntry = await kv.get(POLAR_CACHE_KEY);
+    if (kvEntry) await kv.delete(POLAR_CACHE_KEY);
   }
 
   const values = await readCategory(db, POLAR_CATEGORY);
@@ -169,17 +204,16 @@ export async function getPolarSettings(
     enabled: values.enabled !== "false",
   };
 
-  if (kv) {
-    await kv.put(POLAR_CACHE_KEY, JSON.stringify(polarSettings), {
-      expirationTtl: CACHE_TTL,
-    });
-  }
+  // Cache in memory only — never persist decrypted credentials
+  setCachedCredential(POLAR_CACHE_KEY, polarSettings);
 
   return polarSettings;
 }
 
-/** Invalidate the Polar settings KV cache. */
+/** Invalidate the Polar settings cache. */
 export async function invalidatePolarCache(kv?: KVNamespace): Promise<void> {
+  invalidateCachedCredential(POLAR_CACHE_KEY);
+  // Also clean up any legacy KV entries
   await kv?.delete(POLAR_CACHE_KEY);
 }
 
@@ -248,10 +282,14 @@ export async function getActivePaymentMethods(
   kv?: KVNamespace,
   encryptionKey?: string
 ): Promise<PaymentMethodsConfig> {
-  // Try cache
+  // Try in-memory cache first
+  const cached = getCachedCredential<PaymentMethodsConfig>(PAYMENT_METHODS_CACHE_KEY);
+  if (cached) return cached;
+
+  // Migration path: clean up stale KV entries
   if (kv) {
-    const cached = await kv.get<PaymentMethodsConfig>(PAYMENT_METHODS_CACHE_KEY, "json");
-    if (cached) return cached;
+    const kvEntry = await kv.get(PAYMENT_METHODS_CACHE_KEY);
+    if (kvEntry) await kv.delete(PAYMENT_METHODS_CACHE_KEY);
   }
 
   // Read payment methods settings
@@ -278,7 +316,7 @@ export async function getActivePaymentMethods(
       continue;
     }
     if (method === "stripe") {
-      const stripe = await getStripeSettings(db, undefined, encryptionKey); // skip KV — we're already building cache
+      const stripe = await getStripeSettings(db, undefined, encryptionKey);
       if (stripe && stripe.enabled) {
         validMethods.push("stripe");
       }
@@ -307,18 +345,16 @@ export async function getActivePaymentMethods(
     defaultMethod: validMethods.includes(defaultMethod) ? defaultMethod : (validMethods[0] ?? "cod"),
   };
 
-  // Cache
-  if (kv) {
-    await kv.put(PAYMENT_METHODS_CACHE_KEY, JSON.stringify(config), {
-      expirationTtl: CACHE_TTL,
-    });
-  }
+  // Cache in memory only
+  setCachedCredential(PAYMENT_METHODS_CACHE_KEY, config);
 
   return config;
 }
 
 /** Invalidate payment methods cache (call when admin saves changes). */
 export async function invalidatePaymentMethodsCache(kv?: KVNamespace): Promise<void> {
+  invalidateCachedCredential(PAYMENT_METHODS_CACHE_KEY);
+  // Also clean up any legacy KV entries
   await kv?.delete(PAYMENT_METHODS_CACHE_KEY);
 }
 

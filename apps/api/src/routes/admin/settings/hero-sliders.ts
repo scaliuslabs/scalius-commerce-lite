@@ -6,7 +6,7 @@ import { NotFoundError, ValidationError, ConflictError } from "../../../utils/ap
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const sliderImageSchema = z.object({
     id: z.string(),
@@ -50,16 +50,16 @@ const listRoute = createRoute({
     }
 });
 
-app.openapi(listRoute, async (c) => {
+app.openapi(listRoute, (async (c: any) => {
     try {
         const db = c.get("db");
         const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
-        const parsedData = data.map((slider) => ({ ...slider, images: JSON.parse(slider.images) }));
+        const parsedData = data.map((slider: any) => ({ ...slider, images: (() => { try { return JSON.parse(slider.images); } catch { return []; } })() }));
         return ok(c, parsedData);
     } catch (error: unknown) {
         throw error;
     }
-});
+}) as any);
 
 // ── Create Slider ──
 
@@ -75,7 +75,7 @@ const createSliderRoute = createRoute({
     }
 });
 
-app.openapi(createSliderRoute, async (c) => {
+app.openapi(createSliderRoute, (async (c: any) => {
     try {
         const db = c.get("db");
         const data = c.req.valid("json");
@@ -97,11 +97,13 @@ app.openapi(createSliderRoute, async (c) => {
         const slider = sliderArr[0];
         if (!slider) throw new ValidationError("Failed to create slider");
 
-        return created(c, { ...slider, images: JSON.parse(slider.images) });
+        let parsedImages: unknown[] = [];
+        try { parsedImages = JSON.parse(slider.images); } catch { parsedImages = []; }
+        return created(c, { ...slider, images: parsedImages });
     } catch (error: unknown) {
         throw error;
     }
-});
+}) as any);
 
 // ── Get Slider ──
 
@@ -119,18 +121,20 @@ const getByIdRoute = createRoute({
     }
 });
 
-app.openapi(getByIdRoute, async (c) => {
+app.openapi(getByIdRoute, (async (c: any) => {
     try {
         const db = c.get("db");
         const { id } = c.req.valid("param");
         const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
 
         if (!slider) throw new NotFoundError("Slider not found");
-        return ok(c, { ...slider, images: JSON.parse(slider.images) });
+        let parsedImages: unknown[] = [];
+        try { parsedImages = JSON.parse(slider.images); } catch { parsedImages = []; }
+        return ok(c, { ...slider, images: parsedImages });
     } catch (error: unknown) {
         throw error;
     }
-});
+}) as any);
 
 // ── Update Slider ──
 
@@ -149,7 +153,7 @@ const updateSliderRoute = createRoute({
     }
 });
 
-app.openapi(updateSliderRoute, async (c) => {
+app.openapi(updateSliderRoute, (async (c: any) => {
     try {
         const db = c.get("db");
         const { id } = c.req.valid("param");
@@ -167,11 +171,13 @@ app.openapi(updateSliderRoute, async (c) => {
             .returning();
 
         if (!slider) throw new NotFoundError("Slider not found");
-        return ok(c, { ...slider, images: JSON.parse(slider.images) });
+        let parsedImages: unknown[] = [];
+        try { parsedImages = JSON.parse(slider.images); } catch { parsedImages = []; }
+        return ok(c, { ...slider, images: parsedImages });
     } catch (error: unknown) {
         throw error;
     }
-});
+}) as any);
 
 // ── Delete Slider ──
 
@@ -189,7 +195,7 @@ const deleteSliderRoute = createRoute({
     }
 });
 
-app.openapi(deleteSliderRoute, async (c) => {
+app.openapi(deleteSliderRoute, (async (c: any) => {
     try {
         const db = c.get("db");
         const { id } = c.req.valid("param");
@@ -199,10 +205,12 @@ app.openapi(deleteSliderRoute, async (c) => {
             .returning();
 
         if (!slider) throw new NotFoundError("Slider not found");
-        return ok(c, { ...slider, images: JSON.parse(slider.images) });
+        let parsedImages: unknown[] = [];
+        try { parsedImages = JSON.parse(slider.images); } catch { parsedImages = []; }
+        return ok(c, { ...slider, images: parsedImages });
     } catch (error: unknown) {
         throw error;
     }
-});
+}) as any);
 
 export { app as heroSlidersRoutes };

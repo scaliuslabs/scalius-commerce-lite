@@ -197,22 +197,20 @@ export function extractTokenFromHeader(
 
 /**
  * Get token statistics (for diagnostics).
+ * Does NOT expose any part of the secret — only reports whether it is configured
+ * and whether its length/entropy appears sufficient.
  */
 export function getTokenStats(
   env?: JwtEnv,
 ): {
   blacklistStorage: string;
-  jwtSecret: string;
-  isUsingDefaultSecret: boolean;
+  isConfigured: boolean;
+  secretLengthSufficient: boolean;
 } {
   const secret = env?.JWT_SECRET || process.env?.JWT_SECRET || "";
-  const defaultSecret = "your-jwt-secret-key-change-this-in-production";
   return {
     blacklistStorage: "cloudflare-kv",
-    jwtSecret:
-      typeof secret === "string" && secret.length > 6
-        ? `${secret.substring(0, 3)}...${secret.substring(secret.length - 3)}`
-        : "***",
-    isUsingDefaultSecret: secret === defaultSecret,
+    isConfigured: typeof secret === "string" && secret.length > 0,
+    secretLengthSufficient: typeof secret === "string" && secret.length >= 32,
   };
 }

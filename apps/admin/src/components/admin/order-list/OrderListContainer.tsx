@@ -1,4 +1,5 @@
 import React from "react";
+import { ErrorBoundary } from "../ErrorBoundary";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { DateRange } from "react-day-picker";
@@ -294,6 +295,7 @@ export function OrderListContainer({
   }, [fetchOrders, currentPagination, searchQuery, activeStatus, sort, showTrashed, dateRange]);
 
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading orders. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <>
       <Card className="overflow-hidden border border-border bg-card shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-border hover:shadow-md">
         <CardHeader className="space-y-1.5 pb-6">
@@ -401,5 +403,6 @@ export function OrderListContainer({
         itemCount={selectedOrders.size}
       />
     </>
+    </ErrorBoundary>
   );
 }

@@ -7,7 +7,7 @@ import { search } from "@scalius/core/search";
 import { ok } from "../../utils/api-response";
 import { ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── Search ──
 
@@ -22,7 +22,7 @@ const searchRoute = createRoute({
             categoryId: z.string().optional().openapi({ description: "Category ID filter" }),
             minPrice: z.string().optional().openapi({ description: "Minimum price" }),
             maxPrice: z.string().optional().openapi({ description: "Maximum price" }),
-            limit: z.coerce.number().default(10).openapi({ description: "Max results" }),
+            limit: z.coerce.number().max(100).default(10).openapi({ description: "Max results" }),
             searchPages: z.string().optional().default("true").openapi({ description: "Include pages" }),
             searchCategories: z.string().optional().default("true").openapi({ description: "Include categories" })
         })

@@ -94,3 +94,50 @@ export const WidgetPlacementRule = {
 } as const;
 
 export type WidgetPlacementRule = (typeof WidgetPlacementRule)[keyof typeof WidgetPlacementRule];
+
+export const PaymentRecordStatus = {
+    PENDING: "pending",
+    CONFIRMED: "confirmed",
+    FAILED: "failed",
+    REFUNDED: "refunded",
+    CANCELLED: "cancelled",
+} as const;
+
+export type PaymentRecordStatusType = (typeof PaymentRecordStatus)[keyof typeof PaymentRecordStatus];
+
+export const CodStatus = {
+    PENDING: "pending",
+    COLLECTED: "collected",
+    FAILED: "failed",
+    RETURNED: "returned",
+} as const;
+
+export type CodStatusType = (typeof CodStatus)[keyof typeof CodStatus];
+
+export const PaymentPlanStatus = {
+    PENDING: "pending",
+    DEPOSIT_PAID: "deposit_paid",
+    COMPLETED: "completed",
+    CANCELLED: "cancelled",
+} as const;
+
+export type PaymentPlanStatusType = (typeof PaymentPlanStatus)[keyof typeof PaymentPlanStatus];
+
+export const ShipmentStatus = {
+    PENDING: "pending",
+    PICKED_UP: "picked_up",
+    IN_TRANSIT: "in_transit",
+    DELIVERED: "delivered",
+    RETURNED: "returned",
+    CANCELLED: "cancelled",
+} as const;
+
+export type ShipmentStatusType = (typeof ShipmentStatus)[keyof typeof ShipmentStatus];
+
+export const AlertStatus = {
+    ACTIVE: "active",
+    ACKNOWLEDGED: "acknowledged",
+    RESOLVED: "resolved",
+} as const;
+
+export type AlertStatusType = (typeof AlertStatus)[keyof typeof AlertStatus];

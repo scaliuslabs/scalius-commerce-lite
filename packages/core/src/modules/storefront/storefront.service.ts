@@ -26,7 +26,12 @@ import type { Database } from "@scalius/database/client";
 
 function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
     if (!json) return fallback;
-    try { return JSON.parse(json); } catch { return fallback; }
+    try {
+        return JSON.parse(json);
+    } catch (e: unknown) {
+        console.warn("[Storefront] JSON parse failed:", e instanceof Error ? e.message : e);
+        return fallback;
+    }
 }
 
 const unixToISO = (timestamp: unknown): string | null => {
@@ -36,8 +41,8 @@ const unixToISO = (timestamp: unknown): string | null => {
         if (isNaN(numTimestamp) || numTimestamp <= 0) return null;
         const date = new Date(numTimestamp * 1000);
         if (!isNaN(date.getTime())) return date.toISOString();
-    } catch {
-        // ignore
+    } catch (e: unknown) {
+        console.warn("[Storefront] Failed to convert unix timestamp to ISO:", e instanceof Error ? e.message : e);
     }
     return null;
 };
@@ -333,7 +338,11 @@ export async function getLayoutData(db: Database) {
     let themeColors: Record<string, string> = {};
     const themeRow = (themeResults as { value?: string }[])[0];
     if (themeRow?.value) {
-        try { themeColors = JSON.parse(themeRow.value); } catch { /* ignore corrupt JSON */ }
+        try {
+            themeColors = JSON.parse(themeRow.value);
+        } catch (e: unknown) {
+            console.warn("[Storefront] Failed to parse theme colors JSON:", e instanceof Error ? e.message : e);
+        }
     }
 
     return {

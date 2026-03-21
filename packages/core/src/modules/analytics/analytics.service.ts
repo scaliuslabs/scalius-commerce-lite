@@ -28,7 +28,7 @@ function formatScriptResponse(script: Analytics | undefined | null) {
 }
 
 export async function listAnalyticsScripts(db: Database) {
-    const results = await db.select().from(analytics);
+    const results = await db.select().from(analytics).limit(50);
     return results.map(formatScriptResponse);
 }
 

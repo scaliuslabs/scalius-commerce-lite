@@ -6,6 +6,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import { products, productVariants } from "./products";
 import { orders } from "./orders";
 import { UNIX_NOW } from "./shared";
+import { AlertStatus } from "./enums";
 
 /**
  * Audit log for all stock movements.
@@ -44,7 +45,8 @@ export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {
         .references(() => products.id, { onDelete: "cascade" }),
     currentQty: integer("current_qty").notNull(),
     threshold: integer("threshold").notNull(),
-    alertStatus: text("alert_status").notNull().default("active"),
+    /** Valid: active | acknowledged | resolved (see AlertStatus enum) */
+    alertStatus: text("alert_status").notNull().default(AlertStatus.ACTIVE),
     alertSentAt: integer("alert_sent_at", { mode: "timestamp" }),
     acknowledgedAt: integer("acknowledged_at", { mode: "timestamp" }),
     resolvedAt: integer("resolved_at", { mode: "timestamp" }),

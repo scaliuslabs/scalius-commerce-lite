@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint
+  lint-and-typecheck:
+    name: Lint & Typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -31,31 +31,14 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-  typecheck:
-    name: Typecheck
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Typecheck
         run: pnpm typecheck
 
-  build:
-    name: Build
+  build-and-test:
+    name: Build & Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [lint, typecheck]
+    needs: [lint-and-typecheck]
     steps:
       - uses: actions/checkout@v4
 
@@ -71,24 +54,6 @@ jobs:
 
       - name: Build all workspaces
         run: pnpm build
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [build]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Run tests
         run: pnpm test

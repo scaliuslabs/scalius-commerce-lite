@@ -6,6 +6,7 @@
 // the email barrel (integrations/email/index.ts).
 
 import type { EmailProvider, SendEmailOptions } from "./provider";
+import { ServiceUnavailableError } from "@scalius/core/errors";
 
 const DEFAULT_FROM = "noreply@example.com";
 
@@ -78,7 +79,7 @@ export class ResendEmailProvider implements EmailProvider {
 
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
-          throw new Error(
+          throw new ServiceUnavailableError(
             error instanceof Error ? error.message : `Resend API error: ${response.status}`,
           );
         }
@@ -86,7 +87,7 @@ export class ResendEmailProvider implements EmailProvider {
         console.log(`[Email] Sent to ${to}`);
       } catch (error: unknown) {
         console.error("[Email] Failed to send via Resend:", error);
-        throw new Error(
+        throw new ServiceUnavailableError(
           `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       }

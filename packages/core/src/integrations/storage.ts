@@ -1,6 +1,7 @@
 // src/lib/storage.ts
 // Cloudflare R2 storage – replaces AWS S3 SDK
 import { nanoid } from "nanoid";
+import { ValidationError, ServiceUnavailableError } from "@scalius/core/errors";
 
 // Configuration constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -114,12 +115,12 @@ export async function uploadFile(
 ): Promise<UploadResult> {
   const validation = validateImageFile(file);
   if (!validation.isValid) {
-    throw new Error(validation.error || "File validation failed");
+    throw new ValidationError(validation.error || "File validation failed");
   }
 
   const r2 = bucket ?? _bucket;
   if (!r2) {
-    throw new Error(
+    throw new ServiceUnavailableError(
       "R2 bucket binding is not available. " +
       "Pass the bucket argument explicitly or call initStorage() first.",
     );
@@ -135,7 +136,7 @@ export async function uploadFile(
   try {
     fileBuffer = await file.arrayBuffer();
   } catch (err: unknown) {
-    throw new Error(`Failed to read file: ${err instanceof Error ? err.message : "Unknown error"}`);
+    throw new ServiceUnavailableError(`Failed to read file: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 
   // Upload with timeout
@@ -165,7 +166,7 @@ export async function uploadFile(
       userMessage = "Upload timeout – file may be too large or connection is slow";
     if (userMessage.includes("NetworkingError"))
       userMessage = "Network error – please check your connection";
-    throw new Error(userMessage);
+    throw new ServiceUnavailableError(userMessage);
   }
 
   return {
@@ -186,14 +187,14 @@ export async function deleteFile(
 ): Promise<void> {
   const r2 = bucket ?? _bucket;
   if (!r2) {
-    throw new Error("R2 bucket binding is not available.");
+    throw new ServiceUnavailableError("R2 bucket binding is not available.");
   }
 
   try {
     await r2.delete(key);
     console.log(`[R2] Deleted: ${key}`);
   } catch (err: unknown) {
-    throw new Error(`Failed to delete file: ${err instanceof Error ? err.message : "Unknown error"}`);
+    throw new ServiceUnavailableError(`Failed to delete file: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
 

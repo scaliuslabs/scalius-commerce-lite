@@ -8,7 +8,7 @@ import { getEncryptionKey } from "../../../utils/encryption-key";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const MASKED_VALUE = "••••••••••••";
 

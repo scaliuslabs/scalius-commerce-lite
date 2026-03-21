@@ -145,6 +145,19 @@ app.use("*", async (c, next) => {
   return corsMiddleware(c, next);
 });
 
+// Security headers middleware — runs after CORS so it doesn't interfere with preflight
+app.use("*", async (c, next) => {
+  await next();
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // Only add HSTS if not localhost
+  if (!c.req.url.includes("localhost")) {
+    c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+});
+
 app.use("*", async (c, next) => {
   // Use PUBLIC_API_BASE_URL from CF Workers env binding, fallback to request origin
   const baseUrl = (c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin).trim();

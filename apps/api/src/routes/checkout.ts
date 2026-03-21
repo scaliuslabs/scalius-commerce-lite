@@ -10,6 +10,7 @@ import { successEnvelope, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 import { getEncryptionKey } from "../utils/encryption-key";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── GET /config ─────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ const getCheckoutConfigRoute = createRoute({
 app.use(
   "/config",
   cacheMiddleware({
-    ttl: 60,
+    ttl: CACHE_TTLS.CHECKOUT_CONFIG,
     keyPrefix: "api:checkout:config:",
     varyByQuery: false,
     methods: ["GET"]

@@ -120,7 +120,7 @@ async function requestNotificationPermissionAndToken(userId: string) {
         vapidKey: publicVapidKey,
       });
       if (currentToken) {
-        console.log("FCM Token obtained:", currentToken);
+        console.log("FCM Token obtained:", currentToken ? `${currentToken.substring(0, 8)}...` : "none");
         await sendTokenToServer(currentToken, userId);
       } else {
         console.log(

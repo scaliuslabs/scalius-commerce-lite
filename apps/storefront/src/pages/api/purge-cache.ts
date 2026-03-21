@@ -9,6 +9,53 @@ const CACHE_VERSION_KEY_PREFIX = "v_";
 export const prerender = false;
 
 /**
+ * Constant-time string comparison to prevent timing side-channel attacks.
+ * Uses the Cloudflare Workers crypto.subtle.timingSafeEqual() API.
+ * Falls back to a constant-time byte comparison if unavailable.
+ */
+async function timingSafeCompare(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+
+  // Cloudflare Workers expose timingSafeEqual on crypto.subtle
+  const subtle = crypto.subtle as SubtleCrypto & {
+    timingSafeEqual?(a: ArrayBuffer | ArrayBufferView, b: ArrayBuffer | ArrayBufferView): boolean;
+  };
+
+  if (typeof subtle.timingSafeEqual === "function") {
+    if (aBytes.byteLength !== bBytes.byteLength) {
+      // Still run the comparison against self to maintain constant time
+      subtle.timingSafeEqual(aBytes, aBytes);
+      return false;
+    }
+    return subtle.timingSafeEqual(aBytes, bBytes);
+  }
+
+  // Fallback: constant-time comparison via HMAC
+  // Sign both strings with the same key; if the signatures match, the inputs match.
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode("timing-safe-compare-key"),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const [sigA, sigB] = await Promise.all([
+    crypto.subtle.sign("HMAC", key, aBytes),
+    crypto.subtle.sign("HMAC", key, bBytes),
+  ]);
+  // Compare the fixed-length HMAC digests byte-by-byte
+  const viewA = new Uint8Array(sigA);
+  const viewB = new Uint8Array(sigB);
+  let diff = viewA.byteLength ^ viewB.byteLength;
+  for (let i = 0; i < viewA.byteLength; i++) {
+    diff |= viewA[i] ^ viewB[i];
+  }
+  return diff === 0;
+}
+
+/**
  * Warm critical caches after purge.
  * This ensures the next visitor gets fast response by pre-populating
  * the L2 edge cache with essential data (layout, homepage).
@@ -86,7 +133,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
     );
   }
 
-  if (!providedToken || providedToken !== secretToken) {
+  if (!providedToken || !(await timingSafeCompare(providedToken, secretToken))) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
@@ -173,7 +220,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     providedToken = body.token ?? null;
   }
 
-  if (!providedToken || providedToken !== secretToken) {
+  if (!providedToken || !(await timingSafeCompare(providedToken, secretToken))) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },

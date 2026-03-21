@@ -34,7 +34,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
             user = sessionResult.user as User;
         }
     } catch (error: unknown) {
-        // Ignore error, fallback to JWT
+        console.warn("[AdminAuth] Session verification failed:", error instanceof Error ? error.message : "Unknown error");
     }
 
     // 2. Try JWT Bearer Token
@@ -53,7 +53,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                 }
             }
         } catch (error: unknown) {
-            // Ignore error
+            console.warn("[AdminAuth] JWT verification failed:", error instanceof Error ? error.message : "Unknown error");
         }
     }
 
@@ -80,14 +80,15 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                         }
                     }
                 }
-            } catch {
-                // Ignore scanner token errors
+            } catch (error: unknown) {
+                console.warn("[AdminAuth] Scanner token verification failed:", error instanceof Error ? error.message : "Unknown error");
             }
         }
     }
 
-    // If all methods fail, return 401
+    // If all methods fail, log and return 401
     if (!user) {
+        console.warn("[AdminAuth] All auth methods failed for:", c.req.path);
         throw new UnauthorizedError("Admin access required. Please provide a valid authentication token or session cookie.");
     }
 

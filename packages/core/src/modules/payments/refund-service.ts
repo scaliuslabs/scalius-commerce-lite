@@ -1,16 +1,15 @@
 // src/modules/payments/refund-service.ts
 // Gateway-agnostic refund orchestrator.
 // Determines the correct payment gateway from the order's payment records
-// and dispatches the refund to either Stripe or SSLCommerz.
+// and dispatches the refund via the unified PaymentProvider interface.
 
 import { eq, sql, desc, and } from "drizzle-orm";
 import { orders, orderPayments, PaymentStatus, OrderStatus } from "@scalius/database/schema";
-import { createRefund as stripeRefund } from "./stripe";
-import { initiateSSLCommerzRefund } from "./sslcommerz";
-import { createPolarRefund } from "./polar";
+import { createPaymentProvider } from "./factory";
 import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "./gateway-settings";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
+import type { PaymentGateway } from "./types";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { roundPrice } from "@scalius/shared/price-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -34,11 +33,121 @@ export interface RefundResult {
     error?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Gateway transaction ID resolution
+// ---------------------------------------------------------------------------
+
+/** Extract the correct gateway-specific transaction ID from a payment record. */
+function getTransactionId(
+    gateway: PaymentGateway,
+    payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null; polarCheckoutId?: string | null },
+): string {
+    switch (gateway) {
+        case "stripe": {
+            if (!payment.stripeChargeId) throw new ValidationError("No Stripe charge ID found on payment record");
+            return payment.stripeChargeId;
+        }
+        case "sslcommerz": {
+            if (!payment.sslcommerzBankTranId) throw new ValidationError("No SSLCommerz bank_tran_id found on payment record");
+            return payment.sslcommerzBankTranId;
+        }
+        case "polar": {
+            if (!payment.polarCheckoutId) throw new ValidationError("No Polar order ID found on payment record");
+            return payment.polarCheckoutId;
+        }
+        case "cod":
+            return `COD-${Date.now()}`;
+        default:
+            throw new ValidationError(`Unsupported payment gateway: ${gateway}`);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Resolve gateway settings and create provider
+// ---------------------------------------------------------------------------
+
+async function resolveProvider(
+    db: Database,
+    kv: KVNamespace | undefined,
+    gateway: PaymentGateway,
+    encryptionKey?: string,
+) {
+    switch (gateway) {
+        case "stripe": {
+            const settings = await getStripeSettings(db, kv, encryptionKey);
+            if (!settings) throw new ServiceUnavailableError("Stripe is not configured");
+            return createPaymentProvider({ type: "stripe", settings });
+        }
+        case "sslcommerz": {
+            const settings = await getSSLCommerzSettings(db, kv, encryptionKey);
+            if (!settings) throw new ServiceUnavailableError("SSLCommerz is not configured");
+            return createPaymentProvider({ type: "sslcommerz", settings });
+        }
+        case "polar": {
+            const settings = await getPolarSettings(db, kv, encryptionKey);
+            if (!settings) throw new ServiceUnavailableError("Polar is not configured");
+            return createPaymentProvider({ type: "polar", settings });
+        }
+        case "cod":
+            return createPaymentProvider({ type: "cod", db });
+        default:
+            throw new ValidationError(`Unsupported payment gateway: ${gateway}`);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Unified refund dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Dispatch a refund through the unified PaymentProvider interface.
+ * Returns the gateway-assigned refund ID.
+ *
+ * Amount conventions per gateway (matching RefundParams contract):
+ *   - Stripe & Polar: smallest currency unit (cents/paisa)
+ *   - SSLCommerz: major units (the provider passes through to SSLCommerz API)
+ *   - COD: no external amount needed
+ */
+async function dispatchRefund(
+    db: Database,
+    kv: KVNamespace | undefined,
+    gateway: PaymentGateway,
+    payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null; polarCheckoutId?: string | null },
+    refundAmount: number,
+    isFullRefund: boolean,
+    currencyDecimals: number,
+    params: RefundRequest,
+    encryptionKey?: string,
+): Promise<string | undefined> {
+    const transactionId = getTransactionId(gateway, payment);
+    const provider = await resolveProvider(db, kv, gateway, encryptionKey);
+
+    // Determine the correct amount for each gateway's convention:
+    // Stripe & Polar expect smallest currency unit; SSLCommerz expects major units.
+    let providerAmount: number | undefined;
+    if (!isFullRefund) {
+        if (gateway === "stripe" || gateway === "polar") {
+            providerAmount = Math.round(refundAmount * Math.pow(10, currencyDecimals));
+        } else {
+            // SSLCommerz and COD use major units
+            providerAmount = refundAmount;
+        }
+    }
+
+    const result = await provider.createRefund({
+        transactionId,
+        amount: providerAmount,
+        reason: params.reason,
+    });
+
+    return result.refundId;
+}
+
 /**
  * Process a refund for an order.
  *
  * 1. Finds the payment record (or uses specified gateway)
- * 2. Dispatches to the correct gateway API
+ * 2. Dispatches to the correct gateway API via PaymentProvider
  * 3. Updates order payment status
  * 4. Releases inventory on full refund
  */
@@ -134,90 +243,10 @@ export async function processRefund(
     const currencyConfig = await getCurrencyConfig(db, kv);
     const currencyDecimals = getDecimalPlaces(currencyConfig.code);
 
-    // 3. Dispatch to gateway
-    let refundId: string | undefined;
-
-    if (gateway === "stripe") {
-        if (!payment.stripeChargeId) {
-            throw new ValidationError("No Stripe charge ID found on payment record");
-        }
-
-        const stripe = await getStripeSettings(db, kv, encryptionKey);
-        if (!stripe) {
-            throw new ServiceUnavailableError("Stripe is not configured");
-        }
-
-        const result = await stripeRefund(
-            stripe.secretKey,
-            payment.stripeChargeId,
-            isFullRefund ? undefined : Math.round(refundAmount * Math.pow(10, currencyDecimals)), // Stripe uses smallest unit
-            params.reason === "duplicate" ? "duplicate"
-                : params.reason === "fraudulent" ? "fraudulent"
-                    : "requested_by_customer"
-        );
-
-        if (!result.success) {
-            return { success: false, gateway, amount: refundAmount, isFullRefund, error: result.error };
-        }
-        refundId = result.refundId;
-    } else if (gateway === "sslcommerz") {
-        if (!payment.sslcommerzBankTranId) {
-            throw new ValidationError("No SSLCommerz bank_tran_id found on payment record");
-        }
-
-        const ssl = await getSSLCommerzSettings(db, kv, encryptionKey);
-        if (!ssl) {
-            throw new ServiceUnavailableError("SSLCommerz is not configured");
-        }
-
-        const refundTranId = `REF-${params.orderId}-${Date.now()}`;
-        const result = await initiateSSLCommerzRefund(
-            ssl.storeId,
-            ssl.storePassword,
-            ssl.sandbox,
-            {
-                bankTranId: payment.sslcommerzBankTranId,
-                refundAmount,
-                refundRemarks: params.reason,
-                refundTranId,
-            }
-        );
-
-        if (!result.success) {
-            return { success: false, gateway, amount: refundAmount, isFullRefund, error: result.error };
-        }
-        refundId = result.refundRefId ?? refundTranId;
-    } else if (gateway === "polar") {
-        if (!payment.polarCheckoutId) {
-            throw new ValidationError("No Polar order ID found on payment record");
-        }
-
-        const polar = await getPolarSettings(db, kv, encryptionKey);
-        if (!polar) {
-            throw new ServiceUnavailableError("Polar is not configured");
-        }
-
-        const result = await createPolarRefund(
-            polar,
-            {
-                polarOrderId: payment.polarCheckoutId,
-                amount: Math.round(refundAmount * Math.pow(10, currencyDecimals)),
-                reason: params.reason === "duplicate" ? "duplicate"
-                    : params.reason === "fraudulent" ? "fraudulent"
-                        : "customer_request"
-            }
-        );
-
-        if (!result.success) {
-            return { success: false, gateway, amount: refundAmount, isFullRefund, error: result.error };
-        }
-        refundId = result.refundId;
-    } else if (gateway === "cod") {
-        // COD "refund" is just a status update — no gateway API call needed
-        refundId = `COD-REFUND-${Date.now()}`;
-    } else {
-        throw new ValidationError(`Unsupported payment gateway: ${gateway}`);
-    }
+    // 3. Dispatch to gateway via unified PaymentProvider interface
+    const refundId = await dispatchRefund(
+        db, kv, gateway as PaymentGateway, payment, refundAmount, isFullRefund, currencyDecimals, params, encryptionKey
+    );
 
     // 4. Record refund in orderPayments + update order atomically
     const refundPaymentId = crypto.randomUUID();

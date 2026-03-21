@@ -12,12 +12,13 @@ import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
-const app = new OpenAPIHono();
+import { CACHE_TTLS } from "../utils/cache-ttls";
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 3600,
+    ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:products:",
     varyByQuery: true,
     methods: ["GET"]

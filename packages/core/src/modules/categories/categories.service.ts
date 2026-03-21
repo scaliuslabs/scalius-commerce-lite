@@ -31,12 +31,13 @@ export async function listCategories(
 ) {
     const {
         page = 1,
-        limit = 10,
+        limit: rawLimit = 10,
         search = "",
         showTrashed = false,
         sort = "updatedAt",
         order = "desc",
     } = options;
+    const limit = Math.min(Math.max(rawLimit, 1), 100);
 
     const whereConditions: (SQL | undefined)[] = [];
 

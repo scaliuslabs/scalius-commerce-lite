@@ -17,6 +17,19 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { trackFbAddToCart, trackFbInitiateCheckout } from "@/lib/analytics";
 import { nanoid } from "nanoid";
 
+/**
+ * Escape HTML entities in user-supplied strings to prevent XSS when
+ * interpolating into innerHTML templates.
+ */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 let globalLangData: CheckoutLanguageData | null = null;
 let hasTrackedInitiateCheckout = false;
 
@@ -317,24 +330,38 @@ export async function renderCartItems() {
   const csym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
   cartItemsContainer.innerHTML = Object.values(items)
     .map(
-      (item) => `
+      (item) => {
+        // Escape all user-supplied strings to prevent XSS via innerHTML
+        const safeName = escapeHtml(item.name || "");
+        const safeImage = escapeHtml(item.image || "/placeholder.jpg");
+        const safeId = escapeHtml(item.id || "");
+        const safeVariantId = escapeHtml(item.variantId || "");
+        const safeSize = item.size ? escapeHtml(item.size) : "";
+        const safeColor = item.color ? escapeHtml(item.color) : "";
+
+        const variantInfo = safeSize || safeColor
+          ? `<div class="space-x-1">${safeSize ? `<span>Size: ${safeSize}</span>` : ""}${safeSize && safeColor ? "<span>•</span>" : ""}${safeColor ? `<span>Color: ${safeColor}</span>` : ""}</div>`
+          : "";
+
+        return `
       <div class="py-2.5 sm:py-3 first:pt-0"><div class="flex gap-2.5 sm:gap-3">
-          <div class="w-16 h-16 sm:w-20 sm:h-20 bg-muted rounded-lg overflow-hidden shrink-0"><img src="${item.image || "/placeholder.jpg"}" alt="${item.name}" class="w-full h-full object-cover" /></div>
+          <div class="w-16 h-16 sm:w-20 sm:h-20 bg-muted rounded-lg overflow-hidden shrink-0"><img src="${safeImage}" alt="${safeName}" class="w-full h-full object-cover" /></div>
           <div class="flex-1 min-w-0">
             <div class="flex justify-between">
-              <div class="min-w-0"><h3 class="font-medium truncate text-sm sm:text-base text-foreground">${item.name}</h3><div class="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">${item.size || item.color ? `<div class="space-x-1">${item.size ? `<span>Size: ${item.size}</span>` : ""}${item.size && item.color ? "<span>•</span>" : ""}${item.color ? `<span>Color: ${item.color}</span>` : ""}</div>` : ""}</div></div>
-              <button class="text-muted-foreground hover:text-destructive transition-colors ml-1.5 sm:ml-2 p-0.5" onclick="window.removeFromCart('${item.id}', '${item.variantId || ""}')"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="min-w-0"><h3 class="font-medium truncate text-sm sm:text-base text-foreground">${safeName}</h3><div class="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">${variantInfo}</div></div>
+              <button class="text-muted-foreground hover:text-destructive transition-colors ml-1.5 sm:ml-2 p-0.5" onclick="window.removeFromCart('${safeId}', '${safeVariantId}')"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="flex items-center justify-between mt-1.5 sm:mt-2">
               <div class="flex items-center gap-1.5 sm:gap-2">
-                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity('${item.id}', '${item.variantId || ""}', ${Math.max(0, item.quantity - 1)})">-</button>
+                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity('${safeId}', '${safeVariantId}', ${Math.max(0, item.quantity - 1)})">-</button>
                 <span class="w-5 sm:w-6 text-center text-xs sm:text-sm text-foreground">${item.quantity}</span>
-                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity('${item.id}', '${item.variantId || ""}', ${item.quantity + 1})">+</button>
+                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity('${safeId}', '${safeVariantId}', ${item.quantity + 1})">+</button>
               </div>
               <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${csym}${(item.price * item.quantity).toLocaleString()}</div><div class="text-xs text-muted-foreground">${csym}${item.price.toLocaleString()} each</div></div>
             </div>
           </div>
-        </div></div>`,
+        </div></div>`;
+      },
     )
     .join("");
 
@@ -547,15 +574,4 @@ export async function initCartFunctionality() {
   updateCheckoutButtonState();
 }
 
-declare global {
-  interface Window {
-    updateCartQuantity: (
-      id: string,
-      variantId: string,
-      quantity: number,
-    ) => void;
-    removeFromCart: (id: string, variantId: string) => void;
-    lastShippingEventDetail?: { id: string; fee: number };
-    handleAbandonedCheckout?: () => void;
-  }
-}
+// Window augmentations for cart handlers are declared in env.d.ts

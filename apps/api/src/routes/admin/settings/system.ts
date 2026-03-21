@@ -5,11 +5,13 @@ import { nanoid } from "nanoid";
 
 import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
+import { getEncryptionKey } from "../../../utils/encryption-key";
+import { upsertEncryptedSetting } from "@scalius/core/modules/payments/gateway-settings";
 
 import { ok } from "../../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
 
 // ─────────────────────────────────────────
@@ -39,8 +41,7 @@ const getAuthRoute = createRoute({
 });
 
 app.openapi(getAuthRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const [row] = await db.select().from(siteSettings).limit(1);
         if (!row) throw new NotFoundError("Settings not found");
 
@@ -54,9 +55,6 @@ app.openapi(getAuthRoute, async (c) => {
             partialPaymentEnabled: row.partialPaymentEnabled,
             partialPaymentAmount: row.partialPaymentAmount
         });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 const saveAuthSchema = z.object({
@@ -83,8 +81,7 @@ const saveAuthRoute = createRoute({
 });
 
 app.openapi(saveAuthRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const body = c.req.valid("json");
         const [existingSettings] = await db.select().from(siteSettings).limit(1);
 
@@ -119,9 +116,6 @@ app.openapi(saveAuthRoute, async (c) => {
 
         await invalidateSiteSettingsCache(getKv());
         return ok(c, { message: "Auth settings saved successfully" });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 // ─────────────────────────────────────────
@@ -140,8 +134,7 @@ const getSecurityRoute = createRoute({
 });
 
 app.openapi(getSecurityRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const row = await db
             .select({ value: settings.value })
             .from(settings)
@@ -149,9 +142,6 @@ app.openapi(getSecurityRoute, async (c) => {
             .get();
 
         return ok(c, { cspAllowedDomains: row?.value || "" });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 const saveSecuritySchema = z.object({
@@ -171,9 +161,8 @@ const saveSecurityRoute = createRoute({
 });
 
 app.openapi(saveSecurityRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const { cspAllowedDomains } = c.req.valid("json");
+    const db = c.get("db");
+    const { cspAllowedDomains } = c.req.valid("json");
 
         if (typeof cspAllowedDomains === "string") {
             await db
@@ -197,9 +186,6 @@ app.openapi(saveSecurityRoute, async (c) => {
         }
 
         return ok(c, { message: "Security settings saved successfully" });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 // ─────────────────────────────────────────
@@ -218,8 +204,7 @@ const getEmailRoute = createRoute({
 });
 
 app.openapi(getEmailRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const [apiKeyRow, senderRow] = await Promise.all([
             db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "resend_api_key"), eq(settings.category, "email"))).get(),
             db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "email_sender"), eq(settings.category, "email"))).get(),
@@ -229,9 +214,6 @@ app.openapi(getEmailRoute, async (c) => {
             apiKey: apiKeyRow?.value ? MASKED : "",
             sender: senderRow?.value || ""
         });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 const saveEmailSchema = z.object({
@@ -252,17 +234,13 @@ const saveEmailRoute = createRoute({
 });
 
 app.openapi(saveEmailRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const { apiKey, sender } = c.req.valid("json");
         const updates: Promise<unknown>[] = [];
 
         if (typeof apiKey === "string" && apiKey !== MASKED) {
-            updates.push(
-                db.insert(settings)
-                    .values({ id: `set_${nanoid(10)}`, key: "resend_api_key", value: apiKey, type: "string", category: "email" })
-                    .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: apiKey, updatedAt: sql`(unixepoch())` } })
-            );
+            const encKey = getEncryptionKey(c.env as Record<string, unknown>);
+            updates.push(upsertEncryptedSetting(db, "email", "resend_api_key", apiKey, encKey));
         }
 
         if (typeof sender === "string") {
@@ -275,9 +253,6 @@ app.openapi(saveEmailRoute, async (c) => {
 
         await Promise.all(updates);
         return ok(c, { message: "Email settings saved successfully" });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 // ─────────────────────────────────────────
@@ -296,8 +271,7 @@ const getFirebaseRoute = createRoute({
 });
 
 app.openapi(getFirebaseRoute, async (c) => {
-    try {
-        const db = c.get("db");
+    const db = c.get("db");
         const results = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "firebase")).all();
 
         const config: { serviceAccount: string; publicConfig: Record<string, unknown> } = { serviceAccount: "", publicConfig: {} };
@@ -310,9 +284,6 @@ app.openapi(getFirebaseRoute, async (c) => {
         });
 
         return ok(c, config);
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 const saveFirebaseSchema = z.object({
@@ -333,9 +304,8 @@ const saveFirebaseRoute = createRoute({
 });
 
 app.openapi(saveFirebaseRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const { serviceAccount, publicConfig } = c.req.valid("json");
+    const db = c.get("db");
+    const { serviceAccount, publicConfig } = c.req.valid("json");
         const updates: Promise<unknown>[] = [];
 
         if (serviceAccount && serviceAccount !== MASKED) {
@@ -365,9 +335,6 @@ app.openapi(saveFirebaseRoute, async (c) => {
         layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);
 
         return ok(c, { message: "Settings saved successfully" });
-    } catch (error: unknown) {
-        throw error;
-    }
 });
 
 export { app as systemSettingsRoutes };

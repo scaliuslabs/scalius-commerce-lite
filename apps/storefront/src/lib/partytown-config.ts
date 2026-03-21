@@ -4,35 +4,28 @@
  */
 
 /**
- * Creates the Partytown resolveUrl function.
+ * Partytown resolveUrl function.
  * Proxies known third-party analytics scripts through our same-origin endpoint
  * so the Partytown web worker can fetch them without CORS issues.
+ *
+ * This is a plain function (not `new Function()`) so it does NOT require
+ * 'unsafe-eval' in the Content-Security-Policy.
  */
-export const createPartytownResolveUrl = (): ((
-  url: URL,
-  location: Location,
-  type: string,
-) => URL) => {
-  return new Function(
-    "url",
-    "location",
-    "type",
-    `
-    // Proxy known analytics scripts through same-origin reverse proxy
-    if (type === "script" && (
-      url.hostname === "connect.facebook.net" ||
+function resolveUrl(url: URL, location: Location, type: string): URL {
+  // Proxy known analytics scripts through same-origin reverse proxy
+  if (
+    type === "script" &&
+    (url.hostname === "connect.facebook.net" ||
       url.hostname === "www.googletagmanager.com" ||
-      url.hostname === "www.google-analytics.com"
-    )) {
-      var proxyUrl = new URL("/api/__ptproxy", location.origin);
-      proxyUrl.searchParams.set("url", url.href);
-      return proxyUrl;
-    }
+      url.hostname === "www.google-analytics.com")
+  ) {
+    const proxyUrl = new URL("/api/__ptproxy", location.origin);
+    proxyUrl.searchParams.set("url", url.href);
+    return proxyUrl;
+  }
 
-    return url;
-  `,
-  ) as (url: URL, location: Location, type: string) => URL;
-};
+  return url;
+}
 
 /**
  * Complete Partytown configuration object
@@ -42,7 +35,7 @@ export const partytownConfig = {
   forward: ["dataLayer.push", "fbq", "ga", "gtag"] as string[],
 
   // Custom URL resolver for proxying scripts
-  resolveUrl: createPartytownResolveUrl(),
+  resolveUrl,
 
   // Performance optimizations
   debug: false as boolean,

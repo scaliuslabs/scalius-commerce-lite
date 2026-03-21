@@ -6,13 +6,14 @@ import { cacheMiddleware } from "../middleware/cache";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Apply cache middleware
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 300, // 5 minutes
+    ttl: CACHE_TTLS.SHORT,
     keyPrefix: "api:shipping-methods:",
     varyByQuery: false,
     methods: ["GET"]

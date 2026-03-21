@@ -1,5 +1,9 @@
 /**
- * Simple in-memory cache for layout-level data that changes infrequently.
+ * In-memory layout cache. IMPORTANT: This cache is per-Worker-isolate.
+ * Clearing this cache in the API worker does NOT clear it in the admin worker.
+ * Each Worker isolate has its own independent cache instance.
+ * Cache entries expire naturally on isolate restart or after TTL.
+ *
  * Reduces DB round-trips on every admin page load.
  * TTL: 5 minutes (settings rarely change during a session).
  */
@@ -28,10 +32,22 @@ function set<T>(key: string, value: T): void {
 export const layoutCache = {
   get,
   set,
-  /** Invalidate a specific key */
+  /** Invalidate a specific key (only affects THIS Worker isolate) */
   invalidate: (key: string) => cache.delete(key),
-  /** Invalidate all (call when settings are updated) */
-  clear: () => cache.clear(),
+  /**
+   * Invalidate all entries. Call when settings are updated.
+   *
+   * WARNING: This only clears the cache in the current Worker isolate.
+   * Other Workers (admin, storefront, API) retain their cached data
+   * until their entries expire naturally (TTL) or the isolate restarts.
+   */
+  clear: () => {
+    console.warn(
+      "[layoutCache] clear() called — only affects this Worker isolate. " +
+        "Other Workers retain their cached data until TTL expiry or isolate restart.",
+    );
+    cache.clear();
+  },
 };
 
 export const CACHE_KEYS = {

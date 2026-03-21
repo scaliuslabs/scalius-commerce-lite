@@ -1,5 +1,6 @@
 //src/components/admin/DashboardStats.tsx
 import React, { Suspense } from "react";
+import { ErrorBoundary } from "./ErrorBoundary";
 import {
   Card,
   CardHeader,
@@ -177,6 +178,7 @@ export function DashboardStats({
   const chartConfig = React.useMemo(() => getChartConfig(symbol), [symbol]);
 
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the dashboard. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <div className="space-y-6">
       <motion.div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6"
@@ -249,5 +251,6 @@ export function DashboardStats({
         />
       </Suspense>
     </div>
+    </ErrorBoundary>
   );
 }

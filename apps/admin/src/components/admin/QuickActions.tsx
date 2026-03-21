@@ -1,4 +1,5 @@
 //src/components/admin/QuickActions.tsx
+import { ErrorBoundary } from "./ErrorBoundary";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import {
@@ -138,6 +139,7 @@ const actions = [
 
 export function QuickActions() {
   return (
+    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading quick actions. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <Card className="border-0 shadow-none">
       <CardHeader className="space-y-1.5 pb-6">
         <CardTitle className="text-base font-semibold leading-none tracking-tight">
@@ -196,5 +198,6 @@ export function QuickActions() {
         ))}
       </CardContent>
     </Card>
+    </ErrorBoundary>
   );
 }

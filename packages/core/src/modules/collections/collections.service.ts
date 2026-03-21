@@ -29,11 +29,12 @@ export async function listCollections(
 ) {
     const {
         page = 1,
-        limit = 20,
+        limit: rawLimit = 20,
         search = "",
         showTrashed = false,
         order = "asc",
     } = options;
+    const limit = Math.min(Math.max(rawLimit, 1), 100);
     const sort: CollectionSortField = ALLOWED_COLLECTION_SORT_FIELDS.includes(options.sort as CollectionSortField)
         ? (options.sort as CollectionSortField)
         : "sortOrder";

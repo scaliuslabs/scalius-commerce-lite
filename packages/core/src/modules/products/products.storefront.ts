@@ -1,7 +1,5 @@
 // src/modules/products/products.storefront.ts
 // Storefront product queries — public-facing read-only operations.
-import type { DrizzleD1Database } from "drizzle-orm/d1";
-import * as schema from "@scalius/database/schema";
 import {
     products,
     categories,
@@ -16,6 +14,7 @@ import { ftsMatch } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import type { StorefrontProductFilterInput } from "./products.types";
+import type { Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Private helpers
@@ -41,7 +40,7 @@ function extractFeatures(description: string | null): string[] {
  * Returns a paginated list of active storefront products with images and categories.
  * This is the unified query backing the Hono GET /api/storefront/products route.
  */
-export async function getStorefrontProducts(db: DrizzleD1Database<typeof schema>, params: StorefrontProductFilterInput) {
+export async function getStorefrontProducts(db: Database, params: StorefrontProductFilterInput) {
     const {
         category,
         search,
@@ -234,7 +233,7 @@ export async function getStorefrontProducts(db: DrizzleD1Database<typeof schema>
  * Returns full storefront product details (variants, images, attributes, related products)
  * for a single product identified by slug.
  */
-export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof schema>, slug: string) {
+export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const product = await db
         .select({
             id: products.id,
@@ -443,7 +442,7 @@ export async function getStorefrontProductBySlug(db: DrizzleD1Database<typeof sc
  * Returns products with their variants and primary image URL.
  */
 export async function searchStorefrontProducts(
-    db: DrizzleD1Database<typeof schema>,
+    db: Database,
     params: { search: string; page: number; limit: number },
 ) {
     const { search, page, limit } = params;

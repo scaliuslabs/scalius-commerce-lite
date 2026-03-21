@@ -8,6 +8,7 @@ import { NotFoundError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 import { pageSchema } from "../schemas/entities";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 // Create an OpenAPIHono app for pages routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -15,7 +16,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 3600,
+    ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:pages:",
     varyByQuery: true,
     methods: ["GET"]

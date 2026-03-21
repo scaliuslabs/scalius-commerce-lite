@@ -1,4 +1,5 @@
 import { cn } from "@scalius/shared/utils";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import "./rich-content.css";
 
 interface RichContentProps {
@@ -18,6 +19,9 @@ export function RichContent({
   if (!content) {
     return null;
   }
+
+  // Sanitize HTML to strip XSS vectors (scripts, event handlers, dangerous URLs)
+  const sanitized = sanitizeHtml(content);
 
   return (
     <div
@@ -68,7 +72,7 @@ export function RichContent({
         ],
         className,
       )}
-      dangerouslySetInnerHTML={{ __html: content }}
+      dangerouslySetInnerHTML={{ __html: sanitized }}
     />
   );
 }

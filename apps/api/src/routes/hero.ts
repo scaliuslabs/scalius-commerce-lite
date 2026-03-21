@@ -7,8 +7,10 @@ import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+import { CACHE_TTLS } from "../utils/cache-ttls";
 
 const heroImageSchema = z.object({ url: z.string(), alt: z.string().nullable(), sortOrder: z.number() }).passthrough();
+type HeroImage = z.infer<typeof heroImageSchema>;
 
 // Create an OpenAPIHono app for hero routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -17,7 +19,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: 3600,
+    ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:hero:",
     varyByQuery: false,
     methods: ["GET"]
@@ -106,8 +108,10 @@ app.openapi(listSlidersRoute, async (c) => {
   const mobileSlider = sliders.find((slider) => slider.type === "mobile");
 
   // Parse the JSON strings into arrays
-  const desktopImages = desktopSlider ? JSON.parse(desktopSlider.images) : [];
-  const mobileImages = mobileSlider ? JSON.parse(mobileSlider.images) : [];
+  let desktopImages: HeroImage[] = [];
+  try { desktopImages = desktopSlider ? JSON.parse(desktopSlider.images) : []; } catch { desktopImages = []; }
+  let mobileImages: HeroImage[] = [];
+  try { mobileImages = mobileSlider ? JSON.parse(mobileSlider.images) : []; } catch { mobileImages = []; }
 
   // Format dates
   const formatSlider = (slider: (typeof sliders)[0] | undefined) => {
@@ -116,7 +120,7 @@ app.openapi(listSlidersRoute, async (c) => {
     return {
       id: slider.id,
       type: slider.type,
-      images: JSON.parse(slider.images),
+      images: (() => { try { return JSON.parse(slider.images) as HeroImage[]; } catch { return [] as HeroImage[]; } })(),
       isActive: slider.isActive,
       createdAt: slider.createdAt instanceof Date ? slider.createdAt.toISOString() : null,
       updatedAt: slider.updatedAt instanceof Date ? slider.updatedAt.toISOString() : null,
@@ -200,7 +204,8 @@ app.openapi(getSliderByIdRoute, async (c) => {
   }
 
   // Parse the images JSON
-  const images = JSON.parse(slider.images);
+  let images: HeroImage[] = [];
+  try { images = JSON.parse(slider.images); } catch { images = []; }
 
   // Format the response
   return ok(c, {

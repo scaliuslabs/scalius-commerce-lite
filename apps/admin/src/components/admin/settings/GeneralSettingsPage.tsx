@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense } from "react";
+import { ErrorBoundary } from "../ErrorBoundary";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { Loader2 } from "lucide-react";
 import type { HeaderConfig } from "../header-builder/types";
@@ -83,6 +84,7 @@ export default function GeneralSettingsPage({
     };
 
     return (
+        <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading settings. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
         <div className="max-w-5xl mx-auto">
             <div className="mb-6">
                 <h1 className="text-2xl font-bold tracking-tight">General Settings</h1>
@@ -200,5 +202,6 @@ export default function GeneralSettingsPage({
                 </div>
             </Tabs>
         </div>
+        </ErrorBoundary>
     );
 }

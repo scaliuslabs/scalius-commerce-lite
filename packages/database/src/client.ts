@@ -55,3 +55,4 @@ export const db = new Proxy({} as Database, {
 });
 
 export { schema };
+export { safeBatch } from "./batch-helper";

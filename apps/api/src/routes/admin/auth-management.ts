@@ -11,7 +11,7 @@ import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, RateLimitError, ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Generate a secure random password
 function generateTempPassword(length = 16): string {
@@ -532,7 +532,7 @@ app.openapi(getAccountSecurityRoute, async (c) => {
 // Setup Endpoint (bypasses normal auth)
 // ─────────────────────────────────────────
 
-const setupApp = new OpenAPIHono();
+const setupApp = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── Admin Exists Check (for setup page) ──
 

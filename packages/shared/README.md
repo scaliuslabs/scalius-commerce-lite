@@ -32,29 +32,31 @@ import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { scopeCss } from "@scalius/shared/css-scope";
-import { toISOString, fromUnixSeconds, nowUnixSeconds } from "@scalius/shared/timestamps";
+import { toISOString, fromUnixSeconds, nowUnixSeconds, unixToDate, formatDate } from "@scalius/shared/timestamps";
+import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 ```
 
 ## Files
 
 | File | Lines | Purpose | Key Exports |
 |------|-------|---------|-------------|
-| `utils.ts` | 109 | Tailwind class merging, date/time formatting, status badge styling | `cn()`, `unixToDate()`, `formatDate()`, `getStatusBadgeClass()` |
+| `utils.ts` | 14 | Tailwind class merging (re-exports date/badge utils for backward compat) | `cn()`, re-exports `unixToDate`, `formatDate`, `getStatusBadgeClass` |
+| `status-badges.ts` | 40 | Tailwind CSS badge styling for order statuses | `getStatusBadgeClass()` |
 | `currency.ts` | 101 | ISO 4217 currency formatting with `currency.js` precision | `CurrencyConfig`, `DEFAULT_CURRENCY`, `getDecimalPlaces()`, `getCurrencySymbol()`, `getCurrencyCode()`, `formatPrice()`, `formatPriceShort()` |
 | `price-utils.ts` | 46 | Float-safe price arithmetic via `currency.js` | `roundPrice()`, `addPrices()`, `subtractPrice()`, `pricesEqual()`, `calculatePercentageDiscount()` |
 | `image-optimizer.ts` | 319 | Cloudflare Image Resizing URL generation | `getOptimizedImageUrl()`, `getOriginalImageUrl()`, `isR2Image()`, `getOptimizedImageProps()`, `getResponsiveSrcSet()`, `ImagePresets` |
 | `media-url.ts` | 36 | Resolve bare R2 keys to full CDN URLs | `resolveMediaUrl()` |
 | `cors-helper.ts` | 84 | Dynamic CORS origin validation from env + KV | `getCorsOriginContext()` |
-| `rate-limit.ts` | 74 | In-memory IP-based rate limiter | `rateLimit()` |
+| `rate-limit.ts` | 74 | KV-based IP rate limiter with automatic TTL expiry | `rateLimit()`, `getClientIp()` |
 | `customer-utils.ts` | 78 | Phone validation (E.164), customer stats | `validateAndFormatPhone()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
 | `order-utils.ts` | 9 | Random order ID generation (6 chars, A-Z0-9) | `generateOrderId()` |
 | `json-repair.ts` | 171 | Multi-strategy JSON parsing for LLM responses | `extractAndParseJSON()`, `repairJSON()`, `aggressiveRepairJSON()`, `parseJSONSafely()`, `validateWidgetJSON()` |
 | `tag-parser.ts` | 272 | XML-like tag extraction for LLM widget responses | `parseTagBasedResponse()`, `validateParsedWidget()`, `StreamingTagParser`, `getTagBasedExampleFormat()` |
 | `html-section-parser.ts` | 331 | DOM-based HTML section extraction for widget editing | `parseHtmlIntoSections()`, `reconstructWidgetFromSections()` |
 | `html-escape.ts` | 22 | HTML entity escaping for user values in templates | `escapeHtml()` -- escapes `&`, `<`, `>`, `"`, `'` |
-| `html-sanitize.ts` | 27 | Lightweight XSS sanitizer for admin-authored widget content | `sanitizeHtml()` -- strips `<script>` tags, `on*` handlers, `javascript:` URLs |
+| `html-sanitize.ts` | 70 | Defense-in-depth XSS sanitizer for admin-authored widget content | `sanitizeHtml()` -- strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` handlers, `javascript:`/`vbscript:`/dangerous `data:` URLs |
 | `css-scope.ts` | 223 | Scopes CSS selectors under a wrapper class | `scopeCss()` -- prevents widget styles from leaking; handles `@media`, `@keyframes`, comma-separated selectors, `body`/`html`/`*` rewriting |
-| `timestamps.ts` | 21 | Unix epoch seconds utilities for service layer | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()` |
+| `timestamps.ts` | 82 | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()`, `unixToDate()`, `formatDate()` |
 | `barcode-utils.ts` | 30 | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
 | `barcode-svg.ts` | 206 | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` -- uses `escapeHtml()` for label text |
 | `storefront-url.ts` | 29 | Storefront URL path construction | `buildStorefrontPath()` |
@@ -79,11 +81,11 @@ Runtime dependencies (listed in `package.json`):
 
 ### Image Optimization
 
-`image-optimizer.ts` is a pure module -- it does not read env vars directly. Callers pass `cdnBase` and `isDev` via the `ImageContext` parameter. On production Cloudflare, it routes transforms through the image's own origin (`https://cloud.scalius.com/cdn-cgi/image/params/path`). On localhost, it skips `/cdn-cgi/` transforms (they 404 outside Cloudflare).
+`image-optimizer.ts` public functions are pure when an explicit `ImageContext` is passed. When context is omitted, they fall back to `detectIsDev()` and `detectCdnBase()` which probe `import.meta.env`, `window.location`, and `globalThis.process`. On production Cloudflare, it routes transforms through the image's own origin (`https://cloud.scalius.com/cdn-cgi/image/params/path`). On localhost, it skips `/cdn-cgi/` transforms (they 404 outside Cloudflare).
 
 ### Rate Limiter
 
-`rate-limit.ts` uses an in-memory `Map` -- state resets when the Worker isolate restarts. Acceptable for single-tenant but needs KV migration for multi-instance scale.
+`rate-limit.ts` uses Cloudflare KV with TTL-based expiry for automatic cleanup. Each rate-limit window is stored as a JSON entry (`{ count, resetAt }`) with `expirationTtl` matching the window duration. Uses `CF-Connecting-IP` (not spoofable) for client identification.
 
 ### LLM Response Parsing
 
@@ -93,7 +95,7 @@ Runtime dependencies (listed in `package.json`):
 
 Two complementary utilities:
 - `html-escape.ts` (`escapeHtml`) -- for escaping user-supplied values inserted into HTML templates (email templates, barcode labels). Prevents HTML injection.
-- `html-sanitize.ts` (`sanitizeHtml`) -- for sanitizing admin-authored HTML content (widgets). Strips XSS vectors (`<script>`, event handlers, `javascript:` URLs) while preserving all other HTML structure.
+- `html-sanitize.ts` (`sanitizeHtml`) -- defense-in-depth sanitizer for admin-authored HTML (widgets). Strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` event handlers, `javascript:`/`vbscript:` URLs, and dangerous `data:` URLs while preserving all other HTML structure.
 
 ### CSS Scoping
 
@@ -105,6 +107,5 @@ Two complementary utilities:
 
 ## Known Gaps
 
-- `rate-limit.ts` uses in-memory state that resets on Worker isolate restart.
-- `layout-cache.ts` also uses in-memory state with the same limitation.
+- `layout-cache.ts` uses in-memory state that is per-Worker-isolate; clearing in one Worker does not affect others.
 - `html-section-parser.ts` requires a browser DOM (`DOMParser`); it falls back to a single-section result on the server.

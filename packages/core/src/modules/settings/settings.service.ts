@@ -54,7 +54,9 @@ export async function getStorefrontBaseUrl(
         try {
             const cached = await kv.get("gw:storefront_url");
             if (cached) return cached;
-        } catch { }
+        } catch (e: unknown) {
+            console.warn("[Settings] KV read failed for storefront_url:", e instanceof Error ? e.message : e);
+        }
     }
 
     try {
@@ -68,11 +70,14 @@ export async function getStorefrontBaseUrl(
         if (kv) {
             try {
                 await kv.put("gw:storefront_url", url, { expirationTtl: 300 });
-            } catch { }
+            } catch (e: unknown) {
+                console.warn("[Settings] KV write failed for storefront_url:", e instanceof Error ? e.message : e);
+            }
         }
 
         return url;
-    } catch {
+    } catch (e: unknown) {
+        console.error("[Settings] DB read failed for storefront_url:", e instanceof Error ? e.message : e);
         return "/";
     }
 }
@@ -93,7 +98,9 @@ export async function getCurrencyConfig(
         try {
             const cached = await kv.get("gw:currency");
             if (cached) return JSON.parse(cached);
-        } catch { }
+        } catch (e: unknown) {
+            console.warn("[Settings] KV read failed for currency:", e instanceof Error ? e.message : e);
+        }
     }
 
     try {
@@ -117,11 +124,14 @@ export async function getCurrencyConfig(
         if (kv) {
             try {
                 await kv.put("gw:currency", JSON.stringify(config), { expirationTtl: 300 });
-            } catch { }
+            } catch (e: unknown) {
+                console.warn("[Settings] KV write failed for currency:", e instanceof Error ? e.message : e);
+            }
         }
 
         return config;
-    } catch {
+    } catch (e: unknown) {
+        console.error("[Settings] DB read failed for currency:", e instanceof Error ? e.message : e);
         return DEFAULT_CURRENCY;
     }
 }
@@ -144,7 +154,9 @@ export async function getSiteSettings(
         try {
             const cached = await kv.get(SITE_SETTINGS_CACHE_KEY);
             if (cached) return JSON.parse(cached);
-        } catch { }
+        } catch (e: unknown) {
+            console.warn("[Settings] KV read failed for site_settings:", e instanceof Error ? e.message : e);
+        }
     }
 
     const [row] = await db
@@ -157,7 +169,9 @@ export async function getSiteSettings(
     if (kv && result) {
         try {
             await kv.put(SITE_SETTINGS_CACHE_KEY, JSON.stringify(result), { expirationTtl: 300 });
-        } catch { }
+        } catch (e: unknown) {
+            console.warn("[Settings] KV write failed for site_settings:", e instanceof Error ? e.message : e);
+        }
     }
 
     return result;
@@ -171,7 +185,9 @@ export async function invalidateSiteSettingsCache(kv?: KVNamespace | null): Prom
     if (!kv) return;
     try {
         await kv.delete(SITE_SETTINGS_CACHE_KEY);
-    } catch { }
+    } catch (e: unknown) {
+        console.warn("[Settings] KV delete failed for site_settings:", e instanceof Error ? e.message : e);
+    }
 }
 
 // ─────────────────────────────────────────
@@ -211,7 +227,8 @@ export async function getNotificationChannels(
         const parsed = JSON.parse(row.value);
         // Normalize: the UI may have stored boolean maps instead of string arrays
         return normalizeParsedChannels(parsed);
-    } catch {
+    } catch (e: unknown) {
+        console.error("[Settings] Failed to parse notification channels JSON:", e instanceof Error ? e.message : e);
         return DEFAULT_NOTIFICATION_CHANNELS;
     }
 }

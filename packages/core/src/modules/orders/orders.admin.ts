@@ -16,7 +16,7 @@ import {
     deliveryLocations,
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
-import { reserveMultiple, deductMultiple, releaseMultiple } from "../inventory";
+import { reserveStockBatch, deductMultiple, releaseMultiple } from "../inventory";
 import type { ReservationEntry } from "../inventory";
 
 import { sql, desc, eq, inArray, isNull, and } from "drizzle-orm";
@@ -53,13 +53,14 @@ export async function listOrders(db: Database, options: {
         search,
         status,
         page = 1,
-        limit = 10,
+        limit: rawLimit = 10,
         showTrashed = false,
         sort = "updatedAt",
         order = "desc",
         startDate,
         endDate,
     } = options;
+    const limit = Math.min(Math.max(rawLimit, 1), 100);
     const offset = (page - 1) * limit;
 
     const whereConditions = [];
@@ -96,17 +97,16 @@ export async function listOrders(db: Database, options: {
         whereConditions.push(sql`${orders.createdAt} <= ${endTs}`);
     }
 
-    const countArr = await db
+    const whereClause = whereConditions.length > 0
+        ? sql`${sql.join(whereConditions, sql` AND `)}`
+        : undefined;
+
+    const countQuery = db
         .select({ count: sql<number>`count(*)` })
         .from(orders)
-        .where(
-            whereConditions.length > 0
-                ? sql`${sql.join(whereConditions, sql` AND `)}`
-                : undefined,
-        );
-    const count = countArr[0]?.count ?? 0;
+        .where(whereClause);
 
-    const results = await db
+    const dataQuery = db
         .select({
             id: orders.id,
             customerName: orders.customerName,
@@ -130,11 +130,7 @@ export async function listOrders(db: Database, options: {
             areaName: orders.areaName,
         })
         .from(orders)
-        .where(
-            whereConditions.length > 0
-                ? sql`${sql.join(whereConditions, sql` AND `)}`
-                : undefined,
-        )
+        .where(whereClause)
         .limit(limit)
         .offset(offset)
         .orderBy(
@@ -160,6 +156,20 @@ export async function listOrders(db: Database, options: {
                 return order === "asc" ? sql`${sortField} asc` : sql`${sortField} desc`;
             })(),
         );
+
+    // Batch count + data in a single round-trip
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    const batchResult = await db.batch([countQuery, dataQuery] as any) as any;
+    const countArr = batchResult[0] as { count: number }[];
+    const results = batchResult[1] as {
+        id: string; customerName: string; customerPhone: string; customerEmail: string | null;
+        customerId: string | null; totalAmount: number; shippingCharge: number; discountAmount: number;
+        status: string; paymentStatus: string; paymentMethod: string | null; fulfillmentStatus: string;
+        createdAt: number; updatedAt: number;
+        city: string | null; zone: string | null; area: string | null;
+        cityName: string | null; zoneName: string | null; areaName: string | null;
+    }[];
+    const count = countArr[0]?.count ?? 0;
 
     const orderIds = results.map((r) => r.id);
 
@@ -430,7 +440,12 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
         }));
 
     if (reservationEntries.length > 0) {
-        const reserveResult = await reserveMultiple(db, reservationEntries, orderId);
+        const batchItems = reservationEntries.map(e => ({
+            variantId: e.variantId,
+            quantity: e.quantity,
+            orderId,
+        }));
+        const reserveResult = await reserveStockBatch(db, batchItems, "regular");
         if (!reserveResult.success) {
             throw new ValidationError(
                 reserveResult.error ?? "Insufficient stock for one or more items",
@@ -738,9 +753,22 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         if (oldEntries.length > 0) await releaseMultiple(db, oldEntries, id);
 
         if (newEntries.length > 0) {
-            const reserveResult = await reserveMultiple(db, newEntries, id);
+            const batchItems = newEntries.map(e => ({
+                variantId: e.variantId,
+                quantity: e.quantity,
+                orderId: id,
+            }));
+            const reserveResult = await reserveStockBatch(db, batchItems, pool);
             if (!reserveResult.success) {
-                if (oldEntries.length > 0) await reserveMultiple(db, oldEntries, id);
+                // Re-reserve old entries on failure (rollback)
+                if (oldEntries.length > 0) {
+                    const rollbackItems = oldEntries.map(e => ({
+                        variantId: e.variantId,
+                        quantity: e.quantity,
+                        orderId: id,
+                    }));
+                    await reserveStockBatch(db, rollbackItems, pool);
+                }
                 throw new ValidationError(reserveResult.error ?? "Insufficient stock for updated items");
             }
         }
@@ -758,24 +786,53 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 deltaMap.set(item.variantId, (deltaMap.get(item.variantId) ?? 0) + item.quantity);
             }
         }
+
+        // Pre-fetch ALL needed variants in one query (Fix N+1)
+        const positiveDeltas = [...deltaMap.entries()].filter(([, d]) => d > 0);
+        const positiveVariantIds = positiveDeltas.map(([vid]) => vid);
+        const variantMap = new Map<string, { id: string; stock: number }>();
+        if (positiveVariantIds.length > 0) {
+            const variants = await db
+                .select({ id: productVariants.id, stock: productVariants.stock })
+                .from(productVariants)
+                .where(and(
+                    inArray(productVariants.id, positiveVariantIds),
+                    isNull(productVariants.deletedAt),
+                ));
+            for (const v of variants) variantMap.set(v.id, v);
+        }
+
+        // Validate all positive deltas have sufficient stock before writing
+        for (const [variantId, delta] of positiveDeltas) {
+            const variant = variantMap.get(variantId);
+            if (!variant) throw new NotFoundError(`Variant ${variantId} not found`);
+            if (variant.stock < delta) {
+                throw new ValidationError(`Insufficient stock for variant ${variantId}. Available: ${variant.stock}, Additional Requested: ${delta}`);
+            }
+        }
+
+        // Batch all stock updates into a single db.batch() call
+        const stockUpdateStmts: unknown[] = [];
         for (const [variantId, delta] of deltaMap) {
             if (delta === 0) continue;
             if (delta > 0) {
-                // Need to deduct more stock
-                const variant = await db.select().from(productVariants).where(and(eq(productVariants.id, variantId), isNull(productVariants.deletedAt))).get();
-                if (!variant) throw new NotFoundError(`Variant ${variantId} not found`);
-                if (variant.stock < delta) {
-                    throw new ValidationError(`Insufficient stock for variant ${variantId}. Available: ${variant.stock}, Additional Requested: ${delta}`);
-                }
-                await db.update(productVariants)
-                    .set({ stock: variant.stock - delta, updatedAt: sql`unixepoch()` })
-                    .where(eq(productVariants.id, variantId));
+                const variant = variantMap.get(variantId)!;
+                stockUpdateStmts.push(
+                    db.update(productVariants)
+                        .set({ stock: variant.stock - delta, updatedAt: sql`unixepoch()` })
+                        .where(eq(productVariants.id, variantId)),
+                );
             } else {
                 // Restore stock (delta is negative, so negate it)
-                await db.update(productVariants)
-                    .set({ stock: sql`${productVariants.stock} + ${-delta}`, updatedAt: sql`unixepoch()` })
-                    .where(eq(productVariants.id, variantId));
+                stockUpdateStmts.push(
+                    db.update(productVariants)
+                        .set({ stock: sql`${productVariants.stock} + ${-delta}`, updatedAt: sql`unixepoch()` })
+                        .where(eq(productVariants.id, variantId)),
+                );
             }
+        }
+        if (stockUpdateStmts.length > 0) {
+            await db.batch(stockUpdateStmts as any);
         }
     }
 
@@ -852,7 +909,12 @@ export async function restoreOrder(db: Database, id: string) {
             }));
 
         if (entries.length > 0) {
-            const reserveResult = await reserveMultiple(db, entries, id);
+            const batchItems = entries.map(e => ({
+                variantId: e.variantId,
+                quantity: e.quantity,
+                orderId: id,
+            }));
+            const reserveResult = await reserveStockBatch(db, batchItems, pool);
             if (!reserveResult.success) {
                 throw new ValidationError(
                     `Cannot restore order: ${reserveResult.error ?? "insufficient stock to re-reserve inventory"}`,
@@ -883,20 +945,36 @@ export async function permanentlyDeleteOrder(db: Database, id: string) {
 
 export async function bulkDeleteOrders(db: Database, orderIds: string[], permanent: boolean = false) {
     if (orderIds.length === 0) return;
-    for (const orderId of orderIds) {
-        const order = await db.select({ id: orders.id, inventoryAction: orders.inventoryAction }).from(orders).where(eq(orders.id, orderId)).get();
-        if (!order) continue;
+
+    // Batch-read ALL affected orders in ONE query (Fix N+1)
+    const affectedOrders = await db
+        .select({ id: orders.id, inventoryAction: orders.inventoryAction })
+        .from(orders)
+        .where(inArray(orders.id, orderIds));
+
+    // Apply inventory transitions for orders that need it
+    // (applyInventoryForStatusChange reads order items internally and uses CAS operations)
+    for (const order of affectedOrders) {
         if (order.inventoryAction === "reserved" || order.inventoryAction === "deducted") {
-            await applyInventoryForStatusChange(db, orderId, "cancelled");
+            await applyInventoryForStatusChange(db, order.id, "cancelled");
         }
     }
 
+    // Batch the final delete/soft-delete statements atomically (Fix atomicity)
     if (permanent) {
-        await db.delete(orderItems).where(sql`${orderItems.orderId} IN ${orderIds}`);
-        await db.delete(orders).where(sql`${orders.id} IN ${orderIds}`);
+        const deleteStmts: unknown[] = [
+            db.delete(orderItems).where(inArray(orderItems.orderId, orderIds)),
+            db.delete(orders).where(inArray(orders.id, orderIds)),
+        ];
+        await db.batch(deleteStmts as any);
     } else {
         await db.update(orders)
-            .set({ deletedAt: sql`unixepoch()`, inventoryAction: "restored" })
-            .where(sql`${orders.id} IN ${orderIds}`);
+            .set({
+                deletedAt: sql`unixepoch()`,
+                inventoryAction: "restored",
+                version: sql`${orders.version} + 1`,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(inArray(orders.id, orderIds));
     }
 }

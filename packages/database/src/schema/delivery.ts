@@ -5,6 +5,7 @@ import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { orders } from "./orders";
+import { ShipmentStatus } from "./enums";
 
 export const deliveryLocations = sqliteTable("delivery_locations", {
     id: text("id").primaryKey(),
@@ -25,6 +26,7 @@ export const deliveryLocations = sqliteTable("delivery_locations", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("delivery_locations_parent_id_idx").on(table.parentId),
+    index("delivery_locations_type_idx").on(table.type),
 ]);
 
 export const deliveryProviders = sqliteTable("delivery_providers", {
@@ -55,7 +57,8 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     trackingId: text("tracking_id"),
     trackingUrl: text("tracking_url"),
     courierName: text("courier_name"),
-    status: text("status").notNull().default("pending"),
+    /** Valid: pending | picked_up | in_transit | delivered | returned | cancelled (see ShipmentStatus enum) */
+    status: text("status").notNull().default(ShipmentStatus.PENDING),
     rawStatus: text("raw_status"),
     note: text("note"),
     metadata: text("metadata"),

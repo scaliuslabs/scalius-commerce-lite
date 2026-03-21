@@ -125,7 +125,9 @@ export const checkoutLanguages = sqliteTable("checkout_languages", {
         .notNull()
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+}, (table) => [
+    index("checkout_languages_deleted_at_idx").on(table.deletedAt),
+]);
 
 export type Setting = InferSelectModel<typeof settings>;
 export type SiteSettings = InferSelectModel<typeof siteSettings>;

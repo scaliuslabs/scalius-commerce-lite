@@ -85,24 +85,29 @@ export async function renderProductShortcode(
   }
 }
 
-// REFACTORED: Simplified processing logic
+// REFACTORED: Parallel processing — resolve all shortcodes concurrently, then replace
 export async function processShortcodes(content: string): Promise<string> {
   const shortcodes = parseShortcodes(content);
+  if (shortcodes.length === 0) return content;
+
+  // Phase 1: Resolve all shortcodes in parallel (each triggers an API call)
+  const resolvedMap = new Map<string, string>();
+  await Promise.all(
+    shortcodes.map(async (shortcode) => {
+      let replacement = "";
+      if (shortcode.type === "widget") {
+        replacement = await renderWidgetShortcode(shortcode.id);
+      } else if (shortcode.type === "product") {
+        replacement = await renderProductShortcode(shortcode.id);
+      }
+      resolvedMap.set(shortcode.fullMatch, replacement);
+    }),
+  );
+
+  // Phase 2: Replace all resolved shortcodes in a single pass
   let processedContent = content;
-
-  for (const shortcode of shortcodes) {
-    let replacement = "";
-
-    if (shortcode.type === "widget") {
-      replacement = await renderWidgetShortcode(shortcode.id);
-    } else if (shortcode.type === "product") {
-      replacement = await renderProductShortcode(shortcode.id);
-    }
-
-    processedContent = processedContent.replace(
-      shortcode.fullMatch,
-      replacement,
-    );
+  for (const [original, replacement] of resolvedMap) {
+    processedContent = processedContent.replace(original, replacement);
   }
 
   return processedContent;

@@ -105,6 +105,7 @@ export const discountUsage = sqliteTable("discount_usage", {
         .default(UNIX_NOW),
 }, (table) => [
     index("discount_usage_discount_customer_idx").on(table.discountId, table.customerId),
+    index("discount_usage_order_id_idx").on(table.orderId),
 ]);
 
 export const metaConversionsSettings = sqliteTable("meta_conversions_settings", {
