@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Bengali FTS5 Search** - Fix FTS5 tokenizer to support Bengali script across all search surfaces
 - [ ] **Phase 2: Storefront SEO** - Add JSON-LD structured data, Open Graph/Twitter Card meta tags, and canonical URLs to all storefront pages
 - [ ] **Phase 3: SMS OTP Providers** - Integrate BD SMS gateways for customer OTP delivery with encrypted credential storage
-- [ ] **Phase 4: Invoice & Business Settings** - Enable invoice printing from order pages with configurable business information
+- [x] **Phase 4: Invoice & Business Settings** - Enable invoice printing from order pages with configurable business information (completed 2026-03-21)
 
 ## Phase Details
 
@@ -82,7 +82,7 @@ Plans:
 - [x] 04-01-PLAN.md — Business settings service + API route (GET/POST /admin/settings/business)
 - [x] 04-02-PLAN.md — DB migration (invoice_number column) + invoice numbering service with CAS counter
 - [x] 04-03-PLAN.md — Business settings admin UI tab in GeneralSettingsPage
-- [ ] 04-04-PLAN.md — Invoice API endpoint, Astro page, React actions, Print Invoice button on order view
+- [x] 04-04-PLAN.md — Invoice API endpoint, Astro page, React actions, Print Invoice button on order view
 
 ## Progress
 
@@ -95,4 +95,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Bengali FTS5 Search | 0/2 | Planning complete | - |
 | 2. Storefront SEO | 0/2 | Planning complete | - |
 | 3. SMS OTP Providers | 0/2 | Planning complete | - |
-| 4. Invoice & Business Settings | 0/4 | Planning complete | - |
+| 4. Invoice & Business Settings | 4/4 | Complete   | 2026-03-21 |

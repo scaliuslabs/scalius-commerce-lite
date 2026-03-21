@@ -9,13 +9,13 @@ Requirements for milestone v1.0. Each maps to roadmap phases.
 
 ### Invoice Printing
 
-- [ ] **INV-01**: Merchant can view a clean, printable invoice from any order's detail page
-- [ ] **INV-02**: Invoice displays business name, logo, address, tax ID (TIN/BIN), and configurable footer text
-- [ ] **INV-03**: Invoice displays order items with name, SKU, quantity, unit price, line total, and discount breakdown
-- [ ] **INV-04**: Invoice displays totals section: subtotal, shipping charge, discount, and grand total
+- [x] **INV-01**: Merchant can view a clean, printable invoice from any order's detail page
+- [x] **INV-02**: Invoice displays business name, logo, address, tax ID (TIN/BIN), and configurable footer text
+- [x] **INV-03**: Invoice displays order items with name, SKU, quantity, unit price, line total, and discount breakdown
+- [x] **INV-04**: Invoice displays totals section: subtotal, shipping charge, discount, and grand total
 - [x] **INV-05**: Invoice numbers auto-increment with a configurable prefix (e.g., INV-00001)
-- [ ] **INV-06**: Merchant can print the invoice via browser print dialog (window.print)
-- [ ] **INV-07**: Merchant can download the invoice as a PDF file via one-click button
+- [x] **INV-06**: Merchant can print the invoice via browser print dialog (window.print)
+- [x] **INV-07**: Merchant can download the invoice as a PDF file via one-click button
 
 ### Business Information Settings
 
@@ -129,13 +129,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SMS-05 | Phase 3: SMS OTP Providers | Complete |
 | SMS-06 | Phase 3: SMS OTP Providers | Complete |
 | SMS-07 | Phase 3: SMS OTP Providers | Complete |
-| INV-01 | Phase 4: Invoice & Business Settings | Pending |
-| INV-02 | Phase 4: Invoice & Business Settings | Pending |
-| INV-03 | Phase 4: Invoice & Business Settings | Pending |
-| INV-04 | Phase 4: Invoice & Business Settings | Pending |
+| INV-01 | Phase 4: Invoice & Business Settings | Complete |
+| INV-02 | Phase 4: Invoice & Business Settings | Complete |
+| INV-03 | Phase 4: Invoice & Business Settings | Complete |
+| INV-04 | Phase 4: Invoice & Business Settings | Complete |
 | INV-05 | Phase 4: Invoice & Business Settings | Complete |
-| INV-06 | Phase 4: Invoice & Business Settings | Pending |
-| INV-07 | Phase 4: Invoice & Business Settings | Pending |
+| INV-06 | Phase 4: Invoice & Business Settings | Complete |
+| INV-07 | Phase 4: Invoice & Business Settings | Complete |
 | BIZ-01 | Phase 4: Invoice & Business Settings | Complete |
 | BIZ-02 | Phase 4: Invoice & Business Settings | Complete |
 | BIZ-03 | Phase 4: Invoice & Business Settings | Complete |
