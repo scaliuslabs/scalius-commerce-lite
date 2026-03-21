@@ -439,7 +439,13 @@ export type GetApiV1AttributesFilterableResponses = {
      */
     200: {
         success: true;
-        data?: unknown;
+        data: Array<{
+            id: string;
+            name: string;
+            slug: string;
+            values: Array<string>;
+            [key: string]: unknown | string | Array<string>;
+        }>;
     };
 };
 
@@ -476,7 +482,13 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
      */
     200: {
         success: true;
-        data?: unknown;
+        data: Array<{
+            id: string;
+            name: string;
+            slug: string;
+            values: Array<string>;
+            [key: string]: unknown | string | Array<string>;
+        }>;
     };
 };
 
@@ -524,7 +536,13 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
      */
     200: {
         success: true;
-        data?: unknown;
+        data: Array<{
+            id: string;
+            name: string;
+            slug: string;
+            values: Array<string>;
+            [key: string]: unknown | string | Array<string>;
+        }>;
     };
 };
 
@@ -568,7 +586,13 @@ export type GetApiV1AttributesSearchFiltersResponses = {
      */
     200: {
         success: true;
-        data?: unknown;
+        data: Array<{
+            id: string;
+            name: string;
+            slug: string;
+            values: Array<string>;
+            [key: string]: unknown | string | Array<string>;
+        }>;
     };
 };
 
@@ -608,12 +632,16 @@ export type GetApiV1CollectionsResponses = {
                 id: string;
                 name: string;
                 type: string;
-                config?: unknown;
+                config: {
+                    [key: string]: unknown;
+                };
                 sortOrder: number;
                 isActive: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
-                [key: string]: unknown | string | number | boolean | (string | null) | (string | null) | undefined;
+                [key: string]: unknown | string | {
+                    [key: string]: unknown;
+                } | number | boolean | (string | null) | (string | null);
             }>;
         };
     };
@@ -664,10 +692,47 @@ export type GetApiV1CollectionsByIdResponses = {
     200: {
         success: true;
         data: {
-            collection?: unknown;
-            categories: Array<unknown>;
-            products: Array<unknown>;
-            featuredProduct?: unknown;
+            collection: {
+                id: string;
+                name: string;
+                type: string;
+                config: {
+                    [key: string]: unknown;
+                };
+                sortOrder: number;
+                isActive: boolean;
+                createdAt: string | null;
+                updatedAt: string | null;
+                [key: string]: unknown | string | {
+                    [key: string]: unknown;
+                } | number | boolean | (string | null) | (string | null);
+            };
+            categories: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                [key: string]: unknown | string;
+            }>;
+            products: Array<{
+                id: string;
+                name: string;
+                price: number;
+                slug: string;
+                discountPercentage: number | null;
+                imageUrl: string | null;
+                discountedPrice: number;
+                [key: string]: unknown | string | number | (number | null) | (string | null);
+            }>;
+            featuredProduct?: {
+                id: string;
+                name: string;
+                price: number;
+                slug: string;
+                discountPercentage: number | null;
+                imageUrl: string | null;
+                discountedPrice: number;
+                [key: string]: unknown | string | number | (number | null) | (string | null);
+            };
         };
     };
 };
@@ -712,7 +777,12 @@ export type GetApiV1HeroSlidersResponses = {
             desktop?: {
                 id: string;
                 type: string;
-                images: Array<unknown>;
+                images: Array<{
+                    url: string;
+                    alt: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }>;
                 isActive: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
@@ -720,29 +790,86 @@ export type GetApiV1HeroSlidersResponses = {
             mobile?: {
                 id: string;
                 type: string;
-                images: Array<unknown>;
+                images: Array<{
+                    url: string;
+                    alt: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }>;
                 isActive: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
             } | null;
-            slider?: unknown;
-            images: Array<unknown>;
+            slider?: {
+                id: string;
+                type: string;
+                images: Array<{
+                    url: string;
+                    alt: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }>;
+                isActive: boolean;
+                [key: string]: unknown | string | Array<{
+                    url: string;
+                    alt: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }> | boolean;
+            } | null;
+            images: Array<{
+                url: string;
+                alt: string | null;
+                sortOrder: number;
+                [key: string]: unknown | string | (string | null) | number;
+            }>;
             isMobile?: boolean;
             [key: string]: unknown | ({
                 id: string;
                 type: string;
-                images: Array<unknown>;
+                images: Array<{
+                    url: string;
+                    alt: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }>;
                 isActive: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
             } | null) | ({
                 id: string;
                 type: string;
-                images: Array<unknown>;
+                images: Array<{
+                    url: string;
+                    alt: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }>;
                 isActive: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
-            } | null) | Array<unknown> | boolean | undefined;
+            } | null) | ({
+                id: string;
+                type: string;
+                images: Array<{
+                    url: string;
+                    alt: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }>;
+                isActive: boolean;
+                [key: string]: unknown | string | Array<{
+                    url: string;
+                    alt: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }> | boolean;
+            } | null) | Array<{
+                url: string;
+                alt: string | null;
+                sortOrder: number;
+                [key: string]: unknown | string | (string | null) | number;
+            }> | boolean | undefined;
         };
     };
 };
@@ -795,7 +922,12 @@ export type GetApiV1HeroSlidersByIdResponses = {
             slider: {
                 id: string;
                 type: string;
-                images: Array<unknown>;
+                images: Array<{
+                    url: string;
+                    alt: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }>;
                 isActive: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
@@ -876,9 +1008,25 @@ export type GetApiV1SearchResponses = {
     200: {
         success: true;
         data: {
-            products: Array<unknown>;
-            pages: Array<unknown>;
-            categories: Array<unknown>;
+            products: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                price: number;
+                [key: string]: unknown | string | number;
+            }>;
+            pages: Array<{
+                id: string;
+                title: string;
+                slug: string;
+                [key: string]: unknown | string;
+            }>;
+            categories: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                [key: string]: unknown | string;
+            }>;
             query: string;
             timestamp?: string;
         };
@@ -1056,7 +1204,13 @@ export type GetApiV1NavigationByIdResponses = {
             menu: {
                 id: string;
                 name: string;
-                items: Array<unknown>;
+                items: Array<{
+                    id: string;
+                    label: string;
+                    url: string | null;
+                    sortOrder: number;
+                    [key: string]: unknown | string | (string | null) | number;
+                }>;
             };
         };
     };
@@ -1192,9 +1346,9 @@ export type GetApiV1PagesResponses = {
                 hideFooter: boolean;
                 hideTitle: boolean;
                 sortOrder: number;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
             }>;
             pagination: {
                 page: number;
@@ -1274,9 +1428,9 @@ export type GetApiV1PagesSlugBySlugResponses = {
                 hideFooter: boolean;
                 hideTitle: boolean;
                 sortOrder: number;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
             };
         };
     };
@@ -1339,9 +1493,9 @@ export type GetApiV1PagesByIdResponses = {
                 hideFooter: boolean;
                 hideTitle: boolean;
                 sortOrder: number;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
             };
         };
     };
@@ -1412,10 +1566,22 @@ export type GetApiV1DiscountsValidateResponses = {
         success: true;
         data: {
             valid: boolean;
-            discount?: unknown;
+            discount?: {
+                id: string;
+                code: string;
+                type: string;
+                discountValue: number;
+                [key: string]: unknown | string | number;
+            };
             discountAmount?: number;
             message?: string;
-            [key: string]: unknown | boolean | number | string | undefined;
+            [key: string]: unknown | boolean | {
+                id: string;
+                code: string;
+                type: string;
+                discountValue: number;
+                [key: string]: unknown | string | number;
+            } | number | string | undefined;
         };
     };
 };
@@ -1487,9 +1653,9 @@ export type GetApiV1WidgetsByIdResponses = {
                 placementRule: string;
                 referenceCollectionId: string | null;
                 sortOrder: number;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
             };
         };
     };
@@ -1538,9 +1704,9 @@ export type GetApiV1WidgetsActiveHomepageResponses = {
                 placementRule: string;
                 referenceCollectionId: string | null;
                 sortOrder: number;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
             }>;
         };
     };
@@ -1582,9 +1748,9 @@ export type GetApiV1AnalyticsConfigurationsResponses = {
                 id: string;
                 name: string;
                 type: string;
-                config?: unknown;
+                config: string;
                 isActive: boolean;
-                [key: string]: unknown | string | boolean | undefined;
+                [key: string]: unknown | string | boolean;
             }>;
         };
     };
@@ -1686,11 +1852,27 @@ export type GetApiV1StorefrontHomepageResponses = {
     200: {
         success: true;
         data: {
-            seo?: unknown;
-            hero?: unknown;
-            widgets: Array<unknown>;
-            collections: Array<unknown>;
-            [key: string]: unknown | Array<unknown> | Array<unknown> | undefined;
+            seo: {
+                [key: string]: unknown;
+            };
+            hero: {
+                [key: string]: unknown;
+            };
+            widgets: Array<{
+                [key: string]: unknown;
+            }>;
+            collections: Array<{
+                [key: string]: unknown;
+            }>;
+            [key: string]: unknown | {
+                [key: string]: unknown;
+            } | {
+                [key: string]: unknown;
+            } | Array<{
+                [key: string]: unknown;
+            }> | Array<{
+                [key: string]: unknown;
+            }>;
         };
     };
 };
@@ -1728,12 +1910,32 @@ export type GetApiV1StorefrontLayoutResponses = {
         success: true;
         data: {
             analytics?: unknown;
-            header?: unknown;
-            navigation?: unknown;
-            footer?: unknown;
-            currency?: unknown;
-            theme?: unknown;
-            [key: string]: unknown | undefined;
+            header: {
+                [key: string]: unknown;
+            };
+            navigation: {
+                [key: string]: unknown;
+            };
+            footer: {
+                [key: string]: unknown;
+            };
+            currency: {
+                [key: string]: unknown;
+            };
+            theme: {
+                [key: string]: unknown;
+            };
+            [key: string]: unknown | {
+                [key: string]: unknown;
+            } | {
+                [key: string]: unknown;
+            } | {
+                [key: string]: unknown;
+            } | {
+                [key: string]: unknown;
+            } | {
+                [key: string]: unknown;
+            } | undefined;
         };
     };
 };
@@ -1806,7 +2008,9 @@ export type GetApiV1CheckoutConfigResponses = {
      */
     200: {
         success: true;
-        data?: unknown;
+        data: {
+            [key: string]: unknown;
+        };
     };
 };
 
@@ -2333,8 +2537,19 @@ export type GetApiV1CustomerAuthOrdersResponses = {
     200: {
         success: true;
         data: {
-            orders: Array<unknown>;
-            customer?: unknown;
+            orders: Array<{
+                id: string;
+                status: string;
+                totalAmount: number;
+                createdAt: string | number | unknown;
+                [key: string]: unknown | string | number | (string | number | unknown);
+            }>;
+            customer: {
+                id: string;
+                name: string;
+                phone: string;
+                [key: string]: unknown | string;
+            };
         };
     };
 };
@@ -2419,14 +2634,22 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData?: unknown;
-                fieldVisibility?: unknown;
+                languageData: string | {
+                    [key: string]: unknown;
+                };
+                fieldVisibility: string | {
+                    [key: string]: unknown;
+                };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
-                [key: string]: unknown | string | boolean | undefined;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
+                [key: string]: unknown | string | (string | {
+                    [key: string]: unknown;
+                }) | (string | {
+                    [key: string]: unknown;
+                }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
             };
         };
     };
@@ -2537,14 +2760,22 @@ export type GetApiV1CheckoutLanguagesResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData?: unknown;
-                fieldVisibility?: unknown;
+                languageData: string | {
+                    [key: string]: unknown;
+                };
+                fieldVisibility: string | {
+                    [key: string]: unknown;
+                };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
-                [key: string]: unknown | string | boolean | undefined;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
+                [key: string]: unknown | string | (string | {
+                    [key: string]: unknown;
+                }) | (string | {
+                    [key: string]: unknown;
+                }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
             }>;
             pagination: {
                 page: number;
@@ -2667,14 +2898,22 @@ export type PostApiV1CheckoutLanguagesResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData?: unknown;
-                fieldVisibility?: unknown;
+                languageData: string | {
+                    [key: string]: unknown;
+                };
+                fieldVisibility: string | {
+                    [key: string]: unknown;
+                };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
-                [key: string]: unknown | string | boolean | undefined;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
+                [key: string]: unknown | string | (string | {
+                    [key: string]: unknown;
+                }) | (string | {
+                    [key: string]: unknown;
+                }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
             };
         };
     };
@@ -2779,14 +3018,22 @@ export type GetApiV1CheckoutLanguagesByIdResponses = {
             id: string;
             name: string;
             code: string;
-            languageData?: unknown;
-            fieldVisibility?: unknown;
+            languageData: string | {
+                [key: string]: unknown;
+            };
+            fieldVisibility: string | {
+                [key: string]: unknown;
+            };
             isActive: boolean;
             isDefault: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
-            [key: string]: unknown | string | boolean | undefined;
+            createdAt?: string | number;
+            updatedAt?: string | number;
+            deletedAt?: string | number | unknown;
+            [key: string]: unknown | string | (string | {
+                [key: string]: unknown;
+            }) | (string | {
+                [key: string]: unknown;
+            }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
         };
     };
 };
@@ -2985,14 +3232,22 @@ export type PutApiV1CheckoutLanguagesByIdResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData?: unknown;
-                fieldVisibility?: unknown;
+                languageData: string | {
+                    [key: string]: unknown;
+                };
+                fieldVisibility: string | {
+                    [key: string]: unknown;
+                };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
-                [key: string]: unknown | string | boolean | undefined;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
+                [key: string]: unknown | string | (string | {
+                    [key: string]: unknown;
+                }) | (string | {
+                    [key: string]: unknown;
+                }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
             };
         };
     };
@@ -3729,8 +3984,12 @@ export type GetApiV1ProductsSearchResponses = {
                 price: number;
                 slug: string;
                 imageUrl: string | null;
-                variants: Array<unknown>;
-                [key: string]: unknown | string | number | (string | null) | Array<unknown>;
+                variants: Array<{
+                    [key: string]: unknown;
+                }>;
+                [key: string]: unknown | string | number | (string | null) | Array<{
+                    [key: string]: unknown;
+                }>;
             }>;
             pagination: {
                 page: number;
@@ -3789,11 +4048,21 @@ export type GetApiV1ProductsBySlugResponses = {
     200: {
         success: true;
         data: {
-            product?: unknown;
-            category?: unknown;
-            images: Array<unknown>;
-            variants: Array<unknown>;
-            relatedProducts: Array<unknown>;
+            product: {
+                [key: string]: unknown;
+            };
+            category: {
+                [key: string]: unknown;
+            } | null;
+            images: Array<{
+                [key: string]: unknown;
+            }>;
+            variants: Array<{
+                [key: string]: unknown;
+            }>;
+            relatedProducts: Array<{
+                [key: string]: unknown;
+            }>;
         };
     };
 };
@@ -3983,15 +4252,28 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
     200: {
         success: true;
         data: {
-            category?: unknown;
-            products: Array<unknown>;
+            category: {
+                id: string;
+                name: string;
+                slug: string;
+                [key: string]: unknown | string;
+            };
+            products: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                price: number;
+                [key: string]: unknown | string | number;
+            }>;
             pagination: {
                 page: number;
                 limit: number;
                 total: number;
                 totalPages: number;
             };
-            appliedFilters?: unknown;
+            appliedFilters: {
+                [key: string]: unknown;
+            };
         };
     };
 };
@@ -4448,7 +4730,12 @@ export type GetApiV1OrdersByIdResponses = {
     200: {
         success: true;
         data: {
-            order?: unknown;
+            order: {
+                id: string;
+                status: string;
+                totalAmount: number;
+                [key: string]: unknown | string | number;
+            };
         };
     };
 };
@@ -4875,6 +5162,273 @@ export type PostApiV1AdminCategoriesResponses = {
 
 export type PostApiV1AdminCategoriesResponse = PostApiV1AdminCategoriesResponses[keyof PostApiV1AdminCategoriesResponses];
 
+export type DeleteApiV1AdminCategoriesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/categories/{id}';
+};
+
+export type DeleteApiV1AdminCategoriesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminCategoriesByIdError = DeleteApiV1AdminCategoriesByIdErrors[keyof DeleteApiV1AdminCategoriesByIdErrors];
+
+export type DeleteApiV1AdminCategoriesByIdResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminCategoriesByIdResponse = DeleteApiV1AdminCategoriesByIdResponses[keyof DeleteApiV1AdminCategoriesByIdResponses];
+
+export type GetApiV1AdminCategoriesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/categories/{id}';
+};
+
+export type GetApiV1AdminCategoriesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesByIdError = GetApiV1AdminCategoriesByIdErrors[keyof GetApiV1AdminCategoriesByIdErrors];
+
+export type GetApiV1AdminCategoriesByIdResponses = {
+    /**
+     * Category details
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            slug: string;
+            description: string | null;
+            imageUrl: string | null;
+            metaTitle: string | null;
+            metaDescription: string | null;
+            createdAt: string | null;
+            updatedAt: string | null;
+            deletedAt: string | null;
+            productCount: number;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesByIdResponse = GetApiV1AdminCategoriesByIdResponses[keyof GetApiV1AdminCategoriesByIdResponses];
+
+export type PutApiV1AdminCategoriesByIdData = {
+    body?: {
+        name: string;
+        description: string | null;
+        slug: string;
+        metaTitle: string | null;
+        metaDescription: string | null;
+        image: {
+            id: string;
+            url: string;
+            filename: string;
+            size: number;
+            createdAt: string;
+        } | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/categories/{id}';
+};
+
+export type PutApiV1AdminCategoriesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminCategoriesByIdError = PutApiV1AdminCategoriesByIdErrors[keyof PutApiV1AdminCategoriesByIdErrors];
+
+export type PutApiV1AdminCategoriesByIdResponses = {
+    /**
+     * Category updated
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminCategoriesByIdResponse = PutApiV1AdminCategoriesByIdResponses[keyof PutApiV1AdminCategoriesByIdResponses];
+
 export type PostApiV1AdminCategoriesBulkDeleteData = {
     body?: {
         categoryIds: Array<string>;
@@ -5031,180 +5585,6 @@ export type PostApiV1AdminCategoriesBulkRestoreResponses = {
 };
 
 export type PostApiV1AdminCategoriesBulkRestoreResponse = PostApiV1AdminCategoriesBulkRestoreResponses[keyof PostApiV1AdminCategoriesBulkRestoreResponses];
-
-export type DeleteApiV1AdminCategoriesByIdData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/categories/{id}';
-};
-
-export type DeleteApiV1AdminCategoriesByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type DeleteApiV1AdminCategoriesByIdError = DeleteApiV1AdminCategoriesByIdErrors[keyof DeleteApiV1AdminCategoriesByIdErrors];
-
-export type DeleteApiV1AdminCategoriesByIdResponses = {
-    /**
-     * No content
-     */
-    204: void;
-};
-
-export type DeleteApiV1AdminCategoriesByIdResponse = DeleteApiV1AdminCategoriesByIdResponses[keyof DeleteApiV1AdminCategoriesByIdResponses];
-
-export type PutApiV1AdminCategoriesByIdData = {
-    body?: {
-        name: string;
-        description: string | null;
-        slug: string;
-        metaTitle: string | null;
-        metaDescription: string | null;
-        image: {
-            id: string;
-            url: string;
-            filename: string;
-            size: number;
-            createdAt: string;
-        } | null;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/categories/{id}';
-};
-
-export type PutApiV1AdminCategoriesByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PutApiV1AdminCategoriesByIdError = PutApiV1AdminCategoriesByIdErrors[keyof PutApiV1AdminCategoriesByIdErrors];
-
-export type PutApiV1AdminCategoriesByIdResponses = {
-    /**
-     * Category updated
-     */
-    200: {
-        success: true;
-        data: {
-            [key: string]: unknown;
-        };
-    };
-};
-
-export type PutApiV1AdminCategoriesByIdResponse = PutApiV1AdminCategoriesByIdResponses[keyof PutApiV1AdminCategoriesByIdResponses];
 
 export type DeleteApiV1AdminCategoriesByIdPermanentData = {
     body?: never;
@@ -5562,9 +5942,9 @@ export type GetApiV1AdminCollectionsResponses = {
                 config: string;
                 sortOrder: number;
                 isActive: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
             }>;
             pagination: {
                 page: number;
@@ -5670,9 +6050,9 @@ export type PostApiV1AdminCollectionsResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number | unknown;
+            updatedAt: string | number | unknown;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -6277,9 +6657,9 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number | unknown;
+            updatedAt: string | number | unknown;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -6380,9 +6760,9 @@ export type PutApiV1AdminCollectionsByIdResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number | unknown;
+            updatedAt: string | number | unknown;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -7060,15 +7440,15 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 changeType: string;
-                createdAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | undefined;
+                createdAt: string | number;
+                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | number);
             }>;
             orders: Array<{
                 id: string;
                 totalAmount: number;
                 status: string;
-                createdAt?: unknown;
-                [key: string]: unknown | string | number | undefined;
+                createdAt: string | number;
+                [key: string]: unknown | string | number | (string | number);
             }>;
         };
     };
@@ -7187,9 +7567,9 @@ export type GetApiV1AdminPagesResponses = {
                 hideFooter: boolean;
                 hideTitle: boolean;
                 sortOrder: number;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
             }>;
             pagination: {
                 page: number;
@@ -7857,9 +8237,9 @@ export type GetApiV1AdminPagesByIdResponses = {
             hideFooter: boolean;
             hideTitle: boolean;
             sortOrder: number;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number | unknown;
+            updatedAt: string | number | unknown;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -8152,7 +8532,9 @@ export type PostApiV1AdminWidgetsData = {
         name: string;
         htmlContent: string;
         cssContent?: string;
-        aiContext?: unknown;
+        aiContext?: {
+            [key: string]: unknown;
+        } | null;
         isActive?: boolean;
         displayTarget?: 'homepage';
         placementRule: 'before_collection' | 'after_collection' | 'fixed_top_homepage' | 'fixed_bottom_homepage' | 'standalone';
@@ -8241,9 +8623,9 @@ export type PostApiV1AdminWidgetsResponses = {
             placementRule: string;
             referenceCollectionId: string | null;
             sortOrder: number;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number | unknown;
+            updatedAt: string | number | unknown;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -8727,9 +9109,9 @@ export type GetApiV1AdminWidgetsByIdResponses = {
             placementRule: string;
             referenceCollectionId: string | null;
             sortOrder: number;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number | unknown;
+            updatedAt: string | number | unknown;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -8741,7 +9123,9 @@ export type PutApiV1AdminWidgetsByIdData = {
         name?: string;
         htmlContent?: string;
         cssContent?: string;
-        aiContext?: unknown;
+        aiContext?: {
+            [key: string]: unknown;
+        } | null;
         isActive?: boolean;
         displayTarget?: 'homepage';
         placementRule?: 'before_collection' | 'after_collection' | 'fixed_top_homepage' | 'fixed_bottom_homepage' | 'standalone';
@@ -8832,9 +9216,9 @@ export type PutApiV1AdminWidgetsByIdResponses = {
             placementRule: string;
             referenceCollectionId: string | null;
             sortOrder: number;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number | unknown;
+            updatedAt: string | number | unknown;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -9083,9 +9467,9 @@ export type PatchApiV1AdminWidgetsByIdToggleStatusResponses = {
             placementRule: string;
             referenceCollectionId: string | null;
             sortOrder: number;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number | unknown;
+            updatedAt: string | number | unknown;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -9173,8 +9557,8 @@ export type GetApiV1AdminWidgetsByIdHistoryResponses = {
             htmlContent: string;
             cssContent: string | null;
             reason: string;
-            createdAt?: unknown;
-            [key: string]: unknown | string | (string | null) | undefined;
+            createdAt: string | number;
+            [key: string]: unknown | string | (string | null) | (string | number);
         }>;
     };
 };
@@ -9264,8 +9648,8 @@ export type PostApiV1AdminWidgetsByIdHistoryResponses = {
             htmlContent: string;
             cssContent: string | null;
             reason: string;
-            createdAt?: unknown;
-            [key: string]: unknown | string | (string | null) | undefined;
+            createdAt: string | number;
+            [key: string]: unknown | string | (string | null) | (string | number);
         };
     };
 };
@@ -9547,12 +9931,12 @@ export type GetApiV1AdminDiscountsResponses = {
                 maxUses: number | null;
                 limitOnePerCustomer: boolean;
                 customerSegment: string | null;
-                startDate?: unknown;
-                endDate?: unknown;
+                startDate: string | number;
+                endDate: string | number | unknown;
                 isActive: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
             }>;
             pagination: {
                 page: number;
@@ -9670,12 +10054,12 @@ export type PostApiV1AdminDiscountsResponses = {
             maxUses: number | null;
             limitOnePerCustomer: boolean;
             customerSegment: string | null;
-            startDate?: unknown;
-            endDate?: unknown;
+            startDate: string | number;
+            endDate: string | number | unknown;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number;
+            updatedAt: string | number;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -9824,12 +10208,12 @@ export type GetApiV1AdminDiscountsByIdResponses = {
             maxUses: number | null;
             limitOnePerCustomer: boolean;
             customerSegment: string | null;
-            startDate?: unknown;
-            endDate?: unknown;
+            startDate: string | number;
+            endDate: string | number | unknown;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number;
+            updatedAt: string | number;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -9943,12 +10327,12 @@ export type PutApiV1AdminDiscountsByIdResponses = {
             maxUses: number | null;
             limitOnePerCustomer: boolean;
             customerSegment: string | null;
-            startDate?: unknown;
-            endDate?: unknown;
+            startDate: string | number;
+            endDate: string | number | unknown;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number;
+            updatedAt: string | number;
+            deletedAt: string | number | unknown;
         };
     };
 };
@@ -10240,9 +10624,9 @@ export type GetApiV1AdminMediaResponses = {
                 size: number;
                 mimeType: string;
                 folderId: string | null;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
             }>;
             pagination: {
                 page: number;
@@ -10329,14 +10713,60 @@ export type PostApiV1AdminMediaUploadResponses = {
      */
     200: {
         success: true;
-        data?: unknown;
+        data: {
+            files: Array<{
+                id: string;
+                filename: string;
+                url: string;
+                size: number;
+                mimeType: string;
+                folderId: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
+            }>;
+            [key: string]: unknown | Array<{
+                id: string;
+                filename: string;
+                url: string;
+                size: number;
+                mimeType: string;
+                folderId: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
+            }>;
+        };
     };
     /**
      * All files uploaded successfully
      */
     201: {
         success: true;
-        data?: unknown;
+        data: {
+            files: Array<{
+                id: string;
+                filename: string;
+                url: string;
+                size: number;
+                mimeType: string;
+                folderId: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
+            }>;
+            [key: string]: unknown | Array<{
+                id: string;
+                filename: string;
+                url: string;
+                size: number;
+                mimeType: string;
+                folderId: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
+            }>;
+        };
     };
 };
 
@@ -10499,7 +10929,17 @@ export type PatchApiV1AdminMediaByIdResponses = {
     200: {
         success: true;
         data: {
-            file?: unknown;
+            file: {
+                id: string;
+                filename: string;
+                url: string;
+                size: number;
+                mimeType: string;
+                folderId: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
+            };
         };
     };
 };
@@ -10585,7 +11025,17 @@ export type PutApiV1AdminMediaByIdResponses = {
     200: {
         success: true;
         data: {
-            file?: unknown;
+            file: {
+                id: string;
+                filename: string;
+                url: string;
+                size: number;
+                mimeType: string;
+                folderId: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
+            };
         };
     };
 };
@@ -10754,9 +11204,9 @@ export type GetApiV1AdminMediaFoldersResponses = {
                 id: string;
                 name: string;
                 parentId: string | null;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
             }>;
         };
     };
@@ -10841,7 +11291,14 @@ export type PostApiV1AdminMediaFoldersResponses = {
     201: {
         success: true;
         data: {
-            folder?: unknown;
+            folder: {
+                id: string;
+                name: string;
+                parentId: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
+            };
         };
     };
 };
@@ -10990,10 +11447,10 @@ export type GetApiV1AdminInventoryResponses = {
                 newStock: number;
                 notes: string | null;
                 createdBy: string | null;
-                createdAt?: unknown;
+                createdAt: string | number;
                 variantSku: string | null;
                 productName: string | null;
-                [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | null) | (string | null) | undefined;
+                [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | number) | (string | null) | (string | null);
             }>;
             alerts?: Array<{
                 id: string;
@@ -11002,14 +11459,14 @@ export type GetApiV1AdminInventoryResponses = {
                 currentQty: number;
                 threshold: number;
                 alertStatus: string;
-                alertSentAt?: unknown;
-                acknowledgedAt?: unknown;
-                resolvedAt?: unknown;
+                alertSentAt: string | number | unknown;
+                acknowledgedAt: string | number | unknown;
+                resolvedAt: string | number | unknown;
                 productName: string | null;
                 variantSku: string | null;
                 variantSize: string | null;
                 variantColor: string | null;
-                [key: string]: unknown | string | number | (string | null) | (string | null) | (string | null) | (string | null) | undefined;
+                [key: string]: unknown | string | number | (string | number | unknown) | (string | number | unknown) | (string | number | unknown) | (string | null) | (string | null) | (string | null) | (string | null);
             }>;
             pagination?: {
                 page: number;
@@ -11049,10 +11506,10 @@ export type GetApiV1AdminInventoryResponses = {
                 newStock: number;
                 notes: string | null;
                 createdBy: string | null;
-                createdAt?: unknown;
+                createdAt: string | number;
                 variantSku: string | null;
                 productName: string | null;
-                [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | null) | (string | null) | undefined;
+                [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | number) | (string | null) | (string | null);
             }> | Array<{
                 id: string;
                 variantId: string;
@@ -11060,14 +11517,14 @@ export type GetApiV1AdminInventoryResponses = {
                 currentQty: number;
                 threshold: number;
                 alertStatus: string;
-                alertSentAt?: unknown;
-                acknowledgedAt?: unknown;
-                resolvedAt?: unknown;
+                alertSentAt: string | number | unknown;
+                acknowledgedAt: string | number | unknown;
+                resolvedAt: string | number | unknown;
                 productName: string | null;
                 variantSku: string | null;
                 variantSize: string | null;
                 variantColor: string | null;
-                [key: string]: unknown | string | number | (string | null) | (string | null) | (string | null) | (string | null) | undefined;
+                [key: string]: unknown | string | number | (string | number | unknown) | (string | number | unknown) | (string | number | unknown) | (string | null) | (string | null) | (string | null) | (string | null);
             }> | {
                 page: number;
                 limit: number;
@@ -11113,14 +11570,14 @@ export type GetApiV1AdminInventoryAlertsResponses = {
                 currentQty: number;
                 threshold: number;
                 alertStatus: string;
-                alertSentAt?: unknown;
-                acknowledgedAt?: unknown;
-                resolvedAt?: unknown;
+                alertSentAt: string | number | unknown;
+                acknowledgedAt: string | number | unknown;
+                resolvedAt: string | number | unknown;
                 productName: string | null;
                 variantSku: string | null;
                 variantSize: string | null;
                 variantColor: string | null;
-                [key: string]: unknown | string | number | (string | null) | (string | null) | (string | null) | (string | null) | undefined;
+                [key: string]: unknown | string | number | (string | number | unknown) | (string | number | unknown) | (string | number | unknown) | (string | null) | (string | null) | (string | null) | (string | null);
             }>;
         };
     };
@@ -11191,12 +11648,11 @@ export type PostApiV1AdminInventoryByVariantIdAdjustResponses = {
     200: {
         success: true;
         data: {
-            success: boolean;
             variantId: string;
             previousStock: number;
             newStock: number;
             delta: number;
-            [key: string]: unknown | boolean | string | number;
+            [key: string]: unknown | string | number;
         };
     };
 };
@@ -11543,8 +11999,12 @@ export type GetApiV1AdminNavigationResponses = {
     200: {
         success: true;
         data: {
-            headerConfig?: unknown;
-            footerConfig?: unknown;
+            headerConfig: {
+                [key: string]: unknown;
+            };
+            footerConfig: {
+                [key: string]: unknown;
+            };
         };
     };
 };
@@ -12077,9 +12537,15 @@ export type PostApiV1AdminShipmentsByIdCheckStatusResponses = {
             statusCheck: {
                 status: string;
                 statusChanged: boolean;
-                orderStatusUpdate?: unknown;
+                orderStatusUpdate: {
+                    status: string;
+                    [key: string]: unknown | string;
+                } | null;
                 lastChecked: string;
-                [key: string]: unknown | string | boolean | undefined;
+                [key: string]: unknown | string | boolean | ({
+                    status: string;
+                    [key: string]: unknown | string;
+                } | null);
             };
         };
     };
@@ -12168,9 +12634,9 @@ export type GetApiV1AdminAnalyticsResponses = {
             isActive: boolean;
             usePartytown: boolean;
             location: string;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            [key: string]: unknown | string | boolean | undefined;
+            createdAt: string | number;
+            updatedAt: string | number;
+            [key: string]: unknown | string | boolean | (string | number) | (string | number);
         } | null>;
     };
 };
@@ -13289,9 +13755,9 @@ export type GetApiV1AdminRbacRolesResponses = {
                 description: string | null;
                 isSystem: boolean;
                 permissions: Array<string>;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | boolean | Array<string> | undefined;
+                createdAt: string | number;
+                updatedAt: string | number;
+                [key: string]: unknown | string | (string | null) | boolean | Array<string> | (string | number) | (string | number);
             }>;
         };
     };
@@ -13385,9 +13851,9 @@ export type PostApiV1AdminRbacRolesResponses = {
                 description: string | null;
                 isSystem: boolean;
                 permissions: Array<string>;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | boolean | Array<string> | undefined;
+                createdAt: string | number;
+                updatedAt: string | number;
+                [key: string]: unknown | string | (string | null) | boolean | Array<string> | (string | number) | (string | number);
             };
         };
     };
@@ -13561,9 +14027,9 @@ export type GetApiV1AdminRbacRolesByIdResponses = {
                 description: string | null;
                 isSystem: boolean;
                 permissions: Array<string>;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | boolean | Array<string> | undefined;
+                createdAt: string | number;
+                updatedAt: string | number;
+                [key: string]: unknown | string | (string | null) | boolean | Array<string> | (string | number) | (string | number);
             };
         };
     };
@@ -13658,9 +14124,9 @@ export type PutApiV1AdminRbacRolesByIdResponses = {
                 description: string | null;
                 isSystem: boolean;
                 permissions: Array<string>;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | boolean | Array<string> | undefined;
+                createdAt: string | number;
+                updatedAt: string | number;
+                [key: string]: unknown | string | (string | null) | boolean | Array<string> | (string | number) | (string | number);
             };
         };
     };
@@ -14432,8 +14898,12 @@ export type GetApiV1AdminSettingsGeneralResponses = {
     200: {
         success: true;
         data: {
-            headerConfig?: unknown;
-            footerConfig?: unknown;
+            headerConfig: {
+                [key: string]: unknown;
+            };
+            footerConfig: {
+                [key: string]: unknown;
+            };
         };
     };
 };
@@ -16821,7 +17291,9 @@ export type GetApiV1AdminSettingsFirebaseResponse = GetApiV1AdminSettingsFirebas
 export type PostApiV1AdminSettingsFirebaseData = {
     body?: {
         serviceAccount?: string;
-        publicConfig?: unknown;
+        publicConfig?: {
+            [key: string]: unknown;
+        };
     };
     path?: never;
     query?: never;
@@ -17548,9 +18020,9 @@ export type GetApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            [key: string]: unknown | string | boolean | undefined;
+            createdAt: string | number;
+            updatedAt: string | number;
+            [key: string]: unknown | string | boolean | (string | number) | (string | number);
         }>;
     };
 };
@@ -17561,8 +18033,12 @@ export type PostApiV1AdminSettingsDeliveryProvidersData = {
     body?: {
         name: string;
         type: string;
-        credentials?: unknown;
-        config?: unknown;
+        credentials: string | {
+            [key: string]: unknown;
+        };
+        config: string | {
+            [key: string]: unknown;
+        };
         isActive?: boolean;
     };
     path?: never;
@@ -17643,9 +18119,9 @@ export type PostApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            [key: string]: unknown | string | boolean | undefined;
+            createdAt: string | number;
+            updatedAt: string | number;
+            [key: string]: unknown | string | boolean | (string | number) | (string | number);
         };
     };
 };
@@ -17657,8 +18133,12 @@ export type PutApiV1AdminSettingsDeliveryProvidersData = {
         id: string;
         name: string;
         type: string;
-        credentials?: unknown;
-        config?: unknown;
+        credentials?: string | {
+            [key: string]: unknown;
+        };
+        config?: string | {
+            [key: string]: unknown;
+        };
         isActive?: boolean;
     };
     path?: never;
@@ -17739,9 +18219,9 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            [key: string]: unknown | string | boolean | undefined;
+            createdAt: string | number;
+            updatedAt: string | number;
+            [key: string]: unknown | string | boolean | (string | number) | (string | number);
         };
     };
 };
@@ -17751,8 +18231,12 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponse = PutApiV1AdminSettin
 export type PostApiV1AdminSettingsDeliveryProvidersCreateTestData = {
     body?: {
         type: string;
-        credentials?: unknown;
-        config?: unknown;
+        credentials: string | {
+            [key: string]: unknown;
+        };
+        config: string | {
+            [key: string]: unknown;
+        };
         name?: string;
     };
     path?: never;
@@ -18001,9 +18485,9 @@ export type GetApiV1AdminSettingsDeliveryProvidersByIdResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            [key: string]: unknown | string | boolean | undefined;
+            createdAt: string | number;
+            updatedAt: string | number;
+            [key: string]: unknown | string | boolean | (string | number) | (string | number);
         };
     };
 };
@@ -18178,15 +18662,15 @@ export type GetApiV1AdminSettingsHeroSlidersResponses = {
                 link: string;
             }>;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number;
+            updatedAt: string | number;
+            deletedAt: string | number | unknown;
             [key: string]: unknown | string | ('desktop' | 'mobile') | Array<{
                 id: string;
                 url: string;
                 title: string;
                 link: string;
-            }> | boolean | undefined;
+            }> | boolean | (string | number) | (string | number) | (string | number | unknown);
         }>;
     };
 };
@@ -18285,15 +18769,15 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
                 link: string;
             }>;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number;
+            updatedAt: string | number;
+            deletedAt: string | number | unknown;
             [key: string]: unknown | string | ('desktop' | 'mobile') | Array<{
                 id: string;
                 url: string;
                 title: string;
                 link: string;
-            }> | boolean | undefined;
+            }> | boolean | (string | number) | (string | number) | (string | number | unknown);
         };
     };
 };
@@ -18385,15 +18869,15 @@ export type DeleteApiV1AdminSettingsHeroSlidersByIdResponses = {
                 link: string;
             }>;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number;
+            updatedAt: string | number;
+            deletedAt: string | number | unknown;
             [key: string]: unknown | string | ('desktop' | 'mobile') | Array<{
                 id: string;
                 url: string;
                 title: string;
                 link: string;
-            }> | boolean | undefined;
+            }> | boolean | (string | number) | (string | number) | (string | number | unknown);
         };
     };
 };
@@ -18485,15 +18969,15 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponses = {
                 link: string;
             }>;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number;
+            updatedAt: string | number;
+            deletedAt: string | number | unknown;
             [key: string]: unknown | string | ('desktop' | 'mobile') | Array<{
                 id: string;
                 url: string;
                 title: string;
                 link: string;
-            }> | boolean | undefined;
+            }> | boolean | (string | number) | (string | number) | (string | number | unknown);
         };
     };
 };
@@ -18594,15 +19078,15 @@ export type PutApiV1AdminSettingsHeroSlidersByIdResponses = {
                 link: string;
             }>;
             isActive: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt: string | number;
+            updatedAt: string | number;
+            deletedAt: string | number | unknown;
             [key: string]: unknown | string | ('desktop' | 'mobile') | Array<{
                 id: string;
                 url: string;
                 title: string;
                 link: string;
-            }> | boolean | undefined;
+            }> | boolean | (string | number) | (string | number) | (string | number | unknown);
         };
     };
 };
@@ -19083,228 +19567,47 @@ export type PostApiV1AdminSettingsMetaConversionsLogsResponses = {
 
 export type PostApiV1AdminSettingsMetaConversionsLogsResponse = PostApiV1AdminSettingsMetaConversionsLogsResponses[keyof PostApiV1AdminSettingsMetaConversionsLogsResponses];
 
-export type GetApiV1AdminOrdersData = {
+export type GetApiV1AdminSettingsNotificationChannelsData = {
     body?: never;
     path?: never;
-    query?: {
-        /**
-         * Page number
-         */
-        page?: number | null;
-        /**
-         * Items per page
-         */
-        limit?: number | null;
-        /**
-         * Search query
-         */
-        search?: string;
-        /**
-         * Filter by status
-         */
-        status?: string;
-        /**
-         * Show trashed orders
-         */
-        trashed?: 'true' | 'false';
-        /**
-         * Sort field
-         */
-        sort?: 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
-        /**
-         * Sort order
-         */
-        order?: 'asc' | 'desc';
-        /**
-         * Start date filter
-         */
-        startDate?: string;
-        /**
-         * End date filter
-         */
-        endDate?: string;
-    };
-    url: '/api/v1/admin/orders';
+    query?: never;
+    url: '/api/v1/admin/settings/notification-channels';
 };
 
-export type GetApiV1AdminOrdersResponses = {
+export type GetApiV1AdminSettingsNotificationChannelsErrors = {
     /**
-     * Paginated order list
+     * Validation error
      */
-    200: {
-        success: true;
-        data: {
-            orders: Array<{
-                id: string;
-                customerName: string;
-                customerPhone: string;
-                customerEmail: string | null;
-                customerId: string | null;
-                totalAmount: number;
-                shippingCharge: number;
-                discountAmount: number;
-                status: string;
-                paymentStatus: string | null;
-                paymentMethod: string | null;
-                fulfillmentStatus: string | null;
-                createdAt: string;
-                updatedAt: string;
-                city: string | null;
-                zone: string | null;
-                area: string | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName: string | null;
-                itemCount: number;
-                totalQuantity: number;
-                latestShipment: {
-                    id: string;
-                    providerId: string | null;
-                    providerType: string | null;
-                    providerName: string | null;
-                    status: string;
-                    rawStatus: string | null;
-                    externalId: string | null;
-                    trackingId: string | null;
-                    lastChecked: string | unknown;
-                    updatedAt: string;
-                    createdAt: string;
-                } | null;
-            }>;
-            pagination: {
-                page: number;
-                limit: number;
-                total: number;
-                totalPages: number;
-            };
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
         };
     };
-};
-
-export type GetApiV1AdminOrdersResponse = GetApiV1AdminOrdersResponses[keyof GetApiV1AdminOrdersResponses];
-
-export type PostApiV1AdminOrdersData = {
-    body?: {
-        customerName: string;
-        customerPhone: string;
-        customerEmail: string | null;
-        shippingAddress: string;
-        city: string;
-        zone: string;
-        area: string | null;
-        cityName?: string;
-        zoneName?: string;
-        areaName?: string | null;
-        notes: string | null;
-        items: Array<{
-            productId: string;
-            variantId: string | null;
-            quantity: number;
-            price: number;
-        }>;
-        discountAmount: number | null;
-        shippingCharge: number;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/orders';
-};
-
-export type PostApiV1AdminOrdersResponses = {
     /**
-     * Order created
+     * Unauthorized
      */
-    201: {
-        success: true;
-        data: {
-            id: string;
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
         };
     };
-};
-
-export type PostApiV1AdminOrdersResponse = PostApiV1AdminOrdersResponses[keyof PostApiV1AdminOrdersResponses];
-
-export type PostApiV1AdminOrdersBulkDeleteData = {
-    body?: {
-        orderIds: Array<string>;
-        permanent?: boolean;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/orders/bulk-delete';
-};
-
-export type PostApiV1AdminOrdersBulkDeleteResponses = {
     /**
-     * No content
+     * Forbidden
      */
-    204: void;
-};
-
-export type PostApiV1AdminOrdersBulkDeleteResponse = PostApiV1AdminOrdersBulkDeleteResponses[keyof PostApiV1AdminOrdersBulkDeleteResponses];
-
-export type PostApiV1AdminOrdersBulkShipData = {
-    body?: {
-        orderIds: Array<string>;
-        providerId: string;
-        options?: unknown;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/orders/bulk-ship';
-};
-
-export type PostApiV1AdminOrdersBulkShipResponses = {
-    /**
-     * Bulk ship results
-     */
-    200: {
-        success: true;
-        data: {
-            totalProcessed: number;
-            successCount: number;
-            failureCount: number;
-            results: Array<{
-                orderId: string;
-                success: boolean;
-                shipment?: unknown;
-                error?: string;
-                [key: string]: unknown | string | boolean | undefined;
-            }>;
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
         };
     };
-};
-
-export type PostApiV1AdminOrdersBulkShipResponse = PostApiV1AdminOrdersBulkShipResponses[keyof PostApiV1AdminOrdersBulkShipResponses];
-
-export type DeleteApiV1AdminOrdersByIdData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}';
-};
-
-export type DeleteApiV1AdminOrdersByIdResponses = {
-    /**
-     * No content
-     */
-    204: void;
-};
-
-export type DeleteApiV1AdminOrdersByIdResponse = DeleteApiV1AdminOrdersByIdResponses[keyof DeleteApiV1AdminOrdersByIdResponses];
-
-export type GetApiV1AdminOrdersByIdData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}';
-};
-
-export type GetApiV1AdminOrdersByIdErrors = {
     /**
      * Not found
      */
@@ -19316,152 +19619,148 @@ export type GetApiV1AdminOrdersByIdErrors = {
             details?: unknown;
         };
     };
-};
-
-export type GetApiV1AdminOrdersByIdError = GetApiV1AdminOrdersByIdErrors[keyof GetApiV1AdminOrdersByIdErrors];
-
-export type GetApiV1AdminOrdersByIdResponses = {
     /**
-     * Order details
+     * Server error
      */
-    200: {
-        success: true;
-        data: {
-            id: string;
-            customerName: string;
-            customerPhone: string;
-            customerEmail: string | null;
-            customerId: string | null;
-            totalAmount: number;
-            shippingCharge: number;
-            discountAmount: number;
-            status: string;
-            paymentStatus: string | null;
-            paymentMethod: string | null;
-            fulfillmentStatus: string | null;
-            notes: string | null;
-            shippingAddress: string | null;
-            city: string | null;
-            zone: string | null;
-            area: string | null;
-            cityName: string | null;
-            zoneName: string | null;
-            areaName: string | null;
-            paidAmount: number | null;
-            balanceDue: number | null;
-            createdAt: string;
-            updatedAt: string;
-            deletedAt: string | unknown;
-            itemCount: number;
-            items: Array<{
-                id: string;
-                productId: string;
-                variantId: string | null;
-                quantity: number;
-                price: number;
-                productName: string | null;
-                productImage: string | null;
-                variantSize: string | null;
-                variantColor: string | null;
-            }>;
-            latestShipment: {
-                id: string;
-                providerId: string | null;
-                providerType: string | null;
-                providerName: string | null;
-                status: string;
-                rawStatus: string | null;
-                externalId: string | null;
-                trackingId: string | null;
-                lastChecked: string | unknown;
-                updatedAt: string;
-                createdAt: string;
-            } | null;
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
         };
     };
 };
 
-export type GetApiV1AdminOrdersByIdResponse = GetApiV1AdminOrdersByIdResponses[keyof GetApiV1AdminOrdersByIdResponses];
+export type GetApiV1AdminSettingsNotificationChannelsError = GetApiV1AdminSettingsNotificationChannelsErrors[keyof GetApiV1AdminSettingsNotificationChannelsErrors];
 
-export type PutApiV1AdminOrdersByIdData = {
+export type GetApiV1AdminSettingsNotificationChannelsResponses = {
+    /**
+     * Notification channel configuration
+     */
+    200: {
+        success: true;
+        data: {
+            channels: {
+                [key: string]: Array<string>;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsNotificationChannelsResponse = GetApiV1AdminSettingsNotificationChannelsResponses[keyof GetApiV1AdminSettingsNotificationChannelsResponses];
+
+export type PutApiV1AdminSettingsNotificationChannelsData = {
     body?: {
-        customerName: string;
-        customerPhone: string;
-        customerEmail: string | null;
-        shippingAddress: string;
-        city: string;
-        zone: string;
-        area: string | null;
-        cityName?: string;
-        zoneName?: string;
-        areaName?: string | null;
-        notes: string | null;
-        items: Array<{
-            productId: string;
-            variantId: string | null;
-            quantity: number;
-            price: number;
-        }>;
-        discountAmount: number | null;
-        shippingCharge: number;
+        channels: {
+            [key: string]: Array<string>;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/notification-channels';
+};
+
+export type PutApiV1AdminSettingsNotificationChannelsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsNotificationChannelsError = PutApiV1AdminSettingsNotificationChannelsErrors[keyof PutApiV1AdminSettingsNotificationChannelsErrors];
+
+export type PutApiV1AdminSettingsNotificationChannelsResponses = {
+    /**
+     * Updated notification channel configuration
+     */
+    200: {
+        success: true;
+        data: {
+            channels: {
+                [key: string]: Array<string>;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsNotificationChannelsResponse = PutApiV1AdminSettingsNotificationChannelsResponses[keyof PutApiV1AdminSettingsNotificationChannelsResponses];
+
+export type PutApiV1AdminOrdersByIdStatusData = {
+    body?: {
         status: string;
     };
     path: {
         id: string;
     };
     query?: never;
-    url: '/api/v1/admin/orders/{id}';
+    url: '/api/v1/admin/orders/{id}/status';
 };
 
-export type PutApiV1AdminOrdersByIdResponses = {
+export type PutApiV1AdminOrdersByIdStatusResponses = {
     /**
-     * Order updated
+     * Status updated
      */
     200: {
         success: true;
         data: {
-            id: string;
+            message: string;
         };
     };
 };
 
-export type PutApiV1AdminOrdersByIdResponse = PutApiV1AdminOrdersByIdResponses[keyof PutApiV1AdminOrdersByIdResponses];
-
-export type PostApiV1AdminOrdersByIdRestoreData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/restore';
-};
-
-export type PostApiV1AdminOrdersByIdRestoreResponses = {
-    /**
-     * No content
-     */
-    204: void;
-};
-
-export type PostApiV1AdminOrdersByIdRestoreResponse = PostApiV1AdminOrdersByIdRestoreResponses[keyof PostApiV1AdminOrdersByIdRestoreResponses];
-
-export type DeleteApiV1AdminOrdersByIdPermanentData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/permanent';
-};
-
-export type DeleteApiV1AdminOrdersByIdPermanentResponses = {
-    /**
-     * No content
-     */
-    204: void;
-};
-
-export type DeleteApiV1AdminOrdersByIdPermanentResponse = DeleteApiV1AdminOrdersByIdPermanentResponses[keyof DeleteApiV1AdminOrdersByIdPermanentResponses];
+export type PutApiV1AdminOrdersByIdStatusResponse = PutApiV1AdminOrdersByIdStatusResponses[keyof PutApiV1AdminOrdersByIdStatusResponses];
 
 export type GetApiV1AdminOrdersByIdCodData = {
     body?: never;
@@ -19488,9 +19787,9 @@ export type GetApiV1AdminOrdersByIdCodResponses = {
                 receiptUrl: string | null;
                 reason: string | null;
                 notes: string | null;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (number | null) | (string | null) | (string | null) | (string | null) | undefined;
+                createdAt: string | number;
+                updatedAt: string | number;
+                [key: string]: unknown | string | (string | null) | (number | null) | (string | null) | (string | null) | (string | null) | (string | number) | (string | number);
             } | null;
         };
     };
@@ -19521,7 +19820,6 @@ export type PostApiV1AdminOrdersByIdCodResponses = {
     200: {
         success: true;
         data: {
-            success: boolean;
             message: string;
         };
     };
@@ -19585,7 +19883,6 @@ export type PostApiV1AdminOrdersByIdFulfillResponses = {
     201: {
         success: true;
         data: {
-            success: boolean;
             shipmentId: string;
             isFinalShipment: boolean;
             fulfillmentStatus: string;
@@ -19594,99 +19891,6 @@ export type PostApiV1AdminOrdersByIdFulfillResponses = {
 };
 
 export type PostApiV1AdminOrdersByIdFulfillResponse = PostApiV1AdminOrdersByIdFulfillResponses[keyof PostApiV1AdminOrdersByIdFulfillResponses];
-
-export type PutApiV1AdminOrdersByIdStatusData = {
-    body?: {
-        status: string;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/status';
-};
-
-export type PutApiV1AdminOrdersByIdStatusResponses = {
-    /**
-     * Status updated
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-        };
-    };
-};
-
-export type PutApiV1AdminOrdersByIdStatusResponse = PutApiV1AdminOrdersByIdStatusResponses[keyof PutApiV1AdminOrdersByIdStatusResponses];
-
-export type GetApiV1AdminOrdersByIdItemsData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/items';
-};
-
-export type GetApiV1AdminOrdersByIdItemsResponses = {
-    /**
-     * Order items
-     */
-    200: {
-        success: true;
-        data: Array<{
-            id: string;
-            productId: string;
-            variantId: string | null;
-            quantity: number;
-            price: number;
-            productName: string | null;
-            productImage: string | null;
-            variantSize: string | null;
-            variantColor: string | null;
-        }>;
-    };
-};
-
-export type GetApiV1AdminOrdersByIdItemsResponse = GetApiV1AdminOrdersByIdItemsResponses[keyof GetApiV1AdminOrdersByIdItemsResponses];
-
-export type GetApiV1AdminOrdersByIdPaymentsData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/payments';
-};
-
-export type GetApiV1AdminOrdersByIdPaymentsResponses = {
-    /**
-     * Order payments
-     */
-    200: {
-        success: true;
-        data: {
-            payments: Array<{
-                id: string;
-                orderId: string;
-                paymentMethod: string;
-                amount: number;
-                status: string;
-                [key: string]: unknown | string | number;
-            }>;
-            plan: {
-                id: string;
-                orderId: string;
-                totalAmount: number;
-                paidAmount: number;
-                [key: string]: unknown | string | number;
-            } | null;
-        };
-    };
-};
-
-export type GetApiV1AdminOrdersByIdPaymentsResponse = GetApiV1AdminOrdersByIdPaymentsResponses[keyof GetApiV1AdminOrdersByIdPaymentsResponses];
 
 export type GetApiV1AdminOrdersByIdShipmentsData = {
     body?: never;
@@ -19994,7 +20198,6 @@ export type PostApiV1AdminOrdersByIdReturnResponses = {
     200: {
         success: true;
         data: {
-            success: boolean;
             refundResult?: {
                 success: boolean;
                 gateway: string;
@@ -20004,7 +20207,6 @@ export type PostApiV1AdminOrdersByIdReturnResponses = {
                 error?: string;
                 [key: string]: unknown | boolean | string | number | undefined;
             };
-            error?: string;
         };
     };
 };
@@ -20015,7 +20217,7 @@ export type PostApiV1AdminOrdersByIdRefundData = {
     body?: {
         amount?: number;
         reason?: string;
-        gateway?: 'stripe' | 'sslcommerz';
+        gateway?: 'stripe' | 'sslcommerz' | 'polar' | 'cod';
     };
     path: {
         id: string;
@@ -20043,6 +20245,462 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
 };
 
 export type PostApiV1AdminOrdersByIdRefundResponse = PostApiV1AdminOrdersByIdRefundResponses[keyof PostApiV1AdminOrdersByIdRefundResponses];
+
+export type GetApiV1AdminOrdersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number
+         */
+        page?: number | null;
+        /**
+         * Items per page
+         */
+        limit?: number | null;
+        /**
+         * Search query
+         */
+        search?: string;
+        /**
+         * Filter by status
+         */
+        status?: string;
+        /**
+         * Show trashed orders
+         */
+        trashed?: 'true' | 'false';
+        /**
+         * Sort field
+         */
+        sort?: 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
+        /**
+         * Sort order
+         */
+        order?: 'asc' | 'desc';
+        /**
+         * Start date filter
+         */
+        startDate?: string;
+        /**
+         * End date filter
+         */
+        endDate?: string;
+    };
+    url: '/api/v1/admin/orders';
+};
+
+export type GetApiV1AdminOrdersResponses = {
+    /**
+     * Paginated order list
+     */
+    200: {
+        success: true;
+        data: {
+            orders: Array<{
+                id: string;
+                customerName: string;
+                customerPhone: string;
+                customerEmail: string | null;
+                customerId: string | null;
+                totalAmount: number;
+                shippingCharge: number;
+                discountAmount: number;
+                status: string;
+                paymentStatus: string | null;
+                paymentMethod: string | null;
+                fulfillmentStatus: string | null;
+                createdAt: string;
+                updatedAt: string;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                itemCount: number;
+                totalQuantity: number;
+                latestShipment: {
+                    id: string;
+                    providerId: string | null;
+                    providerType: string | null;
+                    providerName: string | null;
+                    status: string;
+                    rawStatus: string | null;
+                    externalId: string | null;
+                    trackingId: string | null;
+                    lastChecked: string | unknown;
+                    updatedAt: string;
+                    createdAt: string;
+                } | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersResponse = GetApiV1AdminOrdersResponses[keyof GetApiV1AdminOrdersResponses];
+
+export type PostApiV1AdminOrdersData = {
+    body?: {
+        customerName: string;
+        customerPhone: string;
+        customerEmail: string | null;
+        shippingAddress: string;
+        city: string;
+        zone: string;
+        area: string | null;
+        cityName?: string;
+        zoneName?: string;
+        areaName?: string | null;
+        notes: string | null;
+        items: Array<{
+            productId: string;
+            variantId: string | null;
+            quantity: number;
+            price: number;
+        }>;
+        discountAmount: number | null;
+        shippingCharge: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/orders';
+};
+
+export type PostApiV1AdminOrdersResponses = {
+    /**
+     * Order created
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersResponse = PostApiV1AdminOrdersResponses[keyof PostApiV1AdminOrdersResponses];
+
+export type PostApiV1AdminOrdersBulkDeleteData = {
+    body?: {
+        orderIds: Array<string>;
+        permanent?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/orders/bulk-delete';
+};
+
+export type PostApiV1AdminOrdersBulkDeleteResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type PostApiV1AdminOrdersBulkDeleteResponse = PostApiV1AdminOrdersBulkDeleteResponses[keyof PostApiV1AdminOrdersBulkDeleteResponses];
+
+export type PostApiV1AdminOrdersBulkShipData = {
+    body?: {
+        orderIds: Array<string>;
+        providerId: string;
+        options?: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/orders/bulk-ship';
+};
+
+export type PostApiV1AdminOrdersBulkShipResponses = {
+    /**
+     * Bulk ship results
+     */
+    200: {
+        success: true;
+        data: {
+            totalProcessed: number;
+            successCount: number;
+            failureCount: number;
+            results: Array<{
+                orderId: string;
+                success: boolean;
+                shipment?: {
+                    id: string;
+                    status: string;
+                    [key: string]: unknown | string;
+                };
+                error?: string;
+                [key: string]: unknown | string | boolean | {
+                    id: string;
+                    status: string;
+                    [key: string]: unknown | string;
+                } | undefined;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersBulkShipResponse = PostApiV1AdminOrdersBulkShipResponses[keyof PostApiV1AdminOrdersBulkShipResponses];
+
+export type DeleteApiV1AdminOrdersByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}';
+};
+
+export type DeleteApiV1AdminOrdersByIdResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminOrdersByIdResponse = DeleteApiV1AdminOrdersByIdResponses[keyof DeleteApiV1AdminOrdersByIdResponses];
+
+export type GetApiV1AdminOrdersByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}';
+};
+
+export type GetApiV1AdminOrdersByIdErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdError = GetApiV1AdminOrdersByIdErrors[keyof GetApiV1AdminOrdersByIdErrors];
+
+export type GetApiV1AdminOrdersByIdResponses = {
+    /**
+     * Order details
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            customerName: string;
+            customerPhone: string;
+            customerEmail: string | null;
+            customerId: string | null;
+            totalAmount: number;
+            shippingCharge: number;
+            discountAmount: number;
+            status: string;
+            paymentStatus: string | null;
+            paymentMethod: string | null;
+            fulfillmentStatus: string | null;
+            notes: string | null;
+            shippingAddress: string | null;
+            city: string | null;
+            zone: string | null;
+            area: string | null;
+            cityName: string | null;
+            zoneName: string | null;
+            areaName: string | null;
+            paidAmount: number | null;
+            balanceDue: number | null;
+            createdAt: string;
+            updatedAt: string;
+            deletedAt: string | unknown;
+            itemCount: number;
+            items: Array<{
+                id: string;
+                productId: string;
+                variantId: string | null;
+                quantity: number;
+                price: number;
+                productName: string | null;
+                productImage: string | null;
+                variantSize: string | null;
+                variantColor: string | null;
+            }>;
+            latestShipment: {
+                id: string;
+                providerId: string | null;
+                providerType: string | null;
+                providerName: string | null;
+                status: string;
+                rawStatus: string | null;
+                externalId: string | null;
+                trackingId: string | null;
+                lastChecked: string | unknown;
+                updatedAt: string;
+                createdAt: string;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdResponse = GetApiV1AdminOrdersByIdResponses[keyof GetApiV1AdminOrdersByIdResponses];
+
+export type PutApiV1AdminOrdersByIdData = {
+    body?: {
+        customerName: string;
+        customerPhone: string;
+        customerEmail: string | null;
+        shippingAddress: string;
+        city: string;
+        zone: string;
+        area: string | null;
+        cityName?: string;
+        zoneName?: string;
+        areaName?: string | null;
+        notes: string | null;
+        items: Array<{
+            productId: string;
+            variantId: string | null;
+            quantity: number;
+            price: number;
+        }>;
+        discountAmount: number | null;
+        shippingCharge: number;
+        status: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}';
+};
+
+export type PutApiV1AdminOrdersByIdResponses = {
+    /**
+     * Order updated
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+        };
+    };
+};
+
+export type PutApiV1AdminOrdersByIdResponse = PutApiV1AdminOrdersByIdResponses[keyof PutApiV1AdminOrdersByIdResponses];
+
+export type PostApiV1AdminOrdersByIdRestoreData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/restore';
+};
+
+export type PostApiV1AdminOrdersByIdRestoreResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type PostApiV1AdminOrdersByIdRestoreResponse = PostApiV1AdminOrdersByIdRestoreResponses[keyof PostApiV1AdminOrdersByIdRestoreResponses];
+
+export type DeleteApiV1AdminOrdersByIdPermanentData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/permanent';
+};
+
+export type DeleteApiV1AdminOrdersByIdPermanentResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminOrdersByIdPermanentResponse = DeleteApiV1AdminOrdersByIdPermanentResponses[keyof DeleteApiV1AdminOrdersByIdPermanentResponses];
+
+export type GetApiV1AdminOrdersByIdItemsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/items';
+};
+
+export type GetApiV1AdminOrdersByIdItemsResponses = {
+    /**
+     * Order items
+     */
+    200: {
+        success: true;
+        data: Array<{
+            id: string;
+            productId: string;
+            variantId: string | null;
+            quantity: number;
+            price: number;
+            productName: string | null;
+            productImage: string | null;
+            variantSize: string | null;
+            variantColor: string | null;
+        }>;
+    };
+};
+
+export type GetApiV1AdminOrdersByIdItemsResponse = GetApiV1AdminOrdersByIdItemsResponses[keyof GetApiV1AdminOrdersByIdItemsResponses];
+
+export type GetApiV1AdminOrdersByIdPaymentsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/payments';
+};
+
+export type GetApiV1AdminOrdersByIdPaymentsResponses = {
+    /**
+     * Order payments
+     */
+    200: {
+        success: true;
+        data: {
+            payments: Array<{
+                id: string;
+                orderId: string;
+                paymentMethod: string;
+                amount: number;
+                status: string;
+                [key: string]: unknown | string | number;
+            }>;
+            plan: {
+                id: string;
+                orderId: string;
+                totalAmount: number;
+                paidAmount: number;
+                [key: string]: unknown | string | number;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdPaymentsResponse = GetApiV1AdminOrdersByIdPaymentsResponses[keyof GetApiV1AdminOrdersByIdPaymentsResponses];
 
 export type GetApiV1AdminOrdersByIdFormDataData = {
     body?: never;
@@ -20089,9 +20747,9 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 discountAmount: number | null;
                 shippingCharge: number;
                 status: string;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (number | null) | number | undefined;
+                createdAt: string | number;
+                updatedAt: string | number;
+                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (number | null) | number | (string | number) | (string | number);
             };
             productsWithVariants: Array<{
                 id: string;
@@ -20111,7 +20769,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     preorderStock?: number;
                     lowStockThreshold?: number | null;
                     allowPreorder?: boolean;
-                    preorderDate?: unknown;
+                    preorderDate?: string | number | unknown;
                     preorderMessage?: string | null;
                     allowBackorder?: boolean;
                     backorderLimit?: number;
@@ -20122,9 +20780,9 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     barcodeType?: string | null;
                     colorSortOrder?: number | null;
                     sizeSortOrder?: number | null;
-                    createdAt?: unknown;
-                    updatedAt?: unknown;
-                    deletedAt?: unknown;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    deletedAt?: string | number | unknown;
                     stockVersion?: number;
                     version?: number;
                 }>;
@@ -20141,7 +20799,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     preorderStock?: number;
                     lowStockThreshold?: number | null;
                     allowPreorder?: boolean;
-                    preorderDate?: unknown;
+                    preorderDate?: string | number | unknown;
                     preorderMessage?: string | null;
                     allowBackorder?: boolean;
                     backorderLimit?: number;
@@ -20152,9 +20810,9 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     barcodeType?: string | null;
                     colorSortOrder?: number | null;
                     sizeSortOrder?: number | null;
-                    createdAt?: unknown;
-                    updatedAt?: unknown;
-                    deletedAt?: unknown;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    deletedAt?: string | number | unknown;
                     stockVersion?: number;
                     version?: number;
                 }>;
@@ -20172,20 +20830,20 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 discountAmount: number | null;
                 shippingCharge: number;
                 status: string;
-                createdAt?: unknown;
-                updatedAt?: unknown;
+                createdAt: string | number;
+                updatedAt: string | number;
                 items: Array<{
                     productId: string;
                     variantId: string | null;
                     quantity: number;
                     price: number;
                 }>;
-                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (number | null) | number | Array<{
+                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (number | null) | number | (string | number) | (string | number) | Array<{
                     productId: string;
                     variantId: string | null;
                     quantity: number;
                     price: number;
-                }> | undefined;
+                }>;
             };
         };
     };
@@ -20805,7 +21463,7 @@ export type GetApiV1AdminProductsByIdResponses = {
                 preorderStock?: number;
                 lowStockThreshold?: number | null;
                 allowPreorder?: boolean;
-                preorderDate?: unknown;
+                preorderDate?: string | number | unknown;
                 preorderMessage?: string | null;
                 allowBackorder?: boolean;
                 backorderLimit?: number;
@@ -20816,9 +21474,9 @@ export type GetApiV1AdminProductsByIdResponses = {
                 barcodeType?: string | null;
                 colorSortOrder?: number | null;
                 sizeSortOrder?: number | null;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
                 stockVersion?: number;
                 version?: number;
             }>;
@@ -21211,7 +21869,7 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
                 preorderStock?: number;
                 lowStockThreshold?: number | null;
                 allowPreorder?: boolean;
-                preorderDate?: unknown;
+                preorderDate?: string | number | unknown;
                 preorderMessage?: string | null;
                 allowBackorder?: boolean;
                 backorderLimit?: number;
@@ -21222,9 +21880,9 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
                 barcodeType?: string | null;
                 colorSortOrder?: number | null;
                 sizeSortOrder?: number | null;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
                 stockVersion?: number;
                 version?: number;
             }>;
@@ -21334,7 +21992,7 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
             preorderStock?: number;
             lowStockThreshold?: number | null;
             allowPreorder?: boolean;
-            preorderDate?: unknown;
+            preorderDate?: string | number | unknown;
             preorderMessage?: string | null;
             allowBackorder?: boolean;
             backorderLimit?: number;
@@ -21345,9 +22003,9 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
             barcodeType?: string | null;
             colorSortOrder?: number | null;
             sizeSortOrder?: number | null;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt?: string | number;
+            updatedAt?: string | number;
+            deletedAt?: string | number | unknown;
             stockVersion?: number;
             version?: number;
         };
@@ -21536,7 +22194,7 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
             preorderStock?: number;
             lowStockThreshold?: number | null;
             allowPreorder?: boolean;
-            preorderDate?: unknown;
+            preorderDate?: string | number | unknown;
             preorderMessage?: string | null;
             allowBackorder?: boolean;
             backorderLimit?: number;
@@ -21547,9 +22205,9 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
             barcodeType?: string | null;
             colorSortOrder?: number | null;
             sizeSortOrder?: number | null;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt?: string | number;
+            updatedAt?: string | number;
+            deletedAt?: string | number | unknown;
             stockVersion?: number;
             version?: number;
         };
@@ -21661,7 +22319,7 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateResponses = {
                 preorderStock?: number;
                 lowStockThreshold?: number | null;
                 allowPreorder?: boolean;
-                preorderDate?: unknown;
+                preorderDate?: string | number | unknown;
                 preorderMessage?: string | null;
                 allowBackorder?: boolean;
                 backorderLimit?: number;
@@ -21672,9 +22330,9 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateResponses = {
                 barcodeType?: string | null;
                 colorSortOrder?: number | null;
                 sizeSortOrder?: number | null;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
                 stockVersion?: number;
                 version?: number;
             }>;
@@ -21949,7 +22607,7 @@ export type PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateResponses = {
             preorderStock?: number;
             lowStockThreshold?: number | null;
             allowPreorder?: boolean;
-            preorderDate?: unknown;
+            preorderDate?: string | number | unknown;
             preorderMessage?: string | null;
             allowBackorder?: boolean;
             backorderLimit?: number;
@@ -21960,9 +22618,9 @@ export type PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateResponses = {
             barcodeType?: string | null;
             colorSortOrder?: number | null;
             sizeSortOrder?: number | null;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
+            createdAt?: string | number;
+            updatedAt?: string | number;
+            deletedAt?: string | number | unknown;
             stockVersion?: number;
             version?: number;
         };
@@ -22235,7 +22893,7 @@ export type GetApiV1AdminAuthUsersResponses = {
                 image: string | null;
                 twoFactorEnabled: boolean;
                 isSuperAdmin: boolean;
-                createdAt?: unknown;
+                createdAt: string | number;
                 roles: Array<{
                     id: string;
                     name: string;
@@ -22245,14 +22903,14 @@ export type GetApiV1AdminAuthUsersResponses = {
                     grants: Array<string>;
                     denials: Array<string>;
                 };
-                [key: string]: unknown | string | boolean | (string | null) | Array<{
+                [key: string]: unknown | string | boolean | (string | null) | (string | number) | Array<{
                     id: string;
                     name: string;
                     displayName: string;
                 }> | {
                     grants: Array<string>;
                     denials: Array<string>;
-                } | undefined;
+                };
             }>;
         };
     };
@@ -23297,11 +23955,17 @@ export type PostApiV1AdminOpenrouterGenerateData = {
         model: string;
         messages?: Array<{
             role: string;
-            content?: unknown;
+            content: string | Array<{
+                [key: string]: unknown;
+            }>;
         }>;
         prompt?: string;
         stream?: boolean;
-        images?: Array<unknown>;
+        images?: Array<{
+            url: string;
+            mimeType?: string;
+            [key: string]: unknown | string | undefined;
+        }>;
     };
     path?: never;
     query?: never;
@@ -23387,7 +24051,9 @@ export type PostApiV1AdminOpenrouterGenerateStagedData = {
         model: string;
         messages: Array<{
             role: string;
-            content?: unknown;
+            content: string | Array<{
+                [key: string]: unknown;
+            }>;
         }>;
         stage?: string;
         sectionIndex?: number;
@@ -23579,10 +24245,10 @@ export type GetApiV1AdminAttributesResponses = {
                 name: string;
                 slug: string;
                 filterable: boolean;
-                options?: unknown;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                options: Array<string> | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
                 valueCount: number;
             }>;
             pagination: {
@@ -23681,10 +24347,10 @@ export type PostApiV1AdminAttributesResponses = {
                 name: string;
                 slug: string;
                 filterable: boolean;
-                options?: unknown;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                options: Array<string> | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
             };
         };
     };
@@ -23856,10 +24522,10 @@ export type PutApiV1AdminAttributesByIdResponses = {
                 name: string;
                 slug: string;
                 filterable: boolean;
-                options?: unknown;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
+                options: Array<string> | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | unknown;
             };
         };
     };
@@ -24369,7 +25035,7 @@ export type GetApiV1AdminAttributesByIdValuesResponses = {
             values: Array<{
                 value: string;
                 productCount: number;
-                createdAt?: unknown;
+                createdAt: string | number;
                 isPreset: boolean;
                 sampleProducts: Array<string>;
             }>;
@@ -24671,9 +25337,9 @@ export type GetApiV1AdminAbandonedCheckoutsResponses = {
                 checkoutId: string | null;
                 customerPhone: string | null;
                 checkoutData: string;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                [key: string]: unknown | string | (string | null) | (string | null) | undefined;
+                createdAt: string | number;
+                updatedAt: string | number;
+                [key: string]: unknown | string | (string | null) | (string | null) | (string | number) | (string | number);
             }>;
             pagination: {
                 page: number;
@@ -25057,12 +25723,20 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponses = {
                 name: string;
                 type: 'city' | 'zone' | 'area';
                 parentId: string | null;
-                externalIds?: unknown;
-                metadata?: unknown;
+                externalIds: {
+                    [key: string]: unknown;
+                } | null;
+                metadata: {
+                    [key: string]: unknown;
+                } | null;
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
-                [key: string]: unknown | string | ('city' | 'zone' | 'area') | (string | null) | boolean | number | undefined;
+                [key: string]: unknown | string | ('city' | 'zone' | 'area') | (string | null) | ({
+                    [key: string]: unknown;
+                } | null) | ({
+                    [key: string]: unknown;
+                } | null) | boolean | number | undefined;
             }>;
             pagination: {
                 page: number;
@@ -25167,12 +25841,20 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
                 name: string;
                 type: 'city' | 'zone' | 'area';
                 parentId: string | null;
-                externalIds?: unknown;
-                metadata?: unknown;
+                externalIds: {
+                    [key: string]: unknown;
+                } | null;
+                metadata: {
+                    [key: string]: unknown;
+                } | null;
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
-                [key: string]: unknown | string | ('city' | 'zone' | 'area') | (string | null) | boolean | number | undefined;
+                [key: string]: unknown | string | ('city' | 'zone' | 'area') | (string | null) | ({
+                    [key: string]: unknown;
+                } | null) | ({
+                    [key: string]: unknown;
+                } | null) | boolean | number | undefined;
             };
         };
     };
@@ -25181,7 +25863,9 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
 export type PostApiV1AdminSettingsDeliveryLocationsResponse = PostApiV1AdminSettingsDeliveryLocationsResponses[keyof PostApiV1AdminSettingsDeliveryLocationsResponses];
 
 export type DeleteApiV1AdminSettingsDeliveryLocationsAllData = {
-    body?: never;
+    body?: {
+        confirmDeleteAll: true;
+    };
     path?: never;
     query?: never;
     url: '/api/v1/admin/settings/delivery-locations/all';
@@ -25424,12 +26108,20 @@ export type GetApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             name: string;
             type: 'city' | 'zone' | 'area';
             parentId: string | null;
-            externalIds?: unknown;
-            metadata?: unknown;
+            externalIds: {
+                [key: string]: unknown;
+            } | null;
+            metadata: {
+                [key: string]: unknown;
+            } | null;
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
-            [key: string]: unknown | string | ('city' | 'zone' | 'area') | (string | null) | boolean | number | undefined;
+            [key: string]: unknown | string | ('city' | 'zone' | 'area') | (string | null) | ({
+                [key: string]: unknown;
+            } | null) | ({
+                [key: string]: unknown;
+            } | null) | boolean | number | undefined;
         };
     };
 };
@@ -25527,12 +26219,20 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             name: string;
             type: 'city' | 'zone' | 'area';
             parentId: string | null;
-            externalIds?: unknown;
-            metadata?: unknown;
+            externalIds: {
+                [key: string]: unknown;
+            } | null;
+            metadata: {
+                [key: string]: unknown;
+            } | null;
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
-            [key: string]: unknown | string | ('city' | 'zone' | 'area') | (string | null) | boolean | number | undefined;
+            [key: string]: unknown | string | ('city' | 'zone' | 'area') | (string | null) | ({
+                [key: string]: unknown;
+            } | null) | ({
+                [key: string]: unknown;
+            } | null) | boolean | number | undefined;
         };
     };
 };
@@ -25617,14 +26317,22 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData?: unknown;
-                fieldVisibility?: unknown;
+                languageData: string | {
+                    [key: string]: unknown;
+                };
+                fieldVisibility: string | {
+                    [key: string]: unknown;
+                };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
-                [key: string]: unknown | string | boolean | undefined;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
+                [key: string]: unknown | string | (string | {
+                    [key: string]: unknown;
+                }) | (string | {
+                    [key: string]: unknown;
+                }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
             };
         };
     };
@@ -25735,14 +26443,22 @@ export type GetApiV1AdminSettingsCheckoutLanguagesResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData?: unknown;
-                fieldVisibility?: unknown;
+                languageData: string | {
+                    [key: string]: unknown;
+                };
+                fieldVisibility: string | {
+                    [key: string]: unknown;
+                };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
-                [key: string]: unknown | string | boolean | undefined;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
+                [key: string]: unknown | string | (string | {
+                    [key: string]: unknown;
+                }) | (string | {
+                    [key: string]: unknown;
+                }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
             }>;
             pagination: {
                 page: number;
@@ -25865,14 +26581,22 @@ export type PostApiV1AdminSettingsCheckoutLanguagesResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData?: unknown;
-                fieldVisibility?: unknown;
+                languageData: string | {
+                    [key: string]: unknown;
+                };
+                fieldVisibility: string | {
+                    [key: string]: unknown;
+                };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
-                [key: string]: unknown | string | boolean | undefined;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
+                [key: string]: unknown | string | (string | {
+                    [key: string]: unknown;
+                }) | (string | {
+                    [key: string]: unknown;
+                }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
             };
         };
     };
@@ -25977,14 +26701,22 @@ export type GetApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
             id: string;
             name: string;
             code: string;
-            languageData?: unknown;
-            fieldVisibility?: unknown;
+            languageData: string | {
+                [key: string]: unknown;
+            };
+            fieldVisibility: string | {
+                [key: string]: unknown;
+            };
             isActive: boolean;
             isDefault: boolean;
-            createdAt?: unknown;
-            updatedAt?: unknown;
-            deletedAt?: unknown;
-            [key: string]: unknown | string | boolean | undefined;
+            createdAt?: string | number;
+            updatedAt?: string | number;
+            deletedAt?: string | number | unknown;
+            [key: string]: unknown | string | (string | {
+                [key: string]: unknown;
+            }) | (string | {
+                [key: string]: unknown;
+            }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
         };
     };
 };
@@ -26183,14 +26915,22 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData?: unknown;
-                fieldVisibility?: unknown;
+                languageData: string | {
+                    [key: string]: unknown;
+                };
+                fieldVisibility: string | {
+                    [key: string]: unknown;
+                };
                 isActive: boolean;
                 isDefault: boolean;
-                createdAt?: unknown;
-                updatedAt?: unknown;
-                deletedAt?: unknown;
-                [key: string]: unknown | string | boolean | undefined;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | unknown;
+                [key: string]: unknown | string | (string | {
+                    [key: string]: unknown;
+                }) | (string | {
+                    [key: string]: unknown;
+                }) | boolean | (string | number) | (string | number) | (string | number | unknown) | undefined;
             };
         };
     };
