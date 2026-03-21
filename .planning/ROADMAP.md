@@ -47,7 +47,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Layout.astro SEO infrastructure: extended Props, canonical URL, OG tags, Twitter Cards, Organization + WebSite JSON-LD
+- [x] 02-01-PLAN.md — Layout.astro SEO infrastructure: extended Props, canonical URL, OG tags, Twitter Cards, Organization + WebSite JSON-LD
 - [ ] 02-02-PLAN.md — Per-page SEO: Product + BreadcrumbList JSON-LD, CollectionPage JSON-LD, OG props for all four page types
 
 ### Phase 3: SMS OTP Providers

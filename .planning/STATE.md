@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-03-21T22:01:39.203Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-21T22:05:29.749Z"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 10
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** BD merchants can manage their entire e-commerce operation from a single platform optimized for the BD market
-**Current focus:** Phase 01 — Bengali FTS5 Search
+**Current focus:** Phase 02 — Storefront SEO
 
 ## Current Position
 
-Phase: 02
-Plan: Not started
+Phase: 02 (Storefront SEO) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Plan: Not started
 
 *Updated after each plan completion*
 | Phase 01 P01 | 3min | 2 tasks | 3 files |
+| Phase 02-storefront-seo P01 | 2min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,8 @@ Recent decisions affecting current work:
 - [Roadmap]: All 4 phases are technically independent; 1+2 concurrent, 3+4 concurrent
 - [Phase 01]: Preserved all 20 FTS5 triggers identically from migration 0016; only CREATE VIRTUAL TABLE definitions changed
 - [Phase 01]: Left 3 ASCII-only FTS tables (product_variants_fts, discounts_fts, abandoned_checkouts_fts) unchanged
+- [Phase 02-storefront-seo]: Used footerData.copyrightText as primary store name source for JSON-LD and OG tags
+- [Phase 02-storefront-seo]: Organization JSON-LD omitted entirely when no logo URL exists (never emit empty schema)
 
 ### Pending Todos
 
@@ -73,6 +76,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T21:32:14.983Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-03-21T22:05:29.747Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None

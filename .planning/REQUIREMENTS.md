@@ -31,21 +31,21 @@ Requirements for milestone v1.0. Each maps to roadmap phases.
 - [ ] **SEO-02**: Product pages output JSON-LD BreadcrumbList schema matching the visible breadcrumb navigation
 - [ ] **SEO-03**: Category pages output JSON-LD CollectionPage schema with name, description, and item count
 - [ ] **SEO-04**: Category pages output JSON-LD BreadcrumbList schema
-- [ ] **SEO-05**: All pages output JSON-LD Organization schema using business settings (name, logo, contact info)
-- [ ] **SEO-06**: Homepage outputs JSON-LD WebSite schema with SearchAction for Google Sitelinks Search Box
+- [x] **SEO-05**: All pages output JSON-LD Organization schema using business settings (name, logo, contact info)
+- [x] **SEO-06**: Homepage outputs JSON-LD WebSite schema with SearchAction for Google Sitelinks Search Box
 
 ### Storefront SEO — Social Cards
 
 - [ ] **OG-01**: Product pages output Open Graph meta tags (og:title, og:description, og:image, og:url, og:type=product, og:price:amount, og:price:currency)
 - [ ] **OG-02**: Category pages output Open Graph meta tags with category name, description, and representative image
 - [ ] **OG-03**: CMS pages output Open Graph meta tags with page title, description, and featured image
-- [ ] **OG-04**: All pages output Twitter Card meta tags (summary_large_image card type)
-- [ ] **OG-05**: OG images are served as 1200x630 JPEG via Cloudflare Image Resizing (WhatsApp/Facebook compatible)
+- [x] **OG-04**: All pages output Twitter Card meta tags (summary_large_image card type)
+- [x] **OG-05**: OG images are served as 1200x630 JPEG via Cloudflare Image Resizing (WhatsApp/Facebook compatible)
 
 ### Storefront SEO — Canonical URLs
 
-- [ ] **CAN-01**: Every page outputs a canonical URL tag pointing to its clean URL (no query parameters)
-- [ ] **CAN-02**: Canonical URLs use the runtime storefront URL from settings (not hardcoded)
+- [x] **CAN-01**: Every page outputs a canonical URL tag pointing to its clean URL (no query parameters)
+- [x] **CAN-02**: Canonical URLs use the runtime storefront URL from settings (not hardcoded)
 
 ### SMS OTP Providers
 
@@ -113,15 +113,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEO-02 | Phase 2: Storefront SEO | Pending |
 | SEO-03 | Phase 2: Storefront SEO | Pending |
 | SEO-04 | Phase 2: Storefront SEO | Pending |
-| SEO-05 | Phase 2: Storefront SEO | Pending |
-| SEO-06 | Phase 2: Storefront SEO | Pending |
+| SEO-05 | Phase 2: Storefront SEO | Complete |
+| SEO-06 | Phase 2: Storefront SEO | Complete |
 | OG-01 | Phase 2: Storefront SEO | Pending |
 | OG-02 | Phase 2: Storefront SEO | Pending |
 | OG-03 | Phase 2: Storefront SEO | Pending |
-| OG-04 | Phase 2: Storefront SEO | Pending |
-| OG-05 | Phase 2: Storefront SEO | Pending |
-| CAN-01 | Phase 2: Storefront SEO | Pending |
-| CAN-02 | Phase 2: Storefront SEO | Pending |
+| OG-04 | Phase 2: Storefront SEO | Complete |
+| OG-05 | Phase 2: Storefront SEO | Complete |
+| CAN-01 | Phase 2: Storefront SEO | Complete |
+| CAN-02 | Phase 2: Storefront SEO | Complete |
 | SMS-01 | Phase 3: SMS OTP Providers | Pending |
 | SMS-02 | Phase 3: SMS OTP Providers | Pending |
 | SMS-03 | Phase 3: SMS OTP Providers | Pending |
