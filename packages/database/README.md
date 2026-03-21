@@ -1,6 +1,6 @@
 # @scalius/database
 
-Drizzle ORM schema, client factory, and migrations for Cloudflare D1 (SQLite). This package defines the entire data model -- 40 tables across 11 schema files -- and provides a singleton `getDb()` factory for Drizzle-over-D1.
+Drizzle ORM schema, client factory, and migrations for Cloudflare D1 (SQLite). This package defines the entire data model -- 52 tables across 13 schema files -- and provides a singleton `getDb()` factory for Drizzle-over-D1.
 
 ## Export Map
 

@@ -48,7 +48,7 @@ packages/
 ### Packages (JIT — no build step, consumed directly by bundler)
 
 - **`@scalius/api-client`**: Generated SDK from OpenAPI spec — typed API client and response types used by admin and storefront
-- **`@scalius/database`**: Drizzle schema (11 domain files), `getDb()` client factory, migrations
+- **`@scalius/database`**: Drizzle schema (13 files across 10 domains), `getDb()` client factory, migrations
 - **`@scalius/core`**: Domain services (`src/modules/`), Better Auth config (`src/auth/`), RBAC, integrations (email, storage, firebase, meta), FTS5 search, cache utils
 - **`@scalius/shared`**: Pure utilities (currency, cors, image-optimizer, rate-limit, etc.)
 - **`@scalius/tsconfig`**: Shared TypeScript configs (base, astro, worker)
@@ -102,7 +102,7 @@ packages/
 8. Storefront (if displayed): `packages/core/src/modules/{domain}/{domain}.storefront.ts` — add to select
 
 ### Add a New Payment Gateway
-See the 12-step guide in `packages/core/src/modules/payments/README.md` under "Adding a New Provider".
+See `packages/core/src/modules/payments/README.md` for provider details, key patterns, and API endpoints.
 
 ### Add a Notification Type
 1. Template: `packages/core/src/modules/notifications/notifications.service.ts` — add case to `sendOrderNotificationEmail()`
@@ -167,7 +167,7 @@ import { SomeComponent } from "@/components/SomeComponent";
 - Admin Wrangler config: `apps/admin/wrangler.jsonc`
 - Storefront Wrangler config: `apps/storefront/wrangler.jsonc`
 - Drizzle config: `packages/database/drizzle.config.ts`
-- Admin Middleware: `apps/admin/src/middleware.ts`
+- Admin Middleware: `apps/admin/src/middleware/index.ts`
 - Storefront Middleware: `apps/storefront/src/middleware.ts`
 - Auth config: `packages/core/src/auth/auth.ts`
 - Auth client: `apps/admin/src/lib/auth-client.ts`
@@ -182,7 +182,7 @@ import { SomeComponent } from "@/components/SomeComponent";
 
 ```
 @scalius/shared          → (no deps)
-@scalius/database        → drizzle-orm, @scalius/shared
+@scalius/database        → drizzle-orm
 @scalius/core            → @scalius/database, @scalius/shared, better-auth, zod, stripe, etc.
 @scalius/api-client      → (generated, no runtime deps)
 @scalius/api             → @scalius/core, @scalius/database, @scalius/shared, hono
@@ -208,20 +208,25 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 
 ## Recent Changes
 
-- **Codebase Hardening** (15 commits): Full spec at `docs/superpowers/specs/2026-03-16-codebase-hardening-design.md`
-- **Payments**: atomic `processPaymentConfirmed()` via `db.batch()`, COD idempotency, refund amount validation, SSLCommerz redirect validation
-- **Orders**: queue batch orderId bug fixed (per-item tracking), CANCELLED allows admin reactivation to pending/confirmed (order-state-machine.ts). When reactivated, inventory-transitions.ts re-reserves stock, order-notifications DLQ added
-- **Inventory**: `stockVersion` column (separate from `version`) for stock-specific CAS, discount usage race condition narrowed
-- **Delivery**: KV-based webhook replay protection (Pathao/Steadfast), insert-first shipment creation, AES-GCM credential encryption, unified provider interface
-- **Customers**: phone normalization (E.164 format), OTP logging removed, stale discount applicability cache removed
-- **API Standardization**: ALL routes use `ok()`/`created()`/`ApiError` (242 conversions), `CACHE_TTLS` constants, `paginated()` removed
-- **Schema**: timestamp defaults standardized (`UNIX_NOW` constant), 8 FK indexes added, singleton constraints on `siteSettings`/`metaConversionsSettings`, collections enum `"manual"`/`"dynamic"`, `permissions.updatedAt` added
-- **Admin Proxy**: passes through API responses unchanged (envelope rewriting removed — all consumers use `unwrapEnvelope()` or `extractApiError()` from `api-helpers.ts`)
-- **Database**: 7 migrations total (0019-0024, 0028)
+- **Monorepo Migration** (March 14): Refactored from monolith to Turborepo with 3 apps + 5 packages
+- **Codebase Hardening** (March 16): 33 commits. Full spec at `docs/superpowers/specs/2026-03-16-codebase-hardening-design.md`
+- **Admin Refactoring** (March 16-18): Component splitting, proxy simplification, Vite proxy root cause fix
+- **Multi-Session Audit + Fix** (March 20): 25-agent audit + 8-agent fix team, ~130 fixes across entire codebase
+- **SDK Generation** (March 20): Generated SDK from OpenAPI spec (245 paths, 27k+ types), integrated into admin + storefront
+- **API Max Limits** (March 22): Raised API limits for selector/dropdown endpoints that need all items
+- **Payments**: atomic `processPaymentConfirmed()` via `db.batch()`, COD idempotency, refund amount validation, SSLCommerz redirect validation, payment idempotency indexes
+- **Orders**: queue batch orderId bug fixed, CANCELLED allows admin reactivation, order routes split into 3 files (orders.ts, orders-refund.ts, orders-status.ts)
+- **Inventory**: `stockVersion` column for stock-specific CAS, inventory transitions module, restore logic
+- **Delivery**: KV-based webhook replay protection (Pathao/Steadfast), insert-first shipment creation, AES-GCM credential encryption
+- **Customers**: phone normalization (E.164 format), OTP logging removed
+- **API Standardization**: ALL routes use `ok()`/`created()`/`ApiError`, `CACHE_TTLS` constants, centralized entity schemas (`apps/api/src/schemas/entities.ts`)
+- **Schema**: 31 migrations (0000-0030), 52 tables across 13 schema files, timestamp defaults standardized, FK indexes added, singleton constraints
+- **Admin**: unified PaymentGatewaysManager, NotificationChannelsBuilder, media manager rewrite, error pages (404/500)
+- **Storefront**: L1+L2 caching layer, response unwrapping utilities, error pages (404/500)
+- **Shared Utilities**: css-scope, html-escape, html-sanitize, status-badges, timestamps modules added
 
 ## Known Backlog
 
-- **Token blacklist fails open**: When KV is unavailable, revoked JWT tokens are accepted instead of rejected.
 - **`publishedAt` field unused**: Pages store `publishedAt` but it's never used for scheduled publishing.
 - **Dual provider systems**: Universal provider registry exists (email + payment migrated) but delivery and SMS have type definitions with zero registered implementations in the new system. Legacy interfaces still in use.
 - **In-memory state**: Rate limiter and layout cache use in-memory Maps (reset on Worker isolate restart). Acceptable for single-tenant but needs KV migration for scale.
@@ -229,7 +234,7 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 ## Known Limitations / TODO
 
 - **Scanner app**: standalone `/scanner` route exists with QR-token auth — needs testing and polish
-- **Type safety**: ~14 `any` type usages remain across the admin app (mostly Cloudflare env probing and window globals)
+- **Type safety**: ~30 `any` type usages remain across the admin app (mostly Cloudflare env probing, debounce utils, and window globals)
 - **Test coverage**: 9 test files in `tests/` (payments, inventory, orders, discounts, response envelope)
 - **Widget history**: API endpoints exist (GET/POST/DELETE `/admin/widgets/{id}/history/*`) — needs UI testing
 

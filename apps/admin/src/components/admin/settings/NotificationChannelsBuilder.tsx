@@ -56,13 +56,14 @@ export function NotificationChannelsBuilder() {
         const res = await fetch("/api/v1/admin/settings/notification-channels");
         if (res.ok) {
           const json = await res.json();
-          const data = unwrapEnvelope<Record<string, string[]>>(json);
-          if (data && typeof data === "object") {
+          const data = unwrapEnvelope<{ channels: Record<string, string[]> }>(json);
+          const channelData = data?.channels;
+          if (channelData && typeof channelData === "object") {
             // Transform API format (Record<status, string[]>) to UI format
             // (Record<status, Record<channel, boolean>>)
             const config = getDefaultConfig();
             for (const status of ORDER_STATUSES) {
-              const enabledChannels = data[status.key];
+              const enabledChannels = channelData[status.key];
               if (Array.isArray(enabledChannels)) {
                 for (const ch of CHANNELS) {
                   config[status.key][ch.key] = enabledChannels.includes(ch.key);
@@ -106,7 +107,7 @@ export function NotificationChannelsBuilder() {
       const res = await fetch("/api/v1/admin/settings/notification-channels", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(apiChannels),
+        body: JSON.stringify({ channels: apiChannels }),
       });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
