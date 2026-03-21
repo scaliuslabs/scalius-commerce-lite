@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01-PLAN.md — Create Bengali FTS5 tokenizer migration and harden query sanitizer
-- [ ] 01-02-PLAN.md — Validate migration on local D1 and verify Bengali + English search
+- [x] 01-02-PLAN.md — Validate migration on local D1 and verify Bengali + English search
 
 ### Phase 2: Storefront SEO
 **Goal**: Storefront pages are discoverable by search engines and shareable on social platforms with rich previews
