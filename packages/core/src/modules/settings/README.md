@@ -1,28 +1,96 @@
 # Settings
 
-Central store configuration: site settings (singleton row), key-value settings, storefront URL, currency, and allowed countries.
+Central store configuration: site settings (singleton row), key-value settings, storefront URL, currency, notification channel preferences, checkout configuration, and admin site settings management.
 
 ## Files
 
-- `index.ts` -- barrel re-exports everything from `settings.service.ts`
-- `settings.service.ts` -- core service functions
+- `index.ts` -- barrel re-exports everything from `settings.service.ts`, `site-settings.service.ts`, and `checkout-config.service.ts`
+- `settings.service.ts` -- core service functions (storefront URL, currency, site settings, notification channels)
+- `site-settings.service.ts` -- admin site settings operations (currency, header/footer, theme, SEO, storefront URL, allowed countries)
+- `checkout-config.service.ts` -- public checkout configuration assembly
 
-## Service Functions
+## settings.service.ts
 
-| Function | Description |
-|----------|-------------|
-| `getStorefrontPath(db, path, kv?)` | Builds a full storefront URL by fetching the base URL from DB, delegates to `@scalius/shared/storefront-url.buildStorefrontPath()` |
-| `getStorefrontBaseUrl(db, kv?)` | Returns the storefront base URL from `siteSettings.storefrontUrl`. Falls back to `"/"`. KV-cached at `gw:storefront_url` (300s TTL) |
-| `getCurrencyConfig(db, kv?)` | Returns `CurrencyConfig { code, symbol, usdExchangeRate, decimalPlaces }` from the `settings` table (`category = "currency"`). `decimalPlaces` is derived from ISO 4217 via `getDecimalPlaces()` from `@scalius/shared/currency`. Defaults to `BDT / ৳ / 1 / 2`. KV-cached at `gw:currency` (300s TTL) |
-| `getSiteSettings(db, kv?)` | Returns the full `siteSettings` singleton row (headerConfig, footerConfig, storefrontUrl, etc.). KV-cached at `gw:site_settings` (300s TTL) |
-| `invalidateSiteSettingsCache(kv?)` | Deletes the `gw:site_settings` KV key. Called by admin settings routes after any update to the siteSettings table |
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `getStorefrontPath` | `(db, path, kv?) => Promise<string>` | Builds a full storefront URL by fetching the base URL from DB, delegates to `@scalius/shared/storefront-url.buildStorefrontPath()` |
+| `getStorefrontBaseUrl` | `(db, kv?) => Promise<string>` | Returns the storefront base URL from `siteSettings.storefrontUrl`. Falls back to `"/"`. KV-cached at `gw:storefront_url` (300s TTL) |
+| `getCurrencyConfig` | `(db, kv?) => Promise<CurrencyConfig>` | Returns `CurrencyConfig { code, symbol, usdExchangeRate, decimalPlaces }` from the `settings` table (`category = "currency"`). `decimalPlaces` is derived from ISO 4217 via `getDecimalPlaces()` from `@scalius/shared/currency`. Defaults to `BDT / ??? / 1 / 2`. KV-cached at `gw:currency` (300s TTL) |
+| `getSiteSettings` | `(db, kv?) => Promise<row>` | Returns the full `siteSettings` singleton row (headerConfig, footerConfig, storefrontUrl, etc.). KV-cached at `gw:site_settings` (300s TTL) |
+| `invalidateSiteSettingsCache` | `(kv?) => Promise<void>` | Deletes the `gw:site_settings` KV key. Called by admin settings routes after any update to the siteSettings table |
+| `getNotificationChannels` | `(db) => Promise<Record<string, string[]>>` | Returns notification channel preferences per order status. Normalizes both string-array format (canonical) and boolean-map format (from UI). Defaults to email-only for all 6 statuses |
+| `updateNotificationChannels` | `(db, input) => Promise<Record<string, string[]>>` | Saves notification channel preferences. Accepts both UI format (boolean maps, possibly wrapped in `{ channels }`) and canonical format (string arrays). Validates channels against known set (`email`, `sms`, `whatsapp`, `push`). Stores via `upsertSetting()` under category `notifications`, key `order_channels` |
+
+### Default Notification Channels
+
+```typescript
+{
+    order_created: ["email"],
+    order_confirmed: ["email"],
+    order_processing: ["email"],
+    order_shipped: ["email"],
+    order_delivered: ["email"],
+    order_cancelled: ["email"],
+}
+```
+
+## site-settings.service.ts
+
+Admin-facing DB operations for site settings. Cache invalidation stays in route handlers (which have access to KV from the Hono context).
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `getCurrencySettings` | `(db) => { currencyCode, currencySymbol, usdExchangeRate }` | Reads currency settings from `settings` table |
+| `saveCurrencySettings` | `(db, data) => void` | Upserts currency settings. Validates exchange rate is positive |
+| `getGeneralSettings` | `(db) => { headerConfig, footerConfig }` | Returns parsed JSON from `siteSettings` singleton |
+| `saveHeaderConfig` | `(db, config) => void` | Upserts headerConfig on `siteSettings` singleton (insert with `onConflictDoUpdate` on `singletonKey`) |
+| `saveFooterConfig` | `(db, config) => void` | Upserts footerConfig on `siteSettings` singleton |
+| `getThemeSettings` | `(db) => { colors }` | Reads storefront color overrides from `settings` (category=theme, key=storefront_colors) |
+| `saveThemeSettings` | `(db, colors) => void` | Saves storefront color overrides via `upsertSetting()` |
+| `getSeoSettings` | `(db) => { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt }` | Reads SEO fields from `siteSettings` singleton |
+| `saveSeoSettings` | `(db, data) => void` | Upserts SEO fields. Only updates provided fields (undefined values are skipped to avoid NULLing existing data) |
+| `getStorefrontUrlSetting` | `(db) => { storefrontUrl }` | Reads storefrontUrl from `siteSettings` |
+| `saveStorefrontUrl` | `(db, url?) => void` | Upserts storefrontUrl on `siteSettings` singleton |
+| `getAllowedCountries` | `(db) => { allowedCountries, allowedCountriesMode }` | Reads allowed countries. Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |
+| `saveAllowedCountries` | `(db, countries, mode?) => { allowedCountries, allowedCountriesMode }` | Stores as JSON `{ countries: string[], mode: "include" | "exclude" }` in settings table (category=phone, key=allowed_countries) |
+
+## checkout-config.service.ts
+
+### `getCheckoutConfig(db, kv?, encryptionKey?)`
+
+Assembles the full checkout configuration for the storefront. Returns a `CheckoutConfig` object.
+
+Uses `Promise.all()` to fetch site settings, currency rows, and allowed countries in parallel. Resolves enabled payment gateways dynamically from the gateway registry.
+
+```typescript
+interface CheckoutConfig {
+    gateways: Array<Record<string, unknown>>;
+    guestCheckoutEnabled: boolean;
+    authVerificationMethod: string;
+    checkoutMode: string;
+    partialPaymentEnabled: boolean;
+    partialPaymentAmount: number;
+    allowedCountries: string[];
+    allowedCountriesMode: "include" | "exclude";
+    currency: {
+        code: string;
+        symbol: string;
+        decimalPlaces: number;
+    };
+}
+```
+
+**Gateway filtering by `checkoutMode`:**
+- `all` -- show all enabled gateways
+- `gateways_only` -- hide COD
+- `guest_cod_only` -- hide online gateways (Stripe, SSLCommerz, Polar)
 
 ## CurrencyConfig Type
 
 ```typescript
 interface CurrencyConfig {
     code: string;          // ISO 4217 code (e.g. "BDT", "USD", "JPY")
-    symbol: string;        // Display symbol (e.g. "৳", "$", "¥")
+    symbol: string;        // Display symbol (e.g. "???", "$", "??")
     usdExchangeRate: number; // How many units equal 1 USD
     decimalPlaces: number; // ISO 4217 decimal places (0, 2, or 3)
 }
@@ -47,10 +115,10 @@ apps/admin/src/hooks/useCurrency.ts      -- React hook that fetches config and d
 ## Data Model
 
 ### `siteSettings` (singleton row)
-Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, whatsapp OTP fields.
+Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, whatsapp OTP fields. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (resend_api_key, email_sender), `firebase` (service_account, public_config), `integrations` (openrouter_api_key), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (resend_api_key, email_sender), `firebase` (service_account, public_config), `integrations` (openrouter_api_key), `notifications` (order_channels), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
 ## API Endpoints (Admin)
 
@@ -72,6 +140,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/storefront-url` | Save storefrontUrl. Invalidates layout cache + site settings KV |
 | GET | `/allowed-countries` | Get allowed countries list and mode (include/exclude). Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |
 | PUT | `/allowed-countries` | Save allowed countries with mode. Stores as JSON `{ countries: string[], mode: "include" | "exclude" }` in settings table (category=phone, key=allowed_countries) |
+| GET | `/notification-channels` | Get notification channel preferences per order status |
+| POST | `/notification-channels` | Save notification channel preferences. Normalizes and validates channels |
 
 ### `system.ts` -- System integrations & auth
 | Method | Path | Description |
@@ -126,6 +196,7 @@ The storefront checkout endpoint returns:
 - `@scalius/shared/currency` -- `getDecimalPlaces()` for ISO 4217 lookup
 - `@scalius/shared/layout-cache` -- in-memory layout cache
 - `@scalius/core/modules/payments/gateway-settings` -- `upsertSetting()`, gateway-specific getters/invalidators
+- `@scalius/core/modules/payments/gateway-registry` -- `getRegisteredGateways()` for dynamic checkout config
 - Cloudflare KV -- optional caching layer (300s TTL for currency, storefront URL, site settings)
 
 ## Known Gaps

@@ -32,25 +32,27 @@ Customer Auth Flow (storefront):
 | File | Purpose |
 |------|---------|
 | `auth.ts` | `createAuth()` / `getAuth()` -- Better Auth factory with Drizzle adapter, email/password, 2FA (TOTP + email OTP), admin plugin. Cached per BETTER_AUTH_SECRET. |
+| `index.ts` | Barrel re-export of `createAuth`, `getAuth`, and `Auth` type. |
 
 ### RBAC
 
 | File | Purpose |
 |------|---------|
-| `rbac/types.ts` | TypeScript types: `PermissionName`, `UserPermissionContext`, `PermissionCheckResult`, `ProtectedRouteConfig`, `SystemRole`, `PermissionGroup` |
-| `rbac/permissions.ts` | `PERMISSIONS` constant (80 permissions across 14 categories), `PERMISSION_METADATA` record, helper functions (`getPermissionsByCategory`, `getAllPermissions`, `isSensitivePermission`) |
-| `rbac/helpers.ts` | Core RBAC engine: `getUserPermissions()` (L1 Map + L2 KV + D1 batch query), `hasPermission()`, `hasAnyPermission()`, `hasAllPermissions()`, `checkPermissionDetailed()`, `getUserPermissionContext()`, `isSuperAdmin()`, role/permission CRUD (`assignRoleToUser`, `removeRoleFromUser`, `setUserPermissionOverride`, `removeUserPermissionOverride`), `clearPermissionCache()` |
-| `rbac/page-permissions.ts` | Maps admin page routes to required permissions. Static map for exact routes, regex array for dynamic routes (e.g., `/admin/products/[id]/edit`). `hasPageAccess()` function. |
-| `rbac/route-permissions.ts` | Maps API route patterns to required permissions per HTTP method. Glob-style wildcard matching. `getRoutePermission()` function. |
+| `rbac/types.ts` | TypeScript types: `PermissionName`, `UserPermissionContext`, `PermissionCheckResult`, `ProtectedRouteConfig`, `SystemRole`, `PermissionGroup`, `PermissionCategory`, `PermissionMetadata`, `RoleWithPermissions`, `UserPermissionOverride` |
+| `rbac/permissions.ts` | `PERMISSIONS` constant (80 permissions across 14 categories), `PERMISSION_METADATA` record, helper functions (`getPermissionsByCategory`, `getAllPermissions`, `getAllPermissionNames`, `isSensitivePermission`) |
+| `rbac/helpers.ts` | Core RBAC engine: `getUserPermissions()` (L1 Map + L2 KV + D1 batch query), `hasPermission()`, `hasAnyPermission()`, `hasAllPermissions()`, `checkPermissionDetailed()`, `getUserPermissionContext()`, `isSuperAdmin()`, `hasAdminAccess()`, role/permission CRUD (`assignRoleToUser`, `removeRoleFromUser`, `setUserPermissionOverride`, `removeUserPermissionOverride`, `getAllRolesWithPermissions`, `getRolePermissions`), `clearPermissionCache()`, `clearAllPermissionCache()` |
+| `rbac/page-permissions.ts` | Maps admin page routes to required permissions. Static map for exact routes, regex array for dynamic routes (e.g., `/admin/products/[id]/edit`). `getPagePermission()` and `hasPageAccess()` functions. |
+| `rbac/route-permissions.ts` | Maps API route patterns to required permissions per HTTP method. Glob-style wildcard matching. `getRoutePermission()` function. `ROUTE_PERMISSIONS` record. |
 | `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds all 80 permissions and 5 system roles on first admin access. Sets first `role=admin` user as super admin. Runs once per isolate lifecycle (in-memory flag). |
-| `rbac/api-protection.ts` | Higher-order functions for wrapping API route handlers: `withPermission()`, `withAnyPermission()`, `withAllPermissions()`, `withSuperAdmin()`. Also `checkPermissionForApi()` helpers. These are Astro-style wrappers; the Hono API uses middleware instead. |
+| `rbac/api-protection.ts` | Higher-order functions for wrapping API route handlers: `withPermission()`, `withAnyPermission()`, `withAllPermissions()`, `withSuperAdmin()`. Also `checkPermissionForApi()`, `checkAnyPermissionForApi()`, `checkAllPermissionsForApi()` helpers, and `unauthorizedResponse()` / `forbiddenResponse()` factory functions. These are Astro-style wrappers; the Hono API uses middleware instead. |
+| `rbac/index.ts` | Barrel re-export of all RBAC modules. |
 
 ### Database Schema
 
 | File | Tables |
 |------|--------|
-| `packages/database/src/schema/auth.ts` | `user`, `session`, `account`, `verification`, `two_factor` |
-| `packages/database/src/schema/rbac.ts` | `permissions`, `roles`, `role_permissions`, `user_roles`, `user_permissions` |
+| `packages/database/src/schema/auth.ts` | `user`, `session`, `account`, `verification`, `twoFactor` |
+| `packages/database/src/schema/rbac.ts` | `permissions`, `roles`, `rolePermissions`, `userRoles`, `userPermissions` |
 
 ## Better Auth Configuration
 
@@ -61,6 +63,7 @@ Customer Auth Flow (storefront):
 - **Rate limiting**: 5 sign-in attempts/min, 3 password resets/5min, 5 2FA attempts/min, session checks unlimited
 - **IP detection**: `cf-connecting-ip` then `x-forwarded-for`, IPv6 /64 subnet grouping
 - **Trusted origins**: `BETTER_AUTH_URL` + `STOREFRONT_URL`
+- **Email callbacks**: `sendVerificationEmail`, `sendResetPassword`, and 2FA `sendOTP` all dynamically import `sendEmail` from `../integrations/email` to avoid circular dependencies. All templates use `escapeHtml()` from `@scalius/shared/html-escape`.
 
 ### Plugins
 
@@ -76,9 +79,8 @@ Customer Auth Flow (storefront):
 ### Permission Resolution Order
 
 1. Super admin (`user.isSuperAdmin = true`) -- gets ALL permissions unconditionally
-2. User-level denials (explicit deny overrides from `user_permissions` table)
-3. User-level grants (explicit grant overrides from `user_permissions` table)
-4. Role-based permissions (union of all assigned roles via `user_roles` + `role_permissions`)
+2. User-level overrides (grant or deny from `user_permissions` table)
+3. Role-based permissions (union of all assigned roles via `user_roles` + `role_permissions`)
 
 ### 80 Permissions Across 14 Categories
 
@@ -113,6 +115,7 @@ Customer Auth Flow (storefront):
 
 - **L1**: In-memory `Map<userId, {permissions, timestamp}>` per Worker isolate, 5-minute TTL
 - **L2**: Cloudflare KV (`rbac:perms:{userId}`), 5-minute TTL
+- **D1 batch query**: All 3 queries (user lookup, role permissions, user overrides) run in a single `db.batch()` call
 - **Cache invalidation**: `clearPermissionCache(userId, kv)` deletes both L1 and L2. `clearAllPermissionCache()` clears local Map only (no KV prefix deletion).
 - **Weakness**: `clearAllPermissionCache()` only clears the current isolate's Map. Other isolates retain stale L1 caches until TTL expiry.
 
@@ -246,7 +249,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 3. **Route permission map has mixed path prefixes**: Some entries use `/api/products/*` (legacy prefix), others use `/api/v1/admin/categories/*` (current prefix). The admin-auth middleware normalizes paths by prepending `/api/v1` if not present, but the rbac middleware in Astro uses paths as-is.
 
-4. **Fraud checker is NOT called during checkout or order processing**. It is a standalone admin-only tool for manual phone number lookups. No automated fraud screening exists in the order pipeline. See `packages/core/src/modules/fraud-checker/README.md`.
+4. **Fraud checker is NOT called during checkout or order processing**. It is a standalone admin-only tool for manual phone number lookups. No automated fraud screening exists in the order pipeline.
 
 5. **Customer auth has no 2FA**. Storefront customers authenticate solely via single-factor OTP (email or phone).
 

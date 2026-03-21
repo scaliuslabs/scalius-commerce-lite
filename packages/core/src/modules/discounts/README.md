@@ -1,10 +1,19 @@
 # Discounts
 
-Admin CRUD service for discount codes. Handles creation, update, listing, soft-delete, restore, permanent delete, and bulk operations. Does NOT handle storefront validation or usage recording -- those live in the API routes layer and orders queue respectively.
+Discount code CRUD, eligibility validation, and discount amount calculation. Supports three discount types with product/collection scoping, usage limits, and combination flags.
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `index.ts` | Barrel exports (re-exports service, validation, eligibility) |
+| `discounts.service.ts` | Standalone functions for admin CRUD: list, get, create, update, delete, bulk operations, restore |
+| `discounts.eligibility.ts` | Standalone functions for discount validation (`isDiscountValid`) and amount calculation (`calculateDiscountAmount`) |
+| `discounts.validation.ts` | Zod schemas: `createDiscountSchema`, `updateDiscountSchema` with percentage cap refine |
 
 ## Discount Types
 
-Three types defined in `@scalius/database/schema/enums.ts`:
+Three types defined in `@scalius/database/schema`:
 
 | Type | Enum Value | Description |
 |------|-----------|-------------|
@@ -16,57 +25,62 @@ Three types defined in `@scalius/database/schema/enums.ts`:
 
 | Value Type | Enum Value | Description |
 |------------|-----------|-------------|
-| Percentage | `percentage` | Percentage off (e.g., 15% off). Capped at 100% via schema validation. |
-| Fixed Amount | `fixed_amount` | Fixed currency amount off (dynamic symbol from store settings) |
-| Free | `free` | Used exclusively by `free_shipping` type (value field is ignored) |
+| Percentage | `percentage` | Percentage off (capped at 100% via schema validation) |
+| Fixed Amount | `fixed_amount` | Fixed currency amount off |
+| Free | `free` | Used exclusively by `free_shipping` type |
 
-## Schema
+## Service Functions (`discounts.service.ts`)
 
-Four tables in `packages/database/src/schema/marketing.ts`:
+| Function | Signature | Notes |
+|----------|-----------|-------|
+| `listDiscounts` | `(db, { page, limit, search, showTrashed, sort, order })` | Paginated with FTS5 search. Joins `discountProducts`, `discountCollections`, `discountUsage` to return `relatedProducts`, `relatedCollections`, `usageCount`, `totalDiscountAmount` per discount. Sortable by code/type/value/startDate/endDate/createdAt/updatedAt. |
+| `getDiscountById` | `(db, id)` | Single discount with `relatedProducts` and `relatedCollections` (each `{ buy: string[], get: string[] }`). Returns null if not found. |
+| `createDiscount` | `(db, data)` | Validates unique code among non-deleted. Uses `db.batch()` to atomically insert discount + product/collection associations. Only creates associations for `amount_off_products` type. ID format: `disc_{nanoid}`. Returns `{ id }`. |
+| `updateDiscount` | `(db, id, data)` | Validates existence and unique code (excluding self). Uses `db.batch()` to atomically update discount, delete old associations, insert new ones. Handles date parsing (Date/string/number). Returns `{ id }`. Throws `NotFoundError`. |
+| `deleteDiscount` | `(db, id)` | Soft-delete: sets `deletedAt = unixepoch()`. |
+| `bulkDeleteDiscounts` | `(db, discountIds, permanent?)` | Soft-delete or hard-delete array of IDs. |
+| `restoreDiscounts` | `(db, discountIds)` | Checks for code conflicts before restoring: throws `ConflictError` if an active discount already uses any of the codes being restored. Sets `deletedAt = null`. |
+| `permanentlyDeleteDiscount` | `(db, id)` | Hard-delete from DB. |
 
-- **`discounts`** -- Main table. Fields: code, type, valueType, discountValue, minPurchaseAmount, minQuantity, maxUsesPerOrder, maxUses, limitOnePerCustomer, combineWith* flags, customerSegment, startDate, endDate, isActive, timestamps, deletedAt (soft-delete). Indexed on code and deletedAt.
-- **`discountProducts`** -- Join table linking discounts to specific products. Has `applicationType` column (only `"get"` is used; `"buy"` is in the type but never written).
-- **`discountCollections`** -- Join table linking discounts to specific collections. Same `applicationType` pattern as products.
-- **`discountUsage`** -- Records each use of a discount code: discountId, orderId, customerId, amountDiscounted. Indexed on (discountId, customerId) for per-customer limit checks.
+## Eligibility Functions (`discounts.eligibility.ts`)
 
-## DiscountService API
+| Function | Signature | Notes |
+|----------|-----------|-------|
+| `isDiscountValid` | `(db, code, total?, cartItems?, customerPhone?, currencySymbol?)` | Validates a discount code against cart context. Returns `{ valid, discount?, applicableProductIds?, error? }`. |
+| `calculateDiscountAmount` | `(db, discount, total, cartItems, shippingCost?, precomputedProductIds?)` | Calculates the actual discount amount. Accepts optional `precomputedProductIds` to skip re-querying when called after `isDiscountValid`. |
 
-All methods accept a `db: Database` instance (no module-level singleton).
+### Validation Checks (`isDiscountValid`)
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `list` | `(db, { page, limit, search, showTrashed, sort, order })` | Paginated list with FTS5 search on code. Joins discountProducts, discountCollections, and discountUsage to return relatedProducts, relatedCollections, usageCount, totalDiscountAmount per discount. |
-| `getById` | `(db, id)` | Single discount with relatedProducts and relatedCollections. Returns null if not found. |
-| `create` | `(db, data)` | Validates unique code (among non-deleted). Uses `db.batch()` to atomically insert discount + product/collection associations. Only creates associations for `amount_off_products` type. Returns `{ id }`. |
-| `update` | `(db, id, data)` | Validates existence and unique code. Uses `db.batch()` to atomically update discount, delete old associations, and insert new ones. Returns `{ success: true }`. |
-| `delete` | `(db, id)` | Soft-delete: sets `deletedAt = unixepoch()`. |
-| `bulkDelete` | `(db, discountIds, permanent?)` | Soft-delete or permanent delete array of IDs. |
-| `restore` | `(db, discountIds)` | Sets `deletedAt = null` for array of IDs. |
-| `permanentlyDelete` | `(db, id)` | Hard-deletes from DB (cascades to products/collections/usage via FK). |
+Checks performed in order:
 
-## Validation Schema
+1. Code exists, is active, not soft-deleted, within date window
+2. Minimum purchase amount met
+3. Minimum quantity met (sum of cart item quantities)
+4. Total usage limit not exceeded (`maxUses` vs `discountUsage` count)
+5. Per-customer limit (`limitOnePerCustomer` via `discountUsage` joined with `orders.customerPhone`)
+6. Product applicability: for `amount_off_products`, cart must contain at least one product from linked products or collections
 
-`discounts.schema.ts` defines Zod schemas:
+Returns `applicableProductIds` set for downstream use by `calculateDiscountAmount`.
 
-- **`createDiscountSchema`** -- Validates all discount fields. Date handling is flexible: accepts Date, string, or unix timestamp (auto-detects seconds vs milliseconds). `appliesToProducts` and `appliesToCollections` are optional string arrays. Includes a refine check: percentage discounts cannot exceed 100%.
-- **`updateDiscountSchema`** -- Extends create schema with required `id` field. Same percentage cap validation.
+### Discount Calculation (`calculateDiscountAmount`)
 
-## FTS5 Search
+| Type | Percentage | Fixed Amount |
+|------|-----------|-------------|
+| `free_shipping` | Returns full `shippingCost` | Returns full `shippingCost` |
+| `amount_off_order` | `min(subtotal, subtotal * value / 100)` | `min(subtotal, fixedAmount)` |
+| `amount_off_products` | Sums applicable product totals, then `min(total, total * value / 100)` | `min(applicableTotal, fixedAmount)` |
 
-Full-text search on the `code` field via `discounts_fts` virtual table. Created in migration `0016_fts5_search.sql`. Auto-maintained by SQLite triggers on insert/update/delete.
+For `amount_off_products`, collection expansion resolves collections to product IDs by parsing each collection's `config` JSON (`categoryIds` and `productIds`). If no product/collection restrictions exist, falls back to full subtotal. If restrictions exist but no cart items match, returns 0.
 
-## Eligibility Rules (Enforced at Validation Time)
+Uses `roundPrice()` from `@scalius/shared/price-utils` for currency precision.
 
-These rules are stored in the schema but enforced in `apps/api/src/routes/discounts.ts` (the public validation endpoint), NOT in this service:
+## Validation Schemas (`discounts.validation.ts`)
 
-- **Date window**: startDate <= now AND (endDate IS NULL OR endDate > now)
-- **Active flag**: isActive must be true
-- **Not soft-deleted**: deletedAt must be null
-- **Minimum purchase amount**: Cart total must meet minPurchaseAmount
-- **Minimum quantity**: Total cart item count must meet minQuantity
-- **Total usage limit**: discountUsage count < maxUses
-- **Per-customer limit**: When limitOnePerCustomer is true, checks discountUsage joined with orders by customerPhone
-- **Product applicability**: For `amount_off_products`, cart must contain at least one product from linked products or collections
+**`createDiscountSchema`**: Validates all discount fields. Date handling accepts `Date`, `string`, or `number` (auto-detects seconds vs milliseconds). `appliesToProducts` and `appliesToCollections` are optional string arrays. Includes a refine check: percentage discounts cannot exceed 100%.
+
+**`updateDiscountSchema`**: Same as create with required `id` field. Same percentage cap.
+
+**Exported types:** `CreateDiscountInput`, `UpdateDiscountInput`
 
 ## Stacking / Combination Flags
 
@@ -75,45 +89,12 @@ Three boolean flags on each discount:
 - `combineWithOrderDiscounts`
 - `combineWithShippingDiscounts`
 
-**Current status**: These flags are stored and exposed to the storefront validation response with an `enhancedDiscount.combinable` object, but they are NOT enforced at checkout. The system supports only ONE discount code per order (single `discountCode` field on the checkout payload). The schema comment explicitly notes these are "reserved for future multi-discount support."
-
-## Discount Amount Calculation
-
-Performed in `apps/api/src/routes/discounts.ts` via `calculateDiscountAmount()`:
-
-| Type | Percentage | Fixed Amount |
-|------|-----------|-------------|
-| `free_shipping` | Returns full shippingCost | Returns full shippingCost |
-| `amount_off_order` | `min(subtotal, subtotal * value / 100)` | `min(subtotal, fixedAmount)` |
-| `amount_off_products` | Sums applicable product totals, then `min(total, total * value / 100)` | `min(applicableTotal, fixedAmount)` |
-
-For `amount_off_products`, collection expansion resolves collections to individual product IDs by parsing each collection's `config` JSON (categoryIds and productIds). If no applicable products match cart items but the discount has product/collection associations, the full subtotal is used as fallback.
-
-## Usage Recording
-
-Discount usage is NOT recorded by this service. It happens in two places:
-
-1. **Queue processing** (`packages/core/src/modules/orders/orders.queue.ts`): When an order is ingested, the queue consumer inserts a `discountUsage` row in the same `db.batch()` as the order and order items. This is the primary path.
-2. **Storefront fallback** (`apps/storefront/src/lib/api/discounts.ts`): `recordDiscountUsage()` calls `POST /discounts/usage`, but this endpoint does NOT exist in the API routes. The storefront `server.ts` calls this after order creation as a fallback, but the route is missing.
-
-## Files
-
-| File | Description |
-|------|-------------|
-| `index.ts` | Barrel exports for schema and service |
-| `discounts.service.ts` | `DiscountService` object with all CRUD methods |
-| `discounts.schema.ts` | Zod validation schemas (createDiscountSchema, updateDiscountSchema) with percentage cap refine |
+These flags are stored and returned in validation responses but NOT enforced at checkout. Only one discount code per order is supported.
 
 ## Dependencies
 
-- `@scalius/database` -- `discounts`, `discountProducts`, `discountCollections`, `discountUsage` tables, `DiscountType`, `DiscountValueType` enums
-- `@scalius/core/search` -- `ftsMatch()` for FTS5 code search
+- `@scalius/database` -- `discounts`, `discountProducts`, `discountCollections`, `discountUsage`, `orders`, `collections`, `products` tables, `DiscountType`, `DiscountValueType` enums
+- `@scalius/core/search` -- `ftsMatch()` for FTS5 search
 - `@scalius/core/errors` -- `NotFoundError`, `ConflictError`
-- `nanoid` -- ID generation with prefixes (`disc_`, `dp_`, `dc_`)
-
-## Known Gaps
-
-1. **`POST /discounts/usage` endpoint missing**: The storefront's `recordDiscountUsage()` calls this endpoint, but it does not exist in `apps/api/src/routes/discounts.ts`. Usage recording works via the queue path only.
-2. **Combination flags not enforced**: combineWith* flags are stored and returned but never checked. Only one discount code per order is supported.
-3. **`applicationType` always `"get"`**: The `discountProducts` and `discountCollections` tables have an `applicationType` enum with only `"get"`. The service always writes `"get"`. The list method casts to `'buy' | 'get'` and initializes both buckets, but `"buy"` is never written. This is a vestige of planned buy-X-get-Y support.
-4. **`customerSegment` field unused**: The schema has a `customerSegment` text field. It's stored and passed through but never checked during validation or filtering.
+- `@scalius/shared/price-utils` -- `roundPrice()`
+- `nanoid` -- ID generation (`disc_`, `dp_`, `dc_` prefixes)

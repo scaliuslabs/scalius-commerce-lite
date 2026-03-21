@@ -34,8 +34,8 @@ A custom FCM implementation for Cloudflare Workers (no Node.js `firebase-admin` 
 - **JWT creation**: Builds RS256 JWTs using Web Crypto API (`crypto.subtle`) for Google OAuth2 token exchange
 - **OAuth2 token management**: Exchanges JWT for Google access token via `https://oauth2.googleapis.com/token`. Caches access tokens in `SHARED_AUTH_CACHE` KV namespace (3300s TTL) with fallback to uncached if KV not bound.
 - **FCM v1 API**: Sends messages via `https://fcm.googleapis.com/v1/projects/{projectId}/messages:send`
-- **Retry logic**: Up to 3 retries for 429/5xx errors with exponential backoff + jitter
-- **PEM parsing**: Converts PEM private key to ArrayBuffer for Web Crypto, handles formatting issues from env vars
+- **Retry logic**: Up to 3 retries for 429/5xx errors with exponential backoff + jitter. Respects `Retry-After` header.
+- **PEM parsing**: Converts PEM private key to ArrayBuffer for Web Crypto, handles formatting issues from env vars (leading/trailing quotes, literal newlines)
 
 #### Interfaces
 
@@ -48,20 +48,16 @@ interface ServiceAccount {
 ```
 
 ```typescript
-interface FirebaseClientConfig {
-  apiKey: string;
-  authDomain?: string;
-  projectId?: string;
-  storageBucket?: string;
-  messagingSenderId?: string;
-  appId?: string;
-  measurementId?: string;
-  vapidKey?: string;
+interface FCMMessage {
+  notification?: { title?: string; body?: string; image?: string };
+  data?: { [key: string]: string };
+  webpush?: { fcmOptions?: { link?: string }; notification?: { badge?: string } };
+  token: string;
 }
 ```
 
 Key exports:
-- `FCMMessagingService` -- Class with `sendEachForMulticast(payload)` method. Iterates tokens sequentially (not concurrent) and maps error codes to `messaging/*` format. All catch blocks use typed `error: unknown`.
+- `FCMMessagingService` -- Class with `sendEachForMulticast(payload)` method. Iterates tokens sequentially (not concurrent) and maps error codes to `messaging/*` format (e.g., `UNREGISTERED` -> `messaging/registration-token-not-registered`). All catch blocks use typed `error: unknown`.
 - `getFirebaseAdminMessaging(env, serviceAccountJson?)` -- Factory function. When `serviceAccountJson` is provided (e.g., from DB settings), creates a new instance. Otherwise returns a singleton for env-var credentials.
 
 Credential resolution order:
@@ -86,6 +82,7 @@ Runs in the admin dashboard browser. Uses the standard Firebase JS SDK (`firebas
   - Plays `/alert.mp3` audio alert
   - Shows a custom toast notification (not Sonner -- uses hand-built DOM elements with CSS classes `custom-fcm-toast-*`)
   - Toast includes order info, "View Order" link, and close button
+  - Dispatches `admin-notification` custom event on `window` for the notification dropdown
   - All catch blocks use typed `error: unknown`
 
 ## Admin Dashboard Integration

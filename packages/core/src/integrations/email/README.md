@@ -92,10 +92,10 @@ export interface SendEmailOptions {
 - `sendPasswordResetEmail(email, name, url)` -- password reset with 1-hour expiry
 - `sendAdminInviteEmail(email, inviterName, tempPassword, loginUrl)` -- admin invitation with temp credentials
 
-All functions use inline HTML templates with basic responsive styling. No template engine.
+All functions use inline HTML templates with basic responsive styling. User-supplied values are escaped via `escapeHtml()` from `@scalius/shared/html-escape`. No template engine.
 
 ## Key Files
 
 - `provider.ts` -- `EmailProvider` interface, registry (`registerEmailProvider`, `getEmailProvider`, `setActiveEmailProvider`)
-- `resend.ts` -- `ResendEmailProvider` implementation (reads settings from DB per-send, calls Resend API, console fallback). Typed `error: unknown` catch blocks.
+- `resend.ts` -- `ResendEmailProvider` implementation (reads settings from DB per-send, calls Resend API, console fallback). Marked `@deprecated` in favor of `packages/core/src/providers/email/resend-adapter.ts` (universal provider), but still active and connected. Typed `error: unknown` catch blocks.
 - `index.ts` -- barrel exports, provider registration at load time, convenience email functions

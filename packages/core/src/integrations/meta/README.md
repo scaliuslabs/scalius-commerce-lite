@@ -10,10 +10,10 @@ Server-side event tracking via Meta's Conversions API. Sends e-commerce events (
 Storefront (Browser)              API Worker (Hono)                Core Package
 --------------------              ----------------                 ------------
 meta-capi.ts                      meta-conversions.ts              conversions-api.ts
-  sendServerEvent() ──fetch────> POST /api/v1/meta/events ──────> sendCapiEvent()
-                                                                    prepareUserData()
-                                                                    MetaService (settings/logging)
-                                                                    crypto-utils.ts (hashing)
+  sendServerEvent() --fetch-----> POST /api/v1/meta/events ------> sendCapiEvent()
+                                                                     prepareUserData()
+                                                                     meta.service.ts (settings/logging)
+                                                                     crypto-utils.ts (hashing)
 ```
 
 ## End-to-End Flow
@@ -23,12 +23,12 @@ meta-capi.ts                      meta-conversions.ts              conversions-a
 3. Dispatches `POST /api/v1/meta/events` via `sendMetaCapiEvent()` from `@/lib/api/tracking`
 4. API route (`apps/api/src/routes/meta-conversions.ts`) validates the payload via Zod schema, enriches with IP/user-agent from request headers
 5. Calls `sendCapiEvent()` from this package, which:
-   a. Fetches CAPI settings from DB via `MetaService.getCapiSettings()` (singleton row in `metaConversionsSettings`)
+   a. Fetches CAPI settings from DB via `getCapiSettings()` (singleton row in `metaConversionsSettings`)
    b. If disabled or missing credentials, logs a diagnostic event and returns early
    c. Hashes PII fields (email, phone, name, location) via SHA-256 per Meta's requirements
    d. Sends to `https://graph.facebook.com/v19.0/{pixelId}/events`
    e. Logs success/failure to `metaConversionsLogs` table with request/response payloads
-   f. Triggers lazy log cleanup (retention: 12 hours)
+   f. Log retention configured via `logRetentionDays` from settings (default 30 days)
 6. API route uses `ctx.waitUntil()` to process the event in the background (non-blocking response)
 
 ## Supported Events
@@ -47,7 +47,7 @@ Validated by Zod schema in the API route:
 
 ### `conversions-api.ts` -- Event Sending
 
-- `sendCapiEvent(db, event)` -- Main function. Fetches settings, hashes user data, sends to Meta Graph API, logs results. Response data typed as `Record<string, unknown>`. Error objects typed via `error instanceof Error` checks.
+- `sendCapiEvent(db, event)` -- Main function. Fetches settings via `getCapiSettings()`, hashes user data, sends to Meta Graph API, logs results via `logCapiEvent()`. Response data typed as `Record<string, unknown>`. Error objects typed via `error instanceof Error` checks.
 - `prepareUserData(userData)` -- Hashes PII fields per Meta's formatting rules:
   - `em` (email): lowercase, trim, SHA-256
   - `ph` (phone): digits only, SHA-256
@@ -58,13 +58,10 @@ Validated by Zod schema in the API route:
   - `zp` (zip): lowercase, alphanumeric only, SHA-256
   - `country`: lowercase, trim, SHA-256
   - Non-PII fields passed through: `client_ip_address`, `client_user_agent`, `fbc`, `fbp`, `external_id`, `subscription_id`, `lead_id`
-- `getLogRetentionHours()` -- Returns 12 (configurable constant)
-- `getCleanupCheckIntervalHours()` -- Returns 11 (configurable constant)
 
-Configuration constants:
-- `LOG_RETENTION_HOURS = 12` -- Events older than 12 hours are cleaned up
-- `CLEANUP_CHECK_INTERVAL_HOURS = 11` -- Cleanup runs at most once per 11 hours
+Configuration:
 - Graph API version: `v19.0`
+- Default log retention: 30 days (from `DEFAULT_LOG_RETENTION_DAYS` constant, overridden by `settings.logRetentionDays`)
 - Test event code support: If `testEventCode` is set in settings, it is included in the payload for Meta Events Manager testing
 
 ### `crypto-utils.ts` -- Hashing Utilities
@@ -82,12 +79,20 @@ Settings are stored in the `metaConversionsSettings` table (singleton row with `
 - `accessToken` -- Meta access token
 - `isEnabled` -- Boolean toggle
 - `testEventCode` -- Optional test event code for Meta Events Manager
+- `logRetentionDays` -- Configurable log retention period
 
 Event logs are stored in `metaConversionsLogs` table:
-- `eventId`, `eventName`, `status` (success/failed)
+- `eventId` (unique), `eventName`, `status` (success/failed)
 - `requestPayload`, `responsePayload`, `errorMessage`
 - `eventTime`, `createdAt`
-- Auto-cleaned after 12 hours via lazy cleanup on each log write
+- Auto-cleaned based on `logRetentionDays` setting via lazy cleanup on each log write
+
+## Service Layer (`packages/core/src/modules/analytics/meta.service.ts`)
+
+Standalone functions (not a class):
+- `getCapiSettings(db)` -- Fetches singleton settings row
+- `logCapiEvent(db, logData, retentionHours)` -- Inserts log entry and triggers lazy cleanup
+- Cleanup runs based on retention hours derived from `logRetentionDays * 24`
 
 ## Storefront Client (`apps/storefront/src/lib/tracking/meta-capi.ts`)
 
@@ -99,17 +104,8 @@ The storefront client is a thin dispatcher that:
 
 This runs in the browser. The actual CAPI call happens server-side in the API worker.
 
-## Service Layer (`packages/core/src/modules/analytics/meta.service.ts`)
-
-`MetaService` class with static methods:
-- `getCapiSettings(db)` -- Fetches singleton settings row. Typed `error: unknown` catch.
-- `logCapiEvent(db, logData, retentionHours)` -- Inserts log entry and triggers lazy cleanup. Typed `error: unknown` catch.
-- `performLogCleanup(db, retentionHours)` -- Deletes logs older than retention period. Typed `error: unknown` catch.
-- `manualLogCleanup(db, retentionHours)` -- Admin-triggered cleanup with `{ success: boolean; message: string }` result. Uses `error instanceof Error ? error.message : String(error)`.
-
 ## Dependencies
 
 - Web Crypto API (`crypto.subtle`) -- SHA-256 hashing
 - `@scalius/database` -- `metaConversionsSettings`, `metaConversionsLogs` tables
-- `@scalius/core/modules/analytics/meta.service` -- Settings and logging service
-- `@paralleldrive/cuid2` -- Log entry ID generation
+- `@scalius/core/modules/analytics/meta.service` -- `getCapiSettings()` and `logCapiEvent()` functions

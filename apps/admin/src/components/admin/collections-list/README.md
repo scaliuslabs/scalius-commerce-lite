@@ -2,10 +2,6 @@
 
 Admin component for managing product collections with drag-and-drop reordering, inline editing, and bulk operations.
 
-## Overview
-
-Full-featured collection management UI with drag-and-drop reordering (`@hello-pangea/dnd`), inline name editing (debounced auto-save), active/inactive toggle, bulk actions (activate, deactivate, trash, restore, permanent delete), search, sort, pagination, and separate trash view.
-
 ## Architecture
 
 ```
@@ -61,7 +57,6 @@ collections-list/
   - Active view: Activate, Deactivate, Trash
   - Trash view: Restore, Delete Permanently
 - Uses shared `BulkActionDialog` for confirmation
-- Endpoints: `bulk-delete`, `bulk-activate`, `bulk-deactivate`, `bulk-restore`
 
 ### Content Source Display
 - Parses collection `config` JSON to show summary: "N categories + M products" or "N specific products" or "No products"
@@ -69,10 +64,6 @@ collections-list/
 ### Sortable Columns
 - Name, Type, Status (isActive) -- click column header to toggle asc/desc
 - Default sort: `sortOrder` ascending
-
-### Pagination
-- Delegates to shared `AdminListPagination` component
-- Page size options configured in the shared component
 
 ## Data Flow
 
@@ -82,10 +73,10 @@ Astro page (index.astro / trash.astro)
     --> useCollections hook: fetch("/api/v1/admin/collections?...")
     --> useCollectionActions hook: PUT/DELETE/POST for individual ops
     --> useBulkActions hook: POST for bulk ops
-    --> All API calls go through Vite proxy (dev) or service binding (prod) to API worker
 ```
 
 ### API Endpoints Used
+
 | Action | Method | Endpoint |
 |--------|--------|----------|
 | List | GET | `/api/v1/admin/collections` |
@@ -106,8 +97,6 @@ Astro page (index.astro / trash.astro)
 | `index.astro` | `/admin/collections` | Header with title, New/Trash buttons, `CollectionsList showTrashed={false}` |
 | `trash.astro` | `/admin/collections/trash` | Header with title, View Active button, `CollectionsList showTrashed={true}` |
 
-No storefront preview link in collection rows -- there is no dedicated `/collections/[id]` storefront page.
-
 ## Dependencies
 
 - `@hello-pangea/dnd` -- drag-and-drop
@@ -115,18 +104,10 @@ No storefront preview link in collection rows -- there is no dedicated `/collect
 - `@/components/admin/shared/BulkActionDialog` -- shared bulk action confirmation
 - `@/components/admin/shared/AdminListPagination` -- shared pagination
 - `@scalius/shared/utils` -- `cn()` utility
+- `@/lib/api-helpers` -- `unwrapEnvelope()`, `extractApiError()`
+- `@/lib/client/navigate` -- `navigateTo()` client-side navigation
 - `sonner` -- toast notifications
-- `@/lib/client/navigate` -- client-side navigation
-
-## Envelope Handling
-
-The `useCollections` hook handles both envelope formats:
-```typescript
-const data = json.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data : json;
-```
-This accounts for the admin proxy unwrapping `{ success, data }` to `{ success, ...data }` vs. Vite dev proxy passing through the raw envelope.
 
 ## Known Gaps
 
-- **No SSR data loading**: Unlike the categories list (which uses a loader for SSR initial data), `CollectionsList` fetches all data client-side on mount -- causes a loading spinner flash
-- **Search not debounced in hook**: Debouncing is done at the `CollectionsList` level via `useDebounce(searchQuery, 300)`, but `useCollections` refetches on every change of the debounced value (correct behavior, just noting the debounce lives outside the hook)
+- **No SSR data loading**: Unlike the categories list, `CollectionsList` fetches all data client-side on mount -- causes a loading spinner flash

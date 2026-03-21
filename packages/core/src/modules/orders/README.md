@@ -7,17 +7,17 @@ Full order lifecycle: storefront checkout, admin CRUD, state machine validation,
 | File | Exports | Purpose |
 |------|---------|---------|
 | `index.ts` | barrel re-exports | Public API surface |
-| `orders.types.ts` | `OrderShipmentSummary`, `OrderListItem`, `OrderDetails`, `StorefrontOrderItem`, `CreateStorefrontOrderInput`, `CreateStorefrontOrderResult`, `StatusUpdateResult` | Shared TypeScript interfaces for admin and storefront |
-| `orders.admin.ts` | `getOrders()`, `getOrderDetails()`, `createOrder()`, `updateOrder()`, `deleteOrder()`, `restoreOrder()`, `permanentlyDeleteOrder()`, `bulkDeleteOrders()` | Admin dashboard queries and write operations |
+| `orders.types.ts` | `OrderShipmentSummary`, `OrderListItem`, `OrderDetails`, `StorefrontOrderItem`, `CreateStorefrontOrderInput`, `CreateStorefrontOrderResult`, `OrderIngestQueuePayload`, `StatusUpdateResult` | Shared TypeScript interfaces for admin, storefront, and queue |
+| `orders.admin.ts` | `listOrders()`, `getOrderDetails()`, `createOrder()`, `updateOrder()`, `deleteOrder()`, `restoreOrder()`, `permanentlyDeleteOrder()`, `bulkDeleteOrders()` | Admin dashboard queries and write operations |
 | `orders.storefront.ts` | `createStorefrontOrder()` | Storefront checkout validation and queue payload builder |
-| `orders.fulfillment.ts` | `bulkShipOrders()`, `processCodAction()`, `getOrderShipments()`, `createFulfillmentShipment()`, `updateOrderStatus()` | Shipment creation, COD actions, status transitions |
+| `orders.fulfillment.ts` | `bulkShipOrders()`, `processCodAction()`, `getOrderShipments()`, `createFulfillmentShipment()`, `updateOrderStatus()` | Shipment creation, COD actions, status transitions with notification dispatch |
 | `orders.validation.ts` | `createOrderSchema`, `updateOrderSchema`, `bulkDeleteOrderSchema`, `bulkShipOrderSchema`, `CreateOrderInput`, `UpdateOrderInput`, `BulkDeleteOrderInput`, `BulkShipOrderInput` | Zod validation schemas for API routes |
-| `order-state-machine.ts` | `canTransitionTo()`, `validateTransition()`, `getAvailableTransitions()` | Enforces valid order/payment/fulfillment status transitions |
+| `order-state-machine.ts` | `canTransitionTo()`, `validateTransition()`, `getAvailableTransitions()`, `StatusDimension` | Enforces valid order/payment/fulfillment status transitions |
 | `orders.queue.ts` | `handleOrderIngestBatch()`, `setCheckoutStatus()`, `OrderIngestQueueMessage` | Queue consumer for async order ingestion |
 
 ## Order State Machine
 
-Three independent status dimensions, each with its own transition map.
+Three independent status dimensions, each with its own transition map. Exported type `StatusDimension` is `"order" | "payment" | "fulfillment"`.
 
 ### Order Status Transitions
 
@@ -109,6 +109,17 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
 7. Returns `StatusUpdateResult` with optional notification payload
 8. API route enqueues notification to `ORDER_NOTIFICATIONS_QUEUE` if present
 
+**Notification Status Mapping** (`NOTIFICATION_STATUSES` in `orders.fulfillment.ts`):
+
+| Order Status | Notification Type |
+|-------------|-------------------|
+| `pending` | `order_created` |
+| `confirmed` | `order_confirmed` |
+| `processing` | `order_processing` |
+| `shipped` | `order_shipped` |
+| `delivered` | `order_delivered` |
+| `cancelled` | `order_cancelled` |
+
 ### Fulfillment Flow
 
 1. `createFulfillmentShipment()` checks order is not cancelled/returned
@@ -140,7 +151,7 @@ Two queues are relevant:
 | `ORDER_INGEST_QUEUE` | `order.ingest` | `handleOrderIngestBatch()` -- batched DB writes + inventory reservation |
 | `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM push) via `queue-consumer.ts` |
 
-The `order.notification` handler in `queue-consumer.ts` sends both email (via `sendOrderNotificationEmail()`) and FCM push notifications (via `sendOrderNotification()`) to admin devices. FCM failures are caught and logged but do not affect email delivery.
+The `order.notification` handler in `queue-consumer.ts` sends both email (via `sendOrderNotificationEmail()` with `db` for channel preference checking) and FCM push notifications (via `sendOrderNotification()`) to admin devices. FCM failures are caught and logged but do not affect email delivery.
 
 Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.confirmed`, `payment.polar.confirmed`, etc.) are handled in `queue-consumer.ts` and call `processPaymentConfirmed()` / `processPaymentFailed()` from the payments module.
 
@@ -158,7 +169,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 
 | Method | Path | Handler | Purpose |
 |--------|------|---------|---------|
-| GET | `/` | `getOrders()` | Paginated list with FTS5 search, status/date filters, shipment summary |
+| GET | `/` | `listOrders()` | Paginated list with FTS5 search, status/date filters, shipment summary |
 | POST | `/` | `createOrder()` | Manual order creation with reserve-then-deduct inventory |
 | GET | `/:id` | `getOrderDetails()` | Full order with items, variant info, images |
 | PUT | `/:id` | `updateOrder()` | Full order update with inventory adjustment |
@@ -202,9 +213,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 
 ## Known Gaps
 
-1. **Notification types limited**: Only `shipped` and `delivered` trigger customer notifications from `updateOrderStatus()`. Other transitions (confirmed, completed, etc.) do not.
-
-2. **`updateOrder()` item replacement is non-atomic**: The order update uses CAS on the `version` column, but the subsequent `DELETE` + `INSERT` of order items is done in separate queries outside the CAS-protected batch.
+1. **`updateOrder()` item replacement is non-atomic**: The order update uses CAS on the `version` column, but the subsequent `DELETE` + `INSERT` of order items is done in separate queries outside the CAS-protected batch.
 
 ## Dependencies
 

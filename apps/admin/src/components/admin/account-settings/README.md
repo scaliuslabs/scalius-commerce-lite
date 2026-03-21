@@ -12,17 +12,15 @@ Admin account management UI: profile editing, password change, 2FA setup, team m
 | `ChangePasswordForm.tsx` | Current/new/confirm password form with strength meter. Calls `POST /api/v1/admin/auth/change-password`. Enforces 12-char minimum client-side. |
 | `TwoFactorSetup.tsx` | Full 2FA lifecycle: enable (TOTP or email), verify, backup codes, change method, disable. Uses `authClient.twoFactor.*` + custom API endpoints. QR codes generated locally via `qrcode` library (no external API calls). |
 | `AdminUsersManager.tsx` | Team member list with add/delete. Shows 2FA status badges, role badges, super admin badge. Permissions button opens `UserPermissionEditor`. |
-| `hooks/useAdminUsers.ts` | Data hook: fetches admin users (`GET /api/v1/admin/auth/users`) and roles (`GET /api/v1/admin/rbac/roles`), provides `addUser`/`deleteUser` actions. |
+| `hooks/useAdminUsers.ts` | Data hook: fetches admin users (`GET /api/v1/admin/auth/users`) and roles (`GET /api/v1/admin/rbac/roles`), provides `addUser`/`deleteUser` actions. Uses `unwrapEnvelope()` and `extractApiError()` from `@/lib/api-helpers`. |
 
 ## Related Components (outside this directory)
 
-| File | Purpose |
-|------|---------|
-| `../RolesManagement.tsx` | Roles CRUD: create/edit/delete roles, permission accordion with category grouping, select-all per category. System roles have immutable permissions. |
-| `../UserPermissionEditor.tsx` | Per-user permission editor dialog: assign/remove roles, set permission overrides (inherit/force grant/force deny) per permission. Shows effective permission status. |
-| `../PermissionGate.tsx` | Conditional rendering component: `<PermissionGate permission="products.create">`. Supports `permission`, `anyOf`, `allOf`, `fallback`, `invert`. Also exports `withPermission()` HOC. |
-| `../FraudCheckerSettings.tsx` | Fraud checker provider CRUD UI. Uses `window.fraudCheckerActions` bridge. |
-| `../SecuritySettingsBuilder.tsx` | CSP/CORS allowed domains config. Calls `GET/POST /api/v1/admin/settings/security`. |
+| Component | Location |
+|-----------|----------|
+| `RolesManagement` | `../RolesManagement.tsx` -- Roles CRUD with permission accordion |
+| `UserPermissionEditor` | `../UserPermissionEditor.tsx` -- Per-user role/permission editor dialog |
+| `PermissionGate` | `../PermissionGate.tsx` -- Conditional rendering by permission |
 
 ## Permission Context
 
@@ -34,15 +32,6 @@ Admin account management UI: profile editing, password change, 2FA setup, team m
 2. Admin layout injects these into the page as `window.__USER_PERMISSIONS__` and `window.__IS_SUPER_ADMIN__`
 3. `PermissionProvider` reads from props or window globals
 4. Components use `usePermissions()` hook or `<PermissionGate>` component
-
-### Hooks
-
-| Hook | Purpose |
-|------|---------|
-| `usePermissions()` | Returns `{ permissions, isSuperAdmin, hasPermission, hasAnyPermission, hasAllPermissions }`. Falls back to window globals if no provider context. |
-| `useHasPermission(perm)` | Boolean shorthand for single permission check |
-| `useHasAnyPermission(perms)` | Boolean shorthand for any-of check |
-| `useWindowPermissions()` | Direct window global reader (for components outside provider) |
 
 Super admin always returns `true` for all permission checks.
 
@@ -57,7 +46,7 @@ Super admin always returns `true` for all permission checks.
 5. For email: `authClient.twoFactor.sendOtp()`, user enters emailed code
 6. Verification: `authClient.twoFactor.verifyTotp({ code })` or `authClient.twoFactor.verifyOtp({ code })`
 7. On success: calls `POST /api/v1/admin/auth/2fa/method` to save method preference, then `POST /api/v1/admin/auth/2fa/mark-verified` to mark session
-8. Shows backup codes (10 codes, copy to clipboard)
+8. Shows backup codes (copy to clipboard)
 
 ### Change Method Flow
 
@@ -70,10 +59,6 @@ Super admin always returns `true` for all permission checks.
 2. `authClient.twoFactor.disable({ password })`
 3. 2FA removed from account
 
-### Login 2FA Verification
-
-When a user with 2FA enabled logs in, Better Auth's `twoFactorClient` redirects to `/auth/two-factor`. The `TwoFactorForm` component (at `apps/admin/src/components/auth/TwoFactorForm.tsx`) handles TOTP code entry, email OTP with resend, and backup code verification.
-
 ## API Endpoints Used
 
 | Endpoint | Consumer |
@@ -85,24 +70,12 @@ When a user with 2FA enabled logs in, Better Auth's `twoFactorClient` redirects 
 | `GET /api/v1/admin/auth/users` | useAdminUsers |
 | `POST /api/v1/admin/auth/users` | useAdminUsers (addUser) |
 | `DELETE /api/v1/admin/auth/users/{id}` | useAdminUsers (deleteUser) |
-| `GET /api/v1/admin/rbac/roles` | useAdminUsers, RolesManagement, UserPermissionEditor |
-| `GET /api/v1/admin/rbac/permissions` | RolesManagement, UserPermissionEditor |
-| `POST /api/v1/admin/rbac/roles` | RolesManagement |
-| `PUT /api/v1/admin/rbac/roles/{id}` | RolesManagement |
-| `DELETE /api/v1/admin/rbac/roles/{id}` | RolesManagement |
-| `POST /api/v1/admin/rbac/user-roles` | UserPermissionEditor |
-| `DELETE /api/v1/admin/rbac/user-roles` | UserPermissionEditor |
-| `POST /api/v1/admin/rbac/user-permissions` | UserPermissionEditor |
-| `DELETE /api/v1/admin/rbac/user-permissions` | UserPermissionEditor |
+| `GET /api/v1/admin/rbac/roles` | useAdminUsers |
 
 ## Known Gaps
 
-1. **2FA is not enforced as mandatory.** The `TwoFactorSetup` component shows "2FA Required" UI text and an amber warning when disabled, but no middleware prevents admin access without 2FA. The `/auth/setup-2fa` page exists but is never redirected to by middleware. Users can dismiss the warning and use the admin dashboard with only a password.
+1. **2FA is not enforced as mandatory.** The UI shows "2FA Required" text and an amber warning when disabled, but no middleware prevents admin access without 2FA.
 
-2. **Response envelope handling inconsistency.** `useAdminUsers` manually unwraps `json.data` with a heuristic (`json.data && typeof json.data === "object" && !Array.isArray(json.data)`). `RolesManagement` accesses `data.roles` directly without unwrapping in some cases and with unwrapping in others. This is fragile -- depends on whether the request goes through the admin proxy (which unwraps) or the Vite dev proxy (which does not).
+2. **No password change confirmation email.** When a user changes their password, no notification email is sent. The `revokeOtherSessions: true` flag is set though, which invalidates other active sessions.
 
-3. **No password change confirmation email.** When a user changes their password, no notification email is sent. The `revokeOtherSessions: true` flag is set though, which invalidates other active sessions.
-
-4. **Admin invite fallback logs password.** If email delivery fails when creating a new admin user, the temp password is logged to `console.log` with the message `IMPORTANT: Temp password for {email}: {password}`. This is a security risk in production.
-
-5. **Delete protection is role-check only.** The delete endpoint checks `userToDelete.role !== "admin"` but does not prevent deleting super admins specifically. The UI hides the delete button for super admins, but the API does not enforce it.
+3. **Admin invite fallback logs password.** If email delivery fails when creating a new admin user, the temp password is logged to `console.log`. This is a security risk in production.

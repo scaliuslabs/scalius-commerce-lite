@@ -10,7 +10,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
 | `queue(batch)` | Queues -- payment events, order ingest, OTP, notifications |
-| `scheduled(controller)` | Cron -- releases expired stock reservations every 15 minutes |
+| `scheduled(controller)` | Cron -- releases expired stock reservations every 15 minutes (30-minute expiry window) |
 
 ## Route Organization
 
@@ -42,12 +42,14 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/abandoned-checkouts` | `routes/abandoned-checkouts.ts` | Abandoned checkout tracking |
 | `/locations` | `routes/locations.ts` | City/zone/area hierarchy |
 | `/shipping-methods` | `routes/shipping-methods.ts` | Shipping options |
-| `/seo` | `routes/seo.ts` | SEO settings |
+| `/seo` | `routes/seo.ts` | SEO settings for meta tags |
 | `/products` | `routes/products.ts` | Product catalog |
 | `/categories` | `routes/categories.ts` | Category listings |
-| `/orders` | `routes/orders.ts` | Order creation (auth-protected) |
-| `/cache` | `routes/cache.ts` | Cache control (admin-protected) |
+| `/orders` | `routes/orders.ts` | Order creation (auth-protected via `authMiddleware`) |
+| `/cache` | `routes/cache.ts` | Cache control (admin-protected via `adminAuthMiddleware`) |
 | `/__ptproxy` | `routes/partytown-proxy.ts` | Partytown analytics proxy |
+
+Note: `/media` (`routes/media-server.ts`) is only registered in development mode for local file serving.
 
 ### Webhook Routes (signature verification IS the auth)
 
@@ -58,12 +60,17 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/webhooks/stripe` | `routes/webhooks/stripe.ts` | `constructEventAsync` (Stripe SDK) |
 | `/webhooks/sslcommerz` | `routes/webhooks/sslcommerz.ts` | Server-to-server IPN validation API call |
 | `/webhooks/polar` | `routes/webhooks/polar.ts` | `standardwebhooks` signature verification |
-| `/webhooks/pathao` | `routes/webhooks/pathao.ts` | `X-PATHAO-Signature` header check |
-| `/webhooks/steadfast` | `routes/webhooks/steadfast.ts` | `Authorization: Bearer` token check |
+| `/webhooks/pathao` | `routes/webhooks/pathao.ts` | `verifyDeliveryWebhook()` -- X-PATHAO-Signature header (timing-safe comparison) |
+| `/webhooks/steadfast` | `routes/webhooks/steadfast.ts` | `verifyDeliveryWebhook()` -- Authorization Bearer token (timing-safe comparison) |
+
+Delivery webhook verification (`src/middleware/webhook-auth.ts`) uses a three-strategy approach:
+1. Provider-specific signature/token verification (Pathao: X-PATHAO-Signature, Steadfast: Bearer token, default: HMAC-SHA256)
+2. IP allowlist fallback via `config.allowedWebhookIps`
+3. If no security is configured, the webhook is **rejected** (not allowed through)
 
 ### Admin Routes (admin auth + RBAC)
 
-28 route groups under `/admin/*`, protected by `adminAuthMiddleware`.
+All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings sub-routes are organized into modular files mounted through `routes/admin/settings.ts`.
 
 | Mount Point | Route File | Purpose |
 |---|---|---|
@@ -71,7 +78,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/admin/collections` | `routes/admin/collections.ts` | Collection CRUD + reorder |
 | `/admin/customers` | `routes/admin/customers.ts` | Customer management |
 | `/admin/pages` | `routes/admin/pages.ts` | CMS page CRUD |
-| `/admin/widgets` | `routes/admin/widgets.ts` | Widget CRUD + AI generation |
+| `/admin/widgets` | `routes/admin/widgets.ts` | Widget CRUD + history + AI generation |
 | `/admin/discounts` | `routes/admin/discounts.ts` | Discount CRUD |
 | `/admin/media` | `routes/admin/media.ts` | R2 media upload/manage |
 | `/admin/inventory` | `routes/admin/inventory.ts` | Stock management + scanner |
@@ -82,8 +89,8 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/admin/dashboard` | `routes/admin/dashboard.ts` | Dashboard aggregates |
 | `/admin/fraud-checker` | `routes/admin/fraud-checker.ts` | Fraud risk assessment |
 | `/admin/rbac` | `routes/admin/rbac.ts` | Role/permission management |
-| `/admin/settings` | `routes/admin/settings.ts` | Site settings, payment gateways |
-| `/admin/orders` | `routes/admin/orders.ts` | Order management |
+| `/admin/settings` | `routes/admin/settings.ts` | Settings router (see below) |
+| `/admin/orders` | `routes/admin/orders.ts` | Order management (+ `orders-status.ts`, `orders-refund.ts`) |
 | `/admin/products` | `routes/admin/products.ts` | Product CRUD |
 | `/admin/auth` | `routes/admin/auth-management.ts` | User/session management |
 | `/admin/ai-context` | `routes/admin/ai-context.ts` | AI widget context |
@@ -94,6 +101,20 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/admin/settings/delivery-locations` | `routes/admin/settings/delivery-locations.ts` | Location hierarchy CRUD |
 | `/admin/settings/checkout-languages` | (reuses) `routes/checkout-languages.ts` | Admin checkout language CRUD |
 | `/admin/settings/abandoned-checkouts` | (reuses) `routes/abandoned-checkouts.ts` | Admin abandoned checkout view |
+
+**Admin Settings Sub-routes** (mounted inside `routes/admin/settings.ts`):
+
+| Sub-mount | File | Purpose |
+|---|---|---|
+| `/` (root) | `settings/site.ts` | Site-wide settings (siteSettings table) |
+| `/` (root) | `settings/integrations.ts` | Integration config (email, storage, Firebase, etc.) |
+| `/` (root) | `settings/payments.ts` | Payment gateway config (Stripe, SSLCommerz, Polar) |
+| `/` (root) | `settings/system.ts` | System settings (currency, theme, phone) |
+| `/shipping-methods` | `settings/shipping.ts` | Shipping method CRUD |
+| `/delivery-providers` | `settings/delivery-providers.ts` | Delivery provider CRUD |
+| `/hero-sliders` | `settings/hero-sliders.ts` | Hero slider CRUD |
+| `/meta-conversions` | `settings/meta-conversions-admin.ts` | Meta Conversions API config |
+| `/notification-channels` | `settings/notification-channels.ts` | Notification channel config per order status |
 
 ### Payment Routes (public, storefront-facing)
 
@@ -113,16 +134,18 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/docs` | Swagger UI |
 | `/openapi.json` | Auto-generated OpenAPI 3.0 spec |
 | `/health` | Health check with cache stats |
+| `/` | Welcome message with version and environment |
 
 ## Middleware Pipeline
 
-Registered in order in `app.ts`. Every request goes through these:
+Registered in order in `app.ts`. Every request goes through these global middleware:
 
 1. **Per-request init** (`app.use("*")`) -- Calls `getDb(env)`, `initKv(env.CACHE)`, `initStorage(env.BUCKET)`.
 2. **CORS logging** (`app.use("*")`) -- Logs preflight requests for debugging.
 3. **CORS** (`app.use("*")`) -- Dynamic origin validation via `getCorsOriginContext()` from `@scalius/shared`.
 4. **Proxy base URL** (`app.use("*")`) -- Sets `X-Proxy-Base-URL` header from `PUBLIC_API_BASE_URL`.
-5. **Error handler** (`app.use("*")`) -- Catches `ApiError` subclasses and generic errors, returns standardized JSON.
+
+**Global error handler** (`app.onError`) -- Single handler that catches all uncaught errors. `ApiError` subclasses return their specific status/code; generic errors return 500. All errors return JSON `{ success: false, error: { code, message, details? } }`.
 
 Then, route-specific middleware:
 
@@ -132,17 +155,34 @@ Then, route-specific middleware:
 | `authMiddleware` | `/orders/*` | JWT Bearer token verification with auto-refresh. |
 | `cacheMiddleware` | Individual routes | KV-backed response caching with configurable TTL. |
 
-### Admin Auth Flow
+### Admin Auth Flow (`src/middleware/admin-auth.ts`)
 
 `adminAuthMiddleware` tries three auth methods in order:
 
 1. **Better Auth session cookie** -- from the admin dashboard SSR frontend
-2. **JWT Bearer token** -- from decoupled mobile/external apps
-3. **X-Scanner-Token header** -- from the warehouse scanner app (restricted to `/inventory/` endpoints only)
+2. **JWT Bearer token** -- from decoupled mobile/external apps (auto-refreshes near expiry, returns new token via `X-New-Token` header)
+3. **X-Scanner-Token header** -- from the warehouse scanner app (KV-stored, restricted to `/inventory/` endpoints only, role is `scanner` not `admin`)
 
-After authentication, it performs RBAC: checks `isSuperAdmin`, then resolves route-specific permissions via `getRoutePermission()` and validates against the user's effective permission set.
+After authentication, it performs RBAC: resolves the user's effective permission set via `getUserPermissions()` (which handles super-admin internally), then checks route-specific permissions via `getRoutePermission()` supporting `permission`, `anyOf`, and `allOf` modes.
 
-## Response Helpers
+### Auth Middleware (`src/middleware/auth.ts`)
+
+JWT Bearer token verification for protected public routes (e.g., `/orders/*`). Skips auth for `/health`, `/docs`, `/openapi.json`, and `/auth/token`. Auto-refreshes tokens nearing expiry. Returns generic error messages to prevent token enumeration.
+
+### Webhook Auth (`src/middleware/webhook-auth.ts`)
+
+Delivery webhook signature verification supporting provider-specific strategies:
+- **Pathao**: `X-PATHAO-Signature` header with timing-safe comparison
+- **Steadfast**: `Authorization: Bearer` token with timing-safe comparison
+- **Generic**: HMAC-SHA256 via `X-Webhook-Signature` header (supports `sha256=` prefix format)
+- **Fallback**: IP allowlist via `CF-Connecting-IP` / `X-Forwarded-For`
+- **No security**: Rejects the request (fail-closed)
+
+Credentials are loaded from the `deliveryProviders` table and decrypted via AES-GCM (`decryptCredentialsGraceful()`).
+
+## Response Conventions
+
+### Success Responses
 
 `src/utils/api-response.ts`:
 
@@ -152,9 +192,13 @@ After authentication, it performs RBAC: checks `isSuperAdmin`, then resolves rou
 | `created(c, data)` | `{ success: true, data: T }` | 201 |
 | `noContent(c)` | Empty body | 204 |
 
-All success responses follow the `{ success: true, data: T }` envelope. The admin proxy unwraps this to `{ success: true, ...T }` for backward compatibility. The storefront reads `json.data` directly.
+All success responses follow the `{ success: true, data: T }` envelope. The `T` passed to `ok()` is the FINAL payload -- never include redundant `success` or `data` wrapping inside `T`. The storefront reads `json.data` directly.
 
-`src/utils/api-error.ts` re-exports error classes from `@scalius/core/errors`:
+For 202 Accepted: use `c.json({ success: true, data: {...} }, 202)` directly (not `ok()` which forces 200).
+
+### Error Responses
+
+`src/utils/api-error.ts` re-exports error classes from `@scalius/core/errors` (`ApiError` is an alias for `AppError`):
 
 | Class | Status | Code |
 |-------|--------|------|
@@ -166,7 +210,33 @@ All success responses follow the `{ success: true, data: T }` envelope. The admi
 | `RateLimitError` | 429 | `RATE_LIMIT` |
 | `ServiceUnavailableError` | 503 | `SERVICE_UNAVAILABLE` |
 
-Thrown errors are caught by the global error handler and returned as `{ success: false, error: { code, message, details? } }`.
+Thrown errors are caught by `app.onError()` and returned as `{ success: false, error: { code, message, details? } }`.
+
+### OpenAPI Schema Utilities
+
+`src/schemas/responses.ts` provides shared helpers for `createRoute()` response definitions:
+
+| Helper | Purpose |
+|--------|---------|
+| `successEnvelope(schema)` | Wraps schema in `{ success: true, data: T }` |
+| `paginatedEnvelope(key, schema)` | Wraps in `{ success: true, data: { [key]: items[], pagination } }` |
+| `errorResponseSchema` | Standard error shape |
+| `errorResponses` | Pre-built 400/401/403/404/500 response definitions |
+| `messageResponse` | `{ success: true, data: { message: string } }` |
+| `idResponse` | `{ success: true, data: { id: string } }` |
+| `noContentResponse` | 204 No Content definition |
+
+`src/schemas/entities.ts` defines Zod schemas for domain entities used in API responses: products, orders, categories, customers, collections, discounts, pages, widgets, attributes, media, delivery, settings, and navigation.
+
+## JWT Utilities (`src/utils/jwt.ts`)
+
+- `generateToken(payload, expiresIn?, env?)` -- Sign a JWT (default 1h expiry)
+- `verifyToken(token, env?)` -- Verify signature + check KV blacklist
+- `revokeToken(token)` -- Add to KV blacklist with TTL matching token expiry (minimum 60s for KV)
+- `isTokenBlacklisted(token)` -- Check KV blacklist (fails closed: rejects token when KV unavailable)
+- `refreshTokenIfNeeded(token, thresholdMinutes?, env?)` -- Re-sign if within threshold of expiry (verifies first)
+- `extractTokenFromHeader(header)` -- Parse `Bearer` token from Authorization header
+- Token hashing uses SHA-256 hex digest for blacklist keys
 
 ## Cache TTLs
 
@@ -183,11 +253,11 @@ Thrown errors are caught by the global error handler and returned as `{ success:
 
 ## Queue Consumer
 
-`src/queue-consumer.ts` dispatches messages by type. Three queue strategies:
+`src/queue-consumer.ts` dispatches messages by type. Two queue strategies:
 
 ### Order Ingest Queue
 
-Queue name: `order-ingest-queue`. Uses batch processing -- a single `db.batch()` across all messages in the batch. Handles `order.ingest` messages.
+Queue name: `order-ingest-queue`. Uses batch processing -- a single `db.batch()` across all messages in the batch. Handles `order.ingest` messages. Delegated to `handleOrderIngestBatch()` in `@scalius/core/modules/orders/orders.queue`.
 
 ### Payment/Notification/OTP Queue
 
@@ -195,38 +265,41 @@ Messages processed independently with `Promise.allSettled`. Successful messages 
 
 | Message Type | Handler | Action |
 |---|---|---|
-| `payment.stripe.confirmed` | `processPaymentConfirmed()` | Convert cents->major unit via `getDecimalPlaces()`, record payment |
+| `payment.stripe.confirmed` | `processPaymentConfirmed()` | Convert smallest-unit->major-unit via `getDecimalPlaces()` (ISO 4217), record payment |
 | `payment.stripe.failed` | `processPaymentFailed()` | Mark order failed |
 | `payment.stripe.canceled` | `releaseOrderInventory()` | Release reserved stock |
-| `payment.stripe.refunded` | (audit only) | Log refund event |
+| `payment.stripe.refunded` | (audit only) | Log refund event (refunds are admin-initiated synchronously) |
 | `payment.sslcommerz.confirmed` | `processPaymentConfirmed()` | Amount already in major unit, record payment |
 | `payment.sslcommerz.failed` | `processPaymentFailed()` | Mark order failed |
-| `payment.polar.confirmed` | `processPaymentConfirmed()` | Convert cents->major unit via `getDecimalPlaces()` |
+| `payment.polar.confirmed` | `processPaymentConfirmed()` | Convert smallest-unit->major-unit via `getDecimalPlaces()` |
 | `payment.polar.failed` | `processPaymentFailed()` | Mark order failed |
-| `payment.polar.refunded` | `processPolarWebhookRefund()` | Update payment status, release inventory on full refund |
-| `order.notification` | Email + FCM push | Send order status email and admin push notification |
-| `auth.send_otp` | Email/WhatsApp/SMS | Send OTP code via configured channel |
+| `payment.polar.refunded` | `processPolarWebhookRefund()` | Update payment status, release inventory on full refund (can originate from Polar dashboard) |
+| `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) | Send order status email and admin push notification (FCM failure is non-fatal) |
+| `auth.send_otp` | Email / WhatsApp / SMS | Send OTP via email (`sendEmail()`), WhatsApp (Meta Graph API template), or SMS (pending) |
 
 ## How to Add a New Endpoint
 
 1. **Create the route file** in `src/routes/` (public) or `src/routes/admin/` (admin-protected):
 
 ```typescript
-import { OpenAPIHono } from "@hono/zod-openapi";
-import { createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ok } from "../utils/api-response";
 import { NotFoundError } from "../utils/api-error";
-import { cacheMiddleware } from "../middleware/cache";
-import { CACHE_TTLS } from "../utils/cache-ttls";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const getThingRoute = createRoute({
   method: "get",
   path: "/{id}",
+  tags: ["Things"],
   request: { params: z.object({ id: z.string() }) },
   responses: {
-    200: { description: "Success", content: { "application/json": { schema: z.object({ /* ... */ }) } } },
+    200: {
+      description: "Success",
+      content: { "application/json": { schema: successEnvelope(z.object({ /* ... */ })) } },
+    },
+    ...errorResponses,
   },
 });
 
@@ -255,6 +328,9 @@ app.route("/admin/things", adminThingRoutes);
 3. **Add caching** (optional) -- use `cacheMiddleware` with `CACHE_TTLS`:
 
 ```typescript
+import { cacheMiddleware } from "../middleware/cache";
+import { CACHE_TTLS } from "../utils/cache-ttls";
+
 app.use("/*", cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:things:" }));
 ```
 
@@ -269,18 +345,14 @@ app.use("/*", cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:things
 | `src/queue-consumer.ts` | Queue message dispatcher |
 | `src/middleware/admin-auth.ts` | Admin auth (session + JWT + scanner token) + RBAC |
 | `src/middleware/auth.ts` | JWT auth for protected public routes |
-| `src/middleware/webhook-auth.ts` | Delivery webhook signature verification |
+| `src/middleware/webhook-auth.ts` | Delivery webhook signature verification (HMAC/token/IP) |
 | `src/middleware/cache.ts` | KV-backed response cache middleware |
 | `src/utils/api-response.ts` | `ok()`, `created()`, `noContent()` helpers |
-| `src/utils/api-error.ts` | Error class re-exports from `@scalius/core` |
+| `src/utils/api-error.ts` | Error class re-exports from `@scalius/core/errors` |
 | `src/utils/cache-ttls.ts` | Centralized TTL constants |
 | `src/utils/kv-cache.ts` | KV cache get/set/invalidation utilities |
 | `src/utils/cache-invalidation.ts` | Entity-specific cache invalidation |
-| `src/utils/jwt.ts` | JWT sign/verify/refresh utilities |
-
-## Known Gaps
-
-- Widget history API endpoints (`GET/POST/DELETE /admin/widgets/{id}/history/*`) are referenced by the admin UI but do not exist yet.
-- `capturePaymentIntent()` and `cancelPaymentIntent()` exist in `@scalius/core` but have no API routes.
-- The `media` route (`/media`) is only registered in development mode for local file serving.
-- The OpenAPI spec auto-generation only documents routes that use `createRoute()` -- any routes using plain Hono `.get()`/`.post()` are not in the spec.
+| `src/utils/jwt.ts` | JWT sign/verify/refresh/revoke/blacklist utilities |
+| `src/utils/encryption-key.ts` | Encryption key extraction from env |
+| `src/schemas/entities.ts` | Zod schemas for all domain entities |
+| `src/schemas/responses.ts` | OpenAPI envelope/pagination/error helpers |

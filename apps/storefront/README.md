@@ -1,247 +1,255 @@
-<p align="center">
-  <a href="https://scalius.com">
-    <img alt="Scalius Commerce Storefront" src="https://raw.githubusercontent.com/scaliuslabs/scalius-commerce-lite/refs/heads/master/src/assets/logo-dark.png" width="200" />
-  </a>
-</p>
+# Storefront (`apps/storefront/`)
 
-<h1 align="center">Scalius Commerce Storefront</h1>
+Astro 6 SSR customer-facing storefront deployed as a Cloudflare Worker. Communicates with the API worker via Cloudflare Service Binding (`env.BACKEND_API`). Imports `@scalius/shared` and `@scalius/api-client` -- does NOT import `@scalius/core` or `@scalius/database` directly.
 
-<h4 align="center">
-  <a href="https://docs.scalius.com">Documentation</a> |
-  <a href="https://scalius.com">Website</a>
-</h4>
+## Entry Point
 
-<p align="center">
-  A high-performance, modern e-commerce storefront template built with <strong>Astro 6</strong>, <strong>React 19</strong>, and <strong>Tailwind CSS 4</strong>. Designed to work seamlessly with the Open Source <strong>Scalius Commerce Lite Backend</strong>, this storefront is optimized for deployment on <strong>Cloudflare Workers</strong> with edge caching and zero cold starts.
-</p>
+`src/worker.ts` exports a simple Cloudflare Worker that delegates to the Astro Cloudflare adapter handler.
 
-<p align="center">
-  <!-- License: MIT -->
-  <a href="./LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="Scalius Commerce Storefront is released under the MIT license." />
-  </a>
-  <!-- PRs Welcome -->
-  <a href="./CONTRIBUTING.md">
-    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" alt="PRs welcome!" />
-  </a>
-  <!-- Security Policy -->
-  <a href="./SECURITY.md">
-    <img src="https://img.shields.io/badge/Security-Policy-red.svg" alt="Security Policy" />
-  </a>
-</p>
+## Tech Stack
 
-<p align="center">
-  <!-- Twitter / X -->
-  <a href="https://scalius.com/x">
-    <img src="https://img.shields.io/twitter/follow/scaliuslabs.svg?label=Follow%20@scaliuslabs" alt="Follow @scaliuslabs" />
-  </a>
-  <!-- Discord -->
-  <a href="https://scalius.com/discord">
-    <img src="https://img.shields.io/badge/chat-on%20discord-7289DA.svg" alt="Discord Chat" />
-  </a>
-  <!-- Facebook -->
-  <a href="https://scalius.com/facebook">
-    <img src="https://img.shields.io/badge/Facebook-Follow-1877F2?logo=facebook" alt="Follow on Facebook" />
-  </a>
-</p>
+- **Astro 6** -- SSR with `@astrojs/cloudflare` adapter
+- **React 19** -- Interactive components (islands architecture)
+- **Tailwind CSS 4** -- Styling
+- **Nano Stores** -- Client-side state management (cart, toast)
+- **Radix UI** -- Accessible UI primitives
+- **Lucide React** -- Icons
+- **Sonner** -- Toast notifications
 
-## 🚀 Key Features
+## Project Structure
 
-- **⚡ Ultra-Fast Performance**: Built on Astro's server-side rendering (SSR) optimized for the Edge.
-- **🌍 Cloudflare Workers Adapter**: Deploys natively to Cloudflare's global network with zero cold starts.
-- **💾 Smart Edge Caching**: Custom L2 caching strategy using Cloudflare Cache API + KV for instant sub-second page loads.
-- **🖼️ Optimized Images**: Real-time image resizing and optimization via Cloudflare Images (production) or Squoosh (local).
-- **🛍️ Full Commerce Functionality**:
-  - Dynamic Product & Category pages
-  - Full Cart & Checkout flow
-  - Search with Command Palette (FTS5 full-text search — prefix matching, multi-word queries)
-  - Product Variants & Image Zoom
-- **🎨 Modern UI/UX**:
-  - **Tailwind CSS v4** for styling
-  - **Radix UI** for accessible primitives
-  - **Lucide React** for beautiful icons
-  - **Sonner** for toast notifications
-- **🔍 SEO Ready**: Auto-generated sitemaps, semantic HTML, and structured data.
-
-## 🛠 Tech Stack
-
-- **Framework**: [Astro 6](https://astro.build/)
-- **UI Library**: [React 19](https://react.dev/)
-- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
-- **State Management**: [Nano Stores](https://github.com/nanostores/nanostores)
-- **Deployment**: [Cloudflare Workers](https://workers.cloudflare.com/)
-- **Package Manager**: pnpm
-
-## 📁 Project Structure
-
-```bash
-├── public/              # Static assets
-├── scripts/             # Build and deploy scripts
-├── src/
-│   ├── components/      # UI Components (Header, Footer, Product, etc.)
-│   ├── config/          # Build ID and runtime config
-│   ├── layouts/         # Page layouts (Layout.astro)
-│   ├── lib/             # Utilities, API client, middleware helpers
-│   │   ├── api/         # Backend API client (direct fetch via createApiUrl)
-│   │   ├── edge-cache.ts # L2 edge caching (Cache API + KV versioning)
-│   │   ├── smart-cache.ts # In-memory cache + request deduplication
-│   │   └── middleware-helper/ # CSP, cache context
-│   ├── pages/           # File-based routing
-│   │   ├── api/         # Proxy routes (checkout, purge-cache, auth/logout)
-│   │   ├── products/    # Product details pages
-│   │   ├── categories/  # Category listing pages
-│   │   ├── buy/         # Buy/redirect pages
-│   │   ├── cart.astro   # Cart page
-│   │   ├── checkout.astro
-│   │   ├── order-success.astro
-│   │   ├── account.astro
-│   │   └── search/      # Search with filters
-│   ├── store/           # Global state (Cart, Toast, etc.)
-│   └── middleware.ts    # Edge caching, CSP, BACKEND_API context
-├── astro.config.mjs     # Astro configuration
-├── tailwind.config.mjs  # Tailwind configuration
-└── wrangler.jsonc       # Cloudflare Workers configuration
+```
+src/
+  components/        # UI Components (Header, Footer, Product, Cart, etc.)
+  config/            # Build ID and runtime config
+  layouts/           # Page layouts (Layout.astro)
+  lib/               # Utilities, API client, caching, middleware helpers
+    api/             # API client modules (per-domain fetch functions + typed unwrap)
+    cart/            # Cart utility functions
+    checkout/        # Checkout page logic + gateway handlers
+    edge-cache.ts    # L2 edge caching (Cache API + KV versioning + ALS)
+    smart-cache.ts   # In-memory LRU cache (L1)
+    middleware-helper/ # CSP handler
+    tracking/        # Analytics tracking
+  pages/             # File-based routing
+    api/             # Server-side proxy routes
+      checkout/      # create-order, stripe-intent, sslcommerz-session, polar-session
+      auth/          # Auth proxy routes
+      customer-auth/ # Customer OTP auth proxy
+      products/      # Product data proxy
+    products/        # Product detail pages
+    categories/      # Category listing pages
+    buy/             # Buy/redirect pages
+    search/          # Search with filters
+    cart.astro       # Cart page
+    checkout.astro   # Checkout page
+    order-success.astro
+    account.astro    # Customer account page
+  store/             # Global state (cart.ts, toast)
+  middleware.ts      # Edge caching + API context injection
 ```
 
-## 🏁 Getting Started
+## Middleware (`src/middleware.ts`)
 
-### Prerequisites
+Two middleware functions run in sequence via `sequence()`:
 
-- **Node.js**: v18.17.1 or higher (v20+ recommended)
-- **pnpm**: v9+ (Recommended package manager)
+### 1. API Context Middleware (`apiContextMiddleware`)
 
-### Installation
+Injects Cloudflare Worker runtime bindings into AsyncLocalStorage for the request lifecycle. The `apiContext` ALS store (`src/lib/api/context.ts`) carries:
 
-1.  Clone the repository:
+- `BACKEND_API` -- Service binding Fetcher for 0ms-latency internal API calls
+- `PUBLIC_API_URL` -- Full API URL for client-side use
+- `PUBLIC_API_BASE_URL` -- Base URL for image optimization and auth redirects
+- `CDN_DOMAIN_URL` -- CDN domain for image URLs (also set on `globalThis.__SCALIUS_CDN_DOMAIN__` as fallback)
+- `STOREFRONT_URL` -- This storefront's URL (sitemaps, Facebook feed)
+- `API_TOKEN` -- Token for protected API operations
 
-    ```bash
-    git clone https://github.com/scaliuslabs/scalius-commerce-storefront.git
-    cd scalius-commerce-storefront
-    ```
+### 2. Caching Middleware (`cachingMiddleware`)
 
-2.  Install dependencies:
-    ```bash
-    pnpm install
-    ```
+Implements a two-layer edge caching strategy for HTML pages:
 
-### Configuration
+**Cacheable paths** (regex-matched):
+- Homepage (`/`)
+- Product pages (`/products/{slug}`)
+- Category pages (`/categories/{slug}`)
+- Search (`/search`)
+- Sitemaps (`/sitemap.xml`, `/sitemap-*.xml`)
+- Generic pages (any path not matching excluded prefixes)
 
-Copy the example environment file:
+**Non-cacheable paths**: `/api`, `/cart`, `/checkout`, `/buy`, `/order-success`, `/account`, `/health`, `/robots.txt`
 
-```bash
-cp .env.example .env
-```
+**Cache key construction**:
+- Strips tracking parameters (fbclid, gclid, UTM params, ref)
+- Strips product variant selection params (size, color) on product pages
+- Appends `cache_v={kvVersion}-{BUILD_ID}` to ensure deployments never serve stale HTML
 
-For local development, update `.env` with your backend details. In production, many variables can be set in `wrangler.jsonc` under `vars`; secrets should use `wrangler secret put`.
+**Cache flow**:
+1. Check Cloudflare Cache API for cached HTML (with 500ms timeout)
+2. On HIT: return cached response with browser no-cache headers
+3. On MISS: render page, store in Cache API (with `waitUntil`), return with no-cache headers
+4. Browser always gets `Cache-Control: no-cache, no-store, must-revalidate` (edge cache is internal only)
+5. Edge-stored responses use `Cache-Control: public, max-age=31536000, immutable` (invalidation via KV version bump)
 
-| Variable              | Description                                                                 | Required |
-| :-------------------- | :-------------------------------------------------------------------------- | :------- |
-| `PUBLIC_API_URL`      | Full URL of your Scalius Backend API (e.g. `http://localhost:4321/api/v1`)  | Yes      |
-| `PUBLIC_API_BASE_URL` | Base URL for image optimization and auth redirects (e.g. `http://localhost:4321`) | Yes  |
-| `API_TOKEN`           | Backend API token for server-side proxy routes (create-order, payment intents). Must match backend. | Yes |
-| `PURGE_TOKEN`         | Token for cache purge requests. Must match backend's `PURGE_TOKEN`.         | Yes      |
-| `STOREFRONT_URL`      | URL where this storefront is deployed (sitemaps, Facebook feed)             | Optional |
-| `CDN_DOMAIN_URL`      | CDN domain for image optimization (R2 custom domain)                         | Optional |
-| `JWT_SECRET`          | Backend JWT signing secret (for compatibility; storefront does not verify)  | Optional |
+**Cache context**: Wraps all downstream processing in `cacheContextAls.run()` so `withEdgeCache()` calls in API functions read per-request context instead of module-level state.
 
-### Development
+## Caching Architecture
 
-Start the local development server:
+### L1: In-Memory LRU Cache (`src/lib/smart-cache.ts`)
 
-```bash
-pnpm dev
-```
+- Capped at 1000 entries with LRU eviction
+- TTL-based expiry per entry
+- Persists across warm Worker starts, dies on cold start
+- Provides `deleteByPrefix()` and `deleteByPrefixes()` for targeted invalidation
 
-The site will be available at `http://localhost:4321` (or `http://localhost:4322` if the backend is already using 4321).
+### L2: Cloudflare Cache API + KV Versioning (`src/lib/edge-cache.ts`)
 
-### Build & Preview
+- Uses AsyncLocalStorage for per-request cache context (prevents cross-request state contamination)
+- Cache keys include KV version and BUILD_ID: `https://{hostname}/_api-cache/{key}?v={version}&build={BUILD_ID}`
+- `stale-while-revalidate=120` and `stale-if-error=300` for resilience
+- 500ms timeout on L2 cache operations to prevent hanging
+- In-flight request deduplication prevents duplicate API calls when multiple components request the same data simultaneously
 
-From `package.json`:
+### `withEdgeCache(key, fetcher, options)` -- The Main Caching Function
 
-```bash
-pnpm dev      # astro dev --host
-pnpm build    # generate-build-id + astro check + astro build
-pnpm preview  # astro preview
-pnpm deploy   # full pipeline: build ID, type check, build, wrangler deploy
-pnpm start    # node ./dist/server/entry.mjs (Node.js preview)
-```
+1. Check L1 (in-memory) -- versioned key `{key}:v{kvVersion}`
+2. Check in-flight deduplication map
+3. Check L2 (Cache API) -- populate L1 from L2 on hit
+4. Execute fetcher -- store in both L1 and L2
 
-## ☁️ Deployment
+### Cache Invalidation
 
-This project is configured for **Cloudflare Workers**.
+When the API triggers `/api/purge-cache?token=PURGE_TOKEN`:
+- KV version is bumped -- all cache keys change, effectively invalidating everything
+- L1 in-memory cache can be cleared via `clearMemoryCache()` or selectively via `clearL1ByPrefixes()`
+- L2 entries with old version keys are never matched
 
-1.  **Login to Cloudflare**:
+### Cache TTL Constants
 
-    ```bash
-    npx wrangler login
-    ```
+| Constant | Seconds | Purpose |
+|----------|---------|---------|
+| `CACHE_TTL.LONG` | 86400 (24h) | Static data (layout, categories) |
+| `CACHE_TTL.MEDIUM` | 3600 (1h) | Semi-dynamic (product listings) |
+| `CACHE_TTL.SHORT` | 300 (5m) | Dynamic (CSP settings, checkout config) |
 
-2.  **Deploy** (recommended — runs full pipeline: build ID, type check, build, deploy):
+## API Client (`src/lib/api/`)
 
-    ```bash
-    pnpm deploy
-    ```
+### Architecture
 
-    Or deploy manually:
+Each API domain has its own module file (e.g., `products.ts`, `categories.ts`, `orders.ts`). All use `createApiUrl()` from `client.ts` to build request URLs and `fetch()` directly -- the storefront does NOT use the generated SDK for data fetching, only for types.
 
-    ```bash
-    pnpm build
-    npx wrangler deploy
-    ```
+### Typed Envelope Unwrapping (`src/lib/api/unwrap.ts`)
 
-3.  **Configure secrets** in Cloudflare (required for production):
+Two helpers centralize the single `as` cast for the API's `{ success: true, data: T }` envelope:
 
-    ```bash
-    npx wrangler secret put API_TOKEN
-    npx wrangler secret put PURGE_TOKEN
-    ```
+- `unwrapEnvelope<T>(response)` -- Returns `data` if `success === true`, else `null`
+- `unwrapData<T>(response)` -- Returns `data` without checking `success` (for cases where caller handles success separately)
 
-    Non-secret variables (`PUBLIC_API_URL`, `PUBLIC_API_BASE_URL`, `STOREFRONT_URL`, `CDN_DOMAIN_URL`) can be set in `wrangler.jsonc` under `vars`.
+### Runtime Environment (`src/lib/api/runtime-env.ts`)
 
-### Cloudflare bindings
+Consolidated accessors for Cloudflare Worker bindings. All delegate to `apiContext.getStore()` (AsyncLocalStorage set per-request by middleware):
 
-`wrangler.jsonc` declares:
+- `getRuntimeApiUrl()` -- PUBLIC_API_URL
+- `getRuntimeApiBaseUrl()` -- PUBLIC_API_BASE_URL
+- `getRuntimeCdnDomain()` -- CDN_DOMAIN_URL
+- `getRuntimeApiToken()` -- API_TOKEN
+- `getRuntimeStorefrontUrl()` -- STOREFRONT_URL with fallback chain: ALS -> cloudflare:workers env -> import.meta.env -> empty string
 
-| Binding         | Type     | Purpose                                                                 |
-| :-------------- | :------- | :---------------------------------------------------------------------- |
-| `CACHE_CONTROL` | KV       | Cache version for L2 invalidation (purge-cache bumps version)           |
-| `BACKEND_API`   | Service  | Service binding to the Scalius backend for 0ms latency internal calls  |
-| `ASSETS`        | Fetcher  | Static asset serving                                                    |
+### API Module Files
 
-The `BACKEND_API` service binding allows SSR requests to call the backend without a network hop when both are deployed on Cloudflare. Configure the `service` name in `wrangler.jsonc` to match your backend Worker name.
+| File | Functions |
+|------|-----------|
+| `products.ts` | Product catalog, detail, variants |
+| `categories.ts` | Category listings, detail |
+| `collections.ts` | Homepage collections |
+| `orders.ts` | Order creation, status polling |
+| `checkout.ts` | Checkout config, gateways |
+| `search.ts` | FTS5 search |
+| `header.ts` | Header config |
+| `footer.ts` | Footer config |
+| `navigation.ts` | Navigation menus |
+| `pages.ts` | CMS pages |
+| `widgets.ts` | Active widgets |
+| `discounts.ts` | Discount validation |
+| `attributes.ts` | Filterable attributes |
+| `shipping.ts` | Shipping methods, locations |
+| `settings.ts` | Site settings, SEO |
+| `storefront.ts` | Homepage data bundle |
+| `customer-auth.ts` | Customer OTP auth |
+| `abandoned-checkouts.ts` | Abandoned checkout tracking |
+| `tracking.ts` | Analytics/tracking config |
 
-## 🧩 Backend Integration
+## Server-Side Proxy Routes (`src/pages/api/`)
 
-This storefront requires a running instance of the **Scalius Commerce Lite Backend**. Ensure your `PUBLIC_API_URL` points to the correct backend endpoint (e.g. `https://your-backend.com/api/v1`).
+Proxy routes handle operations that require the `API_TOKEN` secret or need to unwrap the API envelope before returning to browser JavaScript.
 
-The API client in `src/lib/api/` uses direct `fetch` calls via `createApiUrl` — it does **not** use the backend's generated SDK. It handles:
+| Route | Purpose |
+|-------|---------|
+| `checkout/create-order.ts` | Create order via API (queue-based, with polling) |
+| `checkout/stripe-intent.ts` | Create Stripe PaymentIntent |
+| `checkout/sslcommerz-session.ts` | Create SSLCommerz session |
+| `checkout/polar-session.ts` | Create Polar checkout session |
+| `purge-cache.ts` | Cache purge endpoint (bumps KV version) |
+| `auth/` | Auth proxy routes |
+| `customer-auth/` | Customer OTP auth proxy |
+| `products/` | Product data proxy |
+| `__ptproxy.ts` | Partytown analytics proxy |
+| `facebook-feed.xml.ts` | Facebook product feed |
 
-- Fetching products, categories, collections, pages, layout data, and widgets
-- Customer auth (OTP-based), cart, checkout, and **asynchronous queue-based order creation (polling)**
-- Payment intents (Stripe, SSLCommerz) via server-side proxy routes
-- Discount validation, shipping locations, and analytics config
+Checkout proxy endpoints unwrap `.data` before returning to the browser -- the checkout page reads top-level fields.
 
-**Server-side proxy routes** (`src/pages/api/checkout/*`, `create-order`, `stripe-intent`, `sslcommerz-session`) require `API_TOKEN` to obtain a JWT from the backend for protected operations.
+## Cart (`src/store/cart.ts`)
 
-## ⚡ Performance Optimization
+Client-side cart state using Nano Stores (`nanostores/map`):
 
-### Edge Caching
+- Persisted to `localStorage` under key `cart`
+- Cart item keys use `{productId}-{variantId}` for variant products, `{productId}-{size}-{color}` for size/color combos, or just `{productId}` for simple products
+- Discount support with auto-clear when cart contents change
+- Cross-component communication via `CustomEvent` dispatches (`cart-updated`, `discount-applied`, `discount-removed`)
 
-The project uses `middleware.ts` for **L2 Caching** at the edge:
+## Checkout (`src/lib/checkout/`)
 
-- **L1**: In-memory `smartCache` for API responses (layout, homepage, widgets)
-- **L2**: Cloudflare Cache API for HTML, with KV (`CACHE_CONTROL`) for versioning (`v_hostname`)
+Gateway-based payment architecture:
 
-When the backend triggers `/api/purge-cache?token=PURGE_TOKEN`, the storefront bumps the KV version, invalidating all cached HTML and clearing the in-memory API cache. Critical paths are then warmed in the background.
+- `registry.ts` -- Gateway handler registry (`registerGateway` / `getGateway`)
+- `handlers/cod.ts` -- Cash on delivery
+- `handlers/stripe.ts` -- Stripe Elements
+- `handlers/sslcommerz.ts` -- SSLCommerz redirect
+- `handlers/polar.ts` -- Polar redirect
+- `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, renders order summary, renders gateway cards, handles payment processing
+- Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
 
-- **Cacheable paths**: Homepage, products, categories, search, sitemaps
-- **Non-cacheable**: Cart, checkout, account, order-success
+## Import Boundaries
 
-### Image Optimization
+The storefront imports ONLY:
+- `@scalius/shared` -- Pure utility functions (currency formatting, CORS, etc.)
+- `@scalius/api-client` -- Generated SDK types (type-only imports)
 
-- **Development**: Uses `squoosh` service.
-- **Production**: Uses Cloudflare Images service via `@astrojs/cloudflare` adapter for on-the-fly resizing and format conversion (WebP/AVIF).
+It does NOT import:
+- `@scalius/core` -- Domain services
+- `@scalius/database` -- Schema, client, migrations
 
-## 📄 License
+All data access goes through the API worker via service binding or HTTP fetch.
 
-[MIT](LICENSE) © Scalius
+## Cloudflare Bindings
+
+| Binding | Type | Purpose |
+|---------|------|---------|
+| `CACHE_CONTROL` | KV | Cache version for L2 invalidation |
+| `BACKEND_API` | Service | Service binding to API worker (0ms latency) |
+| `ASSETS` | Fetcher | Static asset serving |
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/worker.ts` | Cloudflare Worker entry point |
+| `src/middleware.ts` | Cache + API context middleware |
+| `src/lib/edge-cache.ts` | L1+L2 caching with ALS, deduplication, KV versioning |
+| `src/lib/smart-cache.ts` | In-memory LRU cache (1000 entries max) |
+| `src/lib/api/context.ts` | AsyncLocalStorage for per-request Cloudflare bindings |
+| `src/lib/api/runtime-env.ts` | Runtime env accessors with fallback chains |
+| `src/lib/api/unwrap.ts` | Typed envelope unwrap helpers |
+| `src/lib/api/client.ts` | API URL builder and fetch client |
+| `src/lib/checkout/index.ts` | Checkout page logic + gateway orchestration |
+| `src/store/cart.ts` | Nano Stores cart state (localStorage-persisted) |
+| `src/config/build-id.ts` | Build ID for cache key versioning |
