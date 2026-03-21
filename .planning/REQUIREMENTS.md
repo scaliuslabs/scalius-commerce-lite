@@ -13,7 +13,7 @@ Requirements for milestone v1.0. Each maps to roadmap phases.
 - [ ] **INV-02**: Invoice displays business name, logo, address, tax ID (TIN/BIN), and configurable footer text
 - [ ] **INV-03**: Invoice displays order items with name, SKU, quantity, unit price, line total, and discount breakdown
 - [ ] **INV-04**: Invoice displays totals section: subtotal, shipping charge, discount, and grand total
-- [ ] **INV-05**: Invoice numbers auto-increment with a configurable prefix (e.g., INV-00001)
+- [x] **INV-05**: Invoice numbers auto-increment with a configurable prefix (e.g., INV-00001)
 - [ ] **INV-06**: Merchant can print the invoice via browser print dialog (window.print)
 - [ ] **INV-07**: Merchant can download the invoice as a PDF file via one-click button
 
@@ -133,7 +133,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INV-02 | Phase 4: Invoice & Business Settings | Pending |
 | INV-03 | Phase 4: Invoice & Business Settings | Pending |
 | INV-04 | Phase 4: Invoice & Business Settings | Pending |
-| INV-05 | Phase 4: Invoice & Business Settings | Pending |
+| INV-05 | Phase 4: Invoice & Business Settings | Complete |
 | INV-06 | Phase 4: Invoice & Business Settings | Pending |
 | INV-07 | Phase 4: Invoice & Business Settings | Pending |
 | BIZ-01 | Phase 4: Invoice & Business Settings | Complete |
