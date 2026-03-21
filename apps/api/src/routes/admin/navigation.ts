@@ -9,11 +9,11 @@ import {
     updateNavigationConfig,
     deleteNavigationConfig,
 } from "@scalius/core/modules/navigation";
-import {
-    saveNavigationConfigSchema,
-    headerConfigSchema,
-    footerConfigSchema,
-} from "@scalius/core/modules/navigation";
+// OpenAPI-safe schema (no z.lazy() recursion — Hono spec generator stack overflows on recursive schemas)
+const saveNavigationConfigSchema = z.object({
+    type: z.enum(["header", "footer"]),
+    config: z.record(z.string(), z.unknown()),
+});
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getKv } from "../../utils/kv-cache";
 
@@ -80,8 +80,8 @@ const getConfigRoute = createRoute({
             content: {
                 "application/json": {
                     schema: successEnvelope(z.object({
-                        headerConfig: headerConfigSchema,
-                        footerConfig: footerConfigSchema,
+                        headerConfig: z.record(z.string(), z.unknown()),
+                        footerConfig: z.record(z.string(), z.unknown()),
                     })),
                 },
             },
