@@ -7,6 +7,8 @@ import ProductGallery from "@/components/product/ProductGallery.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import { loadPageWithLayout } from "@/lib/page-data";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
 
 const { slug } = Astro.params;
 if (!slug) {
@@ -58,9 +60,90 @@ const pageTitle = product.metaTitle || product.name;
 const pageDescription = cleanMetaDescription;
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+
+// --- SEO: per SEO-01, SEO-02, OG-01, OG-05 ---
+const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
+const storefrontUrl = getRuntimeStorefrontUrl();
+const canonicalUrl = `${storefrontUrl}/products/${product.slug}`;
+
+// OG image: 1200x630 for social sharing (per OG-05)
+const primaryImageUrl = images[0]?.url || product.imageUrl || null;
+const ogImageUrl = primaryImageUrl
+  ? getOptimizedImageUrl(primaryImageUrl, { width: 1200, height: 630, quality: 85, format: "auto", fit: "cover" })
+  : null;
+
+// Description for OG and JSON-LD -- strip HTML (per research constraint)
+const seoDescription = (cleanMetaDescription || product.description || product.name)
+  .replace(/<[^>]+>/g, "")
+  .slice(0, 200);
+
+// Store name for JSON-LD seller and brand fallback
+const storeName = layoutData?.footer?.copyrightText || layoutData?.header?.logo?.alt || "Store";
+
+// Brand from product attributes (mirrors facebook-feed.xml.ts pattern)
+const brandAttribute = product.attributes?.find((a: { name: string }) => a.name.toLowerCase() === "brand");
+const brandName = brandAttribute?.value || storeName;
+
+// Primary SKU
+const primarySku = variants[0]?.sku || product.id;
+
+// priceValidUntil -- end of next year, ISO 8601 date
+const priceValidUntil = new Date(new Date().getFullYear() + 1, 11, 31).toISOString().split("T")[0];
+
+// Product JSON-LD -- per SEO-01 (merchant listing spec)
+const productJsonLd = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": product.name,
+  "description": (product.description || product.name).replace(/<[^>]+>/g, ""),
+  ...(ogImageUrl ? { "image": [ogImageUrl] } : {}),
+  "sku": primarySku,
+  "brand": { "@type": "Brand", "name": brandName },
+  "offers": {
+    "@type": "Offer",
+    "url": canonicalUrl,
+    "priceCurrency": currencyCode,
+    "price": product.discountedPrice.toFixed(2),
+    "priceValidUntil": priceValidUntil,
+    "availability": "https://schema.org/InStock",
+    "itemCondition": "https://schema.org/NewCondition",
+    "seller": { "@type": "Organization", "name": storeName }
+  }
+});
+
+// BreadcrumbList JSON-LD -- per SEO-02
+const breadcrumbItems = [
+  { "@type": "ListItem", "position": 1, "name": "Home", "item": `${storefrontUrl}/` },
+  ...(productCategory ? [{
+    "@type": "ListItem",
+    "position": 2,
+    "name": productCategory.name,
+    "item": `${storefrontUrl}/categories/${productCategory.slug}`
+  }] : []),
+  {
+    "@type": "ListItem",
+    "position": productCategory ? 3 : 2,
+    "name": product.name,
+    "item": canonicalUrl
+  }
+];
+const breadcrumbJsonLd = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": breadcrumbItems
+});
 ---
 
-<Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>
+<Layout
+  title={pageTitle}
+  description={seoDescription || pageDescription}
+  layoutData={layoutData}
+  canonicalUrl={canonicalUrl}
+  ogImage={ogImageUrl ?? undefined}
+  ogType="product"
+  ogPrice={product.discountedPrice.toFixed(2)}
+  ogCurrency={currencyCode}
+>
   <Fragment slot="head">
     {images.length > 0 && (() => {
       const cdnDom = ((cfEnv as unknown as Env)?.CDN_DOMAIN_URL as string || '').replace(/^https?:\/\//, '');
@@ -69,14 +152,16 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
         ? `https://${cdnDom}/cdn-cgi/image/onerror=redirect,width=600,height=600,quality=85,format=auto,fit=cover${new URL(imgUrl).pathname}`
         : imgUrl;
       return (
-        <link 
-          rel="preload" 
-          as="image" 
-          href={preloadHref} 
-          fetchpriority="high" 
+        <link
+          rel="preload"
+          as="image"
+          href={preloadHref}
+          fetchpriority="high"
         />
       );
     })()}
+    <script type="application/ld+json" set:html={productJsonLd} />
+    <script type="application/ld+json" set:html={breadcrumbJsonLd} />
   </Fragment>
 
   <main
