@@ -14,12 +14,14 @@ import { successEnvelope, paginatedEnvelope, idResponse, noContentResponse, erro
 import { orderSummarySchema, orderDetailSchema, orderItemSchema, productVariantSchema } from "../../schemas/entities";
 import { adminOrdersStatusRoutes } from "./orders-status";
 import { adminOrdersRefundRoutes } from "./orders-refund";
+import { adminOrdersInvoiceRoutes } from "./orders-invoice";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Mount sub-routers
 app.route("/", adminOrdersStatusRoutes);
 app.route("/", adminOrdersRefundRoutes);
+app.route("/", adminOrdersInvoiceRoutes);
 
 // ─── Inline response schemas (route-specific, not reusable enough for entities) ──
 
