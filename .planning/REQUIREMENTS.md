@@ -62,7 +62,7 @@ Requirements for milestone v1.0. Each maps to roadmap phases.
 - [ ] **BEN-01**: Customers can search for products using Bengali text and get accurate results
 - [ ] **BEN-02**: Admin can search products, categories, customers, and pages using Bengali text
 - [ ] **BEN-03**: Bengali search works alongside English search without degradation
-- [ ] **BEN-04**: FTS5 tokenizer is configured to preserve Bengali syllable integrity (vowel signs not split from consonants)
+- [x] **BEN-04**: FTS5 tokenizer is configured to preserve Bengali syllable integrity (vowel signs not split from consonants)
 
 ## v2 Requirements
 
@@ -108,7 +108,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BEN-01 | Phase 1: Bengali FTS5 Search | Pending |
 | BEN-02 | Phase 1: Bengali FTS5 Search | Pending |
 | BEN-03 | Phase 1: Bengali FTS5 Search | Pending |
-| BEN-04 | Phase 1: Bengali FTS5 Search | Pending |
+| BEN-04 | Phase 1: Bengali FTS5 Search | Complete |
 | SEO-01 | Phase 2: Storefront SEO | Pending |
 | SEO-02 | Phase 2: Storefront SEO | Pending |
 | SEO-03 | Phase 2: Storefront SEO | Pending |
