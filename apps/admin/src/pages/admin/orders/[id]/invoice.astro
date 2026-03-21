@@ -1,0 +1,294 @@
+---
+import { apiGet } from "@/lib/api-server";
+import { InvoiceActions } from "@/components/admin/InvoiceActions";
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect("/admin/orders");
+
+// Fetch invoice data from API
+let invoiceData: any;
+try {
+  invoiceData = await apiGet<any>(`/orders/${id}/invoice`);
+} catch {
+  return Astro.redirect(`/admin/orders/${id}`);
+}
+
+const { order, invoiceNumber, businessInfo } = invoiceData;
+
+// Compute totals display
+// totalAmount in DB = items total + shipping - discount (confirmed grand total)
+const discount = order.discountAmount ?? 0;
+const subtotal = order.totalAmount - order.shippingCharge + discount;
+const grandTotal = order.totalAmount;
+
+// Format date
+const invoiceDate = order.createdAt instanceof Date
+  ? order.createdAt
+  : typeof order.createdAt === "number"
+    ? new Date(order.createdAt)
+    : new Date(order.createdAt);
+const formattedDate = invoiceDate.toLocaleDateString("en-GB", {
+  day: "2-digit", month: "short", year: "numeric"
+});
+
+// Build address string
+const addressParts = [
+  order.shippingAddress,
+  order.areaName,
+  order.zoneName,
+  order.cityName,
+].filter(Boolean);
+const customerAddress = addressParts.join(", ");
+
+// Check autoprint query param
+const autoprint = Astro.url.searchParams.get("autoprint") === "1";
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice {invoiceNumber} - Order #{order.id}</title>
+  <style>
+    /* Base styles */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
+      background: #f3f4f6;
+      color: #1f2937;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .invoice-wrapper {
+      max-width: 210mm;
+      margin: 60px auto 40px;
+      padding: 0 16px;
+    }
+
+    .invoice-document {
+      background: white;
+      padding: 40px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-radius: 4px;
+    }
+
+    /* Header */
+    .invoice-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .business-info h1 { font-size: 24px; font-weight: 700; color: #111827; }
+    .business-info .legal-name { font-size: 13px; color: #6b7280; margin-top: 2px; }
+    .business-info .details { font-size: 13px; color: #4b5563; margin-top: 8px; line-height: 1.6; }
+    .business-logo img { max-height: 60px; max-width: 180px; object-fit: contain; }
+
+    /* Invoice meta */
+    .invoice-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    .meta-block h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; font-weight: 600; margin-bottom: 8px; }
+    .meta-block p { font-size: 14px; color: #374151; line-height: 1.5; }
+    .meta-block .value { font-weight: 600; }
+
+    /* Items table */
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    .items-table th {
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .items-table th:last-child,
+    .items-table td:last-child { text-align: right; }
+    .items-table th:nth-child(4),
+    .items-table td:nth-child(4) { text-align: right; }
+    .items-table td {
+      padding: 10px 12px;
+      font-size: 14px;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: top;
+    }
+    .items-table .variant { font-size: 12px; color: #6b7280; }
+
+    /* Totals */
+    .invoice-totals {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 32px;
+    }
+    .totals-table { width: 280px; }
+    .totals-table .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 14px;
+      color: #374151;
+    }
+    .totals-table .row.discount { color: #059669; }
+    .totals-table .row.grand-total {
+      border-top: 2px solid #1f2937;
+      margin-top: 8px;
+      padding-top: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    /* Footer */
+    .invoice-footer {
+      border-top: 1px solid #e5e7eb;
+      padding-top: 16px;
+      text-align: center;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.6;
+    }
+
+    /* Print styles */
+    @media print {
+      .print-hidden { display: none !important; }
+      body { background: white !important; }
+      .invoice-wrapper { margin: 0; padding: 0; max-width: 100%; }
+      .invoice-document { box-shadow: none; border-radius: 0; padding: 10mm 12mm; }
+      @page { size: A4; margin: 10mm 12mm 10mm 12mm; }
+      tr { page-break-inside: avoid; }
+      .invoice-totals { page-break-before: avoid; }
+      img { max-width: 100%; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      a { text-decoration: none !important; }
+      a[href]::after { content: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Action bar (hidden on print) -->
+  <InvoiceActions client:load invoiceNumber={invoiceNumber} />
+
+  <div class="invoice-wrapper">
+    <div id="invoice-document" class="invoice-document">
+
+      <!-- Business Header -->
+      <div class="invoice-header">
+        <div class="business-info">
+          <h1>{businessInfo.companyName || "Your Business"}</h1>
+          {businessInfo.legalName && <div class="legal-name">{businessInfo.legalName}</div>}
+          <div class="details">
+            {businessInfo.addressLine1 && <div>{businessInfo.addressLine1}</div>}
+            {businessInfo.addressLine2 && <div>{businessInfo.addressLine2}</div>}
+            {(businessInfo.city || businessInfo.stateRegion || businessInfo.postalCode) && (
+              <div>
+                {[businessInfo.city, businessInfo.stateRegion, businessInfo.postalCode].filter(Boolean).join(", ")}
+              </div>
+            )}
+            {businessInfo.country && <div>{businessInfo.country}</div>}
+            {businessInfo.phone && <div>Phone: {businessInfo.phone}</div>}
+            {businessInfo.email && <div>Email: {businessInfo.email}</div>}
+            {businessInfo.taxId && <div>TIN/BIN: {businessInfo.taxId}</div>}
+          </div>
+        </div>
+        {businessInfo.invoiceLogoUrl && (
+          <div class="business-logo">
+            <img src={businessInfo.invoiceLogoUrl} alt={businessInfo.companyName || "Logo"} />
+          </div>
+        )}
+      </div>
+
+      <!-- Invoice Metadata -->
+      <div class="invoice-meta">
+        <div class="meta-block">
+          <h3>Invoice</h3>
+          <p><span class="value">{invoiceNumber}</span></p>
+          <p>Date: {formattedDate}</p>
+          <p>Order: #{order.id}</p>
+          <p>Payment: {order.paymentMethod?.toUpperCase()} ({order.paymentStatus})</p>
+        </div>
+        <div class="meta-block">
+          <h3>Bill To</h3>
+          <p class="value">{order.customerName}</p>
+          <p>{order.customerPhone}</p>
+          {order.customerEmail && <p>{order.customerEmail}</p>}
+          <p>{customerAddress}</p>
+        </div>
+      </div>
+
+      <!-- Line Items -->
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {order.items.map((item: any, index: number) => {
+            const variant = [item.variantSize, item.variantColor].filter(Boolean).join(" / ");
+            const lineTotal = item.price * item.quantity;
+            return (
+              <tr>
+                <td>{index + 1}</td>
+                <td>
+                  {item.productName || "Unknown Product"}
+                  {variant && <div class="variant">{variant}</div>}
+                </td>
+                <td>{item.quantity}</td>
+                <td>{item.price.toLocaleString()}</td>
+                <td>{lineTotal.toLocaleString()}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <!-- Totals -->
+      <div class="invoice-totals">
+        <div class="totals-table">
+          <div class="row">
+            <span>Subtotal</span>
+            <span>{subtotal.toLocaleString()}</span>
+          </div>
+          <div class="row">
+            <span>Shipping</span>
+            <span>{order.shippingCharge.toLocaleString()}</span>
+          </div>
+          {discount > 0 && (
+            <div class="row discount">
+              <span>Discount</span>
+              <span>-{discount.toLocaleString()}</span>
+            </div>
+          )}
+          <!-- Tax row reserved for future -->
+          <div class="row grand-total">
+            <span>Grand Total</span>
+            <span>{grandTotal.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="invoice-footer">
+        {businessInfo.invoiceFooterText && <p>{businessInfo.invoiceFooterText}</p>}
+        <p>This is a computer-generated invoice and does not require a signature.</p>
+      </div>
+
+    </div>
+  </div>
+
+  {autoprint && (
+    <script>window.addEventListener("load", () => setTimeout(() => window.print(), 500));</script>
+  )}
+</body>
+</html>

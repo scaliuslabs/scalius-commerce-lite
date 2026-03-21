@@ -74,6 +74,7 @@
     "drizzle-orm": "^0.45.1",
     "framer-motion": "^12.36.0",
     "hono": "^4.12.7",
+    "html2pdf.js": "^0.14.0",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.577.0",
     "motion": "^12.36.0",
