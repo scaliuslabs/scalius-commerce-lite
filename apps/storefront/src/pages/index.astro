@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { scopeCss } from "@scalius/shared/css-scope";
+import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
 
 // Parallel fetch: layout data + homepage data
 const { layoutData, pageData: homepageData } = await loadPageWithLayout(
@@ -74,6 +75,10 @@ Object.values(widgetsAfterCollection).forEach((widgets) =>
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 
+// --- SEO: canonical URL for homepage ---
+const storefrontUrl = getRuntimeStorefrontUrl();
+const canonicalUrl = `${storefrontUrl}/`;
+
 function isCollection1(
   collection: CollectionWithProducts
 ): collection is CollectionWithProducts & { type: "manual" } {
@@ -87,7 +92,13 @@ function isCollection2(
 }
 ---
 
-<Layout title={homepageTitle} description={homepageMetaDescription} layoutData={layoutData}>
+<Layout
+  title={homepageTitle}
+  description={homepageMetaDescription}
+  layoutData={layoutData}
+  canonicalUrl={canonicalUrl}
+  ogType="website"
+>
   {
     fixedTopWidgets.map((widget) => (
       <div class={`widget-container sw-${widget.id}`}>

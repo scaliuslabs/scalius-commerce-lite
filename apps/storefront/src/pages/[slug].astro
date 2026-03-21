@@ -7,6 +7,7 @@ import Layout from "../layouts/Layout.astro";
 import RichContent from "../components/RichContent.astro"; // CORRECTED: Path to RichContent
 import { getPageBySlug, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
+import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
 
 // ... rest of the file is the same as in step 1 ...
 const { slug } = Astro.params;
@@ -76,6 +77,10 @@ if (page.content) {
 const hasProductShortcode = processedContent.includes(
   'class="product-shortcode-container"'
 );
+
+// --- SEO: canonical URL for CMS pages (per OG-03, CAN-01) ---
+const storefrontUrl = getRuntimeStorefrontUrl();
+const canonicalUrl = `${storefrontUrl}/${slug}`;
 ---
 
 <Layout
@@ -84,6 +89,8 @@ const hasProductShortcode = processedContent.includes(
   hideHeader={page.hideHeader}
   hideFooter={page.hideFooter}
   layoutData={layoutData}
+  canonicalUrl={canonicalUrl}
+  ogType="website"
 >
   <div class="w-full max-w-7xl mx-auto px-4 py-8">
     <div class="text-center mb-8">
