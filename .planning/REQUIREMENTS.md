@@ -105,13 +105,48 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated by roadmapper) | | |
+| BEN-01 | Phase 1: Bengali FTS5 Search | Pending |
+| BEN-02 | Phase 1: Bengali FTS5 Search | Pending |
+| BEN-03 | Phase 1: Bengali FTS5 Search | Pending |
+| BEN-04 | Phase 1: Bengali FTS5 Search | Pending |
+| SEO-01 | Phase 2: Storefront SEO | Pending |
+| SEO-02 | Phase 2: Storefront SEO | Pending |
+| SEO-03 | Phase 2: Storefront SEO | Pending |
+| SEO-04 | Phase 2: Storefront SEO | Pending |
+| SEO-05 | Phase 2: Storefront SEO | Pending |
+| SEO-06 | Phase 2: Storefront SEO | Pending |
+| OG-01 | Phase 2: Storefront SEO | Pending |
+| OG-02 | Phase 2: Storefront SEO | Pending |
+| OG-03 | Phase 2: Storefront SEO | Pending |
+| OG-04 | Phase 2: Storefront SEO | Pending |
+| OG-05 | Phase 2: Storefront SEO | Pending |
+| CAN-01 | Phase 2: Storefront SEO | Pending |
+| CAN-02 | Phase 2: Storefront SEO | Pending |
+| SMS-01 | Phase 3: SMS OTP Providers | Pending |
+| SMS-02 | Phase 3: SMS OTP Providers | Pending |
+| SMS-03 | Phase 3: SMS OTP Providers | Pending |
+| SMS-04 | Phase 3: SMS OTP Providers | Pending |
+| SMS-05 | Phase 3: SMS OTP Providers | Pending |
+| SMS-06 | Phase 3: SMS OTP Providers | Pending |
+| SMS-07 | Phase 3: SMS OTP Providers | Pending |
+| INV-01 | Phase 4: Invoice & Business Settings | Pending |
+| INV-02 | Phase 4: Invoice & Business Settings | Pending |
+| INV-03 | Phase 4: Invoice & Business Settings | Pending |
+| INV-04 | Phase 4: Invoice & Business Settings | Pending |
+| INV-05 | Phase 4: Invoice & Business Settings | Pending |
+| INV-06 | Phase 4: Invoice & Business Settings | Pending |
+| INV-07 | Phase 4: Invoice & Business Settings | Pending |
+| BIZ-01 | Phase 4: Invoice & Business Settings | Pending |
+| BIZ-02 | Phase 4: Invoice & Business Settings | Pending |
+| BIZ-03 | Phase 4: Invoice & Business Settings | Pending |
+| BIZ-04 | Phase 4: Invoice & Business Settings | Pending |
+| BIZ-05 | Phase 4: Invoice & Business Settings | Pending |
 
 **Coverage:**
 - v1 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after initial definition*
+*Last updated: 2026-03-22 after roadmap creation*
