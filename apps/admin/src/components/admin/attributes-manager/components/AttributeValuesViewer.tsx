@@ -48,7 +48,7 @@ export function AttributeValuesViewer({
     const fetchValues = async () => {
       try {
         const response = await fetch(
-          `/api/v1/admin/attributes/${attributeId}/values`,
+          `/api/v1/admin/attributes/${attributeId}/values?limit=100`,
         );
         if (!response.ok) {
           const errorJson = await response.json().catch(() => ({}));
