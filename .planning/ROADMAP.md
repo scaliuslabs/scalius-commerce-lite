@@ -76,10 +76,13 @@ Plans:
   3. Invoice shows all order items with SKU, quantity, unit price, line total, and a correct grand total
   4. Invoice numbers auto-increment with the merchant's configured prefix (e.g., INV-00001)
   5. Merchant can download the invoice as a PDF file via a one-click button
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md — Business settings service + API route (GET/POST /admin/settings/business)
+- [ ] 04-02-PLAN.md — DB migration (invoice_number column) + invoice numbering service with CAS counter
+- [ ] 04-03-PLAN.md — Business settings admin UI tab in GeneralSettingsPage
+- [ ] 04-04-PLAN.md — Invoice API endpoint, Astro page, React actions, Print Invoice button on order view
 
 ## Progress
 
@@ -92,4 +95,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Bengali FTS5 Search | 0/2 | Planning complete | - |
 | 2. Storefront SEO | 0/2 | Planning complete | - |
 | 3. SMS OTP Providers | 0/2 | Planning complete | - |
-| 4. Invoice & Business Settings | 0/0 | Not started | - |
+| 4. Invoice & Business Settings | 0/4 | Planning complete | - |
