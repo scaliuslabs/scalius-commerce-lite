@@ -816,10 +816,9 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         for (const [variantId, delta] of deltaMap) {
             if (delta === 0) continue;
             if (delta > 0) {
-                const variant = variantMap.get(variantId)!;
                 stockUpdateStmts.push(
                     db.update(productVariants)
-                        .set({ stock: variant.stock - delta, updatedAt: sql`unixepoch()` })
+                        .set({ stock: sql`${productVariants.stock} - ${delta}`, updatedAt: sql`unixepoch()` })
                         .where(eq(productVariants.id, variantId)),
                 );
             } else {

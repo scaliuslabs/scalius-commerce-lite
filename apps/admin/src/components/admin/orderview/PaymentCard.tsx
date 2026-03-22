@@ -101,6 +101,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   stripe: "Stripe",
   sslcommerz: "SSLCommerz",
   cod: "Cash on Delivery",
+  polar: "Polar",
 };
 
 interface PaymentCardProps {

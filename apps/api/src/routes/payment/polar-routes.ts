@@ -4,7 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { type Database } from "@scalius/database/client";
 import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
 import { getKv } from "../../utils/kv-cache";
@@ -144,7 +144,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         .set({
             paymentIntentId: result.checkoutId,
             paymentMethod: PaymentMethod.POLAR,
-            updatedAt: new Date()
+            updatedAt: sql`unixepoch()`
         })
         .where(eq(orders.id, orderId));
 
@@ -168,7 +168,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
                 set: {
                     depositAmount,
                     balanceDue,
-                    updatedAt: new Date()
+                    updatedAt: sql`unixepoch()`
                 }
             });
     }

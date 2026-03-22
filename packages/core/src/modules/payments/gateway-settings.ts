@@ -8,7 +8,7 @@
 //
 // Settings are set by the admin dashboard (not environment variables).
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { registerGateway } from "./gateway-registry";
@@ -238,7 +238,7 @@ export async function upsertSetting(
     })
     .onConflictDoUpdate({
       target: [settings.key, settings.category],
-      set: { value, updatedAt: new Date() },
+      set: { value, updatedAt: sql`unixepoch()` },
     });
 }
 
