@@ -201,6 +201,33 @@ app.openapi(bulkShipRoute, (async (c: any) => {
     const data = c.req.valid("json");
     const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options);
     const successCount = results.filter((r) => r.success).length;
+
+    // Enqueue order_shipped notifications for each successfully shipped order
+    if (c.env.ORDER_NOTIFICATIONS_QUEUE) {
+        const successfulOrderIds = results.filter((r: any) => r.success).map((r: any) => r.orderId);
+        if (successfulOrderIds.length > 0) {
+            const orderRows = await db.select({
+                id: orders.id,
+                customerEmail: orders.customerEmail,
+                customerName: orders.customerName,
+            }).from(orders).where(inArray(orders.id, successfulOrderIds)).all();
+
+            for (const order of orderRows) {
+                try {
+                    await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
+                        type: "order.notification",
+                        orderId: order.id,
+                        customerEmail: order.customerEmail ?? undefined,
+                        customerName: order.customerName,
+                        notificationType: "order_shipped",
+                    });
+                } catch (notifErr: unknown) {
+                    console.error(`[bulk-ship] Failed to enqueue notification for ${order.id}:`, notifErr);
+                }
+            }
+        }
+    }
+
     return ok(c, {
         totalProcessed: results.length,
         successCount,

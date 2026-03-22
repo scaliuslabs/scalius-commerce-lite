@@ -28,7 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Receipt, Loader2, Undo2 } from "lucide-react";
 import type { Order } from "./types";
-import { ORDER_STATUSES } from "./types";
+import { getAvailableTransitions } from "./types";
 import { navigateTo } from "@/lib/client/navigate";
 import { extractApiError } from "@/lib/api-helpers";
 
@@ -139,13 +139,21 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
               )}
             </SelectTrigger>
             <SelectContent className="border-border bg-card text-foreground">
-              {ORDER_STATUSES.map((status) => (
+              {/* Current status (always shown, selected) */}
+              <SelectItem
+                value={order.status.toLowerCase()}
+                className="capitalize text-foreground"
+              >
+                {order.status.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+              </SelectItem>
+              {/* Valid transitions from current status */}
+              {getAvailableTransitions(order.status).map((status) => (
                 <SelectItem
                   key={status}
                   value={status}
                   className="capitalize text-foreground"
                 >
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                  {status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
                 </SelectItem>
               ))}
             </SelectContent>

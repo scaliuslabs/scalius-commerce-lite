@@ -2,7 +2,7 @@
 // Admin endpoints for notification channel configuration per order status.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getNotificationChannels, updateNotificationChannels } from "@scalius/core/modules/settings/settings.service";
+import { getNotificationChannels, updateNotificationChannels, getAdminNotificationChannels, updateAdminNotificationChannels } from "@scalius/core/modules/settings/settings.service";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
 
@@ -57,6 +57,52 @@ app.openapi(updateChannelsRoute, async (c) => {
     const db = c.get("db");
     const { channels } = c.req.valid("json");
     const updated = await updateNotificationChannels(db, channels);
+    return ok(c, { channels: updated });
+});
+
+// GET /notification-channels/admin-channels
+const getAdminChannelsRoute = createRoute({
+    method: "get",
+    path: "/admin-channels",
+    tags: ["Admin - Settings"],
+    summary: "Get admin notification channel settings per order status",
+    responses: {
+        200: {
+            description: "Admin notification channel configuration",
+            content: { "application/json": { schema: successEnvelope(wrappedChannelsSchema) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getAdminChannelsRoute, async (c) => {
+    const db = c.get("db");
+    const channels = await getAdminNotificationChannels(db);
+    return ok(c, { channels });
+});
+
+// PUT /notification-channels/admin-channels
+const updateAdminChannelsRoute = createRoute({
+    method: "put",
+    path: "/admin-channels",
+    tags: ["Admin - Settings"],
+    summary: "Update admin notification channel settings per order status",
+    request: {
+        body: { content: { "application/json": { schema: wrappedChannelsSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Updated admin notification channel configuration",
+            content: { "application/json": { schema: successEnvelope(wrappedChannelsSchema) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(updateAdminChannelsRoute, async (c) => {
+    const db = c.get("db");
+    const { channels } = c.req.valid("json");
+    const updated = await updateAdminNotificationChannels(db, channels);
     return ok(c, { channels: updated });
 });
 

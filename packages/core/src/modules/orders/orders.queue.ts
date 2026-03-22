@@ -376,6 +376,21 @@ export async function handleOrderIngestBatch(
             await setCheckoutStatus(env, payload.checkoutToken, "completed");
             msg.ack();
             console.log(`[Queue] Acked order ${payload.orderData.id}`);
+
+            // Enqueue order_created notification for the customer
+            if (env.ORDER_NOTIFICATIONS_QUEUE) {
+                try {
+                    await env.ORDER_NOTIFICATIONS_QUEUE.send({
+                        type: "order.notification",
+                        orderId: payload.orderData.id,
+                        customerEmail: payload.orderData.customerEmail ?? undefined,
+                        customerName: payload.orderData.customerName,
+                        notificationType: "order_created",
+                    });
+                } catch (notifErr) {
+                    console.error(`[Queue] Failed to enqueue order_created notification for ${payload.orderData.id}:`, notifErr);
+                }
+            }
         }
 
         // Handle messages that failed during preparation (pre-DB)

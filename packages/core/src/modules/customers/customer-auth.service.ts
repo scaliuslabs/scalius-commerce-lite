@@ -69,6 +69,7 @@ export interface VerifyOtpInput {
     code: string;
     name: string;
     phone?: string;
+    email?: string;
 }
 
 export interface VerifyOtpResult {
@@ -269,7 +270,7 @@ export async function verifyOtp(
     kv: KVNamespace,
     input: VerifyOtpInput,
 ): Promise<VerifyOtpResult> {
-    const { method, identifier, code, name, phone } = input;
+    const { method, identifier, code, name, phone, email } = input;
 
     if (!identifier || !code) {
         throw new ValidationError("Contact identifier and code are required");
@@ -319,7 +320,7 @@ export async function verifyOtp(
     // Look up customer in DB (if exists)
     let customerId: string | undefined;
     let customerName = name;
-    let resolvedEmail = method === "email" ? normalizedIdentifier : undefined;
+    let resolvedEmail = method === "email" ? normalizedIdentifier : (email?.trim() || undefined);
     let resolvedPhone = method === "phone" ? normalizedIdentifier : undefined;
     let isNewUser = false;
 

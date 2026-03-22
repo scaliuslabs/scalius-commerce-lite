@@ -131,7 +131,7 @@ export async function sendOrderNotification(
 // Order email notifications
 // ─────────────────────────────────────────
 
-type OrderEmailType = "order_created" | "order_confirmed" | "order_processing" | "order_shipped" | "order_delivered" | "order_cancelled";
+type OrderEmailType = "order_created" | "order_confirmed" | "order_processing" | "order_shipped" | "order_delivered" | "order_completed" | "order_cancelled" | "order_returned" | "order_refunded";
 
 /**
  * Dispatches order notifications to all enabled channels (email, SMS, WhatsApp).
@@ -169,7 +169,10 @@ export async function sendOrderNotificationEmail(
         order_processing: `Order #${orderId} Processing`,
         order_shipped: `Order #${orderId} Shipped`,
         order_delivered: `Order #${orderId} Delivered`,
+        order_completed: `Order #${orderId} Completed`,
         order_cancelled: `Order #${orderId} Cancelled`,
+        order_returned: `Order #${orderId} Returned`,
+        order_refunded: `Order #${orderId} Refunded`,
     };
 
     const htmlMessages: Record<string, string> = {
@@ -178,7 +181,10 @@ export async function sendOrderNotificationEmail(
         order_processing: `Your order <strong>#${orderId}</strong> is being processed, ${safeName}! We'll update you when it ships.`,
         order_shipped: `Your order <strong>#${orderId}</strong> is on its way, ${safeName}! ${safeTrackingId ? `Tracking ID: <strong>${safeTrackingId}</strong>` : ""}`,
         order_delivered: `Your order <strong>#${orderId}</strong> has been delivered, ${safeName}! We hope you love your purchase.`,
+        order_completed: `Your order <strong>#${orderId}</strong> has been completed, ${safeName}! Thank you for shopping with us.`,
         order_cancelled: `Your order <strong>#${orderId}</strong> has been cancelled, ${safeName}. If you have questions, please contact our support team.`,
+        order_returned: `Your order <strong>#${orderId}</strong> has been marked as returned, ${safeName}. If you have questions, please contact our support team.`,
+        order_refunded: `Your order <strong>#${orderId}</strong> has been refunded, ${safeName}. The refund will be processed to your original payment method. If you have questions, please contact our support team.`,
     };
 
     const smsMessages: Record<string, string> = {
@@ -187,7 +193,10 @@ export async function sendOrderNotificationEmail(
         order_processing: `Hi ${name}, your order #${orderId} is being processed. We'll update you when it ships.`,
         order_shipped: `Hi ${name}, your order #${orderId} is on its way!${data?.trackingId ? ` Tracking: ${data.trackingId}` : ""}`,
         order_delivered: `Hi ${name}, your order #${orderId} has been delivered. Enjoy!`,
+        order_completed: `Hi ${name}, your order #${orderId} has been completed. Thank you for shopping with us!`,
         order_cancelled: `Hi ${name}, your order #${orderId} has been cancelled. Contact us if you have questions.`,
+        order_returned: `Hi ${name}, your order #${orderId} has been marked as returned. Contact us if you have questions.`,
+        order_refunded: `Hi ${name}, your order #${orderId} has been refunded. Contact us if you have questions.`,
     };
 
     // ── Email channel ──────────────────────────────────────────────────

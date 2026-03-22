@@ -202,7 +202,10 @@ const DEFAULT_NOTIFICATION_CHANNELS: Record<string, string[]> = {
     order_processing: ["email"],
     order_shipped: ["email"],
     order_delivered: ["email"],
+    order_completed: ["email"],
     order_cancelled: ["email"],
+    order_returned: ["email"],
+    order_refunded: ["email"],
 };
 
 /**
@@ -282,5 +285,92 @@ export async function updateNotificationChannels(
     // Import upsertSetting from gateway-settings (same pattern used by site-settings.service.ts)
     const { upsertSetting } = await import("../payments/gateway-settings");
     await upsertSetting(db, "notifications", "order_channels", JSON.stringify(channels));
+    return channels;
+}
+
+// ─────────────────────────────────────────
+// Admin Notification Channel Preferences
+// ─────────────────────────────────────────
+
+const VALID_ADMIN_CHANNELS = ["push"] as const;
+
+const DEFAULT_ADMIN_CHANNELS: Record<string, string[]> = {
+    order_created: ["push"],
+    order_confirmed: [],
+    order_processing: [],
+    order_shipped: [],
+    order_delivered: [],
+    order_cancelled: ["push"],
+};
+
+/**
+ * Get admin notification channel preferences per order status.
+ * Returns a map of status -> enabled channels (string arrays).
+ * Defaults to push enabled for order_created and order_cancelled only.
+ */
+export async function getAdminNotificationChannels(
+    db: Database,
+): Promise<Record<string, string[]>> {
+    const row = await db
+        .select({ value: settings.value })
+        .from(settings)
+        .where(and(eq(settings.category, "notifications"), eq(settings.key, "admin_channels")))
+        .get();
+
+    if (!row?.value) return DEFAULT_ADMIN_CHANNELS;
+    try {
+        const parsed = JSON.parse(row.value);
+        return normalizeAdminChannels(parsed);
+    } catch (e: unknown) {
+        console.error("[Settings] Failed to parse admin notification channels JSON:", e instanceof Error ? e.message : e);
+        return DEFAULT_ADMIN_CHANNELS;
+    }
+}
+
+/**
+ * Normalize admin channel data which may be in boolean-map format (from the UI)
+ * or string-array format (canonical). Returns string-array format.
+ */
+function normalizeAdminChannels(parsed: unknown): Record<string, string[]> {
+    if (!parsed || typeof parsed !== "object") return DEFAULT_ADMIN_CHANNELS;
+
+    // If the UI wrapped it in { channels: ... }, unwrap
+    const record = (parsed as Record<string, unknown>).channels
+        ? (parsed as Record<string, unknown>).channels as Record<string, unknown>
+        : parsed as Record<string, unknown>;
+
+    const result: Record<string, string[]> = {};
+    for (const [status, value] of Object.entries(record)) {
+        if (Array.isArray(value)) {
+            result[status] = value.filter((v): v is string => typeof v === "string");
+        } else if (value && typeof value === "object") {
+            result[status] = Object.entries(value as Record<string, boolean>)
+                .filter(([, enabled]) => enabled)
+                .map(([channel]) => channel);
+        }
+    }
+    return result;
+}
+
+/**
+ * Update admin notification channel preferences.
+ * Accepts both UI format (boolean maps, possibly wrapped in { channels: ... })
+ * and canonical format (string arrays). Normalizes and validates before saving.
+ */
+export async function updateAdminNotificationChannels(
+    db: Database,
+    input: Record<string, unknown>,
+): Promise<Record<string, string[]>> {
+    const channels = normalizeAdminChannels(input);
+
+    // Validate channel values against the known admin set
+    for (const [status, statusChannels] of Object.entries(channels)) {
+        channels[status] = statusChannels.filter((c) =>
+            (VALID_ADMIN_CHANNELS as readonly string[]).includes(c),
+        );
+    }
+
+    const { upsertSetting } = await import("../payments/gateway-settings");
+    await upsertSetting(db, "notifications", "admin_channels", JSON.stringify(channels));
     return channels;
 }

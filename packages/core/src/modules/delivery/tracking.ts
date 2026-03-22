@@ -1,6 +1,7 @@
 import { deliveryShipments, orders } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import { canTransitionTo } from "../orders/order-state-machine";
 import type { Database } from "@scalius/database/client";
 
 /**
@@ -26,9 +27,15 @@ export async function updateOrderStatusFromShipment(
       return;
     }
 
-    // Get the order
+    // Get the order (include version for CAS locking)
     const [order] = await db
-      .select()
+      .select({
+        id: orders.id,
+        status: orders.status,
+        version: orders.version,
+        customerPhone: orders.customerPhone,
+        customerEmail: orders.customerEmail,
+      })
       .from(orders)
       .where(eq(orders.id, shipment.orderId));
 
@@ -97,16 +104,39 @@ export async function updateOrderStatusFromShipment(
 
     // Update order status if it has changed
     if (newOrderStatus !== order.status) {
-      // Apply inventory side-effects before updating the status
+      // Validate the transition is allowed by the state machine
+      if (!canTransitionTo("order", order.status, newOrderStatus)) {
+        console.log(
+          `Skipping order ${order.id} status update: transition from "${order.status}" to "${newOrderStatus}" not allowed by state machine`,
+        );
+        return null;
+      }
+
+      // Apply inventory side-effects before CAS update
       await applyInventoryForStatusChange(db, order.id, newOrderStatus);
 
-      await db
+      // CAS update: only proceed if the order version hasn't changed since we read it.
+      // If an admin (or another webhook) modified the order concurrently, the version
+      // will have changed and 0 rows will be updated — the admin's change takes priority.
+      const result = await db
         .update(orders)
         .set({
           status: newOrderStatus,
+          version: order.version + 1,
           updatedAt: sql`(unixepoch())`,
         })
-        .where(eq(orders.id, order.id));
+        .where(and(
+          eq(orders.id, order.id),
+          eq(orders.version, order.version),
+        ))
+        .returning({ id: orders.id });
+
+      if (result.length === 0) {
+        console.log(
+          `Skipping order ${order.id} status update: order was modified concurrently (version conflict). Admin change takes priority.`,
+        );
+        return null;
+      }
 
       console.log(
         `Updated order ${order.id} status from ${order.status} to ${newOrderStatus}`,

@@ -1,8 +1,8 @@
 // src/server/routes/admin/shipments.ts
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getShipment, deleteShipmentRecord, checkShipmentStatus } from "@scalius/core/modules/delivery/delivery.service";
-import { updateOrderStatusFromShipment, notifyShipmentStatusChange } from "@scalius/core/modules/delivery/tracking";
-import { deliveryShipments } from "@scalius/database/schema";
+import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
+import { deliveryShipments, orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 
@@ -138,12 +138,37 @@ app.openapi(checkStatusRoute, (async (c: any) => {
             result.status,
         );
 
-        await notifyShipmentStatusChange(
-            db,
-            shipmentId,
-            previousStatus,
-            result.status,
-        );
+        // Enqueue customer notification for shipment status changes
+        if (orderStatusUpdate && orderStatusUpdate.newStatus && c.env.ORDER_NOTIFICATIONS_QUEUE) {
+            const DELIVERY_NOTIFICATION_MAP: Record<string, string> = {
+                shipped: "order_shipped",
+                delivered: "order_delivered",
+                returned: "order_returned",
+                cancelled: "order_cancelled",
+            };
+            const notifType = DELIVERY_NOTIFICATION_MAP[orderStatusUpdate.newStatus];
+            if (notifType) {
+                try {
+                    const order = await db.select({
+                        customerEmail: orders.customerEmail,
+                        customerName: orders.customerName,
+                    }).from(orders).where(eq(orders.id, orderStatusUpdate.orderId)).get();
+
+                    if (order) {
+                        await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
+                            type: "order.notification",
+                            orderId: orderStatusUpdate.orderId,
+                            customerEmail: order.customerEmail ?? undefined,
+                            customerName: order.customerName,
+                            notificationType: notifType,
+                            data: currentShipment.trackingId ? { trackingId: currentShipment.trackingId } : undefined,
+                        });
+                    }
+                } catch (notifErr) {
+                    console.error(`[shipments] Failed to enqueue notification:`, notifErr);
+                }
+            }
+        }
 
         return ok(c, {
             message: `Shipment status updated from ${previousStatus} to ${result.status}`,

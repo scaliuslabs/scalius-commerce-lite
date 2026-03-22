@@ -232,7 +232,7 @@ export default function AuthModal() {
     }
     setLoading(true);
     setError("");
-    const res = await verifyCustomerOtp(method, identifier.trim(), otp.trim(), "", method === "email" ? phoneInput.trim() : "");
+    const res = await verifyCustomerOtp(method, identifier.trim(), otp.trim(), "", method === "email" ? phoneInput.trim() : "", method === "phone" ? emailInput.trim() : "");
     setLoading(false);
 
     if (res.success && res.customer) {

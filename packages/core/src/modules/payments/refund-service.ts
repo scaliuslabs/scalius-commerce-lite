@@ -14,6 +14,7 @@ import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError 
 import { roundPrice } from "@scalius/shared/price-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCurrencyConfig } from "../settings/settings.service";
+import { canTransitionTo } from "../orders/order-state-machine";
 
 export interface RefundRequest {
     orderId: string;
@@ -252,6 +253,15 @@ export async function processRefund(
     const refundPaymentId = crypto.randomUUID();
     const newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - refundAmount));
 
+    // Determine new order status based on refund type and state machine constraints.
+    // Only delivered, completed, and partially_refunded can transition to refunded/partially_refunded.
+    const orderStatusUpdate: Record<string, unknown> = {};
+    if (isFullRefund && canTransitionTo("order", order.status, OrderStatus.REFUNDED)) {
+        orderStatusUpdate.status = OrderStatus.REFUNDED;
+    } else if (!isFullRefund && canTransitionTo("order", order.status, OrderStatus.PARTIALLY_REFUNDED)) {
+        orderStatusUpdate.status = OrderStatus.PARTIALLY_REFUNDED;
+    }
+
     await db.batch([
         db.insert(orderPayments).values({
             id: refundPaymentId,
@@ -261,19 +271,18 @@ export async function processRefund(
             paymentMethod: gateway,
             paymentType: "refund",
             status: "refunded",
-            stripePaymentIntentId: payment.stripePaymentIntentId,
+            // Refund records must NOT copy the original payment's unique gateway IDs —
+            // partial unique indexes (e.g., UNIQUE(orderId, stripePaymentIntentId))
+            // would reject the insert. Refund is identified by metadata.refundId instead.
             stripeChargeId: payment.stripeChargeId,
-            sslcommerzTranId: payment.sslcommerzTranId,
-            sslcommerzValId: payment.sslcommerzValId,
-            sslcommerzBankTranId: payment.sslcommerzBankTranId,
-            polarCheckoutId: payment.polarCheckoutId,
             metadata: JSON.stringify({ refundId, reason: params.reason }),
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            createdAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
         }),
         db.update(orders).set({
             paidAmount: newPaidAmount,
             paymentStatus: isFullRefund ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL,
+            ...orderStatusUpdate,
             updatedAt: sql`unixepoch()`,
         }).where(eq(orders.id, params.orderId)),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
@@ -313,12 +322,13 @@ export async function processReturn(
     },
     encryptionKey?: string,
 ): Promise<{ refundResult?: RefundResult }> {
-    // Verify order exists and is in a returnable state
+    // Verify order exists and is in a returnable state (include version for CAS)
     const order = await db
         .select({
             id: orders.id,
             status: orders.status,
             paymentStatus: orders.paymentStatus,
+            version: orders.version,
         })
         .from(orders)
         .where(eq(orders.id, params.orderId))
@@ -335,14 +345,24 @@ export async function processReturn(
         );
     }
 
-    // Restore inventory and set order status to RETURNED atomically
+    // NOTE: Inventory is applied before the CAS batch update. If the CAS check fails
+    // (concurrent modification), inventory changes will have already been applied.
+    // This is a known limitation — fully fixing it requires refactoring inventory
+    // operations into the batch. The CAS check below mitigates the most common race.
     const newInventoryAction = await applyInventoryForStatusChange(db, params.orderId, OrderStatus.RETURNED);
+
+    // CAS update: only proceed if the order version hasn't changed since we read it.
+    // Prevents concurrent modifications from overwriting each other.
     await db.batch([
         db.update(orders).set({
             status: OrderStatus.RETURNED,
+            version: order.version + 1,
             inventoryAction: newInventoryAction,
             updatedAt: sql`unixepoch()`,
-        }).where(eq(orders.id, params.orderId)),
+        }).where(and(
+            eq(orders.id, params.orderId),
+            eq(orders.version, order.version),
+        )),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ] as any);
 
