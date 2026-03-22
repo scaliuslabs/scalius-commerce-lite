@@ -48,7 +48,7 @@ packages/
 ### Packages (JIT — no build step, consumed directly by bundler)
 
 - **`@scalius/api-client`**: Generated SDK from OpenAPI spec — typed API client and response types used by admin and storefront
-- **`@scalius/database`**: Drizzle schema (13 files across 10 domains), `getDb()` client factory, migrations
+- **`@scalius/database`**: Drizzle schema (13 files, 52 tables across 10 domains), `getDb()` client factory, 33 migrations
 - **`@scalius/core`**: Domain services (`src/modules/`), Better Auth config (`src/auth/`), RBAC, integrations (email, storage, firebase, meta), FTS5 search, cache utils
 - **`@scalius/shared`**: Pure utilities (currency, cors, image-optimizer, rate-limit, etc.)
 - **`@scalius/tsconfig`**: Shared TypeScript configs (base, astro, worker)
@@ -213,23 +213,27 @@ cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
 - **Admin Refactoring** (March 16-18): Component splitting, proxy simplification, Vite proxy root cause fix
 - **Multi-Session Audit + Fix** (March 20): 25-agent audit + 8-agent fix team, ~130 fixes across entire codebase
 - **SDK Generation** (March 20): Generated SDK from OpenAPI spec (245 paths, 27k+ types), integrated into admin + storefront
-- **API Max Limits** (March 22): Raised API limits for selector/dropdown endpoints that need all items
-- **Payments**: atomic `processPaymentConfirmed()` via `db.batch()`, COD idempotency, refund amount validation, SSLCommerz redirect validation, payment idempotency indexes
-- **Orders**: queue batch orderId bug fixed, CANCELLED allows admin reactivation, order routes split into 3 files (orders.ts, orders-refund.ts, orders-status.ts)
-- **Inventory**: `stockVersion` column for stock-specific CAS, inventory transitions module, restore logic
-- **Delivery**: KV-based webhook replay protection (Pathao/Steadfast), insert-first shipment creation, AES-GCM credential encryption
-- **Customers**: phone normalization (E.164 format), OTP logging removed
+- **Comprehensive Audit + Fix** (March 22): 10-agent audit + fix team. CAS on all status-change paths, 9 notification types, SMS channel dispatch, business/invoice settings, Bengali FTS5
+- **Payments**: atomic `processPaymentConfirmed()` via `db.batch()`, COD idempotency, refund amount validation, SSLCommerz redirect validation, payment idempotency indexes (migration 0030), refund now updates `orders.status` to REFUNDED/PARTIALLY_REFUNDED via state machine
+- **Orders**: queue batch orderId bug fixed, CANCELLED allows admin reactivation, order routes split into 3 files (orders.ts, orders-refund.ts, orders-status.ts), CAS on `processCodAction()` and `bulkShipOrders()`, notification enqueue on all 9 status changes
+- **Inventory**: `stockVersion` column for stock-specific CAS, inventory transitions module, restore logic, CAS correctly ordered (version bump before inventory) in all paths including tracking.ts
+- **Delivery**: KV-based webhook replay protection (Pathao/Steadfast), insert-first shipment creation, AES-GCM credential encryption, CAS in `updateOrderStatusFromShipment()` (admin changes take priority)
+- **Customers**: phone normalization (E.164 format), OTP logging removed, SMS OTP delivery via 4 providers
+- **Notifications**: 9 notification types (added order_completed, order_returned, order_refunded), SMS channel dispatch via 4 providers (smsnetbd, bdbulksms, mimsms, gennet), per-status channel independence
+- **Settings**: business info settings (company name, TIN, logo, address), invoice prefix/counter, SMS provider settings, admin notification channels
 - **API Standardization**: ALL routes use `ok()`/`created()`/`ApiError`, `CACHE_TTLS` constants, centralized entity schemas (`apps/api/src/schemas/entities.ts`)
-- **Schema**: 31 migrations (0000-0030), 52 tables across 13 schema files, timestamp defaults standardized, FK indexes added, singleton constraints
+- **Schema**: 33 migrations (0000-0032), 52 tables across 13 schema files, timestamp defaults standardized, FK indexes added, singleton constraints, Bengali FTS5 tokenizer (migration 0031)
 - **Admin**: unified PaymentGatewaysManager, NotificationChannelsBuilder, media manager rewrite, error pages (404/500)
-- **Storefront**: L1+L2 caching layer, response unwrapping utilities, error pages (404/500)
-- **Shared Utilities**: css-scope, html-escape, html-sanitize, status-badges, timestamps modules added
+- **Storefront**: L1+L2 caching layer, response unwrapping utilities, error pages (404/500), SEO (JSON-LD, OG tags, canonical URLs)
+- **Shared Utilities**: css-scope, html-escape, html-sanitize, status-badges (all 11 statuses), timestamps modules added
 
 ## Known Backlog
 
 - **`publishedAt` field unused**: Pages store `publishedAt` but it's never used for scheduled publishing.
-- **Dual provider systems**: Universal provider registry exists (email + payment migrated) but delivery and SMS have type definitions with zero registered implementations in the new system. Legacy interfaces still in use.
+- **Dual provider systems**: Universal provider registry exists (email + payment + SMS migrated) but delivery has type definitions with zero registered implementations in the new system. Legacy interfaces still in use.
 - **In-memory state**: Rate limiter and layout cache use in-memory Maps (reset on Worker isolate restart). Acceptable for single-tenant but needs KV migration for scale.
+- **Delivery webhook notifications**: `notifyShipmentStatusChange()` in tracking.ts is a placeholder (logs only). Should enqueue to ORDER_NOTIFICATIONS_QUEUE.
+- **Bulk ship notifications**: `bulkShipOrders()` does not enqueue "order_shipped" notifications.
 
 ## Known Limitations / TODO
 

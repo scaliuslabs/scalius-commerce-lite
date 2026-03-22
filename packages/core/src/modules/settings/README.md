@@ -8,6 +8,7 @@ Central store configuration: site settings (singleton row), key-value settings, 
 - `settings.service.ts` -- core service functions (storefront URL, currency, site settings, notification channels)
 - `site-settings.service.ts` -- admin site settings operations (currency, header/footer, theme, SEO, storefront URL, allowed countries)
 - `checkout-config.service.ts` -- public checkout configuration assembly
+- `business-settings.service.ts` -- business info settings (company name, TIN, logo, address, invoice prefix/number)
 
 ## settings.service.ts
 
@@ -142,6 +143,18 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | PUT | `/allowed-countries` | Save allowed countries with mode. Stores as JSON `{ countries: string[], mode: "include" | "exclude" }` in settings table (category=phone, key=allowed_countries) |
 | GET | `/notification-channels` | Get notification channel preferences per order status |
 | POST | `/notification-channels` | Save notification channel preferences. Normalizes and validates channels |
+
+### `business.ts` -- Business info & invoice settings
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/business` | Get business info (company name, TIN, logo, address, invoice prefix) |
+| POST | `/business` | Save business info settings |
+
+### `sms.ts` -- SMS provider settings
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/sms` | Get SMS provider settings with masked credentials |
+| POST | `/sms` | Save SMS provider settings (encrypted where needed) |
 
 ### `system.ts` -- System integrations & auth
 | Method | Path | Description |

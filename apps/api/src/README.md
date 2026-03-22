@@ -115,6 +115,8 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/hero-sliders` | `settings/hero-sliders.ts` | Hero slider CRUD |
 | `/meta-conversions` | `settings/meta-conversions-admin.ts` | Meta Conversions API config |
 | `/notification-channels` | `settings/notification-channels.ts` | Notification channel config per order status |
+| `/` (root) | `settings/sms.ts` | SMS provider settings (4 providers: smsnetbd, bdbulksms, mimsms, gennet) |
+| `/` (root) | `settings/business.ts` | Business info (company name, TIN, logo, address, invoice prefix) |
 
 ### Payment Routes (public, storefront-facing)
 
@@ -274,8 +276,8 @@ Messages processed independently with `Promise.allSettled`. Successful messages 
 | `payment.polar.confirmed` | `processPaymentConfirmed()` | Convert smallest-unit->major-unit via `getDecimalPlaces()` |
 | `payment.polar.failed` | `processPaymentFailed()` | Mark order failed |
 | `payment.polar.refunded` | `processPolarWebhookRefund()` | Update payment status, release inventory on full refund (can originate from Polar dashboard) |
-| `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) | Send order status email and admin push notification (FCM failure is non-fatal) |
-| `auth.send_otp` | Email / WhatsApp / SMS | Send OTP via email (`sendEmail()`), WhatsApp (Meta Graph API template), or SMS (pending) |
+| `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) | Send order status notifications across all enabled channels (email, SMS via 4 providers, WhatsApp, FCM push). 9 notification types: order_created, order_confirmed, order_processing, order_shipped, order_delivered, order_completed, order_cancelled, order_returned, order_refunded. Each channel dispatched independently. |
+| `auth.send_otp` | Email / WhatsApp / SMS | Send OTP via email (`sendEmail()`), WhatsApp (Meta Graph API template), or SMS (`getActiveSmsProvider()` with 4 providers) |
 
 ## How to Add a New Endpoint
 

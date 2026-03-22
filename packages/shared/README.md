@@ -41,7 +41,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | File | Lines | Purpose | Key Exports |
 |------|-------|---------|-------------|
 | `utils.ts` | 14 | Tailwind class merging (re-exports date/badge utils for backward compat) | `cn()`, re-exports `unixToDate`, `formatDate`, `getStatusBadgeClass` |
-| `status-badges.ts` | 40 | Tailwind CSS badge styling for order statuses | `getStatusBadgeClass()` |
+| `status-badges.ts` | 61 | Tailwind CSS badge styling for all 11 order statuses (pending, processing, confirmed, shipped, delivered, completed, cancelled, returned, refunded, partially_refunded, incomplete) | `getStatusBadgeClass()` |
 | `currency.ts` | 101 | ISO 4217 currency formatting with `currency.js` precision | `CurrencyConfig`, `DEFAULT_CURRENCY`, `getDecimalPlaces()`, `getCurrencySymbol()`, `getCurrencyCode()`, `formatPrice()`, `formatPriceShort()` |
 | `price-utils.ts` | 46 | Float-safe price arithmetic via `currency.js` | `roundPrice()`, `addPrices()`, `subtractPrice()`, `pricesEqual()`, `calculatePercentageDiscount()` |
 | `image-optimizer.ts` | 319 | Cloudflare Image Resizing URL generation | `getOptimizedImageUrl()`, `getOriginalImageUrl()`, `isR2Image()`, `getOptimizedImageProps()`, `getResponsiveSrcSet()`, `ImagePresets` |

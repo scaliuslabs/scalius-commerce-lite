@@ -76,9 +76,9 @@ Handled by `inventory-transitions.ts` -- the **single source of truth** for how 
 | Order status change | `inventoryAction` guard  | Inventory operation              | New `inventoryAction` |
 |---------------------|-------------------------|----------------------------------|-----------------------|
 | Any -> `shipped`    | Must be `reserved`       | `deductMultiple()` -- decrements `stock`, releases `reservedStock` | `deducted`     |
-| Any -> `cancelled`  | Must be `reserved`       | `releaseMultiple()` -- releases `reservedStock`                    | `restored`     |
-| Any -> `returned`   | Must be `reserved`       | `releaseMultiple()` -- releases `reservedStock`                    | `restored`     |
-| Any -> `refunded`   | Must be `reserved`       | `releaseMultiple()` -- releases `reservedStock`                    | `restored`     |
+| Any -> `cancelled`  | `reserved` or `deducted` | `releaseMultiple()` (reserved) or `restoreDeductedMultiple()` (deducted) | `restored` |
+| Any -> `returned`   | `reserved` or `deducted` | `releaseMultiple()` (reserved) or `restoreDeductedMultiple()` (deducted) | `restored` |
+| Any -> `refunded`   | `reserved` or `deducted` | `releaseMultiple()` (reserved) or `restoreDeductedMultiple()` (deducted) | `restored` |
 | `cancelled` -> active status | Must be `restored` | `reserveMultiple()` -- re-reserves stock                       | `reserved`     |
 
 All transitions are **idempotent**: calling `applyInventoryForStatusChange()` multiple times with the same status produces no duplicate adjustments because it checks `inventoryAction` before acting.
