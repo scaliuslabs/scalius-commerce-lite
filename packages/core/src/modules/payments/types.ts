@@ -61,6 +61,7 @@ export interface InitSSLCommerzSessionParams {
   customerEmail?: string;
   customerAddress?: string;
   customerCity?: string;
+  customerPostcode?: string;
   paymentType: PaymentType;
   productName?: string;
   numItems?: number;
