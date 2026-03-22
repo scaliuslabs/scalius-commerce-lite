@@ -80,8 +80,9 @@ const SummaryRow = ({
 
 export function OrderItemsCard({ order }: OrderItemsCardProps) {
   const { symbol } = useCurrency();
-  const grandTotal =
-    order.totalAmount + order.shippingCharge - (order.discountAmount ?? 0);
+  // totalAmount is the GRAND TOTAL (items + shipping - discount), computed server-side.
+  // Reverse-engineer subtotal for display: subtotal = totalAmount - shipping + discount
+  const subtotal = order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0);
 
   return (
     <Card className="overflow-hidden">
@@ -103,7 +104,7 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
           <div className="ml-auto w-full space-y-1.5 sm:w-72">
             <SummaryRow
               label="Subtotal"
-              value={`${symbol}${order.totalAmount.toLocaleString()}`}
+              value={`${symbol}${subtotal.toLocaleString()}`}
             />
             {order.shippingCharge > 0 && (
               <SummaryRow
@@ -121,7 +122,7 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
             <div className="flex justify-between border-t border-border pt-1.5">
               <span className="font-medium text-foreground">Total</span>
               <span className="font-medium text-foreground">
-                {symbol}{grandTotal.toLocaleString()}
+                {symbol}{order.totalAmount.toLocaleString()}
               </span>
             </div>
           </div>

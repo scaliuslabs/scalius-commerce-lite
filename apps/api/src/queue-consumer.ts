@@ -107,7 +107,7 @@ export type PaymentQueueMessage =
     orderId: string;
     customerEmail?: string;
     customerName: string;
-    notificationType: "order_created" | "order_confirmed" | "order_processing" | "order_shipped" | "order_delivered" | "order_cancelled";
+    notificationType: "order_created" | "order_confirmed" | "order_processing" | "order_shipped" | "order_delivered" | "order_cancelled" | "order_returned";
     data?: Record<string, unknown>;
   };
 
@@ -353,6 +353,7 @@ async function processQueueMessage(
     // ── Order notifications ────────────────────────────────────────────────
 
     case "order.notification": {
+      // Customer notifications (email, SMS, etc.)
       if (payload.customerEmail) {
         await sendOrderNotificationEmail(
           payload.customerEmail,
@@ -364,15 +365,21 @@ async function processQueueMessage(
         );
       }
 
-      // FCM push to admin devices — supplementary, must not break email delivery
+      // Admin push notification — check admin channel settings before sending
       try {
-        const requestUrl = env.PUBLIC_API_BASE_URL || "https://api.scalius.com";
-        await sendOrderNotification(db, {
-          id: payload.orderId,
-          customerName: payload.customerName,
-        }, env, requestUrl);
+        const { getAdminNotificationChannels } = await import("@scalius/core/modules/settings/settings.service");
+        const adminChannels = await getAdminNotificationChannels(db);
+        const enabledAdminChannels = adminChannels[payload.notificationType] || [];
+
+        if (enabledAdminChannels.includes("push")) {
+          const requestUrl = env.PUBLIC_API_BASE_URL || "https://api.scalius.com";
+          await sendOrderNotification(db, {
+            id: payload.orderId,
+            customerName: payload.customerName,
+          }, env, requestUrl);
+        }
       } catch (fcmError) {
-        console.error(`[Queue] FCM push failed for order ${payload.orderId} (non-fatal):`, fcmError);
+        console.error(`[Queue] Admin notification check/send failed for ${payload.orderId}:`, fcmError);
       }
       break;
     }

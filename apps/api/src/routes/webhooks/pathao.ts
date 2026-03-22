@@ -3,9 +3,9 @@
 
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
-import { deliveryShipments } from "@scalius/database/schema";
+import { deliveryShipments, orders } from "@scalius/database/schema";
 import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper";
-import { updateOrderStatusFromShipment, notifyShipmentStatusChange } from "@scalius/core/modules/delivery/tracking";
+import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
 import { recordWebhookEvent } from "@scalius/core/modules/payments/process-payment";
 import { verifyDeliveryWebhook } from "../../middleware/webhook-auth";
 
@@ -139,8 +139,39 @@ app.post("/", async (c) => {
             .where(eq(deliveryShipments.id, shipment.id));
 
         if (normalizedStatus !== previousStatus) {
-            await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
-            await notifyShipmentStatusChange(db, shipment.id, previousStatus, normalizedStatus);
+            const statusResult = await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
+
+            // Enqueue customer notification for delivery status changes
+            if (statusResult && statusResult.newStatus && c.env.ORDER_NOTIFICATIONS_QUEUE) {
+                const DELIVERY_NOTIFICATION_MAP: Record<string, string> = {
+                    shipped: "order_shipped",
+                    delivered: "order_delivered",
+                    returned: "order_returned",
+                    cancelled: "order_cancelled",
+                };
+                const notifType = DELIVERY_NOTIFICATION_MAP[statusResult.newStatus];
+                if (notifType) {
+                    try {
+                        const order = await db.select({
+                            customerEmail: orders.customerEmail,
+                            customerName: orders.customerName,
+                        }).from(orders).where(eq(orders.id, statusResult.orderId)).get();
+
+                        if (order) {
+                            await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
+                                type: "order.notification",
+                                orderId: statusResult.orderId,
+                                customerEmail: order.customerEmail ?? undefined,
+                                customerName: order.customerName,
+                                notificationType: notifType,
+                                data: shipment.trackingId ? { trackingId: shipment.trackingId } : undefined,
+                            });
+                        }
+                    } catch (notifErr) {
+                        console.error(`[pathao-webhook] Failed to enqueue notification:`, notifErr);
+                    }
+                }
+            }
         }
 
         await recordWebhookEvent(

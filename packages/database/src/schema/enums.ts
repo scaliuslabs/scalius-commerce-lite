@@ -98,6 +98,7 @@ export type WidgetPlacementRule = (typeof WidgetPlacementRule)[keyof typeof Widg
 export const PaymentRecordStatus = {
     PENDING: "pending",
     CONFIRMED: "confirmed",
+    SUCCEEDED: "succeeded",
     FAILED: "failed",
     REFUNDED: "refunded",
     CANCELLED: "cancelled",

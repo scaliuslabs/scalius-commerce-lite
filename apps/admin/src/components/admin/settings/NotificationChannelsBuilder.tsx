@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Loader2, Save, Bell } from "lucide-react";
+import { Loader2, Save, Bell, ShieldCheck } from "lucide-react";
 import { unwrapEnvelope, extractApiError } from "@/lib/api-helpers";
 
 const ORDER_STATUSES = [
@@ -19,6 +19,7 @@ const ORDER_STATUSES = [
   { key: "order_shipped", label: "Order Shipped" },
   { key: "order_delivered", label: "Order Delivered" },
   { key: "order_cancelled", label: "Order Cancelled" },
+  { key: "order_returned", label: "Order Returned" },
 ] as const;
 
 const CHANNELS = [
@@ -28,9 +29,26 @@ const CHANNELS = [
   { key: "push", label: "Push" },
 ] as const;
 
+const ADMIN_STATUSES = [
+  { key: "order_created", label: "New Order" },
+  { key: "order_confirmed", label: "Order Confirmed" },
+  { key: "order_processing", label: "Order Processing" },
+  { key: "order_shipped", label: "Order Shipped" },
+  { key: "order_delivered", label: "Order Delivered" },
+  { key: "order_cancelled", label: "Order Cancelled" },
+] as const;
+
+const ADMIN_CHANNELS = [
+  { key: "push", label: "Push" },
+] as const;
+
 type StatusKey = (typeof ORDER_STATUSES)[number]["key"];
 type ChannelKey = (typeof CHANNELS)[number]["key"];
 type ChannelConfig = Record<StatusKey, Record<ChannelKey, boolean>>;
+
+type AdminStatusKey = (typeof ADMIN_STATUSES)[number]["key"];
+type AdminChannelKey = (typeof ADMIN_CHANNELS)[number]["key"];
+type AdminChannelConfig = Record<AdminStatusKey, Record<AdminChannelKey, boolean>>;
 
 function getDefaultConfig(): ChannelConfig {
   const config = {} as ChannelConfig;
@@ -45,13 +63,27 @@ function getDefaultConfig(): ChannelConfig {
   return config;
 }
 
+function getDefaultAdminConfig(): AdminChannelConfig {
+  const config = {} as AdminChannelConfig;
+  for (const status of ADMIN_STATUSES) {
+    config[status.key] = {
+      push: status.key === "order_created" || status.key === "order_cancelled",
+    };
+  }
+  return config;
+}
+
 export function NotificationChannelsBuilder() {
   const [channels, setChannels] = useState<ChannelConfig>(getDefaultConfig());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [adminChannels, setAdminChannels] = useState<AdminChannelConfig>(getDefaultAdminConfig());
+  const [isAdminLoading, setIsAdminLoading] = useState(true);
+  const [isAdminSaving, setIsAdminSaving] = useState(false);
+
   useEffect(() => {
-    async function load() {
+    async function loadCustomerChannels() {
       try {
         const res = await fetch("/api/v1/admin/settings/notification-channels");
         if (res.ok) {
@@ -79,11 +111,50 @@ export function NotificationChannelsBuilder() {
         setIsLoading(false);
       }
     }
-    load();
+
+    async function loadAdminChannels() {
+      try {
+        const res = await fetch("/api/v1/admin/settings/notification-channels/admin-channels");
+        if (res.ok) {
+          const json = await res.json();
+          const data = unwrapEnvelope<{ channels: Record<string, string[]> }>(json);
+          const channelData = data?.channels;
+          if (channelData && typeof channelData === "object") {
+            const config = getDefaultAdminConfig();
+            for (const status of ADMIN_STATUSES) {
+              const enabledChannels = channelData[status.key];
+              if (Array.isArray(enabledChannels)) {
+                for (const ch of ADMIN_CHANNELS) {
+                  config[status.key][ch.key] = enabledChannels.includes(ch.key);
+                }
+              }
+            }
+            setAdminChannels(config);
+          }
+        }
+      } catch {
+        // Use defaults on error
+      } finally {
+        setIsAdminLoading(false);
+      }
+    }
+
+    loadCustomerChannels();
+    loadAdminChannels();
   }, []);
 
   const handleToggle = (status: StatusKey, channel: ChannelKey) => {
     setChannels((prev) => ({
+      ...prev,
+      [status]: {
+        ...prev[status],
+        [channel]: !prev[status][channel],
+      },
+    }));
+  };
+
+  const handleAdminToggle = (status: AdminStatusKey, channel: AdminChannelKey) => {
+    setAdminChannels((prev) => ({
       ...prev,
       [status]: {
         ...prev[status],
@@ -123,7 +194,36 @@ export function NotificationChannelsBuilder() {
     }
   };
 
-  if (isLoading) {
+  const handleAdminSave = async () => {
+    setIsAdminSaving(true);
+    try {
+      const apiChannels: Record<string, string[]> = {};
+      for (const status of ADMIN_STATUSES) {
+        const statusChannels = adminChannels[status.key];
+        apiChannels[status.key] = ADMIN_CHANNELS
+          .filter((ch) => statusChannels?.[ch.key])
+          .map((ch) => ch.key);
+      }
+      const res = await fetch("/api/v1/admin/settings/notification-channels/admin-channels", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channels: apiChannels }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(extractApiError(errJson, "Failed to save"));
+      }
+      toast.success("Admin notification channels saved");
+    } catch (error: unknown) {
+      toast.error("Failed to save", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsAdminSaving(false);
+    }
+  };
+
+  if (isLoading && isAdminLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -132,73 +232,150 @@ export function NotificationChannelsBuilder() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <div>
-            <CardTitle className="text-base">Customer Notification Channels</CardTitle>
-            <CardDescription className="mt-1">
-              Choose how your <strong>customers</strong> are notified about their order status changes.
-              These notifications are sent directly to the customer via their preferred channel.
-            </CardDescription>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <CardTitle className="text-base">Customer Notification Channels</CardTitle>
+              <CardDescription className="mt-1">
+                Choose how your <strong>customers</strong> are notified about their order status changes.
+                These notifications are sent directly to the customer via their preferred channel.
+              </CardDescription>
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/50 border-b">
-                <th className="text-left py-3 px-4 font-medium">
-                  Order Status
-                </th>
-                {CHANNELS.map((ch) => (
-                  <th
-                    key={ch.key}
-                    className="text-center py-3 px-4 font-medium w-24"
-                  >
-                    {ch.label}
+        </CardHeader>
+        <CardContent>
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/50 border-b">
+                  <th className="text-left py-3 px-4 font-medium">
+                    Order Status
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ORDER_STATUSES.map((status, i) => (
-                <tr
-                  key={status.key}
-                  className={i < ORDER_STATUSES.length - 1 ? "border-b" : ""}
-                >
-                  <td className="py-3 px-4 font-medium">{status.label}</td>
                   {CHANNELS.map((ch) => (
-                    <td key={ch.key} className="text-center py-3 px-4">
-                      <Checkbox
-                        checked={channels[status.key]?.[ch.key] ?? false}
-                        onCheckedChange={() =>
-                          handleToggle(status.key, ch.key)
-                        }
-                        aria-label={`${status.label} via ${ch.label}`}
-                      />
-                    </td>
+                    <th
+                      key={ch.key}
+                      className="text-center py-3 px-4 font-medium w-24"
+                    >
+                      {ch.label}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {ORDER_STATUSES.map((status, i) => (
+                  <tr
+                    key={status.key}
+                    className={i < ORDER_STATUSES.length - 1 ? "border-b" : ""}
+                  >
+                    <td className="py-3 px-4 font-medium">{status.label}</td>
+                    {CHANNELS.map((ch) => (
+                      <td key={ch.key} className="text-center py-3 px-4">
+                        <Checkbox
+                          checked={channels[status.key]?.[ch.key] ?? false}
+                          onCheckedChange={() =>
+                            handleToggle(status.key, ch.key)
+                          }
+                          aria-label={`${status.label} via ${ch.label}`}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        <div className="flex justify-end mt-4">
-          <Button onClick={handleSave} disabled={isSaving} size="sm">
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            Save Changes
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          <div className="flex justify-end mt-4">
+            <Button onClick={handleSave} disabled={isSaving} size="sm">
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              Save Changes
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <CardTitle className="text-base">Admin Notifications</CardTitle>
+              <CardDescription className="mt-1">
+                Choose which order events send push notifications to admin devices.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isAdminLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 border-b">
+                      <th className="text-left py-3 px-4 font-medium">
+                        Order Status
+                      </th>
+                      {ADMIN_CHANNELS.map((ch) => (
+                        <th
+                          key={ch.key}
+                          className="text-center py-3 px-4 font-medium w-24"
+                        >
+                          {ch.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ADMIN_STATUSES.map((status, i) => (
+                      <tr
+                        key={status.key}
+                        className={i < ADMIN_STATUSES.length - 1 ? "border-b" : ""}
+                      >
+                        <td className="py-3 px-4 font-medium">{status.label}</td>
+                        {ADMIN_CHANNELS.map((ch) => (
+                          <td key={ch.key} className="text-center py-3 px-4">
+                            <Checkbox
+                              checked={adminChannels[status.key]?.[ch.key] ?? false}
+                              onCheckedChange={() =>
+                                handleAdminToggle(status.key, ch.key)
+                              }
+                              aria-label={`Admin: ${status.label} via ${ch.label}`}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end mt-4">
+                <Button onClick={handleAdminSave} disabled={isAdminSaving} size="sm">
+                  {isAdminSaving ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Save Changes
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

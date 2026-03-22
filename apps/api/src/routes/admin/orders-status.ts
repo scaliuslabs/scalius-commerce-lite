@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
 import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, createShipment, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
-import { deliveryShipments, codTracking } from "@scalius/database/schema";
+import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
@@ -153,6 +153,34 @@ app.openapi(postCodRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.processCodAction(db, orderId, data);
+
+    // Enqueue notification for COD status changes that affect order status
+    const COD_NOTIFICATION_MAP: Record<string, string> = {
+        collected: "order_delivered",
+        returned: "order_returned",
+    };
+    const notifType = COD_NOTIFICATION_MAP[data.action];
+    if (notifType && c.env.ORDER_NOTIFICATIONS_QUEUE) {
+        try {
+            const order = await db.select({
+                customerEmail: orders.customerEmail,
+                customerName: orders.customerName,
+            }).from(orders).where(eq(orders.id, orderId)).get();
+
+            if (order) {
+                await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
+                    type: "order.notification",
+                    orderId,
+                    customerEmail: order.customerEmail ?? undefined,
+                    customerName: order.customerName,
+                    notificationType: notifType,
+                });
+            }
+        } catch (notifErr) {
+            console.error(`[orders] Failed to enqueue COD notification for ${orderId}:`, notifErr);
+        }
+    }
+
     return ok(c, result);
 });
 

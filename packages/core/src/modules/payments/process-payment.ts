@@ -92,7 +92,6 @@ export async function processPaymentConfirmed(
       return { success: true }; // Idempotent — already processed
     }
 
-    const now = new Date();
     const newPaidAmount = roundPrice((order.paidAmount ?? 0) + params.amount);
     const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
     const isFullyPaid = pricesEqual(newBalanceDue, 0); // Allow tiny float drift
@@ -142,8 +141,8 @@ export async function processPaymentConfirmed(
         sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
         polarCheckoutId: params.polarCheckoutId ?? null,
         metadata: params.metadata ? JSON.stringify(params.metadata) : null,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
       }),
       db.update(orders).set({
         status: newStatus,
@@ -162,7 +161,7 @@ export async function processPaymentConfirmed(
         .update(paymentPlans)
         .set({
           status: "deposit_paid",
-          depositPaidAt: now,
+          depositPaidAt: sql`unixepoch()`,
           updatedAt: sql`unixepoch()`,
         })
         .where(eq(paymentPlans.orderId, params.orderId));
@@ -171,7 +170,7 @@ export async function processPaymentConfirmed(
         .update(paymentPlans)
         .set({
           status: "fully_paid",
-          balancePaidAt: now,
+          balancePaidAt: sql`unixepoch()`,
           updatedAt: sql`unixepoch()`,
         })
         .where(eq(paymentPlans.orderId, params.orderId));
@@ -227,8 +226,8 @@ export async function processPaymentFailed(
       stripePaymentIntentId: gateway === "stripe" ? (intentId ?? null) : null,
       sslcommerzTranId: gateway === "sslcommerz" ? (intentId ?? null) : null,
       polarCheckoutId: gateway === "polar" ? (intentId ?? null) : null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: sql`unixepoch()`,
+      updatedAt: sql`unixepoch()`,
     });
   } catch (err: unknown) {
     console.error(`[process-payment] Failed payment recording error:`, err);
@@ -307,7 +306,7 @@ export async function recordWebhookEvent(
       orderId: orderId ?? null,
       status,
       result: result ? JSON.stringify(result) : null,
-      processedAt: new Date(),
+      processedAt: sql`unixepoch()`,
     });
   } catch {
     // Duplicate key = already recorded — safe to ignore

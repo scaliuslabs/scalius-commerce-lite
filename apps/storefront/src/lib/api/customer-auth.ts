@@ -108,13 +108,14 @@ export async function verifyCustomerOtp(
   code: string,
   name?: string,
   phone?: string,
+  email?: string,
 ): Promise<{ success: boolean; customer?: CustomerInfo; error?: string; attemptsLeft?: number; isNewUser?: boolean; }> {
   try {
     const res = await fetch(authUrl("verify-otp"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ method, identifier, code, name, phone }),
+      body: JSON.stringify({ method, identifier, code, name, phone, email }),
     });
     const raw = (await res.json()) as AuthApiEnvelope<VerifyOtpData>;
     const data = raw.data ?? (raw as unknown as VerifyOtpData); // Unwrap { success, data: T } envelope

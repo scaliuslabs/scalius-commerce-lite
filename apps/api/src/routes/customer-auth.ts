@@ -118,7 +118,8 @@ const verifyOtpRoute = createRoute({
             identifier: z.string().openapi({ description: "Email or phone number" }),
             code: z.string().openapi({ description: "6-digit OTP code" }),
             name: z.string().optional(),
-            phone: z.string().optional()
+            phone: z.string().optional(),
+            email: z.string().optional()
           }).superRefine((data, ctx) => {
             if (data.method === "phone" && !isValidPhoneNumber(data.identifier)) {
               ctx.addIssue({
@@ -162,6 +163,7 @@ app.openapi(verifyOtpRoute, async (c) => {
   const code = body.code?.trim();
   const name = body.name?.trim() || "Customer";
   const phone = body.phone?.trim();
+  const email = body.email?.trim().toLowerCase();
 
   const db = c.get("db");
   const kv = c.env.CACHE;
@@ -171,7 +173,8 @@ app.openapi(verifyOtpRoute, async (c) => {
     identifier: identifier!,
     code: code!,
     name,
-    phone
+    phone,
+    email
   });
 
   if (!result.success) {

@@ -270,7 +270,7 @@ export function useOrderListApi(
         setShipmentStatuses((prev) => ({ ...prev, [orderId]: result }));
         setDisplayOrders((prev) =>
           prev.map((order) =>
-            order.id === orderId ? { ...order, status: "Shipped" } : order,
+            order.id === orderId ? { ...order, status: "shipped" } : order,
           ),
         );
       } catch (error) {

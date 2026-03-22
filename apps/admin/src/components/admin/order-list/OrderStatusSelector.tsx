@@ -6,6 +6,7 @@ import {
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu";
 import { LoaderCircle, ChevronDown } from "lucide-react";
+import { getAvailableTransitions } from "../orderview/types";
 
 interface OrderStatusSelectorProps {
   status: string;
@@ -14,20 +15,6 @@ interface OrderStatusSelectorProps {
   showTrashed: boolean;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
 }
-
-const orderStatuses = [
-  "Pending",
-  "Processing",
-  "Confirmed",
-  "Shipped",
-  "Delivered",
-  "Completed",
-  "Cancelled",
-  "Refunded",
-  "Returned",
-  "Partially Refunded",
-  "Incomplete",
-];
 
 export function OrderStatusSelector({
   status,
@@ -142,20 +129,25 @@ export function OrderStatusSelector({
         </button>
       </DropdownMenuTrigger>
       {!showTrashed && (
-        <DropdownMenuContent align="start" className="w-40">
+        <DropdownMenuContent align="start" className="w-48">
           <DropdownMenuRadioGroup
             value={status}
             onValueChange={(newStatus) => onStatusUpdate(orderId, newStatus)}
           >
-            {orderStatuses.map((s) => (
+            {getAvailableTransitions(status).map((s) => (
               <DropdownMenuRadioItem
                 key={s}
                 value={s}
                 className="text-xs cursor-pointer hover:bg-[var(--muted)]"
               >
-                {s}
+                {s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
               </DropdownMenuRadioItem>
             ))}
+            {getAvailableTransitions(status).length === 0 && (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                No transitions available (terminal state)
+              </div>
+            )}
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       )}

@@ -29,14 +29,13 @@ export async function initCODTracking(
   db: Database,
   params: InitCODTrackingParams
 ): Promise<void> {
-  const now = new Date();
   await db.insert(codTracking).values({
     id: crypto.randomUUID(),
     orderId: params.orderId,
     deliveryAttempts: 0,
     codStatus: "pending",
-    createdAt: now,
-    updatedAt: now,
+    createdAt: sql`unixepoch()`,
+    updatedAt: sql`unixepoch()`,
   });
 }
 
@@ -75,8 +74,6 @@ export async function recordCODCollection(
       return { success: true }; // Already recorded — idempotent
     }
 
-    const now = new Date();
-
     // Fetch currency config before batch
     const currencyConfig = await getCurrencyConfig(db);
 
@@ -88,10 +85,10 @@ export async function recordCODCollection(
           codStatus: "collected",
           collectedBy: params.collectedBy,
           collectedAmount: params.collectedAmount,
-          collectedAt: now,
+          collectedAt: sql`unixepoch()`,
           receiptUrl: params.receiptUrl ?? null,
           deliveryAttempts: sql`${codTracking.deliveryAttempts} + 1`,
-          lastAttemptAt: now,
+          lastAttemptAt: sql`unixepoch()`,
           updatedAt: sql`unixepoch()`,
         })
         .where(eq(codTracking.orderId, params.orderId)),
@@ -105,10 +102,10 @@ export async function recordCODCollection(
         paymentType: "full",
         status: "succeeded",
         codCollectedBy: params.collectedBy,
-        codCollectedAt: now,
+        codCollectedAt: sql`unixepoch()`,
         codReceiptUrl: params.receiptUrl ?? null,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
       }),
 
       db
@@ -140,14 +137,13 @@ export async function recordCODFailure(
   params: RecordCODFailureParams
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const now = new Date();
     await db
       .update(codTracking)
       .set({
         codStatus: "failed",
         failureReason: params.reason,
         deliveryAttempts: sql`${codTracking.deliveryAttempts} + 1`,
-        lastAttemptAt: now,
+        lastAttemptAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
       })
       .where(eq(codTracking.orderId, params.orderId));
