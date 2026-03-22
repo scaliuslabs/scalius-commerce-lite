@@ -62,6 +62,7 @@ export async function initSSLCommerzSession(
     cus_email: params.customerEmail ?? "noreply@example.com",
     cus_add1: params.customerAddress ?? "N/A",
     cus_city: params.customerCity ?? "N/A",
+    cus_postcode: params.customerPostcode ?? "0000",
     cus_country: "Bangladesh",
     product_name: params.productName ?? "Order",
     product_category: "E-commerce",
