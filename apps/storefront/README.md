@@ -218,6 +218,18 @@ Gateway-based payment architecture:
 - `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, renders order summary, renders gateway cards, handles payment processing
 - Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
 
+## SEO Features
+
+- **Canonical URLs**: `<link rel="canonical">` on all pages via `Layout.astro` `canonicalUrl` prop
+- **Open Graph tags**: Full OG meta tags (og:title, og:description, og:image, og:url, og:site_name, og:type) in `Layout.astro`
+- **JSON-LD**: Organization and WebSite structured data on all pages (global), Product structured data on product detail pages with offers, availability, and merchant listing spec compliance
+- **Product SEO**: Product pages emit JSON-LD with `@type: Product` including price, availability, SKU, brand, seller, images, and aggregate offer data
+
+## Search
+
+- **FTS5 full-text search**: Product search uses SQLite FTS5 via the API worker
+- **Bengali support**: FTS5 tables use `unicode61` tokenizer with `categories 'L* N* Co Mc Mn'` for proper Bengali script tokenization (migration 0031)
+
 ## Import Boundaries
 
 The storefront imports ONLY:

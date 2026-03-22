@@ -118,7 +118,12 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
 | `processing` | `order_processing` |
 | `shipped` | `order_shipped` |
 | `delivered` | `order_delivered` |
+| `completed` | `order_completed` |
 | `cancelled` | `order_cancelled` |
+| `returned` | `order_returned` |
+| `refunded` | `order_refunded` |
+
+All 9 statuses that trigger notifications are covered. Each dispatches to enabled channels (email, SMS, WhatsApp, push) independently via the queue consumer.
 
 ### Fulfillment Flow
 
@@ -130,10 +135,18 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
 
 ### COD Actions
 
-`processCodAction()` handles three actions:
-- `collected`: Records collection via `recordCODCollection()`, sets order to `delivered`
+`processCodAction()` handles three actions with CAS protection on the order version:
+- `collected`: CAS update first, then records collection via `recordCODCollection()`, sets order to `delivered`
 - `failed`: Records failure via `recordCODFailure()`
-- `returned`: Marks COD returned, applies inventory restoration, sets order to `returned`
+- `returned`: CAS update first, then marks COD returned, applies inventory restoration, sets order to `returned`
+
+### Bulk Ship Orders
+
+`bulkShipOrders()` applies CAS protection per order:
+1. Reads order status and version
+2. For unshipped orders: CAS-updates status to `shipped`, then deducts inventory
+3. For shipped orders needing delivery: CAS-updates to `delivered`, applies inventory for delivered status
+4. CAS conflicts (concurrent admin + webhook edits) are logged and skipped gracefully
 
 ### Delete Flow
 

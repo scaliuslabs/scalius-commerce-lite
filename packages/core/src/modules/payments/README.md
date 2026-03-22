@@ -232,7 +232,8 @@ Payment types: `full`, `deposit`, `balance`.
 3. Finds latest successful payment record to determine gateway
 4. Dispatches to gateway-specific refund API (Stripe: by charge ID with `Math.round(refundAmount * 100)`; SSLCommerz: by bank_tran_id; Polar: by checkout ID with `Math.round(refundAmount * 100)`; COD: marker ID only)
 5. Updates `orders.paidAmount` (subtracts refund) and `orders.paymentStatus` (REFUNDED for full, PARTIAL for partial)
-6. On full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Partial refunds do NOT restore inventory.
+6. Updates `orders.status` to `REFUNDED` (full refund) or `PARTIALLY_REFUNDED` (partial), subject to state machine validation via `canTransitionTo()`
+7. On full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Partial refunds do NOT restore inventory.
 
 `processReturn()`: Sets order status to `RETURNED`, restores inventory via `applyInventoryForStatusChange()`, optionally triggers auto-refund. Only orders in `delivered`, `completed`, or `shipped` status can be returned.
 

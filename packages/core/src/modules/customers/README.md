@@ -155,7 +155,7 @@ Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE custom
 
 2. **Index barrel omission**: `index.ts` only re-exports `customers.service`. `customer-auth.service.ts` and `otp-transport.ts` must be imported by direct path.
 
-3. **SMS transport stub**: `SmsOtpTransport.validateConfig()` returns `null` (always valid) but the actual SMS delivery in the queue consumer is noted as pending. Selecting SMS will accept OTPs but delivery may not work.
+3. **SMS transport**: `SmsOtpTransport.validateConfig()` returns `null` (always valid). SMS delivery is handled by the queue consumer via `getActiveSmsProvider()` with 4 supported providers (smsnetbd, bdbulksms, mimsms, gennet).
 
 4. **Profile update limitations**: `updateCustomerProfile()` (storefront) only syncs `name` back to the KV session. Address/city/zone/cityName/zoneName are updated in DB but not reflected in the session object.
 
