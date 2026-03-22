@@ -122,7 +122,7 @@ export function OrderStatusSelector({
               className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${dotColor}`}
             ></span>
           )}
-          {status}
+          {status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
           {!showTrashed && !isLoading && (
             <ChevronDown className="ml-1 h-3 w-3 opacity-70 group-hover:opacity-100 transition-opacity" />
           )}

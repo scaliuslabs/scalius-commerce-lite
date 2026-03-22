@@ -25,19 +25,27 @@ export async function bulkShipOrders(db: Database, orderIds: string[], providerI
     const results = [];
     for (const orderId of orderIds) {
         try {
-            const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+            const order = await db.select({ status: orders.status, version: orders.version }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) throw new NotFoundError(`Order ${orderId} not found`);
             validateTransition("order", order.status, OrderStatus.SHIPPED);
 
             const shipment = await createShipment(db, orderId, providerId, options);
             if (shipment.success) {
-                const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
-                await db.update(orders).set({
+                // CAS update first — only apply inventory if we win the version check
+                const casResult = await db.update(orders).set({
                     status: OrderStatus.SHIPPED,
                     fulfillmentStatus: FulfillmentStatus.COMPLETE,
-                    inventoryAction: newInventoryAction,
+                    version: order.version + 1,
                     updatedAt: sql`unixepoch()`,
-                }).where(eq(orders.id, orderId));
+                }).where(and(eq(orders.id, orderId), eq(orders.version, order.version))).returning({ id: orders.id });
+
+                if (casResult.length === 0) {
+                    results.push({ orderId, success: false, error: "Order was modified concurrently" });
+                    continue;
+                }
+
+                const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
+                await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
             }
             results.push({ orderId, success: shipment.success, shipment: shipment.success ? shipment : undefined, error: shipment.success ? undefined : shipment.message });
         } catch (error: unknown) {
@@ -48,24 +56,29 @@ export async function bulkShipOrders(db: Database, orderIds: string[], providerI
 }
 
 export async function processCodAction(db: Database, orderId: string, body: Record<string, unknown>) {
-    const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+    const order = await db.select({ status: orders.status, version: orders.version }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
 
     switch (body.action) {
         case "collected": {
             // Validate transition to DELIVERED. If current status is CONFIRMED,
             // transition through SHIPPED first (COD collection implies delivery).
+            let currentVersion = order.version;
             if (order.status === OrderStatus.CONFIRMED) {
                 validateTransition("order", order.status, OrderStatus.SHIPPED);
+                const shipResult = await db.update(orders).set({ status: OrderStatus.SHIPPED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, currentVersion))).returning({ id: orders.id });
+                if (shipResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
+                currentVersion += 1;
                 const shipInventory = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
-                await db.update(orders).set({ status: OrderStatus.SHIPPED, inventoryAction: shipInventory, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
+                await db.update(orders).set({ inventoryAction: shipInventory }).where(eq(orders.id, orderId));
             }
             const currentStatus = order.status === OrderStatus.CONFIRMED ? OrderStatus.SHIPPED : order.status;
             validateTransition("order", currentStatus, OrderStatus.DELIVERED);
 
             const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy as string, collectedAmount: body.collectedAmount as number, receiptUrl: body.receiptUrl as string | undefined });
             if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
-            await db.update(orders).set({ status: OrderStatus.DELIVERED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
+            const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, currentVersion))).returning({ id: orders.id });
+            if (delResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
             return { message: "COD collection recorded" };
         }
         case "failed": {
@@ -76,8 +89,10 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
         case "returned": {
             const retResult = await markCODReturned(db, orderId);
             if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
+            const retCasResult = await db.update(orders).set({ status: OrderStatus.RETURNED, version: order.version + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, order.version))).returning({ id: orders.id });
+            if (retCasResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
             await applyInventoryForStatusChange(db, orderId, OrderStatus.RETURNED);
-            await db.update(orders).set({ status: OrderStatus.RETURNED, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
+            await db.update(orders).set({ inventoryAction: "restored" }).where(eq(orders.id, orderId));
             return { message: "Order marked as returned" };
         }
         default:

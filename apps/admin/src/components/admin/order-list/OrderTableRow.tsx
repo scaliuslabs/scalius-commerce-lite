@@ -244,9 +244,17 @@ export const OrderTableRow = React.memo(function OrderTableRow({
               <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 py-0">
                 Unpaid
               </Badge>
+            ) : order.paymentStatus === "refunded" ? (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 text-[10px] px-1.5 py-0">
+                Refunded
+              </Badge>
+            ) : order.paymentStatus === "failed" ? (
+              <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 py-0">
+                Failed
+              </Badge>
             ) : null}
             <span className="text-[10px] text-[var(--muted-foreground)] uppercase">
-              {order.paymentMethod === "cod" ? "COD" : order.paymentMethod === "stripe" ? "Stripe" : order.paymentMethod === "sslcommerz" ? "SSL" : order.paymentMethod}
+              {order.paymentMethod === "cod" ? "COD" : order.paymentMethod === "stripe" ? "Stripe" : order.paymentMethod === "sslcommerz" ? "SSL" : order.paymentMethod === "polar" ? "Polar" : order.paymentMethod}
             </span>
           </div>
         </div>

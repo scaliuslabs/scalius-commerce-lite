@@ -369,6 +369,7 @@ export function OrderListToolbar({
                 <SelectItem value="stripe">Stripe</SelectItem>
                 <SelectItem value="sslcommerz">SSLCommerz</SelectItem>
                 <SelectItem value="cod">COD</SelectItem>
+                <SelectItem value="polar">Polar</SelectItem>
               </SelectContent>
             </Select>
 

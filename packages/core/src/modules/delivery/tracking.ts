@@ -112,12 +112,9 @@ export async function updateOrderStatusFromShipment(
         return null;
       }
 
-      // Apply inventory side-effects before CAS update
-      await applyInventoryForStatusChange(db, order.id, newOrderStatus);
-
-      // CAS update: only proceed if the order version hasn't changed since we read it.
-      // If an admin (or another webhook) modified the order concurrently, the version
-      // will have changed and 0 rows will be updated — the admin's change takes priority.
+      // CAS update FIRST: only proceed with inventory if we win the version check.
+      // This prevents orphaned inventory changes when two concurrent callers
+      // (e.g. admin + webhook) both apply inventory before either detects the conflict.
       const result = await db
         .update(orders)
         .set({
@@ -137,6 +134,15 @@ export async function updateOrderStatusFromShipment(
         );
         return null;
       }
+
+      // CAS succeeded — we own this transition. Now apply inventory side effects.
+      const newInventoryAction = await applyInventoryForStatusChange(db, order.id, newOrderStatus);
+
+      // Persist the new inventory action (version was already bumped above)
+      await db
+        .update(orders)
+        .set({ inventoryAction: newInventoryAction })
+        .where(eq(orders.id, order.id));
 
       console.log(
         `Updated order ${order.id} status from ${order.status} to ${newOrderStatus}`,

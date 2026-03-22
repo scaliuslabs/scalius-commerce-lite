@@ -57,7 +57,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
         variant="secondary"
         className={`text-xs font-medium ${badgeClass}`}
       >
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
       </Badge>
     );
   };
@@ -83,6 +83,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
     stripe: "Stripe",
     sslcommerz: "SSLCommerz",
     cod: "COD",
+    polar: "Polar",
   };
 
   return (

@@ -159,8 +159,8 @@ app.openapi(createSessionRoute, async (c) => {
       depositAmount: body.depositAmount,
       balanceDue: order.totalAmount - body.depositAmount,
       status: "pending",
-      createdAt: new Date(),
-      updatedAt: new Date()
+      createdAt: sql`unixepoch()`,
+      updatedAt: sql`unixepoch()`
     }).onConflictDoNothing();
   }
 
