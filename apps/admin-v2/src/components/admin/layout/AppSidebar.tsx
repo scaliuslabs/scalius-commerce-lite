@@ -1,3 +1,4 @@
+import { useRef, useCallback } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { ChevronDown, Store, ExternalLink } from "lucide-react";
 import {
@@ -42,44 +43,56 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
   const currentPath = location.pathname;
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const sidebarContentRef = useRef<HTMLDivElement>(null);
 
   const navSections = getFilteredNavSections(permissions, isSuperAdmin);
 
+  // Auto-scroll sidebar when a collapsible section is opened
+  const handleCollapsibleOpen = useCallback((open: boolean, itemName: string) => {
+    if (open && sidebarContentRef.current) {
+      // Small delay to let the collapsible animation start
+      setTimeout(() => {
+        const el = sidebarContentRef.current?.querySelector(
+          `[data-nav-item="${itemName}"]`
+        );
+        el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
+    }
+  }, []);
+
   return (
     <Sidebar collapsible="icon">
-      {/* Header — logo */}
-      <SidebarHeader className="border-b border-sidebar-border flex items-center justify-center px-3 py-3">
-        <Link to="/admin" className="flex items-center gap-2">
+      {/* Header — logo, aligned with header bar */}
+      <SidebarHeader className="h-14 flex items-center border-b border-sidebar-border px-3 shrink-0">
+        <Link to="/admin" className="flex items-center gap-2 min-w-0">
           {isCollapsed ? (
-            <div className="flex items-center justify-center">
-              <img
-                src={faviconImg}
-                alt="Scalius"
-                className="w-8 h-8 object-contain"
-              />
-            </div>
+            <img
+              src={faviconImg}
+              alt="Scalius"
+              className="w-7 h-7 shrink-0 object-contain"
+            />
           ) : (
             <>
               <img
                 src={logoLightImg}
                 alt="Scalius"
-                className="h-7 w-auto max-h-7 object-contain block dark:hidden"
+                className="h-6 w-auto object-contain block dark:hidden"
               />
               <img
                 src={logoDarkImg}
                 alt="Scalius"
-                className="h-7 w-auto max-h-7 object-contain hidden dark:block"
+                className="h-6 w-auto object-contain hidden dark:block"
               />
             </>
           )}
         </Link>
       </SidebarHeader>
 
-      {/* Main navigation */}
-      <SidebarContent>
+      {/* Main navigation — scrollable */}
+      <SidebarContent ref={sidebarContentRef}>
         {navSections.map((section, index) => (
-          <SidebarGroup key={section.label} className={index > 0 ? "pt-4" : ""}>
-            <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+          <SidebarGroup key={section.label} className={index > 0 ? "pt-2" : ""}>
+            <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
               {section.label}
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -90,6 +103,7 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
                       key={item.href}
                       item={item}
                       currentPath={currentPath}
+                      onOpenChange={(open) => handleCollapsibleOpen(open, item.name)}
                     />
                   ) : (
                     <SidebarMenuItem key={item.href}>
@@ -99,7 +113,7 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
                         tooltip={item.name}
                       >
                         <Link to={item.href}>
-                          <item.icon className="shrink-0" strokeWidth={2} />
+                          <item.icon className="shrink-0" strokeWidth={1.8} />
                           <span>{item.name}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -113,7 +127,7 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
       </SidebarContent>
 
       {/* Footer — store link only */}
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="View Store">
@@ -122,7 +136,7 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <Store className="shrink-0" strokeWidth={2} />
+                <Store className="shrink-0" strokeWidth={1.8} />
                 <span className="flex-1">View Store</span>
                 <ExternalLink className="!size-3.5 text-sidebar-foreground/50" />
               </a>
@@ -137,9 +151,11 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
 function CollapsibleNavItem({
   item,
   currentPath,
+  onOpenChange,
 }: {
   item: NavItem;
   currentPath: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const isParentActive =
     isRouteActive(currentPath, item.href) ||
@@ -150,11 +166,12 @@ function CollapsibleNavItem({
       asChild
       defaultOpen={isParentActive}
       className="group/collapsible"
+      onOpenChange={onOpenChange}
     >
-      <SidebarMenuItem>
+      <SidebarMenuItem data-nav-item={item.name}>
         <CollapsibleTrigger asChild>
           <SidebarMenuButton tooltip={item.name} isActive={isParentActive}>
-            <item.icon className="shrink-0" strokeWidth={2} />
+            <item.icon className="shrink-0" strokeWidth={1.8} />
             <span>{item.name}</span>
             <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
           </SidebarMenuButton>
@@ -169,7 +186,7 @@ function CollapsibleNavItem({
                 >
                   <Link to={subItem.href}>
                     {subItem.icon && (
-                      <subItem.icon className="shrink-0" strokeWidth={2} />
+                      <subItem.icon className="shrink-0" strokeWidth={1.8} />
                     )}
                     <span>{subItem.name}</span>
                   </Link>

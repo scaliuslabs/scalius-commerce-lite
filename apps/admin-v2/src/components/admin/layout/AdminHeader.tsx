@@ -26,7 +26,7 @@ export function AdminHeader({ user }: AdminHeaderProps) {
   const breadcrumbItems = generateAdminBreadcrumbs(location.pathname);
 
   return (
-    <header className="h-14 border-b border-border px-3 sm:px-4 flex items-center justify-between sticky top-0 z-30 backdrop-blur-sm bg-background/95 transition-colors duration-200">
+    <header className="h-14 border-b border-border px-3 sm:px-4 flex items-center justify-between sticky top-0 z-[5] backdrop-blur-sm bg-background/95 transition-colors duration-200">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="h-9 w-9 text-muted-foreground hover:text-foreground" />
         <Separator orientation="vertical" className="mr-1 h-4" />
