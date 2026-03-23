@@ -6,10 +6,22 @@
  *
  * Convention:
  *   queryKeys.domain.all       — base key for the domain (used for broad invalidation)
- *   queryKeys.domain.list(p)   — paginated list
+ *   queryKeys.domain.list(p)   — paginated list (with params → exact key; without → prefix for invalidation)
  *   queryKeys.domain.detail(id)— single entity
  *   queryKeys.domain.xxx()     — domain-specific sub-resources
+ *
+ * IMPORTANT: list() without params returns a 2-element prefix ["domain", "list"]
+ * which matches ALL parameterized list queries via TanStack Query's partial matching.
+ * This is critical for cache invalidation — mutations call list() without params
+ * to invalidate all list variants regardless of pagination/sorting/filtering.
  */
+
+/** Helper: returns prefix key when no params, exact key when params provided */
+function listKey(domain: string, params?: Record<string, unknown>) {
+  return params !== undefined
+    ? ([domain, "list", params] as const)
+    : ([domain, "list"] as const);
+}
 
 export const queryKeys = {
   // ── Dashboard ────────────────────────────────────────────────────
@@ -20,7 +32,7 @@ export const queryKeys = {
   // ── Products ─────────────────────────────────────────────────────
   products: {
     all: ["products"] as const,
-    list: (params?: Record<string, unknown>) => ["products", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("products", params),
     detail: (id: string) => ["products", "detail", id] as const,
     stats: () => ["products", "stats"] as const,
     variants: (productId: string) => ["products", "variants", productId] as const,
@@ -30,7 +42,7 @@ export const queryKeys = {
   // ── Categories ───────────────────────────────────────────────────
   categories: {
     all: ["categories"] as const,
-    list: (params?: Record<string, unknown>) => ["categories", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("categories", params),
     detail: (id: string) => ["categories", "detail", id] as const,
     formOptions: () => ["categories", "form-options"] as const,
   },
@@ -38,7 +50,7 @@ export const queryKeys = {
   // ── Collections ──────────────────────────────────────────────────
   collections: {
     all: ["collections"] as const,
-    list: (params?: Record<string, unknown>) => ["collections", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("collections", params),
     detail: (id: string) => ["collections", "detail", id] as const,
     formOptions: () => ["collections", "form-options"] as const,
   },
@@ -46,7 +58,7 @@ export const queryKeys = {
   // ── Orders ───────────────────────────────────────────────────────
   orders: {
     all: ["orders"] as const,
-    list: (params?: Record<string, unknown>) => ["orders", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("orders", params),
     detail: (id: string) => ["orders", "detail", id] as const,
     formData: (id: string) => ["orders", "form-data", id] as const,
     items: (orderId: string) => ["orders", "items", orderId] as const,
@@ -58,7 +70,7 @@ export const queryKeys = {
   // ── Customers ────────────────────────────────────────────────────
   customers: {
     all: ["customers"] as const,
-    list: (params?: Record<string, unknown>) => ["customers", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("customers", params),
     detail: (id: string) => ["customers", "detail", id] as const,
     history: (id: string) => ["customers", "history", id] as const,
   },
@@ -66,21 +78,21 @@ export const queryKeys = {
   // ── Discounts ────────────────────────────────────────────────────
   discounts: {
     all: ["discounts"] as const,
-    list: (params?: Record<string, unknown>) => ["discounts", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("discounts", params),
     detail: (id: string) => ["discounts", "detail", id] as const,
   },
 
   // ── Pages ────────────────────────────────────────────────────────
   pages: {
     all: ["pages"] as const,
-    list: (params?: Record<string, unknown>) => ["pages", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("pages", params),
     detail: (id: string) => ["pages", "detail", id] as const,
   },
 
   // ── Widgets ──────────────────────────────────────────────────────
   widgets: {
     all: ["widgets"] as const,
-    list: (params?: Record<string, unknown>) => ["widgets", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("widgets", params),
     detail: (id: string) => ["widgets", "detail", id] as const,
     history: (widgetId: string) => ["widgets", "history", widgetId] as const,
   },
@@ -88,9 +100,9 @@ export const queryKeys = {
   // ── Attributes ───────────────────────────────────────────────────
   attributes: {
     all: ["attributes"] as const,
-    list: (params?: Record<string, unknown>) => ["attributes", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("attributes", params),
     detail: (id: string) => ["attributes", "detail", id] as const,
-    values: (params?: Record<string, unknown>) => ["attributes", "values", params] as const,
+    values: (params?: Record<string, unknown>) => params !== undefined ? ["attributes", "values", params] as const : ["attributes", "values"] as const,
   },
 
   // ── Analytics ────────────────────────────────────────────────────
@@ -103,13 +115,13 @@ export const queryKeys = {
   // ── Inventory ────────────────────────────────────────────────────
   inventory: {
     all: ["inventory"] as const,
-    list: (params?: Record<string, unknown>) => ["inventory", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("inventory", params),
   },
 
   // ── Media ────────────────────────────────────────────────────────
   media: {
     all: ["media"] as const,
-    list: (params?: Record<string, unknown>) => ["media", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("media", params),
     folders: () => ["media", "folders"] as const,
   },
 
@@ -129,7 +141,7 @@ export const queryKeys = {
   // ── Abandoned Checkouts ──────────────────────────────────────────
   abandonedCheckouts: {
     all: ["abandoned-checkouts"] as const,
-    list: (params?: Record<string, unknown>) => ["abandoned-checkouts", "list", params] as const,
+    list: (params?: Record<string, unknown>) => listKey("abandoned-checkouts", params),
   },
 
   // ── RBAC ─────────────────────────────────────────────────────────
@@ -168,18 +180,18 @@ export const queryKeys = {
     sms: () => ["settings", "sms"] as const,
     openRouter: () => ["settings", "openrouter"] as const,
     metaConversions: () => ["settings", "meta-conversions"] as const,
-    metaConversionsLogs: (params?: Record<string, unknown>) => ["settings", "meta-conversions-logs", params] as const,
+    metaConversionsLogs: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "meta-conversions-logs", params] as const : ["settings", "meta-conversions-logs"] as const,
     allowedCountries: () => ["settings", "allowed-countries"] as const,
     paymentMethods: () => ["settings", "payment-methods"] as const,
     paymentGateway: (gateway: string) => ["settings", "payment-gateway", gateway] as const,
     notificationChannels: () => ["settings", "notification-channels"] as const,
     adminNotificationChannels: () => ["settings", "admin-notification-channels"] as const,
     deliveryProviders: () => ["settings", "delivery-providers"] as const,
-    deliveryLocations: (params?: Record<string, unknown>) => ["settings", "delivery-locations", params] as const,
-    deliveryLocationsAll: (params?: Record<string, unknown>) => ["settings", "delivery-locations-all", params] as const,
+    deliveryLocations: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "delivery-locations", params] as const : ["settings", "delivery-locations"] as const,
+    deliveryLocationsAll: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "delivery-locations-all", params] as const : ["settings", "delivery-locations-all"] as const,
     importPathaoStatus: () => ["settings", "import-pathao-status"] as const,
-    checkoutLanguages: (params?: Record<string, unknown>) => ["settings", "checkout-languages", params] as const,
-    shippingMethods: (params?: Record<string, unknown>) => ["settings", "shipping-methods", params] as const,
+    checkoutLanguages: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "checkout-languages", params] as const : ["settings", "checkout-languages"] as const,
+    shippingMethods: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "shipping-methods", params] as const : ["settings", "shipping-methods"] as const,
     heroSliders: () => ["settings", "hero-sliders"] as const,
   },
 

@@ -290,13 +290,13 @@ export const restoreCategory = createServerFn({ method: "POST" })
 export const bulkDeleteCategories = createServerFn({ method: "POST" })
   .inputValidator((data: { categoryIds: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }) => {
-    return apiPost("/categories/bulk-delete", { ids: data.categoryIds, permanent: data.permanent });
+    return apiPost("/categories/bulk-delete", { categoryIds: data.categoryIds, permanent: data.permanent });
   });
 
 export const bulkRestoreCategories = createServerFn({ method: "POST" })
   .inputValidator((data: { categoryIds: string[] }) => data)
   .handler(async ({ data }) => {
-    return apiPost("/categories/bulk-restore", { ids: data.categoryIds });
+    return apiPost("/categories/bulk-restore", { categoryIds: data.categoryIds });
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -662,7 +662,7 @@ export const restoreCustomer = createServerFn({ method: "POST" })
 export const bulkDeleteCustomers = createServerFn({ method: "POST" })
   .inputValidator((data: { customerIds: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }) => {
-    return apiPost("/customers/bulk-delete", { ids: data.customerIds, permanent: data.permanent });
+    return apiPost("/customers/bulk-delete", { customerIds: data.customerIds, permanent: data.permanent });
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -741,15 +741,15 @@ export const toggleDiscountStatus = createServerFn({ method: "POST" })
 export const bulkDeleteDiscounts = createServerFn({ method: "POST" })
   .inputValidator((data: { discountIds?: string[]; ids?: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }) => {
-    const ids = data.discountIds || data.ids || [];
-    return apiPost("/discounts/bulk-delete", { ids, permanent: data.permanent });
+    const discountIds = data.discountIds || data.ids || [];
+    return apiPost("/discounts/bulk-delete", { discountIds, permanent: data.permanent });
   });
 
 export const bulkRestoreDiscounts = createServerFn({ method: "POST" })
   .inputValidator((data: { discountIds?: string[]; ids?: string[] }) => data)
   .handler(async ({ data }) => {
-    const ids = data.discountIds || data.ids || [];
-    return apiPost("/discounts/bulk-restore", { ids });
+    const discountIds = data.discountIds || data.ids || [];
+    return apiPost("/discounts/bulk-restore", { discountIds });
   });
 
 // ═══════════════════════════════════════════════════════════════════

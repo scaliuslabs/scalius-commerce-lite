@@ -69,9 +69,11 @@ export function useEntityFormSubmit<
           result = await createFn(finalValues);
         }
 
-        for (const key of invalidateKeys) {
-          queryClient.invalidateQueries({ queryKey: key as unknown[] });
-        }
+        await Promise.all(
+          invalidateKeys.map((key) =>
+            queryClient.invalidateQueries({ queryKey: key as unknown[] }),
+          ),
+        );
 
         if (onSuccess) {
           onSuccess(result);
