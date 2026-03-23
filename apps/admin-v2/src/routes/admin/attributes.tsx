@@ -2,7 +2,7 @@ import { useMemo, useCallback, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
-import { Tags, Trash2, Plus, Undo } from "lucide-react";
+import { Tags, Trash2, Plus } from "lucide-react";
 import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { attributesQueryOptions } from "~/lib/api.queries";
 import {
@@ -11,7 +11,6 @@ import {
   usePermanentDeleteAttribute,
   useRestoreAttribute,
   useBulkDeleteAttributes,
-  useBulkRestoreAttributes,
 } from "~/lib/api.mutations";
 import {
   DataTable,
@@ -73,7 +72,6 @@ function AttributesPage() {
   const permanentDeleteMutation = usePermanentDeleteAttribute();
   const restoreMutation = useRestoreAttribute();
   const bulkDeleteMutation = useBulkDeleteAttributes();
-  const bulkRestoreMutation = useBulkRestoreAttributes();
 
   // Dialog states for attribute-specific features
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -284,14 +282,6 @@ function AttributesPage() {
     );
   }, [selectedIds, showTrashed, bulkDeleteMutation, clearSelection]);
 
-  const handleBulkRestore = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    bulkRestoreMutation.mutate(
-      { ids: selectedIds },
-      { onSuccess: clearSelection },
-    );
-  }, [selectedIds, bulkRestoreMutation, clearSelection]);
-
   // Toolbar
   const toolbar = (
     <DataTableToolbar
@@ -300,29 +290,21 @@ function AttributesPage() {
       searchPlaceholder="Search attributes..."
       selectedCount={selectedIds.length}
       bulkActions={
-        <>
-          {showTrashed && (
-            <Button variant="outline" size="sm" onClick={handleBulkRestore}>
-              <Undo className="h-4 w-4 mr-1.5" />
-              Restore ({selectedIds.length})
-            </Button>
-          )}
-          <Button
-            variant={showTrashed ? "destructive" : "outline"}
-            size="sm"
-            onClick={handleBulkDelete}
-            className={
-              !showTrashed
-                ? "text-destructive border-destructive hover:bg-destructive/10"
-                : undefined
-            }
-          >
-            <Trash2 className="h-4 w-4 mr-1.5" />
-            {showTrashed
-              ? `Delete (${selectedIds.length})`
-              : `Trash (${selectedIds.length})`}
-          </Button>
-        </>
+        <Button
+          variant={showTrashed ? "destructive" : "outline"}
+          size="sm"
+          onClick={handleBulkDelete}
+          className={
+            !showTrashed
+              ? "text-destructive border-destructive hover:bg-destructive/10"
+              : undefined
+          }
+        >
+          <Trash2 className="h-4 w-4 mr-1.5" />
+          {showTrashed
+            ? `Delete (${selectedIds.length})`
+            : `Trash (${selectedIds.length})`}
+        </Button>
       }
       actions={
         <div className="flex items-center gap-2">

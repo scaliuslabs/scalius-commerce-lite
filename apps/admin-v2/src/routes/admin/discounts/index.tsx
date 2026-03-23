@@ -2,7 +2,7 @@ import { useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
-import { Plus, Trash2, Tag, Undo } from "lucide-react";
+import { Plus, Trash2, Tag } from "lucide-react";
 import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { discountsQueryOptions } from "~/lib/api.queries";
 import { useCurrency } from "~/hooks/use-currency";
@@ -12,7 +12,6 @@ import {
   useRestoreDiscount,
   useToggleDiscountStatus,
   useBulkDeleteDiscounts,
-  useBulkRestoreDiscounts,
 } from "~/lib/api.mutations";
 import {
   DataTable,
@@ -71,7 +70,6 @@ function DiscountsPage() {
   const restoreMutation = useRestoreDiscount();
   const toggleStatusMutation = useToggleDiscountStatus();
   const bulkDeleteMutation = useBulkDeleteDiscounts();
-  const bulkRestoreMutation = useBulkRestoreDiscounts();
 
   // Column action callbacks
   const handleEdit = useCallback(
@@ -229,14 +227,6 @@ function DiscountsPage() {
     );
   }, [selectedIds, showTrashed, bulkDeleteMutation, clearSelection]);
 
-  const handleBulkRestore = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    bulkRestoreMutation.mutate(
-      { discountIds: selectedIds },
-      { onSuccess: clearSelection },
-    );
-  }, [selectedIds, bulkRestoreMutation, clearSelection]);
-
   // Toolbar
   const toolbar = (
     <DiscountTableToolbar
@@ -246,29 +236,21 @@ function DiscountsPage() {
       activeType={search.type || null}
       onTypeFilterChange={onTypeFilterChange}
       bulkActions={
-        <>
-          {showTrashed && (
-            <Button variant="outline" size="sm" onClick={handleBulkRestore}>
-              <Undo className="h-4 w-4 mr-1.5" />
-              Restore ({selectedIds.length})
-            </Button>
-          )}
-          <Button
-            variant={showTrashed ? "destructive" : "outline"}
-            size="sm"
-            onClick={handleBulkDelete}
-            className={
-              !showTrashed
-                ? "text-destructive border-destructive hover:bg-destructive/10"
-                : undefined
-            }
-          >
-            <Trash2 className="h-4 w-4 mr-1.5" />
-            {showTrashed
-              ? `Delete (${selectedIds.length})`
-              : `Trash (${selectedIds.length})`}
-          </Button>
-        </>
+        <Button
+          variant={showTrashed ? "destructive" : "outline"}
+          size="sm"
+          onClick={handleBulkDelete}
+          className={
+            !showTrashed
+              ? "text-destructive border-destructive hover:bg-destructive/10"
+              : undefined
+          }
+        >
+          <Trash2 className="h-4 w-4 mr-1.5" />
+          {showTrashed
+            ? `Delete (${selectedIds.length})`
+            : `Trash (${selectedIds.length})`}
+        </Button>
       }
       actions={
         <div className="flex items-center gap-2">
