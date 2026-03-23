@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Controller } from 'react-hook-form';
 import type { Control, UseFormRegister, UseFormWatch, FieldErrors } from 'react-hook-form';
 import { WidgetPlacementRule, type Collection } from '@/types/api-responses';
-import type { WidgetFormValues } from '../WidgetForm';
+import type { WidgetFormValues } from '@/lib/form-schemas';
 
 interface WidgetPlacementProps {
   control: Control<WidgetFormValues>;

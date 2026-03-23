@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
 import { Suspense } from "react";
+import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
 
 const TiptapEditor = React.lazy(() =>
   import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
@@ -171,7 +172,7 @@ export function BasicInfoSection({
                     <FormItem>
                       <FormControl>
                         {isClient ? (
-                          <Suspense fallback={<div className="h-48 animate-pulse rounded-lg bg-muted" />}>
+                          <Suspense fallback={<LoadingFallback />}>
                             <TiptapEditor
                               content={field.value || ""}
                               onChange={field.onChange}

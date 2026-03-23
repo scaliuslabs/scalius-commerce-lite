@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Eye, ClipboardPaste, Sparkles } from 'lucide-react';
 import type { UseFormRegister, FieldErrors } from 'react-hook-form';
-import type { WidgetFormValues } from '../WidgetForm';
+import type { WidgetFormValues } from '@/lib/form-schemas';
 
 interface WidgetDetailsProps {
   register: UseFormRegister<WidgetFormValues>;

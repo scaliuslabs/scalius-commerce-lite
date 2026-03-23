@@ -1,6 +1,7 @@
 //src/components/admin/DashboardStats.tsx
 import React, { memo, Suspense } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { LoadingFallback } from "./shared/LoadingFallback";
 import {
   Card,
   CardHeader,
@@ -243,7 +244,7 @@ export const DashboardStats = memo(function DashboardStats({
         </motion.div>
       </motion.div>
 
-      <Suspense fallback={<div className="h-[340px] animate-pulse rounded-lg bg-muted" />}>
+      <Suspense fallback={<LoadingFallback height="h-[340px]" />}>
         <DashboardChart
           initialDailyData={initialDailyData}
           symbol={symbol}

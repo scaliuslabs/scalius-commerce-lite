@@ -1,0 +1,79 @@
+import type React from "react";
+import type { UseFormReturn, FieldValues } from "react-hook-form";
+import { Form } from "@/components/ui/form";
+import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
+
+interface FormContainerProps<T extends FieldValues> {
+  /** The section name shown as breadcrumb link (e.g., "Categories") */
+  title: string;
+  /** The entity name (e.g., category name being edited). Falls back to "New"/"Edit" */
+  entityName?: string;
+  isEdit: boolean;
+  isSubmitting: boolean;
+  /** URL to navigate back to (e.g., "/admin/categories") */
+  backUrl: string;
+  /** URL for "New X" button shown in edit mode (e.g., "/admin/categories/new") */
+  newUrl?: string;
+  /** Label for the "New X" button (e.g., "New Category") */
+  newLabel?: string;
+  /** Custom save button label. Defaults to "Save {title}" / "Create {title}" */
+  saveLabel?: string;
+  /** The react-hook-form instance — used for isDirty and to provide <Form> context */
+  form: UseFormReturn<T>;
+  /** Called when the save button is clicked or the form is submitted — typically `handleSubmit(onSave)` */
+  onSubmit: () => void;
+  /** Form field content */
+  children: React.ReactNode;
+  /** Additional className for the <form> element */
+  formClassName?: string;
+}
+
+/**
+ * Shared form layout wrapper.
+ *
+ * Renders FormStickyHeader + ErrorBoundary + <Form> provider + <form> element.
+ * Forms only need to provide their field content as children.
+ */
+export function FormContainer<T extends FieldValues>({
+  title,
+  entityName,
+  isEdit,
+  isSubmitting,
+  backUrl,
+  newUrl,
+  newLabel,
+  saveLabel,
+  form,
+  onSubmit,
+  children,
+  formClassName = "pt-2 pb-6",
+}: FormContainerProps<T>) {
+  return (
+    <ErrorBoundary>
+      <Form {...form}>
+        <FormStickyHeader
+          title={title}
+          entityName={entityName}
+          isEdit={isEdit}
+          isSubmitting={isSubmitting}
+          isDirty={form.formState.isDirty}
+          cancelUrl={backUrl}
+          newUrl={newUrl}
+          newLabel={newLabel}
+          saveLabel={saveLabel}
+          onSave={onSubmit}
+        />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit();
+          }}
+          className={formClassName}
+        >
+          {children}
+        </form>
+      </Form>
+    </ErrorBoundary>
+  );
+}

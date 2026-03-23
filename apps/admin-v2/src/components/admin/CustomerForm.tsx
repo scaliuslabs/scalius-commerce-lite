@@ -2,13 +2,11 @@ import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
-import { z } from "zod";
 import { toast } from "sonner";
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import type { Country } from "react-phone-number-input";
 import {
-  Form,
   FormControl,
   FormField,
   FormItem,
@@ -24,35 +22,11 @@ import {
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { LocationSelector } from "./LocationSelector";
-import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { useNavigate } from "@tanstack/react-router";
 import { getServerFnError } from "@/lib/api-helpers";
 import { getAllowedCountries, createCustomer, updateCustomer } from "@/lib/api.functions";
-
-const customerFormSchema = z.object({
-  id: z.string().optional(),
-  name: z
-    .string()
-    .min(3, "Name must be at least 3 characters")
-    .max(100, "Name must be less than 100 characters"),
-  email: z.email().nullable(),
-  phone: z
-    .string()
-    .min(7, "Phone number too short")
-    .max(16, "Phone number too long"),
-  address: z
-    .string()
-    .max(500, "Address must be less than 500 characters")
-    .nullable(),
-  city: z.string().nullable(),
-  zone: z.string().nullable(),
-  area: z.string().nullable(),
-  cityName: z.string().optional(),
-  zoneName: z.string().optional(),
-  areaName: z.string().optional(),
-});
-
-type CustomerFormValues = z.infer<typeof customerFormSchema>;
+import { customerFormSchema, type CustomerFormValues } from "@/lib/form-schemas";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -183,103 +157,71 @@ export function CustomerForm({
   };
 
   return (
-    <Form {...form}>
-      <FormStickyHeader
-        title="Customers"
-        entityName={form.watch("name")}
-        isEdit={isEdit}
-        isSubmitting={isSubmitting || !!isInitializing}
-        isDirty={form.formState.isDirty}
-        cancelUrl="/admin/customers"
-        newUrl="/admin/customers/new"
-        newLabel="New Customer"
-        onSave={() => form.handleSubmit(handleSubmit)()}
-      />
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
-          {/* Left Column (2/3) */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardHeader className="pb-3 pt-4 px-4">
-                <CardTitle className="text-base">Basic Information</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3">
+    <FormContainer
+      title="Customers"
+      entityName={form.watch("name")}
+      isEdit={isEdit}
+      isSubmitting={isSubmitting || !!isInitializing}
+      backUrl="/admin/customers"
+      newUrl="/admin/customers/new"
+      newLabel="New Customer"
+      form={form}
+      onSubmit={form.handleSubmit(handleSubmit)}
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+        {/* Left Column (2/3) */}
+        <div className="lg:col-span-2 space-y-4">
+          <Card>
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-base">Basic Information</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter customer name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
-                  name="name"
+                  name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>Phone Number</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter customer name" {...field} />
+                        <PhoneInput
+                          international
+                          defaultCountry={effectiveDefaultCountry}
+                          countries={effectiveCountries}
+                          value={field.value}
+                          onChange={(value) => field.onChange(value || "")}
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone Number</FormLabel>
-                        <FormControl>
-                          <PhoneInput
-                            international
-                            defaultCountry={effectiveDefaultCountry}
-                            countries={effectiveCountries}
-                            value={field.value}
-                            onChange={(value) => field.onChange(value || "")}
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email (Optional)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="email"
-                            placeholder="Enter email address"
-                            {...field}
-                            value={field.value || ""}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Column (1/3) */}
-          <div className="space-y-3">
-            <Card>
-              <CardHeader className="pb-3 pt-4 px-4">
-                <CardTitle className="text-base">Address</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3">
                 <FormField
                   control={form.control}
-                  name="address"
+                  name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Address (Optional)</FormLabel>
+                      <FormLabel>Email (Optional)</FormLabel>
                       <FormControl>
-                        <Textarea
-                          placeholder="Enter address"
-                          className="h-20"
+                        <Input
+                          type="email"
+                          placeholder="Enter email address"
                           {...field}
                           value={field.value || ""}
                         />
@@ -288,17 +230,46 @@ export function CustomerForm({
                     </FormItem>
                   )}
                 />
-
-                <LocationSelector />
-
-                <input type="hidden" {...form.register("cityName")} />
-                <input type="hidden" {...form.register("zoneName")} />
-                <input type="hidden" {...form.register("areaName")} />
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </form>
-    </Form>
+
+        {/* Right Column (1/3) */}
+        <div className="space-y-3">
+          <Card>
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-base">Address</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Enter address"
+                        className="h-20"
+                        {...field}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <LocationSelector />
+
+              <input type="hidden" {...form.register("cityName")} />
+              <input type="hidden" {...form.register("zoneName")} />
+              <input type="hidden" {...form.register("areaName")} />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </FormContainer>
   );
 }

@@ -18,16 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import {
   Loader2,
   Search,
@@ -403,29 +394,16 @@ export function AttributeValueEditor({
       </Dialog>
 
       {/* Delete Confirmation */}
-      <AlertDialog
+      <ConfirmDialog
         open={!!deleteConfirm}
         onOpenChange={() => setDeleteConfirm(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Value?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove the value "{deleteConfirm}" from all products
-              using it. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Delete Value?"
+        description={`This will remove the value "${deleteConfirm}" from all products using it. This action cannot be undone.`}
+        confirmLabel="Delete"
+        loadingLabel="Deleting..."
+        variant="destructive"
+        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
+      />
     </>
   );
 }
