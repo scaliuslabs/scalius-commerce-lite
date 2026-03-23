@@ -57,24 +57,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         }
     }
 
-    // 3. Try API Token (for service-binding auth from admin workers)
-    if (!user) {
-        const apiToken = c.req.header("X-Api-Token");
-        if (apiToken && c.env.API_TOKEN && apiToken === c.env.API_TOKEN) {
-            // API token matches — this is a trusted service-binding call from admin worker.
-            // Look up the session from the forwarded cookie (if any) or create a system user.
-            // For now, create a system admin user for service-binding calls.
-            user = {
-                id: "system:admin-worker",
-                email: "admin-worker@system",
-                name: "Admin Worker",
-                role: "admin",
-                _isServiceBinding: true,
-            };
-        }
-    }
-
-    // 4. Try Scanner Token (for warehouse scanner app)
+    // 3. Try Scanner Token (for warehouse scanner app)
     if (!user) {
         const scannerToken = c.req.header("X-Scanner-Token");
         if (scannerToken) {
@@ -111,12 +94,6 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
     // Inject user into Hono context
     c.set("user", user);
-
-    // Service-binding calls from admin worker — trusted, skip RBAC
-    if ((user as Record<string, unknown>)._isServiceBinding) {
-        await next();
-        return;
-    }
 
     // Scanner token — restrict to inventory endpoints only
     if ((user as Record<string, unknown>)._isScannerToken) {
