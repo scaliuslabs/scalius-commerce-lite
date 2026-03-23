@@ -82,7 +82,9 @@ export function AnalyticsForm({
     try {
       setIsSubmitting(true);
       if (isEdit) {
-        await updateAnalyticsScript({ data: { id: values.id!, ...values } as Record<string, unknown> & { id: string } });
+        const entityId = defaultValues?.id || values.id;
+        if (!entityId) throw new Error("Analytics script ID is required for update");
+        await updateAnalyticsScript({ data: { id: entityId, ...values } as Record<string, unknown> & { id: string } });
       } else {
         await createAnalyticsScript({ data: values as unknown as Record<string, unknown> });
       }

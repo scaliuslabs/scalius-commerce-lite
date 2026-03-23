@@ -163,8 +163,10 @@ export function CustomerForm({
   const handleSubmit: SubmitHandler<CustomerFormValues> = async (values) => {
     try {
       setIsSubmitting(true);
-      if (isEdit && values.id) {
-        await updateCustomer({ data: values as { id: string } & Record<string, unknown> });
+      if (isEdit) {
+        const entityId = defaultValues?.id || values.id;
+        if (!entityId) throw new Error("Customer ID is required for update");
+        await updateCustomer({ data: { ...values, id: entityId } as { id: string } & Record<string, unknown> });
       } else {
         await createCustomer({ data: values as Record<string, unknown> });
       }

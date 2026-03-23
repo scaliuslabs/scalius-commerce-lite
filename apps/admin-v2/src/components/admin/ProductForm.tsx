@@ -116,6 +116,7 @@ export function ProductForm({
   const { isSubmitting, showAlert, alertMessage, setShowAlert, handleSubmit } =
     useProductSubmit({
       isEdit,
+      productId: defaultValues?.id,
       enableVariantImages,
       form,
     });
