@@ -64,7 +64,7 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
     <Sidebar collapsible="icon">
       {/* Header — logo, aligned with header bar */}
       <SidebarHeader className="h-14 flex items-center border-b border-sidebar-border px-3 shrink-0">
-        <Link to="/admin" className="flex items-center gap-2 min-w-0">
+        <Link to="/admin" className="flex items-center min-w-0">
           {isCollapsed ? (
             <img
               src={faviconImg}
@@ -76,12 +76,12 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
               <img
                 src={logoLightImg}
                 alt="Scalius"
-                className="h-6 w-auto object-contain block dark:hidden"
+                className="h-7 w-auto object-contain block dark:hidden"
               />
               <img
                 src={logoDarkImg}
                 alt="Scalius"
-                className="h-6 w-auto object-contain hidden dark:block"
+                className="h-7 w-auto object-contain hidden dark:block"
               />
             </>
           )}
@@ -157,20 +157,31 @@ function CollapsibleNavItem({
   currentPath: string;
   onOpenChange?: (open: boolean) => void;
 }) {
+  const { state, setOpen } = useSidebar();
+  const isCollapsed = state === "collapsed";
   const isParentActive =
     isRouteActive(currentPath, item.href) ||
     (item.subItems?.some((sub) => currentPath === sub.href) ?? false);
+
+  // When collapsed, clicking the icon should expand sidebar and open the submenu
+  const handleClick = useCallback(() => {
+    if (isCollapsed) {
+      setOpen(true);
+    }
+  }, [isCollapsed, setOpen]);
 
   return (
     <Collapsible
       asChild
       defaultOpen={isParentActive}
       className="group/collapsible"
-      onOpenChange={onOpenChange}
+      onOpenChange={(open) => {
+        onOpenChange?.(open);
+      }}
     >
       <SidebarMenuItem data-nav-item={item.name}>
         <CollapsibleTrigger asChild>
-          <SidebarMenuButton tooltip={item.name} isActive={isParentActive}>
+          <SidebarMenuButton tooltip={item.name} isActive={isParentActive} onClick={handleClick}>
             <item.icon className="shrink-0" strokeWidth={1.8} />
             <span>{item.name}</span>
             <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
