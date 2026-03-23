@@ -7,6 +7,7 @@ import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { Loader2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { saveHeaderConfig } from "~/lib/api.functions";
 
@@ -72,6 +73,7 @@ function migrateConfig(config: unknown): HeaderConfig {
 
 export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
   const { getStorefrontPath } = useStorefrontUrl();
+  const queryClient = useQueryClient();
 
   const [config, setConfig] = useState<HeaderConfig>(() => {
     return migrateConfig(initialConfig || defaultHeaderConfig);
@@ -103,6 +105,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
         await saveHeaderConfig({ data: config });
       }
 
+      queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       toast.success("Success!", { description: "Header configuration saved successfully." });
     } catch (error: unknown) {
       console.error("Error saving header:", error);

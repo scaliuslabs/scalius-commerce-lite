@@ -32,6 +32,7 @@ import { formatDate } from "@scalius/shared/utils";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
 import { deleteAnalyticsScript, toggleAnalyticsScript } from "@/lib/api.functions";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter, Link } from "@tanstack/react-router";
 import { AdminListPagination } from "./shared/AdminListPagination";
 
@@ -53,6 +54,7 @@ interface AnalyticsListProps {
 export function AnalyticsList({ analytics }: AnalyticsListProps) {
   const navigate = useNavigate();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -102,6 +104,8 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
     try {
       setIsDeleting(true);
       await deleteAnalyticsScript({ data: { id } });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
+      queryClient.removeQueries({ queryKey: ["analytics", "detail", id] });
       toast.success("Deleted", { description: "Analytics script has been deleted." });
       router.invalidate();
     } catch (error: unknown) {
@@ -112,9 +116,11 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
     }
   };
 
-  const handleToggleActive = async (id: string, currentStatus: boolean) => {
+  const handleToggleActive = async (id: string, _currentStatus: boolean) => {
     try {
       await toggleAnalyticsScript({ data: { id } });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "detail", id] });
       toast.success("Updated", { description: "Analytics script status has been updated." });
       router.invalidate();
     } catch (error: unknown) {

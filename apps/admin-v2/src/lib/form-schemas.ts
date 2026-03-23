@@ -35,7 +35,7 @@ export const categoryFormSchema = z.object({
       url: z.string(),
       filename: z.string(),
       size: z.number(),
-      createdAt: z.date(),
+      createdAt: z.coerce.date(),
     })
     .nullable(),
   slugEdited: z.boolean().optional(),
@@ -62,7 +62,7 @@ export const pageFormSchema = z.object({
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
   isPublished: z.boolean(),
-  publishedAt: z.date().nullable().optional(),
+  publishedAt: z.coerce.date().nullable().optional(),
   sortOrder: z.number(),
   hideHeader: z.boolean(),
   hideFooter: z.boolean(),
@@ -73,7 +73,7 @@ export const pageFormSchema = z.object({
       url: z.string(),
       filename: z.string(),
       size: z.number(),
-      createdAt: z.date(),
+      createdAt: z.coerce.date(),
     })
     .nullable(),
 });
@@ -124,8 +124,8 @@ export const analyticsFormSchema = z.object({
   usePartytown: z.boolean(),
   config: z.string().min(1, "Configuration is required"),
   location: z.enum(["head", "body_start", "body_end"]),
-  createdAt: z.date().optional(),
-  updatedAt: z.date().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export type AnalyticsFormValues = z.infer<typeof analyticsFormSchema>;

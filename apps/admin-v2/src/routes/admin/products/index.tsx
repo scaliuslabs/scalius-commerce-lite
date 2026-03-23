@@ -83,10 +83,12 @@ function mapParams(deps: SearchParams) {
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => {
-    void queryClient.prefetchQuery(productsQueryOptions(mapParams(deps)));
-    void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
-    void queryClient.prefetchQuery(productStatsQueryOptions());
+  loader: async ({ context: { queryClient }, deps }) => {
+    await Promise.all([
+      queryClient.ensureQueryData(productsQueryOptions(mapParams(deps))),
+      queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
+      queryClient.ensureQueryData(productStatsQueryOptions()),
+    ]);
   },
   head: ({ match }) => ({
     meta: [

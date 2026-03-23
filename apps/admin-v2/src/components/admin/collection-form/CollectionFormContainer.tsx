@@ -14,6 +14,7 @@ import {
 import { Input } from "../../ui/input";
 import { FormStickyHeader } from "~/components/admin/FormStickyHeader";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { createCollection, updateCollection } from "~/lib/api.functions";
 import { ProductSelectionSection } from "./ProductSelectionSection";
@@ -39,6 +40,7 @@ export function CollectionForm({
   isEdit = false,
 }: CollectionFormProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const form = useForm<CollectionFormValues>({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
@@ -79,9 +81,14 @@ export function CollectionForm({
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Collection ID is required for update");
         await updateCollection({ data: { ...values, id: entityId } });
+        queryClient.invalidateQueries({ queryKey: ["collections", "detail", entityId] });
       } else {
         await createCollection({ data: values });
       }
+
+      // Invalidate queries so list page shows fresh data
+      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
 
       toast.success(
         `Collection ${isEdit ? "updated" : "created"} successfully`,

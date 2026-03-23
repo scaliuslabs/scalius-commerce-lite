@@ -31,6 +31,7 @@ import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "@/lib/api-helpers";
 import { createCategory, updateCategory } from "@/lib/api.functions";
 import { LoadingFallback } from "./shared/LoadingFallback";
@@ -46,6 +47,7 @@ export function CategoryForm({
   isEdit = false,
 }: CategoryFormProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
 
@@ -100,6 +102,16 @@ export function CategoryForm({
         await updateCategory({ data: { ...values, id: entityId } as Record<string, unknown> & { id: string } });
       } else {
         await createCategory({ data: values as unknown as Record<string, unknown> });
+      }
+
+      // Invalidate queries so list/detail pages show fresh data
+      queryClient.invalidateQueries({ queryKey: ["categories", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
+      if (isEdit) {
+        const entityId = defaultValues?.id || values.id;
+        if (entityId) {
+          queryClient.invalidateQueries({ queryKey: ["categories", "detail", entityId] });
+        }
       }
 
       toast.success(

@@ -31,7 +31,7 @@ import {
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { parseAiContext, serializeAiContext, type AiContext, type ProductReference, type CategoryReference } from '@scalius/core/modules/ai/ai-context-schema';
+import { parseAiContext, AiContextSchema, type AiContext, type ProductReference, type CategoryReference } from '@scalius/core/modules/ai/ai-context-schema';
 import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
 import type { ProductSearchResult } from './widget-form/types';
 import { useAiContext } from './widget-form/useAiContext';
@@ -44,6 +44,7 @@ import { FullScreenEditor, type EditorMode } from './widget-form/FullScreenEdito
 import { WidgetHistoryModal } from './widget-form/WidgetHistoryModal';
 import { WidgetPasteModal } from './widget-form/WidgetPasteModal';
 import { useNavigate, useRouter } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface WidgetFormProps {
   widget?: Widget | null;
@@ -62,6 +63,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 }) => {
   const navigate = useNavigate();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const {
     control,
     handleSubmit,
@@ -367,9 +369,16 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       createdAt: widget?.aiContext ? parseAiContext(widget.aiContext as string).createdAt : Date.now(),
     };
 
+    // Pass aiContext as a validated object (not a string).
+    // The API schema expects z.record() and the service calls JSON.stringify() before DB insert.
+    const validatedContext = AiContextSchema.parse({
+      ...contextToSave,
+      lastModified: Date.now(),
+    });
+
     const submissionData = {
       ...data,
-      aiContext: serializeAiContext(contextToSave),
+      aiContext: validatedContext as unknown as Record<string, unknown>,
     };
 
     try {
@@ -377,7 +386,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         await createWidget({ data: submissionData });
       } else {
         await updateWidget({ data: { ...submissionData, id: widget!.id } });
+        queryClient.invalidateQueries({ queryKey: ['widgets', 'detail', widget!.id] });
       }
+      // Invalidate queries so list page shows fresh data
+      queryClient.invalidateQueries({ queryKey: ['widgets', 'list'] });
       toast.success(`Widget ${isCreateMode ? 'created' : 'updated'} successfully!`);
       setTimeout(() => {
         void navigate({ to: '/admin/widgets' });

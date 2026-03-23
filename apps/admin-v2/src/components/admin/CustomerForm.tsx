@@ -24,6 +24,7 @@ import { Textarea } from "../ui/textarea";
 import { LocationSelector } from "./LocationSelector";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "@/lib/api-helpers";
 import { getAllowedCountries, createCustomer, updateCustomer } from "@/lib/api.functions";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/form-schemas";
@@ -38,6 +39,7 @@ export function CustomerForm({
   isEdit = false,
 }: CustomerFormProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [allowedCountries, setAllowedCountries] = React.useState<string[]>([]);
   const [allowedCountriesMode, setAllowedCountriesMode] = React.useState<"include" | "exclude">("include");
 
@@ -141,9 +143,12 @@ export function CustomerForm({
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Customer ID is required for update");
         await updateCustomer({ data: { ...(values as Record<string, unknown>), id: entityId } as { id: string } & Record<string, unknown> });
+        queryClient.invalidateQueries({ queryKey: ["customers", "detail", entityId] });
       } else {
         await createCustomer({ data: values as Record<string, unknown> });
       }
+      // Invalidate queries so list page shows fresh data
+      queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
       toast.success(isEdit ? "Customer updated successfully" : "Customer created successfully");
       void navigate({ to: "/admin/customers" });
     } catch (error: unknown) {
