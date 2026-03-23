@@ -308,7 +308,9 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
     }));
 
     const createdVariants = [];
-    const chunkSize = 50;
+    // D1 has a 100 bound parameter limit per query.
+    // Each variant has ~22 params, so max 4 per chunk (4 × 22 = 88 < 100).
+    const chunkSize = 4;
     for (let i = 0; i < variantsToCreate.length; i += chunkSize) {
         const chunk = variantsToCreate.slice(i, i + chunkSize);
         const result = await db
