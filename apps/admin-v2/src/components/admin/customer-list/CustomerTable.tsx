@@ -55,20 +55,7 @@ interface CustomerTableProps {
   onSetDialog: (state: { action: "delete" | "bulk-delete"; id?: string }) => void;
 }
 
-function formatDate(value: Date | string | number | null): string {
-  if (!value) return "\u2014";
-  try {
-    const date = value instanceof Date ? value : new Date(value);
-    if (isNaN(date.getTime())) return "\u2014";
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return "\u2014";
-  }
-}
+// formatDate uses shared utility (date-only format)
 
 function formatLocation(customer: Customer): string {
   const parts = [

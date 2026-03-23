@@ -29,24 +29,8 @@ import {
   Truck,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
+import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import type { ShippingMethod, SortField, SortOrder } from "./hooks/useShippingMethods";
-
-function formatDate(dateString?: string | number | Date): string {
-  if (!dateString) return "N/A";
-  try {
-    const date = new Date(
-      typeof dateString === "number" ? dateString * 1000 : dateString,
-    );
-    if (isNaN(date.getTime())) return "N/A";
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return "Invalid Date";
-  }
-}
 
 function getSortIcon(sort: { field: SortField; order: SortOrder }, field: SortField) {
   if (sort.field !== field)

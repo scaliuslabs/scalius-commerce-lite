@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -413,20 +414,7 @@ export function useProductList({
     [products],
   );
 
-  const formatDate = useCallback((value: Date | string | number | null): string => {
-    if (!value) return "N/A";
-    try {
-      const date = value instanceof Date ? value : new Date(value);
-      if (isNaN(date.getTime())) return "N/A";
-      return date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return "N/A";
-    }
-  }, []);
+  // formatDate → shared formatDateShort (date-only format)
 
   const formatPrice = useCallback(
     (price: number): string => {
