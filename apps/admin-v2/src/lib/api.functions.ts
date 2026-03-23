@@ -89,8 +89,7 @@ export const createProduct = createServerFn({ method: "POST" })
 export const updateProduct = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string } & Record<string, unknown>) => data)
   .handler(async ({ data }) => {
-    const { id, ...body } = data;
-    return apiPut<Record<string, unknown>>(`/products/${id}`, body);
+    return apiPut<Record<string, unknown>>(`/products/${data.id}`, data);
   });
 
 export const deleteProduct = createServerFn({ method: "POST" })
@@ -267,8 +266,7 @@ export const createCategory = createServerFn({ method: "POST" })
 export const updateCategory = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string } & Record<string, unknown>) => data)
   .handler(async ({ data }) => {
-    const { id, ...body } = data;
-    return apiPut<Record<string, unknown>>(`/categories/${id}`, body);
+    return apiPut<Record<string, unknown>>(`/categories/${data.id}`, data);
   });
 
 export const deleteCategory = createServerFn({ method: "POST" })
@@ -351,8 +349,7 @@ export const createCollection = createServerFn({ method: "POST" })
 export const updateCollection = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string } & Record<string, unknown>) => data)
   .handler(async ({ data }) => {
-    const { id, ...body } = data;
-    return apiPut<Record<string, unknown>>(`/collections/${id}`, body);
+    return apiPut<Record<string, unknown>>(`/collections/${data.id}`, data);
   });
 
 export const deleteCollection = createServerFn({ method: "POST" })
@@ -469,8 +466,7 @@ export const createOrder = createServerFn({ method: "POST" })
 export const updateOrder = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string } & Record<string, unknown>) => data)
   .handler(async ({ data }) => {
-    const { id, ...body } = data;
-    return apiPut<Record<string, unknown>>(`/orders/${id}`, body);
+    return apiPut<Record<string, unknown>>(`/orders/${data.id}`, data);
   });
 
 export const updateOrderStatus = createServerFn({ method: "POST" })
@@ -640,8 +636,7 @@ export const createCustomer = createServerFn({ method: "POST" })
 export const updateCustomer = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string } & Record<string, unknown>) => data)
   .handler(async ({ data }) => {
-    const { id, ...body } = data;
-    return apiPut<Record<string, unknown>>(`/customers/${id}`, body);
+    return apiPut<Record<string, unknown>>(`/customers/${data.id}`, data);
   });
 
 export const deleteCustomer = createServerFn({ method: "POST" })
@@ -714,8 +709,7 @@ export const createDiscount = createServerFn({ method: "POST" })
 export const updateDiscount = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string } & Record<string, unknown>) => data)
   .handler(async ({ data }) => {
-    const { id, ...body } = data;
-    return apiPut<Record<string, unknown>>(`/discounts/${id}`, body);
+    return apiPut<Record<string, unknown>>(`/discounts/${data.id}`, data);
   });
 
 export const deleteDiscount = createServerFn({ method: "POST" })
@@ -800,8 +794,7 @@ export const createPage = createServerFn({ method: "POST" })
 export const updatePage = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string } & Record<string, unknown>) => data)
   .handler(async ({ data }) => {
-    const { id, ...body } = data;
-    return apiPut<Record<string, unknown>>(`/pages/${id}`, body);
+    return apiPut<Record<string, unknown>>(`/pages/${data.id}`, data);
   });
 
 export const deletePage = createServerFn({ method: "POST" })
@@ -879,8 +872,7 @@ export const createWidget = createServerFn({ method: "POST" })
 export const updateWidget = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string } & Record<string, unknown>) => data)
   .handler(async ({ data }) => {
-    const { id, ...body } = data;
-    return apiPut<Record<string, unknown>>(`/widgets/${id}`, body);
+    return apiPut<Record<string, unknown>>(`/widgets/${data.id}`, data);
   });
 
 export const deleteWidget = createServerFn({ method: "POST" })
@@ -1095,8 +1087,7 @@ export const createAnalyticsScript = createServerFn({ method: "POST" })
 export const updateAnalyticsScript = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string } & Record<string, unknown>) => data)
   .handler(async ({ data }) => {
-    const { id, ...body } = data;
-    return apiPut<Record<string, unknown>>(`/analytics/${id}`, body);
+    return apiPut<Record<string, unknown>>(`/analytics/${data.id}`, data);
   });
 
 export const deleteAnalyticsScript = createServerFn({ method: "POST" })

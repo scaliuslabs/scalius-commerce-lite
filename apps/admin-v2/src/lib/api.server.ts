@@ -147,13 +147,15 @@ async function apiFetchRaw(
   // Production: service binding (env.API exists)
   if (cfEnv.API) {
     const target = `http://api.internal${fullPath}`;
-    return cfEnv.API.fetch(target, fetchOptions);
+    const resp = await cfEnv.API.fetch(target, fetchOptions);
+    return resp;
   }
 
   // Local dev: HTTP to API worker
   const apiBase = cfEnv.PUBLIC_API_BASE_URL as string ?? "http://localhost:8787";
   const target = `${apiBase}${fullPath}`;
-  return fetch(target, fetchOptions);
+  const resp = await fetch(target, fetchOptions);
+  return resp;
 }
 
 // ─── Public helpers (admin endpoints) ─────────────────────────────
