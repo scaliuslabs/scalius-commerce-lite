@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { formatDateShort } from "@scalius/shared/timestamps";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -212,7 +213,7 @@ export function ProductView({ product }: ProductViewProps) {
                 </a>
               </Button>
               <div className="text-[10px] text-muted-foreground text-center sm:text-left lg:text-right mt-1 lg:mt-2">
-                Last updated {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "\u2014"}
+                Last updated {formatDateShort(product.updatedAt)}
               </div>
             </div>
           </div>

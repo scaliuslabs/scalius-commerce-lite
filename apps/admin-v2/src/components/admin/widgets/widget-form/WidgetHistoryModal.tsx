@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { formatDate } from '@scalius/shared/timestamps';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { GitCommitHorizontal, Trash2 } from 'lucide-react';
@@ -38,7 +39,7 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
                   {history.map(h => (
                       <div key={h.id} className={`p-3 rounded-md cursor-pointer group flex justify-between items-center ${selectedHistoryItem?.id === h.id ? 'bg-muted' : 'hover:bg-muted/50'}`} onClick={() => setSelectedHistoryItem(h)}>
                           <div>
-                              <p className="font-medium flex items-center gap-2"><GitCommitHorizontal className="h-4 w-4 text-muted-foreground" /> {h.createdAt ? new Date(h.createdAt).toLocaleString() : "\u2014"}</p>
+                              <p className="font-medium flex items-center gap-2"><GitCommitHorizontal className="h-4 w-4 text-muted-foreground" /> {formatDate(h.createdAt)}</p>
                               <p className="text-xs text-muted-foreground ml-6">{h.reason}</p>
                           </div>
                           <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); handleDeleteHistory(h.id); }}>

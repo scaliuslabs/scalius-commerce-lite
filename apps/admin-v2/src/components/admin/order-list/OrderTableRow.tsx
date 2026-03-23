@@ -38,6 +38,7 @@ import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { FraudCheckIndicator } from "./FraudCheckIndicator";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatRelativeDate, formatDateVerbose } from "@scalius/shared/timestamps";
 
 interface OrderTableRowProps {
   order: OrderListItem;
@@ -54,68 +55,8 @@ interface OrderTableRowProps {
   onShipmentStatusUpdated: (updatedShipment: { id: string; orderId: string; [key: string]: unknown }) => void;
 }
 
-function toDate(value: unknown): Date | null {
-  if (!value) return null;
-  const d = value instanceof Date ? value : new Date(value as string | number);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-const formatDate = (value: unknown) => {
-  const date = toDate(value);
-  if (!date) return "\u2014";
-
-  try {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 1) {
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      if (diffHours < 1) {
-        const diffMinutes = Math.floor(diffMs / (1000 * 60));
-        return diffMinutes < 1 ? "Just now" : `${diffMinutes}m ago`;
-      }
-      return `${diffHours}h ago`;
-    }
-
-    if (diffDays < 7) {
-      return date.toLocaleString("en-US", {
-        weekday: "short",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
-    }
-
-    return date.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: now.getFullYear() !== date.getFullYear() ? "numeric" : undefined,
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return "\u2014";
-  }
-};
-
-const getFullDateTimeString = (value: unknown) => {
-  const date = toDate(value);
-  if (!date) return "\u2014";
-
-  return date.toLocaleString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-    timeZoneName: "short",
-  });
-};
+const formatDate = formatRelativeDate;
+const getFullDateTimeString = formatDateVerbose;
 
 export const OrderTableRow = React.memo(function OrderTableRow({
   order,

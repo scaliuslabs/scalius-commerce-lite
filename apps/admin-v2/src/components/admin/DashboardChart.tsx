@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatDateShort } from "@scalius/shared/timestamps";
 
 interface DailyActivityDataPoint {
   date: string;
@@ -44,14 +45,7 @@ const CustomTooltipContent = ({ active, payload, label, symbol = "\u09F3", chart
   chartConfig: ChartConfig;
 }) => {
   if (active && payload && payload.length) {
-    const parsedDate = label ? new Date(label) : null;
-    const formattedLabel = parsedDate && !isNaN(parsedDate.getTime())
-      ? parsedDate.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })
-      : String(label ?? "");
+    const formattedLabel = label ? formatDateShort(label) : String(label ?? "");
 
     return (
       <div className="rounded-lg border bg-background p-2 shadow-sm">

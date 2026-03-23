@@ -46,7 +46,7 @@ export function useProductSubmit({
       if (isEdit) {
         const entityId = productId || values.id;
         if (!entityId) throw new Error("Product ID is required for update");
-        return updateProduct({ data: { id: entityId, ...formattedValues } }) as Promise<Record<string, unknown>>;
+        return updateProduct({ data: { ...formattedValues, id: entityId } }) as Promise<Record<string, unknown>>;
       }
       return createProduct({ data: formattedValues as Record<string, unknown> }) as Promise<Record<string, unknown>>;
     },

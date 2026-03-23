@@ -1,3 +1,5 @@
+import { formatDate } from "@scalius/shared/timestamps";
+
 interface ShipmentMetadataDisplayProps {
   metadata: Record<string, unknown> | string | null;
   className?: string;
@@ -102,7 +104,7 @@ export function ShipmentMetadataDisplay({
         <div className="flex justify-between gap-4 pt-1 border-t">
           <span className="text-muted-foreground text-xs">Last Update</span>
           <span className="text-xs text-muted-foreground">
-            {new Date(lastWebhookAt).toLocaleString()}
+            {formatDate(lastWebhookAt)}
           </span>
         </div>
       )}

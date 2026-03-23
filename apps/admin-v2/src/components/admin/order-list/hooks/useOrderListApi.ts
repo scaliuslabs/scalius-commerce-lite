@@ -1,6 +1,7 @@
 import React from "react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
+import { formatDateShort } from "@scalius/shared/timestamps";
 import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { UseOrderListStateReturn, OrderListPagination } from "./useOrderListState";
 import { getOrders, createOrderShipment, refreshShipmentStatus } from "~/lib/api.functions";
@@ -273,7 +274,7 @@ export function useOrderListApi(
       order.totalAmount,
       order.discountAmount || 0,
       order.itemCount,
-      order.createdAt.toLocaleDateString("en-US"),
+      formatDateShort(order.createdAt),
     ]);
 
     const csvContent = [

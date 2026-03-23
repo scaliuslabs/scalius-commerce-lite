@@ -1,4 +1,5 @@
 import React from "react";
+import { formatDateShort } from "@scalius/shared/timestamps";
 import {
   Card,
   CardContent,
@@ -112,7 +113,7 @@ const ShipmentHistoryItem = ({
       <div className="flex items-start justify-between">
         <div className="flex flex-col">
           <span className="mb-1 text-xs text-muted-foreground" suppressHydrationWarning>
-            {shipment.createdAt ? new Date(shipment.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "\u2014"}
+            {formatDateShort(shipment.createdAt)}
           </span>
           <ShipmentStatusIndicator
             shipment={{

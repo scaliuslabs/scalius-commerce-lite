@@ -17,7 +17,7 @@ export function useWidgetActions(
   const handleUpdate = async (widgetId: string, data: Partial<WidgetItem>) => {
     setSavingStates((prev) => ({ ...prev, [widgetId]: true }));
     try {
-      const updatedWidget = await updateWidget({ data: { id: widgetId, ...data } }) as WidgetItem;
+      const updatedWidget = await updateWidget({ data: { ...data, id: widgetId } }) as WidgetItem;
       setWidgets((prev) =>
         prev.map((w) => (w.id === widgetId ? { ...w, ...updatedWidget } : w)),
       );

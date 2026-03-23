@@ -1,5 +1,6 @@
 // src/components/admin/RecentOrders.tsx
 import React from "react";
+import { formatDate } from "@scalius/shared/timestamps";
 import { ErrorBoundary } from "./ErrorBoundary";
 import {
   Table,
@@ -269,10 +270,7 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
                               </TooltipTrigger>
                               <TooltipContent side="top" align="end">
                                 <p className="text-xs">
-                                  {parsedDate.toLocaleString("en-US", {
-                                    dateStyle: "medium",
-                                    timeStyle: "short",
-                                  })}
+                                  {formatDate(parsedDate)}
                                 </p>
                               </TooltipContent>
                             </Tooltip>

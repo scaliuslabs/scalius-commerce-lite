@@ -410,7 +410,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       if (isCreateMode) {
         await createWidget({ data: submissionData });
       } else {
-        await updateWidget({ data: { id: widget!.id, ...submissionData } });
+        await updateWidget({ data: { ...submissionData, id: widget!.id } });
       }
       toast.success(`Widget ${isCreateMode ? 'created' : 'updated'} successfully!`);
       setTimeout(() => {

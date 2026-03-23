@@ -15,6 +15,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { formatDate } from '@scalius/shared/timestamps';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -407,7 +408,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                       </div>
                       <div className="text-muted-foreground">{entry.prompt}</div>
                       <div className="text-muted-foreground">
-                        {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : "\u2014"}
+                        {formatDate(entry.timestamp)}
                       </div>
                     </div>
                   ))}

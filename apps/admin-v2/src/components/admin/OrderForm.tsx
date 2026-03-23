@@ -176,7 +176,7 @@ export function OrderForm({
 
     if (isEdit) {
       updateMutation.mutate(
-        { id: values.id, ...values } as Record<string, unknown> & { id: string },
+        { ...(values as unknown as Record<string, unknown>), id: values.id || defaultValues?.id } as Record<string, unknown> & { id: string },
         { onSuccess },
       );
     } else {

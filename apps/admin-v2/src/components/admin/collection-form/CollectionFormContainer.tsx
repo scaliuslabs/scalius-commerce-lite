@@ -78,7 +78,7 @@ export function CollectionForm({
       if (isEdit) {
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Collection ID is required for update");
-        await updateCollection({ data: { id: entityId, ...values } });
+        await updateCollection({ data: { ...values, id: entityId } });
       } else {
         await createCollection({ data: values });
       }

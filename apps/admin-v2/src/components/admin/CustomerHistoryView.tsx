@@ -1,6 +1,7 @@
 // src/components/admin/CustomerHistoryView.tsx
 import React, { useState, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
+import { formatDate, formatDateShort } from "@scalius/shared/timestamps";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   Table,
@@ -94,69 +95,7 @@ interface CustomerHistoryViewProps {
 }
 // --- End Interfaces ---
 
-// --- Helper Functions (Mostly Unchanged) ---
-const formatDate = (
-  date: Date | number | string | null | undefined,
-  options?: Intl.DateTimeFormatOptions,
-): string => {
-  if (date === null || date === undefined) return "N/A";
-
-  let dateObj: Date;
-  try {
-    if (typeof date === "number" || typeof date === "string") {
-      // Assume seconds if it's a typical Unix timestamp length, otherwise milliseconds
-      const numDate = typeof date === "string" ? parseInt(date, 10) : date;
-      if (isNaN(numDate)) throw new Error("Invalid date string/number");
-      dateObj = new Date(numDate * (numDate < 10000000000 ? 1000 : 1));
-    } else if (date instanceof Date) {
-      dateObj = date;
-    } else {
-      throw new Error("Invalid date type");
-    }
-
-    if (isNaN(dateObj.getTime())) {
-      throw new Error("Invalid date value");
-    }
-
-    // Correct potential timestamp issues (simple check)
-    if (
-      dateObj.getFullYear() > 3000 &&
-      typeof date !== "string" &&
-      typeof date !== "number"
-    ) {
-      // If original wasn't a number/string timestamp, it's likely just an invalid date
-      throw new Error("Year seems too large, likely invalid date");
-    } else if (dateObj.getFullYear() > 3000) {
-      // Try assuming milliseconds if it was a large number
-      const correctedDate = new Date(dateObj.getTime() / 1000);
-      if (
-        !isNaN(correctedDate.getTime()) &&
-        correctedDate.getFullYear() < 3000
-      ) {
-        dateObj = correctedDate;
-      } else {
-        throw new Error("Year seems too large, timestamp correction failed");
-      }
-    }
-
-    const defaultOptions: Intl.DateTimeFormatOptions = {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-      // timeZoneName: "short", // Consider removing timezone for brevity unless crucial
-    };
-
-    const mergedOptions = { ...defaultOptions, ...options };
-
-    return dateObj.toLocaleString("en-US", mergedOptions);
-  } catch (error: unknown) {
-    console.error("Error formatting date:", date, error);
-    return "Invalid date";
-  }
-};
+// --- Helper Functions ---
 
 const getInitials = (name: string) => {
   if (!name) return "?";
@@ -272,11 +211,7 @@ export function CustomerHistoryView({
             </h1>
             <p className="text-sm text-muted-foreground">
               Customer since{" "}
-              {formatDate(customer.createdAt, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
+              {formatDateShort(customer.createdAt)}
             </p>
           </div>
         </div>
@@ -397,11 +332,7 @@ export function CustomerHistoryView({
                       Last order placed
                     </span>
                     <p className="font-medium">
-                      {formatDate(customer.lastOrderAt, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
+                      {formatDateShort(customer.lastOrderAt)}
                     </p>
                   </div>
                 </div>
@@ -458,11 +389,7 @@ export function CustomerHistoryView({
                           </Button>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(order.createdAt, {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
+                          {formatDateShort(order.createdAt)}
                         </TableCell>
                         <TableCell className="font-medium">
                           {symbol}
