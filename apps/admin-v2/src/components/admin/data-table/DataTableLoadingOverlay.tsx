@@ -1,8 +1,10 @@
+import { memo } from "react";
+
 interface DataTableLoadingOverlayProps {
   visible: boolean;
 }
 
-export function DataTableLoadingOverlay({ visible }: DataTableLoadingOverlayProps) {
+export const DataTableLoadingOverlay = memo(function DataTableLoadingOverlay({ visible }: DataTableLoadingOverlayProps) {
   if (!visible) return null;
 
   return (
@@ -10,4 +12,4 @@ export function DataTableLoadingOverlay({ visible }: DataTableLoadingOverlayProp
       <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
     </div>
   );
-}
+});

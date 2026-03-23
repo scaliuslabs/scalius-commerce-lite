@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -28,7 +28,7 @@ interface DataTableRowActionsProps {
   children?: ReactNode;
 }
 
-export function DataTableRowActions({
+export const DataTableRowActions = memo(function DataTableRowActions({
   showTrashed = false,
   onView,
   onEdit,
@@ -103,4 +103,4 @@ export function DataTableRowActions({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
+});

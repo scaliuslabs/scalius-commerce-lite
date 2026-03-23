@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Column } from "@tanstack/react-table";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
@@ -16,7 +17,7 @@ interface DataTableColumnHeaderProps<TData, TValue> {
   className?: string;
 }
 
-export function DataTableColumnHeader<TData, TValue>({
+function DataTableColumnHeaderInner<TData, TValue>({
   column,
   title,
   className,
@@ -69,3 +70,5 @@ export function DataTableColumnHeader<TData, TValue>({
     </div>
   );
 }
+
+export const DataTableColumnHeader = memo(DataTableColumnHeaderInner) as typeof DataTableColumnHeaderInner;

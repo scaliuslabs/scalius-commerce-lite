@@ -112,17 +112,16 @@ function WidgetsPage() {
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable({
       columns,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       queryOptions: widgetsQueryOptions({
         search: search.search || undefined,
         showTrashed: false,
-      }) as any,
+      }) as never,
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,
       onPaginationChange: (page, limit) =>
         void navigate({
-          search: ((p: any) => ({ ...p, page, limit })) as any,
+          search: ((prev: Record<string, unknown>) => ({ ...prev, page, limit })) as never,
         }),
       onSortingChange: () => {
         // Widgets have no server-side sorting
@@ -169,7 +168,7 @@ function WidgetsPage() {
             searchValue={search.search}
             onSearchChange={(value) =>
               void navigate({
-                search: ((p: any) => ({ ...p, search: value, page: 1 })) as any,
+                search: ((prev: Record<string, unknown>) => ({ ...prev, search: value, page: 1 })) as never,
               })
             }
             searchPlaceholder="Search widgets..."

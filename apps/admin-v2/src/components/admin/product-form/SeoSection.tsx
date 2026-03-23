@@ -1,4 +1,5 @@
 // src/components/admin/product-form/SeoSection.tsx
+import { memo } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import {
   FormControl,
@@ -17,7 +18,7 @@ interface SeoSectionProps {
   form: UseFormReturn<ProductFormValues>;
 }
 
-export function SeoSection({ form }: SeoSectionProps) {
+export const SeoSection = memo(function SeoSection({ form }: SeoSectionProps) {
   return (
     <CollapsibleCard
       title="Search Engine Listing"
@@ -80,4 +81,4 @@ export function SeoSection({ form }: SeoSectionProps) {
       </div>
     </CollapsibleCard>
   );
-}
+});

@@ -252,7 +252,7 @@ function AttributesPage() {
           ...prev,
           page,
           limit,
-        })) as any,
+        })) as never,
       });
     },
     [navigate],
@@ -266,7 +266,7 @@ function AttributesPage() {
           sort,
           order,
           page: 1,
-        })) as any,
+        })) as never,
       });
     },
     [navigate],
@@ -279,7 +279,7 @@ function AttributesPage() {
           ...prev,
           search: value || undefined,
           page: 1,
-        })) as any,
+        })) as never,
       });
     },
     [navigate],
@@ -289,7 +289,7 @@ function AttributesPage() {
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable<AttributeItem>({
       columns,
-      queryOptions: attributesQueryOptions(mapParams(search)) as any,
+      queryOptions: attributesQueryOptions(mapParams(search)) as never,
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,

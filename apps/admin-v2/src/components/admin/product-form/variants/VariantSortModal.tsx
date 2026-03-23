@@ -11,7 +11,23 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Loader2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { toast } from "sonner";
@@ -30,6 +46,54 @@ interface SortItem {
   sortOrder: number;
 }
 
+function SortableVariantItem({
+  item,
+  index,
+  label,
+}: {
+  item: SortItem;
+  index: number;
+  label: string;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.value });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={cn(
+        "flex items-center gap-3 p-3 bg-muted/50 rounded-md border cursor-grab active:cursor-grabbing",
+        isDragging && "shadow-lg ring-2 ring-primary bg-background opacity-50",
+      )}
+    >
+      <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="font-medium truncate">{item.value}</div>
+        <div className="text-xs text-muted-foreground">
+          {label}: {index + 1}
+        </div>
+      </div>
+      <div className="text-sm text-muted-foreground shrink-0">
+        #{index + 1}
+      </div>
+    </div>
+  );
+}
+
 export function VariantSortModal({
   productId,
   isOpen,
@@ -40,6 +104,13 @@ export function VariantSortModal({
   const [sizes, setSizes] = useState<SortItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   // Fetch current sort order
   useEffect(() => {
@@ -62,36 +133,28 @@ export function VariantSortModal({
     }
   };
 
-  const handleColorDragEnd = (result: { source: { index: number }; destination?: { index: number } | null }) => {
-    if (!result.destination) return;
+  const handleColorDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    const items = Array.from(colors);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    // Update sort orders
-    const updatedItems = items.map((item, index) => ({
-      ...item,
-      sortOrder: index,
-    }));
-
-    setColors(updatedItems);
+    const oldIndex = colors.findIndex((c) => c.value === active.id);
+    const newIndex = colors.findIndex((c) => c.value === over.id);
+    const reordered = arrayMove(colors, oldIndex, newIndex).map(
+      (item, index) => ({ ...item, sortOrder: index }),
+    );
+    setColors(reordered);
   };
 
-  const handleSizeDragEnd = (result: { source: { index: number }; destination?: { index: number } | null }) => {
-    if (!result.destination) return;
+  const handleSizeDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    const items = Array.from(sizes);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    // Update sort orders
-    const updatedItems = items.map((item, index) => ({
-      ...item,
-      sortOrder: index,
-    }));
-
-    setSizes(updatedItems);
+    const oldIndex = sizes.findIndex((s) => s.value === active.id);
+    const newIndex = sizes.findIndex((s) => s.value === over.id);
+    const reordered = arrayMove(sizes, oldIndex, newIndex).map(
+      (item, index) => ({ ...item, sortOrder: index }),
+    );
+    setSizes(reordered);
   };
 
   const handleSave = async () => {
@@ -147,57 +210,27 @@ export function VariantSortModal({
                   No color variants found
                 </div>
               ) : (
-                <DragDropContext onDragEnd={handleColorDragEnd}>
-                  <Droppable droppableId="colors">
-                    {(provided) => (
-                      <div
-                        {...provided.droppableProps}
-                        ref={provided.innerRef}
-                        className="space-y-2 min-h-[100px]"
-                      >
-                        {colors.map((color, index) => (
-                          <Draggable
-                            key={color.value}
-                            draggableId={color.value}
-                            index={index}
-                          >
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={cn(
-                                  "flex items-center gap-3 p-3 bg-muted/50 rounded-md border cursor-grab active:cursor-grabbing",
-                                  snapshot.isDragging &&
-                                  "shadow-lg ring-2 ring-primary bg-background",
-                                )}
-                                style={{
-                                  ...provided.draggableProps.style,
-                                  left: "auto !important",
-                                  top: "auto !important",
-                                }}
-                              >
-                                <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium truncate">
-                                    {color.value}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    Image position: {index + 1}
-                                  </div>
-                                </div>
-                                <div className="text-sm text-muted-foreground shrink-0">
-                                  #{index + 1}
-                                </div>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleColorDragEnd}
+                >
+                  <SortableContext
+                    items={colors.map((c) => c.value)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2 min-h-[100px]">
+                      {colors.map((color, index) => (
+                        <SortableVariantItem
+                          key={color.value}
+                          item={color}
+                          index={index}
+                          label="Image position"
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               )}
             </TabsContent>
 
@@ -210,57 +243,27 @@ export function VariantSortModal({
                   No size variants found
                 </div>
               ) : (
-                <DragDropContext onDragEnd={handleSizeDragEnd}>
-                  <Droppable droppableId="sizes">
-                    {(provided) => (
-                      <div
-                        {...provided.droppableProps}
-                        ref={provided.innerRef}
-                        className="space-y-2 min-h-[100px]"
-                      >
-                        {sizes.map((size, index) => (
-                          <Draggable
-                            key={size.value}
-                            draggableId={size.value}
-                            index={index}
-                          >
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={cn(
-                                  "flex items-center gap-3 p-3 bg-muted/50 rounded-md border cursor-grab active:cursor-grabbing",
-                                  snapshot.isDragging &&
-                                  "shadow-lg ring-2 ring-primary bg-background",
-                                )}
-                                style={{
-                                  ...provided.draggableProps.style,
-                                  left: "auto !important",
-                                  top: "auto !important",
-                                }}
-                              >
-                                <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium truncate">
-                                    {size.value}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    Display order: {index + 1}
-                                  </div>
-                                </div>
-                                <div className="text-sm text-muted-foreground shrink-0">
-                                  #{index + 1}
-                                </div>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleSizeDragEnd}
+                >
+                  <SortableContext
+                    items={sizes.map((s) => s.value)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2 min-h-[100px]">
+                      {sizes.map((size, index) => (
+                        <SortableVariantItem
+                          key={size.value}
+                          item={size}
+                          index={index}
+                          label="Display order"
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               )}
             </TabsContent>
           </Tabs>

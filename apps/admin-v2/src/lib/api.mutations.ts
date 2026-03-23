@@ -119,7 +119,8 @@ export function useCreateProduct() {
     mutationFn: (data: Record<string, unknown>) =>
       createProduct({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "stats"] });
       toast.success("Product created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create product")),
@@ -132,7 +133,7 @@ export function useUpdateProduct() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updateProduct({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
       queryClient.invalidateQueries({ queryKey: ["products", "detail", variables.id] });
       toast.success("Product updated");
     },
@@ -144,8 +145,10 @@ export function useDeleteProduct() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteProduct({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "stats"] });
+      queryClient.removeQueries({ queryKey: ["products", "detail", id] });
       toast.success("Product moved to trash");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete product")),
@@ -156,8 +159,10 @@ export function usePermanentDeleteProduct() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => permanentDeleteProduct({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "stats"] });
+      queryClient.removeQueries({ queryKey: ["products", "detail", id] });
       toast.success("Product permanently deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete product")),
@@ -168,8 +173,10 @@ export function useRestoreProduct() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreProduct({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "detail", id] });
       toast.success("Product restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore product")),
@@ -182,7 +189,8 @@ export function useBulkDeleteProducts() {
     mutationFn: (data: { productIds: string[]; permanent?: boolean }) =>
       bulkDeleteProducts({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "stats"] });
       toast.success(
         variables.permanent
           ? `${variables.productIds.length} products permanently deleted`
@@ -203,7 +211,8 @@ export function useCreateCategory() {
     mutationFn: (data: Record<string, unknown>) =>
       createCategory({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
       toast.success("Category created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create category")),
@@ -216,8 +225,9 @@ export function useUpdateCategory() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updateCategory({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "list"] });
       queryClient.invalidateQueries({ queryKey: ["categories", "detail", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
       toast.success("Category updated");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to update category")),
@@ -228,8 +238,10 @@ export function useDeleteCategory() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteCategory({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["categories", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
+      queryClient.removeQueries({ queryKey: ["categories", "detail", id] });
       toast.success("Category moved to trash");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete category")),
@@ -240,8 +252,10 @@ export function usePermanentDeleteCategory() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteCategoryPermanent({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["categories", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
+      queryClient.removeQueries({ queryKey: ["categories", "detail", id] });
       toast.success("Category permanently deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete category")),
@@ -252,8 +266,10 @@ export function useRestoreCategory() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreCategory({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["categories", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "detail", id] });
       toast.success("Category restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore category")),
@@ -266,7 +282,8 @@ export function useBulkDeleteCategories() {
     mutationFn: (data: { categoryIds: string[]; permanent?: boolean }) =>
       bulkDeleteCategories({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
       toast.success(
         variables.permanent
           ? `${variables.categoryIds.length} categories permanently deleted`
@@ -283,7 +300,8 @@ export function useBulkRestoreCategories() {
     mutationFn: (categoryIds: string[]) =>
       bulkRestoreCategories({ data: { categoryIds } }),
     onSuccess: (_data, categoryIds) => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
       toast.success(`${categoryIds.length} categories restored`);
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore categories")),
@@ -300,7 +318,7 @@ export function useCreateOrder() {
     mutationFn: (data: Record<string, unknown>) =>
       createOrder({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
       toast.success("Order created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create order")),
@@ -313,7 +331,7 @@ export function useUpdateOrder() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updateOrder({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
       queryClient.invalidateQueries({ queryKey: ["orders", "detail", variables.id] });
       toast.success("Order updated");
     },
@@ -327,7 +345,7 @@ export function useUpdateOrderStatus() {
     mutationFn: (data: { orderId: string; status: string; note?: string }) =>
       updateOrderStatus({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
       queryClient.invalidateQueries({ queryKey: ["orders", "detail", variables.orderId] });
       toast.success(`Order status updated to ${variables.status}`);
     },
@@ -345,7 +363,7 @@ export function useCreateOrderShipment() {
       options?: Record<string, unknown>;
     }) => createOrderShipment({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
       queryClient.invalidateQueries({ queryKey: ["orders", "detail", variables.orderId] });
       queryClient.invalidateQueries({ queryKey: ["orders", "shipments", variables.orderId] });
       toast.success("Shipment created");
@@ -360,7 +378,7 @@ export function useRefundOrder() {
     mutationFn: (data: { orderId: string; amount?: number; reason?: string }) =>
       refundOrder({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
       queryClient.invalidateQueries({ queryKey: ["orders", "detail", variables.orderId] });
       queryClient.invalidateQueries({ queryKey: ["orders", "payments", variables.orderId] });
       toast.success("Refund processed");
@@ -394,7 +412,7 @@ export function useReturnOrder() {
       autoRefund?: boolean;
     }) => returnOrder({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
       queryClient.invalidateQueries({ queryKey: ["orders", "detail", variables.orderId] });
       toast.success("Return processed");
     },
@@ -406,8 +424,9 @@ export function useRestoreOrder() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreOrder({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", "detail", id] });
       toast.success("Order restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore order")),
@@ -420,7 +439,7 @@ export function useBulkDeleteOrders() {
     mutationFn: (data: { orderIds: string[]; permanent?: boolean }) =>
       bulkDeleteOrders({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
       toast.success(
         variables.permanent
           ? `${variables.orderIds.length} orders permanently deleted`
@@ -614,7 +633,7 @@ export function useCreateCustomer() {
     mutationFn: (data: Record<string, unknown>) =>
       createCustomer({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
       toast.success("Customer created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create customer")),
@@ -627,7 +646,7 @@ export function useUpdateCustomer() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updateCustomer({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
       queryClient.invalidateQueries({ queryKey: ["customers", "detail", variables.id] });
       toast.success("Customer updated");
     },
@@ -639,8 +658,9 @@ export function useDeleteCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteCustomer({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
+      queryClient.removeQueries({ queryKey: ["customers", "detail", id] });
       toast.success("Customer moved to trash");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete customer")),
@@ -651,8 +671,9 @@ export function usePermanentDeleteCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => permanentDeleteCustomer({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
+      queryClient.removeQueries({ queryKey: ["customers", "detail", id] });
       toast.success("Customer permanently deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete customer")),
@@ -663,8 +684,9 @@ export function useRestoreCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreCustomer({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["customers", "detail", id] });
       toast.success("Customer restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore customer")),
@@ -677,7 +699,7 @@ export function useBulkDeleteCustomers() {
     mutationFn: (data: { customerIds: string[]; permanent?: boolean }) =>
       bulkDeleteCustomers({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
       toast.success(
         variables.permanent
           ? `${variables.customerIds.length} customers permanently deleted`
@@ -698,7 +720,7 @@ export function useCreateDiscount() {
     mutationFn: (data: Record<string, unknown>) =>
       createDiscount({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["discounts"] });
+      queryClient.invalidateQueries({ queryKey: ["discounts", "list"] });
       toast.success("Discount created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create discount")),
@@ -711,7 +733,7 @@ export function useUpdateDiscount() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updateDiscount({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["discounts"] });
+      queryClient.invalidateQueries({ queryKey: ["discounts", "list"] });
       queryClient.invalidateQueries({ queryKey: ["discounts", "detail", variables.id] });
       toast.success("Discount updated");
     },
@@ -723,8 +745,9 @@ export function useDeleteDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteDiscount({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["discounts"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["discounts", "list"] });
+      queryClient.removeQueries({ queryKey: ["discounts", "detail", id] });
       toast.success("Discount moved to trash");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete discount")),
@@ -735,8 +758,9 @@ export function usePermanentDeleteDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => permanentDeleteDiscount({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["discounts"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["discounts", "list"] });
+      queryClient.removeQueries({ queryKey: ["discounts", "detail", id] });
       toast.success("Discount permanently deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete discount")),
@@ -747,8 +771,9 @@ export function useRestoreDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreDiscount({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["discounts"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["discounts", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["discounts", "detail", id] });
       toast.success("Discount restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore discount")),
@@ -761,7 +786,7 @@ export function useToggleDiscountStatus() {
     mutationFn: (data: { id: string; isActive?: boolean }) =>
       toggleDiscountStatus({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["discounts"] });
+      queryClient.invalidateQueries({ queryKey: ["discounts", "list"] });
       queryClient.invalidateQueries({ queryKey: ["discounts", "detail", variables.id] });
       toast.success("Discount status toggled");
     },
@@ -775,7 +800,7 @@ export function useBulkDeleteDiscounts() {
     mutationFn: (data: { discountIds?: string[]; ids?: string[]; permanent?: boolean }) =>
       bulkDeleteDiscounts({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["discounts"] });
+      queryClient.invalidateQueries({ queryKey: ["discounts", "list"] });
       toast.success("Discounts deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete discounts")),
@@ -788,7 +813,7 @@ export function useBulkRestoreDiscounts() {
     mutationFn: (data: { discountIds?: string[]; ids?: string[] }) =>
       bulkRestoreDiscounts({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["discounts"] });
+      queryClient.invalidateQueries({ queryKey: ["discounts", "list"] });
       toast.success("Discounts restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore discounts")),
@@ -805,7 +830,7 @@ export function useCreatePage() {
     mutationFn: (data: Record<string, unknown>) =>
       createPage({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pages"] });
+      queryClient.invalidateQueries({ queryKey: ["pages", "list"] });
       toast.success("Page created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create page")),
@@ -818,7 +843,7 @@ export function useUpdatePage() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updatePage({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["pages"] });
+      queryClient.invalidateQueries({ queryKey: ["pages", "list"] });
       queryClient.invalidateQueries({ queryKey: ["pages", "detail", variables.id] });
       toast.success("Page updated");
     },
@@ -830,8 +855,9 @@ export function useDeletePage() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deletePage({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pages"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["pages", "list"] });
+      queryClient.removeQueries({ queryKey: ["pages", "detail", id] });
       toast.success("Page moved to trash");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete page")),
@@ -842,8 +868,9 @@ export function usePermanentDeletePage() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => permanentDeletePage({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pages"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["pages", "list"] });
+      queryClient.removeQueries({ queryKey: ["pages", "detail", id] });
       toast.success("Page permanently deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete page")),
@@ -854,8 +881,9 @@ export function useRestorePage() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restorePage({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pages"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["pages", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["pages", "detail", id] });
       toast.success("Page restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore page")),
@@ -868,7 +896,7 @@ export function useBulkDeletePages() {
     mutationFn: (data: { pageIds: string[]; permanent?: boolean }) =>
       bulkDeletePages({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["pages"] });
+      queryClient.invalidateQueries({ queryKey: ["pages", "list"] });
       toast.success(
         variables.permanent
           ? `${variables.pageIds.length} pages permanently deleted`
@@ -884,7 +912,7 @@ export function useBulkRestorePages() {
   return useMutation({
     mutationFn: (ids: string[]) => bulkRestorePages({ data: { ids } }),
     onSuccess: (_data, ids) => {
-      queryClient.invalidateQueries({ queryKey: ["pages"] });
+      queryClient.invalidateQueries({ queryKey: ["pages", "list"] });
       toast.success(`${ids.length} pages restored`);
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore pages")),
@@ -901,7 +929,7 @@ export function useCreateWidget() {
     mutationFn: (data: Record<string, unknown>) =>
       createWidget({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["widgets"] });
+      queryClient.invalidateQueries({ queryKey: ["widgets", "list"] });
       toast.success("Widget created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create widget")),
@@ -914,7 +942,7 @@ export function useUpdateWidget() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updateWidget({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["widgets"] });
+      queryClient.invalidateQueries({ queryKey: ["widgets", "list"] });
       queryClient.invalidateQueries({ queryKey: ["widgets", "detail", variables.id] });
       toast.success("Widget updated");
     },
@@ -926,8 +954,9 @@ export function useDeleteWidget() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteWidget({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["widgets"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["widgets", "list"] });
+      queryClient.removeQueries({ queryKey: ["widgets", "detail", id] });
       toast.success("Widget moved to trash");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete widget")),
@@ -938,8 +967,9 @@ export function useRestoreWidget() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreWidget({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["widgets"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["widgets", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["widgets", "detail", id] });
       toast.success("Widget restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore widget")),
@@ -952,7 +982,7 @@ export function useBulkDeleteWidgets() {
     mutationFn: (data: { ids: string[]; permanent?: boolean }) =>
       bulkDeleteWidgets({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["widgets"] });
+      queryClient.invalidateQueries({ queryKey: ["widgets", "list"] });
       toast.success(
         variables.permanent
           ? `${variables.ids.length} widgets permanently deleted`
@@ -968,7 +998,7 @@ export function useBulkRestoreWidgets() {
   return useMutation({
     mutationFn: (ids: string[]) => bulkRestoreWidgets({ data: { ids } }),
     onSuccess: (_data, ids) => {
-      queryClient.invalidateQueries({ queryKey: ["widgets"] });
+      queryClient.invalidateQueries({ queryKey: ["widgets", "list"] });
       toast.success(`${ids.length} widgets restored`);
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore widgets")),
@@ -985,7 +1015,7 @@ export function useCreateAnalyticsScript() {
     mutationFn: (data: Record<string, unknown>) =>
       createAnalyticsScript({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
       toast.success("Analytics script created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create analytics script")),
@@ -998,7 +1028,7 @@ export function useUpdateAnalyticsScript() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updateAnalyticsScript({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
       queryClient.invalidateQueries({ queryKey: ["analytics", "detail", variables.id] });
       toast.success("Analytics script updated");
     },
@@ -1010,8 +1040,9 @@ export function useDeleteAnalyticsScript() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteAnalyticsScript({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
+      queryClient.removeQueries({ queryKey: ["analytics", "detail", id] });
       toast.success("Analytics script deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete analytics script")),
@@ -1028,7 +1059,8 @@ export function useCreateCollection() {
     mutationFn: (data: Record<string, unknown>) =>
       createCollection({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
       toast.success("Collection created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create collection")),
@@ -1041,8 +1073,9 @@ export function useUpdateCollection() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updateCollection({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
       queryClient.invalidateQueries({ queryKey: ["collections", "detail", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
       toast.success("Collection updated");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to update collection")),
@@ -1053,8 +1086,10 @@ export function useDeleteCollection() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteCollection({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
+      queryClient.removeQueries({ queryKey: ["collections", "detail", id] });
       toast.success("Collection moved to trash");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete collection")),
@@ -1065,8 +1100,10 @@ export function usePermanentDeleteCollection() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteCollectionPermanent({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
+      queryClient.removeQueries({ queryKey: ["collections", "detail", id] });
       toast.success("Collection permanently deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete collection")),
@@ -1077,8 +1114,10 @@ export function useRestoreCollection() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreCollection({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "detail", id] });
       toast.success("Collection restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore collection")),
@@ -1091,7 +1130,7 @@ export function useReorderCollections() {
     mutationFn: (data: { items: { id: string; sortOrder: number }[] }) =>
       reorderCollections({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to reorder collections")),
   });
@@ -1103,7 +1142,8 @@ export function useBulkDeleteCollections() {
     mutationFn: (data: { ids: string[]; permanent?: boolean }) =>
       bulkDeleteCollections({ data: { collectionIds: data.ids, permanent: data.permanent } }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
       toast.success(`${variables.ids.length} collection(s) ${variables.permanent ? "permanently deleted" : "moved to trash"}`);
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete collections")),
@@ -1116,7 +1156,8 @@ export function useBulkRestoreCollections() {
     mutationFn: (data: { ids: string[] }) =>
       bulkRestoreCollections({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
       toast.success(`${variables.ids.length} collection(s) restored`);
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore collections")),
@@ -1133,7 +1174,7 @@ export function useCreateAttribute() {
     mutationFn: (data: Record<string, unknown>) =>
       createAttribute({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "list"] });
       toast.success("Attribute created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create attribute")),
@@ -1146,7 +1187,7 @@ export function useUpdateAttribute() {
     mutationFn: (data: { id: string } & Record<string, unknown>) =>
       updateAttribute({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "list"] });
       queryClient.invalidateQueries({ queryKey: ["attributes", "detail", variables.id] });
       toast.success("Attribute updated");
     },
@@ -1158,8 +1199,10 @@ export function useDeleteAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteAttribute({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["attributes", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "values"] });
+      queryClient.removeQueries({ queryKey: ["attributes", "detail", id] });
       toast.success("Attribute moved to trash");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete attribute")),
@@ -1170,8 +1213,10 @@ export function usePermanentDeleteAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteAttributePermanent({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["attributes", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "values"] });
+      queryClient.removeQueries({ queryKey: ["attributes", "detail", id] });
       toast.success("Attribute permanently deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete attribute")),
@@ -1182,8 +1227,10 @@ export function useRestoreAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreAttribute({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["attributes", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "values"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "detail", id] });
       toast.success("Attribute restored");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore attribute")),
@@ -1195,8 +1242,10 @@ export function useUpdateAttributeValues() {
   return useMutation({
     mutationFn: (data: { attributeId: string; values: { name: string; slug: string }[] }) =>
       updateAttributeValues({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["attributes", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "values"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "detail", variables.attributeId] });
       toast.success("Attribute values updated");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to update attribute values")),
@@ -1209,7 +1258,8 @@ export function useBulkDeleteAttributes() {
     mutationFn: (data: { ids: string[]; permanent?: boolean }) =>
       bulkDeleteAttributes({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "values"] });
       toast.success(`${variables.ids.length} attribute(s) ${variables.permanent ? "permanently deleted" : "moved to trash"}`);
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete attributes")),
@@ -1222,7 +1272,8 @@ export function useBulkRestoreAttributes() {
     mutationFn: (data: { ids: string[] }) =>
       bulkRestoreAttributes({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "values"] });
       toast.success(`${variables.ids.length} attribute(s) restored`);
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore attributes")),

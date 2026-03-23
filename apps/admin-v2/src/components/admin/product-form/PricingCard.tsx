@@ -1,4 +1,5 @@
 // src/components/admin/product-form/PricingCard.tsx
+import { memo } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,7 +24,7 @@ interface PricingCardProps {
   form: UseFormReturn<ProductFormValues>;
 }
 
-export function PricingCard({ form }: PricingCardProps) {
+export const PricingCard = memo(function PricingCard({ form }: PricingCardProps) {
   const { symbol } = useCurrency();
   const discountType = form.watch("discountType");
 
@@ -163,4 +164,4 @@ export function PricingCard({ form }: PricingCardProps) {
       </CardContent>
     </Card>
   );
-}
+});

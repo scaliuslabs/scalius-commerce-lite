@@ -8,7 +8,7 @@ import {
 } from "../../ui/card";
 import { Button } from "../../ui/button";
 import { Tag, Percent, Truck } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { cn } from "@scalius/shared/utils";
 
 interface DiscountType {

@@ -15,6 +15,7 @@ interface OrderShipment {
 import { Card, CardContent } from "../../ui/card";
 import { Checkbox } from "../../ui/checkbox";
 import { Badge } from "../../ui/badge";
+import { PaymentStatusBadge } from "../shared/StatusBadges";
 import { Button } from "../../ui/button";
 import {
   Phone,
@@ -132,17 +133,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               </Badge>
             )}
             <div className="flex items-center justify-end gap-1 mt-1">
-              {order.paymentStatus === "paid" ? (
-                <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0">Paid</Badge>
-              ) : order.paymentStatus === "partial" ? (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0">Partial</Badge>
-              ) : order.paymentStatus === "refunded" ? (
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 text-[10px] px-1.5 py-0">Refunded</Badge>
-              ) : order.paymentStatus === "failed" ? (
-                <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 py-0">Failed</Badge>
-              ) : order.paymentStatus === "unpaid" ? (
-                <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 py-0">Unpaid</Badge>
-              ) : null}
+              <PaymentStatusBadge status={order.paymentStatus} />
               <span className="text-[10px] text-[var(--muted-foreground)] uppercase">
                 {order.paymentMethod === "cod" ? "COD" : order.paymentMethod === "stripe" ? "Stripe" : order.paymentMethod === "sslcommerz" ? "SSL" : order.paymentMethod === "polar" ? "Polar" : order.paymentMethod}
               </span>
