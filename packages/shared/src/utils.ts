@@ -9,5 +9,5 @@ export function cn(...inputs: ClassValue[]) {
 // Re-exports for backward compatibility.
 // Canonical locations: @scalius/shared/timestamps, @scalius/shared/status-badges
 // ---------------------------------------------------------------------------
-export { unixToDate, formatDate } from "./timestamps";
+export { unixToDate, formatDate, formatDateShort, formatRelativeDate, formatDateVerbose } from "./timestamps";
 export { getStatusBadgeClass } from "./status-badges";
