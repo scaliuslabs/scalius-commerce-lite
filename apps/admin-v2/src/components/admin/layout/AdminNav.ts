@@ -1,5 +1,4 @@
 // Admin navigation data — pure TypeScript, no DOM dependencies.
-// Ported from apps/admin/src/layouts/components/AdminNav.ts
 
 import type React from "react";
 import {
@@ -26,6 +25,8 @@ import {
   CreditCard,
   Warehouse,
   Palette,
+  Package,
+  PenTool,
 } from "lucide-react";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
@@ -42,6 +43,7 @@ export interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   subItems?: NavSubItem[];
+  defaultOpen?: boolean;
   requiredPermission?: string;
   anyOfPermissions?: string[];
 }
@@ -71,102 +73,121 @@ export function hasNavPermission(
 
 export const allNavSections: NavSection[] = [
   {
-    label: "Commerce",
+    label: "",
     items: [
+      // Dashboard — standalone
       {
         name: "Dashboard",
         href: "/admin",
         icon: LayoutDashboard,
         requiredPermission: PERMISSIONS.DASHBOARD_VIEW,
       },
+      // Catalog — default open
       {
-        name: "Products",
+        name: "Catalog",
         href: "/admin/products",
-        icon: ShoppingCart,
-        requiredPermission: PERMISSIONS.PRODUCTS_VIEW,
+        icon: Package,
+        defaultOpen: true,
+        subItems: [
+          {
+            name: "Products",
+            href: "/admin/products",
+            icon: ShoppingCart,
+            requiredPermission: PERMISSIONS.PRODUCTS_VIEW,
+          },
+          {
+            name: "Categories",
+            href: "/admin/categories",
+            icon: FolderTree,
+            requiredPermission: PERMISSIONS.CATEGORIES_VIEW,
+          },
+          {
+            name: "Attributes",
+            href: "/admin/attributes",
+            icon: ListTree,
+            requiredPermission: PERMISSIONS.ATTRIBUTES_VIEW,
+          },
+          {
+            name: "Collections",
+            href: "/admin/collections",
+            icon: Layers3,
+            requiredPermission: PERMISSIONS.COLLECTIONS_VIEW,
+          },
+          {
+            name: "Inventory",
+            href: "/admin/inventory",
+            icon: Warehouse,
+            requiredPermission: PERMISSIONS.PRODUCTS_VIEW,
+          },
+        ],
       },
+      // Content — default open
       {
-        name: "Inventory",
-        href: "/admin/inventory",
-        icon: Warehouse,
-        requiredPermission: PERMISSIONS.PRODUCTS_VIEW,
-      },
-      {
-        name: "Categories",
-        href: "/admin/categories",
-        icon: FolderTree,
-        requiredPermission: PERMISSIONS.CATEGORIES_VIEW,
-      },
-      {
-        name: "Attributes",
-        href: "/admin/attributes",
-        icon: ListTree,
-        requiredPermission: PERMISSIONS.ATTRIBUTES_VIEW,
-      },
-      {
-        name: "Collections",
-        href: "/admin/collections",
-        icon: Layers3,
-        requiredPermission: PERMISSIONS.COLLECTIONS_VIEW,
-      },
-      {
-        name: "Media",
-        href: "/admin/media",
-        icon: Images,
-        requiredPermission: PERMISSIONS.MEDIA_VIEW,
-      },
-      {
-        name: "Pages",
+        name: "Content",
         href: "/admin/pages",
-        icon: FileText,
-        requiredPermission: PERMISSIONS.PAGES_VIEW,
+        icon: PenTool,
+        defaultOpen: true,
+        subItems: [
+          {
+            name: "Pages",
+            href: "/admin/pages",
+            icon: FileText,
+            requiredPermission: PERMISSIONS.PAGES_VIEW,
+          },
+          {
+            name: "Widgets",
+            href: "/admin/widgets",
+            icon: Blocks,
+            requiredPermission: PERMISSIONS.WIDGETS_VIEW,
+          },
+          {
+            name: "Media",
+            href: "/admin/media",
+            icon: Images,
+            requiredPermission: PERMISSIONS.MEDIA_VIEW,
+          },
+        ],
       },
+      // Sales — default open
       {
-        name: "Widgets",
-        href: "/admin/widgets",
-        icon: Blocks,
-        requiredPermission: PERMISSIONS.WIDGETS_VIEW,
-      },
-    ],
-  },
-  {
-    label: "Sales",
-    items: [
-      {
-        name: "Orders",
+        name: "Sales",
         href: "/admin/orders",
         icon: ShoppingBag,
-        requiredPermission: PERMISSIONS.ORDERS_VIEW,
+        defaultOpen: true,
+        subItems: [
+          {
+            name: "Orders",
+            href: "/admin/orders",
+            icon: ShoppingBag,
+            requiredPermission: PERMISSIONS.ORDERS_VIEW,
+          },
+          {
+            name: "Abandoned",
+            href: "/admin/abandoned-checkouts",
+            icon: Clock3,
+            requiredPermission: PERMISSIONS.ORDERS_VIEW,
+          },
+          {
+            name: "Customers",
+            href: "/admin/customers",
+            icon: Users,
+            requiredPermission: PERMISSIONS.CUSTOMERS_VIEW,
+          },
+          {
+            name: "Discounts",
+            href: "/admin/discounts",
+            icon: BadgePercent,
+            requiredPermission: PERMISSIONS.DISCOUNTS_VIEW,
+          },
+          {
+            name: "Analytics",
+            href: "/admin/analytics",
+            icon: BarChart3,
+            requiredPermission: PERMISSIONS.ANALYTICS_VIEW,
+          },
+        ],
       },
-      {
-        name: "Incomplete Orders",
-        href: "/admin/abandoned-checkouts",
-        icon: Clock3,
-        requiredPermission: PERMISSIONS.ORDERS_VIEW,
-      },
-      {
-        name: "Discounts",
-        href: "/admin/discounts",
-        icon: BadgePercent,
-        requiredPermission: PERMISSIONS.DISCOUNTS_VIEW,
-      },
-      {
-        name: "Analytics",
-        href: "/admin/analytics",
-        icon: BarChart3,
-        requiredPermission: PERMISSIONS.ANALYTICS_VIEW,
-      },
-      {
-        name: "Customers",
-        href: "/admin/customers",
-        icon: Users,
-        requiredPermission: PERMISSIONS.CUSTOMERS_VIEW,
-      },
-    ],
-  },
-  {
-    label: "Settings",
-    items: [
+      // Settings — collapsed by default
       {
         name: "Settings",
         href: "/admin/settings",
@@ -208,7 +229,7 @@ export const allNavSections: NavSection[] = [
             requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
           },
           {
-            name: "Delivery Providers",
+            name: "Delivery",
             href: "/admin/settings/delivery-providers",
             icon: Truck,
             requiredPermission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
@@ -220,13 +241,13 @@ export const allNavSections: NavSection[] = [
             requiredPermission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
           },
           {
-            name: "Meta Conversions",
+            name: "Meta CAPI",
             href: "/admin/settings/meta-conversion",
             icon: BarChart3,
             requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
           },
           {
-            name: "Cache Settings",
+            name: "Cache",
             href: "/admin/settings/cache",
             icon: Database,
             requiredPermission: PERMISSIONS.SETTINGS_CACHE_VIEW,
