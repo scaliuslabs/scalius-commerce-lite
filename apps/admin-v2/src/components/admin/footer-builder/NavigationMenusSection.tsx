@@ -1,5 +1,5 @@
 // src/components/admin/footer-builder/NavigationMenusSection.tsx
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Plus, Trash2, GripVertical } from "lucide-react";
@@ -36,15 +36,13 @@ interface NavigationMenusSectionProps {
   onChange: (menus: FooterMenu[]) => void;
 }
 
-function SortableMenuCard({
+const SortableMenuCard = React.memo(function SortableMenuCard({
   menu,
-  openItems,
   onRemove,
   onUpdateTitle,
   onUpdateLinks,
 }: {
   menu: FooterMenu;
-  openItems: string[];
   onRemove: (id: string, e: React.MouseEvent) => void;
   onUpdateTitle: (id: string, title: string) => void;
   onUpdateLinks: (menuId: string, links: NavigationItem[]) => void;
@@ -58,10 +56,13 @@ function SortableMenuCard({
     isDragging,
   } = useSortable({ id: menu.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = useMemo(
+    () => ({
+      transform: CSS.Transform.toString(transform),
+      transition,
+    }),
+    [transform, transition],
+  );
 
   return (
     <div
@@ -115,7 +116,7 @@ function SortableMenuCard({
       </AccordionItem>
     </div>
   );
-}
+});
 
 export function NavigationMenusSection({
   menus,
@@ -124,11 +125,14 @@ export function NavigationMenusSection({
   const [openItems, setOpenItems] = useState<string[]>([]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  // Memoize menu IDs for SortableContext
+  const menuIds = useMemo(() => menus.map((m) => m.id), [menus]);
 
   // Load accordion state from localStorage
   useEffect(() => {
@@ -142,41 +146,57 @@ export function NavigationMenusSection({
     }
   }, []);
 
-  const handleAccordionChange = (value: string[]) => {
+  const handleAccordionChange = useCallback((value: string[]) => {
     setOpenItems(value);
     localStorage.setItem("footer-builder-accordions", JSON.stringify(value));
-  };
+  }, []);
 
-  const addMenu = () => {
+  const addMenu = useCallback(() => {
     const newId = nanoid();
     onChange([
       ...menus,
       { id: newId, title: `Menu ${menus.length + 1}`, links: [] },
     ]);
-    handleAccordionChange([...openItems, newId]);
-  };
+    setOpenItems((prev) => {
+      const next = [...prev, newId];
+      localStorage.setItem("footer-builder-accordions", JSON.stringify(next));
+      return next;
+    });
+  }, [menus, onChange]);
 
-  const removeMenu = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange(menus.filter((m) => m.id !== id));
-  };
+  const removeMenu = useCallback(
+    (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      onChange(menus.filter((m) => m.id !== id));
+    },
+    [menus, onChange],
+  );
 
-  const updateMenuTitle = (id: string, title: string) => {
-    onChange(menus.map((m) => (m.id === id ? { ...m, title } : m)));
-  };
+  const updateMenuTitle = useCallback(
+    (id: string, title: string) => {
+      onChange(menus.map((m) => (m.id === id ? { ...m, title } : m)));
+    },
+    [menus, onChange],
+  );
 
-  const updateMenuLinks = (menuId: string, links: NavigationItem[]) => {
-    onChange(menus.map((m) => (m.id === menuId ? { ...m, links } : m)));
-  };
+  const updateMenuLinks = useCallback(
+    (menuId: string, links: NavigationItem[]) => {
+      onChange(menus.map((m) => (m.id === menuId ? { ...m, links } : m)));
+    },
+    [menus, onChange],
+  );
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
 
-    const oldIndex = menus.findIndex((m) => m.id === active.id);
-    const newIndex = menus.findIndex((m) => m.id === over.id);
-    onChange(arrayMove(menus, oldIndex, newIndex));
-  };
+      const oldIndex = menus.findIndex((m) => m.id === active.id);
+      const newIndex = menus.findIndex((m) => m.id === over.id);
+      onChange(arrayMove(menus, oldIndex, newIndex));
+    },
+    [menus, onChange],
+  );
 
   return (
     <div className="space-y-4">
@@ -214,7 +234,7 @@ export function NavigationMenusSection({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={menus.map((m) => m.id)}
+              items={menuIds}
               strategy={verticalListSortingStrategy}
             >
               <div className="space-y-2">
@@ -222,7 +242,6 @@ export function NavigationMenusSection({
                   <SortableMenuCard
                     key={menu.id}
                     menu={menu}
-                    openItems={openItems}
                     onRemove={removeMenu}
                     onUpdateTitle={updateMenuTitle}
                     onUpdateLinks={updateMenuLinks}

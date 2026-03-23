@@ -11,6 +11,7 @@ import {
   useRestoreCollection,
   useBulkDeleteCollections,
   useBulkRestoreCollections,
+  useReorderCollections,
 } from "~/lib/api.mutations";
 import {
   DataTable,
@@ -49,8 +50,8 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => {
-    void queryClient.prefetchQuery(collectionsQueryOptions(mapParams(deps)));
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(collectionsQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [
@@ -74,6 +75,7 @@ function CollectionsPage() {
   const restoreMutation = useRestoreCollection();
   const bulkDeleteMutation = useBulkDeleteCollections();
   const bulkRestoreMutation = useBulkRestoreCollections();
+  const reorderMutation = useReorderCollections();
 
   // Track which IDs are currently being saved (for inline edit spinner)
   const savingIds = useMemo(() => {
@@ -244,6 +246,26 @@ function CollectionsPage() {
     );
   }, [selectedIds, bulkRestoreMutation, clearSelection]);
 
+  // Drag-and-drop reorder: only enabled when sorted by sortOrder asc and not trashed
+  const isDragEnabled =
+    !showTrashed && search.sort === "sortOrder" && search.order === "asc" && !search.search;
+
+  const handleReorder = useCallback(
+    (oldIndex: number, newIndex: number) => {
+      const rows = table.getRowModel().rows;
+      // Build the new sort order based on the reordered positions
+      const items = rows.map((r) => r.original);
+      const [movedItem] = items.splice(oldIndex, 1);
+      items.splice(newIndex, 0, movedItem);
+      const reorderData = items.map((item, idx) => ({
+        id: item.id,
+        sortOrder: idx,
+      }));
+      reorderMutation.mutate({ items: reorderData });
+    },
+    [table, reorderMutation],
+  );
+
   // Toolbar
   const toolbar = (
     <DataTableToolbar
@@ -318,7 +340,9 @@ function CollectionsPage() {
         <p className="text-muted-foreground">
           {showTrashed
             ? "View, restore, or permanently delete trashed collections."
-            : "Organize your products into curated collections"}
+            : isDragEnabled
+              ? "Drag collections to change their display order on your store."
+              : "Organize your products into curated collections."}
         </p>
       </div>
 
@@ -328,6 +352,8 @@ function CollectionsPage() {
         isLoading={isLoading}
         toolbar={toolbar}
         itemLabel="collections"
+        sortable={isDragEnabled}
+        onReorder={handleReorder}
         emptyState={{
           icon: Layers,
           title: search.search

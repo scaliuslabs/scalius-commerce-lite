@@ -1,5 +1,5 @@
 // src/components/admin/navigation/SortableNavItem.tsx
-import { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +34,6 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -66,7 +65,7 @@ interface SortableNavItemProps {
   onReorderSubmenu: (parentId: string, oldIndex: number, newIndex: number) => void;
 }
 
-export function SortableNavItem({
+export const SortableNavItem = React.memo(function SortableNavItem({
   item,
   index,
   depth,
@@ -101,26 +100,39 @@ export function SortableNavItem({
     isDragging,
   } = useSortable({ id: item.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = useMemo(
+    () => ({
+      transform: CSS.Transform.toString(transform),
+      transition,
+    }),
+    [transform, transition],
+  );
 
+  // Stable sensors for nested DndContext — created once per component instance
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
 
-  const handleSubmenuDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id || !item.subMenu) return;
+  // Memoize submenu IDs for SortableContext
+  const submenuIds = useMemo(
+    () => (item.subMenu ? item.subMenu.map((sub) => sub.id) : []),
+    [item.subMenu],
+  );
 
-    const oldIndex = item.subMenu.findIndex((i) => i.id === active.id);
-    const newIndex = item.subMenu.findIndex((i) => i.id === over.id);
-    onReorderSubmenu(item.id, oldIndex, newIndex);
-  };
+  const handleSubmenuDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id || !item.subMenu) return;
+
+      const oldIndex = item.subMenu.findIndex((i) => i.id === active.id);
+      const newIndex = item.subMenu.findIndex((i) => i.id === over.id);
+      onReorderSubmenu(item.id, oldIndex, newIndex);
+    },
+    [item.id, item.subMenu, onReorderSubmenu],
+  );
 
   return (
     <>
@@ -128,7 +140,7 @@ export function SortableNavItem({
         ref={setNodeRef}
         style={style}
         className={cn(
-          "group transition-all border-l-4",
+          "group border-l-4",
           getDepthColor(depth),
           isDragging
             ? "bg-primary/10 shadow-lg ring-2 ring-primary/30 opacity-50"
@@ -314,7 +326,7 @@ export function SortableNavItem({
                 onDragEnd={handleSubmenuDragEnd}
               >
                 <SortableContext
-                  items={item.subMenu!.map((sub) => sub.id)}
+                  items={submenuIds}
                   strategy={verticalListSortingStrategy}
                 >
                   <TableBody className="divide-y divide-border">
@@ -346,4 +358,4 @@ export function SortableNavItem({
       )}
     </>
   );
-}
+});

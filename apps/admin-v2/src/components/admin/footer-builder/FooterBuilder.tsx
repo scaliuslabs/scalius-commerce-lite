@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { nanoid } from "nanoid";
+import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { saveFooterConfig } from "~/lib/api.functions";
 
@@ -75,6 +76,7 @@ function migrateConfig(config: unknown): FooterConfig {
 }
 
 export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
+  const queryClient = useQueryClient();
 
   const [config, setConfig] = useState<FooterConfig>(() => {
     return migrateConfig(initialConfig || defaultFooterConfig);
@@ -100,6 +102,7 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
         await saveFooterConfig({ data: config });
       }
 
+      queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       toast.success("Saved", { description: "Footer configuration updated." });
     } catch (error: unknown) {
       console.error("Error saving footer:", error);

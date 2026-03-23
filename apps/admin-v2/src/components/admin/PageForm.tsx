@@ -32,6 +32,7 @@ import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "@/lib/api-helpers";
 import { createPage, updatePage } from "@/lib/api.functions";
 import { LoadingFallback } from "./shared/LoadingFallback";
@@ -44,6 +45,7 @@ interface PageFormProps {
 
 export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
 
@@ -85,9 +87,13 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Page ID is required for update");
         await updatePage({ data: { ...values, id: entityId } as Record<string, unknown> & { id: string } });
+        queryClient.invalidateQueries({ queryKey: ["pages", "detail", entityId] });
       } else {
         await createPage({ data: values as unknown as Record<string, unknown> });
       }
+
+      // Invalidate queries so list page shows fresh data
+      queryClient.invalidateQueries({ queryKey: ["pages", "list"] });
 
       toast.success(
         isEdit ? "Page updated successfully!" : "Page created successfully!",

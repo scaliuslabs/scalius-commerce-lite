@@ -29,6 +29,7 @@ import {
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "@/lib/api-helpers";
 import { createAnalyticsScript, updateAnalyticsScript } from "@/lib/api.functions";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
@@ -44,6 +45,7 @@ export function AnalyticsForm({
   isEdit = false,
 }: AnalyticsFormProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const form = useForm<AnalyticsFormValues>({
     resolver: zodResolver(analyticsFormSchema),
     defaultValues: {
@@ -66,9 +68,12 @@ export function AnalyticsForm({
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Analytics script ID is required for update");
         await updateAnalyticsScript({ data: { ...values, id: entityId } as Record<string, unknown> & { id: string } });
+        queryClient.invalidateQueries({ queryKey: ["analytics", "detail", entityId] });
       } else {
         await createAnalyticsScript({ data: values as unknown as Record<string, unknown> });
       }
+      // Invalidate queries so list page shows fresh data
+      queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
       void navigate({ to: "/admin/analytics" });
     } catch (error: unknown) {
       console.error("Error submitting form:", error);

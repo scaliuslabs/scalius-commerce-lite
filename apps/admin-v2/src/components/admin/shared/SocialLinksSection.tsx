@@ -1,4 +1,5 @@
 // src/components/admin/shared/SocialLinksSection.tsx
+import React, { useMemo, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -41,7 +42,7 @@ interface SocialLinksSectionProps {
   cardClassName?: string;
 }
 
-function SortableSocialLink({
+const SortableSocialLink = React.memo(function SortableSocialLink({
   link,
   onUpdate,
   onRemove,
@@ -63,10 +64,13 @@ function SortableSocialLink({
     isDragging,
   } = useSortable({ id: link.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = useMemo(
+    () => ({
+      transform: CSS.Transform.toString(transform),
+      transition,
+    }),
+    [transform, transition],
+  );
 
   return (
     <div
@@ -145,7 +149,7 @@ function SortableSocialLink({
       </Button>
     </div>
   );
-}
+});
 
 export function SocialLinksSection({
   social,
@@ -155,13 +159,16 @@ export function SocialLinksSection({
   cardClassName,
 }: SocialLinksSectionProps) {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
 
-  const addSocialLink = () => {
+  // Memoize social link IDs for SortableContext
+  const socialIds = useMemo(() => social.map((link) => link.id), [social]);
+
+  const addSocialLink = useCallback(() => {
     onChange([
       ...social,
       {
@@ -171,34 +178,59 @@ export function SocialLinksSection({
         iconUrl: undefined,
       },
     ]);
-  };
+  }, [social, onChange]);
 
-  const updateSocialLink = (id: string, updates: Partial<SocialLink>) => {
-    onChange(
-      social.map((link) => (link.id === id ? { ...link, ...updates } : link)),
-    );
-  };
+  const updateSocialLink = useCallback(
+    (id: string, updates: Partial<SocialLink>) => {
+      onChange(
+        social.map((link) =>
+          link.id === id ? { ...link, ...updates } : link,
+        ),
+      );
+    },
+    [social, onChange],
+  );
 
-  const removeSocialLink = (id: string) => {
-    onChange(social.filter((link) => link.id !== id));
-  };
+  const removeSocialLink = useCallback(
+    (id: string) => {
+      onChange(social.filter((link) => link.id !== id));
+    },
+    [social, onChange],
+  );
 
-  const handleIconSelect = (id: string, file: MediaFile) => {
-    updateSocialLink(id, { iconUrl: file.url });
-  };
+  const handleIconSelect = useCallback(
+    (id: string, file: MediaFile) => {
+      onChange(
+        social.map((link) =>
+          link.id === id ? { ...link, iconUrl: file.url } : link,
+        ),
+      );
+    },
+    [social, onChange],
+  );
 
-  const removeIcon = (id: string) => {
-    updateSocialLink(id, { iconUrl: undefined });
-  };
+  const removeIcon = useCallback(
+    (id: string) => {
+      onChange(
+        social.map((link) =>
+          link.id === id ? { ...link, iconUrl: undefined } : link,
+        ),
+      );
+    },
+    [social, onChange],
+  );
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
 
-    const oldIndex = social.findIndex((link) => link.id === active.id);
-    const newIndex = social.findIndex((link) => link.id === over.id);
-    onChange(arrayMove(social, oldIndex, newIndex));
-  };
+      const oldIndex = social.findIndex((link) => link.id === active.id);
+      const newIndex = social.findIndex((link) => link.id === over.id);
+      onChange(arrayMove(social, oldIndex, newIndex));
+    },
+    [social, onChange],
+  );
 
   return (
     <Card className={cardClassName}>
@@ -234,7 +266,7 @@ export function SocialLinksSection({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={social.map((link) => link.id)}
+              items={socialIds}
               strategy={verticalListSortingStrategy}
             >
               <div className="space-y-2">

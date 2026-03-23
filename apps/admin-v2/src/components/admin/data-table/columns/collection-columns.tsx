@@ -83,7 +83,6 @@ function getContentSource(config: string) {
 export function getCollectionColumns(
   opts: CollectionColumnOptions,
 ): ColumnDef<CollectionItem, unknown>[] {
-  // TODO: Add drag-drop reorder support
   return [
     {
       id: "select",

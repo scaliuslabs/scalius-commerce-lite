@@ -26,8 +26,8 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/admin/widgets/trash")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => {
-    void queryClient.prefetchQuery(
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(
       widgetsQueryOptions({
         search: deps.search || undefined,
         showTrashed: true,

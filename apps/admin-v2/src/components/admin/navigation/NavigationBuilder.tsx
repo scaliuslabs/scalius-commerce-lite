@@ -1,5 +1,5 @@
 // src/components/admin/navigation/NavigationBuilder.tsx
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -49,10 +49,16 @@ export function NavigationBuilder({
   );
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
+  );
+
+  // Memoize root-level item IDs for SortableContext
+  const rootItemIds = useMemo(
+    () => navigation.map((i) => i.id),
+    [navigation],
   );
 
   // Helper: Get item at path
@@ -334,7 +340,7 @@ export function NavigationBuilder({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={navigation.map((i) => i.id)}
+              items={rootItemIds}
               strategy={verticalListSortingStrategy}
             >
               <Table>

@@ -4,8 +4,8 @@ import { inventoryQueryOptions } from "~/lib/api.queries";
 
 export const Route = createFileRoute("/admin/inventory")({
   loader: async ({ context: { queryClient } }) => {
-    // Prefetch the default view: variants tab, sorted by available ascending
-    void queryClient.prefetchQuery(
+    // Ensure the default view data is ready: variants tab, sorted by available ascending
+    await queryClient.ensureQueryData(
       inventoryQueryOptions({ section: "variants", page: 1, limit: 50, sort: "available", order: "asc" }),
     );
   },
