@@ -18,9 +18,11 @@ interface DiscountType {
   icon: React.ReactNode;
 }
 
-interface DiscountTypeSelectorProps {}
+interface DiscountTypeSelectorProps {
+  onSelect?: (typeId: string) => void;
+}
 
-export function DiscountTypeSelector({}: DiscountTypeSelectorProps) {
+export function DiscountTypeSelector({ onSelect }: DiscountTypeSelectorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const discountTypes: DiscountType[] = [
@@ -48,13 +50,8 @@ export function DiscountTypeSelector({}: DiscountTypeSelectorProps) {
   ];
 
   const handleSelect = (typeId: string) => {
-    if (containerRef.current) {
-      const event = new CustomEvent("discountTypeSelected", {
-        bubbles: true,
-        composed: true,
-        detail: { type: typeId },
-      });
-      containerRef.current.dispatchEvent(event);
+    if (onSelect) {
+      onSelect(typeId);
     }
   };
 

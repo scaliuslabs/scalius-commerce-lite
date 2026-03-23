@@ -1,76 +1,216 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useMemo, useCallback } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { CategoryList } from "~/components/admin/categories";
-import { categoriesQueryOptions, productStatsQueryOptions } from "~/lib/api.queries";
-import type { Category } from "~/components/admin/categories/hooks/useCategoryList";
+import { Tag, Plus, Trash2 } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { useStorefrontUrl } from "~/hooks/use-storefront-url";
+import { categoriesQueryOptions } from "~/lib/api.queries";
+import {
+  useDeleteCategory,
+  usePermanentDeleteCategory,
+  useRestoreCategory,
+  useBulkDeleteCategories,
+} from "~/lib/api.mutations";
+import {
+  DataTable,
+  DataTableToolbar,
+  useServerTable,
+} from "~/components/admin/data-table";
+import {
+  getCategoryColumns,
+  type CategoryListItem,
+} from "~/components/admin/data-table/columns/category-columns";
 
 const searchSchema = z.object({
   page: z.number().default(1).catch(1),
   limit: z.number().default(20).catch(20),
   search: z.string().default("").catch(""),
-  sort: z.enum(["name", "createdAt", "updatedAt"]).default("updatedAt").catch("updatedAt"),
+  sort: z
+    .enum(["name", "createdAt", "updatedAt"])
+    .default("updatedAt")
+    .catch("updatedAt"),
   order: z.enum(["asc", "desc"]).default("desc").catch("desc"),
   trashed: z.boolean().default(false).catch(false),
 });
 
+function mapParams(deps: z.infer<typeof searchSchema>) {
+  return {
+    page: deps.page,
+    limit: deps.limit,
+    search: deps.search || undefined,
+    sort: deps.sort,
+    order: deps.order,
+    showTrashed: deps.trashed,
+  };
+}
+
 export const Route = createFileRoute("/admin/categories/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ context: { queryClient }, deps }) => {
-    const params = {
-      page: deps.page,
-      limit: deps.limit,
-      search: deps.search || undefined,
-      sort: deps.sort,
-      order: deps.order,
-      showTrashed: deps.trashed,
-    };
-    await Promise.all([
-      queryClient.ensureQueryData(categoriesQueryOptions(params)),
-      queryClient.ensureQueryData(productStatsQueryOptions()),
-    ]);
+  loader: ({ context: { queryClient }, deps }) => {
+    void queryClient.prefetchQuery(categoriesQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
-    meta: [{ title: `${match.search.trashed ? "Trash" : "Categories"} | Scalius Admin` }],
+    meta: [
+      {
+        title: `${match.search.trashed ? "Trash" : "Categories"} | Scalius Admin`,
+      },
+    ],
   }),
   component: CategoriesPage,
 });
 
 function CategoriesPage() {
   const search = Route.useSearch();
-  const params = {
-    page: search.page,
-    limit: search.limit,
-    search: search.search || undefined,
-    sort: search.sort,
-    order: search.order,
-    showTrashed: search.trashed,
-  };
+  const navigate = useNavigate();
+  const { getStorefrontPath } = useStorefrontUrl();
+  const showTrashed = search.trashed;
 
-  const { data: categoriesData } = useSuspenseQuery(categoriesQueryOptions(params));
-  const { data: stats } = useSuspenseQuery(productStatsQueryOptions());
+  // Mutations
+  const deleteMutation = useDeleteCategory();
+  const permanentDeleteMutation = usePermanentDeleteCategory();
+  const restoreMutation = useRestoreCategory();
+  const bulkDeleteMutation = useBulkDeleteCategories();
 
-  const result = categoriesData as { categories?: Category[]; pagination?: Record<string, unknown> };
-  const statsResult = stats as Record<string, unknown> | null;
+  // Column definitions
+  const columns = useMemo(
+    () =>
+      getCategoryColumns({
+        showTrashed,
+        getStorefrontPath,
+        onEdit: (id) =>
+          void navigate({ to: `/admin/categories/${id}/edit` as string }),
+        onDelete: (id) => deleteMutation.mutate(id),
+        onRestore: (id) => restoreMutation.mutate(id),
+        onPermanentDelete: (id) => permanentDeleteMutation.mutate(id),
+      }),
+    [showTrashed, getStorefrontPath, navigate, deleteMutation, restoreMutation, permanentDeleteMutation],
+  );
+
+  // Data selector
+  const dataSelector = useCallback(
+    (raw: unknown) => {
+      const r = raw as Record<string, unknown>;
+      return {
+        data: (r.categories ?? []) as CategoryListItem[],
+        pagination: (r.pagination ?? {
+          total: 0,
+          page: search.page,
+          limit: search.limit,
+          totalPages: 0,
+        }) as {
+          total: number;
+          page: number;
+          limit: number;
+          totalPages: number;
+        },
+      };
+    },
+    [search.page, search.limit],
+  );
+
+  const { table, isFetching, isLoading, selectedIds, clearSelection } =
+    useServerTable({
+      columns,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      queryOptions: categoriesQueryOptions(mapParams(search)) as any,
+      dataSelector,
+      currentPage: search.page,
+      currentLimit: search.limit,
+      currentSort: search.sort,
+      currentOrder: search.order,
+      onPaginationChange: (page, limit) =>
+        void navigate({
+          search: ((p: any) => ({ ...p, page, limit })) as any,
+        }),
+      onSortingChange: (sort, order) =>
+        void navigate({
+          search: ((p: any) => ({ ...p, sort, order, page: 1 })) as any,
+        }),
+    });
 
   return (
-    <CategoryList
-      categories={result.categories ?? []}
-      pagination={{
-        total: ((result.pagination as Record<string, number>)?.total) ?? 0,
-        page: search.page,
-        limit: search.limit,
-        totalPages: ((result.pagination as Record<string, number>)?.totalPages) ?? 0,
-      }}
-      initialSearchQuery={search.search}
-      initialSort={{ field: search.sort, order: search.order }}
-      showTrashed={search.trashed}
-      stats={statsResult ? {
-        totalCategories: (statsResult.totalCategories as number) ?? 0,
-        categoriesWithImages: (statsResult.categoriesWithImages as number) ?? 0,
-        totalProducts: statsResult.totalProducts as number,
-      } : undefined}
-    />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {showTrashed ? "Category Trash" : "Categories"}
+          </h1>
+          <p className="text-muted-foreground">
+            {showTrashed
+              ? "View, restore, or permanently delete trashed categories."
+              : "Organize your products into categories."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/admin/categories"
+            search={(prev: any) => ({ ...prev, trashed: !showTrashed })}
+          >
+            <Button variant="outline" size="sm">
+              {showTrashed ? (
+                <Tag className="mr-2 h-4 w-4" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              {showTrashed ? "View Active" : "View Trash"}
+            </Button>
+          </Link>
+          {!showTrashed && (
+            <Link to="/admin/categories/new">
+              <Button size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                New Category
+              </Button>
+            </Link>
+          )}
+        </div>
+      </div>
+
+      <DataTable
+        table={table}
+        isFetching={isFetching}
+        isLoading={isLoading}
+        itemLabel="categories"
+        emptyState={{
+          icon: Tag,
+          title: showTrashed ? "Trash is empty" : "No categories found",
+          description: showTrashed
+            ? "Categories moved to trash will appear here."
+            : "Create your first category to organize products.",
+        }}
+        toolbar={
+          <DataTableToolbar
+            searchValue={search.search}
+            onSearchChange={(value) =>
+              void navigate({
+                search: ((p: any) => ({ ...p, search: value, page: 1 })) as any,
+              })
+            }
+            searchPlaceholder="Search categories..."
+            selectedCount={selectedIds.length}
+            bulkActions={
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive border-destructive hover:bg-destructive/10"
+                onClick={() => {
+                  bulkDeleteMutation.mutate(
+                    {
+                      categoryIds: selectedIds,
+                      permanent: showTrashed,
+                    },
+                    { onSuccess: clearSelection },
+                  );
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {showTrashed ? "Delete" : "Trash"} ({selectedIds.length})
+              </Button>
+            }
+          />
+        }
+      />
+    </div>
   );
 }

@@ -1,37 +1,117 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useMemo, useCallback } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { WidgetsList } from "~/components/admin/widget-list";
+import { LayoutDashboard, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { LayoutDashboard } from "lucide-react";
 import { widgetsQueryOptions } from "~/lib/api.queries";
-import type { WidgetListResponse } from "~/types/api-responses";
-import type { WidgetItem } from "~/components/admin/widget-list/types";
+import {
+  useDeleteWidget,
+  useRestoreWidget,
+  useBulkDeleteWidgets,
+} from "~/lib/api.mutations";
+import {
+  DataTable,
+  DataTableToolbar,
+  useServerTable,
+} from "~/components/admin/data-table";
+import { getWidgetColumns } from "~/components/admin/data-table/columns/widget-columns";
+import type { Widget, WidgetListResponse } from "~/types/api-responses";
 
 const searchSchema = z.object({
+  page: z.number().default(1).catch(1),
+  limit: z.number().default(20).catch(20),
   search: z.string().default("").catch(""),
 });
 
 export const Route = createFileRoute("/admin/widgets/trash")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(widgetsQueryOptions({
-      search: deps.search || undefined,
-      showTrashed: true,
-    }));
+  loader: ({ context: { queryClient }, deps }) => {
+    void queryClient.prefetchQuery(
+      widgetsQueryOptions({
+        search: deps.search || undefined,
+        showTrashed: true,
+      }),
+    );
   },
   head: () => ({ meta: [{ title: "Widget Trash | Scalius Admin" }] }),
   component: WidgetsTrashPage,
 });
 
 function WidgetsTrashPage() {
-  const { search } = Route.useSearch();
-  const { data } = useSuspenseQuery(widgetsQueryOptions({
-    search: search || undefined,
-    showTrashed: true,
-  }));
-  const r = data as WidgetListResponse;
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+
+  // Mutations
+  const deleteMutation = useDeleteWidget();
+  const restoreMutation = useRestoreWidget();
+  const bulkDeleteMutation = useBulkDeleteWidgets();
+
+  // Collections come from the widgets response
+  const collectionsRef = useMemo(() => ({ current: [] as Array<{ id: string; name: string }> }), []);
+
+  // Column definitions
+  const columns = useMemo(
+    () =>
+      getWidgetColumns({
+        showTrashed: true,
+        collections: collectionsRef.current,
+        onEdit: (id) =>
+          void navigate({ to: `/admin/widgets/${id}` as string }),
+        onDelete: (id) => deleteMutation.mutate(id),
+        onRestore: (id) => restoreMutation.mutate(id),
+        onPermanentDelete: (id) => deleteMutation.mutate(id),
+        onCopyShortcode: () => {},
+      }),
+    [navigate, deleteMutation, restoreMutation, collectionsRef],
+  );
+
+  // Data selector — client-side pagination for widgets
+  const dataSelector = useCallback(
+    (raw: unknown) => {
+      const r = raw as WidgetListResponse;
+      const allWidgets = (r.widgets ?? []) as Widget[];
+      collectionsRef.current = r.availableCollections ?? [];
+
+      const filtered = search.search
+        ? allWidgets.filter((w) =>
+            w.name.toLowerCase().includes(search.search.toLowerCase()),
+          )
+        : allWidgets;
+
+      const total = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(total / search.limit));
+      const safePage = Math.min(search.page, totalPages);
+      const sliced = filtered.slice(
+        (safePage - 1) * search.limit,
+        safePage * search.limit,
+      );
+
+      return {
+        data: sliced,
+        pagination: { total, page: safePage, limit: search.limit, totalPages },
+      };
+    },
+    [search.search, search.page, search.limit, collectionsRef],
+  );
+
+  const { table, isFetching, isLoading, selectedIds, clearSelection } =
+    useServerTable({
+      columns,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      queryOptions: widgetsQueryOptions({
+        search: search.search || undefined,
+        showTrashed: true,
+      }) as any,
+      dataSelector,
+      currentPage: search.page,
+      currentLimit: search.limit,
+      onPaginationChange: (page, limit) =>
+        void navigate({
+          search: ((p: any) => ({ ...p, page, limit })) as any,
+        }),
+      onSortingChange: () => {},
+    });
 
   return (
     <div className="space-y-6">
@@ -49,12 +129,48 @@ function WidgetsTrashPage() {
           </Button>
         </Link>
       </div>
-      <WidgetsList
-        showTrashed={true}
-        initialWidgets={(r.widgets || []) as unknown as WidgetItem[]}
-        initialCollections={r.availableCollections || []}
-        initialStats={{ total: 0, active: 0, inactive: 0 }}
-        initialSearch={search}
+
+      <DataTable
+        table={table}
+        isFetching={isFetching}
+        isLoading={isLoading}
+        itemLabel="widgets"
+        emptyState={{
+          icon: LayoutDashboard,
+          title: "Trash is empty",
+          description: "Deleted widgets will appear here.",
+        }}
+        toolbar={
+          <DataTableToolbar
+            searchValue={search.search}
+            onSearchChange={(value) =>
+              void navigate({
+                search: ((p: any) => ({ ...p, search: value, page: 1 })) as any,
+              })
+            }
+            searchPlaceholder="Search trashed widgets..."
+            selectedCount={selectedIds.length}
+            bulkActions={
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive border-destructive hover:bg-destructive/10"
+                onClick={() => {
+                  bulkDeleteMutation.mutate(
+                    {
+                      ids: selectedIds,
+                      permanent: true,
+                    },
+                    { onSuccess: clearSelection },
+                  );
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete ({selectedIds.length})
+              </Button>
+            }
+          />
+        }
       />
     </div>
   );

@@ -1,54 +1,385 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useMemo, useCallback } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { DiscountList } from "~/components/admin/discount/discount-list";
+import { Button } from "~/components/ui/button";
+import { Plus, Trash2, Tag, Undo } from "lucide-react";
 import { discountsQueryOptions } from "~/lib/api.queries";
+import { useCurrency } from "~/hooks/use-currency";
+import {
+  useDeleteDiscount,
+  usePermanentDeleteDiscount,
+  useRestoreDiscount,
+  useToggleDiscountStatus,
+  useBulkDeleteDiscounts,
+  useBulkRestoreDiscounts,
+} from "~/lib/api.mutations";
+import {
+  DataTable,
+  useServerTable,
+  type ServerTablePagination,
+} from "~/components/admin/data-table";
+import { DiscountTableToolbar } from "~/components/admin/data-table/DiscountTableToolbar";
+import {
+  getDiscountColumns,
+  type DiscountItem,
+} from "~/components/admin/data-table/columns/discount-columns";
 
 const searchSchema = z.object({
   page: z.number().default(1).catch(1),
   limit: z.number().default(10).catch(10),
   search: z.string().default("").catch(""),
-  sort: z.enum(["code", "type", "value", "startDate", "endDate", "createdAt", "updatedAt"]).default("updatedAt").catch("updatedAt"),
+  sort: z
+    .enum([
+      "code",
+      "type",
+      "value",
+      "startDate",
+      "endDate",
+      "createdAt",
+      "updatedAt",
+    ])
+    .default("updatedAt")
+    .catch("updatedAt"),
   order: z.enum(["asc", "desc"]).default("desc").catch("desc"),
   trashed: z.boolean().default(false).catch(false),
+  type: z.string().optional().catch(undefined),
 });
+
+function mapParams(deps: z.infer<typeof searchSchema>) {
+  return {
+    page: deps.page,
+    limit: deps.limit,
+    search: deps.search || undefined,
+    sort: deps.sort,
+    order: deps.order,
+    showTrashed: deps.trashed,
+  };
+}
 
 export const Route = createFileRoute("/admin/discounts/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(discountsQueryOptions({
-      page: deps.page,
-      limit: deps.limit,
-      search: deps.search || undefined,
-      sort: deps.sort,
-      order: deps.order,
-      showTrashed: deps.trashed,
-    }));
+  loader: ({ context: { queryClient }, deps }) => {
+    void queryClient.prefetchQuery(discountsQueryOptions(mapParams(deps)));
   },
-  head: () => ({ meta: [{ title: "Discounts | Scalius Admin" }] }),
+  head: ({ match }) => ({
+    meta: [
+      {
+        title: `${match.search.trashed ? "Deleted Discounts" : "Discounts"} | Scalius Admin`,
+      },
+    ],
+  }),
   component: DiscountsPage,
 });
 
 function DiscountsPage() {
   const search = Route.useSearch();
-  const { data } = useSuspenseQuery(discountsQueryOptions({
-    page: search.page,
-    limit: search.limit,
-    search: search.search || undefined,
-    sort: search.sort,
-    order: search.order,
-    showTrashed: search.trashed,
-  }));
-  const r = data as Record<string, unknown>;
+  const navigate = useNavigate();
+  const { symbol } = useCurrency();
+  const showTrashed = search.trashed;
+
+  // Mutations
+  const deleteMutation = useDeleteDiscount();
+  const permanentDeleteMutation = usePermanentDeleteDiscount();
+  const restoreMutation = useRestoreDiscount();
+  const toggleStatusMutation = useToggleDiscountStatus();
+  const bulkDeleteMutation = useBulkDeleteDiscounts();
+  const bulkRestoreMutation = useBulkRestoreDiscounts();
+
+  // Column action callbacks
+  const handleEdit = useCallback(
+    (id: string) => {
+      void navigate({ to: `/admin/discounts/${id}/edit` as string });
+    },
+    [navigate],
+  );
+
+  const handleDuplicate = useCallback(
+    (id: string) => {
+      void navigate({
+        to: `/admin/discounts/${id}/edit` as string,
+        search: { duplicate: true } as Record<string, unknown>,
+      });
+    },
+    [navigate],
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      deleteMutation.mutate(id);
+    },
+    [deleteMutation],
+  );
+
+  const handleRestore = useCallback(
+    (id: string) => {
+      restoreMutation.mutate(id);
+    },
+    [restoreMutation],
+  );
+
+  const handlePermanentDelete = useCallback(
+    (id: string) => {
+      permanentDeleteMutation.mutate(id);
+    },
+    [permanentDeleteMutation],
+  );
+
+  const handleToggleStatus = useCallback(
+    (id: string, currentStatus: boolean) => {
+      toggleStatusMutation.mutate({ id, isActive: !currentStatus });
+    },
+    [toggleStatusMutation],
+  );
+
+  // Columns
+  const columns = useMemo(
+    () =>
+      getDiscountColumns({
+        showTrashed,
+        symbol,
+        onEdit: handleEdit,
+        onDuplicate: handleDuplicate,
+        onDelete: handleDelete,
+        onRestore: handleRestore,
+        onPermanentDelete: handlePermanentDelete,
+        onToggleStatus: handleToggleStatus,
+      }),
+    [
+      showTrashed,
+      symbol,
+      handleEdit,
+      handleDuplicate,
+      handleDelete,
+      handleRestore,
+      handlePermanentDelete,
+      handleToggleStatus,
+    ],
+  );
+
+  // Data selector
+  const dataSelector = useCallback(
+    (raw: unknown) => {
+      const d = raw as {
+        discounts?: DiscountItem[];
+        pagination?: ServerTablePagination;
+      };
+      return {
+        data: (d.discounts || []) as DiscountItem[],
+        pagination: d.pagination || {
+          total: 0,
+          page: search.page,
+          limit: search.limit,
+          totalPages: 0,
+        },
+      };
+    },
+    [search.page, search.limit],
+  );
+
+  // URL param updaters
+  const onPaginationChange = useCallback(
+    (page: number, limit: number) => {
+      void navigate({
+        search: ((prev: Record<string, unknown>) => ({
+          ...prev,
+          page,
+          limit,
+        })) as any,
+      });
+    },
+    [navigate],
+  );
+
+  const onSortingChange = useCallback(
+    (sort: string, order: "asc" | "desc") => {
+      void navigate({
+        search: ((prev: Record<string, unknown>) => ({
+          ...prev,
+          sort,
+          order,
+          page: 1,
+        })) as any,
+      });
+    },
+    [navigate],
+  );
+
+  const onSearchChange = useCallback(
+    (value: string) => {
+      void navigate({
+        search: ((prev: Record<string, unknown>) => ({
+          ...prev,
+          search: value || undefined,
+          page: 1,
+        })) as any,
+      });
+    },
+    [navigate],
+  );
+
+  const onTypeFilterChange = useCallback(
+    (type: string | null) => {
+      void navigate({
+        search: ((prev: Record<string, unknown>) => {
+          const next: Record<string, unknown> = { ...prev, page: 1 };
+          if (type) {
+            next.type = type;
+          } else {
+            delete next.type;
+          }
+          return next;
+        }) as any,
+      });
+    },
+    [navigate],
+  );
+
+  // Server table
+  const { table, isFetching, isLoading, selectedIds, clearSelection } =
+    useServerTable<DiscountItem>({
+      columns,
+      queryOptions: discountsQueryOptions(mapParams(search)) as any,
+      dataSelector,
+      currentPage: search.page,
+      currentLimit: search.limit,
+      currentSort: search.sort,
+      currentOrder: search.order,
+      onPaginationChange,
+      onSortingChange,
+    });
+
+  // Bulk action handlers
+  const handleBulkDelete = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    bulkDeleteMutation.mutate(
+      { discountIds: selectedIds, permanent: showTrashed },
+      { onSuccess: clearSelection },
+    );
+  }, [selectedIds, showTrashed, bulkDeleteMutation, clearSelection]);
+
+  const handleBulkRestore = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    bulkRestoreMutation.mutate(
+      { discountIds: selectedIds },
+      { onSuccess: clearSelection },
+    );
+  }, [selectedIds, bulkRestoreMutation, clearSelection]);
+
+  // Toolbar
+  const toolbar = (
+    <DiscountTableToolbar
+      searchValue={search.search}
+      onSearchChange={onSearchChange}
+      selectedCount={selectedIds.length}
+      activeType={search.type || null}
+      onTypeFilterChange={onTypeFilterChange}
+      bulkActions={
+        <>
+          {showTrashed && (
+            <Button variant="outline" size="sm" onClick={handleBulkRestore}>
+              <Undo className="h-4 w-4 mr-1.5" />
+              Restore ({selectedIds.length})
+            </Button>
+          )}
+          <Button
+            variant={showTrashed ? "destructive" : "outline"}
+            size="sm"
+            onClick={handleBulkDelete}
+            className={
+              !showTrashed
+                ? "text-destructive border-destructive hover:bg-destructive/10"
+                : undefined
+            }
+          >
+            <Trash2 className="h-4 w-4 mr-1.5" />
+            {showTrashed
+              ? `Delete (${selectedIds.length})`
+              : `Trash (${selectedIds.length})`}
+          </Button>
+        </>
+      }
+      actions={
+        <div className="flex items-center gap-2">
+          <Link
+            to="/admin/discounts"
+            search={showTrashed ? {} : { trashed: true }}
+          >
+            <Button variant="outline" size="sm">
+              {showTrashed ? (
+                <>
+                  <Tag className="mr-2 h-4 w-4" />
+                  View Active
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  View Trash
+                </>
+              )}
+            </Button>
+          </Link>
+          {!showTrashed && (
+            <Button
+              onClick={() =>
+                void navigate({ to: "/admin/discounts/new" })
+              }
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Discount
+            </Button>
+          )}
+        </div>
+      }
+    />
+  );
 
   return (
-    <DiscountList
-      discounts={(r.discounts || []) as Parameters<typeof DiscountList>[0]["discounts"]}
-      pagination={(r.pagination || { total: 0, page: search.page, limit: search.limit, totalPages: 0 }) as Parameters<typeof DiscountList>[0]["pagination"]}
-      initialSearchQuery={search.search}
-      initialSort={{ field: search.sort, order: search.order }}
-      showTrashed={search.trashed}
-    />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {showTrashed ? "Deleted Discounts" : "Discounts"}
+        </h1>
+        <p className="text-muted-foreground">
+          {showTrashed
+            ? "View and manage deleted discounts"
+            : "Manage your discounts and promotional codes"}
+        </p>
+      </div>
+
+      <DataTable
+        table={table}
+        isFetching={isFetching}
+        isLoading={isLoading}
+        toolbar={toolbar}
+        itemLabel="discounts"
+        emptyState={{
+          icon: Tag,
+          title:
+            search.search || search.type
+              ? "No discounts match your criteria."
+              : showTrashed
+                ? "Trash is empty."
+                : "No discounts created yet.",
+          description:
+            search.search || search.type
+              ? "Try adjusting your search or filters."
+              : showTrashed
+                ? "Deleted discounts will appear here."
+                : "Create your first discount to get started.",
+          action:
+            !showTrashed && !search.search ? (
+              <Button
+                onClick={() =>
+                  void navigate({ to: "/admin/discounts/new" })
+                }
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create First Discount
+              </Button>
+            ) : undefined,
+        }}
+      />
+    </div>
   );
 }
