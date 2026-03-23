@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { env } from "cloudflare:workers";
 
 interface CloudflareWorkerEnv {
   API?: { fetch: (url: string) => Promise<Response> };
@@ -13,6 +12,7 @@ export const Route = createFileRoute("/firebase-messaging-sw.js")({
         // 1. Fetch Firebase config from API using service binding or HTTP
         let publicConfig: Record<string, string> = {};
         try {
+          const { env } = await import("cloudflare:workers");
           const cfEnv = env as CloudflareWorkerEnv;
           let response: Response;
           if (cfEnv?.API) {

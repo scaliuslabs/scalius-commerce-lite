@@ -123,9 +123,7 @@ export function CategoryForm({
         },
       );
 
-      setTimeout(() => {
-        void navigate({ to: "/admin/categories" });
-      }, 500);
+      void navigate({ to: "/admin/categories" });
     } catch (error: unknown) {
       console.error("Error submitting form:", error);
       const errorMessage = getServerFnError(error, "Failed to save category");

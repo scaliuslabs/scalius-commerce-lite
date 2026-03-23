@@ -1,5 +1,4 @@
 //src/components/admin/WelcomeBanner.tsx
-"use client"; // Ensure this runs client-side
 
 import React from "react";
 import { ErrorBoundary } from "./ErrorBoundary";

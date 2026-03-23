@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
+import { useCallback } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
-import { toast } from "sonner";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { getServerFnError } from "@/lib/api-helpers";
 import { getSeoSettings, updateSeoSettings } from "@/lib/api.functions";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 
 interface SeoConfig {
   siteTitle: string;
@@ -24,51 +24,42 @@ const defaultConfig: SeoConfig = {
   robotsTxt: `User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`,
 };
 
-export function SeoSettingsBuilder() {
-  const [config, setConfig] = useState<SeoConfig>(defaultConfig);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(true);
-
-  useEffect(() => {
-    const fetchSeoConfig = async () => {
-      setIsFetching(true);
-      try {
-        const data = await getSeoSettings() as Record<string, unknown>;
-        setConfig({
-          siteTitle: (data.siteTitle as string) || defaultConfig.siteTitle,
-          homepageTitle: (data.homepageTitle as string) || defaultConfig.homepageTitle,
-          homepageMetaDescription:
-            (data.homepageMetaDescription as string) ||
-            defaultConfig.homepageMetaDescription,
-          robotsTxt: (data.robotsTxt as string) || defaultConfig.robotsTxt,
-        });
-      } catch (error: unknown) {
-        console.error("Error fetching SEO config:", error);
-        toast.error("Fetch Error", { description: getServerFnError(error, "Could not load SEO settings.") });
-        setConfig(defaultConfig);
-      } finally {
-        setIsFetching(false);
-      }
-    };
-    fetchSeoConfig();
-  }, []);
-
-  const handleSave = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-
-    try {
-      await updateSeoSettings({ data: config as unknown as Record<string, unknown> });
-      toast.success("Success!", { description: "SEO settings saved successfully." });
-    } catch (error: unknown) {
-      console.error("Error saving SEO settings:", error);
-      toast.error("Save Failed", { description: getServerFnError(error, "An unexpected error occurred.") });
-    } finally {
-      setIsLoading(false);
-    }
+const fetchSeo = async (): Promise<SeoConfig> => {
+  const data = (await getSeoSettings()) as Record<string, unknown>;
+  return {
+    siteTitle: (data.siteTitle as string) || defaultConfig.siteTitle,
+    homepageTitle: (data.homepageTitle as string) || defaultConfig.homepageTitle,
+    homepageMetaDescription:
+      (data.homepageMetaDescription as string) ||
+      defaultConfig.homepageMetaDescription,
+    robotsTxt: (data.robotsTxt as string) || defaultConfig.robotsTxt,
   };
+};
 
-  if (isFetching) {
+const saveSeo = async (values: SeoConfig) => {
+  await updateSeoSettings({
+    data: values as unknown as Record<string, unknown>,
+  });
+};
+
+export function SeoSettingsBuilder() {
+  const { values, setValues, isLoading, isSaving, handleSubmit } =
+    useSettingsForm<SeoConfig>({
+      fetchFn: fetchSeo,
+      saveFn: saveSeo,
+      defaultValues: defaultConfig,
+      successMessage: "SEO settings saved successfully.",
+      errorMessage: "Failed to save SEO settings.",
+    });
+
+  const updateField = useCallback(
+    <K extends keyof SeoConfig>(key: K, value: SeoConfig[K]) => {
+      setValues((prev) => ({ ...prev, [key]: value }));
+    },
+    [setValues],
+  );
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -83,15 +74,13 @@ export function SeoSettingsBuilder() {
           <Label htmlFor="site-title">Global Site Title</Label>
           <Input
             id="site-title"
-            value={config.siteTitle}
-            onChange={(e) =>
-              setConfig({ ...config, siteTitle: e.target.value })
-            }
+            value={values.siteTitle}
+            onChange={(e) => updateField("siteTitle", e.target.value)}
             placeholder="Your Awesome Store - Gadgets, Gizmos, and More"
           />
-          {config.siteTitle && (
+          {values.siteTitle && (
             <CharacterCounter
-              current={config.siteTitle.length}
+              current={values.siteTitle.length}
               recommended={60}
               max={70}
             />
@@ -105,15 +94,13 @@ export function SeoSettingsBuilder() {
           <Label htmlFor="homepage-title">Homepage Title</Label>
           <Input
             id="homepage-title"
-            value={config.homepageTitle}
-            onChange={(e) =>
-              setConfig({ ...config, homepageTitle: e.target.value })
-            }
+            value={values.homepageTitle}
+            onChange={(e) => updateField("homepageTitle", e.target.value)}
             placeholder="Welcome to Your Awesome Store | Shop Online"
           />
-          {config.homepageTitle && (
+          {values.homepageTitle && (
             <CharacterCounter
-              current={config.homepageTitle.length}
+              current={values.homepageTitle.length}
               recommended={60}
               max={70}
             />
@@ -130,16 +117,16 @@ export function SeoSettingsBuilder() {
         </Label>
         <Textarea
           id="homepage-meta-description"
-          value={config.homepageMetaDescription}
+          value={values.homepageMetaDescription}
           onChange={(e) =>
-            setConfig({ ...config, homepageMetaDescription: e.target.value })
+            updateField("homepageMetaDescription", e.target.value)
           }
           placeholder="Describe your homepage in a way that attracts users from search results."
           rows={3}
         />
-        {config.homepageMetaDescription && (
+        {values.homepageMetaDescription && (
           <CharacterCounter
-            current={config.homepageMetaDescription.length}
+            current={values.homepageMetaDescription.length}
             recommended={160}
             max={200}
           />
@@ -159,10 +146,8 @@ export function SeoSettingsBuilder() {
         <Label htmlFor="robots-txt">robots.txt Content</Label>
         <Textarea
           id="robots-txt"
-          value={config.robotsTxt}
-          onChange={(e) =>
-            setConfig({ ...config, robotsTxt: e.target.value })
-          }
+          value={values.robotsTxt}
+          onChange={(e) => updateField("robotsTxt", e.target.value)}
           placeholder={`User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`}
           rows={6}
           className="font-mono text-sm"
@@ -175,11 +160,11 @@ export function SeoSettingsBuilder() {
 
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
-          onClick={handleSave}
-          disabled={isLoading}
+          onClick={handleSubmit}
+          disabled={isSaving}
           className="min-w-[120px]"
         >
-          {isLoading ? (
+          {isSaving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Saving...

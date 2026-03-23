@@ -1,4 +1,3 @@
-"use client";
 import React from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { zodResolver } from "@hookform/resolvers/zod";

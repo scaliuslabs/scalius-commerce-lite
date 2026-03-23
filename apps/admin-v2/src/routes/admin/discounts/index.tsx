@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash2, Tag, Undo } from "lucide-react";
+import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { discountsQueryOptions } from "~/lib/api.queries";
 import { useCurrency } from "~/hooks/use-currency";
 import {
@@ -16,7 +17,6 @@ import {
 import {
   DataTable,
   useServerTable,
-  type ServerTablePagination,
 } from "~/components/admin/data-table";
 import { DiscountTableToolbar } from "~/components/admin/data-table/DiscountTableToolbar";
 import {
@@ -24,24 +24,10 @@ import {
   type DiscountItem,
 } from "~/components/admin/data-table/columns/discount-columns";
 
-const searchSchema = z.object({
-  page: z.number().default(1).catch(1),
-  limit: z.number().default(10).catch(10),
-  search: z.string().default("").catch(""),
-  sort: z
-    .enum([
-      "code",
-      "type",
-      "value",
-      "startDate",
-      "endDate",
-      "createdAt",
-      "updatedAt",
-    ])
-    .default("updatedAt")
-    .catch("updatedAt"),
-  order: z.enum(["asc", "desc"]).default("desc").catch("desc"),
-  trashed: z.boolean().default(false).catch(false),
+const searchSchema = createListSearchSchema(
+  ["code", "type", "value", "startDate", "endDate", "createdAt", "updatedAt"] as const,
+  { limit: 10, sort: "updatedAt" },
+).extend({
   type: z.string().optional().catch(undefined),
 });
 
@@ -53,6 +39,7 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
     sort: deps.sort,
     order: deps.order,
     showTrashed: deps.trashed,
+    type: deps.type,
   };
 }
 
@@ -89,7 +76,7 @@ function DiscountsPage() {
   // Column action callbacks
   const handleEdit = useCallback(
     (id: string) => {
-      void navigate({ to: `/admin/discounts/${id}/edit` as string });
+      void navigate({ to: "/admin/discounts/$discountId/edit", params: { discountId: id } });
     },
     [navigate],
   );
@@ -97,7 +84,8 @@ function DiscountsPage() {
   const handleDuplicate = useCallback(
     (id: string) => {
       void navigate({
-        to: `/admin/discounts/${id}/edit` as string,
+        to: "/admin/discounts/$discountId/edit",
+        params: { discountId: id },
         search: { duplicate: true } as Record<string, unknown>,
       });
     },
@@ -158,24 +146,7 @@ function DiscountsPage() {
   );
 
   // Data selector
-  const dataSelector = useCallback(
-    (raw: unknown) => {
-      const d = raw as {
-        discounts?: DiscountItem[];
-        pagination?: ServerTablePagination;
-      };
-      return {
-        data: (d.discounts || []) as DiscountItem[],
-        pagination: d.pagination || {
-          total: 0,
-          page: search.page,
-          limit: search.limit,
-          totalPages: 0,
-        },
-      };
-    },
-    [search.page, search.limit],
-  );
+  const dataSelector = useMemo(() => createDataSelector<DiscountItem>("discounts"), []);
 
   // URL param updaters
   const onPaginationChange = useCallback(
@@ -239,7 +210,7 @@ function DiscountsPage() {
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable<DiscountItem>({
       columns,
-      queryOptions: discountsQueryOptions(mapParams(search)) as never,
+      queryOptions: discountsQueryOptions(mapParams(search)),
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,

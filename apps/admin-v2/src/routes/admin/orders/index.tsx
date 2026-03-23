@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { toast } from "sonner";
+import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
 import type { Row } from "@tanstack/react-table";
 import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { DateRange } from "react-day-picker";
@@ -27,17 +27,11 @@ import { OrderMobileCard } from "~/components/admin/order-list/OrderMobileCard";
 
 // ── Search schema ─────────────────────────────────────────────────
 
-const searchSchema = z.object({
-  page: z.number().default(1).catch(1),
-  limit: z.number().default(10).catch(10),
-  search: z.string().default("").catch(""),
+const searchSchema = createListSearchSchema(
+  ["customerName", "totalAmount", "status", "createdAt", "updatedAt"] as const,
+  { limit: 10, sort: "updatedAt" },
+).extend({
   status: z.string().optional().catch(undefined),
-  sort: z
-    .enum(["customerName", "totalAmount", "status", "createdAt", "updatedAt"])
-    .default("updatedAt")
-    .catch("updatedAt"),
-  order: z.enum(["asc", "desc"]).default("desc").catch("desc"),
-  trashed: z.boolean().default(false).catch(false),
   paymentStatus: z.string().optional().catch(undefined),
   paymentMethod: z.string().optional().catch(undefined),
   fulfillmentStatus: z.string().optional().catch(undefined),
@@ -86,20 +80,7 @@ export const Route = createFileRoute("/admin/orders/")({
     ],
   }),
   component: OrdersPage,
-  errorComponent: ({ error, reset }) => (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <p className="text-4xl font-bold text-muted-foreground mb-2">Error</p>
-      <p className="text-sm text-muted-foreground mb-4">
-        {error instanceof Error ? error.message : "Something went wrong loading this page."}
-      </p>
-      <button
-        onClick={reset}
-        className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-      >
-        Try Again
-      </button>
-    </div>
-  ),
+  errorComponent: RouteErrorComponent,
 });
 
 // ── Page component ────────────────────────────────────────────────
@@ -293,54 +274,8 @@ function OrdersPage() {
     setIsBulkDeleteOpen(true);
   }, []);
 
-  const handleBulkDeleteConfirm = useCallback(() => {
-    bulkDeleteMut.mutate(
-      { orderIds: selectedIds, permanent: showTrashed },
-      {
-        onSuccess: () => {
-          clearSelection();
-          setIsBulkDeleteOpen(false);
-        },
-        onSettled: () => {
-          setIsBulkDeleteOpen(false);
-        },
-      },
-    );
-  }, [showTrashed, bulkDeleteMut]);
-
-  // ── Shipment handlers ─────────────────────────────────────────
-
-  const handleBulkShipmentSubmit = useCallback(
-    async (providerId: string) => {
-      setIsShipping(true);
-      let successCount = 0;
-      for (const orderId of selectedIds) {
-        try {
-          const result = await createOrderShipment({
-            data: { orderId, shipment: { providerId, options: {} } },
-          });
-          successCount++;
-          setShipmentStatuses((prev) => ({
-            ...prev,
-            [orderId]: result as unknown as ShipmentStatus,
-          }));
-        } catch (error) {
-          console.error(`Error for order ${orderId}:`, error);
-        }
-      }
-      if (successCount > 0) {
-        toast.success(
-          `${successCount} of ${selectedIds.length} shipments created successfully.`,
-        );
-      } else {
-        toast.error("Shipment failed");
-      }
-      setIsShipping(false);
-      setIsShippingDialogOpen(false);
-      if (successCount === selectedIds.length) clearSelection();
-    },
-    [/* selectedIds and clearSelection will be bound below */],
-  );
+  // NOTE: handleBulkDeleteConfirm and handleBulkShipmentSubmit are defined
+  // after useServerTable to avoid using selectedIds/clearSelection before declaration.
 
   // ── Export CSV ─────────────────────────────────────────────────
 
@@ -439,19 +374,7 @@ function OrdersPage() {
 
   // ── Initialize shipment statuses from query data ──────────────
 
-  const dataSelector = useCallback((raw: unknown) => {
-    const r = raw as Record<string, unknown>;
-    const orders = (r.orders ?? []) as OrderListItem[];
-    const pag = r.pagination as
-      | { total: number; page: number; limit: number; totalPages: number }
-      | undefined;
-    return {
-      data: orders,
-      pagination: pag
-        ? { total: pag.total, page: pag.page, limit: pag.limit, totalPages: pag.totalPages }
-        : { total: 0, page: 1, limit: 10, totalPages: 0 },
-    };
-  }, []);
+  const dataSelector = useMemo(() => createDataSelector<OrderListItem>("orders"), []);
 
   // ── Columns ───────────────────────────────────────────────────
 
@@ -487,6 +410,7 @@ function OrdersPage() {
 
   const {
     table,
+    rawData: ordersRawData,
     isFetching,
     isLoading,
     pagination,
@@ -494,7 +418,7 @@ function OrdersPage() {
     clearSelection,
   } = useServerTable({
     columns,
-    queryOptions: ordersQueryOptions(mapParams(search)) as never,
+    queryOptions: ordersQueryOptions(mapParams(search)),
     dataSelector,
     currentPage: search.page,
     currentLimit: search.limit,
@@ -505,14 +429,59 @@ function OrdersPage() {
     defaultPageSize: 10,
   });
 
-  // ── Sync shipment statuses when data changes ──────────────────
-  const queryResult = useQuery({
-    ...ordersQueryOptions(mapParams(search)),
-  });
+  // ── Bulk delete handler (after useServerTable for selectedIds/clearSelection) ──
+  const handleBulkDeleteConfirm = useCallback(() => {
+    bulkDeleteMut.mutate(
+      { orderIds: selectedIds, permanent: showTrashed },
+      {
+        onSuccess: () => {
+          clearSelection();
+          setIsBulkDeleteOpen(false);
+        },
+        onSettled: () => {
+          setIsBulkDeleteOpen(false);
+        },
+      },
+    );
+  }, [showTrashed, bulkDeleteMut, selectedIds, clearSelection]);
 
+  // ── Bulk shipment handler (after useServerTable for selectedIds/clearSelection) ──
+  const handleBulkShipmentSubmit = useCallback(
+    async (providerId: string) => {
+      setIsShipping(true);
+      let successCount = 0;
+      for (const orderId of selectedIds) {
+        try {
+          const result = await createOrderShipment({
+            data: { orderId, shipment: { providerId, options: {} } },
+          });
+          successCount++;
+          setShipmentStatuses((prev) => ({
+            ...prev,
+            [orderId]: result as unknown as ShipmentStatus,
+          }));
+        } catch (error) {
+          console.error(`Error for order ${orderId}:`, error);
+        }
+      }
+      if (successCount > 0) {
+        toast.success(
+          `${successCount} of ${selectedIds.length} shipments created successfully.`,
+        );
+      } else {
+        toast.error("Shipment failed");
+      }
+      setIsShipping(false);
+      setIsShippingDialogOpen(false);
+      if (successCount === selectedIds.length) clearSelection();
+    },
+    [selectedIds, clearSelection],
+  );
+
+  // ── Sync shipment statuses when data changes ──────────────────
   useEffect(() => {
-    if (!queryResult.data) return;
-    const r = queryResult.data as Record<string, unknown>;
+    if (!ordersRawData) return;
+    const r = ordersRawData as Record<string, unknown>;
     const orders = (r.orders ?? []) as OrderListItem[];
     const newStatuses: Record<string, ShipmentStatus> = {};
     orders.forEach((order) => {
@@ -522,7 +491,7 @@ function OrdersPage() {
       }
     });
     setShipmentStatuses(newStatuses);
-  }, [queryResult.data]);
+  }, [ordersRawData]);
 
   // ── Mobile card renderer ──────────────────────────────────────
 

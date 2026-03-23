@@ -15,6 +15,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
+import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
 import {
   productsQueryOptions,
   categoryFormOptionsQueryOptions,
@@ -49,17 +50,11 @@ import { StatCard } from "~/components/admin/shared/StatCard";
 
 // ── Search schema ─────────────────────────────────────────────────
 
-const searchSchema = z.object({
-  page: z.number().default(1).catch(1),
-  limit: z.number().default(20).catch(20),
-  search: z.string().default("").catch(""),
+const searchSchema = createListSearchSchema(
+  ["name", "price", "category", "createdAt", "updatedAt"] as const,
+  { sort: "updatedAt" },
+).extend({
   category: z.string().default("all").catch("all"),
-  sort: z
-    .enum(["name", "price", "category", "createdAt", "updatedAt"])
-    .default("updatedAt")
-    .catch("updatedAt"),
-  order: z.enum(["asc", "desc"]).default("desc").catch("desc"),
-  trashed: z.boolean().default(false).catch(false),
 });
 
 type SearchParams = z.infer<typeof searchSchema>;
@@ -98,20 +93,7 @@ export const Route = createFileRoute("/admin/products/")({
     ],
   }),
   component: ProductsPage,
-  errorComponent: ({ error, reset }) => (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <p className="text-4xl font-bold text-muted-foreground mb-2">Error</p>
-      <p className="text-sm text-muted-foreground mb-4">
-        {error instanceof Error ? error.message : "Something went wrong loading this page."}
-      </p>
-      <button
-        onClick={reset}
-        className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-      >
-        Try Again
-      </button>
-    </div>
-  ),
+  errorComponent: RouteErrorComponent,
 });
 
 // ── Interfaces ────────────────────────────────────────────────────
@@ -246,26 +228,14 @@ function ProductsPage() {
 
   // ── Data selector ─────────────────────────────────────────────
 
-  const dataSelector = useCallback((raw: unknown) => {
-    const r = raw as Record<string, unknown>;
-    const products = (r.products ?? []) as ProductListItem[];
-    const pag = r.pagination as
-      | { total: number; page: number; limit: number; totalPages: number }
-      | undefined;
-    return {
-      data: products,
-      pagination: pag
-        ? { total: pag.total, page: pag.page, limit: pag.limit, totalPages: pag.totalPages }
-        : { total: 0, page: 1, limit: 20, totalPages: 0 },
-    };
-  }, []);
+  const dataSelector = useMemo(() => createDataSelector<ProductListItem>("products"), []);
 
   // ── Server table ──────────────────────────────────────────────
 
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable({
       columns,
-      queryOptions: productsQueryOptions(mapParams(search)) as never,
+      queryOptions: productsQueryOptions(mapParams(search)),
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,

@@ -4,11 +4,8 @@
  * Each wrapper creates a queryOptions object with a consistent queryKey
  * hierarchy and a queryFn that calls the corresponding server function.
  *
- * Query key convention:
- *   [domain]                          — singleton (e.g. dashboard)
- *   [domain, 'list', params]          — paginated list
- *   [domain, 'detail', id]            — single entity
- *   [domain, sub-domain, ...]         — nested resources
+ * All query keys are sourced from the centralized `queryKeys` factory
+ * in `~/lib/query-keys.ts` to ensure consistency with mutation invalidation.
  */
 
 import { queryOptions } from "@tanstack/react-query";
@@ -26,6 +23,7 @@ import type {
   FraudCheckerProvider,
   AnalyticsScript,
 } from "~/types/api-responses";
+import { queryKeys } from "./query-keys";
 import {
   // Dashboard
   getDashboardData,
@@ -147,7 +145,7 @@ const STALE = {
 
 export const dashboardQueryOptions = () =>
   queryOptions({
-    queryKey: ["dashboard"],
+    queryKey: queryKeys.dashboard.all,
     queryFn: () => getDashboardData() as Promise<DashboardData>,
     staleTime: STALE.MODERATE,
   });
@@ -166,35 +164,35 @@ export const productsQueryOptions = (params: {
   showTrashed?: boolean;
 }) =>
   queryOptions({
-    queryKey: ["products", "list", params],
+    queryKey: queryKeys.products.list(params),
     queryFn: () => getProducts({ data: params }),
     staleTime: STALE.MODERATE,
   });
 
 export const productQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["products", "detail", id],
+    queryKey: queryKeys.products.detail(id),
     queryFn: () => getProduct({ data: { id } }),
     staleTime: STALE.SLOW,
   });
 
 export const productStatsQueryOptions = () =>
   queryOptions({
-    queryKey: ["products", "stats"],
+    queryKey: queryKeys.products.stats(),
     queryFn: () => getProductStats(),
     staleTime: STALE.MODERATE,
   });
 
 export const productVariantsQueryOptions = (productId: string) =>
   queryOptions({
-    queryKey: ["products", "variants", productId],
+    queryKey: queryKeys.products.variants(productId),
     queryFn: () => getProductVariants({ data: { productId } }),
     staleTime: STALE.MODERATE,
   });
 
 export const variantSortOrderQueryOptions = (productId: string) =>
   queryOptions({
-    queryKey: ["products", "variant-sort-order", productId],
+    queryKey: queryKeys.products.variantSortOrder(productId),
     queryFn: () => getVariantSortOrder({ data: { productId } }),
     staleTime: STALE.MODERATE,
   });
@@ -212,21 +210,21 @@ export const categoriesQueryOptions = (params: {
   showTrashed?: boolean;
 }) =>
   queryOptions({
-    queryKey: ["categories", "list", params],
+    queryKey: queryKeys.categories.list(params),
     queryFn: () => getCategories({ data: params }),
     staleTime: STALE.MODERATE,
   });
 
 export const categoryQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["categories", "detail", id],
+    queryKey: queryKeys.categories.detail(id),
     queryFn: () => getCategory({ data: { id } }),
     staleTime: STALE.SLOW,
   });
 
 export const categoryFormOptionsQueryOptions = () =>
   queryOptions({
-    queryKey: ["categories", "form-options"],
+    queryKey: queryKeys.categories.formOptions(),
     queryFn: () => getCategoryFormOptions(),
     staleTime: STALE.LOOKUP,
   });
@@ -245,21 +243,21 @@ export const collectionsQueryOptions = (params: {
   trashed?: boolean;
 }) =>
   queryOptions({
-    queryKey: ["collections", "list", params],
+    queryKey: queryKeys.collections.list(params),
     queryFn: () => getCollections({ data: params }),
     staleTime: STALE.MODERATE,
   });
 
 export const collectionQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["collections", "detail", id],
+    queryKey: queryKeys.collections.detail(id),
     queryFn: () => getCollection({ data: { id } }),
     staleTime: STALE.SLOW,
   });
 
 export const collectionFormOptionsQueryOptions = () =>
   queryOptions({
-    queryKey: ["collections", "form-options"],
+    queryKey: queryKeys.collections.formOptions(),
     queryFn: () => getCollectionFormOptions(),
     staleTime: STALE.LOOKUP,
   });
@@ -284,49 +282,49 @@ export const ordersQueryOptions = (params: {
   fulfillmentStatus?: string;
 }) =>
   queryOptions({
-    queryKey: ["orders", "list", params],
+    queryKey: queryKeys.orders.list(params),
     queryFn: () => getOrders({ data: params }),
     staleTime: STALE.FAST,
   });
 
 export const orderQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["orders", "detail", id],
+    queryKey: queryKeys.orders.detail(id),
     queryFn: () => getOrder({ data: { id } }),
     staleTime: STALE.FAST,
   });
 
 export const orderFormDataQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["orders", "form-data", id],
+    queryKey: queryKeys.orders.formData(id),
     queryFn: () => getOrderFormData({ data: { id } }),
     staleTime: STALE.FAST,
   });
 
 export const orderItemsQueryOptions = (orderId: string) =>
   queryOptions({
-    queryKey: ["orders", "items", orderId],
+    queryKey: queryKeys.orders.items(orderId),
     queryFn: () => getOrderItems({ data: { orderId } }),
     staleTime: STALE.FAST,
   });
 
 export const orderPaymentsQueryOptions = (orderId: string) =>
   queryOptions({
-    queryKey: ["orders", "payments", orderId],
+    queryKey: queryKeys.orders.payments(orderId),
     queryFn: () => getOrderPayments({ data: { orderId } }),
     staleTime: STALE.FAST,
   });
 
 export const orderCodQueryOptions = (orderId: string) =>
   queryOptions({
-    queryKey: ["orders", "cod", orderId],
+    queryKey: queryKeys.orders.cod(orderId),
     queryFn: () => getOrderCod({ data: { orderId } }),
     staleTime: STALE.FAST,
   });
 
 export const orderShipmentsQueryOptions = (orderId: string) =>
   queryOptions({
-    queryKey: ["orders", "shipments", orderId],
+    queryKey: queryKeys.orders.shipments(orderId),
     queryFn: () => getOrderShipments({ data: { orderId } }),
     staleTime: STALE.FAST,
   });
@@ -345,21 +343,21 @@ export const customersQueryOptions = (params: {
   trashed?: boolean;
 }) =>
   queryOptions({
-    queryKey: ["customers", "list", params],
+    queryKey: queryKeys.customers.list(params),
     queryFn: () => getCustomers({ data: params }),
     staleTime: STALE.MODERATE,
   });
 
 export const customerQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["customers", "detail", id],
+    queryKey: queryKeys.customers.detail(id),
     queryFn: () => getCustomer({ data: { id } }),
     staleTime: STALE.SLOW,
   });
 
 export const customerHistoryQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["customers", "history", id],
+    queryKey: queryKeys.customers.history(id),
     queryFn: () => getCustomerHistory({ data: { id } }),
     staleTime: STALE.SLOW,
   });
@@ -377,14 +375,14 @@ export const discountsQueryOptions = (params: {
   showTrashed?: boolean;
 }) =>
   queryOptions({
-    queryKey: ["discounts", "list", params],
+    queryKey: queryKeys.discounts.list(params),
     queryFn: () => getDiscounts({ data: params }),
     staleTime: STALE.MODERATE,
   });
 
 export const discountQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["discounts", "detail", id],
+    queryKey: queryKeys.discounts.detail(id),
     queryFn: () => getDiscount({ data: { id } }),
     staleTime: STALE.SLOW,
   });
@@ -403,14 +401,14 @@ export const pagesQueryOptions = (params: {
   trashed?: boolean;
 }) =>
   queryOptions({
-    queryKey: ["pages", "list", params],
+    queryKey: queryKeys.pages.list(params),
     queryFn: () => getPages({ data: params }),
     staleTime: STALE.MODERATE,
   });
 
 export const pageQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["pages", "detail", id],
+    queryKey: queryKeys.pages.detail(id),
     queryFn: () => getPage({ data: { id } }),
     staleTime: STALE.SLOW,
   });
@@ -424,21 +422,21 @@ export const widgetsQueryOptions = (params: {
   showTrashed?: boolean;
 }) =>
   queryOptions({
-    queryKey: ["widgets", "list", params],
+    queryKey: queryKeys.widgets.list(params),
     queryFn: () => getWidgets({ data: params }),
     staleTime: STALE.MODERATE,
   });
 
 export const widgetQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["widgets", "detail", id],
+    queryKey: queryKeys.widgets.detail(id),
     queryFn: () => getWidget({ data: { id } }),
     staleTime: STALE.SLOW,
   });
 
 export const widgetHistoryQueryOptions = (widgetId: string) =>
   queryOptions({
-    queryKey: ["widgets", "history", widgetId],
+    queryKey: queryKeys.widgets.history(widgetId),
     queryFn: () => getWidgetHistory({ data: { widgetId } }),
     staleTime: STALE.SLOW,
   });
@@ -456,7 +454,7 @@ export const attributesQueryOptions = (params: {
   trashed?: boolean;
 }) =>
   queryOptions({
-    queryKey: ["attributes", "list", params],
+    queryKey: queryKeys.attributes.list(params),
     queryFn: () => getAttributes({ data: params }),
     staleTime: STALE.LOOKUP,
   });
@@ -470,7 +468,7 @@ export const attributeValuesQueryOptions = (params: {
   sort?: string;
 }) =>
   queryOptions({
-    queryKey: ["attributes", "values", params],
+    queryKey: queryKeys.attributes.values(params),
     queryFn: () => getAttributeValues({ data: params }),
     staleTime: STALE.LOOKUP,
   });
@@ -481,14 +479,14 @@ export const attributeValuesQueryOptions = (params: {
 
 export const analyticsScriptsQueryOptions = () =>
   queryOptions({
-    queryKey: ["analytics", "list"],
+    queryKey: queryKeys.analytics.list(),
     queryFn: () => getAnalyticsScripts(),
     staleTime: STALE.LOOKUP,
   });
 
 export const analyticsScriptQueryOptions = (id: string) =>
   queryOptions({
-    queryKey: ["analytics", "detail", id],
+    queryKey: queryKeys.analytics.detail(id),
     queryFn: () => getAnalyticsScript({ data: { id } }),
     staleTime: STALE.SLOW,
   });
@@ -508,7 +506,7 @@ export const inventoryQueryOptions = (params: {
   order?: string;
 }) =>
   queryOptions({
-    queryKey: ["inventory", "list", params],
+    queryKey: queryKeys.inventory.list(params),
     queryFn: () => getInventory({ data: params }),
     staleTime: STALE.FAST,
   });
@@ -527,14 +525,14 @@ export const mediaListQueryOptions = (params: {
   sortOrder?: string;
 }) =>
   queryOptions({
-    queryKey: ["media", "list", params],
+    queryKey: queryKeys.media.list(params),
     queryFn: () => getMediaList({ data: params }),
     staleTime: STALE.SLOW,
   });
 
 export const mediaFoldersQueryOptions = () =>
   queryOptions({
-    queryKey: ["media", "folders"],
+    queryKey: queryKeys.media.folders(),
     queryFn: () => getMediaFolders(),
     staleTime: STALE.SLOW,
   });
@@ -545,14 +543,14 @@ export const mediaFoldersQueryOptions = () =>
 
 export const navigationItemsQueryOptions = () =>
   queryOptions({
-    queryKey: ["navigation", "items"],
+    queryKey: queryKeys.navigation.items(),
     queryFn: () => getNavigationItems(),
     staleTime: STALE.LOOKUP,
   });
 
 export const navigationPreviewProductsQueryOptions = (params: Record<string, string>) =>
   queryOptions({
-    queryKey: ["navigation", "preview-products", params],
+    queryKey: queryKeys.navigation.previewProducts(params),
     queryFn: () => getNavigationPreviewProducts({ data: params }),
     staleTime: STALE.SLOW,
   });
@@ -563,7 +561,7 @@ export const navigationPreviewProductsQueryOptions = (params: Record<string, str
 
 export const fraudCheckerProvidersQueryOptions = () =>
   queryOptions({
-    queryKey: ["fraud-checker", "list"],
+    queryKey: queryKeys.fraudChecker.list(),
     queryFn: () => getFraudCheckerProviders(),
     staleTime: STALE.LOOKUP,
   });
@@ -580,7 +578,7 @@ export const abandonedCheckoutsQueryOptions = (params: {
   order?: string;
 }) =>
   queryOptions({
-    queryKey: ["abandoned-checkouts", "list", params],
+    queryKey: queryKeys.abandonedCheckouts.list(params),
     queryFn: () => getAbandonedCheckouts({ data: params }),
     staleTime: STALE.MODERATE,
   });
@@ -591,14 +589,14 @@ export const abandonedCheckoutsQueryOptions = (params: {
 
 export const rbacRolesQueryOptions = () =>
   queryOptions({
-    queryKey: ["rbac", "roles"],
+    queryKey: queryKeys.rbac.roles(),
     queryFn: () => getRbacRoles(),
     staleTime: STALE.CONFIG,
   });
 
 export const rbacPermissionsQueryOptions = () =>
   queryOptions({
-    queryKey: ["rbac", "permissions"],
+    queryKey: queryKeys.rbac.permissions(),
     queryFn: () => getRbacPermissions(),
     staleTime: STALE.CONFIG,
   });
@@ -609,21 +607,21 @@ export const rbacPermissionsQueryOptions = () =>
 
 export const adminUsersQueryOptions = () =>
   queryOptions({
-    queryKey: ["admin-users", "list"],
+    queryKey: queryKeys.adminUsers.list(),
     queryFn: () => getAdminUsers(),
     staleTime: STALE.LOOKUP,
   });
 
 export const accountSecurityQueryOptions = () =>
   queryOptions({
-    queryKey: ["auth", "account-security"],
+    queryKey: queryKeys.auth.accountSecurity(),
     queryFn: () => getAccountSecurity(),
     staleTime: STALE.LOOKUP,
   });
 
 export const twoFaInfoQueryOptions = () =>
   queryOptions({
-    queryKey: ["auth", "2fa-info"],
+    queryKey: queryKeys.auth.twoFaInfo(),
     queryFn: () => get2faInfo(),
     staleTime: STALE.LOOKUP,
   });
@@ -634,98 +632,98 @@ export const twoFaInfoQueryOptions = () =>
 
 export const settingsByCategoryQueryOptions = (category: string) =>
   queryOptions({
-    queryKey: ["settings", category],
+    queryKey: queryKeys.settings.byCategory(category),
     queryFn: () => getSettingsByCategory({ data: { category } }),
     staleTime: STALE.CONFIG,
   });
 
 export const generalSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "general"],
+    queryKey: queryKeys.settings.general(),
     queryFn: () => getGeneralSettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const storefrontUrlQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "storefront-url"],
+    queryKey: queryKeys.settings.storefrontUrl(),
     queryFn: () => getStorefrontUrl(),
     staleTime: STALE.CONFIG,
   });
 
 export const currencySettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "currency"],
+    queryKey: queryKeys.settings.currency(),
     queryFn: () => getCurrencySettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const seoSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "seo"],
+    queryKey: queryKeys.settings.seo(),
     queryFn: () => getSeoSettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const securitySettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "security"],
+    queryKey: queryKeys.settings.security(),
     queryFn: () => getSecuritySettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const authSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "auth"],
+    queryKey: queryKeys.settings.auth(),
     queryFn: () => getAuthSettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const emailSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "email"],
+    queryKey: queryKeys.settings.email(),
     queryFn: () => getEmailSettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const firebaseSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "firebase"],
+    queryKey: queryKeys.settings.firebase(),
     queryFn: () => getFirebaseSettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const businessSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "business"],
+    queryKey: queryKeys.settings.business(),
     queryFn: () => getBusinessSettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const themeSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "theme"],
+    queryKey: queryKeys.settings.theme(),
     queryFn: () => getThemeSettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const smsSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "sms"],
+    queryKey: queryKeys.settings.sms(),
     queryFn: () => getSmsSettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const openRouterSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "openrouter"],
+    queryKey: queryKeys.settings.openRouter(),
     queryFn: () => getOpenRouterSettings(),
     staleTime: STALE.CONFIG,
   });
 
 export const metaConversionsSettingsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "meta-conversions"],
+    queryKey: queryKeys.settings.metaConversions(),
     queryFn: () => getMetaConversionsSettings(),
     staleTime: STALE.CONFIG,
   });
@@ -735,77 +733,77 @@ export const metaConversionsLogsQueryOptions = (params: {
   limit?: number;
 }) =>
   queryOptions({
-    queryKey: ["settings", "meta-conversions-logs", params],
+    queryKey: queryKeys.settings.metaConversionsLogs(params),
     queryFn: () => getMetaConversionsLogs({ data: params }),
     staleTime: 1000 * 60,
   });
 
 export const allowedCountriesQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "allowed-countries"],
+    queryKey: queryKeys.settings.allowedCountries(),
     queryFn: () => getAllowedCountries(),
     staleTime: STALE.CONFIG,
   });
 
 export const paymentMethodsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "payment-methods"],
+    queryKey: queryKeys.settings.paymentMethods(),
     queryFn: () => getPaymentMethods(),
     staleTime: STALE.CONFIG,
   });
 
 export const paymentGatewaySettingsQueryOptions = (gateway: string) =>
   queryOptions({
-    queryKey: ["settings", "payment-gateway", gateway],
+    queryKey: queryKeys.settings.paymentGateway(gateway),
     queryFn: () => getPaymentGatewaySettings({ data: { gateway } }),
     staleTime: STALE.CONFIG,
   });
 
 export const notificationChannelsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "notification-channels"],
+    queryKey: queryKeys.settings.notificationChannels(),
     queryFn: () => getNotificationChannels(),
     staleTime: STALE.CONFIG,
   });
 
 export const adminNotificationChannelsQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "admin-notification-channels"],
+    queryKey: queryKeys.settings.adminNotificationChannels(),
     queryFn: () => getAdminNotificationChannels(),
     staleTime: STALE.CONFIG,
   });
 
 export const deliveryProvidersQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "delivery-providers"],
+    queryKey: queryKeys.settings.deliveryProviders(),
     queryFn: () => getDeliveryProviders(),
     staleTime: STALE.CONFIG,
   });
 
 export const deliveryLocationsQueryOptions = (params: Record<string, string | number | boolean | undefined>) =>
   queryOptions({
-    queryKey: ["settings", "delivery-locations", params],
+    queryKey: queryKeys.settings.deliveryLocations(params),
     queryFn: () => getDeliveryLocations({ data: params }),
     staleTime: STALE.LOOKUP,
   });
 
 export const allDeliveryLocationsQueryOptions = (params: { type?: string }) =>
   queryOptions({
-    queryKey: ["settings", "delivery-locations-all", params],
+    queryKey: queryKeys.settings.deliveryLocationsAll(params),
     queryFn: () => getAllDeliveryLocations({ data: params }),
     staleTime: STALE.LOOKUP,
   });
 
 export const importPathaoStatusQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "import-pathao-status"],
+    queryKey: queryKeys.settings.importPathaoStatus(),
     queryFn: () => getImportPathaoStatus(),
     staleTime: STALE.LOOKUP,
   });
 
 export const checkoutLanguagesQueryOptions = (params: Record<string, string | number | boolean | undefined>) =>
   queryOptions({
-    queryKey: ["settings", "checkout-languages", params],
+    queryKey: queryKeys.settings.checkoutLanguages(params),
     queryFn: () => getCheckoutLanguages({ data: params }),
     staleTime: STALE.CONFIG,
   });
@@ -819,14 +817,14 @@ export const shippingMethodsQueryOptions = (params: {
   trashed?: boolean;
 }) =>
   queryOptions({
-    queryKey: ["settings", "shipping-methods", params],
+    queryKey: queryKeys.settings.shippingMethods(params),
     queryFn: () => getShippingMethods({ data: params }),
     staleTime: STALE.CONFIG,
   });
 
 export const heroSlidersQueryOptions = () =>
   queryOptions({
-    queryKey: ["settings", "hero-sliders"],
+    queryKey: queryKeys.settings.heroSliders(),
     queryFn: () => getHeroSliders(),
     staleTime: STALE.CONFIG,
   });
@@ -837,7 +835,7 @@ export const heroSlidersQueryOptions = () =>
 
 export const aiPromptsQueryOptions = (type: string) =>
   queryOptions({
-    queryKey: ["ai", "prompts", type],
+    queryKey: queryKeys.ai.prompts(type),
     queryFn: () => getAiPrompts({ data: { type } }),
     staleTime: STALE.LOOKUP,
   });
@@ -848,21 +846,21 @@ export const aiPromptsQueryOptions = (type: string) =>
 
 export const cacheStatsQueryOptions = () =>
   queryOptions({
-    queryKey: ["cache", "stats"],
+    queryKey: queryKeys.cache.stats(),
     queryFn: () => getCacheStats(),
     staleTime: STALE.REALTIME,
   });
 
 export const cacheLastClearedQueryOptions = () =>
   queryOptions({
-    queryKey: ["cache", "last-cleared"],
+    queryKey: queryKeys.cache.lastCleared(),
     queryFn: () => getCacheLastCleared(),
     staleTime: STALE.REALTIME,
   });
 
 export const cacheGroupsQueryOptions = () =>
   queryOptions({
-    queryKey: ["cache", "groups"],
+    queryKey: queryKeys.cache.groups(),
     queryFn: () => getCacheGroups(),
     staleTime: STALE.REALTIME,
   });
@@ -873,7 +871,7 @@ export const cacheGroupsQueryOptions = () =>
 
 export const setupStatusQueryOptions = () =>
   queryOptions({
-    queryKey: ["setup", "status"],
+    queryKey: queryKeys.setup.status(),
     queryFn: () => getSetupStatus(),
     staleTime: STALE.STATIC,
   });
@@ -884,7 +882,7 @@ export const setupStatusQueryOptions = () =>
 
 export const firebaseConfigQueryOptions = () =>
   queryOptions({
-    queryKey: ["firebase", "config"],
+    queryKey: queryKeys.firebase.config(),
     queryFn: () => getFirebaseConfig(),
     staleTime: STALE.CONFIG,
   });

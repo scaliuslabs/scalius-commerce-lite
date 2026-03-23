@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Input } from "~/components/ui/input";
-import { useDebounce } from "~/hooks/use-debounce";
+import { Input } from "@/components/ui/input";
+import { useDebounce } from "@/hooks/use-debounce";
 import { Loader2 } from "lucide-react";
 
 interface InlineEditCellProps {

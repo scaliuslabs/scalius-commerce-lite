@@ -30,6 +30,11 @@ export function PermissionProvider({
   permissions: permissionsList = [],
   isSuperAdmin = false,
 }: PermissionProviderProps) {
+  // Serialize the permissions list to a stable string key so the memo
+  // only re-computes when the actual permission values change, not on
+  // every render due to a new array reference.
+  const permissionsKey = permissionsList.join(",");
+
   const value = useMemo(() => {
     const permissionsSet = new Set(permissionsList);
 
@@ -49,7 +54,8 @@ export function PermissionProvider({
         return permissions.every((p) => permissionsSet.has(p));
       },
     };
-  }, [permissionsList, isSuperAdmin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionsKey, isSuperAdmin]);
 
   return (
     <PermissionContext.Provider value={value}>

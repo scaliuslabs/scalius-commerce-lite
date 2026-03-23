@@ -1,9 +1,11 @@
 // src/components/admin/InventoryManager.tsx
 // Rebuilt Inventory Management Dashboard (Premium UI/UX).
+// Uses TanStack Query for data fetching and shadcn Dialog for the adjust modal.
 
 import { Link } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Card,
@@ -20,6 +22,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +42,10 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@scalius/shared/utils";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
-import { getInventory, adjustInventory } from "@/lib/api.functions";
+import { StatCard } from "@/components/admin/shared/StatCard";
+import { inventoryQueryOptions } from "@/lib/api.queries";
+import { adjustInventory } from "@/lib/api.functions";
+import { useDebounce } from "@/hooks/use-debounce";
 
 // ---------- Types ----------
 
@@ -82,7 +95,7 @@ interface Pagination {
   totalPages: number;
 }
 
-type Tab = "variants" | "movements" | "alerts";
+type Tab = "variants" | "movements";
 type StockFilter = "all" | "low" | "out" | "reserved";
 type SortField = "productName" | "sku" | "available";
 type SortOrder = "asc" | "desc";
@@ -124,93 +137,89 @@ function timeAgo(dateStr: string) {
 // ---------- Main Component ----------
 
 export function InventoryManager() {
-  // State
+  // Local UI state
   const [activeTab, setActiveTab] = useState<Tab>("variants");
-  const [variants, setVariants] = useState<InventoryVariant[]>([]);
-  const [movements, setMovements] = useState<InventoryMovement[]>([]);
-  const [stats, setStats] = useState<InventoryStats | null>(null);
-  // Separate requested page/limit from server-returned pagination to avoid fetch loops
   const [requestedPage, setRequestedPage] = useState(1);
   const [requestedLimit, setRequestedLimit] = useState(50);
-  const [pagination, setPagination] = useState<Pagination | null>(null);
   const [movementsRequestedPage, setMovementsRequestedPage] = useState(1);
   const [movementsRequestedLimit, setMovementsRequestedLimit] = useState(50);
-  const [movementsPagination, setMovementsPagination] = useState<Pagination | null>(null);
-  const [search, setSearch] = useState("");
   const [localSearch, setLocalSearch] = useState("");
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [sort, setSort] = useState<{ field: SortField; order: SortOrder }>({ field: "available", order: "asc" });
-  const [loading, setLoading] = useState(true);
   const [adjustingVariant, setAdjustingVariant] = useState<InventoryVariant | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Fetch data
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (activeTab === "variants") {
-        const data = await getInventory({
-          data: {
-            section: "variants",
-            search,
-            status: stockFilter,
-            page: requestedPage,
-            limit: requestedLimit,
-            sort: sort.field,
-            order: sort.order,
-          },
-        }) as Record<string, unknown>;
-        setVariants((data.variants || []) as InventoryVariant[]);
-        setStats((data.stats as InventoryStats) || null);
-        setPagination((data.pagination as Pagination) || null);
-      } else if (activeTab === "movements") {
-        const data = await getInventory({
-          data: {
-            section: "movements",
-            page: movementsRequestedPage,
-            limit: movementsRequestedLimit,
-          },
-        }) as Record<string, unknown>;
-        setMovements((data.movements || []) as InventoryMovement[]);
-        setMovementsPagination((data.pagination as Pagination) || null);
-      }
-    } catch (err: unknown) {
-      console.error("Failed to fetch inventory data:", err);
-      toast.error("Failed to fetch inventory data");
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab, search, stockFilter, requestedPage, requestedLimit, movementsRequestedPage, movementsRequestedLimit, sort.field, sort.order, refreshKey]);
+  const queryClient = useQueryClient();
+  const search = useDebounce(localSearch, 300);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  // TanStack Query — variants
+  const variantsQuery = useQuery({
+    ...inventoryQueryOptions({
+      section: "variants",
+      search: search || undefined,
+      status: stockFilter === "all" ? undefined : stockFilter,
+      page: requestedPage,
+      limit: requestedLimit,
+      sort: sort.field,
+      order: sort.order,
+    }),
+    placeholderData: keepPreviousData,
+    enabled: activeTab === "variants",
+  });
 
-  // Debounced search
-  useEffect(() => {
-    const timeout = setTimeout(() => setSearch(localSearch), 300);
-    return () => clearTimeout(timeout);
-  }, [localSearch]);
+  // TanStack Query — movements
+  const movementsQuery = useQuery({
+    ...inventoryQueryOptions({
+      section: "movements",
+      page: movementsRequestedPage,
+      limit: movementsRequestedLimit,
+    }),
+    placeholderData: keepPreviousData,
+    enabled: activeTab === "movements",
+  });
 
-  const refresh = () => setRefreshKey((k) => k + 1);
+  // Extract typed data from query results
+  const variantsData = useMemo(() => {
+    const raw = variantsQuery.data as Record<string, unknown> | undefined;
+    if (!raw) return { variants: [] as InventoryVariant[], stats: null as InventoryStats | null, pagination: null as Pagination | null };
+    return {
+      variants: (raw.variants || []) as InventoryVariant[],
+      stats: (raw.stats as InventoryStats) || null,
+      pagination: (raw.pagination as Pagination) || null,
+    };
+  }, [variantsQuery.data]);
 
-  const clearFilters = () => {
+  const movementsData = useMemo(() => {
+    const raw = movementsQuery.data as Record<string, unknown> | undefined;
+    if (!raw) return { movements: [] as InventoryMovement[], pagination: null as Pagination | null };
+    return {
+      movements: (raw.movements || []) as InventoryMovement[],
+      pagination: (raw.pagination as Pagination) || null,
+    };
+  }, [movementsQuery.data]);
+
+  const { variants, stats, pagination } = variantsData;
+  const { movements, pagination: movementsPagination } = movementsData;
+
+  const loading = activeTab === "variants" ? variantsQuery.isFetching : movementsQuery.isFetching;
+  const isInitialLoad = activeTab === "variants" ? variantsQuery.isLoading : movementsQuery.isLoading;
+
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["inventory"] });
+  }, [queryClient]);
+
+  const clearFilters = useCallback(() => {
     setLocalSearch("");
-    setSearch("");
     setStockFilter("all");
-  };
+  }, []);
 
-  const handleSort = (field: SortField) => {
+  const handleSort = useCallback((field: SortField) => {
     setSort(prev => ({
       field,
       order: prev.field === field && prev.order === "asc" ? "desc" : "asc"
     }));
-  };
+  }, []);
 
   const hasActiveFilters = localSearch.trim() || stockFilter !== "all";
-
-  // Sort params are sent to the server (lines above); display the server-sorted results directly
-  const displayVariants = variants;
 
   return (
     <Card className="border-none shadow-none bg-transparent sm:bg-card">
@@ -237,12 +246,12 @@ export function InventoryManager() {
 
         {stats && (
           <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            <StatCard label="Total SKUs" value={stats.totalVariants} icon={Package} iconBgColor="bg-blue-100 dark:bg-blue-900/30" iconTextColor="text-blue-600 dark:text-blue-400" />
-            <StatCard label="On Hand" value={stats.totalOnHand} icon={Package} iconBgColor="bg-slate-100 dark:bg-slate-900/30" iconTextColor="text-slate-600 dark:text-slate-400" />
-            <StatCard label="Reserved" value={stats.totalReserved} icon={History} iconBgColor="bg-amber-100 dark:bg-amber-900/30" iconTextColor="text-amber-600 dark:text-amber-400" />
-            <StatCard label="Available" value={stats.totalAvailable} icon={Package} iconBgColor="bg-emerald-100 dark:bg-emerald-900/30" iconTextColor="text-emerald-600 dark:text-emerald-400" />
-            <StatCard label="Low Stock" value={stats.lowStockCount} icon={AlertTriangle} iconBgColor="bg-amber-100 dark:bg-amber-900/30" iconTextColor="text-amber-600 dark:text-amber-400" />
-            <StatCard label="Out of Stock" value={stats.outOfStockCount} icon={AlertTriangle} iconBgColor="bg-red-100 dark:bg-red-900/30" iconTextColor="text-red-600 dark:text-red-400" />
+            <StatCard title="Total SKUs" value={stats.totalVariants} icon={Package} iconBgColor="bg-blue-100 dark:bg-blue-900/30" iconTextColor="text-blue-600 dark:text-blue-400" />
+            <StatCard title="On Hand" value={stats.totalOnHand} icon={Package} iconBgColor="bg-slate-100 dark:bg-slate-900/30" iconTextColor="text-slate-600 dark:text-slate-400" />
+            <StatCard title="Reserved" value={stats.totalReserved} icon={History} iconBgColor="bg-amber-100 dark:bg-amber-900/30" iconTextColor="text-amber-600 dark:text-amber-400" />
+            <StatCard title="Available" value={stats.totalAvailable} icon={Package} iconBgColor="bg-emerald-100 dark:bg-emerald-900/30" iconTextColor="text-emerald-600 dark:text-emerald-400" />
+            <StatCard title="Low Stock" value={stats.lowStockCount} icon={AlertTriangle} iconBgColor="bg-amber-100 dark:bg-amber-900/30" iconTextColor="text-amber-600 dark:text-amber-400" />
+            <StatCard title="Out of Stock" value={stats.outOfStockCount} icon={AlertTriangle} iconBgColor="bg-red-100 dark:bg-red-900/30" iconTextColor="text-red-600 dark:text-red-400" />
           </div>
         )}
       </CardHeader>
@@ -332,20 +341,20 @@ export function InventoryManager() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading && variants.length === 0 ? (
+                  {isInitialLoad ? (
                     <TableRow>
                       <TableCell colSpan={8} className="h-24 text-center">
                         <RefreshCw className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
-                  ) : displayVariants.length === 0 ? (
+                  ) : variants.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="h-24 text-center text-xs text-muted-foreground">
                         {hasActiveFilters ? "No variants match your filters." : "No variants found."}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    displayVariants.map((v) => {
+                    variants.map((v) => {
                       const badge = getStockBadge(v.available, v.lowStockThreshold);
                       return (
                         <TableRow key={v.id} className="hover:bg-muted/50">
@@ -356,7 +365,7 @@ export function InventoryManager() {
                           </TableCell>
                           <TableCell className="py-2 font-mono text-[11px] text-muted-foreground">{v.sku}</TableCell>
                           <TableCell className="py-2 text-xs text-muted-foreground">
-                            {[v.size, v.color].filter(Boolean).join(" / ") || "—"}
+                            {[v.size, v.color].filter(Boolean).join(" / ") || "\u2014"}
                           </TableCell>
                           <TableCell className="py-2 text-right text-xs">{v.stock}</TableCell>
                           <TableCell className="py-2 text-right text-xs">
@@ -401,7 +410,10 @@ export function InventoryManager() {
         {/* Movements Tab */}
         {activeTab === "movements" && (
           <div className="p-2 sm:p-3">
-            <div className="border rounded-md overflow-hidden">
+            <div className="border rounded-md overflow-hidden relative">
+              {loading && movements.length > 0 && (
+                <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
+              )}
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -413,7 +425,7 @@ export function InventoryManager() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading && movements.length === 0 ? (
+                  {movementsQuery.isLoading ? (
                     <TableRow><TableCell colSpan={5} className="h-24 text-center"><RefreshCw className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : movements.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="h-24 text-center text-xs text-muted-foreground">No movements recorded yet.</TableCell></TableRow>
@@ -432,7 +444,7 @@ export function InventoryManager() {
                             <div className="text-muted-foreground truncate max-w-[200px]">{m.productName}</div>
                           </TableCell>
                           <TableCell className="py-2 text-xs text-muted-foreground truncate max-w-[200px]">
-                            {m.notes || "—"}
+                            {m.notes || "\u2014"}
                           </TableCell>
                           <TableCell className="py-2 text-right">
                             <div className={cn("text-xs font-bold", m.quantity > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
@@ -460,14 +472,12 @@ export function InventoryManager() {
         )}
       </CardContent>
 
-      {/* Adjust Modal */}
-      {adjustingVariant && (
-        <AdjustModal
-          variant={adjustingVariant}
-          onClose={() => setAdjustingVariant(null)}
-          onSubmit={refresh}
-        />
-      )}
+      {/* Adjust Modal — shadcn Dialog */}
+      <AdjustDialog
+        variant={adjustingVariant}
+        onClose={() => setAdjustingVariant(null)}
+        onSubmit={refresh}
+      />
     </Card>
   );
 }
@@ -498,34 +508,14 @@ function PaginationControls({
   );
 }
 
-function StatCard({ label, value, icon: Icon, iconBgColor, iconTextColor }: { label: string; value: number | null | undefined; icon: React.ComponentType<{ className?: string }>; iconBgColor: string; iconTextColor: string }) {
-  const safeValue = Number.isFinite(value) ? Number(value) : 0;
-
-  return (
-    <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
-      <CardContent className="p-2 flex items-center space-x-2">
-        <div className={cn("rounded-full p-2", iconBgColor)}>
-          <Icon className={cn("h-3.5 w-3.5", iconTextColor)} />
-        </div>
-        <div>
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider leading-tight">
-            {label}
-          </p>
-          <p className="text-sm font-bold text-foreground leading-tight">{safeValue.toLocaleString()}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function AdjustModal({ variant, onClose, onSubmit }: { variant: InventoryVariant; onClose: () => void; onSubmit: () => void }) {
+function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVariant | null; onClose: () => void; onSubmit: () => void }) {
   const [delta, setDelta] = useState(0);
   const [reason, setReason] = useState<string>("received");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (delta === 0) return;
+    if (!variant || delta === 0) return;
     setSubmitting(true);
     try {
       await adjustInventory({
@@ -533,6 +523,10 @@ function AdjustModal({ variant, onClose, onSubmit }: { variant: InventoryVariant
       });
       onSubmit();
       onClose();
+      // Reset form state for next open
+      setDelta(0);
+      setReason("received");
+      setNotes("");
     } catch (error) {
       console.error("Failed to adjust stock:", error);
       toast.error("Failed to adjust stock");
@@ -541,78 +535,96 @@ function AdjustModal({ variant, onClose, onSubmit }: { variant: InventoryVariant
     }
   };
 
-  const newStock = Math.max(0, variant.stock + delta);
-  const newAvailable = Math.max(0, newStock - variant.reservedStock);
+  // Reset form state when a new variant is selected
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      onClose();
+      setDelta(0);
+      setReason("received");
+      setNotes("");
+    }
+  };
+
+  const newStock = variant ? Math.max(0, variant.stock + delta) : 0;
+  const newAvailable = variant ? Math.max(0, newStock - variant.reservedStock) : 0;
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
-        <CardHeader className="p-4 border-b">
-          <CardTitle className="text-base font-semibold">Adjust Stock</CardTitle>
-          <CardDescription className="text-xs">
-            <span className="font-medium text-foreground">{variant.productName}</span> — <span className="font-mono">{variant.sku}</span>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 space-y-4">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-muted/50 rounded-md p-2 border">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">On Hand</div>
-              <div className="text-sm font-bold mt-0.5">{variant.stock}</div>
-            </div>
-            <div className="bg-muted/50 rounded-md p-2 border">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Reserved</div>
-              <div className="text-sm font-bold mt-0.5 text-amber-600 dark:text-amber-400">{variant.reservedStock}</div>
-            </div>
-            <div className="bg-muted/50 rounded-md p-2 border">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Available</div>
-              <div className="text-sm font-bold mt-0.5 text-emerald-600 dark:text-emerald-400">{variant.available}</div>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground">Adjustment Amount</label>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d - 1)}><Minus className="h-3.5 w-3.5" /></Button>
-              <Input type="number" value={delta} onChange={(e) => setDelta(parseInt(e.target.value) || 0)} className="text-center font-bold h-8" />
-              <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d + 1)}><Plus className="h-3.5 w-3.5" /></Button>
-            </div>
-            {delta !== 0 && (
-              <p className="text-[11px] text-muted-foreground text-center mt-1">
-                New on hand: <span className="font-medium">{newStock}</span> →
-                Available: <span className={cn("font-medium", newAvailable <= 0 ? "text-red-500" : "text-emerald-600")}>{newAvailable}</span>
-              </p>
+    <Dialog open={!!variant} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base font-semibold">Adjust Stock</DialogTitle>
+          <DialogDescription className="text-xs">
+            {variant && (
+              <>
+                <span className="font-medium text-foreground">{variant.productName}</span> — <span className="font-mono">{variant.sku}</span>
+              </>
             )}
-          </div>
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground">Reason</label>
-            <Select value={reason} onValueChange={setReason}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="text-xs">
-                <SelectItem value="received">Stock Received</SelectItem>
-                <SelectItem value="correction">Count Correction</SelectItem>
-                <SelectItem value="return">Customer Return</SelectItem>
-                <SelectItem value="damage">Damaged / Write-off</SelectItem>
-                <SelectItem value="theft">Theft / Shrinkage</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        {variant && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-muted/50 rounded-md p-2 border">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">On Hand</div>
+                <div className="text-sm font-bold mt-0.5">{variant.stock}</div>
+              </div>
+              <div className="bg-muted/50 rounded-md p-2 border">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Reserved</div>
+                <div className="text-sm font-bold mt-0.5 text-amber-600 dark:text-amber-400">{variant.reservedStock}</div>
+              </div>
+              <div className="bg-muted/50 rounded-md p-2 border">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Available</div>
+                <div className="text-sm font-bold mt-0.5 text-emerald-600 dark:text-emerald-400">{variant.available}</div>
+              </div>
+            </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground">Notes (optional)</label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add context for audit log..." className="h-8 text-xs" />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Adjustment Amount</label>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d - 1)}><Minus className="h-3.5 w-3.5" /></Button>
+                <Input type="number" value={delta} onChange={(e) => setDelta(parseInt(e.target.value) || 0)} className="text-center font-bold h-8" />
+                <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d + 1)}><Plus className="h-3.5 w-3.5" /></Button>
+              </div>
+              {delta !== 0 && (
+                <p className="text-[11px] text-muted-foreground text-center mt-1">
+                  New on hand: <span className="font-medium">{newStock}</span> {"\u2192"}{" "}
+                  Available: <span className={cn("font-medium", newAvailable <= 0 ? "text-red-500" : "text-emerald-600")}>{newAvailable}</span>
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Reason</label>
+              <Select value={reason} onValueChange={setReason}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectItem value="received">Stock Received</SelectItem>
+                  <SelectItem value="correction">Count Correction</SelectItem>
+                  <SelectItem value="return">Customer Return</SelectItem>
+                  <SelectItem value="damage">Damaged / Write-off</SelectItem>
+                  <SelectItem value="theft">Theft / Shrinkage</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Notes (optional)</label>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add context for audit log..." className="h-8 text-xs" />
+            </div>
           </div>
-        </CardContent>
-        <div className="flex items-center justify-end gap-2 p-4 border-t bg-muted/20">
-          <Button variant="outline" size="sm" onClick={onClose} className="h-7 text-xs">Cancel</Button>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)} className="h-7 text-xs">Cancel</Button>
           <Button size="sm" onClick={handleSubmit} disabled={delta === 0 || submitting} className="h-7 text-xs">
             {submitting ? "Applying..." : `Apply ${delta > 0 ? "+" : ""}${delta}`}
           </Button>
-        </div>
-      </Card>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

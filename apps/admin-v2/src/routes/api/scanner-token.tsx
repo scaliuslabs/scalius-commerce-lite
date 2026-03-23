@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { env } from "cloudflare:workers";
 
 interface ScannerTokenPayload {
   adminId: string;
@@ -7,21 +6,6 @@ interface ScannerTokenPayload {
   createdAt: number;
   claimed: boolean;
   sessionId?: string;
-}
-
-interface ScannerUser {
-  id: string;
-  name?: string;
-  email?: string;
-}
-
-interface ScannerSession {
-  id: string;
-}
-
-interface ScannerContext {
-  user?: ScannerUser;
-  session?: ScannerSession;
 }
 
 interface CloudflareEnv {
@@ -59,15 +43,17 @@ export const Route = createFileRoute("/api/scanner-token")({
       /**
        * POST -- Generate scanner token. Requires admin session.
        */
-      POST: async ({ request, context }) => {
-        const ctx = (context as unknown) as ScannerContext;
-        const user = ctx?.user;
-        const session = ctx?.session;
+      POST: async ({ request }) => {
+        const { getAuthSession } = await import("~/lib/auth.server");
+        const authResult = await getAuthSession(request.headers);
 
-        if (!session || !user) {
+        if (!authResult?.session || !authResult?.user) {
           return jsonResponse({ success: false, error: "Authentication required" }, 401);
         }
 
+        const user = authResult.user;
+
+        const { env } = await import("cloudflare:workers");
         const kv = (env as CloudflareEnv)?.CACHE;
         if (!kv) {
           return jsonResponse({ success: false, error: "KV binding unavailable" }, 503);
@@ -100,6 +86,7 @@ export const Route = createFileRoute("/api/scanner-token")({
           return jsonResponse({ success: false, error: "Token parameter required" }, 400);
         }
 
+        const { env } = await import("cloudflare:workers");
         const kv = (env as CloudflareEnv)?.CACHE;
         if (!kv) {
           return jsonResponse({ success: false, error: "KV binding unavailable" }, 503);

@@ -1,8 +1,20 @@
-import { useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { FileText, Plus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { pagesQueryOptions } from "~/lib/api.queries";
 import {
@@ -19,17 +31,10 @@ import {
 import { getPageColumns } from "~/components/admin/data-table/columns/page-columns";
 import type { Page } from "~/types/api-responses";
 
-const searchSchema = z.object({
-  page: z.number().default(1).catch(1),
-  limit: z.number().default(20).catch(20),
-  search: z.string().default("").catch(""),
-  sort: z
-    .enum(["title", "sortOrder", "createdAt", "updatedAt"])
-    .default("updatedAt")
-    .catch("updatedAt"),
-  order: z.enum(["asc", "desc"]).default("desc").catch("desc"),
-  trashed: z.boolean().default(false).catch(false),
-});
+const searchSchema = createListSearchSchema(
+  ["title", "sortOrder", "createdAt", "updatedAt"] as const,
+  { sort: "updatedAt" },
+);
 
 function mapParams(deps: z.infer<typeof searchSchema>) {
   return {
@@ -70,6 +75,23 @@ function PagesPage() {
   const restoreMutation = useRestorePage();
   const bulkDeleteMutation = useBulkDeletePages();
 
+  // Delete confirmation state
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const isActionLoading =
+    deleteMutation.isPending || permanentDeleteMutation.isPending;
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteId) return;
+    const id = deleteId;
+    setDeleteId(null);
+    if (showTrashed) {
+      permanentDeleteMutation.mutate(id);
+    } else {
+      deleteMutation.mutate(id);
+    }
+  }, [deleteId, showTrashed, deleteMutation, permanentDeleteMutation]);
+
   // Column definitions
   const columns = useMemo(
     () =>
@@ -77,53 +99,46 @@ function PagesPage() {
         showTrashed,
         getStorefrontPath,
         onEdit: (id) =>
-          void navigate({ to: `/admin/pages/${id}/edit` as string }),
-        onDelete: (id) => deleteMutation.mutate(id),
+          void navigate({ to: "/admin/pages/$pageId/edit", params: { pageId: id } }),
+        onDelete: (id) => setDeleteId(id),
         onRestore: (id) => restoreMutation.mutate(id),
-        onPermanentDelete: (id) => permanentDeleteMutation.mutate(id),
+        onPermanentDelete: (id) => setDeleteId(id),
       }),
-    [showTrashed, getStorefrontPath, navigate, deleteMutation, restoreMutation, permanentDeleteMutation],
+    [showTrashed, getStorefrontPath, navigate, restoreMutation],
   );
 
   // Data selector
-  const dataSelector = useCallback(
-    (raw: unknown) => {
-      const r = raw as Record<string, unknown>;
-      return {
-        data: (r.pages ?? []) as Page[],
-        pagination: (r.pagination ?? {
-          total: 0,
-          page: search.page,
-          limit: search.limit,
-          totalPages: 0,
-        }) as {
-          total: number;
-          page: number;
-          limit: number;
-          totalPages: number;
-        },
-      };
+  const dataSelector = useMemo(() => createDataSelector<Page>("pages"), []);
+
+  const onPaginationChange = useCallback(
+    (page: number, limit: number) => {
+      void navigate({
+        search: ((prev: Record<string, unknown>) => ({ ...prev, page, limit })) as never,
+      });
     },
-    [search.page, search.limit],
+    [navigate],
+  );
+
+  const onSortingChange = useCallback(
+    (sort: string, order: "asc" | "desc") => {
+      void navigate({
+        search: ((prev: Record<string, unknown>) => ({ ...prev, sort, order, page: 1 })) as never,
+      });
+    },
+    [navigate],
   );
 
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable({
       columns,
-      queryOptions: pagesQueryOptions(mapParams(search)) as never,
+      queryOptions: pagesQueryOptions(mapParams(search)),
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,
       currentSort: search.sort,
       currentOrder: search.order,
-      onPaginationChange: (page, limit) =>
-        void navigate({
-          search: ((prev: Record<string, unknown>) => ({ ...prev, page, limit })) as never,
-        }),
-      onSortingChange: (sort, order) =>
-        void navigate({
-          search: ((prev: Record<string, unknown>) => ({ ...prev, sort, order, page: 1 })) as never,
-        }),
+      onPaginationChange,
+      onSortingChange,
     });
 
   return (
@@ -208,6 +223,55 @@ function PagesPage() {
           />
         }
       />
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog
+        open={!!deleteId}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+      >
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-base">
+              {showTrashed ? (
+                <>
+                  <AlertTriangle className="h-4 w-4 text-red-500" /> Delete
+                  Permanently?
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 text-amber-500" /> Move to Trash?
+                </>
+              )}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="pt-1 text-xs">
+              {showTrashed
+                ? "This action cannot be undone. Are you sure you want to permanently delete this page?"
+                : "Are you sure you want to move this page to the trash? It can be restored later."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isActionLoading}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className={cn(
+                "h-8 text-xs",
+                showTrashed ? "bg-destructive hover:bg-destructive/90" : "",
+              )}
+              disabled={isActionLoading}
+            >
+              {isActionLoading ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : null}
+              {showTrashed ? "Delete Permanently" : "Move to Trash"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

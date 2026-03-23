@@ -40,9 +40,9 @@
   --sidebar-ring: oklch(0.705 0.015 286.067);
 
   /* Explicit chart color mapping */
-  --color-revenue: oklch(var(--chart-1));
-  --color-orders: oklch(var(--chart-2));
-  --color-newCustomers: oklch(var(--chart-3));
+  --color-revenue: var(--chart-1);
+  --color-orders: var(--chart-2);
+  --color-newCustomers: var(--chart-3);
 }
 
 .dark {
@@ -79,9 +79,9 @@
   --sidebar-ring: oklch(0.552 0.016 285.938);
 
   /* Explicit chart color mapping (Dark) */
-  --color-revenue: oklch(var(--chart-1));
-  --color-orders: oklch(var(--chart-2));
-  --color-newCustomers: oklch(var(--chart-3));
+  --color-revenue: var(--chart-1);
+  --color-orders: var(--chart-2);
+  --color-newCustomers: var(--chart-3);
 }
 
 @theme inline {

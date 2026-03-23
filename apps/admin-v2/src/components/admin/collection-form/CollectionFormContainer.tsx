@@ -97,10 +97,7 @@ export function CollectionForm({
     } catch (error: unknown) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save collection", {
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to save collection. Please try again.",
+        description: getServerFnError(error, "Failed to save collection"),
       });
     } finally {
       setIsSubmitting(false);

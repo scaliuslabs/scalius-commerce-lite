@@ -1,14 +1,14 @@
 import { memo } from "react";
 import type { Column } from "@tanstack/react-table";
 import { cn } from "@scalius/shared/utils";
-import { Button } from "~/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 import { ArrowDown, ArrowUp, ArrowUpDown, EyeOff } from "lucide-react";
 
 interface DataTableColumnHeaderProps<TData, TValue> {

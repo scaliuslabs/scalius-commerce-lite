@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { Tags, Trash2, Plus, Undo } from "lucide-react";
+import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { attributesQueryOptions } from "~/lib/api.queries";
 import {
   useUpdateAttribute,
@@ -16,7 +17,6 @@ import {
   DataTable,
   DataTableToolbar,
   useServerTable,
-  type ServerTablePagination,
 } from "~/components/admin/data-table";
 import {
   getAttributeColumns,
@@ -30,17 +30,10 @@ import {
 import { useAttributeActions } from "~/components/admin/attributes-manager/hooks/useAttributeActions";
 import type { NewAttribute } from "~/components/admin/attributes-manager/types";
 
-const searchSchema = z.object({
-  page: z.number().default(1).catch(1),
-  limit: z.number().default(20).catch(20),
-  search: z.string().default("").catch(""),
-  sort: z
-    .enum(["name", "slug", "filterable", "updatedAt"])
-    .default("name")
-    .catch("name"),
-  order: z.enum(["asc", "desc"]).default("asc").catch("asc"),
-  trashed: z.boolean().default(false).catch(false),
-});
+const searchSchema = createListSearchSchema(
+  ["name", "slug", "filterable", "updatedAt"] as const,
+  { sort: "name", order: "asc" },
+);
 
 function mapParams(deps: z.infer<typeof searchSchema>) {
   return {
@@ -225,24 +218,7 @@ function AttributesPage() {
   );
 
   // Data selector
-  const dataSelector = useCallback(
-    (raw: unknown) => {
-      const d = raw as {
-        attributes?: AttributeItem[];
-        pagination?: ServerTablePagination;
-      };
-      return {
-        data: (d.attributes || []) as AttributeItem[],
-        pagination: d.pagination || {
-          total: 0,
-          page: search.page,
-          limit: search.limit,
-          totalPages: 0,
-        },
-      };
-    },
-    [search.page, search.limit],
-  );
+  const dataSelector = useMemo(() => createDataSelector<AttributeItem>("attributes"), []);
 
   // URL param updaters
   const onPaginationChange = useCallback(
@@ -289,7 +265,7 @@ function AttributesPage() {
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable<AttributeItem>({
       columns,
-      queryOptions: attributesQueryOptions(mapParams(search)) as never,
+      queryOptions: attributesQueryOptions(mapParams(search)),
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,

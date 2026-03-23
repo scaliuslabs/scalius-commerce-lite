@@ -1,7 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { ScannerApp } from "~/components/admin/scanner";
 
+const scannerSearchSchema = z.object({
+  token: z.string().optional().catch(undefined),
+});
+
 export const Route = createFileRoute("/scanner")({
+  validateSearch: scannerSearchSchema,
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -19,7 +25,7 @@ export const Route = createFileRoute("/scanner")({
 });
 
 function ScannerPage() {
-  const { token } = Route.useSearch() as { token?: string };
+  const { token } = Route.useSearch();
 
   return (
     <div className="dark bg-background text-foreground min-h-screen overflow-hidden">
