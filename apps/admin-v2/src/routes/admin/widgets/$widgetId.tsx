@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { WidgetForm } from "~/components/admin/widgets/WidgetForm";
 import { widgetQueryOptions, widgetsQueryOptions } from "~/lib/api.queries";
 import type { Widget, WidgetListResponse } from "~/types/api-responses";
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/admin/widgets/$widgetId")({
       promises.push(queryClient.ensureQueryData(widgetQueryOptions(params.widgetId)));
     }
     await Promise.all(promises);
+    return { isCreateMode };
   },
   head: () => ({
     meta: [{ title: "Widget | Scalius Admin" }],
@@ -23,27 +24,44 @@ export const Route = createFileRoute("/admin/widgets/$widgetId")({
 });
 
 function WidgetFormPage() {
-  const { widgetId } = Route.useParams();
-  const isCreateMode = widgetId === "create";
-  const { data: listData } = useSuspenseQuery(widgetsQueryOptions({}));
-  // useQuery (not useSuspenseQuery) to support enabled: false for create mode
-  const { data: widgetData } = useQuery({
-    ...widgetQueryOptions(widgetId),
-    enabled: !isCreateMode,
-  });
+  const { isCreateMode } = Route.useLoaderData();
 
-  const widget = isCreateMode ? null : (widgetData as Widget | null);
+  return isCreateMode ? <WidgetCreateForm /> : <WidgetEditForm />;
+}
+
+function WidgetCreateForm() {
+  const { data: listData } = useSuspenseQuery(widgetsQueryOptions({}));
   const availableCollections = (listData as WidgetListResponse).availableCollections || [];
-  const submitButtonText = isCreateMode ? "Create Widget" : "Save Changes";
+
+  return (
+    <div className="container mx-auto py-6">
+      <WidgetForm
+        widget={null}
+        isCreateMode={true}
+        availableCollections={availableCollections}
+        placementRules={Object.values(WidgetPlacementRule)}
+        submitButtonText="Create Widget"
+      />
+    </div>
+  );
+}
+
+function WidgetEditForm() {
+  const { widgetId } = Route.useParams();
+  const { data: listData } = useSuspenseQuery(widgetsQueryOptions({}));
+  const { data: widgetData } = useSuspenseQuery(widgetQueryOptions(widgetId));
+
+  const widget = widgetData as Widget;
+  const availableCollections = (listData as WidgetListResponse).availableCollections || [];
 
   return (
     <div className="container mx-auto py-6">
       <WidgetForm
         widget={widget}
-        isCreateMode={isCreateMode}
+        isCreateMode={false}
         availableCollections={availableCollections}
         placementRules={Object.values(WidgetPlacementRule)}
-        submitButtonText={submitButtonText}
+        submitButtonText="Save Changes"
       />
     </div>
   );

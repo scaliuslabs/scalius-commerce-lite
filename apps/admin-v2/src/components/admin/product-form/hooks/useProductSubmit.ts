@@ -11,6 +11,7 @@ import { getServerFnError } from "@/lib/api-helpers";
 
 interface UseProductSubmitOptions {
   isEdit: boolean;
+  productId?: string;
   enableVariantImages: boolean;
   form: UseFormReturn<ProductFormValues>;
   onSuccess?: () => void;
@@ -26,6 +27,7 @@ interface UseProductSubmitReturn {
 
 export function useProductSubmit({
   isEdit,
+  productId,
   enableVariantImages,
   form,
   onSuccess,
@@ -42,7 +44,9 @@ export function useProductSubmit({
         enableVariantImages,
       );
       if (isEdit) {
-        return updateProduct({ data: { id: values.id!, ...formattedValues } }) as Promise<Record<string, unknown>>;
+        const entityId = productId || values.id;
+        if (!entityId) throw new Error("Product ID is required for update");
+        return updateProduct({ data: { id: entityId, ...formattedValues } }) as Promise<Record<string, unknown>>;
       }
       return createProduct({ data: formattedValues as Record<string, unknown> }) as Promise<Record<string, unknown>>;
     },
