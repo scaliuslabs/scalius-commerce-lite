@@ -52,11 +52,3 @@ export function useStorefrontUrl() {
   };
 }
 
-/**
- * Clear the TanStack Query cache for storefront URL.
- * Kept for API compatibility but typically not needed --
- * prefer queryClient.invalidateQueries({ queryKey: ["settings", "storefront-url"] }).
- */
-export function clearStorefrontUrlCache(): void {
-  // No-op: callers should use queryClient.invalidateQueries instead
-}

@@ -1,7 +1,6 @@
 import React, { Suspense } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import type { SubmitHandler } from "react-hook-form";
 import { toast } from "sonner";
 import {
   FormControl,
@@ -30,12 +29,11 @@ import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadF
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
-import { useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { getServerFnError } from "@/lib/api-helpers";
 import { createCategory, updateCategory } from "@/lib/api.functions";
 import { LoadingFallback } from "./shared/LoadingFallback";
 import { categoryFormSchema, type CategoryFormValues } from "@/lib/form-schemas";
+import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
+import { queryKeys } from "@/lib/query-keys";
 
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
@@ -46,8 +44,6 @@ export function CategoryForm({
   defaultValues,
   isEdit = false,
 }: CategoryFormProps) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
 
@@ -69,7 +65,29 @@ export function CategoryForm({
     },
   });
 
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<CategoryFormValues>({
+    entityName: "Category",
+    isEdit,
+    entityId: defaultValues?.id,
+    createFn: (data) => createCategory({ data: data as unknown as Record<string, unknown> }),
+    updateFn: (data) => updateCategory({ data: data as Record<string, unknown> & { id: string } }),
+    invalidateKeys: [
+      queryKeys.categories.list(),
+      queryKeys.categories.formOptions(),
+      ...(isEdit && defaultValues?.id ? [queryKeys.categories.detail(defaultValues.id)] : []),
+    ],
+    navigateTo: "/admin/categories",
+    onError: (_error, message, setFieldError) => {
+      if (message.includes("slug already exists")) {
+        setFieldError("slug", "This slug is already in use. Please choose a different one.");
+        toast.error("Slug already in use", {
+          description: "This slug is already in use. Please choose a different one.",
+        });
+        return true;
+      }
+      return false;
+    },
+  });
 
   // Auto-generate slug from name - ONLY if slug hasn't been manually edited
   React.useEffect(() => {
@@ -92,58 +110,10 @@ export function CategoryForm({
     }
   }, [form, isEdit]);
 
-  const handleSubmit: SubmitHandler<CategoryFormValues> = async (values) => {
-    try {
-      setIsSubmitting(true);
-
-      if (isEdit) {
-        const entityId = defaultValues?.id || values.id;
-        if (!entityId) throw new Error("Category ID is required for update");
-        await updateCategory({ data: { ...values, id: entityId } as Record<string, unknown> & { id: string } });
-      } else {
-        await createCategory({ data: values as unknown as Record<string, unknown> });
-      }
-
-      // Invalidate queries so list/detail pages show fresh data
-      queryClient.invalidateQueries({ queryKey: ["categories", "list"] });
-      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
-      if (isEdit) {
-        const entityId = defaultValues?.id || values.id;
-        if (entityId) {
-          queryClient.invalidateQueries({ queryKey: ["categories", "detail", entityId] });
-        }
-      }
-
-      toast.success(
-        isEdit
-          ? "Category updated successfully!"
-          : "Category created successfully!",
-        {
-          description: `"${values.name}" has been ${isEdit ? "updated" : "created"}.`,
-        },
-      );
-
-      void navigate({ to: "/admin/categories" });
-    } catch (error: unknown) {
-      console.error("Error submitting form:", error);
-      const errorMessage = getServerFnError(error, "Failed to save category");
-      if (errorMessage.includes("slug already exists")) {
-        form.setError("slug", {
-          type: "manual",
-          message: "This slug is already in use. Please choose a different one.",
-        });
-        toast.error("Slug already in use", {
-          description: "This slug is already in use. Please choose a different one.",
-        });
-      } else {
-        toast.error("Failed to save category", {
-          description: errorMessage,
-          duration: 6000,
-        });
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleSubmit = (values: CategoryFormValues) => {
+    submitEntity(values, (field, msg) =>
+      form.setError(field as keyof CategoryFormValues, { type: "manual", message: msg }),
+    );
   };
 
   return (

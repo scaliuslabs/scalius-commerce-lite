@@ -1,11 +1,10 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Switch } from "~/components/ui/switch";
 import { Badge } from "~/components/ui/badge";
 import { LayoutGrid, GridIcon } from "lucide-react";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
-import { DataTableRowActions } from "../DataTableRowActions";
 import { InlineEditCell } from "../InlineEditCell";
+import { createSelectColumn, createActionsColumn } from "./column-factories";
 import type { Collection } from "~/types/api-responses";
 
 export interface CollectionItem extends Collection {
@@ -84,29 +83,7 @@ export function getCollectionColumns(
   opts: CollectionColumnOptions,
 ): ColumnDef<CollectionItem, unknown>[] {
   return [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(!!v)}
-          aria-label={`Select ${row.original.name}`}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    createSelectColumn<CollectionItem>({ getLabel: (r) => (r as CollectionItem).name }),
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -182,22 +159,12 @@ export function getCollectionColumns(
         );
       },
     },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const collection = row.original;
-        return (
-          <DataTableRowActions
-            showTrashed={opts.showTrashed}
-            onEdit={() => opts.onEdit(collection.id)}
-            onDelete={() => opts.onDelete(collection.id)}
-            onRestore={() => opts.onRestore(collection.id)}
-            onPermanentDelete={() => opts.onPermanentDelete(collection.id)}
-          />
-        );
-      },
-      enableSorting: false,
-      size: 70,
-    },
+    createActionsColumn<CollectionItem>({
+      showTrashed: opts.showTrashed,
+      onEdit: (c) => opts.onEdit(c.id),
+      onDelete: (c) => opts.onDelete(c.id),
+      onRestore: (c) => opts.onRestore(c.id),
+      onPermanentDelete: (c) => opts.onPermanentDelete(c.id),
+    }),
   ];
 }

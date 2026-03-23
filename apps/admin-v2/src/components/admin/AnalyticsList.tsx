@@ -35,6 +35,7 @@ import { deleteAnalyticsScript, toggleAnalyticsScript } from "@/lib/api.function
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter, Link } from "@tanstack/react-router";
 import { AdminListPagination } from "./shared/AdminListPagination";
+import { useDeleteHandler } from "@/hooks/use-delete-handler";
 
 interface Analytics {
   id: string;
@@ -55,7 +56,14 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
   const navigate = useNavigate();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [isDeleting, setIsDeleting] = React.useState(false);
+  const { isDeleting, handleDelete } = useDeleteHandler({
+    deleteFn: (data) => deleteAnalyticsScript({ data }),
+    invalidateKeys: [["analytics", "list"]],
+    removeKeys: [(id) => ["analytics", "detail", id]],
+    successMessage: "Analytics script has been deleted.",
+    errorMessage: "Failed to delete analytics script.",
+    invalidateRouter: true,
+  });
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
@@ -97,22 +105,6 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
         return "Body End";
       default:
         return location;
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      setIsDeleting(true);
-      await deleteAnalyticsScript({ data: { id } });
-      queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
-      queryClient.removeQueries({ queryKey: ["analytics", "detail", id] });
-      toast.success("Deleted", { description: "Analytics script has been deleted." });
-      router.invalidate();
-    } catch (error: unknown) {
-      console.error("Error deleting analytics script:", error);
-      toast.error("Error", { description: getServerFnError(error, "Failed to delete analytics script.") });
-    } finally {
-      setIsDeleting(false);
     }
   };
 

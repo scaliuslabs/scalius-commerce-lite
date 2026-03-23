@@ -4,7 +4,7 @@ import { themeSettingsQueryOptions } from "~/lib/api.queries";
 
 export const Route = createFileRoute("/admin/settings/theme")({
   loader: async ({ context: { queryClient } }) => {
-    void queryClient.prefetchQuery(themeSettingsQueryOptions());
+    await queryClient.ensureQueryData(themeSettingsQueryOptions());
   },
   head: () => ({ meta: [{ title: "Theme | Scalius Admin" }] }),
   component: ThemePage,

@@ -1,8 +1,6 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import type { SubmitHandler } from "react-hook-form";
-import { toast } from "sonner";
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import type { Country } from "react-phone-number-input";
@@ -23,11 +21,10 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { LocationSelector } from "./LocationSelector";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
-import { useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { getServerFnError } from "@/lib/api-helpers";
 import { getAllowedCountries, createCustomer, updateCustomer } from "@/lib/api.functions";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/form-schemas";
+import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
+import { queryKeys } from "@/lib/query-keys";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -38,8 +35,6 @@ export function CustomerForm({
   defaultValues,
   isEdit = false,
 }: CustomerFormProps) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [allowedCountries, setAllowedCountries] = React.useState<string[]>([]);
   const [allowedCountriesMode, setAllowedCountriesMode] = React.useState<"include" | "exclude">("include");
 
@@ -134,31 +129,21 @@ export function CustomerForm({
     }
   }, [isEdit, defaultValues, isInitializing, form]);
 
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<CustomerFormValues>({
+    entityName: "Customer",
+    isEdit,
+    entityId: defaultValues?.id,
+    createFn: (data) => createCustomer({ data: data as Record<string, unknown> }),
+    updateFn: (data) => updateCustomer({ data: data as { id: string } & Record<string, unknown> }),
+    invalidateKeys: [
+      queryKeys.customers.list(),
+      ...(isEdit && defaultValues?.id ? [queryKeys.customers.detail(defaultValues.id)] : []),
+    ],
+    navigateTo: "/admin/customers",
+  });
 
-  const handleSubmit: SubmitHandler<CustomerFormValues> = async (values) => {
-    try {
-      setIsSubmitting(true);
-      if (isEdit) {
-        const entityId = defaultValues?.id || values.id;
-        if (!entityId) throw new Error("Customer ID is required for update");
-        await updateCustomer({ data: { ...(values as Record<string, unknown>), id: entityId } as { id: string } & Record<string, unknown> });
-        queryClient.invalidateQueries({ queryKey: ["customers", "detail", entityId] });
-      } else {
-        await createCustomer({ data: values as Record<string, unknown> });
-      }
-      // Invalidate queries so list page shows fresh data
-      queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
-      toast.success(isEdit ? "Customer updated successfully" : "Customer created successfully");
-      void navigate({ to: "/admin/customers" });
-    } catch (error: unknown) {
-      console.error("Error submitting form:", error);
-      toast.error("Failed to save customer", {
-        description: getServerFnError(error, "Please try again."),
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleSubmit = (values: CustomerFormValues) => {
+    submitEntity(values);
   };
 
   return (

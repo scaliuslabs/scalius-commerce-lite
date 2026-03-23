@@ -1,8 +1,6 @@
 import React, { Suspense } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import type { SubmitHandler } from "react-hook-form";
-import { toast } from "sonner";
 import {
   FormControl,
   FormDescription,
@@ -31,12 +29,11 @@ import { CharacterCounter } from "@/components/ui/character-counter";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
-import { useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { getServerFnError } from "@/lib/api-helpers";
 import { createPage, updatePage } from "@/lib/api.functions";
 import { LoadingFallback } from "./shared/LoadingFallback";
 import { pageFormSchema, type PageFormValues } from "@/lib/form-schemas";
+import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
+import { queryKeys } from "@/lib/query-keys";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -44,8 +41,6 @@ interface PageFormProps {
 }
 
 export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
 
@@ -72,46 +67,28 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
     },
   });
 
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
-
-  const handleSubmit: SubmitHandler<PageFormValues> = async (values) => {
-    try {
-      setIsSubmitting(true);
-
+  const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<PageFormValues>({
+    entityName: "Page",
+    isEdit,
+    entityId: defaultValues?.id,
+    createFn: (data) => createPage({ data: data as unknown as Record<string, unknown> }),
+    updateFn: (data) => updatePage({ data: data as Record<string, unknown> & { id: string } }),
+    invalidateKeys: [
+      queryKeys.pages.list(),
+      ...(isEdit && defaultValues?.id ? [queryKeys.pages.detail(defaultValues.id)] : []),
+    ],
+    navigateTo: "/admin/pages",
+    transformValues: (values) => {
       // Set publishedAt to current date if isPublished is true and publishedAt is not set
       if (values.isPublished && !values.publishedAt) {
-        values.publishedAt = new Date();
+        return { ...values, publishedAt: new Date() };
       }
+      return values;
+    },
+  });
 
-      if (isEdit) {
-        const entityId = defaultValues?.id || values.id;
-        if (!entityId) throw new Error("Page ID is required for update");
-        await updatePage({ data: { ...values, id: entityId } as Record<string, unknown> & { id: string } });
-        queryClient.invalidateQueries({ queryKey: ["pages", "detail", entityId] });
-      } else {
-        await createPage({ data: values as unknown as Record<string, unknown> });
-      }
-
-      // Invalidate queries so list page shows fresh data
-      queryClient.invalidateQueries({ queryKey: ["pages", "list"] });
-
-      toast.success(
-        isEdit ? "Page updated successfully!" : "Page created successfully!",
-        {
-          description: `"${values.title}" has been ${isEdit ? "updated" : "created"}.`,
-        },
-      );
-
-      void navigate({ to: "/admin/pages" });
-    } catch (error: unknown) {
-      console.error("Error submitting form:", error);
-      toast.error("Failed to save page", {
-        description: getServerFnError(error, "Failed to save page"),
-        duration: 6000,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleSubmit = (values: PageFormValues) => {
+    submitEntity(values);
   };
 
   // Auto-generate slug from title (only when creating a new page, not editing)

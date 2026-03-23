@@ -1,13 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Tag } from "lucide-react";
-import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { cn } from "@scalius/shared/utils";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
-import { DataTableRowActions } from "../DataTableRowActions";
+import { createSelectColumn, createDateColumn, createActionsColumn } from "./column-factories";
 import type { Category } from "~/types/api-responses";
+import { getPlainText } from "~/lib/format-utils";
 
 /** Extended category type that includes the product count from list responses */
 export interface CategoryListItem extends Category {
@@ -23,46 +22,11 @@ interface CategoryColumnOptions {
   onPermanentDelete: (id: string) => void;
 }
 
-function getPlainDescription(html: string | null, maxLength = 60): string {
-  if (!html) return "";
-  let text = html;
-  let prev = "";
-  while (prev !== text) {
-    prev = text;
-    text = text.replace(/<[^>]*>/g, "");
-  }
-  text = text.replace(/&nbsp;/g, " ").trim();
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength).trim() + "...";
-}
-
 export function getCategoryColumns(
   opts: CategoryColumnOptions,
 ): ColumnDef<CategoryListItem, unknown>[] {
   return [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(!!v)}
-          aria-label={`Select ${row.original.name}`}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    createSelectColumn<CategoryListItem>({ getLabel: (r) => (r as CategoryListItem).name }),
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -99,7 +63,7 @@ export function getCategoryColumns(
               </span>
               {category.description ? (
                 <span className="text-xs text-muted-foreground/70 truncate">
-                  {getPlainDescription(category.description)}
+                  {getPlainText(category.description)}
                 </span>
               ) : null}
             </div>
@@ -139,44 +103,17 @@ export function getCategoryColumns(
       enableSorting: false,
       size: 100,
     },
-    {
-      accessorKey: "updatedAt",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Last Updated" />
-      ),
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">
-          {formatDate(row.original.updatedAt)}
-        </span>
-      ),
-      size: 130,
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const category = row.original;
-        return (
-          <DataTableRowActions
-            showTrashed={opts.showTrashed}
-            onView={
-              !opts.showTrashed
-                ? () => {
-                    window.open(
-                      opts.getStorefrontPath(`/categories/${category.slug}`),
-                      "_blank",
-                    );
-                  }
-                : undefined
-            }
-            onEdit={() => opts.onEdit(category.id)}
-            onDelete={() => opts.onDelete(category.id)}
-            onRestore={() => opts.onRestore(category.id)}
-            onPermanentDelete={() => opts.onPermanentDelete(category.id)}
-          />
-        );
-      },
-      enableSorting: false,
-      size: 70,
-    },
+    createDateColumn<CategoryListItem>("updatedAt", "Last Updated"),
+    createActionsColumn<CategoryListItem>({
+      showTrashed: opts.showTrashed,
+      onView: (c) =>
+        !opts.showTrashed
+          ? window.open(opts.getStorefrontPath(`/categories/${c.slug}`), "_blank")
+          : undefined,
+      onEdit: (c) => opts.onEdit(c.id),
+      onDelete: (c) => opts.onDelete(c.id),
+      onRestore: (c) => opts.onRestore(c.id),
+      onPermanentDelete: (c) => opts.onPermanentDelete(c.id),
+    }),
   ];
 }
