@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Table } from "@tanstack/react-table";
 import { Button } from "~/components/ui/button";
 import {
@@ -19,7 +20,7 @@ interface DataTablePaginationProps<TData> {
   pageSizeOptions?: number[];
 }
 
-export function DataTablePagination<TData>({
+function DataTablePaginationInner<TData>({
   table,
   itemLabel = "items",
   pageSizeOptions = [10, 20, 50, 100],
@@ -126,3 +127,5 @@ export function DataTablePagination<TData>({
     </div>
   );
 }
+
+export const DataTablePagination = memo(DataTablePaginationInner) as typeof DataTablePaginationInner;

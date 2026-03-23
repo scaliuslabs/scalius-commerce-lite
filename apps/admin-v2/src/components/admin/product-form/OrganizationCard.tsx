@@ -1,5 +1,5 @@
 // src/components/admin/product-form/OrganizationCard.tsx
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -43,7 +43,7 @@ interface OrganizationCardProps {
   isEdit?: boolean;
 }
 
-export function OrganizationCard({
+export const OrganizationCard = memo(function OrganizationCard({
   form,
   categories,
   isEdit,
@@ -121,7 +121,7 @@ export function OrganizationCard({
       </CardContent>
     </Card>
   );
-}
+});
 
 // Combobox component for selecting and creating categories
 function CategoryCombobox({

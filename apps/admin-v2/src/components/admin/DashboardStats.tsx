@@ -1,5 +1,5 @@
 //src/components/admin/DashboardStats.tsx
-import React, { Suspense } from "react";
+import React, { memo, Suspense } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import {
   Card,
@@ -19,7 +19,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import type { ChartConfig } from "@/components/ui/chart";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { useCurrency } from "@/hooks/use-currency";
 
 const DashboardChart = React.lazy(() =>
@@ -167,7 +167,7 @@ const cardVariants = {
   },
 };
 
-export function DashboardStats({
+export const DashboardStats = memo(function DashboardStats({
   totalProducts,
   totalCustomers,
   currentMonth,
@@ -253,4 +253,4 @@ export function DashboardStats({
     </div>
     </ErrorBoundary>
   );
-}
+});

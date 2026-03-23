@@ -112,8 +112,7 @@ function CategoriesPage() {
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable({
       columns,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      queryOptions: categoriesQueryOptions(mapParams(search)) as any,
+      queryOptions: categoriesQueryOptions(mapParams(search)) as never,
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,
@@ -121,11 +120,11 @@ function CategoriesPage() {
       currentOrder: search.order,
       onPaginationChange: (page, limit) =>
         void navigate({
-          search: ((p: any) => ({ ...p, page, limit })) as any,
+          search: ((prev: Record<string, unknown>) => ({ ...prev, page, limit })) as never,
         }),
       onSortingChange: (sort, order) =>
         void navigate({
-          search: ((p: any) => ({ ...p, sort, order, page: 1 })) as any,
+          search: ((prev: Record<string, unknown>) => ({ ...prev, sort, order, page: 1 })) as never,
         }),
     });
 
@@ -145,7 +144,7 @@ function CategoriesPage() {
         <div className="flex items-center gap-2">
           <Link
             to="/admin/categories"
-            search={(prev: any) => ({ ...prev, trashed: !showTrashed })}
+            search={((prev: Record<string, unknown>) => ({ ...prev, trashed: !showTrashed })) as never}
           >
             <Button variant="outline" size="sm">
               {showTrashed ? (
@@ -184,7 +183,7 @@ function CategoriesPage() {
             searchValue={search.search}
             onSearchChange={(value) =>
               void navigate({
-                search: ((p: any) => ({ ...p, search: value, page: 1 })) as any,
+                search: ((prev: Record<string, unknown>) => ({ ...prev, search: value, page: 1 })) as never,
               })
             }
             searchPlaceholder="Search categories..."

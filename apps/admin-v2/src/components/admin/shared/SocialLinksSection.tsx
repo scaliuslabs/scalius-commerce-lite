@@ -12,11 +12,22 @@ import { MediaManager } from "../media-manager";
 import { Plus, Trash2, GripVertical, Link2, ImageIcon, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import {
-  DragDropContext,
-  Droppable,
-  Draggable,
-  type DropResult,
-} from "@hello-pangea/dnd";
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import type { SocialLink } from "./builder-types";
@@ -30,13 +41,126 @@ interface SocialLinksSectionProps {
   cardClassName?: string;
 }
 
+function SortableSocialLink({
+  link,
+  onUpdate,
+  onRemove,
+  onIconSelect,
+  onIconRemove,
+}: {
+  link: SocialLink;
+  onUpdate: (id: string, updates: Partial<SocialLink>) => void;
+  onRemove: (id: string) => void;
+  onIconSelect: (id: string, file: MediaFile) => void;
+  onIconRemove: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: link.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-2 p-2 border rounded-md bg-card",
+        isDragging && "shadow-lg ring-2 ring-primary/30 opacity-50",
+      )}
+    >
+      {/* Drag Handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab p-1 rounded hover:bg-muted shrink-0"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+
+      {/* Icon Preview/Upload - Conditional rendering */}
+      <div className="relative shrink-0">
+        {link.iconUrl ? (
+          <div className="relative group">
+            <div className="h-9 w-9 rounded border bg-muted/30 flex items-center justify-center overflow-hidden">
+              <img
+                src={getOptimizedImageUrl(link.iconUrl)}
+                alt={link.label || "Icon"}
+                className="h-5 w-5 object-contain"
+              />
+            </div>
+            <Button
+              variant="destructive"
+              size="icon"
+              className="absolute -top-1 -right-1 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => onIconRemove(link.id)}
+            >
+              <X className="h-2 w-2" />
+            </Button>
+          </div>
+        ) : (
+          <MediaManager
+            onSelect={(file) => onIconSelect(link.id, file)}
+            trigger={
+              <Button variant="outline" size="icon" className="h-9 w-9">
+                <ImageIcon className="h-4 w-4" />
+              </Button>
+            }
+          />
+        )}
+      </div>
+
+      {/* Label Input */}
+      <Input
+        value={link.label}
+        onChange={(e) => onUpdate(link.id, { label: e.target.value })}
+        placeholder="Label"
+        className="flex-1 h-9"
+      />
+
+      {/* URL Input */}
+      <Input
+        value={link.url}
+        onChange={(e) => onUpdate(link.id, { url: e.target.value })}
+        placeholder="URL"
+        className="flex-1 h-9"
+      />
+
+      {/* Remove Button */}
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={() => onRemove(link.id)}
+        className="h-9 w-9 shrink-0"
+      >
+        <Trash2 className="h-4 w-4 text-muted-foreground" />
+      </Button>
+    </div>
+  );
+}
+
 export function SocialLinksSection({
   social,
   onChange,
-  droppableId,
+  droppableId: _droppableId,
   description = "Add links to your social media profiles. Customize each with a label and optional icon.",
   cardClassName,
 }: SocialLinksSectionProps) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
   const addSocialLink = () => {
     onChange([
       ...social,
@@ -67,12 +191,13 @@ export function SocialLinksSection({
     updateSocialLink(id, { iconUrl: undefined });
   };
 
-  const handleDragEnd = (result: DropResult) => {
-    if (!result.destination) return;
-    const items = Array.from(social);
-    const [reordered] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reordered);
-    onChange(items);
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = social.findIndex((link) => link.id === active.id);
+    const newIndex = social.findIndex((link) => link.id === over.id);
+    onChange(arrayMove(social, oldIndex, newIndex));
   };
 
   return (
@@ -103,120 +228,29 @@ export function SocialLinksSection({
             </Button>
           </div>
         ) : (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId={droppableId}>
-              {(provided, snapshot) => (
-                <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  className={cn(
-                    "space-y-2",
-                    snapshot.isDraggingOver &&
-                      "bg-primary/5 rounded-lg p-2 -m-2",
-                  )}
-                >
-                  {social.map((link, index) => (
-                    <Draggable
-                      key={link.id}
-                      draggableId={link.id}
-                      index={index}
-                    >
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          className={cn(
-                            "flex items-center gap-2 p-2 border rounded-md bg-card",
-                            snapshot.isDragging &&
-                              "shadow-lg ring-2 ring-primary/30",
-                          )}
-                        >
-                          {/* Drag Handle */}
-                          <div
-                            {...provided.dragHandleProps}
-                            className="cursor-grab p-1 rounded hover:bg-muted shrink-0"
-                          >
-                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                          </div>
-
-                          {/* Icon Preview/Upload - Conditional rendering */}
-                          <div className="relative shrink-0">
-                            {link.iconUrl ? (
-                              <div className="relative group">
-                                <div className="h-9 w-9 rounded border bg-muted/30 flex items-center justify-center overflow-hidden">
-                                  <img
-                                    src={getOptimizedImageUrl(link.iconUrl)}
-                                    alt={link.label || "Icon"}
-                                    className="h-5 w-5 object-contain"
-                                  />
-                                </div>
-                                <Button
-                                  variant="destructive"
-                                  size="icon"
-                                  className="absolute -top-1 -right-1 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={() => removeIcon(link.id)}
-                                >
-                                  <X className="h-2 w-2" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <MediaManager
-                                onSelect={(file) =>
-                                  handleIconSelect(link.id, file)
-                                }
-                                trigger={
-                                  <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-9 w-9"
-                                  >
-                                    <ImageIcon className="h-4 w-4" />
-                                  </Button>
-                                }
-                              />
-                            )}
-                          </div>
-
-                          {/* Label Input */}
-                          <Input
-                            value={link.label}
-                            onChange={(e) =>
-                              updateSocialLink(link.id, {
-                                label: e.target.value,
-                              })
-                            }
-                            placeholder="Label"
-                            className="flex-1 h-9"
-                          />
-
-                          {/* URL Input */}
-                          <Input
-                            value={link.url}
-                            onChange={(e) =>
-                              updateSocialLink(link.id, { url: e.target.value })
-                            }
-                            placeholder="URL"
-                            className="flex-1 h-9"
-                          />
-
-                          {/* Remove Button */}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeSocialLink(link.id)}
-                            className="h-9 w-9 shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={social.map((link) => link.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-2">
+                {social.map((link) => (
+                  <SortableSocialLink
+                    key={link.id}
+                    link={link}
+                    onUpdate={updateSocialLink}
+                    onRemove={removeSocialLink}
+                    onIconSelect={handleIconSelect}
+                    onIconRemove={removeIcon}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </CardContent>
     </Card>

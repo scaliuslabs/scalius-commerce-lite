@@ -1,7 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import FirebaseSettingsForm from "~/components/admin/settings/FirebaseSettingsForm";
+import { firebaseSettingsQueryOptions } from "~/lib/api.queries";
 
 export const Route = createFileRoute("/admin/settings/notifications")({
+  loader: async ({ context: { queryClient } }) => {
+    void queryClient.prefetchQuery(firebaseSettingsQueryOptions());
+  },
   head: () => ({ meta: [{ title: "Notification Settings | Scalius Admin" }] }),
   component: NotificationSettingsPage,
 });

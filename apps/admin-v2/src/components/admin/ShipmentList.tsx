@@ -1,5 +1,5 @@
 import { useState, useEffect, type FC } from "react";
-import { ShipmentStatusBadge } from "./ShipmentStatusBadge";
+import { ShipmentStatusBadge } from "./shared/StatusBadges";
 import { ShipmentMetadataDisplay } from "../ui/ShipmentMetadataDisplay";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";

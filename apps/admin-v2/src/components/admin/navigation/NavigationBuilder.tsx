@@ -17,9 +17,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Menu, Layers } from "lucide-react";
-import { DragDropContext, Droppable } from "@hello-pangea/dnd";
-import type { DropResult } from "@hello-pangea/dnd";
-import { cn } from "@scalius/shared/utils";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { SortableNavItem } from "./SortableNavItem";
 import { AddNavItemDialog } from "./AddNavItemDialog";
 import type { NavigationItem, NavigationBuilderProps } from "./types";
@@ -34,6 +46,13 @@ export function NavigationBuilder({
   const [addToParentPath, setAddToParentPath] = useState<string | null>(null);
   const [addToParentLabel, setAddToParentLabel] = useState<string | undefined>(
     undefined,
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   // Helper: Get item at path
@@ -193,8 +212,6 @@ export function NavigationBuilder({
       if (!path) return; // Can't outdent root items
 
       const pathParts = path.split(".").map(Number);
-      // const parentPath = pathParts.slice(0, -1).join(".");
-      // const parentIndex = pathParts[pathParts.length - 1];
 
       const outdentAtPath = (
         items: NavigationItem[],
@@ -227,40 +244,34 @@ export function NavigationBuilder({
     [navigation, onChange],
   );
 
-  // Drag end handler
+  // Drag end handler for root-level items
   const handleDragEnd = useCallback(
-    (result: DropResult) => {
-      if (!result.destination) return;
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
 
-      const { source, destination } = result;
+      const oldIndex = navigation.findIndex((i) => i.id === active.id);
+      const newIndex = navigation.findIndex((i) => i.id === over.id);
+      onChange(arrayMove(navigation, oldIndex, newIndex));
+    },
+    [navigation, onChange],
+  );
 
-      // Same list reorder
-      if (source.droppableId === destination.droppableId) {
-        if (source.droppableId === "main-navigation") {
-          const reordered = Array.from(navigation);
-          const [removed] = reordered.splice(source.index, 1);
-          reordered.splice(destination.index, 0, removed);
-          onChange(reordered);
-        } else {
-          // Submenu reorder
-          const parentId = source.droppableId.replace("submenu-", "");
-          const updateSubmenu = (items: NavigationItem[]): NavigationItem[] => {
-            return items.map((item) => {
-              if (item.id === parentId && item.subMenu) {
-                const reordered = Array.from(item.subMenu);
-                const [removed] = reordered.splice(source.index, 1);
-                reordered.splice(destination.index, 0, removed);
-                return { ...item, subMenu: reordered };
-              }
-              if (item.subMenu) {
-                return { ...item, subMenu: updateSubmenu(item.subMenu) };
-              }
-              return item;
-            });
-          };
-          onChange(updateSubmenu(navigation));
-        }
-      }
+  // Reorder submenu items (called from SortableNavItem for nested lists)
+  const handleReorderSubmenu = useCallback(
+    (parentId: string, oldIndex: number, newIndex: number) => {
+      const reorderInItems = (items: NavigationItem[]): NavigationItem[] => {
+        return items.map((item) => {
+          if (item.id === parentId && item.subMenu) {
+            return { ...item, subMenu: arrayMove(item.subMenu, oldIndex, newIndex) };
+          }
+          if (item.subMenu) {
+            return { ...item, subMenu: reorderInItems(item.subMenu) };
+          }
+          return item;
+        });
+      };
+      onChange(reorderInItems(navigation));
     },
     [navigation, onChange],
   );
@@ -317,67 +328,68 @@ export function NavigationBuilder({
 
       <CardContent className="p-0">
         <div className="border-t">
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="main-navigation" type="MAIN_NAV">
-              {(provided, snapshot) => (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30 hover:bg-muted/30">
-                      <TableHead className="w-[60px] pl-3">Order</TableHead>
-                      <TableHead>Label</TableHead>
-                      <TableHead>URL</TableHead>
-                      <TableHead className="w-[100px] text-right pr-3">
-                        Actions
-                      </TableHead>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={navigation.map((i) => i.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableHead className="w-[60px] pl-3">Order</TableHead>
+                    <TableHead>Label</TableHead>
+                    <TableHead>URL</TableHead>
+                    <TableHead className="w-[100px] text-right pr-3">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {navigation.length === 0 ? (
+                    <TableRow>
+                      <td colSpan={4} className="py-12 text-center">
+                        <Menu className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
+                        <p className="text-muted-foreground mb-1">
+                          No navigation items yet
+                        </p>
+                        <p className="text-sm text-muted-foreground/70 mb-4">
+                          Add categories, pages, custom links, or labels
+                        </p>
+                        <Button onClick={handleAddRoot}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add First Item
+                        </Button>
+                      </td>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={cn(snapshot.isDraggingOver && "bg-primary/5")}
-                  >
-                    {navigation.length === 0 ? (
-                      <TableRow>
-                        <td colSpan={4} className="py-12 text-center">
-                          <Menu className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
-                          <p className="text-muted-foreground mb-1">
-                            No navigation items yet
-                          </p>
-                          <p className="text-sm text-muted-foreground/70 mb-4">
-                            Add categories, pages, custom links, or labels
-                          </p>
-                          <Button onClick={handleAddRoot}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add First Item
-                          </Button>
-                        </td>
-                      </TableRow>
-                    ) : (
-                      navigation.map((item, index) => (
-                        <SortableNavItem
-                          key={item.id}
-                          item={item}
-                          index={index}
-                          depth={0}
-                          maxDepth={MAX_NAV_DEPTH}
-                          onUpdate={updateItem}
-                          onRemove={removeItem}
-                          onAddChild={handleAddChild}
-                          onIndent={handleIndent}
-                          onOutdent={handleOutdent}
-                          parentPath=""
-                          getStorefrontPath={getStorefrontPath}
-                          canIndent={index > 0}
-                          canOutdent={false}
-                        />
-                      ))
-                    )}
-                    {provided.placeholder}
-                  </TableBody>
-                </Table>
-              )}
-            </Droppable>
-          </DragDropContext>
+                  ) : (
+                    navigation.map((item, index) => (
+                      <SortableNavItem
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        depth={0}
+                        maxDepth={MAX_NAV_DEPTH}
+                        onUpdate={updateItem}
+                        onRemove={removeItem}
+                        onAddChild={handleAddChild}
+                        onIndent={handleIndent}
+                        onOutdent={handleOutdent}
+                        parentPath=""
+                        getStorefrontPath={getStorefrontPath}
+                        canIndent={index > 0}
+                        canOutdent={false}
+                        onReorderSubmenu={handleReorderSubmenu}
+                      />
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </SortableContext>
+          </DndContext>
         </div>
       </CardContent>
 

@@ -11,11 +11,22 @@ import {
   AccordionTrigger,
 } from "~/components/ui/accordion";
 import {
-  DragDropContext,
-  Droppable,
-  Draggable,
-  type DropResult,
-} from "@hello-pangea/dnd";
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@scalius/shared/utils";
 import { NavigationBuilder } from "../navigation";
 import type { FooterMenu, NavigationItem } from "./types";
@@ -25,11 +36,99 @@ interface NavigationMenusSectionProps {
   onChange: (menus: FooterMenu[]) => void;
 }
 
+function SortableMenuCard({
+  menu,
+  openItems,
+  onRemove,
+  onUpdateTitle,
+  onUpdateLinks,
+}: {
+  menu: FooterMenu;
+  openItems: string[];
+  onRemove: (id: string, e: React.MouseEvent) => void;
+  onUpdateTitle: (id: string, title: string) => void;
+  onUpdateLinks: (menuId: string, links: NavigationItem[]) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: menu.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "rounded-lg border bg-card",
+        isDragging && "shadow-lg ring-2 ring-primary/30 opacity-50",
+      )}
+    >
+      <AccordionItem value={menu.id} className="border-0">
+        <div className="flex items-center px-4 py-2 border-b bg-muted/10">
+          <div
+            {...attributes}
+            {...listeners}
+            className="mr-2 cursor-grab"
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+
+          <AccordionTrigger className="flex-1 py-1 hover:no-underline pr-4">
+            <span className="font-medium text-sm">
+              {menu.title}
+            </span>
+          </AccordionTrigger>
+
+          <div className="flex items-center gap-2 ml-auto pl-4 border-l">
+            <Input
+              value={menu.title}
+              onChange={(e) => onUpdateTitle(menu.id, e.target.value)}
+              className="h-8 w-[200px]"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              onClick={(e) => onRemove(menu.id, e)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <AccordionContent className="p-4 bg-background">
+          <NavigationBuilder
+            navigation={menu.links}
+            onChange={(newLinks) => onUpdateLinks(menu.id, newLinks)}
+            getStorefrontPath={() => "#"}
+          />
+        </AccordionContent>
+      </AccordionItem>
+    </div>
+  );
+}
+
 export function NavigationMenusSection({
   menus,
   onChange,
 }: NavigationMenusSectionProps) {
   const [openItems, setOpenItems] = useState<string[]>([]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   // Load accordion state from localStorage
   useEffect(() => {
@@ -70,12 +169,13 @@ export function NavigationMenusSection({
     onChange(menus.map((m) => (m.id === menuId ? { ...m, links } : m)));
   };
 
-  const handleDragEnd = (result: DropResult) => {
-    if (!result.destination || result.type !== "MENU") return;
-    const items = Array.from(menus);
-    const [reordered] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reordered);
-    onChange(items);
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = menus.findIndex((m) => m.id === active.id);
+    const newIndex = menus.findIndex((m) => m.id === over.id);
+    onChange(arrayMove(menus, oldIndex, newIndex));
   };
 
   return (
@@ -108,83 +208,29 @@ export function NavigationMenusSection({
           onValueChange={handleAccordionChange}
           className="w-full space-y-2"
         >
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="menus" type="MENU">
-              {(provided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  className="space-y-2"
-                >
-                  {menus.map((menu, index) => (
-                    <Draggable
-                      key={menu.id}
-                      draggableId={menu.id}
-                      index={index}
-                    >
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          className={cn(
-                            "rounded-lg border bg-card",
-                            snapshot.isDragging &&
-                              "shadow-lg ring-2 ring-primary/30",
-                          )}
-                        >
-                          <AccordionItem value={menu.id} className="border-0">
-                            <div className="flex items-center px-4 py-2 border-b bg-muted/10">
-                              <div
-                                {...provided.dragHandleProps}
-                                className="mr-2 cursor-grab"
-                              >
-                                <GripVertical className="h-4 w-4 text-muted-foreground" />
-                              </div>
-
-                              <AccordionTrigger className="flex-1 py-1 hover:no-underline pr-4">
-                                <span className="font-medium text-sm">
-                                  {menu.title}
-                                </span>
-                              </AccordionTrigger>
-
-                              <div className="flex items-center gap-2 ml-auto pl-4 border-l">
-                                <Input
-                                  value={menu.title}
-                                  onChange={(e) =>
-                                    updateMenuTitle(menu.id, e.target.value)
-                                  }
-                                  className="h-8 w-[200px]"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                  onClick={(e) => removeMenu(menu.id, e)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                            <AccordionContent className="p-4 bg-background">
-                              <NavigationBuilder
-                                navigation={menu.links}
-                                onChange={(newLinks) =>
-                                  updateMenuLinks(menu.id, newLinks)
-                                }
-                                getStorefrontPath={() => "#"}
-                              />
-                            </AccordionContent>
-                          </AccordionItem>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={menus.map((m) => m.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-2">
+                {menus.map((menu) => (
+                  <SortableMenuCard
+                    key={menu.id}
+                    menu={menu}
+                    openItems={openItems}
+                    onRemove={removeMenu}
+                    onUpdateTitle={updateMenuTitle}
+                    onUpdateLinks={updateMenuLinks}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         </Accordion>
       )}
     </div>

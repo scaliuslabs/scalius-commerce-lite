@@ -63,6 +63,20 @@ export const Route = createFileRoute("/admin/customers/")({
     ],
   }),
   component: CustomersPage,
+  errorComponent: ({ error, reset }) => (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <p className="text-4xl font-bold text-muted-foreground mb-2">Error</p>
+      <p className="text-sm text-muted-foreground mb-4">
+        {error instanceof Error ? error.message : "Something went wrong loading this page."}
+      </p>
+      <button
+        onClick={reset}
+        className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+      >
+        Try Again
+      </button>
+    </div>
+  ),
 });
 
 function CustomersPage() {
@@ -117,8 +131,7 @@ function CustomersPage() {
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable({
       columns,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      queryOptions: customersQueryOptions(mapParams(search)) as any,
+      queryOptions: customersQueryOptions(mapParams(search)) as never,
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,
@@ -126,11 +139,11 @@ function CustomersPage() {
       currentOrder: search.order,
       onPaginationChange: (page, limit) =>
         void navigate({
-          search: ((p: any) => ({ ...p, page, limit })) as any,
+          search: ((prev: Record<string, unknown>) => ({ ...prev, page, limit })) as never,
         }),
       onSortingChange: (sort, order) =>
         void navigate({
-          search: ((p: any) => ({ ...p, sort, order, page: 1 })) as any,
+          search: ((prev: Record<string, unknown>) => ({ ...prev, sort, order, page: 1 })) as never,
         }),
     });
 
@@ -150,7 +163,7 @@ function CustomersPage() {
         <div className="flex items-center gap-2">
           <Link
             to="/admin/customers"
-            search={(prev: any) => ({ ...prev, trashed: !showTrashed })}
+            search={((prev: Record<string, unknown>) => ({ ...prev, trashed: !showTrashed })) as never}
           >
             <Button variant="outline" size="sm">
               {showTrashed ? (
@@ -189,7 +202,7 @@ function CustomersPage() {
             searchValue={search.search}
             onSearchChange={(value) =>
               void navigate({
-                search: ((p: any) => ({ ...p, search: value, page: 1 })) as any,
+                search: ((prev: Record<string, unknown>) => ({ ...prev, search: value, page: 1 })) as never,
               })
             }
             searchPlaceholder="Search by name, phone, or email..."

@@ -1,5 +1,5 @@
 // src/components/admin/product-form/ProductImagesSection.tsx
-import React from "react";
+import React, { memo } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
@@ -25,7 +25,7 @@ interface ProductImagesSectionProps {
   uniqueColorOptions: string[];
 }
 
-export function ProductImagesSection({
+export const ProductImagesSection = memo(function ProductImagesSection({
   form,
   enableVariantImages,
   setEnableVariantImages,
@@ -191,4 +191,4 @@ export function ProductImagesSection({
       )}
     </Card>
   );
-}
+});

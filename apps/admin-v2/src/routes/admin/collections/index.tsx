@@ -180,7 +180,7 @@ function CollectionsPage() {
           ...prev,
           page,
           limit,
-        })) as any,
+        })) as never,
       });
     },
     [navigate],
@@ -194,7 +194,7 @@ function CollectionsPage() {
           sort,
           order,
           page: 1,
-        })) as any,
+        })) as never,
       });
     },
     [navigate],
@@ -207,7 +207,7 @@ function CollectionsPage() {
           ...prev,
           search: value || undefined,
           page: 1,
-        })) as any,
+        })) as never,
       });
     },
     [navigate],
@@ -217,7 +217,7 @@ function CollectionsPage() {
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable<CollectionItem>({
       columns,
-      queryOptions: collectionsQueryOptions(mapParams(search)) as any,
+      queryOptions: collectionsQueryOptions(mapParams(search)) as never,
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,

@@ -1,5 +1,5 @@
 // src/components/admin/RecentOrders.tsx
-import React from "react";
+import React, { memo } from "react";
 import { formatDate } from "@scalius/shared/timestamps";
 import { ErrorBoundary } from "./ErrorBoundary";
 import {
@@ -117,7 +117,7 @@ const parseOrderDate = (date: string | Date | null | undefined): Date | null => 
   }
 };
 
-export function RecentOrders({ orders }: RecentOrdersProps) {
+export const RecentOrders = memo(function RecentOrders({ orders }: RecentOrdersProps) {
   const { symbol } = useCurrency();
   return (
     <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading recent orders. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
@@ -292,4 +292,4 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
     </Card>
     </ErrorBoundary>
   );
-}
+});

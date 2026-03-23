@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Package } from "lucide-react";
 
 export interface EmptyStateConfig {
@@ -12,7 +12,7 @@ interface DataTableEmptyStateProps {
   config?: EmptyStateConfig;
 }
 
-export function DataTableEmptyState({ config }: DataTableEmptyStateProps) {
+export const DataTableEmptyState = memo(function DataTableEmptyState({ config }: DataTableEmptyStateProps) {
   const Icon = config?.icon ?? Package;
   const title = config?.title ?? "No results found";
   const description = config?.description ?? "Try adjusting your search or filters.";
@@ -25,4 +25,4 @@ export function DataTableEmptyState({ config }: DataTableEmptyStateProps) {
       {config?.action && <div className="mt-4">{config.action}</div>}
     </div>
   );
-}
+});

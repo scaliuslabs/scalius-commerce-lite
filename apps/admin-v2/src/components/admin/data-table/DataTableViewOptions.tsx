@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Table } from "@tanstack/react-table";
 import { Button } from "~/components/ui/button";
 import {
@@ -14,7 +15,7 @@ interface DataTableViewOptionsProps<TData> {
   table: Table<TData>;
 }
 
-export function DataTableViewOptions<TData>({
+function DataTableViewOptionsInner<TData>({
   table,
 }: DataTableViewOptionsProps<TData>) {
   return (
@@ -45,3 +46,5 @@ export function DataTableViewOptions<TData>({
     </DropdownMenu>
   );
 }
+
+export const DataTableViewOptions = memo(DataTableViewOptionsInner) as typeof DataTableViewOptionsInner;

@@ -185,7 +185,7 @@ function DiscountsPage() {
           ...prev,
           page,
           limit,
-        })) as any,
+        })) as never,
       });
     },
     [navigate],
@@ -199,7 +199,7 @@ function DiscountsPage() {
           sort,
           order,
           page: 1,
-        })) as any,
+        })) as never,
       });
     },
     [navigate],
@@ -212,7 +212,7 @@ function DiscountsPage() {
           ...prev,
           search: value || undefined,
           page: 1,
-        })) as any,
+        })) as never,
       });
     },
     [navigate],
@@ -229,7 +229,7 @@ function DiscountsPage() {
             delete next.type;
           }
           return next;
-        }) as any,
+        }) as never,
       });
     },
     [navigate],
@@ -239,7 +239,7 @@ function DiscountsPage() {
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable<DiscountItem>({
       columns,
-      queryOptions: discountsQueryOptions(mapParams(search)) as any,
+      queryOptions: discountsQueryOptions(mapParams(search)) as never,
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,

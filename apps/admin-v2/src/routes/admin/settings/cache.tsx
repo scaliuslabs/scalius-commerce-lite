@@ -1,7 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CacheManager } from "~/components/admin/CacheManager";
+import { cacheStatsQueryOptions, cacheLastClearedQueryOptions, cacheGroupsQueryOptions } from "~/lib/api.queries";
 
 export const Route = createFileRoute("/admin/settings/cache")({
+  loader: async ({ context: { queryClient } }) => {
+    void queryClient.prefetchQuery(cacheStatsQueryOptions());
+    void queryClient.prefetchQuery(cacheLastClearedQueryOptions());
+    void queryClient.prefetchQuery(cacheGroupsQueryOptions());
+  },
   head: () => ({ meta: [{ title: "Cache Settings | Scalius Admin" }] }),
   component: CacheSettingsPage,
 });
