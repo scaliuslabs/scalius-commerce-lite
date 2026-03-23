@@ -92,9 +92,11 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
       <SidebarContent ref={sidebarContentRef}>
         {navSections.map((section, index) => (
           <SidebarGroup key={section.label} className={index > 0 ? "pt-2" : ""}>
-            <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-              {section.label}
-            </SidebarGroupLabel>
+            {section.label && (
+              <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+                {section.label}
+              </SidebarGroupLabel>
+            )}
             <SidebarGroupContent>
               <SidebarMenu>
                 {section.items.map((item) =>
@@ -159,9 +161,10 @@ function CollapsibleNavItem({
 }) {
   const { state, setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const normalizedPath = currentPath.replace(/\/$/, ""); // strip trailing slash
   const isParentActive =
-    isRouteActive(currentPath, item.href) ||
-    (item.subItems?.some((sub) => currentPath === sub.href) ?? false);
+    isRouteActive(normalizedPath, item.href) ||
+    (item.subItems?.some((sub) => isRouteActive(normalizedPath, sub.href)) ?? false);
 
   // When collapsed, clicking the icon should expand sidebar and open the submenu
   const handleClick = useCallback(() => {
@@ -173,7 +176,7 @@ function CollapsibleNavItem({
   return (
     <Collapsible
       asChild
-      defaultOpen={isParentActive}
+      defaultOpen={isParentActive || item.defaultOpen === true}
       className="group/collapsible"
       onOpenChange={(open) => {
         onOpenChange?.(open);
@@ -193,7 +196,7 @@ function CollapsibleNavItem({
               <SidebarMenuSubItem key={subItem.href}>
                 <SidebarMenuSubButton
                   asChild
-                  isActive={currentPath === subItem.href}
+                  isActive={normalizedPath === subItem.href.replace(/\/$/, "")}
                 >
                   <Link to={subItem.href}>
                     {subItem.icon && (
