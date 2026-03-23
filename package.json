@@ -11,6 +11,7 @@
     "deploy": "node scripts/deploy.mjs",
     "deploy:api": "turbo deploy --filter=@scalius/api",
     "deploy:admin": "turbo deploy --filter=@scalius/admin",
+    "deploy:admin-v2": "turbo deploy --filter=@scalius/admin-v2",
     "deploy:storefront": "turbo deploy --filter=@scalius/storefront",
     "typecheck": "turbo typecheck",
     "dev:setup": "node scripts/dev-setup.mjs",
