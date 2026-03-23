@@ -29,57 +29,38 @@ import { toast } from "sonner";
 import { Receipt, Loader2, Undo2 } from "lucide-react";
 import type { Order } from "./types";
 import { getAvailableTransitions } from "./types";
-import { useNavigate } from "@tanstack/react-router";
-import { getServerFnError } from "@/lib/api-helpers";
-import { updateOrderStatus, returnOrder } from "@/lib/api.functions";
+import { useUpdateOrderStatus, useReturnOrder } from "@/lib/api.mutations";
 
 interface OrderStatusCardProps {
   order: Order;
 }
 
 export function OrderStatusCard({ order }: OrderStatusCardProps) {
-  const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isReturning, setIsReturning] = useState(false);
   const [returnReason, setReturnReason] = useState("");
   const [autoRefund, setAutoRefund] = useState(false);
   const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false);
 
-  const handleStatusChange = async (newStatus: string) => {
-    setIsSubmitting(true);
-    try {
-      await updateOrderStatus({ data: { orderId: order.id, status: newStatus } });
-      toast.success("Success", { description: "Order status has been updated." });
-      void navigate({ to: window.location.pathname });
-    } catch (error: unknown) {
-      console.error("Error updating status:", error);
-      toast.error("Error", {
-        description: getServerFnError(error, "Failed to update status. Please try again."),
-      });
-      setIsSubmitting(false);
-    }
+  const statusMutation = useUpdateOrderStatus();
+  const returnMutation = useReturnOrder();
+
+  const handleStatusChange = (newStatus: string) => {
+    statusMutation.mutate({ orderId: order.id, status: newStatus });
   };
 
-  const handleReturnOrder = async () => {
+  const handleReturnOrder = () => {
     if (!returnReason.trim()) {
       toast.error("Error", { description: "Return reason is required." });
       return;
     }
 
-    setIsReturning(true);
-    try {
-      await returnOrder({ data: { orderId: order.id, reason: returnReason, autoRefund } });
-      toast.success("Order Returned", { description: "Order return has been processed successfully." });
-      setIsReturnDialogOpen(false);
-      void navigate({ to: window.location.pathname });
-    } catch (error: unknown) {
-      console.error("Error processing return:", error);
-      toast.error("Error", {
-        description: getServerFnError(error, "Failed to process return."),
-      });
-    } finally {
-      setIsReturning(false);
-    }
+    returnMutation.mutate(
+      { orderId: order.id, reason: returnReason, autoRefund },
+      {
+        onSuccess: () => {
+          setIsReturnDialogOpen(false);
+        },
+      },
+    );
   };
 
   const isReturnable = ["delivered", "completed", "shipped"].includes(order.status.toLowerCase());
@@ -97,10 +78,10 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
           <Select
             defaultValue={order.status.toLowerCase()}
             onValueChange={handleStatusChange}
-            disabled={isSubmitting}
+            disabled={statusMutation.isPending}
           >
             <SelectTrigger className="h-9 text-sm border-border bg-background text-foreground">
-              {isSubmitting ? (
+              {statusMutation.isPending ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Updating...</span>
@@ -180,11 +161,11 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsReturnDialogOpen(false)} disabled={isReturning}>
+                <Button variant="outline" onClick={() => setIsReturnDialogOpen(false)} disabled={returnMutation.isPending}>
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={handleReturnOrder} disabled={isReturning}>
-                  {isReturning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                <Button variant="destructive" onClick={handleReturnOrder} disabled={returnMutation.isPending}>
+                  {returnMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Confirm Return
                 </Button>
               </DialogFooter>

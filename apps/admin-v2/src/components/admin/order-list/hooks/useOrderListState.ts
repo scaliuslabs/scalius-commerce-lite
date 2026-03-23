@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "@tanstack/react-router";
 import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { DateRange } from "react-day-picker";
 
@@ -111,15 +112,16 @@ export function useOrderListState(
     setCurrentPagination(pagination);
   }, [pagination]);
 
-  // Initialize URL-based filters
+  // Initialize URL-based filters from search params
   React.useEffect(() => {
-    const url = new URL(window.location.href);
-    setActiveStatus(url.searchParams.get("status"));
-    setPaymentStatus(url.searchParams.get("paymentStatus"));
-    setPaymentMethod(url.searchParams.get("paymentMethod"));
-    setFulfillmentStatus(url.searchParams.get("fulfillmentStatus"));
-    const sortField = url.searchParams.get("sort") as SortField | null;
-    const sortOrder = url.searchParams.get("order") as SortOrder | null;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setActiveStatus(params.get("status"));
+    setPaymentStatus(params.get("paymentStatus"));
+    setPaymentMethod(params.get("paymentMethod"));
+    setFulfillmentStatus(params.get("fulfillmentStatus"));
+    const sortField = params.get("sort") as SortField | null;
+    const sortOrder = params.get("order") as SortOrder | null;
     if (sortField && sortOrder) {
       setSort({ field: sortField, order: sortOrder });
     }

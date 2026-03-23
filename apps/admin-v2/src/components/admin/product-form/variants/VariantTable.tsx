@@ -71,8 +71,7 @@ export function VariantTable({
                   checked={allSelected}
                   ref={(el) => {
                     if (el) {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DOM indeterminate property not on Radix Checkbox type
-                      (el as any).indeterminate = someSelected;
+                      (el as unknown as HTMLInputElement).indeterminate = someSelected;
                     }
                   }}
                   onCheckedChange={onToggleAllSelection}

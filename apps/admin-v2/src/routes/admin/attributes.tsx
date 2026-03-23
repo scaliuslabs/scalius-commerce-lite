@@ -11,7 +11,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/admin/attributes")({
   validateSearch: searchSchema,
   head: ({ match }) => ({
-    meta: [{ title: `${(match.search as any).trashed ? "Attribute Trash" : "Product Attributes"} | Scalius Admin` }],
+    meta: [{ title: `${match.search.trashed ? "Attribute Trash" : "Product Attributes"} | Scalius Admin` }],
   }),
   component: AttributesPage,
 });

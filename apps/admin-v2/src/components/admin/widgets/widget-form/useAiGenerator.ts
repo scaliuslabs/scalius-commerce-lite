@@ -12,6 +12,9 @@ import type { Widget } from '@/types/api-responses';
 import { getOpenRouterSettings, getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
 
 type PromptMessage = StructuredPromptResult['messages'][number];
+type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
+type AiProductData = StructuredPromptParams['selectedProducts'][number];
+type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
 
 interface ModelInfo {
   id: string;
@@ -108,8 +111,8 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
         systemPrompt,
         userPrompt: userPrompt,
         selectedImages: aiContext.selectedImages,
-        selectedProducts: (contextData.products || []) as any[],
-        selectedCategories: (contextData.categories || []) as any[],
+        selectedProducts: (contextData.products || []) as AiProductData[],
+        selectedCategories: (contextData.categories || []) as AiCategoryData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
         modelId: selectedModel,
         supportsVision: isVisionModel,
@@ -270,8 +273,8 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
         systemPrompt,
         userPrompt: userPrompt,
         selectedImages: aiContext.selectedImages,
-        selectedProducts: (contextData.products || []) as any[],
-        selectedCategories: (contextData.categories || []) as any[],
+        selectedProducts: (contextData.products || []) as AiProductData[],
+        selectedCategories: (contextData.categories || []) as AiCategoryData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
       });
 

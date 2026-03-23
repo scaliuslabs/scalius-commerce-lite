@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { CategoryList } from "~/components/admin/categories";
-import { getCategories, getProductStats } from "~/lib/api.functions";
+import { categoriesQueryOptions, productStatsQueryOptions } from "~/lib/api.queries";
+import type { Category } from "~/components/admin/categories/hooks/useCategoryList";
 
 const searchSchema = z.object({
   page: z.number().default(1).catch(1),
@@ -15,52 +17,59 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/admin/categories/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ deps }) => {
-    const [categoriesResult, stats] = await Promise.all([
-      getCategories({
-        data: {
-          page: deps.page,
-          limit: deps.limit,
-          search: deps.search || undefined,
-          sort: deps.sort,
-          order: deps.order,
-          showTrashed: deps.trashed,
-        },
-      }) as Promise<any>,
-      getProductStats() as Promise<any>,
-    ]);
-    return {
-      categories: (categoriesResult?.categories || []) as any[],
-      pagination: (categoriesResult?.pagination || { total: 0, page: deps.page, limit: deps.limit, totalPages: 0 }) as any,
-      stats: (stats || {}) as any,
+  loader: async ({ context: { queryClient }, deps }) => {
+    const params = {
+      page: deps.page,
+      limit: deps.limit,
+      search: deps.search || undefined,
+      sort: deps.sort,
+      order: deps.order,
+      showTrashed: deps.trashed,
     };
+    await Promise.all([
+      queryClient.ensureQueryData(categoriesQueryOptions(params)),
+      queryClient.ensureQueryData(productStatsQueryOptions()),
+    ]);
   },
   head: ({ match }) => ({
-    meta: [{ title: `${(match.search as any).trashed ? "Trash" : "Categories"} | Scalius Admin` }],
+    meta: [{ title: `${match.search.trashed ? "Trash" : "Categories"} | Scalius Admin` }],
   }),
   component: CategoriesPage,
 });
 
 function CategoriesPage() {
-  const { categories, pagination, stats } = Route.useLoaderData();
   const search = Route.useSearch();
+  const params = {
+    page: search.page,
+    limit: search.limit,
+    search: search.search || undefined,
+    sort: search.sort,
+    order: search.order,
+    showTrashed: search.trashed,
+  };
+
+  const { data: categoriesData } = useSuspenseQuery(categoriesQueryOptions(params));
+  const { data: stats } = useSuspenseQuery(productStatsQueryOptions());
+
+  const result = categoriesData as { categories?: Category[]; pagination?: Record<string, unknown> };
+  const statsResult = stats as Record<string, unknown> | null;
 
   return (
     <CategoryList
-      categories={categories}
+      categories={result.categories ?? []}
       pagination={{
-        total: pagination.total,
+        total: ((result.pagination as Record<string, number>)?.total) ?? 0,
         page: search.page,
         limit: search.limit,
-        totalPages: pagination.totalPages,
+        totalPages: ((result.pagination as Record<string, number>)?.totalPages) ?? 0,
       }}
       initialSearchQuery={search.search}
       initialSort={{ field: search.sort, order: search.order }}
       showTrashed={search.trashed}
-      stats={stats ? {
-        totalCategories: stats.totalCategories ?? 0,
-        categoriesWithImages: stats.categoriesWithImages ?? 0,
-        totalProducts: stats.totalProducts,
+      stats={statsResult ? {
+        totalCategories: (statsResult.totalCategories as number) ?? 0,
+        categoriesWithImages: (statsResult.categoriesWithImages as number) ?? 0,
+        totalProducts: statsResult.totalProducts as number,
       } : undefined}
     />
   );

@@ -1,5 +1,4 @@
-// src/contexts/PermissionContext.tsx
-import { createContext, useContext, useMemo, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
 
 interface PermissionContextValue {
@@ -12,6 +11,14 @@ interface PermissionContextValue {
 
 const PermissionContext = createContext<PermissionContextValue | null>(null);
 
+const EMPTY_CONTEXT: PermissionContextValue = {
+  permissions: new Set(),
+  isSuperAdmin: false,
+  hasPermission: () => false,
+  hasAnyPermission: () => false,
+  hasAllPermissions: () => false,
+};
+
 interface PermissionProviderProps {
   children: ReactNode;
   permissions?: string[];
@@ -20,30 +27,11 @@ interface PermissionProviderProps {
 
 export function PermissionProvider({
   children,
-  permissions: permissionsList,
-  isSuperAdmin: isSuperAdminProp,
+  permissions: permissionsList = [],
+  isSuperAdmin = false,
 }: PermissionProviderProps) {
-  // If permissions are not provided as props, try to get them from window
-  const [permsFromWindow, setPermsFromWindow] = useState<string[]>([]);
-  const [superAdminFromWindow, setSuperAdminFromWindow] = useState(false);
-
-  useEffect(() => {
-    // Get permissions from window if not provided as props
-    if (typeof window !== "undefined") {
-      if (window.__USER_PERMISSIONS__) {
-        setPermsFromWindow(window.__USER_PERMISSIONS__);
-      }
-      if (window.__IS_SUPER_ADMIN__) {
-        setSuperAdminFromWindow(window.__IS_SUPER_ADMIN__);
-      }
-    }
-  }, []);
-
-  const permissions = permissionsList ?? permsFromWindow;
-  const isSuperAdmin = isSuperAdminProp ?? superAdminFromWindow;
-
   const value = useMemo(() => {
-    const permissionsSet = new Set(permissions);
+    const permissionsSet = new Set(permissionsList);
 
     return {
       permissions: permissionsSet,
@@ -61,7 +49,7 @@ export function PermissionProvider({
         return permissions.every((p) => permissionsSet.has(p));
       },
     };
-  }, [permissions, isSuperAdmin]);
+  }, [permissionsList, isSuperAdmin]);
 
   return (
     <PermissionContext.Provider value={value}>
@@ -70,66 +58,16 @@ export function PermissionProvider({
   );
 }
 
-/**
- * Hook to get permissions directly from window (for components that can't use context)
- * Uses the same logic as PermissionProvider but without React context
- */
-export function useWindowPermissions(): PermissionContextValue {
-  const [permissions, setPermissions] = useState<Set<string>>(new Set());
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (window.__USER_PERMISSIONS__) {
-        setPermissions(new Set(window.__USER_PERMISSIONS__));
-      }
-      if (window.__IS_SUPER_ADMIN__) {
-        setIsSuperAdmin(window.__IS_SUPER_ADMIN__);
-      }
-    }
-  }, []);
-
-  return useMemo(
-    () => ({
-      permissions,
-      isSuperAdmin,
-      hasPermission: (permission: PermissionName | string) => {
-        if (isSuperAdmin) return true;
-        return permissions.has(permission);
-      },
-      hasAnyPermission: (permList: (PermissionName | string)[]) => {
-        if (isSuperAdmin) return true;
-        return permList.some((p) => permissions.has(p));
-      },
-      hasAllPermissions: (permList: (PermissionName | string)[]) => {
-        if (isSuperAdmin) return true;
-        return permList.every((p) => permissions.has(p));
-      },
-    }),
-    [permissions, isSuperAdmin]
-  );
-}
-
 export function usePermissions(): PermissionContextValue {
   const context = useContext(PermissionContext);
-  const windowPerms = useWindowPermissions();
-
-  // If context is available, use it; otherwise fall back to window permissions
-  if (context) {
-    return context;
-  }
-
-  // Return window permissions as fallback (for components not wrapped in provider)
-  return windowPerms;
+  return context ?? EMPTY_CONTEXT;
 }
 
-// Hook for checking a single permission
 export function useHasPermission(permission: PermissionName | string): boolean {
   const { hasPermission } = usePermissions();
   return hasPermission(permission);
 }
 
-// Hook for checking any of multiple permissions
 export function useHasAnyPermission(permissions: (PermissionName | string)[]): boolean {
   const { hasAnyPermission } = usePermissions();
   return hasAnyPermission(permissions);

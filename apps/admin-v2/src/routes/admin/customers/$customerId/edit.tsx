@@ -1,33 +1,31 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { CustomerForm } from "~/components/admin/CustomerForm";
-import { getCustomer } from "~/lib/api.functions";
+import { customerQueryOptions } from "~/lib/api.queries";
+import type { Customer } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/customers/$customerId/edit")({
-  loader: async ({ params }) => {
-    const customer = await getCustomer({ data: { id: params.customerId } }).catch(() => null);
-    if (!customer) throw redirect({ to: "/admin/customers" });
-    const c = customer as any;
-    return {
-      customer: {
-        ...c,
-        cityName: c.cityName || "",
-        zoneName: c.zoneName || "",
-        areaName: c.areaName || "",
-      },
-    };
+  loader: async ({ context: { queryClient }, params }) => {
+    const data = await queryClient.ensureQueryData(customerQueryOptions(params.customerId)).catch(() => null);
+    if (!data) throw redirect({ to: "/admin/customers" });
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: `Edit ${loaderData?.customer?.name || "Customer"} | Scalius Admin` }],
+  head: () => ({
+    meta: [{ title: "Edit Customer | Scalius Admin" }],
   }),
   component: EditCustomerPage,
 });
 
 function EditCustomerPage() {
-  const { customer } = Route.useLoaderData();
+  const { customerId } = Route.useParams();
+  const { data } = useSuspenseQuery(customerQueryOptions(customerId));
+  const c = data as Customer;
 
-  if (!customer) {
-    return <div>Customer not found</div>;
-  }
+  const customer = {
+    ...c,
+    cityName: c.cityName || "",
+    zoneName: c.zoneName || "",
+    areaName: c.areaName || "",
+  };
 
   return (
     <div className="container max-w-7xl py-4 pb-8">

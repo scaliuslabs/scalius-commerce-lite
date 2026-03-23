@@ -75,9 +75,9 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
       updatedShipment.lastChecked = now;
 
       // Update the shipment in the list
-      setShipments((prevShipments: any[]) =>
-        prevShipments.map((s: any) =>
-          s.id === updatedShipment.id ? updatedShipment : s,
+      setShipments((prevShipments) =>
+        prevShipments.map((s) =>
+          s.id === updatedShipment.id ? { ...s, ...updatedShipment } as Shipment : s,
         ),
       );
 
@@ -90,7 +90,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
 
       // If this was the selected shipment, update it
       if (selectedShipment?.id === updatedShipment.id) {
-        setSelectedShipment(updatedShipment as any);
+        setSelectedShipment({ ...selectedShipment, ...updatedShipment } as Shipment);
       }
 
       if (onRefresh) {

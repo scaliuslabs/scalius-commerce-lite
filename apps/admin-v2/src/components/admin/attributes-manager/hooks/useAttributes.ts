@@ -1,8 +1,8 @@
 // src/components/admin/attributes-manager/hooks/useAttributes.ts
-import { useState, useEffect, useCallback } from "react";
-import { toast } from "sonner";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Attribute, Pagination, SortField, SortOrder } from "../types";
-import { getAttributes } from "~/lib/api.functions";
+import { attributesQueryOptions } from "~/lib/api.queries";
 
 export function useAttributes(
   showTrashed: boolean,
@@ -10,58 +10,61 @@ export function useAttributes(
   sortField: SortField,
   sortOrder: SortOrder,
 ) {
-  const [attributes, setAttributes] = useState<Attribute[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 1,
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+
+  const params = {
+    page,
+    limit,
+    trashed: showTrashed,
+    search: searchQuery || undefined,
+    sort: sortField,
+    order: sortOrder,
+  };
+
+  const { data, isLoading } = useQuery({
+    ...attributesQueryOptions(params),
+    select: (raw) => {
+      const d = raw as { attributes?: Attribute[]; pagination?: Pagination };
+      return {
+        attributes: d.attributes || [],
+        pagination: d.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
+      };
+    },
   });
-  const [isLoading, setIsLoading] = useState(true);
 
-  const fetchAttributes = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getAttributes({
-        data: {
-          page: pagination.page,
-          limit: pagination.limit,
-          trashed: showTrashed,
-          search: searchQuery,
-          sort: sortField,
-          order: sortOrder,
-        },
-      }) as { attributes: Attribute[]; pagination: Pagination };
-      setAttributes(data.attributes);
-      setPagination(data.pagination);
-    } catch (error: unknown) {
-      toast.error("Failed to load attributes.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    pagination.page,
-    pagination.limit,
-    showTrashed,
-    searchQuery,
-    sortField,
-    sortOrder,
-  ]);
+  const attributes = data?.attributes || [];
+  const pagination = data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 };
 
-  useEffect(() => {
-    fetchAttributes();
-  }, [fetchAttributes]);
+  // Expose setAttributes for optimistic updates in useAttributeActions
+  const [optimisticOverrides, setOptimisticOverrides] = useState<Attribute[] | null>(null);
 
-  const goToPage = (page: number) => {
-    setPagination((prev) => ({ ...prev, page }));
+  const setAttributes = useCallback((updater: React.SetStateAction<Attribute[]>) => {
+    setOptimisticOverrides((prev) => {
+      const current = prev ?? attributes;
+      return typeof updater === "function" ? updater(current) : updater;
+    });
+  }, [attributes]);
+
+  const fetchAttributes = useCallback(() => {
+    setOptimisticOverrides(null);
+    queryClient.invalidateQueries({ queryKey: ["attributes"] });
+  }, [queryClient]);
+
+  const goToPage = (newPage: number) => {
+    setOptimisticOverrides(null);
+    setPage(newPage);
   };
 
   const changePageSize = (newLimit: number) => {
-    setPagination((prev) => ({ ...prev, limit: newLimit, page: 1 }));
+    setOptimisticOverrides(null);
+    setLimit(newLimit);
+    setPage(1);
   };
 
   return {
-    attributes,
+    attributes: optimisticOverrides ?? attributes,
     setAttributes,
     pagination,
     isLoading,

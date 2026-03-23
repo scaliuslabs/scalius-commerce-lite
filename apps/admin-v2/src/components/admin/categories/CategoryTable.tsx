@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 import type { Category, SortField } from "./hooks/useCategoryList";
 
 interface CategoryRowProps {
@@ -60,6 +60,7 @@ const CategoryRow = React.memo(function CategoryRow({
   getPlainDescription,
   getStorefrontPath,
 }: CategoryRowProps) {
+  const navigate = useNavigate();
   return (
     <TableRow
       className={cn(
@@ -97,14 +98,12 @@ const CategoryRow = React.memo(function CategoryRow({
             </div>
           )}
           <div className="flex flex-col min-w-0">
-            <span
+            <Link
+              to={`/admin/categories/${category.id}/edit` as string}
               className="font-medium text-sm text-foreground hover:text-primary cursor-pointer truncate"
-              onClick={() =>
-                void navigateTo(`/admin/categories/${category.id}/edit`)
-              }
             >
               {category.name}
-            </span>
+            </Link>
             <span className="text-xs text-muted-foreground truncate">
               {category.slug}
             </span>
@@ -259,6 +258,7 @@ export const CategoryTable = React.memo(function CategoryTable({
   getPlainDescription,
   getStorefrontPath,
 }: CategoryTableProps) {
+  const navigate = useNavigate();
   const getSortIcon = useCallback(
     (field: SortField) => {
       if (sort.field !== field) {
@@ -350,7 +350,7 @@ export const CategoryTable = React.memo(function CategoryTable({
                     <Button
                       size="sm"
                       onClick={() =>
-                        void navigateTo("/admin/categories/new")
+                        void navigate({ to: "/admin/categories/new" })
                       }
                       className="mt-1 h-7 text-sm font-medium"
                     >

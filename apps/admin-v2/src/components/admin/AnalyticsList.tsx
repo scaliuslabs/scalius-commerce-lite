@@ -32,7 +32,7 @@ import { formatDate } from "@scalius/shared/utils";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
 import { deleteAnalyticsScript, toggleAnalyticsScript } from "@/lib/api.functions";
-import { useNavigate, Link } from "@tanstack/react-router";
+import { useNavigate, useRouter, Link } from "@tanstack/react-router";
 import { AdminListPagination } from "./shared/AdminListPagination";
 
 interface Analytics {
@@ -52,6 +52,7 @@ interface AnalyticsListProps {
 
 export function AnalyticsList({ analytics }: AnalyticsListProps) {
   const navigate = useNavigate();
+  const router = useRouter();
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -102,7 +103,7 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
       setIsDeleting(true);
       await deleteAnalyticsScript({ data: { id } });
       toast.success("Deleted", { description: "Analytics script has been deleted." });
-      void navigate({ to: window.location.pathname });
+      router.invalidate();
     } catch (error: unknown) {
       console.error("Error deleting analytics script:", error);
       toast.error("Error", { description: getServerFnError(error, "Failed to delete analytics script.") });
@@ -113,9 +114,9 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      await toggleAnalyticsScript({ data: { id } as any });
+      await toggleAnalyticsScript({ data: { id } });
       toast.success("Updated", { description: "Analytics script status has been updated." });
-      void navigate({ to: window.location.pathname });
+      router.invalidate();
     } catch (error: unknown) {
       console.error("Error toggling analytics script status:", error);
       toast.error("Error", { description: getServerFnError(error, "Failed to update analytics script status.") });

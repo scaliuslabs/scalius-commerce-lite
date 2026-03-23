@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { Sidebar } from "@/components/admin/layout/Sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
 import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
 import { PermissionProvider } from "@/contexts/PermissionContext";
@@ -20,20 +21,17 @@ function AdminLayout() {
   return (
     <ThemeProvider>
       <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
-        <div className="flex min-h-screen">
-          <Sidebar storefrontUrl="/" />
-
-          <div className="flex flex-1 flex-col min-h-screen">
+        <SidebarProvider>
+          <AppSidebar user={user} />
+          <SidebarInset>
             <AdminHeader user={user} />
-
-            <main className="flex-1 p-6 transition-colors duration-200 relative bg-gray-50 dark:bg-[#0a0a0a]">
+            <main className="flex-1 p-6 bg-gray-50 dark:bg-[#0a0a0a]">
               <div className="max-w-7xl mx-auto min-h-[50vh]">
                 <Outlet />
               </div>
             </main>
-          </div>
-        </div>
-
+          </SidebarInset>
+        </SidebarProvider>
         <Toaster richColors closeButton />
       </PermissionProvider>
     </ThemeProvider>

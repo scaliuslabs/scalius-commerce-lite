@@ -45,7 +45,7 @@ import {
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "~/hooks/use-currency";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 import { generateDiscountCode } from "./utils";
 import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart } from "./shared-validation";
 
@@ -130,6 +130,7 @@ export function AmountOffOrderForm({
   onCancel,
 }: AmountOffOrderFormProps) {
   const { symbol } = useCurrency();
+  const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormValues>({
@@ -215,7 +216,7 @@ export function AmountOffOrderForm({
       toast.success("Success!", { description: `Discount "${values.code}" ${discountId ? "updated" : "created"} successfully.` });
       // Redirect or call a success handler instead of hard reload
       // Example: navigate to the list page
-      await navigateTo("/admin/discounts");
+      void navigate({ to: "/admin/discounts" });
       // Or if using a router: router.push('/admin/discounts');
     } catch (error: unknown) {
       const action = defaultValues?.id ? "updating" : "creating";

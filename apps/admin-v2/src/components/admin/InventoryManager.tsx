@@ -368,8 +368,7 @@ export function InventoryManager() {
                           </TableCell>
                           <TableCell className="py-2 text-right text-xs font-semibold">{v.available}</TableCell>
                           <TableCell className="py-2 text-center">
-                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- badge.variant computed from runtime status, safe to cast */}
-                            <Badge variant={badge.variant as any} className={cn("text-[10px] px-1.5 py-0", badge.className)}>
+                            <Badge variant={badge.variant} className={cn("text-[10px] px-1.5 py-0", badge.className)}>
                               {badge.label}
                             </Badge>
                           </TableCell>

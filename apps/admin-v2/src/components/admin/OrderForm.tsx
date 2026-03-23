@@ -5,7 +5,6 @@ import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { toast } from "sonner";
-import { getServerFnError } from "@/lib/api-helpers";
 import { OrderStatus } from "@/types/api-responses";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
@@ -15,7 +14,8 @@ import {
   updateShippingCharge,
   updateDiscountAmount,
 } from "@/store/orderStore";
-import { getDeliveryLocations, createOrder, updateOrder } from "@/lib/api.functions";
+import { getDeliveryLocations } from "@/lib/api.functions";
+import { useCreateOrder, useUpdateOrder } from "@/lib/api.mutations";
 
 // Imports for our new, refactored components and types
 import {
@@ -35,6 +35,8 @@ export function OrderForm({
   isEdit = false,
 }: OrderFormProps) {
   const navigate = useNavigate();
+  const createMutation = useCreateOrder();
+  const updateMutation = useUpdateOrder();
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
@@ -54,7 +56,7 @@ export function OrderForm({
     },
   });
 
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
   const [locations, setLocations] = React.useState<{
     cities: DeliveryLocation[];
     zones: DeliveryLocation[];
@@ -151,40 +153,37 @@ export function OrderForm({
 
   // --- FORM SUBMISSION ---
 
-  const handleSubmit: SubmitHandler<OrderFormValues> = async (values) => {
-    setIsSubmitting(true);
-    try {
-      // Find the location objects from state based on the selected IDs
-      const city = locations.cities.find((c) => c.id === values.city);
-      const zone = locations.zones.find((z) => z.id === values.zone);
-      const area = values.area
-        ? locations.areas.find((a) => a.id === values.area)
-        : null;
+  const handleSubmit: SubmitHandler<OrderFormValues> = (values) => {
+    // Find the location objects from state based on the selected IDs
+    const city = locations.cities.find((c) => c.id === values.city);
+    const zone = locations.zones.find((z) => z.id === values.zone);
+    const area = values.area
+      ? locations.areas.find((a) => a.id === values.area)
+      : null;
 
-      // Enrich the form values with the location names before submission
-      values.cityName = city ? city.name : "";
-      values.zoneName = zone ? zone.name : "";
-      values.areaName = area ? area.name : null;
+    // Enrich the form values with the location names before submission
+    values.cityName = city ? city.name : "";
+    values.zoneName = zone ? zone.name : "";
+    values.areaName = area ? area.name : null;
 
-      if (!isEdit) {
-        values.id = generateOrderId();
-      }
+    if (!isEdit) {
+      values.id = generateOrderId();
+    }
 
-      if (isEdit) {
-        await updateOrder({ data: { id: values.id, ...values } as Record<string, unknown> & { id: string } });
-      } else {
-        await createOrder({ data: values as unknown as Record<string, unknown> });
-      }
-
-      toast.success(isEdit ? "Order updated successfully" : "Order created successfully");
+    const onSuccess = () => {
       void navigate({ to: "/admin/orders" });
-    } catch (error: unknown) {
-      console.error("Error submitting form:", error);
-      toast.error("Failed to save order", {
-        description: getServerFnError(error, "Failed to save order. Please try again."),
-      });
-    } finally {
-      setIsSubmitting(false);
+    };
+
+    if (isEdit) {
+      updateMutation.mutate(
+        { id: values.id, ...values } as Record<string, unknown> & { id: string },
+        { onSuccess },
+      );
+    } else {
+      createMutation.mutate(
+        values as unknown as Record<string, unknown>,
+        { onSuccess },
+      );
     }
   };
 

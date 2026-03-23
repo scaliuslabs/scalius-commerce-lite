@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   getCheckoutLanguages,
@@ -91,6 +92,7 @@ interface PaginationState {
 }
 
 export function useLanguages() {
+  const navigate = useNavigate();
   const [languages, setLanguages] = useState<ManagerCheckoutLanguage[]>([]);
   const [pagination, setPagination] = useState<PaginationState>({
     total: 0,
@@ -168,13 +170,14 @@ export function useLanguages() {
   );
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const pageFromUrl = parseInt(url.searchParams.get("page") || "1");
-    const limitFromUrl = parseInt(url.searchParams.get("limit") || "10");
-    const searchFromUrl = url.searchParams.get("search") || "";
-    const sortFieldFromUrl = url.searchParams.get("sort") as SortField | null;
-    const sortOrderFromUrl = url.searchParams.get("order") as SortOrder | null;
-    const showTrashedFromUrl = url.searchParams.get("trashed") === "true";
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const pageFromUrl = parseInt(params.get("page") || "1");
+    const limitFromUrl = parseInt(params.get("limit") || "10");
+    const searchFromUrl = params.get("search") || "";
+    const sortFieldFromUrl = params.get("sort") as SortField | null;
+    const sortOrderFromUrl = params.get("order") as SortOrder | null;
+    const showTrashedFromUrl = params.get("trashed") === "true";
 
     setSearchQuery(searchFromUrl);
     if (sortFieldFromUrl && sortOrderFromUrl) {
@@ -203,17 +206,18 @@ export function useLanguages() {
   const handleSearch = useCallback(
     (e?: React.SyntheticEvent) => {
       if (e) e.preventDefault();
-      const url = new URL(window.location.href);
-      if (searchQuery.trim()) {
-        url.searchParams.set("search", searchQuery.trim());
-      } else {
-        url.searchParams.delete("search");
-      }
-      url.searchParams.set("page", "1");
-      window.history.pushState({}, "", url.toString());
+      void navigate({
+        search: ((prev: any) => {
+          const next = { ...prev, page: 1 };
+          if (searchQuery.trim()) next.search = searchQuery.trim();
+          else delete next.search;
+          return next;
+        }) as any,
+        replace: true,
+      });
       fetchLanguages(1, pagination.limit, searchQuery, sort, showTrashed);
     },
-    [searchQuery, pagination.limit, sort, showTrashed, fetchLanguages],
+    [searchQuery, pagination.limit, sort, showTrashed, fetchLanguages, navigate],
   );
 
   const handleSort = useCallback(
@@ -222,38 +226,47 @@ export function useLanguages() {
         sort.field === field && sort.order === "asc" ? "desc" : "asc";
       const newSort = { field, order: newOrder };
       setSort(newSort);
-      const url = new URL(window.location.href);
-      url.searchParams.set("sort", field);
-      url.searchParams.set("order", newOrder);
-      url.searchParams.set("page", "1");
-      window.history.pushState({}, "", url.toString());
+      void navigate({
+        search: ((prev: any) => ({
+          ...prev,
+          sort: field,
+          order: newOrder,
+          page: 1,
+        })) as any,
+        replace: true,
+      });
       fetchLanguages(1, pagination.limit, searchQuery, newSort, showTrashed);
     },
-    [sort, pagination.limit, searchQuery, showTrashed, fetchLanguages],
+    [sort, pagination.limit, searchQuery, showTrashed, fetchLanguages, navigate],
   );
 
   const toggleTrash = useCallback(() => {
     const newShowTrashed = !showTrashed;
     setShowTrashed(newShowTrashed);
-    const url = new URL(window.location.href);
-    if (newShowTrashed) {
-      url.searchParams.set("trashed", "true");
-    } else {
-      url.searchParams.delete("trashed");
-    }
-    url.searchParams.set("page", "1");
-    window.history.pushState({}, "", url.toString());
+    void navigate({
+      search: ((prev: any) => {
+        const next = { ...prev, page: 1 };
+        if (newShowTrashed) next.trashed = "true";
+        else delete next.trashed;
+        return next;
+      }) as any,
+      replace: true,
+    });
     fetchLanguages(1, pagination.limit, searchQuery, sort, newShowTrashed);
-  }, [showTrashed, pagination.limit, searchQuery, sort, fetchLanguages]);
+  }, [showTrashed, pagination.limit, searchQuery, sort, fetchLanguages, navigate]);
 
   const clearFilters = useCallback(() => {
     setSearchQuery("");
-    const url = new URL(window.location.href);
-    url.searchParams.delete("search");
-    url.searchParams.set("page", "1");
-    window.history.pushState({}, "", url.toString());
+    void navigate({
+      search: ((prev: any) => {
+        const next = { ...prev, page: 1 };
+        delete next.search;
+        return next;
+      }) as any,
+      replace: true,
+    });
     fetchLanguages(1, pagination.limit, "", sort, showTrashed);
-  }, [pagination.limit, sort, showTrashed, fetchLanguages]);
+  }, [pagination.limit, sort, showTrashed, fetchLanguages, navigate]);
 
   const handleSetActive = async (id: string, isActive: boolean) => {
     setIsActionLoading(true);

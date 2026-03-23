@@ -70,7 +70,7 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
 
     const updatedShipment = await refreshShipmentStatus(
       shipment.orderId, shipment.id,
-    ) as any;
+    );
 
     if (updatedShipment && onStatusUpdated) {
       onStatusUpdated(updatedShipment as { id: string; orderId: string; status: string; lastChecked: string | null; [key: string]: unknown });

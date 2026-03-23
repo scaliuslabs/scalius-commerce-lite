@@ -1,6 +1,7 @@
 // src/components/admin/collections-list/hooks/useBulkActions.ts
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   bulkDeleteCollections,
@@ -11,49 +12,46 @@ import {
 import type { BulkAction } from "../types";
 
 export function useBulkActions(onRefresh: () => void) {
+  const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<BulkAction>(null);
-  const [isActionLoading, setIsActionLoading] = useState(false);
 
-  const handleBulkAction = useCallback(
-    async (action: BulkAction) => {
-      if (!action || selectedIds.size === 0) return;
-      setIsActionLoading(true);
-
-      const selected = Array.from(selectedIds);
-
-      try {
-        switch (action) {
-          case "trash":
-            await bulkDeleteCollections({ data: { collectionIds: selected } });
-            break;
-          case "delete":
-            await bulkDeleteCollections({ data: { collectionIds: selected, permanent: true } });
-            break;
-          case "restore":
-            await bulkRestoreCollections({ data: { ids: selected } });
-            break;
-          case "activate":
-            await bulkActivateCollections({ data: { ids: selected } });
-            break;
-          case "deactivate":
-            await bulkDeactivateCollections({ data: { ids: selected } });
-            break;
-        }
-
-        toast.success(
-          `${selectedIds.size} collections processed successfully.`,
-        );
-        setSelectedIds(new Set());
-        onRefresh();
-      } catch (error: unknown) {
-        toast.error(getServerFnError(error, `Bulk ${action} failed.`));
-      } finally {
-        setIsActionLoading(false);
-        setBulkAction(null);
+  const bulkMutation = useMutation({
+    mutationFn: async ({ action, ids }: { action: NonNullable<BulkAction>; ids: string[] }) => {
+      switch (action) {
+        case "trash":
+          return bulkDeleteCollections({ data: { collectionIds: ids } });
+        case "delete":
+          return bulkDeleteCollections({ data: { collectionIds: ids, permanent: true } });
+        case "restore":
+          return bulkRestoreCollections({ data: { ids } });
+        case "activate":
+          return bulkActivateCollections({ data: { ids } });
+        case "deactivate":
+          return bulkDeactivateCollections({ data: { ids } });
       }
     },
-    [selectedIds, onRefresh],
+    onSuccess: (_data, { ids }) => {
+      toast.success(`${ids.length} collections processed successfully.`);
+      setSelectedIds(new Set());
+      onRefresh();
+    },
+    onError: (error, { action }) => {
+      toast.error(getServerFnError(error, `Bulk ${action} failed.`));
+    },
+    onSettled: () => {
+      setBulkAction(null);
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+
+  const handleBulkAction = useCallback(
+    (action: BulkAction) => {
+      if (!action || selectedIds.size === 0) return;
+      const ids = Array.from(selectedIds);
+      bulkMutation.mutate({ action, ids });
+    },
+    [selectedIds, bulkMutation],
   );
 
   const toggleSelection = useCallback((id: string) => {
@@ -78,7 +76,7 @@ export function useBulkActions(onRefresh: () => void) {
   return {
     selectedIds,
     bulkAction,
-    isActionLoading,
+    isActionLoading: bulkMutation.isPending,
     setBulkAction,
     handleBulkAction,
     toggleSelection,

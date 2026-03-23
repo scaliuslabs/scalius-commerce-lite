@@ -1,13 +1,13 @@
 // src/components/admin/collections-list/hooks/useCollections.ts
-import { useState, useEffect, useCallback } from "react";
-import { toast } from "sonner";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CollectionItem,
   Pagination,
   SortField,
   SortOrder,
 } from "../types";
-import { getCollections } from "~/lib/api.functions";
+import { collectionsQueryOptions } from "~/lib/api.queries";
 
 export function useCollections(
   showTrashed: boolean,
@@ -15,61 +15,61 @@ export function useCollections(
   sortField: SortField,
   sortOrder: SortOrder,
 ) {
-  const [collections, setCollections] = useState<CollectionItem[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 1,
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
 
-  const fetchCollections = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getCollections({
-        data: {
-          page: pagination.page,
-          limit: pagination.limit,
-          showTrashed: showTrashed,
-          search: searchQuery,
-          sort: sortField,
-          order: sortOrder,
-        },
-      }) as { collections: CollectionItem[]; pagination?: Pagination };
-      setCollections(data.collections || []);
-      if (data.pagination) {
-        setPagination(data.pagination);
-      }
-    } catch (error: unknown) {
-      toast.error("Failed to load collections.");
-      console.error("Error fetching collections:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    pagination.page,
-    pagination.limit,
+  const params = {
+    page,
+    limit,
     showTrashed,
-    searchQuery,
-    sortField,
-    sortOrder,
-  ]);
+    search: searchQuery || undefined,
+    sort: sortField,
+    order: sortOrder,
+  };
 
-  useEffect(() => {
-    fetchCollections();
-  }, [fetchCollections]);
+  const { data, isLoading } = useQuery({
+    ...collectionsQueryOptions(params),
+    select: (raw) => {
+      const d = raw as { collections?: CollectionItem[]; pagination?: Pagination };
+      return {
+        collections: d.collections || [],
+        pagination: d.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
+      };
+    },
+  });
 
-  const goToPage = (page: number) => {
-    setPagination((prev) => ({ ...prev, page }));
+  const collections = data?.collections || [];
+  const pagination = data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 };
+
+  // Expose setCollections for optimistic updates in useCollectionActions
+  const [optimisticOverrides, setOptimisticOverrides] = useState<CollectionItem[] | null>(null);
+
+  const setCollections = useCallback((updater: React.SetStateAction<CollectionItem[]>) => {
+    setOptimisticOverrides((prev) => {
+      const current = prev ?? collections;
+      return typeof updater === "function" ? updater(current) : updater;
+    });
+  }, [collections]);
+
+  const fetchCollections = useCallback(() => {
+    setOptimisticOverrides(null);
+    queryClient.invalidateQueries({ queryKey: ["collections"] });
+  }, [queryClient]);
+
+  const goToPage = (newPage: number) => {
+    setOptimisticOverrides(null);
+    setPage(newPage);
   };
 
   const changePageSize = (newLimit: number) => {
-    setPagination((prev) => ({ ...prev, limit: newLimit, page: 1 }));
+    setOptimisticOverrides(null);
+    setLimit(newLimit);
+    setPage(1);
   };
 
   return {
-    collections,
+    collections: optimisticOverrides ?? collections,
     setCollections,
     pagination,
     isLoading,

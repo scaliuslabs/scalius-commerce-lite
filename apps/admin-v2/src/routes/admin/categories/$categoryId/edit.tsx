@@ -1,38 +1,40 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { CategoryForm } from "~/components/admin/CategoryForm";
-import { getCategory } from "~/lib/api.functions";
+import { categoryQueryOptions } from "~/lib/api.queries";
+import type { Category } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
-  loader: async ({ params }) => {
-    const category = await getCategory({ data: { id: params.categoryId } }).catch(() => null);
+  loader: async ({ params, context: { queryClient } }) => {
+    const category = await queryClient.ensureQueryData(categoryQueryOptions(params.categoryId)).catch(() => null);
     if (!category) throw redirect({ to: "/admin/categories" });
-    const c = category as any;
-    return {
-      category: {
-        ...c,
-        slugEdited: true,
-        image: c.imageUrl
-          ? { id: `temp_${c.id}`, url: c.imageUrl, filename: c.imageUrl.split("/").pop() || "", size: 0, createdAt: new Date() }
-          : null,
-      },
-    };
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: `Edit ${loaderData?.category?.name || "Category"} | Scalius Admin` }],
+  head: () => ({
+    meta: [{ title: "Edit Category | Scalius Admin" }],
   }),
   component: EditCategoryPage,
 });
 
 function EditCategoryPage() {
-  const { category } = Route.useLoaderData();
+  const { categoryId } = Route.useParams();
+  const { data: categoryData } = useSuspenseQuery(categoryQueryOptions(categoryId));
 
-  if (!category) {
+  if (!categoryData) {
     return <div>Category not found</div>;
   }
 
+  const c = categoryData as Category;
+  const defaultValues = {
+    ...c,
+    slugEdited: true,
+    image: c.imageUrl
+      ? { id: `temp_${c.id}`, url: c.imageUrl, filename: c.imageUrl.split("/").pop() || "", size: 0, createdAt: new Date() }
+      : null,
+  };
+
   return (
     <div className="container max-w-7xl py-4 pb-8">
-      <CategoryForm defaultValues={category} isEdit={true} />
+      <CategoryForm defaultValues={defaultValues} isEdit={true} />
     </div>
   );
 }

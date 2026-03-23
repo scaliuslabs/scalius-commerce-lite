@@ -7,41 +7,19 @@ import { X as CloseIcon, PartyPopper } from "lucide-react";
 import { BackgroundGradient } from "../ui/background-gradient"; // Import the new component
 import { ContainerTextFlip } from "../ui/container-text-flip"; // Import Text Flip
 
-// Function to safely check sessionStorage for initial visibility
-const getInitialVisibility = () => {
-  // Only run this logic in the browser
-  if (typeof window !== "undefined" && typeof sessionStorage !== "undefined") {
-    const storageKey = "welcomeBannerDismissedUntil";
-    const dismissedUntil = sessionStorage.getItem(storageKey);
-    if (dismissedUntil && Date.now() < parseInt(dismissedUntil, 10)) {
-      return false; // Should be hidden initially
-    }
-  }
-  return true; // Default to visible
-};
-
 export function WelcomeBanner() {
-  // Initialize state directly using the check function
-  const [showBanner, setShowBanner] = React.useState(getInitialVisibility);
+  // SSR-safe: default to visible, check sessionStorage after hydration
+  const [showBanner, setShowBanner] = React.useState(true);
 
-  // Effect for Handling Expiration and as Fallback
   React.useEffect(() => {
     const storageKey = "welcomeBannerDismissedUntil";
     const dismissedUntil = sessionStorage.getItem(storageKey);
-    const shouldBeVisible = !(
-      dismissedUntil && Date.now() < parseInt(dismissedUntil, 10)
-    );
-
-    // If state mismatches (e.g., expired dismissal), update it.
-    if (showBanner !== shouldBeVisible) {
-      setShowBanner(shouldBeVisible);
-      if (shouldBeVisible && dismissedUntil) {
-        sessionStorage.removeItem(storageKey); // Clean up expired timestamp
-      }
-    } else if (!shouldBeVisible) {
-    } else {
+    if (dismissedUntil && Date.now() < parseInt(dismissedUntil, 10)) {
+      setShowBanner(false);
+    } else if (dismissedUntil) {
+      sessionStorage.removeItem(storageKey);
     }
-  }, []); // Run only on mount
+  }, []);
 
   // Handler for dismissing the banner - wrapped in useCallback
   const handleDismissBanner = React.useCallback(() => {

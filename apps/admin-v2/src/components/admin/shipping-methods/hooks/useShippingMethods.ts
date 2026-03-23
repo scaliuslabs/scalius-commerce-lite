@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
 import { getServerFnError } from "@/lib/api-helpers";
 import {
   getShippingMethods,
@@ -42,6 +43,7 @@ interface PaginationState {
 }
 
 export function useShippingMethods() {
+  const navigate = useNavigate();
   const [methods, setMethods] = useState<ShippingMethod[]>([]);
   const [pagination, setPagination] = useState<PaginationState>({
     total: 0,
@@ -108,30 +110,32 @@ export function useShippingMethods() {
   }, [fetchMethods]);
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    setSearchQuery(url.searchParams.get("search") || "");
-    const sortFieldFromUrl = url.searchParams.get("sort") as SortField | null;
-    const sortOrderFromUrl = url.searchParams.get("order") as SortOrder | null;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setSearchQuery(params.get("search") || "");
+    const sortFieldFromUrl = params.get("sort") as SortField | null;
+    const sortOrderFromUrl = params.get("order") as SortOrder | null;
     if (sortFieldFromUrl && sortOrderFromUrl) {
       setSort({ field: sortFieldFromUrl, order: sortOrderFromUrl });
     }
-    setShowTrashed(url.searchParams.get("trashed") === "true");
+    setShowTrashed(params.get("trashed") === "true");
   }, []);
 
   const handleSearch = useCallback(
     (e?: React.SyntheticEvent) => {
       if (e) e.preventDefault();
-      const url = new URL(window.location.href);
-      if (searchQuery.trim()) {
-        url.searchParams.set("search", searchQuery.trim());
-      } else {
-        url.searchParams.delete("search");
-      }
-      url.searchParams.set("page", "1");
-      window.history.pushState({}, "", url.toString());
+      void navigate({
+        search: ((prev: any) => {
+          const next = { ...prev, page: 1 };
+          if (searchQuery.trim()) next.search = searchQuery.trim();
+          else delete next.search;
+          return next;
+        }) as any,
+        replace: true,
+      });
       fetchMethods(1, pagination.limit, searchQuery, sort, showTrashed);
     },
-    [searchQuery, pagination.limit, sort, showTrashed, fetchMethods],
+    [searchQuery, pagination.limit, sort, showTrashed, fetchMethods, navigate],
   );
 
   const handleSort = useCallback(
@@ -140,60 +144,74 @@ export function useShippingMethods() {
         sort.field === field && sort.order === "asc" ? "desc" : "asc";
       const newSort = { field, order: newOrder };
       setSort(newSort);
-      const url = new URL(window.location.href);
-      url.searchParams.set("sort", field);
-      url.searchParams.set("order", newOrder);
-      url.searchParams.set("page", "1");
-      window.history.pushState({}, "", url.toString());
+      void navigate({
+        search: ((prev: any) => ({
+          ...prev,
+          sort: field,
+          order: newOrder,
+          page: 1,
+        })) as any,
+        replace: true,
+      });
       fetchMethods(1, pagination.limit, searchQuery, newSort, showTrashed);
     },
-    [sort, pagination.limit, searchQuery, showTrashed, fetchMethods],
+    [sort, pagination.limit, searchQuery, showTrashed, fetchMethods, navigate],
   );
 
   const handlePageChange = useCallback(
     (newPage: number) => {
       if (newPage < 1 || newPage > pagination.totalPages) return;
-      const url = new URL(window.location.href);
-      url.searchParams.set("page", newPage.toString());
-      window.history.pushState({}, "", url.toString());
+      void navigate({
+        search: ((prev: any) => ({ ...prev, page: newPage })) as any,
+        replace: true,
+      });
       fetchMethods(newPage, pagination.limit, searchQuery, sort, showTrashed);
     },
-    [pagination.totalPages, pagination.limit, searchQuery, sort, showTrashed, fetchMethods],
+    [pagination.totalPages, pagination.limit, searchQuery, sort, showTrashed, fetchMethods, navigate],
   );
 
   const handleLimitChange = useCallback(
     (newLimit: number) => {
-      const url = new URL(window.location.href);
-      url.searchParams.set("limit", newLimit.toString());
-      url.searchParams.set("page", "1");
-      window.history.pushState({}, "", url.toString());
+      void navigate({
+        search: ((prev: any) => ({
+          ...prev,
+          limit: newLimit,
+          page: 1,
+        })) as any,
+        replace: true,
+      });
       fetchMethods(1, newLimit, searchQuery, sort, showTrashed);
     },
-    [searchQuery, sort, showTrashed, fetchMethods],
+    [searchQuery, sort, showTrashed, fetchMethods, navigate],
   );
 
   const toggleTrash = useCallback(() => {
     const newShowTrashed = !showTrashed;
     setShowTrashed(newShowTrashed);
-    const url = new URL(window.location.href);
-    if (newShowTrashed) {
-      url.searchParams.set("trashed", "true");
-    } else {
-      url.searchParams.delete("trashed");
-    }
-    url.searchParams.set("page", "1");
-    window.history.pushState({}, "", url.toString());
+    void navigate({
+      search: ((prev: any) => {
+        const next = { ...prev, page: 1 };
+        if (newShowTrashed) next.trashed = "true";
+        else delete next.trashed;
+        return next;
+      }) as any,
+      replace: true,
+    });
     fetchMethods(1, pagination.limit, searchQuery, sort, newShowTrashed);
-  }, [showTrashed, pagination.limit, searchQuery, sort, fetchMethods]);
+  }, [showTrashed, pagination.limit, searchQuery, sort, fetchMethods, navigate]);
 
   const clearFilters = useCallback(() => {
     setSearchQuery("");
-    const url = new URL(window.location.href);
-    url.searchParams.delete("search");
-    url.searchParams.set("page", "1");
-    window.history.pushState({}, "", url.toString());
+    void navigate({
+      search: ((prev: any) => {
+        const next = { ...prev, page: 1 };
+        delete next.search;
+        return next;
+      }) as any,
+      replace: true,
+    });
     fetchMethods(1, pagination.limit, "", sort, showTrashed);
-  }, [pagination.limit, sort, showTrashed, fetchMethods]);
+  }, [pagination.limit, sort, showTrashed, fetchMethods, navigate]);
 
   const handleFormSubmit = async (
     formData: Partial<ShippingMethod>,

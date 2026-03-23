@@ -38,23 +38,23 @@ interface ProductVariant {
   size: string | null;
   color: string | null;
   weight: number | null;
-  sku: string;
-  price: number;
+  sku: string | null;
+  price: number | null;
   stock: number;
   reservedStock: number;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
-  [key: string]: unknown;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
+  deletedAt: Date | string | number | null;
 }
 
 interface ProductImage {
   id: string;
   url: string;
-  alt: string | null;
+  alt?: string | null;
+  altText?: string | null;
   isPrimary: boolean;
   sortOrder: number;
-  createdAt: Date;
+  createdAt: Date | string | number;
 }
 
 interface ProductViewProps {
@@ -70,11 +70,11 @@ interface ProductViewProps {
     isActive: boolean;
     discountPercentage: number | null;
     freeDelivery: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-    deletedAt: Date | null;
+    createdAt: Date | string | number;
+    updatedAt: Date | string | number;
+    deletedAt: Date | string | number | null;
     category: {
-      name: string;
+      name: string | null;
     };
     additionalInfo?: {
       id: string;
@@ -212,7 +212,7 @@ export function ProductView({ product }: ProductViewProps) {
                 </a>
               </Button>
               <div className="text-[10px] text-muted-foreground text-center sm:text-left lg:text-right mt-1 lg:mt-2">
-                Last updated {product.updatedAt.toLocaleDateString("en-US")}
+                Last updated {new Date(product.updatedAt).toLocaleDateString("en-US")}
               </div>
             </div>
           </div>
@@ -336,7 +336,7 @@ export function ProductView({ product }: ProductViewProps) {
                             ].filter(Boolean).join(" • ") || "—"}
                           </TableCell>
                           <TableCell className="py-2.5 text-xs font-medium text-right text-foreground">
-                            {symbol}{v.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            {symbol}{(v.price ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </TableCell>
                           <TableCell className="py-2.5 text-xs text-right text-muted-foreground">{v.stock}</TableCell>
                           <TableCell className="py-2.5 text-right">

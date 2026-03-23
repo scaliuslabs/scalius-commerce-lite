@@ -26,17 +26,19 @@ function getCurrencyData(): Promise<CurrencyData> {
   // Deduplicate: if a fetch is already in flight, reuse it
   if (fetchPromise) return fetchPromise;
 
-  // Try localStorage first (synchronous)
-  try {
-    const cached = localStorage.getItem("scalius_currency_cache");
-    if (cached) {
-      const data = JSON.parse(cached) as CurrencyData;
-      if (data.symbol && data.code) {
-        cachedCurrency = data;
+  // Try localStorage first (synchronous) — only in browser
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem("scalius_currency_cache");
+      if (cached) {
+        const data = JSON.parse(cached) as CurrencyData;
+        if (data.symbol && data.code) {
+          cachedCurrency = data;
+        }
       }
+    } catch {
+      // localStorage unavailable
     }
-  } catch {
-    // localStorage unavailable
   }
 
   // Fetch fresh via server function (single request)

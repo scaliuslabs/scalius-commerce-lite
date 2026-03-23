@@ -72,6 +72,8 @@ type DashboardResponseData = ExtractData<GetApiV1AdminDashboardResponse>;
 export type DashboardStats = DashboardResponseData["stats"];
 export type DashboardRecentOrder = DashboardResponseData["recentOrders"][number];
 export type DashboardDailyActivity = DashboardResponseData["dailyActivityData"][number];
+/** Full dashboard response (stats + recentOrders + dailyActivityData) */
+export type DashboardData = DashboardResponseData;
 
 /** Collection form options from GET /admin/collections/form-options */
 export type CollectionFormOptions = ExtractData<GetApiV1AdminCollectionsFormOptionsResponse>;
@@ -633,4 +635,80 @@ export interface PaginationResponse {
 export interface OpenRouterMessage {
   role: string;
   content: string | Array<{ type: string; [key: string]: unknown }>;
+}
+
+// ---------------------------------------------------------------------------
+// Loader-level response shapes (list endpoints)
+// ---------------------------------------------------------------------------
+
+export interface CustomerListData {
+  customers: Customer[];
+  pagination: PaginationResponse;
+}
+
+export interface DiscountListData {
+  discounts: Discount[];
+  pagination: PaginationResponse;
+}
+
+// ---------------------------------------------------------------------------
+// Invoice domain
+// ---------------------------------------------------------------------------
+
+export interface InvoiceBusinessInfo {
+  companyName: string | null;
+  legalName: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  stateRegion: string | null;
+  postalCode: string | null;
+  country: string | null;
+  phone: string | null;
+  email: string | null;
+  taxId: string | null;
+  invoiceLogoUrl: string | null;
+  invoiceFooterText: string | null;
+}
+
+export interface InvoiceData {
+  order: OrderDetail;
+  invoiceNumber: string;
+  businessInfo: InvoiceBusinessInfo;
+}
+
+// ---------------------------------------------------------------------------
+// Form option shapes
+// ---------------------------------------------------------------------------
+
+export interface CategoryOption {
+  id: string;
+  name: string;
+  slug?: string;
+}
+
+export interface ProductOption {
+  id: string;
+  name: string;
+  slug?: string;
+  price?: number;
+}
+
+export interface CollectionFormOptionsData {
+  categories: CategoryOption[];
+  products: ProductOption[];
+}
+
+// ---------------------------------------------------------------------------
+// Account security
+// ---------------------------------------------------------------------------
+
+export interface AccountSecurity {
+  twoFactorMethod: string | null;
+  isSuperAdmin: boolean;
+}
+
+export interface RbacPermission {
+  id: string;
+  name: string;
 }

@@ -1,19 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { FraudCheckerSettings } from "~/components/admin/FraudCheckerSettings";
-import { getFraudCheckerProviders } from "~/lib/api.functions";
+import { fraudCheckerProvidersQueryOptions } from "~/lib/api.queries";
+import type { FraudCheckerProvider } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/settings/fraud-checker")({
-  loader: async () => {
-    const result = await getFraudCheckerProviders().catch(() => []);
-    const providers = (Array.isArray(result) ? result : []) as any[];
-    return { providers };
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions());
   },
   head: () => ({ meta: [{ title: "Fraud Checker | Scalius Admin" }] }),
   component: FraudCheckerPage,
 });
 
 function FraudCheckerPage() {
-  const { providers } = Route.useLoaderData();
+  const { data } = useSuspenseQuery(fraudCheckerProvidersQueryOptions());
+  const providers = (Array.isArray(data) ? data : []) as FraudCheckerProvider[];
 
   return (
     <div className="container py-6 space-y-6">

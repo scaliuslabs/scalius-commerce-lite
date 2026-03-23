@@ -9,6 +9,25 @@ interface ScannerTokenPayload {
   sessionId?: string;
 }
 
+interface ScannerUser {
+  id: string;
+  name?: string;
+  email?: string;
+}
+
+interface ScannerSession {
+  id: string;
+}
+
+interface ScannerContext {
+  user?: ScannerUser;
+  session?: ScannerSession;
+}
+
+interface CloudflareEnv {
+  CACHE?: KVNamespace;
+}
+
 const TOKEN_TTL_SECONDS = 6 * 60 * 60; // 6 hours
 const COOKIE_NAME = "scanner_sid";
 
@@ -41,14 +60,15 @@ export const Route = createFileRoute("/api/scanner-token")({
        * POST -- Generate scanner token. Requires admin session.
        */
       POST: async ({ request, context }) => {
-        const user = (context as any)?.user;
-        const session = (context as any)?.session;
+        const ctx = (context as unknown) as ScannerContext;
+        const user = ctx?.user;
+        const session = ctx?.session;
 
         if (!session || !user) {
           return jsonResponse({ success: false, error: "Authentication required" }, 401);
         }
 
-        const kv = (env as any)?.CACHE as KVNamespace | undefined;
+        const kv = (env as CloudflareEnv)?.CACHE;
         if (!kv) {
           return jsonResponse({ success: false, error: "KV binding unavailable" }, 503);
         }
@@ -57,7 +77,7 @@ export const Route = createFileRoute("/api/scanner-token")({
         const token = nanoid(32);
         const payload: ScannerTokenPayload = {
           adminId: user.id,
-          adminName: user.name || user.email,
+          adminName: user.name || user.email || "",
           createdAt: Date.now(),
           claimed: false,
         };
@@ -80,7 +100,7 @@ export const Route = createFileRoute("/api/scanner-token")({
           return jsonResponse({ success: false, error: "Token parameter required" }, 400);
         }
 
-        const kv = (env as any)?.CACHE as KVNamespace | undefined;
+        const kv = (env as CloudflareEnv)?.CACHE;
         if (!kv) {
           return jsonResponse({ success: false, error: "KV binding unavailable" }, 503);
         }

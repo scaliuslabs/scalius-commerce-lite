@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { env } from "cloudflare:workers";
 
+interface CloudflareWorkerEnv {
+  API?: { fetch: (url: string) => Promise<Response> };
+  PUBLIC_API_BASE_URL?: string;
+}
+
 export const Route = createFileRoute("/firebase-messaging-sw.js")({
   server: {
     handlers: {
@@ -8,14 +13,14 @@ export const Route = createFileRoute("/firebase-messaging-sw.js")({
         // 1. Fetch Firebase config from API using service binding or HTTP
         let publicConfig: Record<string, string> = {};
         try {
-          const cfEnv = env as any;
+          const cfEnv = env as CloudflareWorkerEnv;
           let response: Response;
           if (cfEnv?.API) {
             response = await cfEnv.API.fetch(
               new URL("/api/v1/auth/firebase-config", "http://api.internal").toString(),
             );
           } else {
-            const apiBase = (cfEnv?.PUBLIC_API_BASE_URL as string | undefined) || "http://localhost:8787";
+            const apiBase = cfEnv?.PUBLIC_API_BASE_URL || "http://localhost:8787";
             response = await fetch(
               new URL("/api/v1/auth/firebase-config", apiBase).toString(),
             );

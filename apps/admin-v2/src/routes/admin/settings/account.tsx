@@ -1,35 +1,40 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { AccountSettingsWithPermissions } from "~/components/admin/AccountSettingsWithPermissions";
-import { getAccountSecurity, getAdminUsers, getRbacPermissions } from "~/lib/api.functions";
+import {
+  accountSecurityQueryOptions,
+  rbacPermissionsQueryOptions,
+} from "~/lib/api.queries";
+import type { AccountSecurity, RbacPermission } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/settings/account")({
-  loader: async () => {
-    const [securityResult, usersResult, permissionsResult] = await Promise.all([
-      getAccountSecurity().catch(() => ({ twoFactorMethod: null, isSuperAdmin: false })),
-      getAdminUsers().catch(() => []),
-      getRbacPermissions().catch(() => []),
+  loader: async ({ context: { queryClient } }) => {
+    await Promise.all([
+      queryClient.ensureQueryData(accountSecurityQueryOptions()),
+      queryClient.ensureQueryData(rbacPermissionsQueryOptions()),
     ]);
-    const security = securityResult as any;
-    return {
-      userData: {
-        id: "",
-        name: "Admin",
-        email: "",
-        image: null,
-        role: "admin",
-        twoFactorEnabled: !!security.twoFactorMethod,
-        twoFactorMethod: security.twoFactorMethod,
-      },
-      permissions: Array.isArray(permissionsResult) ? permissionsResult.map((p: any) => p.name || p.id || p) : [],
-      isSuperAdmin: security.isSuperAdmin ?? false,
-    };
   },
   head: () => ({ meta: [{ title: "Account Settings | Scalius Admin" }] }),
   component: AccountSettingsPage,
 });
 
 function AccountSettingsPage() {
-  const { userData, permissions, isSuperAdmin } = Route.useLoaderData();
+  const { data: securityResult } = useSuspenseQuery(accountSecurityQueryOptions());
+  const { data: permissionsResult } = useSuspenseQuery(rbacPermissionsQueryOptions());
+
+  const security = securityResult as AccountSecurity;
+  const userData = {
+    id: "",
+    name: "Admin",
+    email: "",
+    image: null,
+    role: "admin",
+    twoFactorEnabled: !!security.twoFactorMethod,
+    twoFactorMethod: security.twoFactorMethod,
+  };
+  const permsList = (Array.isArray(permissionsResult) ? permissionsResult : []) as RbacPermission[];
+  const permissions = permsList.map((p) => p.name || p.id);
+  const isSuperAdmin = security.isSuperAdmin ?? false;
 
   return (
     <div className="max-w-3xl mx-auto">

@@ -41,9 +41,9 @@ import {
   ReceiptText,
 } from "lucide-react";
 import type { Order } from "./types";
-import { useNavigate } from "@tanstack/react-router";
-import { getServerFnError } from "@/lib/api-helpers";
-import { getOrderPayments, getOrderCod, updateOrderCod, refundOrder } from "@/lib/api.functions";
+import { useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { orderPaymentsQueryOptions, orderCodQueryOptions } from "@/lib/api.queries";
+import { useUpdateOrderCod, useRefundOrder } from "@/lib/api.mutations";
 
 interface OrderPayment {
   id: string;
@@ -110,23 +110,17 @@ interface PaymentCardProps {
 }
 
 export function PaymentCard({ order }: PaymentCardProps) {
-  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { symbol } = useCurrency();
-  const [payments, setPayments] = React.useState<OrderPayment[]>([]);
-  const [plan, setPlan] = React.useState<PaymentPlan | null>(null);
-  const [codTracking, setCodTracking] = React.useState<CODTracking | null>(null);
-  const [loading, setLoading] = React.useState(true);
   const [historyExpanded, setHistoryExpanded] = React.useState(false);
 
   // Refund state
   const [isRefundDialogOpen, setIsRefundDialogOpen] = React.useState(false);
   const [refundAmount, setRefundAmount] = React.useState("");
   const [refundReason, setRefundReason] = React.useState("requested_by_customer");
-  const [refundLoading, setRefundLoading] = React.useState(false);
 
   // COD modal state
   const [codAction, setCodAction] = React.useState<"collected" | "failed" | "returned" | null>(null);
-  const [codLoading, setCodLoading] = React.useState(false);
   const [collectedBy, setCollectedBy] = React.useState("");
   const [collectedAmount, setCollectedAmount] = React.useState("");
   const [failReason, setFailReason] = React.useState<string>("not_home");
@@ -136,34 +130,24 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const grandTotal = order.totalAmount;
   const isCOD = order.paymentMethod === "cod";
 
-  const fetchPaymentData = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const paymentsData = await getOrderPayments({ data: { orderId: order.id } }) as { payments: OrderPayment[]; plan: PaymentPlan | null };
-      setPayments(paymentsData.payments);
-      setPlan(paymentsData.plan);
+  // Use TanStack Query for payment data
+  const { data: paymentsData } = useSuspenseQuery(orderPaymentsQueryOptions(order.id));
+  const paymentsResult = paymentsData as { payments: OrderPayment[]; plan: PaymentPlan | null } | null;
+  const payments = paymentsResult?.payments ?? [];
+  const plan = paymentsResult?.plan ?? null;
 
-      if (isCOD) {
-        try {
-          const codData = await getOrderCod({ data: { orderId: order.id } }) as { tracking: CODTracking | null };
-          setCodTracking(codData.tracking);
-        } catch {
-          // COD data may not exist
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load payment data:", error);
-      toast.error("Failed to load payment data");
-    } finally {
-      setLoading(false);
-    }
-  }, [order.id, isCOD]);
+  // COD data — conditionally fetch (useQuery, not suspense, since it's optional)
+  const { data: codData } = useQuery({
+    ...orderCodQueryOptions(order.id),
+    enabled: isCOD,
+  });
+  const codTracking = isCOD ? ((codData as { tracking: CODTracking | null } | null)?.tracking ?? null) : null;
 
-  React.useEffect(() => {
-    fetchPaymentData();
-  }, [fetchPaymentData]);
+  // Mutations
+  const codMutation = useUpdateOrderCod();
+  const refundMutation = useRefundOrder();
 
-  async function submitCODAction() {
+  function submitCODAction() {
     if (!codAction) return;
 
     if (codAction === "collected") {
@@ -178,39 +162,29 @@ export function PaymentCard({ order }: PaymentCardProps) {
       }
     }
 
-    setCodLoading(true);
-    try {
-      const body: Record<string, unknown> = { action: codAction };
-      if (codAction === "collected") {
-        body.collectedBy = collectedBy.trim();
-        body.collectedAmount = parseFloat(collectedAmount);
-      } else if (codAction === "failed") {
-        body.reason = failReason;
-        if (failNotes.trim()) body.notes = failNotes.trim();
-      }
-
-      await updateOrderCod({ data: { orderId: order.id, action: codAction, ...body } });
-
-      const messages: Record<string, string> = {
-        collected: "COD collection recorded.",
-        failed: "Delivery failure recorded.",
-        returned: "Order marked as returned.",
-      };
-      toast.success("Success", { description: messages[codAction] });
-      setCodAction(null);
-      await fetchPaymentData();
-
-      if (codAction === "collected" || codAction === "returned") {
-        void navigate({ to: window.location.pathname });
-      }
-    } catch (err: unknown) {
-      toast.error("Error", { description: err instanceof Error ? err.message : "Failed to record COD action" });
-    } finally {
-      setCodLoading(false);
+    const body: Record<string, unknown> = { action: codAction, orderId: order.id };
+    if (codAction === "collected") {
+      body.collectedBy = collectedBy.trim();
+      body.collectedAmount = parseFloat(collectedAmount);
+    } else if (codAction === "failed") {
+      body.reason = failReason;
+      if (failNotes.trim()) body.notes = failNotes.trim();
     }
+
+    codMutation.mutate(body as { orderId: string; action: string } & Record<string, unknown>, {
+      onSuccess: () => {
+        const messages: Record<string, string> = {
+          collected: "COD collection recorded.",
+          failed: "Delivery failure recorded.",
+          returned: "Order marked as returned.",
+        };
+        toast.success("Success", { description: messages[codAction!] });
+        setCodAction(null);
+      },
+    });
   }
 
-  async function handleIssueRefund() {
+  function handleIssueRefund() {
     const amount = parseFloat(refundAmount);
     if (isNaN(amount) || amount <= 0 || amount > (order.paidAmount ?? 0)) {
       toast.error("Error", { description: "Valid refund amount up to the paid amount is required." });
@@ -221,19 +195,17 @@ export function PaymentCard({ order }: PaymentCardProps) {
       return;
     }
 
-    setRefundLoading(true);
-    try {
-      await refundOrder({ data: { orderId: order.id, amount, reason: refundReason } });
-      toast.success("Refund Issued", { description: `Successfully initiated refund of ${symbol}${amount}.` });
-
-      setIsRefundDialogOpen(false);
-      await fetchPaymentData();
-      void navigate({ to: window.location.pathname });
-    } catch (err: unknown) {
-      toast.error("Error", { description: err instanceof Error ? err.message : "Failed to issue refund" });
-    } finally {
-      setRefundLoading(false);
-    }
+    refundMutation.mutate(
+      { orderId: order.id, amount, reason: refundReason },
+      {
+        onSuccess: () => {
+          toast.success("Refund Issued", { description: `Successfully initiated refund of ${symbol}${amount}.` });
+          setIsRefundDialogOpen(false);
+          // Invalidate order detail to refresh payment status
+          queryClient.invalidateQueries({ queryKey: ["orders", "detail", order.id] });
+        },
+      },
+    );
   }
 
   const paymentStatusCfg = PAYMENT_STATUS_CONFIG[order.paymentStatus ?? "unpaid"] ?? PAYMENT_STATUS_CONFIG.unpaid;
@@ -362,7 +334,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 </div>
               )}
 
-              {/* COD action buttons — only when not yet collected/returned */}
+              {/* COD action buttons -- only when not yet collected/returned */}
               {(!codTracking || !["collected", "returned"].includes(codTracking.codStatus)) && (
                 <div className="flex gap-2">
                   <Button
@@ -422,7 +394,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
           )}
 
           {/* Transaction history toggle */}
-          {!loading && payments.length > 0 && (
+          {payments.length > 0 && (
             <button
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground w-full"
               onClick={() => setHistoryExpanded((v) => !v)}
@@ -466,13 +438,6 @@ export function PaymentCard({ order }: PaymentCardProps) {
               ))}
             </div>
           )}
-
-          {loading && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Loading payment details…
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -504,8 +469,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button onClick={submitCODAction} disabled={codLoading}>
-              {codLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button onClick={submitCODAction} disabled={codMutation.isPending}>
+              {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Confirm Collection
             </Button>
           </DialogFooter>
@@ -538,7 +503,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
               <Label htmlFor="failNotes">Notes (optional)</Label>
               <Input
                 id="failNotes"
-                placeholder="Additional details…"
+                placeholder="Additional details..."
                 value={failNotes}
                 onChange={(e) => setFailNotes(e.target.value)}
               />
@@ -546,8 +511,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={submitCODAction} disabled={codLoading}>
-              {codLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending}>
+              {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Record Failure
             </Button>
           </DialogFooter>
@@ -565,8 +530,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={submitCODAction} disabled={codLoading}>
-              {codLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending}>
+              {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Mark Returned
             </Button>
           </DialogFooter>
@@ -616,11 +581,11 @@ export function PaymentCard({ order }: PaymentCardProps) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRefundDialogOpen(false)} disabled={refundLoading}>
+            <Button variant="outline" onClick={() => setIsRefundDialogOpen(false)} disabled={refundMutation.isPending}>
               Cancel
             </Button>
-            <Button onClick={handleIssueRefund} disabled={refundLoading}>
-              {refundLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button onClick={handleIssueRefund} disabled={refundMutation.isPending}>
+              {refundMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Submit Refund
             </Button>
           </DialogFooter>

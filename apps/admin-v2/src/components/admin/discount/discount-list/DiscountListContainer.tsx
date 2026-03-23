@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useCurrency } from "~/hooks/use-currency";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 import { DiscountRow } from "./DiscountRow";
 import { DiscountDeleteDialogs } from "./DiscountDeleteDialogs";
 import { useDiscountListFilters } from "./hooks/useDiscountListFilters";
@@ -65,6 +65,7 @@ export function DiscountListContainer({
   initialSort = { field: "updatedAt", order: "desc" },
   showTrashed = false,
 }: DiscountListProps) {
+  const navigate = useNavigate();
   const { symbol } = useCurrency();
 
   const filters = useDiscountListFilters(
@@ -117,9 +118,10 @@ export function DiscountListContainer({
               variant="outline"
               size="sm"
               onClick={() => {
-                void navigateTo(
-                  showTrashed ? "/admin/discounts" : "/admin/discounts?trashed=true",
-                );
+                void navigate({
+                  to: "/admin/discounts",
+                  search: showTrashed ? {} : { trashed: true },
+                } as any);
               }}
               className="group h-9 border-gray-200 bg-white/80 px-3 text-xs font-medium shadow-sm backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:border-gray-300 hover:bg-white hover:shadow-md active:translate-y-0 dark:bg-gray-800/80 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:border-gray-600"
             >
@@ -138,7 +140,7 @@ export function DiscountListContainer({
             {!showTrashed ? (
               <Button
                 size="sm"
-                onClick={() => void navigateTo("/admin/discounts/new")}
+                onClick={() => void navigate({ to: "/admin/discounts/new" })}
                 className="group h-9 px-3 text-xs font-medium shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
               >
                 <Plus className="mr-1.5 h-3.5 w-3.5 transition-transform group-hover:scale-110" />
@@ -336,7 +338,7 @@ export function DiscountListContainer({
                       {!showTrashed && !filters.searchQuery && !filters.activeType ? (
                         <Button
                           size="sm"
-                          onClick={() => void navigateTo("/admin/discounts/new")}
+                          onClick={() => void navigate({ to: "/admin/discounts/new" })}
                           className="mt-2"
                         >
                           <Plus className="h-4 w-4 mr-1.5" />

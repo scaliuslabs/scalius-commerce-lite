@@ -1,9 +1,14 @@
 import React from "react";
 import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
 import type { OrderListItem } from "@scalius/core/modules/orders";
-import type { UseOrderListStateReturn } from "./useOrderListState";
-import { getOrders, updateOrderStatus, bulkDeleteOrders, restoreOrder, createOrderShipment, refreshShipmentStatus } from "~/lib/api.functions";
-import { getServerFnError } from "@/lib/api-helpers";
+import type { UseOrderListStateReturn, OrderListPagination } from "./useOrderListState";
+import { getOrders, createOrderShipment, refreshShipmentStatus } from "~/lib/api.functions";
+import {
+  useUpdateOrderStatus,
+  useBulkDeleteOrders,
+  useRestoreOrder,
+} from "~/lib/api.mutations";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 interface ShipmentStatus {
@@ -27,8 +32,12 @@ interface FetchOrdersParams {
 export function useOrderListApi(
   state: UseOrderListStateReturn,
   _showTrashed: boolean,
-  initialOrders: OrderListItem[],
+  _initialOrders: OrderListItem[],
 ) {
+  const statusMutation = useUpdateOrderStatus();
+  const bulkDeleteMutation = useBulkDeleteOrders();
+  const restoreMutation = useRestoreOrder();
+
   const {
     displayOrders,
     setDisplayOrders,
@@ -47,6 +56,8 @@ export function useOrderListApi(
     fulfillmentStatus,
     shipmentStatuses,
   } = state;
+
+  const navigate = useNavigate();
 
   const fetchOrders = React.useCallback(
     async (params: FetchOrdersParams) => {
@@ -81,48 +92,40 @@ export function useOrderListApi(
             : null,
         }));
 
-        setDisplayOrders(parsedOrders as any);
-        setCurrentPagination(data.pagination as any);
+        setDisplayOrders(parsedOrders as OrderListItem[]);
+        setCurrentPagination(data.pagination as OrderListPagination);
         const newShipmentStatuses: Record<string, ShipmentStatus> = {};
-        (parsedOrders as any[]).forEach((order: OrderListItem) => {
+        (parsedOrders as OrderListItem[]).forEach((order: OrderListItem) => {
           if (order.latestShipment) {
             newShipmentStatuses[order.id] = order.latestShipment as unknown as ShipmentStatus;
           }
         });
         setShipmentStatuses(newShipmentStatuses);
-        const urlToUpdate = new URL(window.location.href);
-        if (params.page)
-          urlToUpdate.searchParams.set("page", params.page.toString());
-        if (params.limit)
-          urlToUpdate.searchParams.set("limit", params.limit.toString());
-        if (params.search) {
-          urlToUpdate.searchParams.set("search", params.search);
-        } else {
-          urlToUpdate.searchParams.delete("search");
-        }
-        if (params.status) {
-          urlToUpdate.searchParams.set("status", params.status);
-        } else {
-          urlToUpdate.searchParams.delete("status");
-        }
-        if (paymentStatus) urlToUpdate.searchParams.set("paymentStatus", paymentStatus);
-        else urlToUpdate.searchParams.delete("paymentStatus");
-
-        if (paymentMethod) urlToUpdate.searchParams.set("paymentMethod", paymentMethod);
-        else urlToUpdate.searchParams.delete("paymentMethod");
-
-        if (fulfillmentStatus) urlToUpdate.searchParams.set("fulfillmentStatus", fulfillmentStatus);
-        else urlToUpdate.searchParams.delete("fulfillmentStatus");
-
-        if (params.sort) urlToUpdate.searchParams.set("sort", params.sort);
-        if (params.order) urlToUpdate.searchParams.set("order", params.order);
-        if (params.trashed) {
-          urlToUpdate.searchParams.set("trashed", "true");
-        } else {
-          urlToUpdate.searchParams.delete("trashed");
-        }
-
-        window.history.pushState({}, "", urlToUpdate.toString());
+        void navigate({
+          search: ((prev: any) => {
+            const next: Record<string, unknown> = { ...prev };
+            if (params.page) next.page = params.page;
+            else delete next.page;
+            if (params.limit) next.limit = params.limit;
+            else delete next.limit;
+            if (params.search) next.search = params.search;
+            else delete next.search;
+            if (params.status) next.status = params.status;
+            else delete next.status;
+            if (paymentStatus) next.paymentStatus = paymentStatus;
+            else delete next.paymentStatus;
+            if (paymentMethod) next.paymentMethod = paymentMethod;
+            else delete next.paymentMethod;
+            if (fulfillmentStatus) next.fulfillmentStatus = fulfillmentStatus;
+            else delete next.fulfillmentStatus;
+            if (params.sort) next.sort = params.sort;
+            if (params.order) next.order = params.order;
+            if (params.trashed) next.trashed = "true";
+            else delete next.trashed;
+            return next;
+          }) as any,
+          replace: true,
+        });
       } catch (error) {
         console.error("Error fetching orders:", error);
         toast.error("Failed to fetch orders. Please try again.");
@@ -130,83 +133,87 @@ export function useOrderListApi(
         setIsLoadingOrders(false);
       }
     },
-    [paymentStatus, paymentMethod, fulfillmentStatus, setDisplayOrders, setCurrentPagination, setShipmentStatuses, setIsLoadingOrders],
+    [paymentStatus, paymentMethod, fulfillmentStatus, setDisplayOrders, setCurrentPagination, setShipmentStatuses, setIsLoadingOrders, navigate],
   );
 
-  const handleStatusUpdate = React.useCallback(async (orderId: string, newStatus: string) => {
+  const handleStatusUpdate = React.useCallback((orderId: string, newStatus: string) => {
     setUpdatingStatusIds((prev) => new Set(prev).add(orderId));
     const originalOrders = [...displayOrders];
 
+    // Optimistic update
     setDisplayOrders((prev) =>
       prev.map((order) =>
         order.id === orderId ? { ...order, status: newStatus } : order,
       ),
     );
 
-    try {
-      await updateOrderStatus({ data: { orderId, status: newStatus.toLowerCase() } });
-      toast.success(`Order status changed to ${newStatus}`);
-    } catch (error) {
-      console.error("Error updating status:", error);
-      setDisplayOrders(originalOrders);
-      toast.error(getServerFnError(error, "Failed to update order status. Please try again."));
-    } finally {
-      setUpdatingStatusIds((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(orderId);
-        return newSet;
-      });
-    }
-  }, [displayOrders, setDisplayOrders, setUpdatingStatusIds]);
+    statusMutation.mutate(
+      { orderId, status: newStatus.toLowerCase() },
+      {
+        onError: () => {
+          setDisplayOrders(originalOrders);
+        },
+        onSettled: () => {
+          setUpdatingStatusIds((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(orderId);
+            return newSet;
+          });
+        },
+      },
+    );
+  }, [displayOrders, setDisplayOrders, setUpdatingStatusIds, statusMutation]);
 
-  const performDelete = React.useCallback(async (ids: string[], permanent: boolean) => {
+  const performDelete = React.useCallback((ids: string[], permanent: boolean) => {
     setIsDeleting(true);
     const originalOrders = [...displayOrders];
 
+    // Optimistic removal
     setDisplayOrders((prev) => prev.filter((order) => !ids.includes(order.id)));
 
-    try {
-      await bulkDeleteOrders({ data: { orderIds: ids, permanent } });
-      toast.success(`${ids.length} order(s) have been ${permanent ? "permanently deleted" : "moved to trash"}.`);
+    bulkDeleteMutation.mutate(
+      { orderIds: ids, permanent },
+      {
+        onSuccess: () => {
+          setSelectedOrders(new Set());
+          setCurrentPagination((prev) => ({
+            ...prev,
+            total: Math.max(0, prev.total - ids.length),
+            totalPages: Math.max(
+              1,
+              Math.ceil((prev.total - ids.length) / prev.limit),
+            ),
+          }));
+        },
+        onError: () => {
+          setDisplayOrders(originalOrders);
+        },
+        onSettled: () => {
+          setIsDeleting(false);
+          setOrderToDelete(null);
+          setIsBulkDeleteOpen(false);
+        },
+      },
+    );
+  }, [displayOrders, setDisplayOrders, setIsDeleting, setSelectedOrders, setCurrentPagination, setOrderToDelete, setIsBulkDeleteOpen, bulkDeleteMutation]);
 
-      setSelectedOrders(new Set());
-      setCurrentPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - ids.length),
-        totalPages: Math.max(
-          1,
-          Math.ceil((prev.total - ids.length) / prev.limit),
-        ),
-      }));
-    } catch (error) {
-      console.error("Error deleting orders:", error);
-      setDisplayOrders(originalOrders);
-      toast.error(getServerFnError(error, "Failed to delete orders. Please try again."));
-    } finally {
-      setIsDeleting(false);
-      setOrderToDelete(null);
-      setIsBulkDeleteOpen(false);
-    }
-  }, [displayOrders, setDisplayOrders, setIsDeleting, setSelectedOrders, setCurrentPagination, setOrderToDelete, setIsBulkDeleteOpen]);
-
-  const handleRestore = React.useCallback(async (id: string) => {
-    const snapshot = [...displayOrders]; // capture current state before optimistic update
+  const handleRestore = React.useCallback((id: string) => {
+    const snapshot = [...displayOrders];
     setDisplayOrders((prev) => prev.filter((order) => order.id !== id));
-    try {
-      await restoreOrder({ data: { id } });
-      toast.success("Order restored");
 
-      setCurrentPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - 1),
-        totalPages: Math.max(1, Math.ceil((prev.total - 1) / prev.limit)),
-      }));
-    } catch (error) {
-      console.error("Error restoring order:", error);
-      toast.error(getServerFnError(error, "Error restoring order"));
-      setDisplayOrders(snapshot); // rollback to snapshot, not stale initialOrders
-    }
-  }, [displayOrders, setDisplayOrders, setCurrentPagination]);
+    restoreMutation.mutate(id, {
+      onSuccess: () => {
+        setCurrentPagination((prev) => ({
+          ...prev,
+          total: Math.max(0, prev.total - 1),
+          totalPages: Math.max(1, Math.ceil((prev.total - 1) / prev.limit)),
+        }));
+      },
+      onError: () => {
+        setDisplayOrders(snapshot);
+      },
+    });
+  }, [displayOrders, setDisplayOrders, setCurrentPagination, restoreMutation]);
 
   const handleBulkShipmentSubmit = React.useCallback(async (providerId: string) => {
     setIsShipping(true);

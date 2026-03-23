@@ -32,7 +32,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 import { DiscountStatusBadge } from "./DiscountStatusBadge";
 import type { DiscountItem } from "./hooks/useDiscountListFilters";
 
@@ -101,6 +101,7 @@ export const DiscountRow = React.memo(function DiscountRow({
   getDiscountValueDisplay,
   symbol,
 }: DiscountRowProps) {
+  const navigate = useNavigate();
   const summaryLines = buildDiscountSummary(discount, getTypeLabel, getDiscountValueDisplay, symbol);
 
   return (
@@ -280,9 +281,10 @@ export const DiscountRow = React.memo(function DiscountRow({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
-                    void navigateTo(
-                      `/admin/discounts/${discount.id}/edit?duplicate=true`,
-                    );
+                    void navigate({
+                      to: `/admin/discounts/${discount.id}/edit` as string,
+                      search: { duplicate: true },
+                    } as any);
                   }}
                 >
                   <Copy className="mr-2 h-4 w-4" />

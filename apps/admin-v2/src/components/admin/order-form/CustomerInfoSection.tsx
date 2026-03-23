@@ -42,12 +42,13 @@ export function CustomerInfoSection() {
 
   React.useEffect(() => {
     getAllowedCountries()
-      .then((data: any) => {
+      .then((result: unknown) => {
+        const data = result as Record<string, unknown>;
         if (Array.isArray(data.allowedCountries) && data.allowedCountries.length > 0) {
           setAllowedCountries(data.allowedCountries as string[]);
         }
         if (data.allowedCountriesMode === "include" || data.allowedCountriesMode === "exclude") {
-          setAllowedCountriesMode(data.allowedCountriesMode as "include" | "exclude");
+          setAllowedCountriesMode(data.allowedCountriesMode);
         }
       })
       .catch(() => {});
@@ -112,8 +113,8 @@ export function CustomerInfoSection() {
                 <FormControl>
                   <PhoneInput
                     international
-                    defaultCountry={effectiveDefaultCountry as any}
-                    countries={effectiveCountries as any}
+                    defaultCountry={effectiveDefaultCountry}
+                    countries={effectiveCountries}
                     value={field.value}
                     onChange={(value) => field.onChange(value || "")}
                     onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}

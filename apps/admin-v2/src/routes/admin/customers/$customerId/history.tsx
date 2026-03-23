@@ -1,36 +1,29 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { CustomerHistoryView } from "~/components/admin/CustomerHistoryView";
-import { getCustomerHistory } from "~/lib/api.functions";
+import { customerHistoryQueryOptions } from "~/lib/api.queries";
 
 export const Route = createFileRoute("/admin/customers/$customerId/history")({
-  loader: async ({ params }) => {
-    const result = await getCustomerHistory({ data: { id: params.customerId } }).catch(() => null);
-    if (!result) throw redirect({ to: "/admin/customers" });
-    const r = result as any;
-    return {
-      customer: r.customer || null,
-      history: r.history || [],
-      orders: r.orders || [],
-    };
+  loader: async ({ context: { queryClient }, params }) => {
+    const data = await queryClient.ensureQueryData(customerHistoryQueryOptions(params.customerId)).catch(() => null);
+    if (!data) throw redirect({ to: "/admin/customers" });
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: `Customer History - ${loaderData?.customer?.name || "Customer"} | Scalius Admin` }],
+  head: () => ({
+    meta: [{ title: "Customer History | Scalius Admin" }],
   }),
   component: CustomerHistoryPage,
 });
 
 function CustomerHistoryPage() {
-  const { customer, history, orders } = Route.useLoaderData();
-
-  if (!customer) {
-    return <div>Customer not found</div>;
-  }
+  const { customerId } = Route.useParams();
+  const { data } = useSuspenseQuery(customerHistoryQueryOptions(customerId));
+  const r = data as Record<string, unknown>;
 
   return (
     <CustomerHistoryView
-      customer={customer}
-      history={history}
-      orders={orders}
+      customer={r.customer as Parameters<typeof CustomerHistoryView>[0]["customer"]}
+      history={(r.history || []) as Parameters<typeof CustomerHistoryView>[0]["history"]}
+      orders={(r.orders || []) as Parameters<typeof CustomerHistoryView>[0]["orders"]}
     />
   );
 }

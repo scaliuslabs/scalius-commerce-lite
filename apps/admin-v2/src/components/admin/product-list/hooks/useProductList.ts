@@ -1,8 +1,14 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrency } from "@/hooks/use-currency";
-import { getProducts, deleteProduct, permanentDeleteProduct, restoreProduct, bulkDeleteProducts } from "~/lib/api.functions";
+import {
+  deleteProduct,
+  permanentDeleteProduct,
+  restoreProduct,
+  bulkDeleteProducts,
+} from "~/lib/api.functions";
 import { getServerFnError } from "@/lib/api-helpers";
 
 export interface ProductListItem {
@@ -79,22 +85,17 @@ export function useProductList({
 }: UseProductListParams) {
   const { symbol } = useCurrency();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [products, setProducts] = useState(initialProducts || []);
   const [pagination, setPagination] = useState(initialPagination);
-  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [localSearch, setLocalSearch] = useState(initialSearchQuery);
-  const [selectedCategory, setSelectedCategory] = useState(initialCategoryId);
-  const [sort, setSort] = useState(initialSort);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(
     new Set(),
   );
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
-  const [isActionLoading, setIsActionLoading] = useState(false);
   const [isConfirmBulkDeleteOpen, setIsConfirmBulkDeleteOpen] = useState(false);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const searchTimeoutRef = useRef<number | undefined>(undefined);
-  const prevSearchQueryRef = useRef(initialSearchQuery);
 
   useEffect(() => {
     setProducts(initialProducts || []);
@@ -103,113 +104,6 @@ export function useProductList({
   useEffect(() => {
     setPagination(initialPagination);
   }, [initialPagination]);
-
-  useEffect(() => {
-    setLocalSearch(searchQuery);
-  }, [searchQuery]);
-
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    setSearchQuery(url.searchParams.get("search") || initialSearchQuery);
-    setSelectedCategory(
-      url.searchParams.get("category") || initialCategoryId,
-    );
-    setSort({
-      field: (url.searchParams.get("sort") || initialSort.field) as SortField,
-      order: (url.searchParams.get("order") || initialSort.order) as SortOrder,
-    });
-  }, [
-    initialSearchQuery,
-    initialCategoryId,
-    initialSort.field,
-    initialSort.order,
-  ]);
-
-  const fetchProducts = useCallback(
-    async (params: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      category?: string;
-      sort?: SortField;
-      order?: SortOrder;
-    }) => {
-      setIsLoadingProducts(true);
-      try {
-        const data = await getProducts({
-          data: {
-            page: params.page,
-            limit: params.limit,
-            search: params.search,
-            categoryId: params.category !== ALL_CATEGORIES ? params.category : undefined,
-            sort: params.sort,
-            order: params.order,
-            showTrashed: showTrashed ? true : undefined,
-          },
-        }) as unknown as { products: Record<string, unknown>[]; pagination: unknown };
-
-        const parsed = ((data.products || []) as Record<string, unknown>[]).map(
-          (p: Record<string, unknown>) => ({
-            ...p,
-            createdAt: p.createdAt ? new Date(p.createdAt as string) : null,
-            updatedAt: p.updatedAt ? new Date(p.updatedAt as string) : null,
-          }),
-        ) as unknown as ProductListItem[];
-        setProducts(parsed);
-        setPagination((data.pagination || initialPagination) as Pagination);
-
-        const urlToUpdate = new URL(window.location.href);
-        if (params.page)
-          urlToUpdate.searchParams.set("page", params.page.toString());
-        if (params.limit)
-          urlToUpdate.searchParams.set("limit", params.limit.toString());
-        if (params.search)
-          urlToUpdate.searchParams.set("search", params.search);
-        else urlToUpdate.searchParams.delete("search");
-        if (params.category && params.category !== ALL_CATEGORIES)
-          urlToUpdate.searchParams.set("category", params.category);
-        else urlToUpdate.searchParams.delete("category");
-        if (params.sort) urlToUpdate.searchParams.set("sort", params.sort);
-        if (params.order) urlToUpdate.searchParams.set("order", params.order);
-        if (showTrashed) urlToUpdate.searchParams.set("trashed", "true");
-        else urlToUpdate.searchParams.delete("trashed");
-        window.history.pushState({}, "", urlToUpdate.toString());
-      } catch (err: unknown) {
-        console.error("Error fetching products:", err);
-        toast.error("Failed to load products. Please try again.");
-      } finally {
-        setIsLoadingProducts(false);
-      }
-    },
-    [showTrashed, initialPagination],
-  );
-
-  // Debounced search
-  useEffect(() => {
-    if (searchTimeoutRef.current)
-      window.clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = window.setTimeout(() => {
-      if (localSearch !== searchQuery) setSearchQuery(localSearch);
-    }, 500);
-    return () => {
-      if (searchTimeoutRef.current)
-        window.clearTimeout(searchTimeoutRef.current);
-    };
-  }, [localSearch, searchQuery]);
-
-  useEffect(() => {
-    if (searchQuery !== prevSearchQueryRef.current) {
-      prevSearchQueryRef.current = searchQuery;
-      fetchProducts({
-        page: 1,
-        limit: pagination.limit,
-        search: searchQuery.trim() || undefined,
-        category: selectedCategory,
-        sort: sort.field,
-        order: sort.order,
-      });
-    }
-  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard shortcut
   useEffect(() => {
@@ -232,6 +126,142 @@ export function useProductList({
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, []);
+
+  // Navigate via URL search params (TanStack Router re-runs loader automatically)
+  const navigateWithParams = useCallback(
+    (params: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      category?: string;
+      sort?: SortField;
+      order?: SortOrder;
+    }) => {
+      void navigate({
+        to: "/admin/products",
+        search: ((prev: any) => ({
+          ...prev,
+          page: params.page ?? prev.page,
+          limit: params.limit ?? prev.limit,
+          search: params.search ?? prev.search,
+          category: params.category ?? prev.category,
+          sort: params.sort ?? prev.sort,
+          order: params.order ?? prev.order,
+          trashed: showTrashed,
+        })) as any,
+      });
+    },
+    [navigate, showTrashed],
+  );
+
+  // Debounced search — navigates via URL
+  useEffect(() => {
+    if (searchTimeoutRef.current)
+      window.clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = window.setTimeout(() => {
+      void navigate({
+        to: "/admin/products",
+        search: ((prev: any) => ({
+          ...prev,
+          search: localSearch,
+          page: 1,
+        })) as any,
+      });
+    }, 500);
+    return () => {
+      if (searchTimeoutRef.current)
+        window.clearTimeout(searchTimeoutRef.current);
+    };
+  }, [localSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Mutations ─────────────────────────────────────────────────────
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteProduct({ data: { id } }),
+    onMutate: async (id) => {
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+      setSelectedProducts((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    },
+    onError: (_err) => {
+      toast.error(getServerFnError(_err, "Failed to move product to trash."));
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onSuccess: () => {
+      toast.success("Product moved to trash.");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: (id: string) => permanentDeleteProduct({ data: { id } }),
+    onMutate: async (id) => {
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+      setSelectedProducts((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    },
+    onError: (_err) => {
+      toast.error(getServerFnError(_err, "Failed to permanently delete product."));
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onSuccess: () => {
+      toast.success("Product permanently deleted.");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => restoreProduct({ data: { id } }),
+    onMutate: async (id) => {
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+      setSelectedProducts((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    },
+    onError: (_err) => {
+      toast.error(getServerFnError(_err, "Failed to restore product."));
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onSuccess: () => {
+      toast.success("Product restored successfully.");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      bulkDeleteProducts({ data: { productIds: ids, permanent: showTrashed } }),
+    onMutate: async (ids) => {
+      setProducts((prev) => prev.filter((p) => !ids.includes(p.id)));
+      setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - ids.length) }));
+      setSelectedProducts(new Set());
+    },
+    onError: (_err) => {
+      toast.error(getServerFnError(_err, "Failed to process bulk delete."));
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onSuccess: (_data, ids) => {
+      toast.success(
+        `${ids.length} products ${showTrashed ? "permanently deleted" : "moved to trash"}.`,
+      );
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
+  const isActionLoading =
+    deleteMutation.isPending ||
+    permanentDeleteMutation.isPending ||
+    restoreMutation.isPending ||
+    bulkDeleteMutation.isPending;
+
+  // ── Derived state ─────────────────────────────────────────────────
 
   const displayStats = useMemo((): ProductStats => {
     if (stats) {
@@ -259,183 +289,89 @@ export function useProductList({
     return "indeterminate" as const;
   }, [selectedProducts.size, products.length]);
 
+  // ── Handlers ──────────────────────────────────────────────────────
+
   const handleSearch = useCallback(
     (e?: React.SyntheticEvent) => {
       e?.preventDefault();
-      setSearchQuery(localSearch);
     },
-    [localSearch],
+    [],
   );
 
   const handleCategoryChange = useCallback(
     (value: string) => {
-      setSelectedCategory(value);
-      fetchProducts({
-        page: 1,
-        limit: pagination.limit,
-        search: searchQuery.trim() || undefined,
-        category: value,
-        sort: sort.field,
-        order: sort.order,
-      });
+      navigateWithParams({ page: 1, category: value });
     },
-    [fetchProducts, pagination.limit, searchQuery, sort.field, sort.order],
+    [navigateWithParams],
   );
 
   const handleSort = useCallback(
     (field: SortField) => {
-      const newOrder =
-        sort.field === field && sort.order === "asc" ? "desc" : "asc";
-      setSort({ field, order: newOrder });
-      fetchProducts({
-        page: pagination.page,
-        limit: pagination.limit,
-        search: searchQuery.trim() || undefined,
-        category: selectedCategory,
+      navigateWithParams({
         sort: field,
-        order: newOrder,
+        order: initialSort.field === field && initialSort.order === "asc" ? "desc" : "asc",
       });
     },
-    [
-      fetchProducts,
-      pagination.page,
-      pagination.limit,
-      searchQuery,
-      selectedCategory,
-      sort.field,
-      sort.order,
-    ],
+    [navigateWithParams, initialSort.field, initialSort.order],
   );
 
   const handlePageChange = useCallback(
     (newPage: number) => {
       if (newPage < 1 || newPage > pagination.totalPages) return;
-      fetchProducts({
-        page: newPage,
-        limit: pagination.limit,
-        search: searchQuery.trim() || undefined,
-        category: selectedCategory,
-        sort: sort.field,
-        order: sort.order,
-      });
+      navigateWithParams({ page: newPage });
     },
-    [
-      fetchProducts,
-      pagination.totalPages,
-      pagination.limit,
-      searchQuery,
-      selectedCategory,
-      sort.field,
-      sort.order,
-    ],
+    [navigateWithParams, pagination.totalPages],
   );
 
   const handleLimitChange = useCallback(
     (newLimit: number) => {
-      fetchProducts({
-        page: 1,
-        limit: newLimit,
-        search: searchQuery.trim() || undefined,
-        category: selectedCategory,
-        sort: sort.field,
-        order: sort.order,
-      });
+      navigateWithParams({ page: 1, limit: newLimit });
     },
-    [fetchProducts, searchQuery, selectedCategory, sort.field, sort.order],
+    [navigateWithParams],
   );
 
-  const handleView = useCallback((id: string) => {
-    void navigate({ to: `/admin/products/${id}` as string });
-  }, [navigate]);
+  const handleView = useCallback(
+    (id: string) => {
+      void navigate({ to: "/admin/products/$productId", params: { productId: id } });
+    },
+    [navigate],
+  );
 
-  const handleEdit = useCallback((id: string) => {
-    void navigate({ to: `/admin/products/${id}/edit` as string });
-  }, [navigate]);
+  const handleEdit = useCallback(
+    (id: string) => {
+      void navigate({ to: "/admin/products/$productId/edit", params: { productId: id } });
+    },
+    [navigate],
+  );
 
   const triggerDelete = useCallback((id: string) => {
     setProductToDelete(id);
   }, []);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = useCallback(() => {
     if (!productToDelete) return;
-    setIsActionLoading(true);
     const idToDelete = productToDelete;
     setProductToDelete(null);
-
-    try {
-      await deleteProduct({ data: { id: idToDelete } });
-      toast.success("Product moved to trash.");
-      setProducts((prev) => prev.filter((p) => p.id !== idToDelete));
-      setPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - 1),
-      }));
-      setSelectedProducts((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(idToDelete);
-        return newSet;
-      });
-    } catch (error: unknown) {
-      console.error("Error deleting product:", error);
-      toast.error(getServerFnError(error, "Failed to move product to trash."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  }, [productToDelete]);
+    deleteMutation.mutate(idToDelete);
+  }, [productToDelete, deleteMutation]);
 
   const triggerPermanentDelete = useCallback((id: string) => {
     setProductToDelete(id);
   }, []);
 
-  const handlePermanentDelete = useCallback(async () => {
+  const handlePermanentDelete = useCallback(() => {
     if (!productToDelete) return;
-    setIsActionLoading(true);
     const idToDelete = productToDelete;
     setProductToDelete(null);
+    permanentDeleteMutation.mutate(idToDelete);
+  }, [productToDelete, permanentDeleteMutation]);
 
-    try {
-      await permanentDeleteProduct({ data: { id: idToDelete } });
-      toast.success("Product permanently deleted.");
-      setProducts((prev) => prev.filter((p) => p.id !== idToDelete));
-      setPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - 1),
-      }));
-      setSelectedProducts((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(idToDelete);
-        return newSet;
-      });
-    } catch (error: unknown) {
-      console.error("Error permanently deleting product:", error);
-      toast.error(getServerFnError(error, "Failed to permanently delete product."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  }, [productToDelete]);
-
-  const handleRestore = useCallback(async (id: string) => {
-    setIsActionLoading(true);
-    try {
-      await restoreProduct({ data: { id } });
-      toast.success("Product restored successfully.");
-      setProducts((prev) => prev.filter((p) => p.id !== id));
-      setPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - 1),
-      }));
-      setSelectedProducts((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
-      });
-    } catch (error: unknown) {
-      console.error("Error restoring product:", error);
-      toast.error(getServerFnError(error, "Failed to restore product."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  }, []);
+  const handleRestore = useCallback(
+    (id: string) => {
+      restoreMutation.mutate(id);
+    },
+    [restoreMutation],
+  );
 
   const handleBulkDelete = useCallback(() => {
     if (selectedProducts.size > 0) {
@@ -443,32 +379,12 @@ export function useProductList({
     }
   }, [selectedProducts]);
 
-  const confirmBulkDelete = useCallback(async () => {
+  const confirmBulkDelete = useCallback(() => {
     if (selectedProducts.size === 0) return;
-    setIsActionLoading(true);
     const idsToDelete = Array.from(selectedProducts);
     setIsConfirmBulkDeleteOpen(false);
-
-    try {
-      await bulkDeleteProducts({ data: { productIds: idsToDelete, permanent: showTrashed } });
-      toast.success(
-        `${idsToDelete.length} products ${showTrashed ? "permanently deleted" : "moved to trash"}.`,
-      );
-      setProducts((prev) =>
-        prev.filter((p) => !idsToDelete.includes(p.id)),
-      );
-      setPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - idsToDelete.length),
-      }));
-      setSelectedProducts(new Set());
-    } catch (error: unknown) {
-      console.error("Error bulk deleting products:", error);
-      toast.error(getServerFnError(error, "Failed to process bulk delete."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  }, [selectedProducts, showTrashed]);
+    bulkDeleteMutation.mutate(idsToDelete);
+  }, [selectedProducts, bulkDeleteMutation]);
 
   const toggleProductSelection = useCallback(
     (productId: string, checked: boolean) => {
@@ -508,8 +424,7 @@ export function useProductList({
         day: "numeric",
         year: "numeric",
       });
-    } catch (error: unknown) {
-      console.error("Error formatting date:", error);
+    } catch {
       return "Invalid date";
     }
   }, []);
@@ -523,18 +438,11 @@ export function useProductList({
 
   const clearFilters = useCallback(() => {
     setLocalSearch("");
-    setSearchQuery("");
-    setSelectedCategory(ALL_CATEGORIES);
-    fetchProducts({
-      page: 1,
-      limit: pagination.limit,
-      sort: sort.field,
-      order: sort.order,
-    });
-  }, [fetchProducts, pagination.limit, sort.field, sort.order]);
+    navigateWithParams({ page: 1, search: "", category: ALL_CATEGORIES });
+  }, [navigateWithParams]);
 
   const hasActiveFilters =
-    localSearch.trim().length > 0 || selectedCategory !== ALL_CATEGORIES;
+    localSearch.trim().length > 0 || initialCategoryId !== ALL_CATEGORIES;
 
   return {
     // State
@@ -542,15 +450,15 @@ export function useProductList({
     pagination,
     localSearch,
     setLocalSearch,
-    selectedCategory,
-    sort,
+    selectedCategory: initialCategoryId,
+    sort: initialSort,
     selectedProducts,
     productToDelete,
     setProductToDelete,
     isActionLoading,
     isConfirmBulkDeleteOpen,
     setIsConfirmBulkDeleteOpen,
-    isLoadingProducts,
+    isLoadingProducts: false,
     searchInputRef,
 
     // Derived

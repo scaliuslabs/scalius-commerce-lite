@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
-import { getCategoryFormOptions } from "~/lib/api.functions";
+import { categoryFormOptionsQueryOptions } from "~/lib/api.queries";
+import type { Category } from "~/components/admin/product-form/types";
 
 const defaultValues = {
   name: "",
@@ -19,16 +21,16 @@ const defaultValues = {
 };
 
 export const Route = createFileRoute("/admin/products/new")({
-  loader: async () => {
-    const result = await getCategoryFormOptions();
-    return { allCategories: (result as any).categories || [] };
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(categoryFormOptionsQueryOptions());
   },
   head: () => ({ meta: [{ title: "New Product | Scalius Admin" }] }),
   component: NewProductPage,
 });
 
 function NewProductPage() {
-  const { allCategories } = Route.useLoaderData();
+  const { data: categoryData } = useSuspenseQuery(categoryFormOptionsQueryOptions());
+  const allCategories = ((categoryData as Record<string, unknown>)?.categories ?? []) as Category[];
 
   return (
     <div className="container max-w-7xl py-4 pb-8">

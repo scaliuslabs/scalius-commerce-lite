@@ -43,7 +43,7 @@ import { WidgetPlacement } from './widget-form/WidgetPlacement';
 import { FullScreenEditor, type EditorMode } from './widget-form/FullScreenEditor';
 import { WidgetHistoryModal } from './widget-form/WidgetHistoryModal';
 import { WidgetPasteModal } from './widget-form/WidgetPasteModal';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 
 const widgetFormSchema = z.object({
   name: z.string().min(3, 'Widget name must be at least 3 characters long.'),
@@ -95,6 +95,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   submitButtonText,
 }) => {
   const navigate = useNavigate();
+  const router = useRouter();
   const {
     control,
     handleSubmit,
@@ -103,8 +104,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<WidgetFormValues>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- @hookform/resolvers upstream typing limitation with .refine()
-    resolver: zodResolver(widgetFormSchema) as any,
+    resolver: zodResolver(widgetFormSchema),
     defaultValues: widget && !isCreateMode
       ? {
           name: widget.name,
@@ -345,7 +345,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     try {
       await restoreWidgetHistory({ data: { widgetId: widget.id, historyId } });
       toast.success('Version restored successfully!');
-      void navigate({ to: window.location.pathname });
+      router.invalidate();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to restore version');
     }

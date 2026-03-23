@@ -2,14 +2,19 @@
 import type { ReactNode } from "react";
 import {
   Outlet,
-  createRootRoute,
+  createRootRouteWithContext,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
 import appCss from "~/styles/global.css?url";
 import { themeInitScript } from "~/components/admin/layout/ThemeProvider";
 
-export const Route = createRootRoute({
+interface RouterContext {
+  queryClient: QueryClient;
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },

@@ -1,6 +1,7 @@
 // src/components/admin/attributes-manager/hooks/useAttributeActions.ts
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   updateAttribute,
@@ -15,98 +16,127 @@ export function useAttributeActions(
   onRefresh: () => void,
   setAttributes: React.Dispatch<React.SetStateAction<Attribute[]>>,
 ) {
-  const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
-  const [isActionLoading, setIsActionLoading] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const queryClient = useQueryClient();
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Attribute> }) =>
+      updateAttribute({ data: { id, ...data } }),
+    onMutate: async ({ id, data }) => {
+      setAttributes((prev) =>
+        prev.map((attr) => (attr.id === id ? { ...attr, ...data } : attr)),
+      );
+    },
+    onSuccess: () => {
+      toast.success("Attribute updated.");
+    },
+    onError: (error) => {
+      toast.error(getServerFnError(error, "Failed to update attribute"));
+      onRefresh();
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (newAttribute: NewAttribute) =>
+      createAttribute({ data: newAttribute as unknown as Record<string, unknown> }),
+    onSuccess: (_data, newAttribute) => {
+      toast.success(`Attribute "${newAttribute.name}" created successfully.`);
+      onRefresh();
+    },
+    onError: (error) => {
+      toast.error(getServerFnError(error, "Failed to create attribute"));
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ id, showTrashed }: { id: string; name: string; showTrashed: boolean }) =>
+      showTrashed
+        ? deleteAttributePermanent({ data: { id } })
+        : deleteAttribute({ data: { id } }),
+    onSuccess: (_data, { name, showTrashed }) => {
+      toast.success(
+        showTrashed
+          ? `Attribute "${name}" permanently deleted.`
+          : `Attribute "${name}" moved to trash.`,
+      );
+      onRefresh();
+    },
+    onError: (error) => {
+      toast.error("Deletion Failed", {
+        description: getServerFnError(error, "Failed to delete attribute"),
+        duration: 8000,
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => restoreAttribute({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Attribute restored.");
+      onRefresh();
+    },
+    onError: (error) => {
+      toast.error(getServerFnError(error, "Failed to restore attribute"));
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+    },
+  });
+
+  const savingStates: Record<string, boolean> = {};
+  if (updateMutation.isPending && updateMutation.variables) {
+    savingStates[updateMutation.variables.id] = true;
+  }
+
+  const isActionLoading =
+    deleteMutation.isPending || restoreMutation.isPending;
 
   const handleUpdate = useCallback(
-    async (id: string, data: Partial<Attribute>) => {
-      setSavingStates((prev) => ({ ...prev, [id]: true }));
-      try {
-        await updateAttribute({ data: { id, ...data } });
-        toast.success(`Attribute updated.`);
-        setAttributes((prev) =>
-          prev.map((attr) => (attr.id === id ? { ...attr, ...data } : attr)),
-        );
-      } catch (error: unknown) {
-        toast.error(getServerFnError(error, "Failed to update attribute"));
-        onRefresh();
-      } finally {
-        setSavingStates((prev) => ({ ...prev, [id]: false }));
-      }
+    (id: string, data: Partial<Attribute>) => {
+      updateMutation.mutate({ id, data });
     },
-    [onRefresh, setAttributes],
+    [updateMutation],
   );
 
   const handleCreate = useCallback(
-    async (newAttribute: NewAttribute, onSuccess: () => void) => {
+    (newAttribute: NewAttribute, onSuccess: () => void) => {
       if (!newAttribute.name.trim() || !newAttribute.slug.trim()) {
         toast.error("Name and slug are required.");
         return;
       }
-      setIsCreating(true);
-      try {
-        await createAttribute({ data: newAttribute as unknown as Record<string, unknown> });
-        toast.success(`Attribute "${newAttribute.name}" created successfully.`);
-        onSuccess();
-        onRefresh();
-      } catch (error: unknown) {
-        toast.error(getServerFnError(error, "Failed to create attribute"));
-      } finally {
-        setIsCreating(false);
-      }
+      createMutation.mutate(newAttribute, {
+        onSuccess: () => onSuccess(),
+      });
     },
-    [onRefresh],
+    [createMutation],
   );
 
   const handleDelete = useCallback(
-    async (id: string, name: string, showTrashed: boolean) => {
-      setIsActionLoading(true);
-      const successMessage = showTrashed
-        ? `Attribute "${name}" permanently deleted.`
-        : `Attribute "${name}" moved to trash.`;
-
-      try {
-        if (showTrashed) {
-          await deleteAttributePermanent({ data: { id } });
-        } else {
-          await deleteAttribute({ data: { id } });
-        }
-
-        toast.success(successMessage);
-        onRefresh();
-      } catch (error: unknown) {
-        toast.error("Deletion Failed", {
-          description: getServerFnError(error, "Failed to delete attribute"),
-          duration: 8000,
-        });
-      } finally {
-        setIsActionLoading(false);
-      }
+    (id: string, name: string, showTrashed: boolean) => {
+      deleteMutation.mutate({ id, name, showTrashed });
     },
-    [onRefresh],
+    [deleteMutation],
   );
 
   const handleRestore = useCallback(
-    async (id: string) => {
-      setIsActionLoading(true);
-      try {
-        await restoreAttribute({ data: { id } });
-        toast.success("Attribute restored.");
-        onRefresh();
-      } catch (error: unknown) {
-        toast.error(getServerFnError(error, "Failed to restore attribute"));
-      } finally {
-        setIsActionLoading(false);
-      }
+    (id: string) => {
+      restoreMutation.mutate(id);
     },
-    [onRefresh],
+    [restoreMutation],
   );
 
   return {
     savingStates,
     isActionLoading,
-    isCreating,
+    isCreating: createMutation.isPending,
     handleUpdate,
     handleCreate,
     handleDelete,

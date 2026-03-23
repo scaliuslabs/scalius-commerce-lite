@@ -1,7 +1,7 @@
 import { type FC, useState, useEffect } from "react";
 import type { DeliveryProviderRecord, DeliveryShipment, Order } from "@/types/api-responses";
 import { toast } from "sonner";
-import { useNavigate } from "@tanstack/react-router";
+import { useRouter } from "@tanstack/react-router";
 import { formatDate } from "@scalius/shared/utils";
 import ShipmentStatusIndicator from "./ShipmentStatusIndicator";
 
@@ -33,7 +33,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
   providers,
   shipments: initialShipments,
 }) => {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [shipments, setShipments] =
     useState<ExtendedDeliveryShipment[]>(initialShipments);
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
@@ -113,7 +113,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
       toast.success("Shipment created successfully");
 
       // Refresh the page to update the order status if needed
-      void navigate({ to: window.location.pathname });
+      router.invalidate();
 
       setSelectedProviderId("");
     } catch (error: unknown) {
@@ -163,7 +163,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
 
         // If order status was also updated, refresh the page to show the new status
         if (result.data.orderStatusUpdate) {
-          void navigate({ to: window.location.pathname });
+          router.invalidate();
         }
       } else {
         toast.info("Shipment status is up to date");

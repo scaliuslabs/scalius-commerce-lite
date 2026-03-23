@@ -1,9 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { WidgetsList } from "~/components/admin/widget-list";
 import { Button } from "~/components/ui/button";
 import { PlusCircle, Trash2 } from "lucide-react";
-import { getWidgets } from "~/lib/api.functions";
+import { widgetsQueryOptions } from "~/lib/api.queries";
+import type { WidgetListResponse } from "~/types/api-responses";
+import type { WidgetItem } from "~/components/admin/widget-list/types";
 
 const searchSchema = z.object({
   search: z.string().default("").catch(""),
@@ -12,27 +15,24 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/admin/widgets/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ deps }) => {
-    const result = await getWidgets({ data: { search: deps.search || undefined, showTrashed: false } });
-    const r = result as any;
-    const widgets = r.widgets || [];
-    return {
-      widgets,
-      collections: r.availableCollections || [],
-      stats: {
-        total: widgets.length,
-        active: widgets.filter((w: any) => w.isActive).length,
-        inactive: widgets.filter((w: any) => !w.isActive).length,
-      },
-    };
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(widgetsQueryOptions({
+      search: deps.search || undefined,
+      showTrashed: false,
+    }));
   },
   head: () => ({ meta: [{ title: "Widgets | Scalius Admin" }] }),
   component: WidgetsPage,
 });
 
 function WidgetsPage() {
-  const { widgets, collections, stats } = Route.useLoaderData();
   const { search } = Route.useSearch();
+  const { data } = useSuspenseQuery(widgetsQueryOptions({
+    search: search || undefined,
+    showTrashed: false,
+  }));
+  const r = data as WidgetListResponse;
+  const widgets = (r.widgets || []) as unknown as WidgetItem[];
 
   return (
     <div className="space-y-6">
@@ -61,8 +61,12 @@ function WidgetsPage() {
       <WidgetsList
         showTrashed={false}
         initialWidgets={widgets}
-        initialCollections={collections}
-        initialStats={stats}
+        initialCollections={r.availableCollections || []}
+        initialStats={{
+          total: widgets.length,
+          active: widgets.filter((w) => w.isActive).length,
+          inactive: widgets.filter((w) => !w.isActive).length,
+        }}
         initialSearch={search}
       />
     </div>

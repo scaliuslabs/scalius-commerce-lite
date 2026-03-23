@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 import { formatPrice } from "@scalius/shared/currency";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
@@ -64,6 +64,7 @@ export function useDiscountListFilters(
   showTrashed: boolean,
   symbol: string,
 ) {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [sort, setSort] = useState(initialSort);
   const [selectedDiscounts, setSelectedDiscounts] = useState<Set<string>>(
@@ -92,70 +93,77 @@ export function useDiscountListFilters(
 
   // URL sync
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const typeFromUrl = url.searchParams.get("type");
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const typeFromUrl = params.get("type");
     setActiveType(typeFromUrl);
     setSort({
-      field: (url.searchParams.get("sort") || initialSort.field) as SortField,
-      order: (url.searchParams.get("order") || initialSort.order) as SortOrder,
+      field: (params.get("sort") || initialSort.field) as SortField,
+      order: (params.get("order") || initialSort.order) as SortOrder,
     });
-    setSearchQuery(url.searchParams.get("search") || initialSearchQuery);
+    setSearchQuery(params.get("search") || initialSearchQuery);
   }, [initialSort.field, initialSort.order, initialSearchQuery]);
 
-  // Navigation handlers (SSR pattern via navigateTo)
+  // Navigation handlers
   const handleSearch = useCallback(
     (e: React.SyntheticEvent) => {
       e.preventDefault();
-      const url = new URL(window.location.href);
-      if (searchQuery.trim()) {
-        url.searchParams.set("search", searchQuery.trim());
-      } else {
-        url.searchParams.delete("search");
-      }
-      url.searchParams.delete("page");
-      void navigateTo(url.toString());
+      void navigate({
+        search: ((prev: any) => {
+          const next = { ...prev };
+          if (searchQuery.trim()) next.search = searchQuery.trim();
+          else delete next.search;
+          delete next.page;
+          return next;
+        }) as any,
+      });
     },
-    [searchQuery],
+    [searchQuery, navigate],
   );
 
   const handleSort = useCallback((field: SortField) => {
-    const url = new URL(window.location.href);
-    const currentOrder = url.searchParams.get("order");
-    const currentSort = url.searchParams.get("sort");
-    const newOrder =
-      currentSort === field && currentOrder === "asc" ? "desc" : "asc";
-    url.searchParams.set("sort", field);
-    url.searchParams.set("order", newOrder);
-    void navigateTo(url.toString());
-  }, []);
+    void navigate({
+      search: ((prev: any) => {
+        const currentOrder = prev.order as string | undefined;
+        const currentSort = prev.sort as string | undefined;
+        const newOrder =
+          currentSort === field && currentOrder === "asc" ? "desc" : "asc";
+        return { ...prev, sort: field, order: newOrder };
+      }) as any,
+    });
+  }, [navigate]);
 
   const handlePageChange = useCallback((newPage: number) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("page", newPage.toString());
-    void navigateTo(url.toString());
-  }, []);
+    void navigate({
+      search: ((prev: any) => ({ ...prev, page: newPage })) as any,
+    });
+  }, [navigate]);
 
   const handleLimitChange = useCallback((newLimit: number) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("limit", newLimit.toString());
-    url.searchParams.delete("page");
-    void navigateTo(url.toString());
-  }, []);
+    void navigate({
+      search: ((prev: any) => {
+        const next = { ...prev, limit: newLimit };
+        delete next.page;
+        return next;
+      }) as any,
+    });
+  }, [navigate]);
 
   const handleEdit = useCallback((id: string) => {
-    void navigateTo(`/admin/discounts/${id}/edit`);
-  }, []);
+    void navigate({ to: `/admin/discounts/${id}/edit` as string });
+  }, [navigate]);
 
   const handleTypeFilter = useCallback((type: string | null) => {
-    const url = new URL(window.location.href);
-    if (type) {
-      url.searchParams.set("type", type);
-    } else {
-      url.searchParams.delete("type");
-    }
-    url.searchParams.delete("page");
-    void navigateTo(url.toString());
-  }, []);
+    void navigate({
+      search: ((prev: any) => {
+        const next = { ...prev };
+        if (type) next.type = type;
+        else delete next.type;
+        delete next.page;
+        return next;
+      }) as any,
+    });
+  }, [navigate]);
 
   // API action handlers
   const handleDelete = useCallback((id: string) => {

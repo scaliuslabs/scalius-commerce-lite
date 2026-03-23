@@ -1,36 +1,34 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { AnalyticsForm } from "~/components/admin/AnalyticsForm";
-import { getAnalyticsScript } from "~/lib/api.functions";
+import { analyticsScriptQueryOptions } from "~/lib/api.queries";
+import type { AnalyticsScript } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/analytics/$analyticsId/edit")({
-  loader: async ({ params }) => {
-    const script = await getAnalyticsScript({ data: { id: params.analyticsId } }).catch(() => null);
-    if (!script) throw redirect({ to: "/admin/analytics" });
-    const s = script as any;
-    const validType = ["google_analytics", "facebook_pixel", "custom"].includes(s.type) ? s.type : "custom";
-    const validLocation = ["head", "body_start", "body_end"].includes(s.location) ? s.location : "head";
-    return {
-      defaultValues: {
-        id: s.id,
-        name: s.name,
-        type: validType,
-        isActive: s.isActive,
-        usePartytown: s.usePartytown ?? true,
-        config: s.config || "",
-        location: validLocation,
-      },
-    };
+  loader: async ({ context: { queryClient }, params }) => {
+    const data = await queryClient.ensureQueryData(analyticsScriptQueryOptions(params.analyticsId)).catch(() => null);
+    if (!data) throw redirect({ to: "/admin/analytics" });
   },
   head: () => ({ meta: [{ title: "Edit Analytics Script | Scalius Admin" }] }),
   component: EditAnalyticsPage,
 });
 
 function EditAnalyticsPage() {
-  const { defaultValues } = Route.useLoaderData();
+  const { analyticsId } = Route.useParams();
+  const { data } = useSuspenseQuery(analyticsScriptQueryOptions(analyticsId));
+  const s = data as AnalyticsScript;
 
-  if (!defaultValues) {
-    return <div>Analytics script not found</div>;
-  }
+  const validType = (["google_analytics", "facebook_pixel", "custom"].includes(s.type) ? s.type : "custom") as "google_analytics" | "facebook_pixel" | "custom";
+  const validLocation = (["head", "body_start", "body_end"].includes(s.location) ? s.location : "head") as "head" | "body_start" | "body_end";
+  const defaultValues = {
+    id: s.id,
+    name: s.name,
+    type: validType,
+    isActive: s.isActive,
+    usePartytown: s.usePartytown ?? true,
+    config: s.config || "",
+    location: validLocation,
+  };
 
   return (
     <div className="container py-10">

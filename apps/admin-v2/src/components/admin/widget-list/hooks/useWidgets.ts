@@ -1,7 +1,7 @@
 // src/components/admin/widget-list/hooks/useWidgets.ts
 import { useState, useEffect } from "react";
 import type { WidgetItem, CollectionOption, WidgetStatistics } from "../types";
-import { useNavigate } from "@tanstack/react-router";
+import { useRouter } from "@tanstack/react-router";
 
 export function useWidgets(
   initialWidgets: WidgetItem[],
@@ -9,7 +9,7 @@ export function useWidgets(
   initialStats: WidgetStatistics,
   _showTrashed: boolean,
 ) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [widgets, setWidgets] = useState<WidgetItem[]>(initialWidgets);
   const [collections] = useState<CollectionOption[]>(initialCollections);
   const [stats] = useState<WidgetStatistics>(initialStats);
@@ -22,7 +22,7 @@ export function useWidgets(
   const fetchWidgets = async () => {
     setIsLoading(true);
     try {
-      void navigate({ to: window.location.pathname + window.location.search });
+      router.invalidate();
     } catch (error: unknown) {
       console.error("Error fetching widgets:", error);
       setIsLoading(false);

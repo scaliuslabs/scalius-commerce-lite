@@ -11,6 +11,10 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { generateStructuredPrompt } from '@scalius/core/modules/ai/prompt-helper-v2';
+
+type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
+type AiProductData = StructuredPromptParams['selectedProducts'][number];
+type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@scalius/core/modules/ai/ai-config';
@@ -121,8 +125,8 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
         existingHtml: codeToImprove.html,
         existingCss: codeToImprove.css,
         selectedImages: aiContext.selectedImages,
-        selectedProducts: (contextData.products || []) as any[],
-        selectedCategories: (contextData.categories || []) as any[],
+        selectedProducts: (contextData.products || []) as AiProductData[],
+        selectedCategories: (contextData.categories || []) as AiCategoryData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
         modelId: aiGenerator.selectedModel,
         supportsVision: isVisionModel,

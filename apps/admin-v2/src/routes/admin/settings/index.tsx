@@ -1,27 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import GeneralSettingsPage from "~/components/admin/settings/GeneralSettingsPage";
-import { getGeneralSettings } from "~/lib/api.functions";
+import { generalSettingsQueryOptions } from "~/lib/api.queries";
+import type { HeaderConfig } from "~/components/admin/header-builder/types";
+import type { FooterConfig } from "~/components/admin/footer-builder/types";
 
 export const Route = createFileRoute("/admin/settings/")({
-  loader: async () => {
-    const result = await getGeneralSettings().catch(() => ({ headerConfig: null, footerConfig: null }));
-    const r = result as any;
-    return {
-      headerConfig: r.headerConfig || null,
-      footerConfig: r.footerConfig || null,
-    };
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(generalSettingsQueryOptions());
   },
   head: () => ({ meta: [{ title: "General Settings | Scalius Admin" }] }),
   component: SettingsPage,
 });
 
 function SettingsPage() {
-  const { headerConfig, footerConfig } = Route.useLoaderData();
+  const { data } = useSuspenseQuery(generalSettingsQueryOptions());
+  const result = data as { headerConfig?: HeaderConfig | null; footerConfig?: FooterConfig | null };
 
   return (
     <GeneralSettingsPage
-      headerConfig={headerConfig}
-      footerConfig={footerConfig}
+      headerConfig={result.headerConfig ?? null}
+      footerConfig={result.footerConfig ?? null}
     />
   );
 }
