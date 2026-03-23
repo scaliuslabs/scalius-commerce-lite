@@ -106,11 +106,12 @@ function getStatusInfo(status: string): {
 }
 
 // Helper to safely parse date
-const parseOrderDate = (date: string | Date): Date | null => {
+const parseOrderDate = (date: string | Date | null | undefined): Date | null => {
+  if (!date) return null;
   try {
-    return typeof date === "string" ? new Date(date) : date;
-  } catch (e: unknown) {
-    console.error("Failed to parse date:", date, e);
+    const d = typeof date === "string" ? new Date(date) : date;
+    return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+  } catch {
     return null;
   }
 };

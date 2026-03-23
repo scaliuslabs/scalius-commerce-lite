@@ -38,7 +38,7 @@ interface ProductTableProps {
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onPermanentDelete: (id: string) => void;
-  formatDate: (date: Date | null) => string;
+  formatDate: (value: Date | string | number | null) => string;
   formatPrice: (price: number) => string;
 }
 

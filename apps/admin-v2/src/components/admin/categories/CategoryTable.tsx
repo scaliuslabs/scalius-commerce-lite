@@ -44,7 +44,7 @@ interface CategoryRowProps {
   onToggleSelection: (id: string, checked: boolean) => void;
   onRestore: (id: string) => void;
   onDelete: (id: string) => void;
-  formatDate: (date: Date) => string;
+  formatDate: (value: Date | string | number | null) => string;
   getPlainDescription: (html: string | null, maxLength?: number) => string;
   getStorefrontPath: (path: string) => string;
 }
@@ -235,7 +235,7 @@ interface CategoryTableProps {
   onToggleSelection: (id: string, checked: boolean) => void;
   onRestore: (id: string) => void;
   onDelete: (id: string) => void;
-  formatDate: (date: Date) => string;
+  formatDate: (value: Date | string | number | null) => string;
   getPlainDescription: (html: string | null, maxLength?: number) => string;
   getStorefrontPath: (path: string) => string;
 }

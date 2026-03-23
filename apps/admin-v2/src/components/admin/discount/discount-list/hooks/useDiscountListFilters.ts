@@ -338,14 +338,14 @@ export function useDiscountListFilters(
     if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "Invalid Date";
+      if (isNaN(date.getTime())) return "N/A";
       return date.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
         year: "numeric",
       });
     } catch {
-      return "Invalid Date";
+      return "N/A";
     }
   }, []);
 

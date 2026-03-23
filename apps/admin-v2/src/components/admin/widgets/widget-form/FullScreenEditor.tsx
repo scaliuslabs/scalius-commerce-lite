@@ -407,7 +407,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                       </div>
                       <div className="text-muted-foreground">{entry.prompt}</div>
                       <div className="text-muted-foreground">
-                        {new Date(entry.timestamp).toLocaleString()}
+                        {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : "\u2014"}
                       </div>
                     </div>
                   ))}

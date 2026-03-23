@@ -8,20 +8,18 @@ import { Pencil, Trash2, RotateCw, XCircle, ExternalLink } from "lucide-react";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import type { PageRowProps } from "../types";
 
-const formatDate = (date: Date | null): string => {
-  if (!date) return "N/A";
+const formatDate = (value: Date | string | number | null): string => {
+  if (!value) return "N/A";
   try {
-    if (!(date instanceof Date) || isNaN(date.getTime())) {
-      return "Invalid date";
-    }
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return "N/A";
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
     });
-  } catch (error: unknown) {
-    console.error("Error formatting date:", error);
-    return "Invalid date";
+  } catch {
+    return "N/A";
   }
 };
 

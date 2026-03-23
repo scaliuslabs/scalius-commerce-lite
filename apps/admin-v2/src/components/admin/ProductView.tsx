@@ -212,7 +212,7 @@ export function ProductView({ product }: ProductViewProps) {
                 </a>
               </Button>
               <div className="text-[10px] text-muted-foreground text-center sm:text-left lg:text-right mt-1 lg:mt-2">
-                Last updated {new Date(product.updatedAt).toLocaleDateString("en-US")}
+                Last updated {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "\u2014"}
               </div>
             </div>
           </div>

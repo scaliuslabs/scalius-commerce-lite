@@ -44,11 +44,14 @@ const CustomTooltipContent = ({ active, payload, label, symbol = "\u09F3", chart
   chartConfig: ChartConfig;
 }) => {
   if (active && payload && payload.length) {
-    const formattedLabel = new Date(label ?? "").toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    const parsedDate = label ? new Date(label) : null;
+    const formattedLabel = parsedDate && !isNaN(parsedDate.getTime())
+      ? parsedDate.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : String(label ?? "");
 
     return (
       <div className="rounded-lg border bg-background p-2 shadow-sm">
@@ -103,6 +106,11 @@ export function DashboardChart({
   chartConfig,
 }: DashboardChartProps) {
   const [timeRange, setTimeRange] = React.useState("90d");
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const filteredData = React.useMemo(() => {
     const days = parseInt(timeRange.replace("d", ""), 10);
@@ -137,6 +145,9 @@ export function DashboardChart({
         </Select>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+        {!mounted ? (
+          <div className="h-[250px] w-full animate-pulse rounded-lg bg-muted" />
+        ) : (
         <ChartContainer
           config={chartConfig}
           className="aspect-auto h-[250px] w-full"
@@ -254,6 +265,7 @@ export function DashboardChart({
             <ChartLegend content={<ChartLegendContent />} />
           </AreaChart>
         </ChartContainer>
+        )}
       </CardContent>
     </Card>
   );

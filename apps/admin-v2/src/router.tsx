@@ -64,8 +64,9 @@ export function getRouter() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 1000 * 30, // 30s — data is fresh for 30 seconds
+        staleTime: 1000 * 10, // 10s — data is fresh for 10 seconds
         gcTime: 1000 * 60 * 5, // 5min — keep in cache after unmount
+        refetchOnWindowFocus: true, // refetch when user returns to tab
       },
     },
   });

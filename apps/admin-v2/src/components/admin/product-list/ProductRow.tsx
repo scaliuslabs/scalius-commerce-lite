@@ -35,7 +35,7 @@ interface ProductRowProps {
   onRestore: (id: string) => void;
   onPermanentDelete: (id: string) => void;
   showTrashed: boolean;
-  formatDate: (date: Date | null) => string;
+  formatDate: (value: Date | string | number | null) => string;
   formatPrice: (price: number) => string;
 }
 
