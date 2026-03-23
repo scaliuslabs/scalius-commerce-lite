@@ -42,6 +42,9 @@ interface ApiEnvelope {
 /**
  * Extract cookie and authorization headers for forwarding to the API worker.
  * Uses TanStack Start's request context (no AsyncLocalStorage needed).
+ *
+ * Falls back to API_TOKEN for service-binding auth when cookies are unavailable
+ * (e.g. during SSR when getRequestHeader context may not be set).
  */
 function getForwardHeaders(): Record<string, string> {
   const forwarded: Record<string, string> = {};
@@ -53,6 +56,19 @@ function getForwardHeaders(): Record<string, string> {
   } catch {
     // Outside request context (e.g. during build) -- no headers to forward
   }
+
+  // Fallback: if no cookie or auth, send API_TOKEN for service-binding auth
+  if (!forwarded["cookie"] && !forwarded["authorization"]) {
+    try {
+      const env = getCfEnv();
+      if (env.API_TOKEN) {
+        forwarded["x-api-token"] = env.API_TOKEN as string;
+      }
+    } catch {
+      // env not available
+    }
+  }
+
   return forwarded;
 }
 
