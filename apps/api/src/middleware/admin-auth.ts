@@ -69,6 +69,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                 email: "admin-worker@system",
                 name: "Admin Worker",
                 role: "admin",
+                _isServiceBinding: true,
             };
         }
     }
@@ -111,7 +112,13 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // Inject user into Hono context
     c.set("user", user);
 
-    // 3. Scanner token — restrict to inventory endpoints only
+    // Service-binding calls from admin worker — trusted, skip RBAC
+    if ((user as Record<string, unknown>)._isServiceBinding) {
+        await next();
+        return;
+    }
+
+    // Scanner token — restrict to inventory endpoints only
     if ((user as Record<string, unknown>)._isScannerToken) {
         const pathname = new URL(c.req.url).pathname;
         if (!pathname.includes("/inventory/")) {
