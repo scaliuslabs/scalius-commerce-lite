@@ -6,22 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Pencil, Trash2, RotateCw, XCircle, ExternalLink } from "lucide-react";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
+import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import type { PageRowProps } from "../types";
-
-const formatDate = (value: Date | string | number | null): string => {
-  if (!value) return "N/A";
-  try {
-    const date = value instanceof Date ? value : new Date(value);
-    if (isNaN(date.getTime())) return "N/A";
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return "N/A";
-  }
-};
 
 export function PageRow({
   page,
