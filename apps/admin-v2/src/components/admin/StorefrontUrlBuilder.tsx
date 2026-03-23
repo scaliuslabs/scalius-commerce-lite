@@ -1,0 +1,103 @@
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { Loader2, ExternalLink } from "lucide-react";
+import { getServerFnError } from "@/lib/api-helpers";
+import { getStorefrontUrl, updateStorefrontUrl } from "@/lib/api.functions";
+
+interface StorefrontUrlBuilderProps {
+  initialUrl?: string;
+}
+
+export function StorefrontUrlBuilder({
+  initialUrl = "/",
+}: StorefrontUrlBuilderProps) {
+  const [storefrontUrl, setStorefrontUrl] = useState(initialUrl);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchStorefrontUrl = async () => {
+      try {
+        const data = await getStorefrontUrl() as Record<string, unknown>;
+        setStorefrontUrl((data.storefrontUrl as string) || "/");
+      } catch (error: unknown) {
+        console.error("Error fetching storefront URL:", error);
+      }
+    };
+    fetchStorefrontUrl();
+  }, []);
+
+  const handleSave = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+
+    try {
+      await updateStorefrontUrl({ data: { storefrontUrl: storefrontUrl || "/" } });
+      toast.success("Success!", { description: "Storefront URL saved successfully." });
+    } catch (error: unknown) {
+      console.error("Error saving storefront URL:", error);
+      toast.error("Save Failed", { description: getServerFnError(error, "An unexpected error occurred.") });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testUrl = () => {
+    const url =
+      storefrontUrl?.startsWith("http") || storefrontUrl?.startsWith("/")
+        ? storefrontUrl
+        : `/${storefrontUrl}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className="space-y-2">
+        <Label htmlFor="storefront-url">Store URL</Label>
+        <div className="flex gap-2">
+          <Input
+            id="storefront-url"
+            value={storefrontUrl}
+            onChange={(e) => setStorefrontUrl(e.target.value)}
+            placeholder="/"
+            className="flex-1"
+          />
+          {storefrontUrl && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={testUrl}
+              title="Test URL"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Use "/" for root, "/store" for subdirectory, or a full URL like
+          "https://mystore.com" for headless setups. This powers the "View
+          Store" sidebar link.
+        </p>
+      </div>
+
+      <div className="flex justify-end pt-4 border-t border-border">
+        <Button
+          onClick={handleSave}
+          disabled={isLoading}
+          className="min-w-[120px]"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            "Save URL"
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}

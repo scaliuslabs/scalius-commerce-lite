@@ -1,0 +1,218 @@
+// Media API Client
+
+import type {
+  MediaFile,
+  MediaFolder,
+  MediaApiResponse,
+  MediaFoldersApiResponse,
+  MediaFilterOptions,
+} from "../types";
+import { extractApiError, extractApiErrorDetails, unwrapEnvelope } from "~/lib/api-helpers";
+import {
+  getMediaList as getMediaFiles,
+  deleteMedia,
+  updateMedia,
+  getMediaFolders,
+  createMediaFolder as createMediaFolderFn,
+  deleteMediaFolder as deleteMediaFolderFn,
+  moveMediaFiles as moveMediaFilesFn,
+} from "~/lib/api.functions";
+
+/** Shape of the upload response JSON — varies between success, partial, and error */
+interface UploadResponseData {
+  files?: MediaFile[];
+  warnings?: Array<{ filename: string; error: string }>;
+  summary?: string;
+  error?: string;
+  details?: Array<{ filename: string; error: string }> | string;
+}
+
+export class MediaApiClient {
+  /**
+   * Fetch media files with pagination and filtering
+   */
+  static async fetchFiles(
+    page: number = 1,
+    limit: number = 20,
+    filters: Partial<MediaFilterOptions> = {},
+  ): Promise<MediaApiResponse> {
+    const data = await getMediaFiles({
+      data: {
+        page,
+        limit,
+        search: filters.search,
+        folderId: filters.folderId ?? undefined,
+        sortBy: filters.sortBy,
+        sortOrder: filters.sortOrder,
+      },
+    });
+    return data as MediaApiResponse;
+  }
+
+  /**
+   * Upload files to the media library with improved error handling
+   */
+  static async uploadFiles(
+    files: FileList | File[],
+    folderId?: string | null,
+  ): Promise<
+    | MediaFile[]
+    | {
+      files: MediaFile[];
+      warnings?: Array<{ filename: string; error: string }>;
+      summary?: string;
+    }
+  > {
+    try {
+      const formData = new FormData();
+
+      Array.from(files).forEach((file) => {
+        formData.append("files", file);
+      });
+
+      if (folderId) {
+        formData.append("folderId", folderId);
+      }
+
+      const response = await fetch("/api/v1/admin/media/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      // Parse response JSON
+      let rawData: Record<string, unknown>;
+      try {
+        rawData = await response.json();
+      } catch (parseError) {
+        console.error("Failed to parse upload response:", parseError);
+        throw new Error(
+          "Upload failed: Server returned an invalid response. Please try again."
+        );
+      }
+
+      // Handle errors (4xx, 5xx)
+      if (!response.ok) {
+        const errorMessage = extractApiError(rawData, "Upload failed for unknown reason");
+        const error: Error & { details?: Array<{ filename: string; error: string }>; summary?: string } = new Error(errorMessage);
+
+        // Attach details array if available
+        const details = extractApiErrorDetails(rawData);
+        if (details) {
+          error.details = details as Array<{ filename: string; error: string }>;
+        }
+
+        throw error;
+      }
+
+      // Unwrap envelope for success responses
+      const data = unwrapEnvelope<UploadResponseData>(rawData);
+
+      // Handle success (201) and partial success (207)
+      if (response.status === 207 || response.status === 201) {
+        // Return the full response object if there are warnings or summary
+        if (data.warnings || data.summary) {
+          return {
+            files: data.files || [],
+            warnings: data.warnings,
+            summary: data.summary,
+          };
+        }
+        return data.files || [];
+      }
+
+      // Fallback for unexpected responses
+      return data.files || [];
+    } catch (error: unknown) {
+      // Re-throw with better context if it's a network error
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        throw new Error(
+          "Network error: Unable to reach the server. Please check your connection."
+        );
+      }
+
+      // Re-throw the error as-is if it already has a message
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a single media file
+   */
+  static async deleteFile(fileId: string): Promise<void> {
+    await deleteMedia({ data: { fileId } });
+  }
+
+  /**
+   * Delete multiple files
+   */
+  static async deleteFiles(fileIds: string[]): Promise<{
+    success: number;
+    failed: number;
+  }> {
+    let success = 0;
+    let failed = 0;
+
+    for (const fileId of fileIds) {
+      try {
+        await this.deleteFile(fileId);
+        success++;
+      } catch (error: unknown) {
+        failed++;
+        console.error(`Failed to delete file ${fileId}:`, error);
+      }
+    }
+
+    return { success, failed };
+  }
+
+  /**
+   * Fetch all folders
+   */
+  static async fetchFolders(): Promise<MediaFolder[]> {
+    const data = await getMediaFolders() as unknown as MediaFoldersApiResponse;
+    return data.folders ?? [];
+  }
+
+  /**
+   * Create a new folder
+   */
+  static async createFolder(
+    name: string,
+    parentId?: string | null,
+  ): Promise<MediaFolder> {
+    const data = await createMediaFolderFn({
+      data: { name, parentId: parentId || undefined },
+    }) as { folder: MediaFolder };
+    return data.folder;
+  }
+
+  /**
+   * Delete a folder
+   */
+  static async deleteFolder(folderId: string): Promise<void> {
+    await deleteMediaFolderFn({ data: { folderId } });
+  }
+
+  /**
+   * Move files to a folder
+   */
+  static async moveFilesToFolder(
+    fileIds: string[],
+    folderId: string | null,
+  ): Promise<void> {
+    await moveMediaFilesFn({ data: { fileIds, targetFolderId: folderId } });
+  }
+
+  /**
+   * Update file metadata
+   */
+  static async updateFileMetadata(
+    fileId: string,
+    updates: { filename?: string; folderId?: string | null },
+  ): Promise<MediaFile> {
+    const data = await updateMedia({
+      data: { fileId, update: updates },
+    }) as { file: MediaFile };
+    return data.file;
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "scalius-admin-v2",
+  "compatibility_date": "2026-03-10",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main": "@tanstack/react-start/server-entry",
+  "observability": {
+    "enabled": true
+  },
+  "dev": {
+    "inspector_port": 9232
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "scalius-commerce",
+      "database_id": "2efcad0d-841e-4f8d-b8f6-5b735d881edc",
+      "migrations_dir": "../../packages/database/migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "d6e2d77d898e4b3f9c186802ce63f9b8"
+    },
+    {
+      "binding": "SESSION",
+      "id": "0564d3a6c3704c8c9f355b7ec5498f50"
+    },
+    {
+      "binding": "SHARED_AUTH_CACHE",
+      "id": "9f577136c05144349f2b8013a4fc1cc5"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "scalius-media"
+    }
+  ],
+  "services": [
+    {
+      "binding": "API",
+      "service": "scalius-api"
+    }
+  ],
+  "vars": {
+    "PUBLIC_API_BASE_URL": "https://api.scalius.com",
+    "BETTER_AUTH_URL": "https://dashboard.scalius.com",
+    "STOREFRONT_URL": "https://storefront.scalius.com",
+    "CDN_DOMAIN_URL": "cloud.scalius.com",
+    "R2_PUBLIC_URL": "https://cloud.scalius.com",
+    "PURGE_URL": "https://storefront.scalius.com/api/purge-cache"
+  }
+}
