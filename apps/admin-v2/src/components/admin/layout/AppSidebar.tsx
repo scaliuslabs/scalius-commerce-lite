@@ -1,4 +1,5 @@
 import { useRef, useCallback } from "react";
+// useCallback kept for handleCollapsibleOpen
 import { Link, useLocation } from "@tanstack/react-router";
 import { ChevronDown, Store, ExternalLink } from "lucide-react";
 import {
@@ -113,6 +114,7 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
                         asChild
                         isActive={isRouteActive(currentPath, item.href)}
                         tooltip={item.name}
+                        className={isRouteActive(currentPath, item.href) ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
                       >
                         <Link to={item.href}>
                           <item.icon className="shrink-0" strokeWidth={1.8} />
@@ -159,19 +161,10 @@ function CollapsibleNavItem({
   currentPath: string;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const { state, setOpen } = useSidebar();
-  const isCollapsed = state === "collapsed";
   const normalizedPath = currentPath.replace(/\/$/, ""); // strip trailing slash
   const isParentActive =
     isRouteActive(normalizedPath, item.href) ||
     (item.subItems?.some((sub) => isRouteActive(normalizedPath, sub.href)) ?? false);
-
-  // When collapsed, clicking the icon should expand sidebar and open the submenu
-  const handleClick = useCallback(() => {
-    if (isCollapsed) {
-      setOpen(true);
-    }
-  }, [isCollapsed, setOpen]);
 
   return (
     <Collapsible
@@ -184,7 +177,7 @@ function CollapsibleNavItem({
     >
       <SidebarMenuItem data-nav-item={item.name}>
         <CollapsibleTrigger asChild>
-          <SidebarMenuButton tooltip={item.name} isActive={isParentActive} onClick={handleClick}>
+          <SidebarMenuButton tooltip={item.name} isActive={isParentActive} className={isParentActive ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}>
             <item.icon className="shrink-0" strokeWidth={1.8} />
             <span>{item.name}</span>
             <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
@@ -197,6 +190,8 @@ function CollapsibleNavItem({
                 <SidebarMenuSubButton
                   asChild
                   isActive={normalizedPath === subItem.href.replace(/\/$/, "")}
+                  tooltip={subItem.name}
+                  className={normalizedPath === subItem.href.replace(/\/$/, "") ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
                 >
                   <Link to={subItem.href}>
                     {subItem.icon && (
