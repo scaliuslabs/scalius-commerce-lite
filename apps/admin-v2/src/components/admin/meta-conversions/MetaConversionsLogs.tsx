@@ -42,16 +42,7 @@ import {
 } from "lucide-react";
 import { useMetaConversionsLogs } from "./hooks/useMetaConversionsLogs";
 import { LogDetails } from "./LogDetails";
-
-function formatDate(timestamp: string | number | Date | null): string {
-  if (!timestamp) return "Invalid Date";
-  try {
-    const date = new Date(timestamp);
-    return isNaN(date.getTime()) ? "Invalid Date" : date.toLocaleString();
-  } catch {
-    return "Invalid Date";
-  }
-}
+import { formatDate } from "@scalius/shared/timestamps";
 
 const StatusBadge = React.memo(function StatusBadge({ status }: { status: string }) {
   return (

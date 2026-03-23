@@ -106,7 +106,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       if (isEdit) {
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Page ID is required for update");
-        await updatePage({ data: { id: entityId, ...values } as Record<string, unknown> & { id: string } });
+        await updatePage({ data: { ...values, id: entityId } as Record<string, unknown> & { id: string } });
       } else {
         await createPage({ data: values as unknown as Record<string, unknown> });
       }

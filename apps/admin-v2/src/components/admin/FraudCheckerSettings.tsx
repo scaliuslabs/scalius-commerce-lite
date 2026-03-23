@@ -118,7 +118,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
         saved = await createFraudCheckerProvider({ data: values }) as FraudProvider;
         setProviders((prev) => [...prev, saved]);
       } else if (selectedProvider) {
-        saved = await updateFraudCheckerProvider({ data: { id: selectedProvider.id, ...values } }) as FraudProvider;
+        saved = await updateFraudCheckerProvider({ data: { ...values, id: selectedProvider.id } }) as FraudProvider;
         setProviders((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
       } else {
         return;

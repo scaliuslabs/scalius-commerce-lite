@@ -129,7 +129,7 @@ export function CategoryForm({
       if (isEdit) {
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Category ID is required for update");
-        await updateCategory({ data: { id: entityId, ...values } as Record<string, unknown> & { id: string } });
+        await updateCategory({ data: { ...values, id: entityId } as Record<string, unknown> & { id: string } });
       } else {
         await createCategory({ data: values as unknown as Record<string, unknown> });
       }

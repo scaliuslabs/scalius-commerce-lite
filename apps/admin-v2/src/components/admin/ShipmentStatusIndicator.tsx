@@ -1,4 +1,5 @@
 import { type FC } from "react";
+import { formatDate } from "@scalius/shared/timestamps";
 import { useShipmentStatus } from "@/hooks/use-shipment-status";
 import { History, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
@@ -88,21 +89,8 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   // Format the full date for tooltip
   const getFullDateForTooltip = (dateStr?: string) => {
     if (!dateStr) return "Never checked";
-
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-        timeZoneName: "short",
-      });
-    } catch (error: unknown) {
-      return "Invalid date";
-    }
+    const result = formatDate(dateStr);
+    return result === "N/A" ? "Never checked" : result;
   };
 
   return (

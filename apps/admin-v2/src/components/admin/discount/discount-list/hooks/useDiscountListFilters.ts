@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { formatPrice } from "@scalius/shared/currency";
+import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   deleteDiscount,
@@ -334,20 +335,7 @@ export function useDiscountListFilters(
   // Utility formatters
   const getSortIcon = useCallback((_field: SortField) => sort, [sort]);
 
-  const formatDate = useCallback((dateString: string | null) => {
-    if (!dateString) return "N/A";
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "N/A";
-      return date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return "N/A";
-    }
-  }, []);
+  // formatDate → shared formatDateShort (date-only format)
 
   const getTypeLabel = useCallback((type: string) => {
     switch (type) {

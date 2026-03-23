@@ -1,5 +1,6 @@
 import React, { useCallback } from "react";
 import { Link } from "@tanstack/react-router";
+import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import {
   Table,
   TableBody,

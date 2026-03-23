@@ -1,7 +1,7 @@
 // Formatting utilities for media manager
 
-import { formatDate } from "@scalius/shared/utils";
-export { formatDate };
+import { formatDate, formatDate as formatDateTime } from "@scalius/shared/timestamps";
+export { formatDate, formatDateTime };
 
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 Bytes";
@@ -9,19 +9,6 @@ export function formatFileSize(bytes: number): string {
   const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
-
-export function formatDateTime(date: Date | string | null | undefined): string {
-  if (!date) return "\u2014";
-  const d = date instanceof Date ? date : new Date(date);
-  if (isNaN(d.getTime())) return "\u2014";
-  return d.toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export function formatFileType(mimeType: string): string {

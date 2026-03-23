@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";

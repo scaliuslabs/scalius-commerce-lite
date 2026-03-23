@@ -33,6 +33,7 @@ import { FraudCheckIndicator } from "./FraudCheckIndicator";
 import { useCurrency } from "@/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatRelativeDate } from "@scalius/shared/timestamps";
 
 interface OrderMobileCardProps {
   order: OrderListItem;
@@ -49,43 +50,7 @@ interface OrderMobileCardProps {
   onShipmentStatusUpdated: (updatedShipment: { id: string; orderId: string; [key: string]: unknown }) => void;
 }
 
-const formatDate = (date: Date) => {
-  try {
-    if (!(date instanceof Date) || isNaN(date.getTime())) {
-      return "Invalid date";
-    }
-
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 1) {
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      if (diffHours < 1) {
-        const diffMinutes = Math.floor(diffMs / (1000 * 60));
-        return diffMinutes < 1 ? "Just now" : `${diffMinutes}m ago`;
-      }
-      return `${diffHours}h ago`;
-    }
-
-    if (diffDays < 7) {
-      return date.toLocaleString("en-US", {
-        weekday: "short",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
-    }
-
-    return date.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: now.getFullYear() !== date.getFullYear() ? "numeric" : undefined,
-    });
-  } catch (error) {
-    return "Invalid date";
-  }
-};
+const formatDate = formatRelativeDate;
 
 export const OrderMobileCard = React.memo(function OrderMobileCard({
   order,
