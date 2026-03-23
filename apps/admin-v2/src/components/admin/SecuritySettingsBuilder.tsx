@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { getSecuritySettings, updateSecuritySettings } from "@/lib/api.functions";
 import { useSettingsForm } from "@/hooks/use-settings-form";
+import { queryKeys } from "@/lib/query-keys";
 
 interface SecurityValues {
   cspAllowedDomains: string;
@@ -25,6 +26,7 @@ const saveSecurity = async (values: SecurityValues) => {
 export function SecuritySettingsBuilder() {
   const { values, setValue, isLoading, isSaving, handleSubmit } =
     useSettingsForm<SecurityValues>({
+      queryKey: queryKeys.settings.security(),
       fetchFn: fetchSecurity,
       saveFn: saveSecurity,
       defaultValues: { cspAllowedDomains: "" },

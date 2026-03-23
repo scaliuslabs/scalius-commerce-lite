@@ -1,8 +1,6 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import type { SubmitHandler } from "react-hook-form";
-import { toast } from "sonner";
 import {
   FormControl,
   FormDescription,
@@ -28,12 +26,11 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
-import { useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { getServerFnError } from "@/lib/api-helpers";
 import { createAnalyticsScript, updateAnalyticsScript } from "@/lib/api.functions";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { analyticsFormSchema, type AnalyticsFormValues } from "@/lib/form-schemas";
+import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
+import { queryKeys } from "@/lib/query-keys";
 
 interface AnalyticsFormProps {
   defaultValues?: Partial<AnalyticsFormValues>;
@@ -44,8 +41,6 @@ export function AnalyticsForm({
   defaultValues,
   isEdit = false,
 }: AnalyticsFormProps) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const form = useForm<AnalyticsFormValues>({
     resolver: zodResolver(analyticsFormSchema),
     defaultValues: {
@@ -59,28 +54,21 @@ export function AnalyticsForm({
     },
   });
 
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<AnalyticsFormValues>({
+    entityName: "Analytics Script",
+    isEdit,
+    entityId: defaultValues?.id,
+    createFn: (data) => createAnalyticsScript({ data: data as unknown as Record<string, unknown> }),
+    updateFn: (data) => updateAnalyticsScript({ data: data as Record<string, unknown> & { id: string } }),
+    invalidateKeys: [
+      queryKeys.analytics.list(),
+      ...(isEdit && defaultValues?.id ? [queryKeys.analytics.detail(defaultValues.id)] : []),
+    ],
+    navigateTo: "/admin/analytics",
+  });
 
-  const handleSubmit: SubmitHandler<AnalyticsFormValues> = async (values) => {
-    try {
-      setIsSubmitting(true);
-      if (isEdit) {
-        const entityId = defaultValues?.id || values.id;
-        if (!entityId) throw new Error("Analytics script ID is required for update");
-        await updateAnalyticsScript({ data: { ...values, id: entityId } as Record<string, unknown> & { id: string } });
-        queryClient.invalidateQueries({ queryKey: ["analytics", "detail", entityId] });
-      } else {
-        await createAnalyticsScript({ data: values as unknown as Record<string, unknown> });
-      }
-      // Invalidate queries so list page shows fresh data
-      queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
-      void navigate({ to: "/admin/analytics" });
-    } catch (error: unknown) {
-      console.error("Error submitting form:", error);
-      toast.error(getServerFnError(error, "Failed to save analytics script. Please try again."));
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleSubmit = (values: AnalyticsFormValues) => {
+    submitEntity(values);
   };
 
   // Helper function to show example config based on type

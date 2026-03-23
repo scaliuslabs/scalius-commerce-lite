@@ -1,7 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
 import type { OrderListItem } from "@scalius/core/modules/orders";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
 import { PaymentStatusBadge } from "~/components/admin/shared/StatusBadges";
 import {
@@ -31,6 +30,7 @@ import { OrderStatusSelector } from "~/components/admin/order-list/OrderStatusSe
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
 import { FraudCheckIndicator } from "~/components/admin/order-list/FraudCheckIndicator";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
+import { createSelectColumn } from "./column-factories";
 
 /** Minimal shipment shape used in the order list */
 interface OrderShipment {
@@ -98,31 +98,7 @@ export function getOrderColumns(
 ): ColumnDef<OrderListItem, unknown>[] {
   return [
     // ── Select ────────────────────────────────────────────────────
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          className="translate-y-[2px]"
-          aria-label="Select all orders"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(!!v)}
-          className="translate-y-[2px]"
-          aria-label={`Select order ${row.original.id}`}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    createSelectColumn<OrderListItem>({ getLabel: (r) => (r as OrderListItem).customerName }),
 
     // ── Customer ──────────────────────────────────────────────────
     {

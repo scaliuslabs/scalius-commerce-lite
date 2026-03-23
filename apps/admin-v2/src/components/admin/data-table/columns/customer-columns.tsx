@@ -1,6 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
-import { Checkbox } from "~/components/ui/checkbox";
 import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import {
@@ -12,7 +11,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
-import { DataTableRowActions } from "../DataTableRowActions";
+import { createSelectColumn, createActionsColumn } from "./column-factories";
 import type { Customer } from "~/types/api-responses";
 
 function formatLocation(customer: Customer): string {
@@ -38,29 +37,7 @@ export function getCustomerColumns(
   opts: CustomerColumnOptions,
 ): ColumnDef<Customer, unknown>[] {
   return [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(!!v)}
-          aria-label={`Select ${row.original.name}`}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    createSelectColumn<Customer>({ getLabel: (r) => (r as Customer).name }),
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -137,19 +114,12 @@ export function getCustomerColumns(
         </div>
       ),
     },
-    {
-      id: "actions",
-      cell: ({ row }) => (
-        <DataTableRowActions
-          showTrashed={opts.showTrashed}
-          onEdit={() => opts.onEdit(row.original.id)}
-          onDelete={() => opts.onDelete(row.original.id)}
-          onRestore={() => opts.onRestore(row.original.id)}
-          onPermanentDelete={() => opts.onPermanentDelete(row.original.id)}
-        />
-      ),
-      enableSorting: false,
-      size: 70,
-    },
+    createActionsColumn<Customer>({
+      showTrashed: opts.showTrashed,
+      onEdit: (c) => opts.onEdit(c.id),
+      onDelete: (c) => opts.onDelete(c.id),
+      onRestore: (c) => opts.onRestore(c.id),
+      onPermanentDelete: (c) => opts.onPermanentDelete(c.id),
+    }),
   ];
 }

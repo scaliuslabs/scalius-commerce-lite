@@ -1,5 +1,4 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -21,7 +20,7 @@ import { cn } from "@scalius/shared/utils";
 import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { formatPrice } from "@scalius/shared/currency";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
-import { DataTableRowActions } from "../DataTableRowActions";
+import { createSelectColumn, createActionsColumn } from "./column-factories";
 
 export interface DiscountItem {
   id: string;
@@ -199,29 +198,7 @@ export function getDiscountColumns(
   opts: DiscountColumnOptions,
 ): ColumnDef<DiscountItem, unknown>[] {
   return [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(!!v)}
-          aria-label={`Select ${row.original.code}`}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    createSelectColumn<DiscountItem>({ getLabel: (r) => (r as DiscountItem).code }),
     {
       accessorKey: "code",
       header: ({ column }) => (
@@ -429,40 +406,24 @@ export function getDiscountColumns(
       enableSorting: false,
       size: 90,
     },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const discount = row.original;
-        return (
-          <DataTableRowActions
-            showTrashed={opts.showTrashed}
-            onEdit={() => opts.onEdit(discount.id)}
-            onDelete={() => opts.onDelete(discount.id)}
-            onRestore={() => opts.onRestore(discount.id)}
-            onPermanentDelete={() => opts.onPermanentDelete(discount.id)}
-            extraActions={
-              !opts.showTrashed
-                ? [
-                    {
-                      label: "Duplicate",
-                      icon: Copy,
-                      onClick: () => opts.onDuplicate(discount.id),
-                    },
-                    {
-                      label: discount.isActive ? "Deactivate" : "Activate",
-                      icon: discount.isActive ? X : Check,
-                      onClick: () =>
-                        opts.onToggleStatus(discount.id, discount.isActive),
-                    },
-                  ]
-                : undefined
-            }
-          />
-        );
-      },
-      enableSorting: false,
-      size: 70,
-    },
+    createActionsColumn<DiscountItem>({
+      showTrashed: opts.showTrashed,
+      onEdit: (d) => opts.onEdit(d.id),
+      onDelete: (d) => opts.onDelete(d.id),
+      onRestore: (d) => opts.onRestore(d.id),
+      onPermanentDelete: (d) => opts.onPermanentDelete(d.id),
+      getExtraActions: (d) =>
+        !opts.showTrashed
+          ? [
+              { label: "Duplicate", icon: Copy, onClick: () => opts.onDuplicate(d.id) },
+              {
+                label: d.isActive ? "Deactivate" : "Activate",
+                icon: d.isActive ? X : Check,
+                onClick: () => opts.onToggleStatus(d.id, d.isActive),
+              },
+            ]
+          : undefined,
+    }),
   ];
 }
 

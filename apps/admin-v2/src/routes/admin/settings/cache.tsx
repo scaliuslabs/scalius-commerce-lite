@@ -4,9 +4,11 @@ import { cacheStatsQueryOptions, cacheLastClearedQueryOptions, cacheGroupsQueryO
 
 export const Route = createFileRoute("/admin/settings/cache")({
   loader: async ({ context: { queryClient } }) => {
-    void queryClient.prefetchQuery(cacheStatsQueryOptions());
-    void queryClient.prefetchQuery(cacheLastClearedQueryOptions());
-    void queryClient.prefetchQuery(cacheGroupsQueryOptions());
+    await Promise.all([
+      queryClient.ensureQueryData(cacheStatsQueryOptions()),
+      queryClient.ensureQueryData(cacheLastClearedQueryOptions()),
+      queryClient.ensureQueryData(cacheGroupsQueryOptions()),
+    ]);
   },
   head: () => ({ meta: [{ title: "Cache Settings | Scalius Admin" }] }),
   component: CacheSettingsPage,

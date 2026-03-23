@@ -1,11 +1,8 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Link } from "@tanstack/react-router";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
-import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { ExternalLink } from "lucide-react";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
-import { DataTableRowActions } from "../DataTableRowActions";
+import { createSelectColumn, createDateColumn, createActionsColumn } from "./column-factories";
 import type { Page } from "~/types/api-responses";
 
 interface PageColumnOptions {
@@ -21,29 +18,7 @@ export function getPageColumns(
   opts: PageColumnOptions,
 ): ColumnDef<Page, unknown>[] {
   return [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(!!v)}
-          aria-label={`Select ${row.original.title}`}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    createSelectColumn<Page>({ getLabel: (r) => (r as Page).title }),
     {
       accessorKey: "title",
       header: ({ column }) => (
@@ -102,37 +77,17 @@ export function getPageColumns(
       enableSorting: false,
       size: 100,
     },
-    {
-      accessorKey: "updatedAt",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Last Updated" />
-      ),
-      cell: ({ row }) => formatDate(row.original.updatedAt),
-      size: 130,
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => (
-        <DataTableRowActions
-          showTrashed={opts.showTrashed}
-          onView={
-            !opts.showTrashed
-              ? () => {
-                  window.open(
-                    opts.getStorefrontPath(`/${row.original.slug}`),
-                    "_blank",
-                  );
-                }
-              : undefined
-          }
-          onEdit={() => opts.onEdit(row.original.id)}
-          onDelete={() => opts.onDelete(row.original.id)}
-          onRestore={() => opts.onRestore(row.original.id)}
-          onPermanentDelete={() => opts.onPermanentDelete(row.original.id)}
-        />
-      ),
-      enableSorting: false,
-      size: 70,
-    },
+    createDateColumn<Page>("updatedAt", "Last Updated"),
+    createActionsColumn<Page>({
+      showTrashed: opts.showTrashed,
+      onView: (p) =>
+        !opts.showTrashed
+          ? window.open(opts.getStorefrontPath(`/${p.slug}`), "_blank")
+          : undefined,
+      onEdit: (p) => opts.onEdit(p.id),
+      onDelete: (p) => opts.onDelete(p.id),
+      onRestore: (p) => opts.onRestore(p.id),
+      onPermanentDelete: (p) => opts.onPermanentDelete(p.id),
+    }),
   ];
 }

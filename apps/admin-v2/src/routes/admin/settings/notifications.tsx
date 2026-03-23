@@ -4,7 +4,7 @@ import { firebaseSettingsQueryOptions } from "~/lib/api.queries";
 
 export const Route = createFileRoute("/admin/settings/notifications")({
   loader: async ({ context: { queryClient } }) => {
-    void queryClient.prefetchQuery(firebaseSettingsQueryOptions());
+    await queryClient.ensureQueryData(firebaseSettingsQueryOptions());
   },
   head: () => ({ meta: [{ title: "Notification Settings | Scalius Admin" }] }),
   component: NotificationSettingsPage,

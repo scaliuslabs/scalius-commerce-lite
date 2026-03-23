@@ -1,8 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
-import { DataTableColumnHeader } from "../DataTableColumnHeader";
-import { DataTableRowActions } from "../DataTableRowActions";
+import { createSelectColumn, createActionsColumn } from "./column-factories";
 import type { Widget, WidgetPlacementRule } from "~/types/api-responses";
 
 const placementRuleLabels: Record<string, string> = {
@@ -46,29 +44,7 @@ export function getWidgetColumns(
   opts: WidgetColumnOptions,
 ): ColumnDef<Widget, unknown>[] {
   return [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(!!v)}
-          aria-label={`Select ${row.original.name}`}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    createSelectColumn<Widget>({ getLabel: (r) => (r as Widget).name }),
     {
       accessorKey: "name",
       header: "Widget Name",
@@ -119,29 +95,16 @@ export function getWidgetColumns(
       enableSorting: false,
       size: 80,
     },
-    {
-      id: "actions",
-      cell: ({ row }) => (
-        <DataTableRowActions
-          showTrashed={opts.showTrashed}
-          onEdit={() => opts.onEdit(row.original.id)}
-          onDelete={() => opts.onDelete(row.original.id)}
-          onRestore={() => opts.onRestore(row.original.id)}
-          onPermanentDelete={() => opts.onPermanentDelete(row.original.id)}
-          extraActions={
-            !opts.showTrashed
-              ? [
-                  {
-                    label: "Copy Shortcode",
-                    onClick: () => opts.onCopyShortcode(row.original.id),
-                  },
-                ]
-              : undefined
-          }
-        />
-      ),
-      enableSorting: false,
-      size: 70,
-    },
+    createActionsColumn<Widget>({
+      showTrashed: opts.showTrashed,
+      onEdit: (w) => opts.onEdit(w.id),
+      onDelete: (w) => opts.onDelete(w.id),
+      onRestore: (w) => opts.onRestore(w.id),
+      onPermanentDelete: (w) => opts.onPermanentDelete(w.id),
+      getExtraActions: (w) =>
+        !opts.showTrashed
+          ? [{ label: "Copy Shortcode", onClick: () => opts.onCopyShortcode(w.id) }]
+          : undefined,
+    }),
   ];
 }

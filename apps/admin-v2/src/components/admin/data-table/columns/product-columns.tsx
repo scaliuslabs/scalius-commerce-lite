@@ -1,13 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
 import { Image as ImageIcon, Copy } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { toast } from "sonner";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
-import { DataTableRowActions } from "../DataTableRowActions";
+import { createSelectColumn, createDateColumn, createActionsColumn } from "./column-factories";
 
 export interface ProductListItem {
   id: string;
@@ -62,31 +60,7 @@ export function getProductColumns(
   opts: ProductColumnOptions,
 ): ColumnDef<ProductListItem, unknown>[] {
   return [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label="Select all products on this page"
-          className="h-3.5 w-3.5"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(!!v)}
-          aria-label={`Select ${row.original.name}`}
-          className="h-3.5 w-3.5"
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    createSelectColumn<ProductListItem>({ getLabel: (r) => (r as ProductListItem).name }),
     {
       id: "image",
       header: () => <span className="text-xs">Image</span>,
@@ -208,51 +182,18 @@ export function getProductColumns(
       enableSorting: false,
       size: 80,
     },
-    {
-      accessorKey: "updatedAt",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Last Updated" />
-      ),
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">
-          {formatDate(row.original.updatedAt)}
-        </span>
-      ),
-      size: 120,
-    },
-    {
-      id: "actions",
-      header: () => (
-        <span className="text-xs text-right block pr-1">Actions</span>
-      ),
-      cell: ({ row }) => {
-        const product = row.original;
-        return (
-          <div className="text-right">
-            <DataTableRowActions
-              showTrashed={opts.showTrashed}
-              onView={() => opts.onView(product.id)}
-              onEdit={() => opts.onEdit(product.id)}
-              onDelete={() => opts.onDelete(product.id)}
-              onRestore={() => opts.onRestore(product.id)}
-              onPermanentDelete={() => opts.onPermanentDelete(product.id)}
-              extraActions={
-                !opts.showTrashed
-                  ? [
-                      {
-                        label: "Copy Shortcode",
-                        icon: Copy,
-                        onClick: () => copyProductShortcode(product.slug),
-                      },
-                    ]
-                  : undefined
-              }
-            />
-          </div>
-        );
-      },
-      enableSorting: false,
-      size: 70,
-    },
+    createDateColumn<ProductListItem>("updatedAt", "Last Updated", { size: 120 }),
+    createActionsColumn<ProductListItem>({
+      showTrashed: opts.showTrashed,
+      onView: (p) => opts.onView(p.id),
+      onEdit: (p) => opts.onEdit(p.id),
+      onDelete: (p) => opts.onDelete(p.id),
+      onRestore: (p) => opts.onRestore(p.id),
+      onPermanentDelete: (p) => opts.onPermanentDelete(p.id),
+      getExtraActions: (p) =>
+        !opts.showTrashed
+          ? [{ label: "Copy Shortcode", icon: Copy, onClick: () => copyProductShortcode(p.slug) }]
+          : undefined,
+    }),
   ];
 }

@@ -9,6 +9,7 @@ import { CharacterCounter } from "@/components/ui/character-counter";
 import { getServerFnError } from "@/lib/api-helpers";
 import { getSeoSettings, updateSeoSettings } from "@/lib/api.functions";
 import { useSettingsForm } from "@/hooks/use-settings-form";
+import { queryKeys } from "@/lib/query-keys";
 
 interface SeoConfig {
   siteTitle: string;
@@ -45,6 +46,7 @@ const saveSeo = async (values: SeoConfig) => {
 export function SeoSettingsBuilder() {
   const { values, setValues, isLoading, isSaving, handleSubmit } =
     useSettingsForm<SeoConfig>({
+      queryKey: queryKeys.settings.seo(),
       fetchFn: fetchSeo,
       saveFn: saveSeo,
       defaultValues: defaultConfig,

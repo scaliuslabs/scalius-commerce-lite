@@ -735,7 +735,7 @@ export const metaConversionsLogsQueryOptions = (params: {
   queryOptions({
     queryKey: queryKeys.settings.metaConversionsLogs(params),
     queryFn: () => getMetaConversionsLogs({ data: params }),
-    staleTime: 1000 * 60,
+    staleTime: STALE.MODERATE,
   });
 
 export const allowedCountriesQueryOptions = () =>

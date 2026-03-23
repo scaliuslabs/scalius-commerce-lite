@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, ExternalLink } from "lucide-react";
 import { getStorefrontUrl, updateStorefrontUrl } from "@/lib/api.functions";
 import { useSettingsForm } from "@/hooks/use-settings-form";
+import { queryKeys } from "@/lib/query-keys";
 
 interface StorefrontUrlValues {
   storefrontUrl: string;
@@ -31,6 +32,7 @@ export function StorefrontUrlBuilder({
 }: StorefrontUrlBuilderProps) {
   const { values, setValue, isLoading, isSaving, handleSubmit } =
     useSettingsForm<StorefrontUrlValues>({
+      queryKey: queryKeys.settings.storefrontUrl(),
       fetchFn: fetchUrl,
       saveFn: saveUrl,
       defaultValues: { storefrontUrl: initialUrl },

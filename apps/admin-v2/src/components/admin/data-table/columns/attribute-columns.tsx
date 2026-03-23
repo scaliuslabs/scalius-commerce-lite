@@ -1,12 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Switch } from "~/components/ui/switch";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Filter, Edit3 } from "lucide-react";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
-import { DataTableRowActions } from "../DataTableRowActions";
 import { InlineEditCell } from "../InlineEditCell";
+import { createSelectColumn, createActionsColumn } from "./column-factories";
 import type { ProductAttribute } from "~/types/api-responses";
 
 export interface AttributeItem extends ProductAttribute {
@@ -30,29 +29,7 @@ export function getAttributeColumns(
   opts: AttributeColumnOptions,
 ): ColumnDef<AttributeItem, unknown>[] {
   return [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(!!v)}
-          aria-label={`Select ${row.original.name}`}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    createSelectColumn<AttributeItem>({ getLabel: (r) => (r as AttributeItem).name }),
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -155,33 +132,15 @@ export function getAttributeColumns(
       },
       enableSorting: false,
     },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const attribute = row.original;
-        return (
-          <DataTableRowActions
-            showTrashed={opts.showTrashed}
-            onDelete={() => opts.onDelete(attribute.id)}
-            onRestore={() => opts.onRestore(attribute.id)}
-            onPermanentDelete={() => opts.onPermanentDelete(attribute.id)}
-            extraActions={
-              !opts.showTrashed
-                ? [
-                    {
-                      label: "Edit Values",
-                      icon: Edit3,
-                      onClick: () =>
-                        opts.onEditValues(attribute.id, attribute.name),
-                    },
-                  ]
-                : undefined
-            }
-          />
-        );
-      },
-      enableSorting: false,
-      size: 70,
-    },
+    createActionsColumn<AttributeItem>({
+      showTrashed: opts.showTrashed,
+      onDelete: (a) => opts.onDelete(a.id),
+      onRestore: (a) => opts.onRestore(a.id),
+      onPermanentDelete: (a) => opts.onPermanentDelete(a.id),
+      getExtraActions: (a) =>
+        !opts.showTrashed
+          ? [{ label: "Edit Values", icon: Edit3, onClick: () => opts.onEditValues(a.id, a.name) }]
+          : undefined,
+    }),
   ];
 }
