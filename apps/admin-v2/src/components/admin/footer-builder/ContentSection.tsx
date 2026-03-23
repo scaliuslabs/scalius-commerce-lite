@@ -3,6 +3,7 @@ import React, { Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
 
 const TiptapEditor = React.lazy(() =>
   import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
@@ -43,7 +44,7 @@ export function ContentSection({
         <div className="grid gap-2">
           <Label>Description</Label>
           <div className="border rounded-md overflow-hidden min-h-[150px]">
-            <Suspense fallback={<div className="h-40 animate-pulse rounded-lg bg-muted" />}>
+            <Suspense fallback={<LoadingFallback height="h-40" />}>
               <TiptapEditor
                 content={description}
                 onChange={onDescriptionChange}

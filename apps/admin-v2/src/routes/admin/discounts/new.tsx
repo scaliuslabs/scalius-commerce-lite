@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { DiscountTypeSelector } from "~/components/admin/discount/DiscountTypeSelector";
 import { Button } from "~/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
 
 const AmountOffProductsContainer = lazy(
   () => import("~/components/admin/discount/amount-off-products/AmountOffProductsContainer").then(m => ({ default: m.AmountOffProductsContainer })),
@@ -52,13 +53,7 @@ function NewDiscountPage() {
         {!selectedType ? (
           <DiscountTypeSelector onSelect={setSelectedType} />
         ) : (
-          <Suspense
-            fallback={
-              <div className="flex items-center justify-center py-12">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
-              </div>
-            }
-          >
+          <Suspense fallback={<PageLoadingSpinner />}>
             {selectedType === "amount_off_products" && <AmountOffProductsContainer />}
             {selectedType === "amount_off_order" && <AmountOffOrderForm />}
             {selectedType === "free_shipping" && <FreeShippingForm />}

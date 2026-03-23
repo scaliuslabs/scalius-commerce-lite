@@ -14,8 +14,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { WidgetPlacementRule, type Widget, type Collection, type WidgetHistoryEntry, type Category } from '@/types/api-responses';
+import { widgetFormSchema, type WidgetFormValues } from '@/lib/form-schemas';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { ArrowLeft, Clock, Save } from 'lucide-react';
@@ -44,40 +44,6 @@ import { FullScreenEditor, type EditorMode } from './widget-form/FullScreenEdito
 import { WidgetHistoryModal } from './widget-form/WidgetHistoryModal';
 import { WidgetPasteModal } from './widget-form/WidgetPasteModal';
 import { useNavigate, useRouter } from '@tanstack/react-router';
-
-const widgetFormSchema = z.object({
-  name: z.string().min(3, 'Widget name must be at least 3 characters long.'),
-  htmlContent: z.string().min(1, 'HTML content cannot be empty.'),
-  cssContent: z.string().optional(),
-  isActive: z.boolean().default(true),
-  displayTarget: z.enum(['homepage']).default('homepage'),
-  placementRule: z.enum([
-    WidgetPlacementRule.BEFORE_COLLECTION,
-    WidgetPlacementRule.AFTER_COLLECTION,
-    WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
-    WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
-    WidgetPlacementRule.STANDALONE,
-  ]),
-  referenceCollectionId: z.string().optional().nullable(),
-  sortOrder: z.coerce.number().int().default(0),
-}).refine(
-  (data) => {
-    if (
-      (data.placementRule === WidgetPlacementRule.BEFORE_COLLECTION ||
-        data.placementRule === WidgetPlacementRule.AFTER_COLLECTION) &&
-      !data.referenceCollectionId
-    ) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: 'A collection must be selected for "Before Collection" or "After Collection" placement.',
-    path: ['referenceCollectionId'],
-  }
-);
-
-export type WidgetFormValues = z.infer<typeof widgetFormSchema>;
 
 interface WidgetFormProps {
   widget?: Widget | null;

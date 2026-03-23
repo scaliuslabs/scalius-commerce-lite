@@ -9,6 +9,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
 
 const TiptapEditor = React.lazy(() =>
   import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
@@ -79,7 +80,7 @@ export function TitleDescriptionSection({
                 <FormItem>
                   <FormControl>
                     {isClient ? (
-                      <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-muted" />}>
+                      <Suspense fallback={<LoadingFallback height="h-64" />}>
                         <TiptapEditor
                           content={field.value || ""}
                           onChange={field.onChange}

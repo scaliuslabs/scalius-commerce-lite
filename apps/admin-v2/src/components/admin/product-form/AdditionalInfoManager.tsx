@@ -6,6 +6,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
 
 const TiptapEditor = React.lazy(() =>
   import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
@@ -141,7 +142,7 @@ function SortableRichContentItem({
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <Suspense fallback={<div className="h-48 animate-pulse rounded-lg bg-muted" />}>
+                      <Suspense fallback={<LoadingFallback />}>
                         <TiptapEditor
                           content={field.value || ""}
                           onChange={(newContent: string) => {

@@ -2,10 +2,8 @@ import React, { Suspense } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
-import { z } from "zod";
 import { toast } from "sonner";
 import {
-  Form,
   FormControl,
   FormDescription,
   FormField,
@@ -30,35 +28,14 @@ const TiptapEditor = React.lazy(() =>
 );
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
-import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { FormContainer } from "@/components/admin/shared/FormContainer";
+import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { useNavigate } from "@tanstack/react-router";
 import { getServerFnError } from "@/lib/api-helpers";
 import { createPage, updatePage } from "@/lib/api.functions";
-
-const pageFormSchema = z.object({
-  id: z.string().optional(),
-  title: z
-    .string()
-    .min(3, "Page title must be at least 3 characters")
-    .max(100, "Page title must be less than 100 characters"),
-  slug: z
-    .string()
-    .min(3, "Slug must be at least 3 characters")
-    .max(100, "Slug must be less than 100 characters")
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
-  content: z.string().min(1, "Content is required"),
-  metaTitle: z.string().nullable(),
-  metaDescription: z.string().nullable(),
-  isPublished: z.boolean(),
-  publishedAt: z.date().nullable().optional(),
-  sortOrder: z.number(),
-  hideHeader: z.boolean(),
-  hideFooter: z.boolean(),
-  hideTitle: z.boolean(),
-});
-
-type PageFormValues = z.infer<typeof pageFormSchema>;
+import { LoadingFallback } from "./shared/LoadingFallback";
+import { pageFormSchema, type PageFormValues } from "@/lib/form-schemas";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -88,6 +65,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       hideHeader: false,
       hideFooter: false,
       hideTitle: false,
+      featuredImage: null,
       ...defaultValues,
     },
   });
@@ -155,75 +133,96 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
   const storefrontPageUrl = getStorefrontPath(slug ? `/${slug}` : "/");
 
   return (
-    <Form {...form}>
-      <FormStickyHeader
-        title="Pages"
-        entityName={form.watch("title")}
-        isEdit={isEdit}
-        isSubmitting={isSubmitting}
-        isDirty={form.formState.isDirty}
-        cancelUrl="/admin/pages"
-        newUrl="/admin/pages/new"
-        newLabel="New Page"
-        saveLabel={isEdit ? "Save Page" : "Create Page"}
-        onSave={() => form.handleSubmit(handleSubmit)()}
-      />
+    <FormContainer
+      title="Pages"
+      entityName={form.watch("title")}
+      isEdit={isEdit}
+      isSubmitting={isSubmitting}
+      backUrl="/admin/pages"
+      newUrl="/admin/pages/new"
+      newLabel="New Page"
+      saveLabel={isEdit ? "Save Page" : "Create Page"}
+      form={form}
+      onSubmit={form.handleSubmit(handleSubmit)}
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+        {/* Left Column (2/3) */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Title field (standalone) */}
+          <FormField
+            control={form.control}
+            name="title"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium">
+                  Title <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input placeholder="Page title" {...field} className="text-base" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
-          {/* Left Column (2/3) */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Title field (standalone) */}
+          {/* Page Content card */}
+          <Card>
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-base">Content</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <FormField
+                control={form.control}
+                name="content"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      {isClient && (
+                        <Suspense fallback={<LoadingFallback height="h-64" />}>
+                          <TiptapEditor
+                            content={field.value}
+                            onChange={field.onChange}
+                            placeholder="Write your page content here..."
+                            compact={true}
+                          />
+                        </Suspense>
+                      )}
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Featured Image Card (collapsible) */}
+          <CollapsibleCard
+            title="Featured Image"
+            description="Add a featured image for this page (optional)"
+            defaultOpen={true}
+          >
             <FormField
               control={form.control}
-              name="title"
+              name="featuredImage"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-sm font-medium">
-                    Title <span className="text-destructive">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input placeholder="Page title" {...field} className="text-base" />
-                  </FormControl>
+                  <FormImageUploadField
+                    value={field.value}
+                    onChange={field.onChange}
+                    triggerLabel="Select Featured Image"
+                    changeTriggerLabel="Change Featured Image"
+                    placeholder="No featured image selected"
+                  />
                   <FormMessage />
                 </FormItem>
               )}
             />
+          </CollapsibleCard>
+        </div>
 
-            {/* Page Content card */}
-            <Card>
-              <CardHeader className="pb-3 pt-4 px-4">
-                <CardTitle className="text-base">Content</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                <FormField
-                  control={form.control}
-                  name="content"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        {isClient && (
-                          <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-muted" />}>
-                            <TiptapEditor
-                              content={field.value}
-                              onChange={field.onChange}
-                              placeholder="Write your page content here..."
-                              compact={true}
-                            />
-                          </Suspense>
-                        )}
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Column (1/3) */}
-          <div className="space-y-3">
-            {/* Status & Display card */}
+        {/* Right Column (1/3) */}
+        <div className="space-y-3">
+          {/* Status & Display card */}
             <Card>
               <CardHeader className="pb-3 pt-4 px-4">
                 <CardTitle className="text-base">Status & Display</CardTitle>
@@ -457,7 +456,6 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
             </CollapsibleCard>
           </div>
         </div>
-      </form>
-    </Form>
+    </FormContainer>
   );
 }
