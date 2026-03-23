@@ -8,6 +8,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { adminRouteGuard } from "~/lib/auth.fns";
 
 export const Route = createFileRoute("/admin")({
+  // Admin is behind auth, never crawled — skip SSR for faster client navigation
+  ssr: false,
   beforeLoad: async () => {
     // Auth + RBAC guard: redirects to /auth/setup, /auth/login, or /auth/two-factor as needed
     const authContext = await adminRouteGuard();
