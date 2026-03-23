@@ -71,6 +71,24 @@ import {
   restoreWidget,
   bulkDeleteWidgets,
   bulkRestoreWidgets,
+  // Collections
+  createCollection,
+  updateCollection,
+  deleteCollection,
+  deleteCollectionPermanent,
+  restoreCollection,
+  reorderCollections,
+  bulkDeleteCollections,
+  bulkRestoreCollections,
+  // Attributes
+  createAttribute,
+  updateAttribute,
+  deleteAttribute,
+  deleteAttributePermanent,
+  restoreAttribute,
+  updateAttributeValues,
+  bulkDeleteAttributes,
+  bulkRestoreAttributes,
   // Analytics
   createAnalyticsScript,
   updateAnalyticsScript,
@@ -997,5 +1015,216 @@ export function useDeleteAnalyticsScript() {
       toast.success("Analytics script deleted");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to delete analytics script")),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  COLLECTIONS
+// ═══════════════════════════════════════════════════════════════════
+
+export function useCreateCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      createCollection({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      toast.success("Collection created");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to create collection")),
+  });
+}
+
+export function useUpdateCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string } & Record<string, unknown>) =>
+      updateCollection({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", "detail", variables.id] });
+      toast.success("Collection updated");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update collection")),
+  });
+}
+
+export function useDeleteCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteCollection({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      toast.success("Collection moved to trash");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete collection")),
+  });
+}
+
+export function usePermanentDeleteCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteCollectionPermanent({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      toast.success("Collection permanently deleted");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete collection")),
+  });
+}
+
+export function useRestoreCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreCollection({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      toast.success("Collection restored");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to restore collection")),
+  });
+}
+
+export function useReorderCollections() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { items: { id: string; sortOrder: number }[] }) =>
+      reorderCollections({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to reorder collections")),
+  });
+}
+
+export function useBulkDeleteCollections() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { ids: string[]; permanent?: boolean }) =>
+      bulkDeleteCollections({ data: { collectionIds: data.ids, permanent: data.permanent } }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      toast.success(`${variables.ids.length} collection(s) ${variables.permanent ? "permanently deleted" : "moved to trash"}`);
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete collections")),
+  });
+}
+
+export function useBulkRestoreCollections() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { ids: string[] }) =>
+      bulkRestoreCollections({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      toast.success(`${variables.ids.length} collection(s) restored`);
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to restore collections")),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ATTRIBUTES
+// ═══════════════════════════════════════════════════════════════════
+
+export function useCreateAttribute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      createAttribute({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      toast.success("Attribute created");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to create attribute")),
+  });
+}
+
+export function useUpdateAttribute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string } & Record<string, unknown>) =>
+      updateAttribute({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      queryClient.invalidateQueries({ queryKey: ["attributes", "detail", variables.id] });
+      toast.success("Attribute updated");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update attribute")),
+  });
+}
+
+export function useDeleteAttribute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteAttribute({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      toast.success("Attribute moved to trash");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete attribute")),
+  });
+}
+
+export function usePermanentDeleteAttribute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteAttributePermanent({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      toast.success("Attribute permanently deleted");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete attribute")),
+  });
+}
+
+export function useRestoreAttribute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreAttribute({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      toast.success("Attribute restored");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to restore attribute")),
+  });
+}
+
+export function useUpdateAttributeValues() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { attributeId: string; values: { name: string; slug: string }[] }) =>
+      updateAttributeValues({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      toast.success("Attribute values updated");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update attribute values")),
+  });
+}
+
+export function useBulkDeleteAttributes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { ids: string[]; permanent?: boolean }) =>
+      bulkDeleteAttributes({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      toast.success(`${variables.ids.length} attribute(s) ${variables.permanent ? "permanently deleted" : "moved to trash"}`);
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete attributes")),
+  });
+}
+
+export function useBulkRestoreAttributes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { ids: string[] }) =>
+      bulkRestoreAttributes({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+      toast.success(`${variables.ids.length} attribute(s) restored`);
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to restore attributes")),
   });
 }

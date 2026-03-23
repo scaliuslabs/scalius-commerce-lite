@@ -36,6 +36,7 @@ import { cn } from "@scalius/shared/utils";
 import { format } from "date-fns";
 import { Separator } from "../../ui/separator";
 import { toast } from "sonner";
+import { useCreateDiscount, useUpdateDiscount } from "~/lib/api.mutations";
 import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import {
   Tooltip,
@@ -178,6 +179,9 @@ export function AmountOffOrderForm({
     },
   });
 
+  const createMut = useCreateDiscount();
+  const updateMut = useUpdateDiscount();
+
   const internalHandleSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     const discountId = defaultValues?.id;
@@ -193,37 +197,19 @@ export function AmountOffOrderForm({
     };
 
     try {
-      const method = discountId ? "PUT" : "POST";
-      const url = discountId
-        ? `/api/v1/admin/discounts/${discountId}`
-        : "/api/v1/admin/discounts";
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const responseData = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(
-          responseData?.error ||
-          `Failed to ${discountId ? "update" : "create"} discount (Status: ${response.status})`,
-        );
+      if (discountId) {
+        await updateMut.mutateAsync({ id: discountId, ...payload });
+      } else {
+        await createMut.mutateAsync(payload);
       }
-
-      toast.success("Success!", { description: `Discount "${values.code}" ${discountId ? "updated" : "created"} successfully.` });
-      // Redirect or call a success handler instead of hard reload
-      // Example: navigate to the list page
       void navigate({ to: "/admin/discounts" });
-      // Or if using a router: router.push('/admin/discounts');
     } catch (error: unknown) {
-      const action = defaultValues?.id ? "updating" : "creating";
-      console.error(`Error ${action} Amount Off Order discount:`, error);
-      toast.error("Operation Failed", { description: error instanceof Error
-            ? error.message
-            : "An unknown error occurred while saving." });
+      // Mutation hooks already show toast on error, but catch to prevent unhandled
+      if (!(error instanceof Error && error.message.includes("Failed"))) {
+        toast.error("Operation Failed", {
+          description: error instanceof Error ? error.message : "An unknown error occurred while saving.",
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }

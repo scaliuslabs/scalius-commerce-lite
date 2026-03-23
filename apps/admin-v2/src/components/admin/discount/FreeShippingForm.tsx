@@ -35,6 +35,7 @@ import {
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
 import { toast } from "sonner";
+import { useCreateDiscount, useUpdateDiscount } from "~/lib/api.mutations";
 import { useCurrency } from "~/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
 import { generateDiscountCode } from "./utils";
@@ -59,6 +60,8 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
   const { symbol } = useCurrency();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const createMut = useCreateDiscount();
+  const updateMut = useUpdateDiscount();
 
   const form = useForm<FormValues>({
     resolver: zodResolver<FormValues>(formSchema),
@@ -101,41 +104,26 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
           : new Date(),
     };
 
+    const payload = {
+      ...ensuredValues,
+      type: "free_shipping",
+      valueType: "free",
+      discountValue: 100,
+      startDate: ensuredValues.startDate.toISOString(),
+      endDate: values.endDate ? values.endDate.toISOString() : null,
+    };
+
     try {
-      const method = discountId ? "PUT" : "POST";
-      const url = discountId
-        ? `/api/v1/admin/discounts/${discountId}`
-        : "/api/v1/admin/discounts";
-
-      const payload = {
-        ...ensuredValues,
-        type: "free_shipping",
-        valueType: "free",
-        discountValue: 100,
-        startDate: ensuredValues.startDate.toISOString(),
-        endDate: values.endDate ? values.endDate.toISOString() : null,
-      };
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData?.error ||
-          `Failed to ${discountId ? "update" : "create"} discount`,
-        );
+      if (discountId) {
+        await updateMut.mutateAsync({ id: discountId, ...payload });
+      } else {
+        await createMut.mutateAsync(payload);
       }
-
-      toast.success(`Discount ${discountId ? "updated" : "created"} successfully!`);
       void navigate({ to: "/admin/discounts" });
     } catch (error: unknown) {
-      const action = defaultValues?.id ? "updating" : "creating";
-      console.error(`Error ${action} Free Shipping discount:`, error);
-      toast.error("Error", { description: error instanceof Error ? error.message : "An unknown error occurred" });
+      if (!(error instanceof Error && error.message.includes("Failed"))) {
+        toast.error("Error", { description: error instanceof Error ? error.message : "An unknown error occurred" });
+      }
     } finally {
       setIsSubmitting(false);
     }

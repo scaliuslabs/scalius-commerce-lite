@@ -15,6 +15,7 @@ import { Separator } from "../../../ui/separator";
 import { toast } from "sonner";
 import { useCurrency } from "~/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
+import { useCreateDiscount, useUpdateDiscount } from "~/lib/api.mutations";
 import { DiscountDetailsSection } from "./DiscountDetailsSection";
 import { AppliesToSection } from "./AppliesToSection";
 import { MinimumRequirementsSection } from "./MinimumRequirementsSection";
@@ -39,6 +40,8 @@ export function AmountOffProductsContainer({
   const { symbol } = useCurrency();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const createMut = useCreateDiscount();
+  const updateMut = useUpdateDiscount();
   const [selectedProducts, setSelectedProducts] = useState<Product[]>(
     initialSelectedProducts,
   );
@@ -106,46 +109,29 @@ export function AmountOffProductsContainer({
           : new Date(),
     };
 
+    const { appliesTo, ...restOfValues } = ensuredValues;
+    const payload = {
+      ...restOfValues,
+      type: "amount_off_products",
+      appliesToProducts: selectedProducts.map((p) => p.id),
+      appliesToCollections: selectedCollections.map((c) => c.id),
+      startDate: ensuredValues.startDate,
+      endDate: values.endDate,
+    };
+
     try {
-      const method = discountId ? "PUT" : "POST";
-      const url = discountId
-        ? `/api/v1/admin/discounts/${discountId}`
-        : "/api/v1/admin/discounts";
-
-      const { appliesTo, ...restOfValues } = ensuredValues;
-      const payload = {
-        ...restOfValues,
-        type: "amount_off_products",
-        appliesToProducts: selectedProducts.map((p) => p.id),
-        appliesToCollections: selectedCollections.map((c) => c.id),
-        startDate: ensuredValues.startDate,
-        endDate: values.endDate,
-      };
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData?.error ||
-          `Failed to ${discountId ? "update" : "create"} discount`,
-        );
+      if (discountId) {
+        await updateMut.mutateAsync({ id: discountId, ...payload });
+      } else {
+        await createMut.mutateAsync(payload);
       }
-
-      toast.success(`Discount ${discountId ? "updated" : "created"} successfully!`, {
-        description: `Code: ${values.code}`,
-      });
       void navigate({ to: "/admin/discounts" });
     } catch (error: unknown) {
-      const action = defaultValues?.id ? "updating" : "creating";
-      console.error(`Error ${action} discount:`, error);
-      toast.error(
-        error instanceof Error ? error.message : "An unknown error occurred",
-      );
+      if (!(error instanceof Error && error.message.includes("Failed"))) {
+        toast.error(
+          error instanceof Error ? error.message : "An unknown error occurred",
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
