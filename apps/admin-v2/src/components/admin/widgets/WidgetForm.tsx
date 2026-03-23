@@ -45,6 +45,7 @@ import { WidgetHistoryModal } from './widget-form/WidgetHistoryModal';
 import { WidgetPasteModal } from './widget-form/WidgetPasteModal';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { getServerFnError } from '~/lib/api-helpers';
 
 interface WidgetFormProps {
   widget?: Widget | null;
@@ -391,14 +392,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       // Invalidate queries so list page shows fresh data
       queryClient.invalidateQueries({ queryKey: ['widgets', 'list'] });
       toast.success(`Widget ${isCreateMode ? 'created' : 'updated'} successfully!`);
-      setTimeout(() => {
-        void navigate({ to: '/admin/widgets' });
-      }, 1000);
+      void navigate({ to: '/admin/widgets' });
     } catch (error: unknown) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : `Failed to ${isCreateMode ? 'create' : 'update'} widget.`,
+        getServerFnError(error, `Failed to ${isCreateMode ? 'create' : 'update'} widget`),
       );
     }
   };

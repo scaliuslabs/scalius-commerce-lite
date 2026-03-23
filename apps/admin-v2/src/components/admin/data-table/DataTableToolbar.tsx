@@ -1,8 +1,8 @@
 import { type ReactNode, useRef, useEffect, useState, useCallback } from "react";
-import { Input } from "~/components/ui/input";
-import { Button } from "~/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";
-import { useDebounce } from "~/hooks/use-debounce";
+import { useDebounce } from "@/hooks/use-debounce";
 
 interface DataTableToolbarProps {
   searchValue: string;

@@ -11,26 +11,21 @@ import {
   TableRow,
 } from "../ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "../ui/tooltip"; // Import Tooltip components
+} from "../ui/tooltip";
 import {
   ArrowRight,
-  ArrowUpRight, // Using a slightly different icon for links
-  Clock,
-  Truck,
-  CheckCircle,
-  XCircle,
-  Loader2, // For Processing
-  Package, // For Empty State
+  ArrowUpRight,
+  Package,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns"; // For relative dates
+import { formatDistanceToNow } from "date-fns";
 import { useCurrency } from "@/hooks/use-currency";
+import { OrderStatusBadge } from "./shared/StatusBadges";
 import { Link } from "@tanstack/react-router";
 
 // Refined Order Interface (assuming createdAt is a Date object or string that can be parsed)
@@ -44,66 +39,6 @@ interface Order {
 
 interface RecentOrdersProps {
   orders: Order[];
-}
-
-// Enhanced Status Styling with Icons
-function getStatusInfo(status: string): {
-  bg: string;
-  text: string;
-  border: string;
-  icon: React.ComponentType<{ className?: string }>;
-  iconColor: string;
-} {
-  switch (status.toLowerCase()) {
-    case "pending":
-      return {
-        bg: "bg-amber-50 dark:bg-amber-900/30",
-        text: "text-amber-700 dark:text-amber-300",
-        border: "border-amber-200 dark:border-amber-700/50",
-        icon: Clock,
-        iconColor: "text-amber-500 dark:text-amber-400",
-      };
-    case "processing":
-      return {
-        bg: "bg-blue-50 dark:bg-blue-900/30",
-        text: "text-blue-700 dark:text-blue-300",
-        border: "border-blue-200 dark:border-blue-700/50",
-        icon: Loader2, // Using Loader2 for processing
-        iconColor: "text-blue-500 dark:text-blue-400 animate-spin", // Added spin animation
-      };
-    case "shipped":
-      return {
-        bg: "bg-violet-50 dark:bg-violet-900/30",
-        text: "text-violet-700 dark:text-violet-300",
-        border: "border-violet-200 dark:border-violet-700/50",
-        icon: Truck,
-        iconColor: "text-violet-500 dark:text-violet-400",
-      };
-    case "delivered":
-      return {
-        bg: "bg-emerald-50 dark:bg-emerald-900/30",
-        text: "text-emerald-700 dark:text-emerald-300",
-        border: "border-emerald-200 dark:border-emerald-700/50",
-        icon: CheckCircle,
-        iconColor: "text-emerald-500 dark:text-emerald-400",
-      };
-    case "cancelled":
-      return {
-        bg: "bg-rose-50 dark:bg-rose-900/30",
-        text: "text-rose-700 dark:text-rose-300",
-        border: "border-rose-200 dark:border-rose-700/50",
-        icon: XCircle,
-        iconColor: "text-rose-500 dark:text-rose-400",
-      };
-    default:
-      return {
-        bg: "bg-gray-100 dark:bg-gray-800/50",
-        text: "text-gray-700 dark:text-gray-300",
-        border: "border-gray-200 dark:border-gray-700/50",
-        icon: Clock, // Default to clock or another neutral icon
-        iconColor: "text-gray-500 dark:text-gray-400",
-      };
-  }
 }
 
 // Helper to safely parse date
@@ -206,9 +141,8 @@ export const RecentOrders = memo(function RecentOrders({ orders }: RecentOrdersP
                 </TableRow>
               ) : (
                 /* --- Enhanced Order Row --- */
-                orders.map((order) => {
-                  const statusInfo = getStatusInfo(order.status);
-                  const IconComponent = statusInfo.icon;
+                <TooltipProvider delayDuration={150}>
+                {orders.map((order) => {
                   const parsedDate = parseOrderDate(order.createdAt);
 
                   return (
@@ -245,21 +179,12 @@ export const RecentOrders = memo(function RecentOrders({ orders }: RecentOrdersP
 
                       {/* Status Cell */}
                       <TableCell className="py-3.5 px-4">
-                        <Badge
-                          variant="outline"
-                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${statusInfo.bg} ${statusInfo.text} ${statusInfo.border} shadow-xs`}
-                        >
-                          <IconComponent
-                            className={`h-3 w-3 ${statusInfo.iconColor}`}
-                          />
-                          {order.status}
-                        </Badge>
+                        <OrderStatusBadge status={order.status} />
                       </TableCell>
 
                       {/* Date Cell with Relative Time & Tooltip */}
                       <TableCell className="py-3.5 px-6 text-right">
                         {parsedDate ? (
-                          <TooltipProvider delayDuration={150}>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span className="text-sm text-gray-600 dark:text-gray-400 cursor-default">
@@ -274,7 +199,6 @@ export const RecentOrders = memo(function RecentOrders({ orders }: RecentOrdersP
                                 </p>
                               </TooltipContent>
                             </Tooltip>
-                          </TooltipProvider>
                         ) : (
                           <span className="text-sm text-gray-400 dark:text-gray-600">
                             Invalid Date
@@ -283,7 +207,8 @@ export const RecentOrders = memo(function RecentOrders({ orders }: RecentOrdersP
                       </TableCell>
                     </TableRow>
                   );
-                })
+                })}
+                </TooltipProvider>
               )}
             </TableBody>
           </Table>

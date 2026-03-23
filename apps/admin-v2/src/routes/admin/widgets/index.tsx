@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { widgetsQueryOptions } from "~/lib/api.queries";
 import {
   useDeleteWidget,
+  usePermanentDeleteWidget,
   useRestoreWidget,
   useBulkDeleteWidgets,
 } from "~/lib/api.mutations";
@@ -45,6 +46,7 @@ function WidgetsPage() {
 
   // Mutations
   const deleteMutation = useDeleteWidget();
+  const permanentDeleteMutation = usePermanentDeleteWidget();
   const restoreMutation = useRestoreWidget();
   const bulkDeleteMutation = useBulkDeleteWidgets();
 
@@ -61,7 +63,7 @@ function WidgetsPage() {
           void navigate({ to: `/admin/widgets/${id}` as string }),
         onDelete: (id) => deleteMutation.mutate(id),
         onRestore: (id) => restoreMutation.mutate(id),
-        onPermanentDelete: (id) => deleteMutation.mutate(id),
+        onPermanentDelete: (id) => permanentDeleteMutation.mutate(id),
         onCopyShortcode: (id) => {
           navigator.clipboard
             .writeText(`[widget id="${id}"]`)
@@ -69,7 +71,7 @@ function WidgetsPage() {
             .catch(() => toast.error("Failed to copy shortcode."));
         },
       }),
-    [navigate, deleteMutation, restoreMutation, collectionsRef],
+    [navigate, deleteMutation, permanentDeleteMutation, restoreMutation, collectionsRef],
   );
 
   // Data selector — widgets are NOT server-paginated, so we slice client-side

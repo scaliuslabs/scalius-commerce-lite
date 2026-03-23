@@ -25,9 +25,12 @@ const defaultPagination: ServerTablePagination = {
   totalPages: 0,
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyQueryOptions = UseQueryOptions<any, any, any, any>;
+
 export interface UseServerTableOptions<TData> {
   columns: ColumnDef<TData, unknown>[];
-  queryOptions: UseQueryOptions<unknown, Error, unknown, unknown[]>;
+  queryOptions: AnyQueryOptions;
   dataSelector: (raw: unknown) => {
     data: TData[];
     pagination: ServerTablePagination;
@@ -48,6 +51,7 @@ export interface UseServerTableOptions<TData> {
 
 export interface UseServerTableReturn<TData> {
   table: Table<TData>;
+  rawData: unknown;
   isFetching: boolean;
   isLoading: boolean;
   pagination: ServerTablePagination;
@@ -75,7 +79,7 @@ export function useServerTable<TData>({
   const { data: rawData, isFetching, isLoading } = useQuery({
     ...qOpts,
     placeholderData: keepPreviousData,
-  } as UseQueryOptions);
+  });
 
   // Extract typed data from API response
   const { data, pagination } = useMemo(() => {
@@ -146,6 +150,7 @@ export function useServerTable<TData>({
 
   return {
     table,
+    rawData,
     isFetching,
     isLoading,
     pagination,

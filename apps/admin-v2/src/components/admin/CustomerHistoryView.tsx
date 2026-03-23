@@ -28,17 +28,13 @@ import {
   Building,
   Home,
   ExternalLink,
-  AlertCircle,
-  CheckCircle2,
-  Truck,
-  Package,
-  XCircle,
   Loader2,
   Archive,
   ClipboardList,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useCurrency } from "@/hooks/use-currency";
+import { OrderStatusBadge } from "./shared/StatusBadges";
 import { Separator } from "../ui/separator";
 import { ScrollArea } from "../ui/scroll-area";
 import { Avatar, AvatarFallback } from "../ui/avatar";
@@ -106,41 +102,6 @@ const getInitials = (name: string) => {
     .join("")
     .toUpperCase()
     .substring(0, 2);
-};
-
-const getStatusBadgeVariant = (status: string): string => {
-  switch (status?.toLowerCase()) {
-    case "pending":
-      return "bg-yellow-100 text-yellow-800 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700/50";
-    case "processing":
-      return "bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700/50";
-    case "shipped":
-      return "bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700/50";
-    case "delivered":
-      return "bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700/50";
-    case "cancelled":
-      return "bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700/50";
-    default:
-      return "bg-gray-100 text-gray-800 border border-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600";
-  }
-};
-
-const getStatusIcon = (status: string) => {
-  const iconClass = "h-3.5 w-3.5";
-  switch (status?.toLowerCase()) {
-    case "pending":
-      return <AlertCircle className={iconClass} />;
-    case "processing":
-      return <Package className={iconClass} />;
-    case "shipped":
-      return <Truck className={iconClass} />;
-    case "delivered":
-      return <CheckCircle2 className={iconClass} />;
-    case "cancelled":
-      return <XCircle className={iconClass} />;
-    default:
-      return <Package className={iconClass} />;
-  }
 };
 
 const getChangeTypeBadgeVariant = (
@@ -399,16 +360,7 @@ export function CustomerHistoryView({
                           })}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="secondary" // Use secondary as base, let cn override colors
-                            className={cn(
-                              "capitalize flex items-center gap-1.5 text-xs px-2 py-0.5 font-medium",
-                              getStatusBadgeVariant(order.status),
-                            )}
-                          >
-                            {getStatusIcon(order.status)}
-                            {order.status}
-                          </Badge>
+                          <OrderStatusBadge status={order.status} />
                         </TableCell>
                       </TableRow>
                     ))

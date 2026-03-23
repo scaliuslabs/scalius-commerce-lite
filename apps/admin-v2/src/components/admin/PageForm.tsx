@@ -102,14 +102,11 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
         },
       );
 
-      // Small delay to show toast before redirect
-      setTimeout(() => {
-        void navigate({ to: "/admin/pages" });
-      }, 500);
+      void navigate({ to: "/admin/pages" });
     } catch (error: unknown) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save page", {
-        description: (error instanceof Error ? error.message : String(error)) || "Please try again.",
+        description: getServerFnError(error, "Failed to save page"),
         duration: 6000,
       });
     } finally {

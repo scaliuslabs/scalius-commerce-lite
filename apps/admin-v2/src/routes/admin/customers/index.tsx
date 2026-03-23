@@ -1,8 +1,20 @@
-import { useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { Users, UserPlus, Trash2 } from "lucide-react";
+import { Users, UserPlus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
+import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { useCurrency } from "~/hooks/use-currency";
 import { customersQueryOptions } from "~/lib/api.queries";
 import {
@@ -19,24 +31,10 @@ import {
 import { getCustomerColumns } from "~/components/admin/data-table/columns/customer-columns";
 import type { Customer } from "~/types/api-responses";
 
-const searchSchema = z.object({
-  page: z.number().default(1).catch(1),
-  limit: z.number().default(10).catch(10),
-  search: z.string().default("").catch(""),
-  sort: z
-    .enum([
-      "name",
-      "totalOrders",
-      "totalSpent",
-      "lastOrderAt",
-      "createdAt",
-      "updatedAt",
-    ])
-    .default("updatedAt")
-    .catch("updatedAt"),
-  order: z.enum(["asc", "desc"]).default("desc").catch("desc"),
-  trashed: z.boolean().default(false).catch(false),
-});
+const searchSchema = createListSearchSchema(
+  ["name", "totalOrders", "totalSpent", "lastOrderAt", "createdAt", "updatedAt"] as const,
+  { limit: 10, sort: "updatedAt" },
+);
 
 function mapParams(deps: z.infer<typeof searchSchema>) {
   return {
@@ -63,20 +61,7 @@ export const Route = createFileRoute("/admin/customers/")({
     ],
   }),
   component: CustomersPage,
-  errorComponent: ({ error, reset }) => (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <p className="text-4xl font-bold text-muted-foreground mb-2">Error</p>
-      <p className="text-sm text-muted-foreground mb-4">
-        {error instanceof Error ? error.message : "Something went wrong loading this page."}
-      </p>
-      <button
-        onClick={reset}
-        className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-      >
-        Try Again
-      </button>
-    </div>
-  ),
+  errorComponent: RouteErrorComponent,
 });
 
 function CustomersPage() {
@@ -91,6 +76,23 @@ function CustomersPage() {
   const restoreMutation = useRestoreCustomer();
   const bulkDeleteMutation = useBulkDeleteCustomers();
 
+  // Delete confirmation state
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const isActionLoading =
+    deleteMutation.isPending || permanentDeleteMutation.isPending;
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteId) return;
+    const id = deleteId;
+    setDeleteId(null);
+    if (showTrashed) {
+      permanentDeleteMutation.mutate(id);
+    } else {
+      deleteMutation.mutate(id);
+    }
+  }, [deleteId, showTrashed, deleteMutation, permanentDeleteMutation]);
+
   // Column definitions
   const columns = useMemo(
     () =>
@@ -98,53 +100,46 @@ function CustomersPage() {
         showTrashed,
         symbol,
         onEdit: (id) =>
-          void navigate({ to: `/admin/customers/${id}/edit` as string }),
-        onDelete: (id) => deleteMutation.mutate(id),
+          void navigate({ to: "/admin/customers/$customerId/edit", params: { customerId: id } }),
+        onDelete: (id) => setDeleteId(id),
         onRestore: (id) => restoreMutation.mutate(id),
-        onPermanentDelete: (id) => permanentDeleteMutation.mutate(id),
+        onPermanentDelete: (id) => setDeleteId(id),
       }),
-    [showTrashed, symbol, navigate, deleteMutation, restoreMutation, permanentDeleteMutation],
+    [showTrashed, symbol, navigate, restoreMutation],
   );
 
   // Data selector
-  const dataSelector = useCallback(
-    (raw: unknown) => {
-      const r = raw as Record<string, unknown>;
-      return {
-        data: (r.customers ?? []) as Customer[],
-        pagination: (r.pagination ?? {
-          total: 0,
-          page: search.page,
-          limit: search.limit,
-          totalPages: 0,
-        }) as {
-          total: number;
-          page: number;
-          limit: number;
-          totalPages: number;
-        },
-      };
+  const dataSelector = useMemo(() => createDataSelector<Customer>("customers"), []);
+
+  const onPaginationChange = useCallback(
+    (page: number, limit: number) => {
+      void navigate({
+        search: ((prev: Record<string, unknown>) => ({ ...prev, page, limit })) as never,
+      });
     },
-    [search.page, search.limit],
+    [navigate],
+  );
+
+  const onSortingChange = useCallback(
+    (sort: string, order: "asc" | "desc") => {
+      void navigate({
+        search: ((prev: Record<string, unknown>) => ({ ...prev, sort, order, page: 1 })) as never,
+      });
+    },
+    [navigate],
   );
 
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable({
       columns,
-      queryOptions: customersQueryOptions(mapParams(search)) as never,
+      queryOptions: customersQueryOptions(mapParams(search)),
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,
       currentSort: search.sort,
       currentOrder: search.order,
-      onPaginationChange: (page, limit) =>
-        void navigate({
-          search: ((prev: Record<string, unknown>) => ({ ...prev, page, limit })) as never,
-        }),
-      onSortingChange: (sort, order) =>
-        void navigate({
-          search: ((prev: Record<string, unknown>) => ({ ...prev, sort, order, page: 1 })) as never,
-        }),
+      onPaginationChange,
+      onSortingChange,
     });
 
   return (
@@ -229,6 +224,55 @@ function CustomersPage() {
           />
         }
       />
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog
+        open={!!deleteId}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+      >
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-base">
+              {showTrashed ? (
+                <>
+                  <AlertTriangle className="h-4 w-4 text-red-500" /> Delete
+                  Permanently?
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 text-amber-500" /> Move to Trash?
+                </>
+              )}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="pt-1 text-xs">
+              {showTrashed
+                ? "This action cannot be undone. Are you sure you want to permanently delete this customer?"
+                : "Are you sure you want to move this customer to the trash? It can be restored later."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isActionLoading}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className={cn(
+                "h-8 text-xs",
+                showTrashed ? "bg-destructive hover:bg-destructive/90" : "",
+              )}
+              disabled={isActionLoading}
+            >
+              {isActionLoading ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : null}
+              {showTrashed ? "Delete Permanently" : "Move to Trash"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

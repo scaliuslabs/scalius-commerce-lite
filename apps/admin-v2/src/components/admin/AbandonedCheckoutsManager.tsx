@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useCurrency } from "@/hooks/use-currency";
 import {
   Table,
@@ -8,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,7 +52,8 @@ import {
 import { cn } from "@scalius/shared/utils";
 import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
-import { getAbandonedCheckouts, deleteAbandonedCheckouts } from "@/lib/api.functions";
+import { abandonedCheckoutsQueryOptions } from "@/lib/api.queries";
+import { deleteAbandonedCheckouts } from "@/lib/api.functions";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 // --- Type Definitions ---
@@ -75,6 +77,13 @@ interface ParsedCheckoutData {
   items: CartItem[];
   customerInfo: CustomerInfo;
   total: number;
+}
+
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 
 type SortKey = keyof AbandonedCheckout;
@@ -327,15 +336,11 @@ const DetailsModal = ({
 
 export function AbandonedCheckoutsManager() {
   useCurrency();
-  const [checkouts, setCheckouts] = useState<AbandonedCheckout[]>([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 1,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [isActionLoading, setIsActionLoading] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Local UI state
+  const [requestedPage, setRequestedPage] = useState(1);
+  const [requestedLimit, setRequestedLimit] = useState(20);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; order: "asc" | "desc" }>({
@@ -348,94 +353,96 @@ export function AbandonedCheckoutsManager() {
   const [detailsDialog, setDetailsDialog] = useState<AbandonedCheckout | null>(
     null,
   );
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
 
-  const fetchCheckouts = useCallback(
-    async (pageNumber: number) => {
-      setIsLoading(true);
-      const params = new URLSearchParams({
-        page: String(pageNumber),
-        limit: String(pagination.limit),
-        search: debouncedSearch,
-        sort: sort.key,
-        order: sort.order,
-      });
+  // TanStack Query for data fetching
+  const { data: rawData, isLoading, isFetching } = useQuery({
+    ...abandonedCheckoutsQueryOptions({
+      page: requestedPage,
+      limit: requestedLimit,
+      search: debouncedSearch || undefined,
+      sort: sort.key,
+      order: sort.order,
+    }),
+    placeholderData: keepPreviousData,
+  });
 
-      try {
-        const data = await getAbandonedCheckouts({
-          data: {
-            page: pageNumber,
-            limit: pagination.limit,
-            search: debouncedSearch,
-            sort: sort.key,
-            order: sort.order,
-          },
-        }) as Record<string, unknown>;
-        setCheckouts(data.checkouts as AbandonedCheckout[]);
-        setPagination(data.pagination as { page: number; limit: number; total: number; totalPages: number });
-        setSelectedIds(new Set());
-      } catch (error: unknown) {
-        toast.error("Failed to load checkouts", { description: error instanceof Error ? error.message : String(error) });
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [pagination.limit, debouncedSearch, sort.key, sort.order],
-  );
+  // Extract typed data
+  const { checkouts, pagination } = useMemo(() => {
+    const raw = rawData as Record<string, unknown> | undefined;
+    if (!raw) {
+      return {
+        checkouts: [] as AbandonedCheckout[],
+        pagination: { page: 1, limit: requestedLimit, total: 0, totalPages: 1 } as Pagination,
+      };
+    }
+    return {
+      checkouts: (raw.checkouts ?? []) as AbandonedCheckout[],
+      pagination: (raw.pagination ?? { page: 1, limit: requestedLimit, total: 0, totalPages: 1 }) as Pagination,
+    };
+  }, [rawData, requestedLimit]);
 
-  useEffect(() => {
-    fetchCheckouts(1);
-  }, [debouncedSearch, sort, pagination.limit]);
+  // Reset selection when data changes (search/sort/page change)
+  // This is handled implicitly by the query key changing
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > pagination.totalPages) return;
-    setPagination((p) => ({ ...p, page: newPage }));
-    fetchCheckouts(newPage);
-  };
+  const handlePageChange = useCallback((newPage: number) => {
+    setRequestedPage(newPage);
+    setSelectedIds(new Set());
+  }, []);
 
-  const handleLimitChange = (newLimit: number) => {
-    setPagination((prev) => ({ ...prev, limit: newLimit, page: 1 }));
-  };
+  const handleLimitChange = useCallback((newLimit: number) => {
+    setRequestedLimit(newLimit);
+    setRequestedPage(1);
+    setSelectedIds(new Set());
+  }, []);
 
-  const handleSort = (key: SortKey) => {
+  const handleSort = useCallback((key: SortKey) => {
     setSort((prev) => ({
       key,
       order: prev.key === key && prev.order === "desc" ? "asc" : "desc",
     }));
-  };
+    setRequestedPage(1);
+    setSelectedIds(new Set());
+  }, []);
 
-  const handleToggleSelection = (id: string) => {
+  const handleToggleSelection = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(id)) newSet.delete(id);
       else newSet.add(id);
       return newSet;
     });
-  };
+  }, []);
 
-  const handleToggleSelectAll = (checked: boolean | "indeterminate") => {
+  const handleToggleSelectAll = useCallback((checked: boolean | "indeterminate") => {
     if (checked) {
       setSelectedIds(new Set(checkouts.map((c) => c.id)));
     } else {
       setSelectedIds(new Set());
     }
-  };
+  }, [checkouts]);
 
-  const performDelete = async () => {
+  const performDelete = useCallback(async () => {
     if (!deleteDialog) return;
     setIsActionLoading(true);
     try {
       await deleteAbandonedCheckouts({ data: { ids: deleteDialog.ids } });
       toast.success(`${deleteDialog.ids.length} checkout(s) deleted.`);
-      fetchCheckouts(1);
-    } catch (error: unknown) {
+      setSelectedIds(new Set());
+      void queryClient.invalidateQueries({ queryKey: ["abandoned-checkouts"] });
+    } catch {
       toast.error("Deletion failed.");
     } finally {
       setIsActionLoading(false);
       setDeleteDialog(null);
     }
-  };
+  }, [deleteDialog, queryClient]);
+
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["abandoned-checkouts"] });
+  }, [queryClient]);
 
   const renderSortArrow = (key: SortKey) => {
     if (sort.key !== key)
@@ -474,11 +481,11 @@ export function AbandonedCheckoutsManager() {
               </Button>
             )}
             <Button
-              onClick={() => fetchCheckouts(pagination.page)}
-              disabled={isLoading}
+              onClick={refresh}
+              disabled={isFetching}
               variant="outline"
             >
-              {isLoading ? (
+              {isFetching ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -498,7 +505,10 @@ export function AbandonedCheckoutsManager() {
 
         <Card>
           <CardContent className="p-0">
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg overflow-hidden relative">
+              {isFetching && checkouts.length > 0 && (
+                <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
+              )}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -575,7 +585,7 @@ export function AbandonedCheckoutsManager() {
             </div>
           </CardContent>
           {pagination.totalPages > 1 && (
-            <CardHeader>
+            <div className="p-4 pt-2">
               <AdminListPagination
                 pagination={pagination}
                 itemLabel="checkouts"
@@ -583,7 +593,7 @@ export function AbandonedCheckoutsManager() {
                 onLimitChange={handleLimitChange}
                 pageSizeOptions={[10, 20, 50, 100]}
               />
-            </CardHeader>
+            </div>
           )}
         </Card>
       </div>

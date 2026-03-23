@@ -1,12 +1,12 @@
 import { memo, type ReactNode } from "react";
-import { Button } from "~/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Eye, Pencil, Trash2, Undo, AlertTriangle } from "lucide-react";
 
 export interface ExtraAction {

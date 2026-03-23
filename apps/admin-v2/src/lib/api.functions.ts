@@ -881,6 +881,12 @@ export const deleteWidget = createServerFn({ method: "POST" })
     return apiDelete(`/widgets/${data.id}`);
   });
 
+export const permanentDeleteWidget = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: string }) => data)
+  .handler(async ({ data }) => {
+    return apiDelete(`/widgets/${data.id}/permanent`);
+  });
+
 export const restoreWidget = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string }) => data)
   .handler(async ({ data }) => {
@@ -1363,7 +1369,7 @@ export const removeUserRole = createServerFn({ method: "POST" })
     (data: { userId: string; roleId: string }) => data,
   )
   .handler(async ({ data }) => {
-    return apiDelete("/rbac/user-roles");
+    return apiDelete("/rbac/user-roles", data);
   });
 
 export const assignUserPermission = createServerFn({ method: "POST" })
@@ -1379,7 +1385,7 @@ export const removeUserPermission = createServerFn({ method: "POST" })
     (data: { userId: string; permissionId: string }) => data,
   )
   .handler(async ({ data }) => {
-    return apiDelete("/rbac/user-permissions");
+    return apiDelete("/rbac/user-permissions", data);
   });
 
 // ═══════════════════════════════════════════════════════════════════

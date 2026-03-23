@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
-import { Button } from "~/components/ui/button";
-import { Badge } from "~/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 import { Filter, X } from "lucide-react";
 import { DataTableToolbar } from "./DataTableToolbar";
 import { getTypeLabel } from "./columns/discount-columns";

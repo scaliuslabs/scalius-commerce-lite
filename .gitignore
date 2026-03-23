@@ -42,3 +42,4 @@ tests/
 /.claude
 skills-lock.json
 /temp-doc
+/tanstack-router

@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { PlusCircle, Trash2, Layers, Undo } from "lucide-react";
+import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { collectionsQueryOptions } from "~/lib/api.queries";
 import {
   useUpdateCollection,
@@ -17,24 +18,16 @@ import {
   DataTable,
   DataTableToolbar,
   useServerTable,
-  type ServerTablePagination,
 } from "~/components/admin/data-table";
 import {
   getCollectionColumns,
   type CollectionItem,
 } from "~/components/admin/data-table/columns/collection-columns";
 
-const searchSchema = z.object({
-  page: z.number().default(1).catch(1),
-  limit: z.number().default(20).catch(20),
-  search: z.string().default("").catch(""),
-  sort: z
-    .enum(["name", "type", "isActive", "sortOrder", "updatedAt"])
-    .default("sortOrder")
-    .catch("sortOrder"),
-  order: z.enum(["asc", "desc"]).default("asc").catch("asc"),
-  trashed: z.boolean().default(false).catch(false),
-});
+const searchSchema = createListSearchSchema(
+  ["name", "type", "isActive", "sortOrder", "updatedAt"] as const,
+  { sort: "sortOrder", order: "asc" },
+);
 
 function mapParams(deps: z.infer<typeof searchSchema>) {
   return {
@@ -103,7 +96,7 @@ function CollectionsPage() {
 
   const handleEdit = useCallback(
     (id: string) => {
-      void navigate({ to: `/admin/collections/${id}/edit` as string });
+      void navigate({ to: "/admin/collections/$collectionId/edit", params: { collectionId: id } });
     },
     [navigate],
   );
@@ -155,24 +148,7 @@ function CollectionsPage() {
   );
 
   // Data selector
-  const dataSelector = useCallback(
-    (raw: unknown) => {
-      const d = raw as {
-        collections?: CollectionItem[];
-        pagination?: ServerTablePagination;
-      };
-      return {
-        data: (d.collections || []) as CollectionItem[],
-        pagination: d.pagination || {
-          total: 0,
-          page: search.page,
-          limit: search.limit,
-          totalPages: 0,
-        },
-      };
-    },
-    [search.page, search.limit],
-  );
+  const dataSelector = useMemo(() => createDataSelector<CollectionItem>("collections"), []);
 
   // URL param updaters
   const onPaginationChange = useCallback(
@@ -219,7 +195,7 @@ function CollectionsPage() {
   const { table, isFetching, isLoading, selectedIds, clearSelection } =
     useServerTable<CollectionItem>({
       columns,
-      queryOptions: collectionsQueryOptions(mapParams(search)) as never,
+      queryOptions: collectionsQueryOptions(mapParams(search)),
       dataSelector,
       currentPage: search.page,
       currentLimit: search.limit,

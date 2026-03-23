@@ -1,12 +1,12 @@
 import { memo } from "react";
 import type { Table } from "@tanstack/react-table";
-import { Button } from "~/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 import {
   ChevronLeft,
   ChevronRight,
