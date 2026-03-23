@@ -22,10 +22,10 @@ function AdminLayout() {
     <ThemeProvider>
       <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
         <SidebarProvider>
-          <AppSidebar user={user} />
+          <AppSidebar />
           <SidebarInset>
             <AdminHeader user={user} />
-            <main className="flex-1 p-6 bg-gray-50 dark:bg-[#0a0a0a]">
+            <main className="flex-1 p-3 sm:p-4 md:p-6 bg-gray-50 dark:bg-[#0a0a0a]">
               <div className="max-w-7xl mx-auto min-h-[50vh]">
                 <Outlet />
               </div>
