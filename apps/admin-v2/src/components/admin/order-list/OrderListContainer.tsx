@@ -131,10 +131,10 @@ export function OrderListContainer({
 
   // Trigger search when filter dropdowns change
   React.useEffect(() => {
-    const url = new URL(window.location.href);
-    const urlPaymentStatus = url.searchParams.get("paymentStatus");
-    const urlPaymentMethod = url.searchParams.get("paymentMethod");
-    const urlFulfillmentStatus = url.searchParams.get("fulfillmentStatus");
+    const params = new URLSearchParams(window.location.search);
+    const urlPaymentStatus = params.get("paymentStatus");
+    const urlPaymentMethod = params.get("paymentMethod");
+    const urlFulfillmentStatus = params.get("fulfillmentStatus");
 
     if (paymentStatus !== urlPaymentStatus || paymentMethod !== urlPaymentMethod || fulfillmentStatus !== urlFulfillmentStatus) {
       fetchOrders({

@@ -57,15 +57,14 @@ function Calendar({
         day_hidden: "invisible",
         ...classNames,
       }}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-day-picker v8 component typing limitation
       components={{
-        IconLeft: ({ className, ...props }: { className?: string; [key: string]: unknown }) => (
-          <ChevronLeft className={cn("size-4", className)} {...(props as Record<string, unknown>)} />
+        IconLeft: ({ className, ...rest }: { className?: string } & Record<string, unknown>) => (
+          <ChevronLeft className={cn("size-4", className)} {...(rest as React.SVGProps<SVGSVGElement>)} />
         ),
-        IconRight: ({ className, ...props }: { className?: string; [key: string]: unknown }) => (
-          <ChevronRight className={cn("size-4", className)} {...(props as Record<string, unknown>)} />
+        IconRight: ({ className, ...rest }: { className?: string } & Record<string, unknown>) => (
+          <ChevronRight className={cn("size-4", className)} {...(rest as React.SVGProps<SVGSVGElement>)} />
         ),
-      } as any}
+      } as Partial<React.ComponentProps<typeof DayPicker>["components"]>}
       {...props}
     />
   );

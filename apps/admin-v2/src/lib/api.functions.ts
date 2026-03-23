@@ -1,5 +1,5 @@
-// @ts-nocheck
-
+// @ts-nocheck — Known TanStack Start issue: TS2345 on handler types when Register includes router context (QueryClient).
+// See: https://github.com/TanStack/router/issues/6185
 /**
  * TanStack Start server functions for ALL admin API endpoints.
  *

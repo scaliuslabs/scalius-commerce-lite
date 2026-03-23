@@ -13,7 +13,7 @@ import {
 } from "../../ui/form";
 import { Input } from "../../ui/input";
 import { FormStickyHeader } from "~/components/admin/FormStickyHeader";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 import { getServerFnError } from "~/lib/api-helpers";
 import { createCollection, updateCollection } from "~/lib/api.functions";
 import { ProductSelectionSection } from "./ProductSelectionSection";
@@ -38,6 +38,7 @@ export function CollectionForm({
   defaultValues,
   isEdit = false,
 }: CollectionFormProps) {
+  const navigate = useNavigate();
   const form = useForm<CollectionFormValues>({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
@@ -83,7 +84,7 @@ export function CollectionForm({
       toast.success(
         `Collection ${isEdit ? "updated" : "created"} successfully`,
       );
-      await navigateTo("/admin/collections");
+      void navigate({ to: "/admin/collections" });
     } catch (error: unknown) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save collection", {

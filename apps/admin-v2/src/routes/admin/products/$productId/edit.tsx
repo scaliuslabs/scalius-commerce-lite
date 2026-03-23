@@ -1,78 +1,85 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { VariantManager } from "~/components/admin/product-form/variants";
-import { getProduct, getCategoryFormOptions } from "~/lib/api.functions";
+import { productQueryOptions, categoryFormOptionsQueryOptions } from "~/lib/api.queries";
+import type { ProductDetail, ProductImageDetail, ProductVariant } from "~/types/api-responses";
+import type { Category } from "~/components/admin/product-form/types";
+import type { ProductVariant as LocalProductVariant } from "~/components/admin/product-form/variants/types";
 
 export const Route = createFileRoute("/admin/products/$productId/edit")({
-  loader: async ({ params }) => {
-    const [productResult, categoryResult] = await Promise.all([
-      getProduct({ data: { id: params.productId } }).catch(() => null),
-      getCategoryFormOptions(),
+  loader: async ({ params, context: { queryClient } }) => {
+    const [productResult] = await Promise.all([
+      queryClient.ensureQueryData(productQueryOptions(params.productId)).catch(() => null),
+      queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
     ]);
     if (!productResult) throw redirect({ to: "/admin/products" });
-    const product = productResult as any;
-    const allCategories = (categoryResult as any).categories || [];
-    const defaultValues = {
-      id: product.id,
-      name: product.name,
-      description: product.description,
-      price: product.price,
-      categoryId: product.categoryId,
-      slug: product.slug,
-      metaTitle: product.metaTitle,
-      metaDescription: product.metaDescription,
-      isActive: product.isActive,
-      discountType: (product.discountType || "percentage") as "percentage" | "flat",
-      discountPercentage: product.discountPercentage || 0,
-      discountAmount: product.discountAmount || 0,
-      freeDelivery: product.freeDelivery,
-      slugEdited: true,
-      images: (product.images || []).map((img: any) => ({
-        id: img.id,
-        url: img.url,
-        filename: img.altText || img.url.split("/").pop() || "",
-        size: 0,
-        createdAt: new Date(img.createdAt),
-      })),
-      attributes: product.attributes || [],
-      additionalInfo: (product.additionalInfo || []).map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        content: item.content,
-        sortOrder: item.sortOrder,
-      })),
-    };
-    const formattedVariants = (product.variants || [])
-      .filter((v: any) => !v.deletedAt)
-      .map((v: any) => ({
-        id: v.id,
-        productId: v.productId,
-        size: v.size,
-        color: v.color,
-        weight: v.weight,
-        sku: v.sku || "",
-        price: v.price ?? 0,
-        stock: v.stock,
-        reservedStock: v.reservedStock,
-        barcode: v.barcode || null,
-        barcodeType: v.barcodeType || null,
-        discountType: (v.discountType || "percentage") as "percentage" | "flat",
-        discountPercentage: v.discountPercentage || 0,
-        discountAmount: v.discountAmount || 0,
-        createdAt: new Date(v.createdAt),
-        updatedAt: new Date(v.updatedAt),
-        deletedAt: v.deletedAt ? new Date(v.deletedAt) : null,
-      }));
-    return { product, allCategories, defaultValues, formattedVariants };
   },
   head: ({ loaderData }) => ({
-    meta: [{ title: `Edit ${loaderData?.product?.name || "Product"} | Scalius Admin` }],
+    meta: [{ title: `Edit Product | Scalius Admin` }],
   }),
   component: EditProductPage,
 });
 
 function EditProductPage() {
-  const { product, allCategories, defaultValues, formattedVariants } = Route.useLoaderData();
+  const { productId } = Route.useParams();
+  const { data: productResult } = useSuspenseQuery(productQueryOptions(productId));
+  const { data: categoryData } = useSuspenseQuery(categoryFormOptionsQueryOptions());
+
+  const product = productResult as ProductDetail;
+  const allCategories = ((categoryData as Record<string, unknown>)?.categories || []) as Category[];
+
+  const defaultValues = {
+    id: product.id,
+    name: product.name,
+    description: product.description,
+    price: product.price,
+    categoryId: product.categoryId,
+    slug: product.slug,
+    metaTitle: product.metaTitle,
+    metaDescription: product.metaDescription,
+    isActive: product.isActive,
+    discountType: (product.discountType || "percentage") as "percentage" | "flat",
+    discountPercentage: product.discountPercentage || 0,
+    discountAmount: product.discountAmount || 0,
+    freeDelivery: product.freeDelivery,
+    slugEdited: true,
+    images: (product.images || []).map((img: ProductImageDetail) => ({
+      id: img.id,
+      url: img.url,
+      filename: img.altText || img.url.split("/").pop() || "",
+      size: 0,
+      createdAt: new Date(img.createdAt),
+    })),
+    attributes: product.attributes || [],
+    additionalInfo: (product.additionalInfo || []).map((item) => ({
+      id: item.id,
+      title: item.title,
+      content: item.content,
+      sortOrder: item.sortOrder,
+    })),
+  };
+
+  const formattedVariants: LocalProductVariant[] = (product.variants || [])
+    .filter((v: ProductVariant) => !v.deletedAt)
+    .map((v: ProductVariant) => ({
+      id: v.id,
+      size: v.size,
+      color: v.color,
+      weight: v.weight,
+      sku: v.sku || "",
+      price: v.price ?? 0,
+      stock: v.stock,
+      reservedStock: v.reservedStock,
+      barcode: v.barcode || null,
+      barcodeType: (v.barcodeType || null) as LocalProductVariant["barcodeType"],
+      discountType: (v.discountType || "percentage") as "percentage" | "flat",
+      discountPercentage: v.discountPercentage || 0,
+      discountAmount: v.discountAmount || 0,
+      createdAt: new Date(v.createdAt),
+      updatedAt: new Date(v.updatedAt),
+      deletedAt: v.deletedAt ? new Date(v.deletedAt) : null,
+    }));
 
   return (
     <div className="container max-w-7xl space-y-6 py-4 pb-8">

@@ -36,7 +36,7 @@ import {
 import { Badge } from "../../ui/badge";
 import { toast } from "sonner";
 import { useCurrency } from "~/hooks/use-currency";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 import { generateDiscountCode } from "./utils";
 import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart } from "./shared-validation";
 
@@ -57,6 +57,7 @@ interface FreeShippingFormProps {
 
 export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
   const { symbol } = useCurrency();
+  const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormValues>({
@@ -130,7 +131,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
       }
 
       toast.success(`Discount ${discountId ? "updated" : "created"} successfully!`);
-      await navigateTo("/admin/discounts");
+      void navigate({ to: "/admin/discounts" });
     } catch (error: unknown) {
       const action = defaultValues?.id ? "updating" : "creating";
       console.error(`Error ${action} Free Shipping discount:`, error);

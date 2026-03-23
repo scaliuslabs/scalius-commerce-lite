@@ -1,25 +1,24 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { PageForm } from "~/components/admin/PageForm";
-import { getPage } from "~/lib/api.functions";
+import { pageQueryOptions } from "~/lib/api.queries";
+import type { Page } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/pages/$pageId/edit")({
-  loader: async ({ params }) => {
-    const page = await getPage({ data: { id: params.pageId } }).catch(() => null) as any;
-    if (!page) throw redirect({ to: "/admin/pages" });
-    return { page: page as any };
+  loader: async ({ context: { queryClient }, params }) => {
+    const data = await queryClient.ensureQueryData(pageQueryOptions(params.pageId)).catch(() => null);
+    if (!data) throw redirect({ to: "/admin/pages" });
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: `Edit ${loaderData?.page?.title || "Page"} | Scalius Admin` }],
+  head: () => ({
+    meta: [{ title: "Edit Page | Scalius Admin" }],
   }),
   component: EditPagePage,
 });
 
 function EditPagePage() {
-  const { page } = Route.useLoaderData();
-
-  if (!page) {
-    return <div>Page not found</div>;
-  }
+  const { pageId } = Route.useParams();
+  const { data } = useSuspenseQuery(pageQueryOptions(pageId));
+  const page = data as Page;
 
   return (
     <div className="container max-w-7xl py-4 pb-8">

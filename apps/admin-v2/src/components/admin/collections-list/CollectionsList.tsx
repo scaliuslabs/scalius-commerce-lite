@@ -25,11 +25,12 @@ import type {
   SortOrder,
   DeleteDialogState,
 } from "./types";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 
 export function CollectionsList({
   showTrashed = false,
 }: CollectionsManagerProps) {
+  const navigate = useNavigate();
   // Search and sort state
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("sortOrder");
@@ -119,7 +120,7 @@ export function CollectionsList({
   };
 
   const handleCreateClick = () => {
-    void navigateTo("/admin/collections/new");
+    void navigate({ to: "/admin/collections/new" });
   };
 
   return (

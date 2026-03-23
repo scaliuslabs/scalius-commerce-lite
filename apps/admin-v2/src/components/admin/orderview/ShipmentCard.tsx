@@ -19,9 +19,8 @@ import type { DeliveryShipment } from "@/types/api-responses";
 import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
 import type { Order } from "./types";
-import { useNavigate } from "@tanstack/react-router";
-import { getServerFnError } from "@/lib/api-helpers";
-import { createOrderShipment } from "@/lib/api.functions";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCreateOrderShipment } from "@/lib/api.mutations";
 
 interface ShipmentCardProps {
   order: Order;
@@ -29,29 +28,21 @@ interface ShipmentCardProps {
 
 const CreateShipmentForm = ({
   order,
-  onShipmentCreated,
 }: {
   order: Order;
-  onShipmentCreated: () => void;
 }) => {
-  const [isCreatingShipment, setIsCreatingShipment] = React.useState(false);
   const [selectedProviderId, setSelectedProviderId] = React.useState("");
+  const shipmentMutation = useCreateOrderShipment();
 
-  const handleCreateShipment = async () => {
+  const handleCreateShipment = () => {
     if (!selectedProviderId) {
       toast.error("Error", { description: "Please select a delivery provider." });
       return;
     }
-    setIsCreatingShipment(true);
-    try {
-      await createOrderShipment({ data: { orderId: order.id, shipment: { providerId: selectedProviderId, options: {} } } });
-      toast.success("Success", { description: "Shipment created successfully. Page will reload." });
-      onShipmentCreated();
-    } catch (error: unknown) {
-      toast.error("Error Creating Shipment", { description: getServerFnError(error, "An unknown error occurred.") });
-    } finally {
-      setIsCreatingShipment(false);
-    }
+    shipmentMutation.mutate({
+      orderId: order.id,
+      shipment: { providerId: selectedProviderId, options: {} },
+    });
   };
 
   return (
@@ -71,7 +62,7 @@ const CreateShipmentForm = ({
             <Select
               value={selectedProviderId}
               onValueChange={setSelectedProviderId}
-              disabled={isCreatingShipment}
+              disabled={shipmentMutation.isPending}
             >
               <SelectTrigger className="h-9 text-sm border-border bg-background text-foreground">
                 <SelectValue placeholder="Select provider" />
@@ -91,13 +82,13 @@ const CreateShipmentForm = ({
           </div>
           <Button
             className="w-full"
-            disabled={isCreatingShipment || !selectedProviderId}
+            disabled={shipmentMutation.isPending || !selectedProviderId}
             onClick={handleCreateShipment}
           >
-            {isCreatingShipment && (
+            {shipmentMutation.isPending && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
-            {isCreatingShipment ? "Creating..." : "Create Shipment"}
+            {shipmentMutation.isPending ? "Creating..." : "Create Shipment"}
           </Button>
         </div>
       </CardContent>
@@ -195,9 +186,10 @@ const ShipmentHistoryItem = ({
 };
 
 export function ShipmentCard({ order }: ShipmentCardProps) {
-  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const handleRefresh = () => {
-    void navigate({ to: window.location.pathname });
+    queryClient.invalidateQueries({ queryKey: ["orders", "detail", order.id] });
+    queryClient.invalidateQueries({ queryKey: ["orders", "shipments", order.id] });
   };
 
   const hasProviders = order.deliveryProviders && order.deliveryProviders.length > 0;
@@ -206,7 +198,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
   return (
     <>
       {hasProviders && (
-        <CreateShipmentForm order={order} onShipmentCreated={handleRefresh} />
+        <CreateShipmentForm order={order} />
       )}
 
       {hasShipments && (

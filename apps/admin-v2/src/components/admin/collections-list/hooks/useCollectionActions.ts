@@ -1,6 +1,7 @@
 // src/components/admin/collections-list/hooks/useCollectionActions.ts
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   updateCollection,
@@ -15,85 +16,117 @@ export function useCollectionActions(
   onRefresh: () => void,
   setCollections: React.Dispatch<React.SetStateAction<CollectionItem[]>>,
 ) {
-  const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
-  const [isActionLoading, setIsActionLoading] = useState(false);
+  const queryClient = useQueryClient();
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CollectionItem> }) =>
+      updateCollection({ data: { id, ...data } }),
+    onMutate: async ({ id, data }) => {
+      setCollections((prev) =>
+        prev.map((collection) =>
+          collection.id === id ? { ...collection, ...data } : collection,
+        ),
+      );
+    },
+    onSuccess: () => {
+      toast.success("Collection updated.");
+    },
+    onError: (error) => {
+      toast.error(getServerFnError(error, "Failed to update collection"));
+      onRefresh();
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ id, showTrashed }: { id: string; name: string; showTrashed: boolean }) =>
+      showTrashed
+        ? deleteCollectionPermanent({ data: { id } })
+        : deleteCollection({ data: { id } }),
+    onSuccess: (_data, { name, showTrashed }) => {
+      toast.success(
+        showTrashed
+          ? `Collection "${name}" permanently deleted.`
+          : `Collection "${name}" moved to trash.`,
+      );
+      onRefresh();
+    },
+    onError: (error) => {
+      toast.error("Deletion Failed", {
+        description: getServerFnError(error, "Failed to delete collection"),
+        duration: 8000,
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => restoreCollection({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Collection restored.");
+      onRefresh();
+    },
+    onError: (error) => {
+      toast.error(getServerFnError(error, "Failed to restore collection"));
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: (updatedOrder: { id: string; sortOrder: number }[]) =>
+      reorderCollections({ data: { items: updatedOrder } }),
+    onSuccess: () => {
+      toast.success("Collection order updated.");
+    },
+    onError: (error) => {
+      toast.error(getServerFnError(error, "Failed to update collection order"));
+      onRefresh();
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+
+  const savingStates: Record<string, boolean> = {};
+  if (updateMutation.isPending && updateMutation.variables) {
+    savingStates[updateMutation.variables.id] = true;
+  }
+
+  const isActionLoading =
+    deleteMutation.isPending || restoreMutation.isPending;
 
   const handleUpdate = useCallback(
-    async (id: string, data: Partial<CollectionItem>) => {
-      setSavingStates((prev) => ({ ...prev, [id]: true }));
-      try {
-        await updateCollection({ data: { id, ...data } });
-        toast.success("Collection updated.");
-        setCollections((prev) =>
-          prev.map((collection) =>
-            collection.id === id ? { ...collection, ...data } : collection,
-          ),
-        );
-      } catch (error: unknown) {
-        toast.error(getServerFnError(error, "Failed to update collection"));
-        onRefresh();
-      } finally {
-        setSavingStates((prev) => ({ ...prev, [id]: false }));
-      }
+    (id: string, data: Partial<CollectionItem>) => {
+      updateMutation.mutate({ id, data });
     },
-    [onRefresh, setCollections],
+    [updateMutation],
   );
 
   const handleDelete = useCallback(
-    async (id: string, name: string, showTrashed: boolean) => {
-      setIsActionLoading(true);
-      const successMessage = showTrashed
-        ? `Collection "${name}" permanently deleted.`
-        : `Collection "${name}" moved to trash.`;
-
-      try {
-        if (showTrashed) {
-          await deleteCollectionPermanent({ data: { id } });
-        } else {
-          await deleteCollection({ data: { id } });
-        }
-
-        toast.success(successMessage);
-        onRefresh();
-      } catch (error: unknown) {
-        toast.error("Deletion Failed", {
-          description: getServerFnError(error, "Failed to delete collection"),
-          duration: 8000,
-        });
-      } finally {
-        setIsActionLoading(false);
-      }
+    (id: string, name: string, showTrashed: boolean) => {
+      deleteMutation.mutate({ id, name, showTrashed });
     },
-    [onRefresh],
+    [deleteMutation],
   );
 
   const handleRestore = useCallback(
-    async (id: string) => {
-      setIsActionLoading(true);
-      try {
-        await restoreCollection({ data: { id } });
-        toast.success("Collection restored.");
-        onRefresh();
-      } catch (error: unknown) {
-        toast.error(getServerFnError(error, "Failed to restore collection"));
-      } finally {
-        setIsActionLoading(false);
-      }
+    (id: string) => {
+      restoreMutation.mutate(id);
     },
-    [onRefresh],
+    [restoreMutation],
   );
 
   const handleReorder = useCallback(
     async (updatedOrder: { id: string; sortOrder: number }[]) => {
-      try {
-        await reorderCollections({ data: { items: updatedOrder } });
-        toast.success("Collection order updated.");
-      } catch (error: unknown) {
-        toast.error(getServerFnError(error, "Failed to update collection order"));
-        throw error;
-      }
+      reorderMutation.mutate(updatedOrder);
     },
-    [],
+    [reorderMutation],
   );
 
   return {

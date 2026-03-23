@@ -2,12 +2,14 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 import { createServerFn } from "@tanstack/react-start";
 import { InvoiceActions } from "~/components/admin/InvoiceActions";
+import type { InvoiceData, OrderItem } from "~/types/api-responses";
 
 const getOrderInvoiceData = createServerFn({ method: "GET" })
   .inputValidator((data: { id: string }) => data)
+  // @ts-expect-error -- Known TanStack Start handler type issue
   .handler(async ({ data }) => {
     const { apiGet } = await import("~/lib/api.server");
-    return apiGet<{ order: any; invoiceNumber: string; businessInfo: any }>(`/orders/${data.id}/invoice`);
+    return apiGet<InvoiceData>(`/orders/${data.id}/invoice`);
   });
 
 const searchSchema = z.object({
@@ -18,8 +20,8 @@ export const Route = createFileRoute("/admin/orders/$orderId/invoice")({
   validateSearch: searchSchema,
   loader: async ({ params }) => {
     const result = await getOrderInvoiceData({ data: { id: params.orderId } }).catch(() => null);
-    if (!result) throw redirect({ to: `/admin/orders/${params.orderId}` as any });
-    const r = result as any;
+    if (!result) throw redirect({ to: `/admin/orders/${params.orderId}` as string });
+    const r = result as InvoiceData;
     return {
       order: r.order,
       invoiceNumber: r.invoiceNumber || "",
@@ -122,7 +124,7 @@ function InvoicePage() {
               </tr>
             </thead>
             <tbody>
-              {(order.items || []).map((item: any, index: number) => {
+              {(order.items || []).map((item: OrderItem, index: number) => {
                 const variant = [item.variantSize, item.variantColor].filter(Boolean).join(" / ");
                 const lineTotal = item.price * item.quantity;
                 return (

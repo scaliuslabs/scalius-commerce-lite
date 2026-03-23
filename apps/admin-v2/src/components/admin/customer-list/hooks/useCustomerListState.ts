@@ -79,12 +79,13 @@ export function useCustomerListState(
 
   // Initialize from URL
   useEffect(() => {
-    const url = new URL(window.location.href);
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
     setSort({
-      field: (url.searchParams.get("sort") || initialSort.field) as SortField,
-      order: (url.searchParams.get("order") || initialSort.order) as "asc" | "desc",
+      field: (params.get("sort") || initialSort.field) as SortField,
+      order: (params.get("order") || initialSort.order) as "asc" | "desc",
     });
-    setSearchQuery(url.searchParams.get("search") || initialSearchQuery);
+    setSearchQuery(params.get("search") || initialSearchQuery);
   }, [initialSort, initialSearchQuery]);
 
   // Keyboard shortcut for search

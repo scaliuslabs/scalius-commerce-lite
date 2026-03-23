@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 import type { Customer, SortField, CustomerListPagination } from "./useCustomerListState";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
@@ -51,6 +51,8 @@ export function useCustomerListActions({
   setCurrentPagination,
   setDialogState,
 }: UseCustomerListActionsProps) {
+  const navigate = useNavigate();
+
   const fetchCustomers = useCallback(
     async (params: {
       page?: number;
@@ -81,16 +83,23 @@ export function useCustomerListActions({
         setDisplayCustomers(parsed);
         setCurrentPagination(data.pagination || initialPagination);
 
-        const urlToUpdate = new URL(window.location.href);
-        if (params.page) urlToUpdate.searchParams.set("page", params.page.toString());
-        if (params.limit) urlToUpdate.searchParams.set("limit", params.limit.toString());
-        if (params.search) urlToUpdate.searchParams.set("search", params.search);
-        else urlToUpdate.searchParams.delete("search");
-        if (params.sort) urlToUpdate.searchParams.set("sort", params.sort);
-        if (params.order) urlToUpdate.searchParams.set("order", params.order);
-        if (showTrashed) urlToUpdate.searchParams.set("trashed", "true");
-        else urlToUpdate.searchParams.delete("trashed");
-        window.history.pushState({}, "", urlToUpdate.toString());
+        void navigate({
+          search: ((prev: any) => {
+            const next: Record<string, unknown> = { ...prev };
+            if (params.page) next.page = params.page;
+            else delete next.page;
+            if (params.limit) next.limit = params.limit;
+            else delete next.limit;
+            if (params.search) next.search = params.search;
+            else delete next.search;
+            if (params.sort) next.sort = params.sort;
+            if (params.order) next.order = params.order;
+            if (showTrashed) next.trashed = "true";
+            else delete next.trashed;
+            return next;
+          }) as any,
+          replace: true,
+        });
       } catch (err: unknown) {
         console.error("Error fetching customers:", err);
         toast.error("Failed to load customers. Please try again.");
@@ -98,7 +107,7 @@ export function useCustomerListActions({
         setIsLoadingCustomers(false);
       }
     },
-    [showTrashed, initialPagination, setIsLoadingCustomers, setDisplayCustomers, setCurrentPagination],
+    [showTrashed, initialPagination, setIsLoadingCustomers, setDisplayCustomers, setCurrentPagination, navigate],
   );
 
   // Debounced search
@@ -178,10 +187,11 @@ export function useCustomerListActions({
   );
 
   const toggleTrashView = useCallback(() => {
-    void navigateTo(
-      showTrashed ? "/admin/customers" : "/admin/customers?trashed=true",
-    );
-  }, [showTrashed]);
+    void navigate({
+      to: "/admin/customers",
+      search: showTrashed ? {} : { trashed: true },
+    });
+  }, [showTrashed, navigate]);
 
   const performServerAction = useCallback(
     async (

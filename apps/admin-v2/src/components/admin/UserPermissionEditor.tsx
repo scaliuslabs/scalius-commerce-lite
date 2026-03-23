@@ -97,13 +97,15 @@ export function UserPermissionEditor({
     async function fetchData() {
       setIsLoading(true);
       try {
-        const [rolesData, permsData] = await Promise.all([
-          getRbacRoles() as any,
-          getRbacPermissions() as any,
+        const [rolesResult, permsResult] = await Promise.all([
+          getRbacRoles(),
+          getRbacPermissions(),
         ]);
+        const rolesData = rolesResult as unknown as { roles?: Role[] };
+        const permsData = permsResult as unknown as { grouped: Record<string, PermissionMetadata[]> };
 
         setRoles((rolesData.roles || []) as Role[]);
-        setGroupedPermissions(permsData.grouped as Record<string, PermissionMetadata[]>);
+        setGroupedPermissions(permsData.grouped);
       } catch (error: unknown) {
         console.error("Error fetching RBAC data:", error);
         toast.error("Failed to load roles and permissions");

@@ -1,9 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { WidgetsList } from "~/components/admin/widget-list";
 import { Button } from "~/components/ui/button";
 import { LayoutDashboard } from "lucide-react";
-import { getWidgets } from "~/lib/api.functions";
+import { widgetsQueryOptions } from "~/lib/api.queries";
+import type { WidgetListResponse } from "~/types/api-responses";
+import type { WidgetItem } from "~/components/admin/widget-list/types";
 
 const searchSchema = z.object({
   search: z.string().default("").catch(""),
@@ -12,22 +15,23 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/admin/widgets/trash")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ deps }) => {
-    const result = await getWidgets({ data: { search: deps.search || undefined, showTrashed: true } });
-    const r = result as any;
-    return {
-      widgets: r.widgets || [],
-      collections: r.availableCollections || [],
-      stats: { total: 0, active: 0, inactive: 0 },
-    };
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(widgetsQueryOptions({
+      search: deps.search || undefined,
+      showTrashed: true,
+    }));
   },
   head: () => ({ meta: [{ title: "Widget Trash | Scalius Admin" }] }),
   component: WidgetsTrashPage,
 });
 
 function WidgetsTrashPage() {
-  const { widgets, collections, stats } = Route.useLoaderData();
   const { search } = Route.useSearch();
+  const { data } = useSuspenseQuery(widgetsQueryOptions({
+    search: search || undefined,
+    showTrashed: true,
+  }));
+  const r = data as WidgetListResponse;
 
   return (
     <div className="space-y-6">
@@ -47,9 +51,9 @@ function WidgetsTrashPage() {
       </div>
       <WidgetsList
         showTrashed={true}
-        initialWidgets={widgets}
-        initialCollections={collections}
-        initialStats={stats}
+        initialWidgets={(r.widgets || []) as unknown as WidgetItem[]}
+        initialCollections={r.availableCollections || []}
+        initialStats={{ total: 0, active: 0, inactive: 0 }}
         initialSearch={search}
       />
     </div>

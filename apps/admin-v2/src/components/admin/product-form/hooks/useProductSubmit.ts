@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
@@ -30,58 +31,70 @@ export function useProductSubmit({
   onSuccess,
 }: UseProductSubmitOptions): UseProductSubmitReturn {
   const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const queryClient = useQueryClient();
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
 
-  const handleSubmit = async (values: ProductFormValues) => {
-    try {
-      setIsSubmitting(true);
+  const mutation = useMutation({
+    mutationFn: async (values: ProductFormValues) => {
       const formattedValues = formatFormValuesForSubmission(
         values,
         enableVariantImages,
       );
-
-      let result: Record<string, unknown>;
       if (isEdit) {
-        result = await updateProduct({ data: { id: values.id!, ...formattedValues } }) as Record<string, unknown>;
-      } else {
-        result = await createProduct({ data: formattedValues as Record<string, unknown> }) as Record<string, unknown>;
+        return updateProduct({ data: { id: values.id!, ...formattedValues } }) as Promise<Record<string, unknown>>;
       }
-
-      toast.success("Success", { description: isEdit
+      return createProduct({ data: formattedValues as Record<string, unknown> }) as Promise<Record<string, unknown>>;
+    },
+    onSuccess: (result, values) => {
+      toast.success("Success", {
+        description: isEdit
           ? "Product updated successfully."
-          : "Product created successfully." });
+          : "Product created successfully.",
+      });
 
       // Reset form dirty state after successful save
       if (isEdit) {
-        // For edits, reset the form to mark it as clean (not dirty)
         form.reset(form.getValues());
       }
+
+      // Invalidate product queries so lists/details refetch
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
 
       if (onSuccess) {
         onSuccess();
       } else if (!isEdit) {
-        // For new products, redirect to edit page with the new product ID
-        void navigate({ to: `/admin/products/${result.id}/edit` as string });
+        void navigate({
+          to: "/admin/products/$productId/edit",
+          params: { productId: result.id as string },
+        });
       }
-    } catch (error: unknown) {
-      console.error("Error submitting form:", error);
+    },
+    onError: (error: unknown) => {
       const errorMessage = getServerFnError(error, "Failed to save product");
       if (errorMessage.includes("slug already exists")) {
-        form.setError("slug", { type: "manual", message: "This slug is already in use. Please choose a different one." });
-        setAlertMessage("This slug is already in use. Please choose a different one.");
+        form.setError("slug", {
+          type: "manual",
+          message:
+            "This slug is already in use. Please choose a different one.",
+        });
+        setAlertMessage(
+          "This slug is already in use. Please choose a different one.",
+        );
         setShowAlert(true);
       } else {
         toast.error("Error", { description: errorMessage });
       }
-    } finally {
-      setIsSubmitting(false);
-    }
+    },
+  });
+
+  const handleSubmit = async (values: ProductFormValues) => {
+    mutation.mutate(values);
   };
 
   return {
-    isSubmitting,
+    isSubmitting: mutation.isPending,
     showAlert,
     alertMessage,
     setShowAlert,

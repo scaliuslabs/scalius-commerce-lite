@@ -1,35 +1,51 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { OrderForm } from "~/components/admin/OrderForm";
-import { getOrderFormData } from "~/lib/api.functions";
+import { orderFormDataQueryOptions } from "~/lib/api.queries";
+import type { ProductVariant } from "~/types/api-responses";
+
+interface OrderFormProduct {
+  id: string;
+  name: string;
+  price: number;
+  discountPercentage: number | null;
+  variants: ProductVariant[];
+}
+
+interface OrderFormDataResult {
+  productsWithVariants?: OrderFormProduct[];
+  defaultValues?: Record<string, unknown>;
+}
 
 export const Route = createFileRoute("/admin/orders/$orderId/edit")({
-  loader: async ({ params }) => {
-    const result = await getOrderFormData({ data: { id: params.orderId } }).catch(() => null);
-    if (!result) throw redirect({ to: "/admin/orders" });
-    const r = result as any;
-    return {
-      order: { id: params.orderId },
-      productsWithVariants: (r.productsWithVariants || []).map((p: any) => ({
-        ...p,
-        variants: (p.variants || []).map((v: any) => ({ ...v, sku: v.sku || "", price: v.price ?? 0 })),
-      })),
-      defaultValues: r.defaultValues || r,
-    };
+  loader: async ({ context: { queryClient }, params }) => {
+    try {
+      await queryClient.ensureQueryData(orderFormDataQueryOptions(params.orderId));
+    } catch {
+      throw redirect({ to: "/admin/orders" });
+    }
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: `Edit Order #${loaderData?.order?.id || ""} | Scalius Admin` }],
+  head: ({ params }) => ({
+    meta: [{ title: `Edit Order #${params.orderId} | Scalius Admin` }],
   }),
   component: EditOrderPage,
 });
 
 function EditOrderPage() {
-  const { order, productsWithVariants, defaultValues } = Route.useLoaderData();
+  const { orderId } = Route.useParams();
+  const { data } = useSuspenseQuery(orderFormDataQueryOptions(orderId));
+  const r = data as OrderFormDataResult;
+
+  const productsWithVariants = (r.productsWithVariants || []).map((p) => ({
+    ...p,
+    variants: (p.variants || []).map((v) => ({ ...v, sku: v.sku || "", price: v.price ?? 0 })),
+  }));
 
   return (
     <div className="container max-w-7xl py-4 pb-8">
       <OrderForm
         products={productsWithVariants}
-        defaultValues={defaultValues}
+        defaultValues={(r.defaultValues || r) as Record<string, unknown>}
         isEdit={true}
       />
     </div>

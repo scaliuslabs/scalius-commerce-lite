@@ -13,7 +13,7 @@ import { authMiddleware } from "./auth";
 export const rbacMiddleware = createMiddleware()
   .middleware([authMiddleware])
   .server(async ({ next, context }) => {
-    const user = (context as any).user as { id: string; role?: string | null } | null;
+    const user = context?.user;
 
     // No user = no permissions
     if (!user) {
@@ -28,7 +28,10 @@ export const rbacMiddleware = createMiddleware()
 
     // Dynamic import keeps cloudflare:workers out of client bundle
     const { loadUserPermissions } = await import("./rbac.server");
-    const rbac = await loadUserPermissions(user.id, user.role);
+    const rbac = await loadUserPermissions(
+      user.id,
+      user.role,
+    );
 
     return next({
       context: {

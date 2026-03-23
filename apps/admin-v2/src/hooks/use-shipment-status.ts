@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { useNavigate } from "@tanstack/react-router";
+import { useRouter } from "@tanstack/react-router";
 import { refreshShipmentStatus } from "~/lib/api.functions";
 
 /**
@@ -23,7 +23,7 @@ function cleanOrderId(orderId: string): string {
  * Custom hook for refreshing shipment status
  */
 export function useShipmentStatus() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState<Record<string, boolean>>({});
 
   const refreshStatus = async (orderId: string, shipmentId: string) => {
@@ -36,7 +36,7 @@ export function useShipmentStatus() {
     try {
       const updatedShipment = await refreshShipmentStatus({
         data: { orderId: cleanedOrderId, shipmentId },
-      }) as any;
+      }) as Record<string, unknown>;
 
       if (updatedShipment.statusChanged) {
         toast.success(`Status updated to: ${updatedShipment.status}`);
@@ -48,7 +48,7 @@ export function useShipmentStatus() {
           ) ||
           updatedShipment.orderStatusUpdate
         ) {
-          void navigate({ to: window.location.pathname });
+          router.invalidate();
         }
       } else {
         toast.info("Shipment status is up to date");

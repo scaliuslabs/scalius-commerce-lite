@@ -1,4 +1,6 @@
 import { createRouter, Link } from "@tanstack/react-router";
+import { QueryClient } from "@tanstack/react-query";
+import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { routeTree } from "./routeTree.gen";
 
 function DefaultPendingComponent() {
@@ -59,8 +61,18 @@ function DefaultErrorComponent({ error }: { error: Error }) {
 }
 
 export function getRouter() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 1000 * 30, // 30s — data is fresh for 30 seconds
+        gcTime: 1000 * 60 * 5, // 5min — keep in cache after unmount
+      },
+    },
+  });
+
   const router = createRouter({
     routeTree,
+    context: { queryClient },
     scrollRestoration: true,
     defaultPreload: "intent",
     defaultPendingMs: 200,
@@ -69,6 +81,9 @@ export function getRouter() {
     defaultNotFoundComponent: DefaultNotFoundComponent,
     defaultErrorComponent: DefaultErrorComponent,
   });
+
+  // SSR dehydration/hydration for React Query — handles streaming automatically
+  setupRouterSsrQueryIntegration({ router, queryClient });
 
   return router;
 }

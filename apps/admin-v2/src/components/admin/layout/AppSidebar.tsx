@@ -1,0 +1,250 @@
+import { Link, useLocation } from "@tanstack/react-router";
+import { ChevronDown, LogOut, Store, ExternalLink } from "lucide-react";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { getFilteredNavSections, type NavItem } from "./AdminNav";
+import faviconImg from "@/assets/favicon.png";
+import logoDarkImg from "@/assets/logo-dark.png";
+import logoLightImg from "@/assets/logo-light.png";
+
+interface AppSidebarProps {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    image: string | null;
+    role: string;
+    twoFactorEnabled: boolean;
+    isSuperAdmin: boolean;
+  };
+  storefrontUrl?: string;
+}
+
+function isRouteActive(currentPath: string, href: string): boolean {
+  if (href === "/admin") return currentPath === href;
+  return currentPath === href || currentPath.startsWith(href + "/");
+}
+
+export function AppSidebar({ user, storefrontUrl = "/" }: AppSidebarProps) {
+  const { permissions, isSuperAdmin } = usePermissions();
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
+
+  const navSections = getFilteredNavSections(permissions, isSuperAdmin);
+
+  const userInitials = user.name
+    ? user.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "U";
+
+  return (
+    <Sidebar collapsible="icon">
+      {/* Header — logo */}
+      <SidebarHeader className="border-b border-sidebar-border h-14 flex-row items-center justify-center px-3">
+        <Link to="/admin" className="flex items-center gap-2">
+          {isCollapsed ? (
+            <div className="flex items-center justify-center">
+              <img
+                src={faviconImg}
+                alt="Scalius"
+                className="w-7 h-7"
+              />
+            </div>
+          ) : (
+            <>
+              <img
+                src={logoLightImg}
+                alt="Scalius"
+                className="h-8 w-auto block dark:hidden"
+              />
+              <img
+                src={logoDarkImg}
+                alt="Scalius"
+                className="h-8 w-auto hidden dark:block"
+              />
+            </>
+          )}
+        </Link>
+      </SidebarHeader>
+
+      {/* Main navigation */}
+      <SidebarContent>
+        {navSections.map((section) => (
+          <SidebarGroup key={section.label}>
+            <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+              {section.label}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {section.items.map((item) =>
+                  item.subItems?.length ? (
+                    <CollapsibleNavItem
+                      key={item.href}
+                      item={item}
+                      currentPath={currentPath}
+                    />
+                  ) : (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isRouteActive(currentPath, item.href)}
+                        tooltip={item.name}
+                      >
+                        <Link to={item.href}>
+                          <item.icon className="shrink-0" strokeWidth={2} />
+                          <span>{item.name}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ),
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+      </SidebarContent>
+
+      {/* Footer — store link + user */}
+      <SidebarFooter>
+        {/* View Store link */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="View Store">
+              <a
+                href={storefrontUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Store className="shrink-0" strokeWidth={2} />
+                <span className="flex-1">View Store</span>
+                <ExternalLink className="!size-3.5 text-sidebar-foreground/50" />
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        {/* User menu */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    {user.image && <AvatarImage src={user.image} alt={user.name} />}
+                    <AvatarFallback className="rounded-lg text-xs">
+                      {userInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">{user.name}</span>
+                    <span className="truncate text-xs text-sidebar-foreground/60">
+                      {user.email}
+                    </span>
+                  </div>
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                side="top"
+                align="end"
+                sideOffset={4}
+              >
+                <DropdownMenuItem asChild>
+                  <a href="/auth/logout" className="flex items-center gap-2">
+                    <LogOut className="size-4" />
+                    Log out
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
+function CollapsibleNavItem({
+  item,
+  currentPath,
+}: {
+  item: NavItem;
+  currentPath: string;
+}) {
+  const isParentActive =
+    isRouteActive(currentPath, item.href) ||
+    (item.subItems?.some((sub) => currentPath === sub.href) ?? false);
+
+  return (
+    <Collapsible
+      asChild
+      defaultOpen={isParentActive}
+      className="group/collapsible"
+    >
+      <SidebarMenuItem>
+        <CollapsibleTrigger asChild>
+          <SidebarMenuButton tooltip={item.name} isActive={isParentActive}>
+            <item.icon className="shrink-0" strokeWidth={2} />
+            <span>{item.name}</span>
+            <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+          </SidebarMenuButton>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <SidebarMenuSub>
+            {item.subItems?.map((subItem) => (
+              <SidebarMenuSubItem key={subItem.href}>
+                <SidebarMenuSubButton
+                  asChild
+                  isActive={currentPath === subItem.href}
+                >
+                  <Link to={subItem.href}>
+                    {subItem.icon && (
+                      <subItem.icon className="shrink-0" strokeWidth={2} />
+                    )}
+                    <span>{subItem.name}</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            ))}
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </SidebarMenuItem>
+    </Collapsible>
+  );
+}

@@ -7,7 +7,7 @@ import {
 import { Button } from "../../ui/button";
 import { Tag, Trash2, Plus, ShoppingBag, Image as ImageIcon } from "lucide-react";
 import { StatCard } from "../shared/StatCard";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 
 interface CategoryHeaderProps {
   showTrashed: boolean;
@@ -32,6 +32,7 @@ export const CategoryHeader = React.memo(function CategoryHeader({
   displayStats,
   onToggleTrash,
 }: CategoryHeaderProps) {
+  const navigate = useNavigate();
   return (
     <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2 border-b">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
@@ -66,7 +67,7 @@ export const CategoryHeader = React.memo(function CategoryHeader({
             <Button
               size="sm"
               className="h-7 text-sm font-medium"
-              onClick={() => void navigateTo("/admin/categories/new")}
+              onClick={() => void navigate({ to: "/admin/categories/new" })}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
               Add Category

@@ -1,19 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { MetaConversionsManager } from "~/components/admin/meta-conversions";
-import { getMetaConversionsSettings } from "~/lib/api.functions";
+import { metaConversionsSettingsQueryOptions } from "~/lib/api.queries";
+import type { MetaConversionsSettingsResponse } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/settings/meta-conversion")({
-  loader: async () => {
-    const result = await getMetaConversionsSettings().catch(() => ({ settings: null }));
-    const r = result as any;
-    return { settings: r.settings ?? undefined };
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(metaConversionsSettingsQueryOptions());
   },
   head: () => ({ meta: [{ title: "Meta Conversions API | Scalius Admin" }] }),
   component: MetaConversionPage,
 });
 
 function MetaConversionPage() {
-  const { settings } = Route.useLoaderData();
+  const { data } = useSuspenseQuery(metaConversionsSettingsQueryOptions());
+  const r = data as unknown as MetaConversionsSettingsResponse;
 
   return (
     <div className="container py-6 space-y-6">
@@ -26,7 +27,7 @@ function MetaConversionPage() {
           </p>
         </div>
       </div>
-      <MetaConversionsManager initialSettings={settings} />
+      <MetaConversionsManager initialSettings={r.settings ?? undefined} />
     </div>
   );
 }

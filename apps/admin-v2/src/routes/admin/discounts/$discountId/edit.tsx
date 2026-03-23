@@ -1,9 +1,11 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { AmountOffProductsForm } from "~/components/admin/discount/amount-off-products";
 import { AmountOffOrderForm } from "~/components/admin/discount/AmountOffOrderForm";
 import { FreeShippingForm } from "~/components/admin/discount/FreeShippingForm";
-import { getDiscount, getCollectionFormOptions } from "~/lib/api.functions";
+import { discountQueryOptions, collectionFormOptionsQueryOptions } from "~/lib/api.queries";
+import type { Discount, CollectionFormOptionsData } from "~/types/api-responses";
 
 const searchSchema = z.object({
   duplicate: z.boolean().default(false).catch(false),
@@ -11,49 +13,47 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
   validateSearch: searchSchema,
-  loader: async ({ params }) => {
-    const [discountResult, formOptions] = await Promise.all([
-      getDiscount({ data: { id: params.discountId } }).catch(() => null),
-      getCollectionFormOptions().catch(() => ({ categories: [], products: [] })),
+  loader: async ({ context: { queryClient }, params }) => {
+    const [discountResult] = await Promise.all([
+      queryClient.ensureQueryData(discountQueryOptions(params.discountId)).catch(() => null),
+      queryClient.ensureQueryData(collectionFormOptionsQueryOptions()),
     ]);
     if (!discountResult) throw redirect({ to: "/admin/discounts" });
-    const discount = discountResult as any;
-    const fo = formOptions as any;
-    const allProducts = fo.products || [];
-    const allProductIds = [
-      ...(discount.relatedProducts?.buy || []),
-      ...(discount.relatedProducts?.get || []),
-    ];
-    const selectedProducts = allProducts.filter((p: any) => allProductIds.includes(p.id));
-    const allCollectionIds = [
-      ...(discount.relatedCollections?.buy || []),
-      ...(discount.relatedCollections?.get || []),
-    ];
-    const selectedCollections = allCollectionIds.map((colId: string) => ({
-      id: colId, name: colId, description: null, slug: "",
-    }));
-    return {
-      discount,
-      formattedDiscount: {
-        ...discount,
-        startDate: discount.startDate ? new Date(discount.startDate) : new Date(),
-        endDate: discount.endDate ? new Date(discount.endDate) : null,
-      },
-      selectedProducts,
-      selectedCollections,
-    };
   },
-  head: ({ loaderData, match }) => ({
+  head: ({ match }) => ({
     meta: [{
-      title: `${(match.search as any).duplicate ? "Duplicate" : "Edit"} Discount | Scalius Admin`,
+      title: `${match.search.duplicate ? "Duplicate" : "Edit"} Discount | Scalius Admin`,
     }],
   }),
   component: EditDiscountPage,
 });
 
 function EditDiscountPage() {
-  const { discount, formattedDiscount, selectedProducts, selectedCollections } = Route.useLoaderData();
+  const { discountId } = Route.useParams();
   const { duplicate: isDuplicate } = Route.useSearch();
+  const { data: discountResult } = useSuspenseQuery(discountQueryOptions(discountId));
+  const { data: formOptions } = useSuspenseQuery(collectionFormOptionsQueryOptions());
+
+  const discount = discountResult as Discount;
+  const fo = formOptions as CollectionFormOptionsData;
+  const allProducts = fo.products || [];
+  const allProductIds = [
+    ...(discount.relatedProducts?.buy || []),
+    ...(discount.relatedProducts?.get || []),
+  ];
+  const selectedProducts = allProducts.filter((p) => allProductIds.includes(p.id));
+  const allCollectionIds = [
+    ...(discount.relatedCollections?.buy || []),
+    ...(discount.relatedCollections?.get || []),
+  ];
+  const selectedCollections = allCollectionIds.map((colId: string) => ({
+    id: colId, name: colId, description: null, slug: "",
+  }));
+  const formattedDiscount = {
+    ...discount,
+    startDate: discount.startDate ? new Date(discount.startDate) : new Date(),
+    endDate: discount.endDate ? new Date(discount.endDate) : null,
+  };
 
   if (!discount) {
     return <div>Discount not found</div>;
@@ -88,7 +88,7 @@ function EditDiscountPage() {
             defaultValues={{
               id: effectiveId,
               code: effectiveCode,
-              valueType: discount.valueType,
+              valueType: discount.valueType as "percentage" | "fixed_amount",
               discountValue: discount.discountValue,
               minPurchaseAmount: discount.minPurchaseAmount,
               minQuantity: discount.minQuantity,
@@ -102,7 +102,7 @@ function EditDiscountPage() {
               endDate: formattedDiscount.endDate,
               isActive: Boolean(discount.isActive),
             }}
-            initialSelectedProducts={selectedProducts}
+            initialSelectedProducts={selectedProducts as Parameters<typeof AmountOffProductsForm>[0]["initialSelectedProducts"]}
             initialSelectedCollections={selectedCollections}
           />
         )}
@@ -112,7 +112,7 @@ function EditDiscountPage() {
             defaultValues={{
               id: effectiveId,
               code: effectiveCode,
-              valueType: discount.valueType,
+              valueType: discount.valueType as "percentage" | "fixed_amount",
               discountValue: discount.discountValue,
               minPurchaseAmount: discount.minPurchaseAmount,
               maxUsesPerOrder: discount.maxUsesPerOrder,

@@ -6,7 +6,7 @@ import { Loader2, Shield, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { MediaManager, type MediaFile } from "../media-manager";
 import type { User } from "./AccountSettingsContainer";
-import { navigateTo } from "~/lib/client/navigate";
+import { useRouter } from "@tanstack/react-router";
 import { getServerFnError } from "~/lib/api-helpers";
 import { updateProfile } from "~/lib/api.functions";
 
@@ -24,6 +24,7 @@ interface ProfileHeaderProps {
 }
 
 export function ProfileHeader({ user }: ProfileHeaderProps) {
+  const router = useRouter();
   const [name, setName] = useState(user.name);
   const [image, setImage] = useState(user.image || "");
   const [isLoading, setIsLoading] = useState(false);
@@ -52,7 +53,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
       toast.success("Profile updated successfully");
       setIsEditing(false);
       // Refresh to update header with updated user info
-      void navigateTo(window.location.pathname);
+      router.invalidate();
     } catch (err) {
       toast.error(getServerFnError(err, "Failed to update profile"));
     } finally {

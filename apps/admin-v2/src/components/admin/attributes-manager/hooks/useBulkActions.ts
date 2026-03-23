@@ -1,41 +1,46 @@
 // src/components/admin/attributes-manager/hooks/useBulkActions.ts
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { bulkDeleteAttributes, bulkRestoreAttributes } from "~/lib/api.functions";
 import type { BulkAction } from "../types";
 
 export function useBulkActions(onRefresh: () => void) {
+  const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<BulkAction>(null);
-  const [isActionLoading, setIsActionLoading] = useState(false);
+
+  const bulkMutation = useMutation({
+    mutationFn: async ({ action, ids }: { action: NonNullable<BulkAction>; ids: string[] }) => {
+      if (action === "restore") {
+        return bulkRestoreAttributes({ data: { ids } });
+      }
+      return bulkDeleteAttributes({
+        data: { ids, permanent: action === "delete" },
+      });
+    },
+    onSuccess: (_data, { ids }) => {
+      toast.success(`${ids.length} attributes processed successfully.`);
+      setSelectedIds(new Set());
+      onRefresh();
+    },
+    onError: (error, { action }) => {
+      toast.error(getServerFnError(error, `Bulk ${action} failed.`));
+    },
+    onSettled: () => {
+      setBulkAction(null);
+      queryClient.invalidateQueries({ queryKey: ["attributes"] });
+    },
+  });
 
   const handleBulkAction = useCallback(
-    async (action: BulkAction) => {
+    (action: BulkAction) => {
       if (!action || selectedIds.size === 0) return;
-      setIsActionLoading(true);
-
       const ids = Array.from(selectedIds);
-
-      try {
-        if (action === "restore") {
-          await bulkRestoreAttributes({ data: { ids } });
-        } else {
-          await bulkDeleteAttributes({
-            data: { ids, permanent: action === "delete" },
-          });
-        }
-        toast.success(`${selectedIds.size} attributes processed successfully.`);
-        setSelectedIds(new Set());
-        onRefresh();
-      } catch (error: unknown) {
-        toast.error(getServerFnError(error, `Bulk ${action} failed.`));
-      } finally {
-        setIsActionLoading(false);
-        setBulkAction(null);
-      }
+      bulkMutation.mutate({ action, ids });
     },
-    [selectedIds, onRefresh],
+    [selectedIds, bulkMutation],
   );
 
   const toggleSelection = useCallback((id: string) => {
@@ -60,7 +65,7 @@ export function useBulkActions(onRefresh: () => void) {
   return {
     selectedIds,
     bulkAction,
-    isActionLoading,
+    isActionLoading: bulkMutation.isPending,
     setBulkAction,
     handleBulkAction,
     toggleSelection,

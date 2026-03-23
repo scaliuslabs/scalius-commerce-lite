@@ -1,49 +1,40 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { WidgetForm } from "~/components/admin/widgets/WidgetForm";
-import { getWidget, getWidgets } from "~/lib/api.functions";
-
-const WidgetPlacementRule = {
-  BEFORE_COLLECTION: "before_collection",
-  AFTER_COLLECTION: "after_collection",
-  FIXED_TOP_HOMEPAGE: "fixed_top_homepage",
-  FIXED_BOTTOM_HOMEPAGE: "fixed_bottom_homepage",
-  STANDALONE: "standalone",
-} as const;
+import { widgetQueryOptions, widgetsQueryOptions } from "~/lib/api.queries";
+import type { Widget, WidgetListResponse } from "~/types/api-responses";
+import { WidgetPlacementRule } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/widgets/$widgetId")({
-  loader: async ({ params }) => {
+  loader: async ({ context: { queryClient }, params }) => {
     const isCreateMode = params.widgetId === "create";
-    let widget = null;
-    let pageTitle = "Create New Widget";
-    let submitButtonText = "Create Widget";
+    const promises: Promise<unknown>[] = [
+      queryClient.ensureQueryData(widgetsQueryOptions({})),
+    ];
     if (!isCreateMode) {
-      const dbWidget = await getWidget({ data: { id: params.widgetId } }).catch(() => null);
-      if (dbWidget) {
-        const w = dbWidget as any;
-        pageTitle = `Edit Widget: ${w.name}`;
-        submitButtonText = "Save Changes";
-        widget = w;
-      }
+      promises.push(queryClient.ensureQueryData(widgetQueryOptions(params.widgetId)));
     }
-    const listData = await getWidgets({ data: {} }).catch(() => ({ availableCollections: [] }));
-    const availableCollections = (listData as any).availableCollections || [];
-    return {
-      widget,
-      isCreateMode,
-      pageTitle,
-      submitButtonText,
-      availableCollections,
-      placementRules: Object.values(WidgetPlacementRule),
-    };
+    await Promise.all(promises);
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: `${loaderData?.pageTitle || "Widget"} | Scalius Admin` }],
+  head: () => ({
+    meta: [{ title: "Widget | Scalius Admin" }],
   }),
   component: WidgetFormPage,
 });
 
 function WidgetFormPage() {
-  const { widget, isCreateMode, availableCollections, placementRules, submitButtonText } = Route.useLoaderData();
+  const { widgetId } = Route.useParams();
+  const isCreateMode = widgetId === "create";
+  const { data: listData } = useSuspenseQuery(widgetsQueryOptions({}));
+  // useQuery (not useSuspenseQuery) to support enabled: false for create mode
+  const { data: widgetData } = useQuery({
+    ...widgetQueryOptions(widgetId),
+    enabled: !isCreateMode,
+  });
+
+  const widget = isCreateMode ? null : (widgetData as Widget | null);
+  const availableCollections = (listData as WidgetListResponse).availableCollections || [];
+  const submitButtonText = isCreateMode ? "Create Widget" : "Save Changes";
 
   return (
     <div className="container mx-auto py-6">
@@ -51,7 +42,7 @@ function WidgetFormPage() {
         widget={widget}
         isCreateMode={isCreateMode}
         availableCollections={availableCollections}
-        placementRules={placementRules}
+        placementRules={Object.values(WidgetPlacementRule)}
         submitButtonText={submitButtonText}
       />
     </div>

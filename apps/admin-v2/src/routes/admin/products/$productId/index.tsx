@@ -1,25 +1,29 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductView } from "~/components/admin/ProductView";
-import { getProduct } from "~/lib/api.functions";
+import { productQueryOptions } from "~/lib/api.queries";
+import type { ProductDetail } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/products/$productId/")({
-  loader: async ({ params }) => {
-    const product = await getProduct({ data: { id: params.productId } }).catch(() => null) as any;
+  loader: async ({ params, context: { queryClient } }) => {
+    const product = await queryClient.ensureQueryData(productQueryOptions(params.productId)).catch(() => null);
     if (!product) throw redirect({ to: "/admin/products" });
-    return { product: product as any };
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: `${loaderData?.product?.name || "Product"} | Scalius Admin` }],
+  head: () => ({
+    meta: [{ title: "Product | Scalius Admin" }],
   }),
   component: ProductViewPage,
 });
 
 function ProductViewPage() {
-  const { product } = Route.useLoaderData();
+  const { productId } = Route.useParams();
+  const { data: productData } = useSuspenseQuery(productQueryOptions(productId));
+  const product = productData as ProductDetail;
 
   if (!product) {
     return <div>Product not found</div>;
   }
 
-  return <ProductView product={product} />;
+  // ProductView has its own inline product type — cast through unknown for compatibility
+  return <ProductView product={product as unknown as React.ComponentProps<typeof ProductView>["product"]} />;
 }

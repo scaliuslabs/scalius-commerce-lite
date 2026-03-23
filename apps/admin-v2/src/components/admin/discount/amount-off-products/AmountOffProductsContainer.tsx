@@ -14,7 +14,7 @@ import { Switch } from "../../../ui/switch";
 import { Separator } from "../../../ui/separator";
 import { toast } from "sonner";
 import { useCurrency } from "~/hooks/use-currency";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
 import { DiscountDetailsSection } from "./DiscountDetailsSection";
 import { AppliesToSection } from "./AppliesToSection";
 import { MinimumRequirementsSection } from "./MinimumRequirementsSection";
@@ -37,6 +37,7 @@ export function AmountOffProductsContainer({
   initialSelectedCollections = [],
 }: AmountOffProductsContainerProps) {
   const { symbol } = useCurrency();
+  const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<Product[]>(
     initialSelectedProducts,
@@ -138,7 +139,7 @@ export function AmountOffProductsContainer({
       toast.success(`Discount ${discountId ? "updated" : "created"} successfully!`, {
         description: `Code: ${values.code}`,
       });
-      await navigateTo("/admin/discounts");
+      void navigate({ to: "/admin/discounts" });
     } catch (error: unknown) {
       const action = defaultValues?.id ? "updating" : "creating";
       console.error(`Error ${action} discount:`, error);

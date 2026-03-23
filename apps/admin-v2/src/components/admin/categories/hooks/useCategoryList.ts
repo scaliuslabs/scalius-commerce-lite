@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { toast } from "sonner";
-import { navigateTo } from "~/lib/client/navigate";
+import { useNavigate } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  getCategories,
   deleteCategory,
   deleteCategoryPermanent,
   restoreCategory,
@@ -60,23 +60,20 @@ export function useCategoryList({
   showTrashed,
   stats,
 }: UseCategoryListParams) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [categories, setCategories] = useState(initialCategories || []);
   const [pagination, setPagination] = useState(initialPagination);
-  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [localSearch, setLocalSearch] = useState(initialSearchQuery);
-  const [sort, setSort] = useState(initialSort);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(),
   );
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
-  const [isActionLoading, setIsActionLoading] = useState(false);
   const [isConfirmBulkDeleteOpen, setIsConfirmBulkDeleteOpen] = useState(false);
   const [isConfirmBulkRestoreOpen, setIsConfirmBulkRestoreOpen] =
     useState(false);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const searchTimeoutRef = useRef<number | undefined>(undefined);
-  const prevSearchQueryRef = useRef(initialSearchQuery);
 
   useEffect(() => {
     setCategories(initialCategories || []);
@@ -85,101 +82,6 @@ export function useCategoryList({
   useEffect(() => {
     setPagination(initialPagination);
   }, [initialPagination]);
-
-  useEffect(() => {
-    setLocalSearch(searchQuery);
-  }, [searchQuery]);
-
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    setSearchQuery(url.searchParams.get("search") || initialSearchQuery);
-    setSort({
-      field: (url.searchParams.get("sort") || initialSort.field) as SortField,
-      order: (url.searchParams.get("order") || initialSort.order) as SortOrder,
-    });
-  }, [initialSearchQuery, initialSort.field, initialSort.order]);
-
-  const fetchCategories = useCallback(
-    async (params: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      sort?: SortField;
-      order?: SortOrder;
-    }) => {
-      setIsLoadingCategories(true);
-      try {
-        const data = await getCategories({
-          data: {
-            page: params.page,
-            limit: params.limit,
-            search: params.search,
-            sort: params.sort,
-            order: params.order,
-            showTrashed: showTrashed || undefined,
-          },
-        }) as { categories: Record<string, unknown>[]; pagination: Pagination };
-
-        const parsed = (data.categories || []).map(
-          (c: Record<string, unknown>) => ({
-            ...c,
-            createdAt: c.createdAt ? new Date(c.createdAt as string) : null,
-            updatedAt: c.updatedAt ? new Date(c.updatedAt as string) : null,
-            deletedAt: c.deletedAt ? new Date(c.deletedAt as string) : null,
-          }),
-        ) as unknown as Category[];
-        setCategories(parsed);
-        setPagination(data.pagination || initialPagination);
-
-        const urlToUpdate = new URL(window.location.href);
-        if (params.page)
-          urlToUpdate.searchParams.set("page", params.page.toString());
-        if (params.limit)
-          urlToUpdate.searchParams.set("limit", params.limit.toString());
-        if (params.search)
-          urlToUpdate.searchParams.set("search", params.search);
-        else urlToUpdate.searchParams.delete("search");
-        if (params.sort) urlToUpdate.searchParams.set("sort", params.sort);
-        if (params.order) urlToUpdate.searchParams.set("order", params.order);
-        if (showTrashed) urlToUpdate.searchParams.set("trashed", "true");
-        else urlToUpdate.searchParams.delete("trashed");
-        window.history.pushState({}, "", urlToUpdate.toString());
-      } catch (err: unknown) {
-        console.error("Error fetching categories:", err);
-        toast.error("Failed to load categories. Please try again.");
-      } finally {
-        setIsLoadingCategories(false);
-      }
-    },
-    [showTrashed, initialPagination],
-  );
-
-  // Debounced search
-  useEffect(() => {
-    if (searchTimeoutRef.current)
-      window.clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = window.setTimeout(() => {
-      if (localSearch !== searchQuery) setSearchQuery(localSearch);
-    }, 500);
-    return () => {
-      if (searchTimeoutRef.current)
-        window.clearTimeout(searchTimeoutRef.current);
-    };
-  }, [localSearch, searchQuery]);
-
-  // Trigger fetch on search change
-  useEffect(() => {
-    if (searchQuery !== prevSearchQueryRef.current) {
-      prevSearchQueryRef.current = searchQuery;
-      fetchCategories({
-        page: 1,
-        limit: pagination.limit,
-        search: searchQuery.trim() || undefined,
-        sort: sort.field,
-        order: sort.order,
-      });
-    }
-  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard shortcut for search
   useEffect(() => {
@@ -202,6 +104,159 @@ export function useCategoryList({
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, []);
+
+  // Navigate via URL search params (TanStack Router re-runs loader automatically)
+  const navigateWithParams = useCallback(
+    (params: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort?: SortField;
+      order?: SortOrder;
+    }) => {
+      void navigate({
+        to: "/admin/categories",
+        search: ((prev: any) => ({
+          ...prev,
+          page: params.page ?? prev.page,
+          limit: params.limit ?? prev.limit,
+          search: params.search ?? prev.search,
+          sort: params.sort ?? prev.sort,
+          order: params.order ?? prev.order,
+          trashed: showTrashed,
+        })) as any,
+      });
+    },
+    [navigate, showTrashed],
+  );
+
+  // Debounced search — navigates via URL
+  useEffect(() => {
+    if (searchTimeoutRef.current)
+      window.clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = window.setTimeout(() => {
+      void navigate({
+        to: "/admin/categories",
+        search: ((prev: any) => ({
+          ...prev,
+          search: localSearch,
+          page: 1,
+        })) as any,
+      });
+    }, 500);
+    return () => {
+      if (searchTimeoutRef.current)
+        window.clearTimeout(searchTimeoutRef.current);
+    };
+  }, [localSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Mutations ─────────────────────────────────────────────────────
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteCategory({ data: { id } }),
+    onMutate: async (id) => {
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+      setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+      setSelectedCategories((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    },
+    onError: (_err) => {
+      toast.error(getServerFnError(_err, "Failed to move category to trash."));
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onSuccess: () => {
+      toast.success("Category moved to trash.");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: (id: string) => deleteCategoryPermanent({ data: { id } }),
+    onMutate: async (id) => {
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+      setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+      setSelectedCategories((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    },
+    onError: (_err) => {
+      toast.error(getServerFnError(_err, "Failed to permanently delete category."));
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onSuccess: () => {
+      toast.success("Category permanently deleted.");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => restoreCategory({ data: { id } }),
+    onMutate: async (id) => {
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+      setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+      setSelectedCategories((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    },
+    onError: (_err) => {
+      toast.error(getServerFnError(_err, "Failed to restore category."));
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onSuccess: () => {
+      toast.success("Category restored successfully.");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      bulkDeleteCategories({ data: { categoryIds: ids, permanent: showTrashed } }),
+    onMutate: async (ids) => {
+      setCategories((prev) => prev.filter((c) => !ids.includes(c.id)));
+      setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - ids.length) }));
+      setSelectedCategories(new Set());
+    },
+    onError: (_err) => {
+      toast.error(getServerFnError(_err, "Failed to process bulk delete."));
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onSuccess: (_data, ids) => {
+      toast.success(
+        `${ids.length} categories ${showTrashed ? "permanently deleted" : "moved to trash"}.`,
+      );
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+
+  const bulkRestoreMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      bulkRestoreCategories({ data: { categoryIds: ids } }),
+    onMutate: async (ids) => {
+      setCategories((prev) => prev.filter((c) => !ids.includes(c.id)));
+      setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - ids.length) }));
+      setSelectedCategories(new Set());
+    },
+    onError: (_err) => {
+      toast.error(getServerFnError(_err, "Failed to restore categories."));
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onSuccess: (_data, ids) => {
+      toast.success(`Restored ${ids.length} categories successfully`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+
+  const isActionLoading =
+    deleteMutation.isPending ||
+    permanentDeleteMutation.isPending ||
+    restoreMutation.isPending ||
+    bulkDeleteMutation.isPending ||
+    bulkRestoreMutation.isPending;
 
   // Derived state
   const displayStats = useMemo(() => {
@@ -233,144 +288,55 @@ export function useCategoryList({
   const handleSearch = useCallback(
     (e?: React.SyntheticEvent) => {
       e?.preventDefault();
-      setSearchQuery(localSearch);
     },
-    [localSearch],
+    [],
   );
 
   const handleSort = useCallback(
     (field: SortField) => {
-      const newOrder =
-        sort.field === field && sort.order === "asc" ? "desc" : "asc";
-      setSort({ field, order: newOrder });
-      fetchCategories({
-        page: pagination.page,
-        limit: pagination.limit,
-        search: searchQuery.trim() || undefined,
+      navigateWithParams({
         sort: field,
-        order: newOrder,
+        order: initialSort.field === field && initialSort.order === "asc" ? "desc" : "asc",
       });
     },
-    [
-      fetchCategories,
-      pagination.page,
-      pagination.limit,
-      searchQuery,
-      sort.field,
-      sort.order,
-    ],
+    [navigateWithParams, initialSort.field, initialSort.order],
   );
 
   const handlePageChange = useCallback(
     (newPage: number) => {
       if (newPage < 1 || newPage > pagination.totalPages) return;
-      fetchCategories({
-        page: newPage,
-        limit: pagination.limit,
-        search: searchQuery.trim() || undefined,
-        sort: sort.field,
-        order: sort.order,
-      });
+      navigateWithParams({ page: newPage });
     },
-    [
-      fetchCategories,
-      pagination.totalPages,
-      pagination.limit,
-      searchQuery,
-      sort.field,
-      sort.order,
-    ],
+    [navigateWithParams, pagination.totalPages],
   );
 
   const handleLimitChange = useCallback(
     (newLimit: number) => {
-      fetchCategories({
-        page: 1,
-        limit: newLimit,
-        search: searchQuery.trim() || undefined,
-        sort: sort.field,
-        order: sort.order,
-      });
+      navigateWithParams({ page: 1, limit: newLimit });
     },
-    [fetchCategories, searchQuery, sort.field, sort.order],
+    [navigateWithParams],
   );
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = useCallback(() => {
     if (!categoryToDelete) return;
-    setIsActionLoading(true);
     const idToDelete = categoryToDelete;
     setCategoryToDelete(null);
+    deleteMutation.mutate(idToDelete);
+  }, [categoryToDelete, deleteMutation]);
 
-    try {
-      await deleteCategory({ data: { id: idToDelete } });
-      toast.success("Category moved to trash.");
-      setCategories((prev) => prev.filter((p) => p.id !== idToDelete));
-      setPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - 1),
-      }));
-      setSelectedCategories((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(idToDelete);
-        return newSet;
-      });
-    } catch (error: unknown) {
-      console.error("Error deleting category:", error);
-      toast.error(getServerFnError(error, "Failed to move category to trash."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  }, [categoryToDelete]);
-
-  const handlePermanentDelete = useCallback(async () => {
+  const handlePermanentDelete = useCallback(() => {
     if (!categoryToDelete) return;
-    setIsActionLoading(true);
     const idToDelete = categoryToDelete;
     setCategoryToDelete(null);
+    permanentDeleteMutation.mutate(idToDelete);
+  }, [categoryToDelete, permanentDeleteMutation]);
 
-    try {
-      await deleteCategoryPermanent({ data: { id: idToDelete } });
-      toast.success("Category permanently deleted.");
-      setCategories((prev) => prev.filter((p) => p.id !== idToDelete));
-      setPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - 1),
-      }));
-      setSelectedCategories((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(idToDelete);
-        return newSet;
-      });
-    } catch (error: unknown) {
-      console.error("Error permanently deleting category:", error);
-      toast.error(getServerFnError(error, "Failed to permanently delete category."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  }, [categoryToDelete]);
-
-  const handleRestore = useCallback(async (id: string) => {
-    setIsActionLoading(true);
-    try {
-      await restoreCategory({ data: { id } });
-      toast.success("Category restored successfully.");
-      setCategories((prev) => prev.filter((p) => p.id !== id));
-      setPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - 1),
-      }));
-      setSelectedCategories((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
-      });
-    } catch (error: unknown) {
-      console.error("Error restoring category:", error);
-      toast.error(getServerFnError(error, "Failed to restore category."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  }, []);
+  const handleRestore = useCallback(
+    (id: string) => {
+      restoreMutation.mutate(id);
+    },
+    [restoreMutation],
+  );
 
   const handleBulkDelete = useCallback(() => {
     if (selectedCategories.size > 0) {
@@ -378,63 +344,19 @@ export function useCategoryList({
     }
   }, [selectedCategories]);
 
-  const confirmBulkDelete = useCallback(async () => {
+  const confirmBulkDelete = useCallback(() => {
     if (selectedCategories.size === 0) return;
-    setIsActionLoading(true);
     const idsToDelete = Array.from(selectedCategories);
     setIsConfirmBulkDeleteOpen(false);
+    bulkDeleteMutation.mutate(idsToDelete);
+  }, [selectedCategories, bulkDeleteMutation]);
 
-    try {
-      await bulkDeleteCategories({
-        data: { categoryIds: idsToDelete, permanent: showTrashed },
-      });
-
-      toast.success(
-        `${idsToDelete.length} categories ${showTrashed ? "permanently deleted" : "moved to trash"}.`,
-      );
-      setCategories((prev) =>
-        prev.filter((p) => !idsToDelete.includes(p.id)),
-      );
-      setPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - idsToDelete.length),
-      }));
-      setSelectedCategories(new Set());
-    } catch (error: unknown) {
-      console.error("Error bulk deleting categories:", error);
-      toast.error(getServerFnError(error, "Failed to process bulk delete."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  }, [selectedCategories, showTrashed]);
-
-  const confirmBulkRestore = useCallback(async () => {
+  const confirmBulkRestore = useCallback(() => {
     if (selectedCategories.size === 0) return;
-    setIsActionLoading(true);
     const idsToRestore = Array.from(selectedCategories);
     setIsConfirmBulkRestoreOpen(false);
-
-    try {
-      await bulkRestoreCategories({ data: { categoryIds: idsToRestore } });
-
-      toast.success(
-        `Restored ${idsToRestore.length} categories successfully`,
-      );
-      setCategories((prev) =>
-        prev.filter((p) => !idsToRestore.includes(p.id)),
-      );
-      setPagination((prev) => ({
-        ...prev,
-        total: Math.max(0, prev.total - idsToRestore.length),
-      }));
-      setSelectedCategories(new Set());
-    } catch (error: unknown) {
-      console.error("Error restoring categories:", error);
-      toast.error(getServerFnError(error, "Failed to restore categories."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  }, [selectedCategories]);
+    bulkRestoreMutation.mutate(idsToRestore);
+  }, [selectedCategories, bulkRestoreMutation]);
 
   const toggleCategorySelection = useCallback(
     (categoryId: string, checked: boolean) => {
@@ -465,24 +387,20 @@ export function useCategoryList({
 
   const clearFilters = useCallback(() => {
     setLocalSearch("");
-    setSearchQuery("");
-    fetchCategories({
-      page: 1,
-      limit: pagination.limit,
-      sort: sort.field,
-      order: sort.order,
-    });
-  }, [fetchCategories, pagination.limit, sort.field, sort.order]);
+    navigateWithParams({ page: 1, search: "" });
+  }, [navigateWithParams]);
 
   const toggleTrash = useCallback(() => {
-    const url = new URL(window.location.href);
-    if (showTrashed) {
-      url.searchParams.delete("trashed");
-    } else {
-      url.searchParams.set("trashed", "true");
-    }
-    void navigateTo(url.toString());
-  }, [showTrashed]);
+    void navigate({
+      to: "/admin/categories",
+      search: ((prev: any) => {
+        const next = { ...prev };
+        if (showTrashed) delete next.trashed;
+        else next.trashed = true;
+        return next;
+      }) as any,
+    });
+  }, [showTrashed, navigate]);
 
   const formatDate = useCallback((date: Date): string => {
     if (!date) return "N/A";
@@ -495,8 +413,7 @@ export function useCategoryList({
         day: "numeric",
         year: "numeric",
       });
-    } catch (error: unknown) {
-      console.error("Error formatting date:", error);
+    } catch {
       return "Invalid date";
     }
   }, []);
@@ -525,7 +442,7 @@ export function useCategoryList({
     pagination,
     localSearch,
     setLocalSearch,
-    sort,
+    sort: initialSort,
     selectedCategories,
     categoryToDelete,
     setCategoryToDelete,
@@ -534,7 +451,7 @@ export function useCategoryList({
     setIsConfirmBulkDeleteOpen,
     isConfirmBulkRestoreOpen,
     setIsConfirmBulkRestoreOpen,
-    isLoadingCategories,
+    isLoadingCategories: false,
     searchInputRef,
 
     // Derived

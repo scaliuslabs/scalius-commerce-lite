@@ -1,40 +1,54 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { OrderView } from "~/components/admin/OrderView";
-import { getOrder, getOrderShipments, getDeliveryProviders } from "~/lib/api.functions";
+import type { DeliveryProviderRecord } from "~/types/api-responses";
+import type { Order } from "~/components/admin/orderview/types";
+import {
+  orderQueryOptions,
+  orderShipmentsQueryOptions,
+  deliveryProvidersQueryOptions,
+} from "~/lib/api.queries";
 
 export const Route = createFileRoute("/admin/orders/$orderId/")({
-  loader: async ({ params }) => {
-    const [orderResult, shipments, providers] = await Promise.all([
-      getOrder({ data: { id: params.orderId } }).catch(() => null),
-      getOrderShipments({ data: { orderId: params.orderId } }).catch(() => []),
-      getDeliveryProviders().catch(() => []),
-    ]);
-    if (!orderResult) throw redirect({ to: "/admin/orders" });
-    const o = orderResult as any;
-    const activeProviders = Array.isArray(providers) ? (providers as any[]).filter((p: any) => p.isActive) : [];
-    return {
-      order: o,
-      items: o.items || [],
-      totalAmount: o.totalAmount,
-      cityName: o.cityName || "",
-      zoneName: o.zoneName || "",
-      areaName: o.areaName || null,
-      shipments: Array.isArray(shipments) ? shipments : [],
-      deliveryProviders: activeProviders,
-    };
+  loader: async ({ context: { queryClient }, params }) => {
+    try {
+      await Promise.all([
+        queryClient.ensureQueryData(orderQueryOptions(params.orderId)),
+        queryClient.ensureQueryData(orderShipmentsQueryOptions(params.orderId)),
+        queryClient.ensureQueryData(deliveryProvidersQueryOptions()),
+      ]);
+    } catch {
+      throw redirect({ to: "/admin/orders" });
+    }
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: `Order #${loaderData?.order?.id || ""} | Scalius Admin` }],
+  head: ({ params }) => ({
+    meta: [{ title: `Order #${params.orderId} | Scalius Admin` }],
   }),
   component: OrderViewPage,
 });
 
 function OrderViewPage() {
-  const data = Route.useLoaderData();
+  const { orderId } = Route.useParams();
+  const { data: order } = useSuspenseQuery(orderQueryOptions(orderId));
+  const { data: shipments } = useSuspenseQuery(orderShipmentsQueryOptions(orderId));
+  const { data: providers } = useSuspenseQuery(deliveryProvidersQueryOptions());
 
-  if (!data.order) {
+  const fullOrder = useMemo(() => {
+    if (!order) return null;
+    const activeProviders = Array.isArray(providers)
+      ? (providers as DeliveryProviderRecord[]).filter((p) => p.isActive)
+      : [];
+    return {
+      ...(order as Record<string, unknown>),
+      shipments: Array.isArray(shipments) ? shipments : [],
+      deliveryProviders: activeProviders,
+    } as Order;
+  }, [order, shipments, providers]);
+
+  if (!fullOrder) {
     return <div>Order not found</div>;
   }
 
-  return <OrderView order={data.order} />;
+  return <OrderView order={fullOrder} />;
 }

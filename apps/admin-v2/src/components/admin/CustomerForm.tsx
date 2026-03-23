@@ -226,8 +226,8 @@ export function CustomerForm({
                         <FormControl>
                           <PhoneInput
                             international
-                            defaultCountry={effectiveDefaultCountry as any}
-                            countries={effectiveCountries as any}
+                            defaultCountry={effectiveDefaultCountry}
+                            countries={effectiveCountries}
                             value={field.value}
                             onChange={(value) => field.onChange(value || "")}
                             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"

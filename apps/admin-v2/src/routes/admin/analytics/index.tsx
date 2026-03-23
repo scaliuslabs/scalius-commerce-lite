@@ -1,19 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { AnalyticsList } from "~/components/admin/AnalyticsList";
-import { getAnalyticsScripts } from "~/lib/api.functions";
+import { analyticsScriptsQueryOptions } from "~/lib/api.queries";
+import type { AnalyticsScript } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/analytics/")({
-  loader: async () => {
-    const result = await getAnalyticsScripts().catch(() => []);
-    const scripts = (Array.isArray(result) ? result : []) as any[];
-    return { scripts };
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(analyticsScriptsQueryOptions());
   },
   head: () => ({ meta: [{ title: "Analytics Scripts | Scalius Admin" }] }),
   component: AnalyticsPage,
 });
 
 function AnalyticsPage() {
-  const { scripts } = Route.useLoaderData();
+  const { data } = useSuspenseQuery(analyticsScriptsQueryOptions());
+  const scripts = (Array.isArray(data) ? data : []) as AnalyticsScript[];
 
   return (
     <div className="space-y-6">
