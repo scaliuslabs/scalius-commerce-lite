@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { ChevronDown, LogOut, Store, ExternalLink } from "lucide-react";
+import { ChevronDown, Store, ExternalLink } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -21,13 +21,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { getFilteredNavSections, type NavItem } from "./AdminNav";
 import faviconImg from "@/assets/favicon.png";
@@ -35,15 +28,6 @@ import logoDarkImg from "@/assets/logo-dark.png";
 import logoLightImg from "@/assets/logo-light.png";
 
 interface AppSidebarProps {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    image: string | null;
-    role: string;
-    twoFactorEnabled: boolean;
-    isSuperAdmin: boolean;
-  };
   storefrontUrl?: string;
 }
 
@@ -52,7 +36,7 @@ function isRouteActive(currentPath: string, href: string): boolean {
   return currentPath === href || currentPath.startsWith(href + "/");
 }
 
-export function AppSidebar({ user, storefrontUrl = "/" }: AppSidebarProps) {
+export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
   const { permissions, isSuperAdmin } = usePermissions();
   const location = useLocation();
   const currentPath = location.pathname;
@@ -61,26 +45,17 @@ export function AppSidebar({ user, storefrontUrl = "/" }: AppSidebarProps) {
 
   const navSections = getFilteredNavSections(permissions, isSuperAdmin);
 
-  const userInitials = user.name
-    ? user.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
-    : "U";
-
   return (
     <Sidebar collapsible="icon">
       {/* Header — logo */}
-      <SidebarHeader className="border-b border-sidebar-border h-14 flex-row items-center justify-center px-3">
+      <SidebarHeader className="border-b border-sidebar-border flex items-center justify-center px-3 py-3">
         <Link to="/admin" className="flex items-center gap-2">
           {isCollapsed ? (
             <div className="flex items-center justify-center">
               <img
                 src={faviconImg}
                 alt="Scalius"
-                className="w-7 h-7"
+                className="w-8 h-8 object-contain"
               />
             </div>
           ) : (
@@ -88,12 +63,12 @@ export function AppSidebar({ user, storefrontUrl = "/" }: AppSidebarProps) {
               <img
                 src={logoLightImg}
                 alt="Scalius"
-                className="h-8 w-auto block dark:hidden"
+                className="h-7 w-auto max-h-7 object-contain block dark:hidden"
               />
               <img
                 src={logoDarkImg}
                 alt="Scalius"
-                className="h-8 w-auto hidden dark:block"
+                className="h-7 w-auto max-h-7 object-contain hidden dark:block"
               />
             </>
           )}
@@ -102,8 +77,8 @@ export function AppSidebar({ user, storefrontUrl = "/" }: AppSidebarProps) {
 
       {/* Main navigation */}
       <SidebarContent>
-        {navSections.map((section) => (
-          <SidebarGroup key={section.label}>
+        {navSections.map((section, index) => (
+          <SidebarGroup key={section.label} className={index > 0 ? "pt-4" : ""}>
             <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50">
               {section.label}
             </SidebarGroupLabel>
@@ -137,9 +112,8 @@ export function AppSidebar({ user, storefrontUrl = "/" }: AppSidebarProps) {
         ))}
       </SidebarContent>
 
-      {/* Footer — store link + user */}
+      {/* Footer — store link only */}
       <SidebarFooter>
-        {/* View Store link */}
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="View Store">
@@ -153,46 +127,6 @@ export function AppSidebar({ user, storefrontUrl = "/" }: AppSidebarProps) {
                 <ExternalLink className="!size-3.5 text-sidebar-foreground/50" />
               </a>
             </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-
-        {/* User menu */}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <Avatar className="h-8 w-8 rounded-lg">
-                    {user.image && <AvatarImage src={user.image} alt={user.name} />}
-                    <AvatarFallback className="rounded-lg text-xs">
-                      {userInitials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">{user.name}</span>
-                    <span className="truncate text-xs text-sidebar-foreground/60">
-                      {user.email}
-                    </span>
-                  </div>
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-                side="top"
-                align="end"
-                sideOffset={4}
-              >
-                <DropdownMenuItem asChild>
-                  <a href="/auth/logout" className="flex items-center gap-2">
-                    <LogOut className="size-4" />
-                    Log out
-                  </a>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

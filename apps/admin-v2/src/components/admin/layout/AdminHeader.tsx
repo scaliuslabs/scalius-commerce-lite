@@ -26,19 +26,21 @@ export function AdminHeader({ user }: AdminHeaderProps) {
   const breadcrumbItems = generateAdminBreadcrumbs(location.pathname);
 
   return (
-    <header className="h-14 border-b border-border px-4 flex items-center justify-between sticky top-0 z-30 backdrop-blur-sm bg-background/95 transition-colors duration-200">
+    <header className="h-14 border-b border-border px-3 sm:px-4 flex items-center justify-between sticky top-0 z-30 backdrop-blur-sm bg-background/95 transition-colors duration-200">
       <div className="flex items-center gap-2">
-        <SidebarTrigger className="h-8 w-8 text-muted-foreground hover:text-foreground" />
+        <SidebarTrigger className="h-9 w-9 text-muted-foreground hover:text-foreground" />
         <Separator orientation="vertical" className="mr-1 h-4" />
         <Breadcrumb items={breadcrumbItems} />
       </div>
 
       <TooltipProvider>
         <div className="flex items-center">
-          <CacheNukeButton />
-          <div className="h-5 w-px bg-border mx-2.5" />
-          <NotificationDropdown />
-          <div className="h-5 w-px bg-border mx-2.5" />
+          <div className="hidden md:flex items-center">
+            <CacheNukeButton />
+            <div className="h-5 w-px bg-border mx-2.5" />
+            <NotificationDropdown />
+            <div className="h-5 w-px bg-border mx-2.5" />
+          </div>
           <DarkModeToggle />
           <div className="h-5 w-px bg-border mx-2.5" />
           <UserMenu user={user} />
