@@ -54,12 +54,17 @@ interface OrderTableRowProps {
   onShipmentStatusUpdated: (updatedShipment: { id: string; orderId: string; [key: string]: unknown }) => void;
 }
 
-const formatDate = (date: Date) => {
-  try {
-    if (!(date instanceof Date) || isNaN(date.getTime())) {
-      return "Invalid date";
-    }
+function toDate(value: unknown): Date | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value as string | number);
+  return isNaN(d.getTime()) ? null : d;
+}
 
+const formatDate = (value: unknown) => {
+  const date = toDate(value);
+  if (!date) return "\u2014";
+
+  try {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -90,16 +95,14 @@ const formatDate = (date: Date) => {
       minute: "2-digit",
       hour12: true,
     });
-  } catch (error) {
-    console.error("Error formatting date:", error);
-    return "Invalid date";
+  } catch {
+    return "\u2014";
   }
 };
 
-const getFullDateTimeString = (date: Date) => {
-  if (!(date instanceof Date) || isNaN(date.getTime())) {
-    return "Invalid date";
-  }
+const getFullDateTimeString = (value: unknown) => {
+  const date = toDate(value);
+  if (!date) return "\u2014";
 
   return date.toLocaleString("en-US", {
     weekday: "long",

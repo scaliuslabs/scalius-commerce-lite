@@ -55,14 +55,19 @@ interface CustomerTableProps {
   onSetDialog: (state: { action: "delete" | "bulk-delete"; id?: string }) => void;
 }
 
-function formatDate(date: Date | null): string {
-  return date
-    ? new Date(date).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "\u2014";
+function formatDate(value: Date | string | number | null): string {
+  if (!value) return "\u2014";
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return "\u2014";
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "\u2014";
+  }
 }
 
 function formatLocation(customer: Customer): string {

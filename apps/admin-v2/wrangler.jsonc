@@ -6,8 +6,12 @@
     "nodejs_compat"
   ],
   "main": "@tanstack/react-start/server-entry",
+  "workers_dev": false,
   "observability": {
     "enabled": true
+  },
+  "limits": {
+    "cpu_ms": 300000
   },
   "dev": {
     "inspector_port": 9232

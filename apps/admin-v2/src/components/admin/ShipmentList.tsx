@@ -145,7 +145,9 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
 
   // Format date for display
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return "\u2014";
     const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "\u2014";
     return new Intl.DateTimeFormat("en-US", {
       dateStyle: "medium",
       timeStyle: "short",

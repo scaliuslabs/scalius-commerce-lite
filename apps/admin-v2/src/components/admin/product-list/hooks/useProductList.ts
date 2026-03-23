@@ -413,19 +413,18 @@ export function useProductList({
     [products],
   );
 
-  const formatDate = useCallback((date: Date | null): string => {
-    if (!date) return "N/A";
+  const formatDate = useCallback((value: Date | string | number | null): string => {
+    if (!value) return "N/A";
     try {
-      if (!(date instanceof Date) || isNaN(date.getTime())) {
-        return "Invalid date";
-      }
+      const date = value instanceof Date ? value : new Date(value);
+      if (isNaN(date.getTime())) return "N/A";
       return date.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
         year: "numeric",
       });
     } catch {
-      return "Invalid date";
+      return "N/A";
     }
   }, []);
 

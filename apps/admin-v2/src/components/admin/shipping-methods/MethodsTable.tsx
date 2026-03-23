@@ -37,7 +37,7 @@ function formatDate(dateString?: string | number | Date): string {
     const date = new Date(
       typeof dateString === "number" ? dateString * 1000 : dateString,
     );
-    if (isNaN(date.getTime())) return "Invalid Date";
+    if (isNaN(date.getTime())) return "N/A";
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",

@@ -11,8 +11,11 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-export function formatDateTime(date: Date | string): string {
-  return new Date(date).toLocaleString("en-US", {
+export function formatDateTime(date: Date | string | null | undefined): string {
+  if (!date) return "\u2014";
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return "\u2014";
+  return d.toLocaleString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
