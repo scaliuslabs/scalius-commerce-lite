@@ -2,7 +2,7 @@ import { useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
-import { PlusCircle, Trash2, Layers, Undo } from "lucide-react";
+import { PlusCircle, Trash2, Layers } from "lucide-react";
 import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { collectionsQueryOptions } from "~/lib/api.queries";
 import {
@@ -11,7 +11,6 @@ import {
   usePermanentDeleteCollection,
   useRestoreCollection,
   useBulkDeleteCollections,
-  useBulkRestoreCollections,
   useReorderCollections,
 } from "~/lib/api.mutations";
 import {
@@ -67,7 +66,6 @@ function CollectionsPage() {
   const permanentDeleteMutation = usePermanentDeleteCollection();
   const restoreMutation = useRestoreCollection();
   const bulkDeleteMutation = useBulkDeleteCollections();
-  const bulkRestoreMutation = useBulkRestoreCollections();
   const reorderMutation = useReorderCollections();
 
   // Track which IDs are currently being saved (for inline edit spinner)
@@ -214,14 +212,6 @@ function CollectionsPage() {
     );
   }, [selectedIds, showTrashed, bulkDeleteMutation, clearSelection]);
 
-  const handleBulkRestore = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    bulkRestoreMutation.mutate(
-      { ids: selectedIds },
-      { onSuccess: clearSelection },
-    );
-  }, [selectedIds, bulkRestoreMutation, clearSelection]);
-
   // Drag-and-drop reorder: only enabled when sorted by sortOrder asc and not trashed
   const isDragEnabled =
     !showTrashed && search.sort === "sortOrder" && search.order === "asc" && !search.search;
@@ -250,29 +240,21 @@ function CollectionsPage() {
       searchPlaceholder="Search collections..."
       selectedCount={selectedIds.length}
       bulkActions={
-        <>
-          {showTrashed && (
-            <Button variant="outline" size="sm" onClick={handleBulkRestore}>
-              <Undo className="h-4 w-4 mr-1.5" />
-              Restore ({selectedIds.length})
-            </Button>
-          )}
-          <Button
-            variant={showTrashed ? "destructive" : "outline"}
-            size="sm"
-            onClick={handleBulkDelete}
-            className={
-              !showTrashed
-                ? "text-destructive border-destructive hover:bg-destructive/10"
-                : undefined
-            }
-          >
-            <Trash2 className="h-4 w-4 mr-1.5" />
-            {showTrashed
-              ? `Delete (${selectedIds.length})`
-              : `Trash (${selectedIds.length})`}
-          </Button>
-        </>
+        <Button
+          variant={showTrashed ? "destructive" : "outline"}
+          size="sm"
+          onClick={handleBulkDelete}
+          className={
+            !showTrashed
+              ? "text-destructive border-destructive hover:bg-destructive/10"
+              : undefined
+          }
+        >
+          <Trash2 className="h-4 w-4 mr-1.5" />
+          {showTrashed
+            ? `Delete (${selectedIds.length})`
+            : `Trash (${selectedIds.length})`}
+        </Button>
       }
       actions={
         <div className="flex items-center gap-2">
