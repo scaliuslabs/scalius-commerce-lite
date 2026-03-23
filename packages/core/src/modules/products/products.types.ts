@@ -45,6 +45,8 @@ export const bulkVariantSchema = z.object({
     discountType: z.enum(["percentage", "flat"]),
     discountPercentage: z.number().min(0).max(100).nullable(),
     discountAmount: z.number().min(0).nullable(),
+    colorSortOrder: z.number().min(0).optional(),
+    sizeSortOrder: z.number().min(0).optional(),
 });
 
 export const bulkCreateVariantsSchema = z.object({
