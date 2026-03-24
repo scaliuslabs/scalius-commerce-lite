@@ -19,7 +19,7 @@ import type { Widget, WidgetListResponse } from "~/types/api-responses";
 
 const searchSchema = z.object({
   page: z.number().default(1).catch(1),
-  limit: z.number().default(20).catch(20),
+  limit: z.number().default(10).catch(10),
   search: z.string().default("").catch(""),
 });
 
