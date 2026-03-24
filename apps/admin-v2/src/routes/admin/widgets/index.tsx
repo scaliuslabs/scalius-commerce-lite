@@ -27,16 +27,10 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/admin/widgets/")({
   validateSearch: searchSchema,
-  loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => {
-    void queryClient.prefetchQuery(
-      widgetsQueryOptions({
-        search: deps.search || undefined,
-        showTrashed: false,
-      }),
-    );
+  staleTime: 0,
+  loader: ({ context: { queryClient } }) => {
+    void queryClient.prefetchQuery(widgetsQueryOptions({ showTrashed: false }));
   },
-  pendingComponent: () => null,
   head: () => ({ meta: [{ title: "Widgets | Scalius Admin" }] }),
   component: WidgetsPage,
 });
