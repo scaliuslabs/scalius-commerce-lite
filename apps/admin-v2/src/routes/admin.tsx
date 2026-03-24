@@ -37,6 +37,8 @@ function AdminLayout() {
                 <Outlet />
               </div>
             </div>
+            {/* Portal target for form action bars — sits OUTSIDE the scroll area */}
+            <div id="form-action-bar-slot" />
           </SidebarInset>
         </SidebarProvider>
         <Toaster richColors closeButton />

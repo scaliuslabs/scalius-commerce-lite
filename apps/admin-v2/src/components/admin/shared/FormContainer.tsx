@@ -1,7 +1,7 @@
 import type React from "react";
 import type { UseFormReturn, FieldValues } from "react-hook-form";
 import { Form } from "@/components/ui/form";
-import { FormBreadcrumb, FormActionBar } from "@/components/admin/FormStickyHeader";
+import { FormActionBar } from "@/components/admin/FormStickyHeader";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 
@@ -55,12 +55,6 @@ export function FormContainer<T extends FieldValues>({
         <UnsavedChangesGuard
           isDirty={form.formState.isDirty}
           isSubmitting={isSubmitting}
-        />
-        <FormBreadcrumb
-          title={title}
-          entityName={entityName}
-          isEdit={isEdit}
-          cancelUrl={backUrl}
         />
         <form
           onSubmit={(e) => {

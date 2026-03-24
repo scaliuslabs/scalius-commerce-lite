@@ -12,7 +12,7 @@ import {
   FormMessage,
 } from "../../ui/form";
 import { Input } from "../../ui/input";
-import { FormBreadcrumb, FormActionBar } from "~/components/admin/FormStickyHeader";
+import { FormActionBar } from "~/components/admin/FormStickyHeader";
 import { useNavigate } from "@tanstack/react-router";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { useQueryClient } from "@tanstack/react-query";
@@ -142,13 +142,6 @@ export function CollectionForm({
         isDirty={form.formState.isDirty}
         isSubmitting={isSubmitting}
       />
-      <FormBreadcrumb
-        title="Collections"
-        entityName={form.watch("name")}
-        isEdit={isEdit}
-        cancelUrl="/admin/collections"
-      />
-
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">

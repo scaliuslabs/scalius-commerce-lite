@@ -7,7 +7,7 @@ import { Form } from "@/components/ui/form";
 import { toast } from "sonner";
 import { OrderStatus } from "@/types/api-responses";
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { FormBreadcrumb, FormActionBar } from "@/components/admin/FormStickyHeader";
+import { FormActionBar } from "@/components/admin/FormStickyHeader";
 import { useNavigate } from "@tanstack/react-router";
 import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
 import {
@@ -193,12 +193,6 @@ export function OrderForm({
       <UnsavedChangesGuard
         isDirty={form.formState.isDirty}
         isSubmitting={isSubmitting}
-      />
-      <FormBreadcrumb
-        title="Orders"
-        entityName={isEdit ? `Order #${defaultValues?.id || ""}` : undefined}
-        isEdit={isEdit}
-        cancelUrl="/admin/orders"
       />
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6 space-y-4">
