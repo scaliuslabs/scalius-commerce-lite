@@ -308,7 +308,7 @@ export async function verifyOtp(
     // Verify code
     if (stored.code !== code) {
         const remaining = OTP_TTL_SECONDS - Math.floor((Date.now() - (stored.expiresAt - OTP_TTL_SECONDS * 1000)) / 1000);
-        await kv.put(otpKey, JSON.stringify(stored), { expirationTtl: Math.max(remaining, 1) });
+        await kv.put(otpKey, JSON.stringify(stored), { expirationTtl: Math.max(remaining, 60) });
         throw new ValidationError("Incorrect code. Please try again.", {
             attemptsLeft: 5 - stored.attempts,
         });

@@ -52,7 +52,8 @@ export async function rateLimit(options: RateLimitOptions): Promise<RateLimitRes
 
   count++;
 
-  const ttlSeconds = Math.max(1, Math.ceil((resetAt - now) / 1000));
+  // Cloudflare KV requires expirationTtl >= 60 seconds
+  const ttlSeconds = Math.max(60, Math.ceil((resetAt - now) / 1000));
   await kv.put(kvKey, JSON.stringify({ count, resetAt }), { expirationTtl: ttlSeconds });
 
   const allowed = count <= limit;
