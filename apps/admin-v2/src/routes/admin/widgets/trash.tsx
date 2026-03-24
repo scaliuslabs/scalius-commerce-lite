@@ -26,8 +26,8 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/admin/widgets/trash")({
   validateSearch: searchSchema,
   staleTime: 0,
-  loader: ({ context: { queryClient } }) => {
-    void queryClient.prefetchQuery(widgetsQueryOptions({ showTrashed: true }));
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(widgetsQueryOptions({ showTrashed: true }));
   },
   head: () => ({ meta: [{ title: "Widget Trash | Scalius Admin" }] }),
   component: WidgetsTrashPage,

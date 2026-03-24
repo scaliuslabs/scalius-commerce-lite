@@ -14,6 +14,7 @@ import {
 import { Input } from "../../ui/input";
 import { FormStickyHeader } from "~/components/admin/FormStickyHeader";
 import { useNavigate } from "@tanstack/react-router";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { createCollection, updateCollection } from "~/lib/api.functions";
@@ -53,6 +54,7 @@ export function CollectionForm({
   });
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
   const selectedType = form.watch("type");
   const selectedCategoryIds = form.watch("config.categoryIds");
   const selectedProductIds = form.watch("config.productIds");
@@ -136,6 +138,10 @@ export function CollectionForm({
 
   return (
     <>
+      <UnsavedChangesGuard
+        isDirty={form.formState.isDirty}
+        isSubmitting={isSubmitting}
+      />
       <FormStickyHeader
         title="Collections"
         entityName={form.watch("name")}

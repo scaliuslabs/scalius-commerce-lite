@@ -22,10 +22,6 @@ function EditCollectionPage() {
   const { data: collectionData } = useSuspenseQuery(collectionQueryOptions(collectionId));
   const { data: formOptions } = useSuspenseQuery(collectionFormOptionsQueryOptions());
 
-  if (!collectionData) {
-    return <div>Collection not found</div>;
-  }
-
   const c = collectionData as Collection;
   const fo = formOptions as { categories?: Category[]; products?: Product[] };
   const parsedConfig = typeof c.config === "string" ? JSON.parse(c.config) : c.config || {};

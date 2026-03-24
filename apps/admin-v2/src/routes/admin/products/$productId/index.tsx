@@ -20,10 +20,6 @@ function ProductViewPage() {
   const { data: productData } = useSuspenseQuery(productQueryOptions(productId));
   const product = productData as ProductDetail;
 
-  if (!product) {
-    return <div>Product not found</div>;
-  }
-
   // ProductView has its own inline product type — cast through unknown for compatibility
   return <ProductView product={product as unknown as React.ComponentProps<typeof ProductView>["product"]} />;
 }

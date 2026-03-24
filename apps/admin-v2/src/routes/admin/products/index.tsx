@@ -83,8 +83,8 @@ const defaultApiParams = mapParams(searchSchema.parse({}));
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: searchSchema,
   staleTime: 0,
-  loader: ({ context: { queryClient } }) => {
-    void queryClient.prefetchQuery(productsQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(productsQueryOptions(defaultApiParams));
     void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
     void queryClient.prefetchQuery(productStatsQueryOptions());
   },

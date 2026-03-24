@@ -9,6 +9,7 @@ import { OrderStatus } from "@/types/api-responses";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { useNavigate } from "@tanstack/react-router";
+import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
 import {
   updateOrderItems,
   updateShippingCharge,
@@ -189,6 +190,10 @@ export function OrderForm({
 
   return (
     <>
+      <UnsavedChangesGuard
+        isDirty={form.formState.isDirty}
+        isSubmitting={isSubmitting}
+      />
       <FormStickyHeader
         title="Orders"
         entityName={isEdit ? `Order #${defaultValues?.id || ""}` : undefined}

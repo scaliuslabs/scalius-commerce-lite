@@ -3,6 +3,7 @@ import type { UseFormReturn, FieldValues } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
+import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 
 interface FormContainerProps<T extends FieldValues> {
   /** The section name shown as breadcrumb link (e.g., "Categories") */
@@ -52,6 +53,10 @@ export function FormContainer<T extends FieldValues>({
   return (
     <ErrorBoundary>
       <Form {...form}>
+        <UnsavedChangesGuard
+          isDirty={form.formState.isDirty}
+          isSubmitting={isSubmitting}
+        />
         <FormStickyHeader
           title={title}
           entityName={entityName}

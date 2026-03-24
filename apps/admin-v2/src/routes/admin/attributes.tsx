@@ -50,8 +50,8 @@ const defaultApiParams = mapParams(searchSchema.parse({}));
 export const Route = createFileRoute("/admin/attributes")({
   validateSearch: searchSchema,
   staleTime: 0,
-  loader: ({ context: { queryClient } }) => {
-    void queryClient.prefetchQuery(attributesQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(attributesQueryOptions(defaultApiParams));
   },
   head: ({ match }) => ({
     meta: [

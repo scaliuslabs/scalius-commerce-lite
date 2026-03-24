@@ -47,8 +47,8 @@ const defaultApiParams = mapParams(searchSchema.parse({}));
 export const Route = createFileRoute("/admin/discounts/")({
   validateSearch: searchSchema,
   staleTime: 0,
-  loader: ({ context: { queryClient } }) => {
-    void queryClient.prefetchQuery(discountsQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(discountsQueryOptions(defaultApiParams));
   },
   head: ({ match }) => ({
     meta: [
