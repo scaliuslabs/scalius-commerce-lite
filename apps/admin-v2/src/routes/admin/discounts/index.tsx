@@ -48,6 +48,7 @@ export const Route = createFileRoute("/admin/discounts/")({
   loader: ({ context: { queryClient }, deps }) => {
     void queryClient.prefetchQuery(discountsQueryOptions(mapParams(deps)));
   },
+  pendingComponent: () => null,
   head: ({ match }) => ({
     meta: [
       {

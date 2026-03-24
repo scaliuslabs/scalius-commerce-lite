@@ -45,6 +45,7 @@ export const Route = createFileRoute("/admin/collections/")({
   loader: ({ context: { queryClient }, deps }) => {
     void queryClient.prefetchQuery(collectionsQueryOptions(mapParams(deps)));
   },
+  pendingComponent: () => null,
   head: ({ match }) => ({
     meta: [
       {

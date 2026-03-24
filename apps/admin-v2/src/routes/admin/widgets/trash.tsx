@@ -34,6 +34,7 @@ export const Route = createFileRoute("/admin/widgets/trash")({
       }),
     );
   },
+  pendingComponent: () => null,
   head: () => ({ meta: [{ title: "Widget Trash | Scalius Admin" }] }),
   component: WidgetsTrashPage,
 });
