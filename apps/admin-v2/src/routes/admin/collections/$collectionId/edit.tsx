@@ -8,7 +8,7 @@ import type { Category, Product } from "~/components/admin/collection-form/types
 export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
     const [collection] = await Promise.all([
-      queryClient.ensureQueryData(collectionQueryOptions(params.collectionId)).catch(() => null),
+      queryClient.ensureQueryData({ ...collectionQueryOptions(params.collectionId), staleTime: Infinity }).catch(() => null),
       queryClient.ensureQueryData(collectionFormOptionsQueryOptions()),
     ]);
     if (!collection) throw redirect({ to: "/admin/collections" });

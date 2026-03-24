@@ -14,8 +14,8 @@ export const Route = createFileRoute("/admin/orders/$orderId/")({
   loader: async ({ context: { queryClient }, params }) => {
     try {
       await Promise.all([
-        queryClient.ensureQueryData(orderQueryOptions(params.orderId)),
-        queryClient.ensureQueryData(orderShipmentsQueryOptions(params.orderId)),
+        queryClient.ensureQueryData({ ...orderQueryOptions(params.orderId), staleTime: Infinity }),
+        queryClient.ensureQueryData({ ...orderShipmentsQueryOptions(params.orderId), staleTime: Infinity }),
         queryClient.ensureQueryData(deliveryProvidersQueryOptions()),
       ]);
     } catch {
@@ -30,8 +30,15 @@ export const Route = createFileRoute("/admin/orders/$orderId/")({
 
 function OrderViewPage() {
   const { orderId } = Route.useParams();
-  const { data: order } = useSuspenseQuery(orderQueryOptions(orderId));
-  const { data: shipments } = useSuspenseQuery(orderShipmentsQueryOptions(orderId));
+  // Poll for webhook-driven updates (shipment status, payment confirmation)
+  const { data: order } = useSuspenseQuery({
+    ...orderQueryOptions(orderId),
+    refetchInterval: 30_000,
+  });
+  const { data: shipments } = useSuspenseQuery({
+    ...orderShipmentsQueryOptions(orderId),
+    refetchInterval: 30_000,
+  });
   const { data: providers } = useSuspenseQuery(deliveryProvidersQueryOptions());
 
   const fullOrder = useMemo(() => {

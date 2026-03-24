@@ -6,7 +6,7 @@ import type { Page } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/pages/$pageId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
-    const data = await queryClient.ensureQueryData(pageQueryOptions(params.pageId)).catch(() => null);
+    const data = await queryClient.ensureQueryData({ ...pageQueryOptions(params.pageId), staleTime: Infinity }).catch(() => null);
     if (!data) throw redirect({ to: "/admin/pages" });
   },
   head: () => ({

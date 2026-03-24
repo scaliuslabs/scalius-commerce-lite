@@ -15,7 +15,7 @@ export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
   validateSearch: searchSchema,
   loader: async ({ context: { queryClient }, params }) => {
     const [discountResult] = await Promise.all([
-      queryClient.ensureQueryData(discountQueryOptions(params.discountId)).catch(() => null),
+      queryClient.ensureQueryData({ ...discountQueryOptions(params.discountId), staleTime: Infinity }).catch(() => null),
       queryClient.ensureQueryData(collectionFormOptionsQueryOptions()),
     ]);
     if (!discountResult) throw redirect({ to: "/admin/discounts" });

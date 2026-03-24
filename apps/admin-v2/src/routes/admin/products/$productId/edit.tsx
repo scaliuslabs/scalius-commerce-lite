@@ -10,7 +10,7 @@ import type { ProductVariant as LocalProductVariant } from "~/components/admin/p
 export const Route = createFileRoute("/admin/products/$productId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
     const [productResult] = await Promise.all([
-      queryClient.ensureQueryData(productQueryOptions(params.productId)).catch(() => null),
+      queryClient.ensureQueryData({ ...productQueryOptions(params.productId), staleTime: Infinity }).catch(() => null),
       queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
     ]);
     if (!productResult) throw redirect({ to: "/admin/products" });

@@ -12,7 +12,7 @@ export const Route = createFileRoute("/admin/widgets/$widgetId")({
       queryClient.ensureQueryData(widgetsQueryOptions({})),
     ];
     if (!isCreateMode) {
-      promises.push(queryClient.ensureQueryData(widgetQueryOptions(params.widgetId)));
+      promises.push(queryClient.ensureQueryData({ ...widgetQueryOptions(params.widgetId), staleTime: Infinity }));
     }
     await Promise.all(promises);
     return { isCreateMode };

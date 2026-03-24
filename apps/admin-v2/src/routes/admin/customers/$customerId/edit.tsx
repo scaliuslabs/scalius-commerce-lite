@@ -6,7 +6,7 @@ import type { Customer } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/customers/$customerId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
-    const data = await queryClient.ensureQueryData(customerQueryOptions(params.customerId)).catch(() => null);
+    const data = await queryClient.ensureQueryData({ ...customerQueryOptions(params.customerId), staleTime: Infinity }).catch(() => null);
     if (!data) throw redirect({ to: "/admin/customers" });
   },
   head: () => ({
