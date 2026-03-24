@@ -537,19 +537,17 @@ function OrdersPage() {
   return (
     <>
       <Card className="overflow-hidden border border-border bg-card shadow-sm backdrop-blur-xl">
-        <CardHeader className="space-y-1.5 pb-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-2">
-            <div className="flex items-center gap-3">
-              <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
-                {showTrashed ? "Trash" : "Orders"}
-              </CardTitle>
-              {!showTrashed && (
-                <div className="flex items-center justify-center rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary ring-1 ring-inset ring-primary/20">
-                  {pagination.total}{" "}
-                  {pagination.total === 1 ? "order" : "orders"}
-                </div>
-              )}
-            </div>
+        <CardHeader className="space-y-1 pb-3">
+          <div className="flex items-center gap-3">
+            <CardTitle className="text-xl font-bold tracking-tight text-foreground">
+              {showTrashed ? "Trash" : "Orders"}
+            </CardTitle>
+            {!showTrashed && (
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">
+                {pagination.total}{" "}
+                {pagination.total === 1 ? "order" : "orders"}
+              </span>
+            )}
           </div>
         </CardHeader>
 

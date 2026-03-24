@@ -32,34 +32,22 @@ interface DateRangePickerProps {
 const PRESETS = [
   {
     label: "Today",
-    getValue: () => ({
-      from: startOfToday(),
-      to: endOfToday(),
-    }),
+    getValue: () => ({ from: startOfToday(), to: endOfToday() }),
   },
   {
     label: "Yesterday",
     getValue: () => {
-      const yesterday = subDays(new Date(), 1);
-      return {
-        from: yesterday,
-        to: yesterday,
-      };
+      const d = subDays(new Date(), 1);
+      return { from: d, to: d };
     },
   },
   {
     label: "Last 7 days",
-    getValue: () => ({
-      from: subDays(new Date(), 7),
-      to: new Date(),
-    }),
+    getValue: () => ({ from: subDays(new Date(), 7), to: new Date() }),
   },
   {
     label: "Last 30 days",
-    getValue: () => ({
-      from: subDays(new Date(), 30),
-      to: new Date(),
-    }),
+    getValue: () => ({ from: subDays(new Date(), 30), to: new Date() }),
   },
   {
     label: "This Month",
@@ -71,11 +59,8 @@ const PRESETS = [
   {
     label: "Last Month",
     getValue: () => {
-      const lastMonth = subMonths(new Date(), 1);
-      return {
-        from: startOfMonth(lastMonth),
-        to: endOfMonth(lastMonth),
-      };
+      const m = subMonths(new Date(), 1);
+      return { from: startOfMonth(m), to: endOfMonth(m) };
     },
   },
   {
@@ -123,10 +108,10 @@ export function DateRangePickerWithPresets({
       <PopoverTrigger asChild>
         <Button
           id="date"
-          variant={"outline"}
+          variant="outline"
           size="sm"
           className={cn(
-            "justify-start text-left font-normal text-xs h-9 w-[260px]",
+            "justify-start text-left font-normal text-xs h-9 w-[240px]",
             !date && "text-muted-foreground",
             className,
           )}
@@ -135,97 +120,71 @@ export function DateRangePickerWithPresets({
           {date?.from ? (
             date.to ? (
               <>
-                {format(date.from, "LLL dd, y")} -{" "}
-                {format(date.to, "LLL dd, y")}
+                {format(date.from, "MMM d, yyyy")} –{" "}
+                {format(date.to, "MMM d, yyyy")}
               </>
             ) : (
-              format(date.from, "LLL dd, y")
+              format(date.from, "MMM d, yyyy")
             )
           ) : (
             <span>Pick a date range</span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 border-0 shadow-xl" align={align}>
-        {/* Solid Card Wrapper */}
-        <div className="flex flex-col sm:flex-row bg-popover border rounded-md overflow-hidden">
-          {/* Presets Sidebar - Compact and integrated */}
-          <div className="flex flex-col gap-0.5 p-2 border-b sm:border-b-0 sm:border-r border-border/50 min-w-[130px] bg-muted/10">
-            <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-1.5 px-2 py-0.5">
-              Presets
-            </div>
+      <PopoverContent className="w-auto p-0" align={align} sideOffset={4}>
+        <div className="flex bg-popover rounded-lg border shadow-lg overflow-hidden">
+          {/* Presets */}
+          <div className="flex flex-col gap-0.5 p-2 border-r min-w-[120px]">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/60 px-2 pb-1">
+              Quick select
+            </span>
             {PRESETS.map((preset) => (
-              <Button
+              <button
                 key={preset.label}
-                variant="ghost"
-                size="sm"
+                type="button"
                 onClick={() => handlePresetSelect(preset)}
-                className="justify-start text-[11px] font-medium h-7 px-2 hover:bg-muted/60 hover:text-foreground"
+                className="text-left text-xs px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
               >
                 {preset.label}
-              </Button>
+              </button>
             ))}
           </div>
 
-          {/* Calendar Area - Compact mode */}
-          <div className="p-0">
-            <div className="p-2">
-              <Calendar
-                autoFocus
-                mode="range"
-                defaultMonth={tempDate?.from}
-                selected={tempDate}
-                onSelect={setTempDate}
-                numberOfMonths={2}
-                className="p-1"
-                classNames={{
-                  months: "flex flex-col sm:flex-row gap-3",
-                  month: "flex flex-col gap-3",
-                  caption:
-                    "flex justify-center pt-1 relative items-center w-full pb-1",
-                  caption_label: "text-xs font-semibold",
-                  nav_button:
-                    "size-6 bg-transparent p-0 opacity-50 hover:opacity-100",
-                  head_cell:
-                    "text-muted-foreground rounded-md w-7 font-normal text-[0.7rem]",
-                  cell: "h-7 w-7 text-center text-[0.75rem] p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                  day: "size-7 p-0 font-normal aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground rounded-md focus:bg-accent focus:text-accent-foreground",
-                  day_selected:
-                    "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-                  day_today: "bg-accent/50 text-accent-foreground",
-                  day_outside:
-                    "text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
-                  day_disabled: "text-muted-foreground opacity-50",
-                  day_range_middle:
-                    "aria-selected:bg-accent aria-selected:text-accent-foreground",
-                  day_hidden: "invisible",
-                }}
-              />
-            </div>
+          {/* Calendar + Footer */}
+          <div className="flex flex-col">
+            <Calendar
+              autoFocus
+              mode="range"
+              defaultMonth={tempDate?.from}
+              selected={tempDate}
+              onSelect={setTempDate}
+              numberOfMonths={2}
+              className="p-2"
+            />
 
-            {/* Actions Footer */}
-            <div className="flex items-center justify-between p-2 border-t border-border/50 bg-muted/5">
+            {/* Footer */}
+            <div className="flex items-center justify-between px-3 py-2 border-t">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleReset}
-                className="text-[11px] h-7 px-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+                className="text-xs h-7 px-2 text-muted-foreground hover:text-destructive"
               >
                 Reset
               </Button>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setOpen(false)}
-                  className="text-[11px] h-7 px-3 hover:bg-muted"
+                  className="text-xs h-7 px-3"
                 >
                   Cancel
                 </Button>
                 <Button
                   size="sm"
                   onClick={handleApply}
-                  className="text-[11px] h-7 px-3 shadow-sm bg-primary hover:bg-primary/90 transition-all active:scale-95"
+                  className="text-xs h-7 px-3"
                 >
                   Apply
                 </Button>
