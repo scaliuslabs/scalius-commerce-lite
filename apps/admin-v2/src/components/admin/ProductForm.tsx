@@ -144,7 +144,7 @@ export function ProductForm({
         isSubmitting={isSubmitting}
       />
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="pb-6">
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="-mt-4 pb-6">
           {/* Two-Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
             {/* Left Column - Main Content (2/3 width on large screens) */}
