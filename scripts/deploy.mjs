@@ -118,13 +118,12 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
       apiDir
     );
 
-    // 4. Deploy all four workers
+    // 4. Deploy all three workers (admin-v2 replaces the old Astro admin)
     runWithRetry("pnpm exec wrangler deploy", "Deploy API Worker", apiDir);
-    runWithRetry("pnpm exec wrangler deploy", "Deploy Admin Worker", resolve(root, "apps", "admin"));
     runWithRetry("pnpm exec wrangler deploy", "Deploy Admin V2 Worker", resolve(root, "apps", "admin-v2"));
     runWithRetry("pnpm exec wrangler deploy", "Deploy Storefront Worker", resolve(root, "apps", "storefront"));
 
-    console.log("\n✓ Deploy complete (API + Admin + Admin V2 + Storefront).");
+    console.log("\n✓ Deploy complete (API + Admin V2 + Storefront).");
   } catch {
     console.error("\n✗ Deploy failed after retries. See errors above.");
     process.exit(1);
