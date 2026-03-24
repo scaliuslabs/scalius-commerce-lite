@@ -54,8 +54,8 @@ const listAbandonedCheckoutsRoute = createRoute({
 app.openapi(listAbandonedCheckoutsRoute, async (c) => {
     const db = c.get("db");
 
+    // --- Perform Cleanup (best-effort, don't fail the request) ---
     try {
-        // --- Perform Cleanup ---
         const thirtyDaysAgoTimestamp = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
         await db.delete(abandonedCheckouts).where(sql`${abandonedCheckouts.createdAt} <= ${thirtyDaysAgoTimestamp}`);
 
@@ -93,13 +93,17 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
         if (emptyCheckoutIds.length > 0) {
             await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, emptyCheckoutIds));
         }
+    } catch (cleanupErr) {
+        console.error("Abandoned checkout cleanup failed (non-fatal):", cleanupErr);
+    }
 
-        // --- Fetch Data for UI ---
+    // --- Fetch Data for UI ---
+    try {
         const query = c.req.valid("query");
         const page = query.page;
         const limit = query.limit;
         const search = query.search || "";
-        const sort = (query.sort || "updatedAt") as string;
+        const sortField = (query.sort || "updatedAt") as string;
         const orderStr = query.order || "desc";
         const offset = (page - 1) * limit;
 
@@ -111,10 +115,13 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
 
         const combinedWhere = whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
+        // Safe column access — fall back to updatedAt if sort field doesn't exist
+        const sortColumn = (sortField in abandonedCheckouts)
+            ? abandonedCheckouts[sortField as keyof typeof abandonedCheckouts._.columns]
+            : abandonedCheckouts.updatedAt;
+
         const results = await db.select().from(abandonedCheckouts).where(combinedWhere).orderBy(
-            orderStr === 'asc'
-                ? asc(abandonedCheckouts[sort as keyof typeof abandonedCheckouts._.columns])
-                : desc(abandonedCheckouts[sort as keyof typeof abandonedCheckouts._.columns])
+            orderStr === 'asc' ? asc(sortColumn) : desc(sortColumn)
         ).limit(limit).offset(offset);
 
         const totalResult = await db.select({ total: count() }).from(abandonedCheckouts).where(combinedWhere);
