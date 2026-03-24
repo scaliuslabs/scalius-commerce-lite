@@ -474,7 +474,7 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
     (data: { orderId: string; status: string; note?: string }) => data,
   )
   .handler(async ({ data }) => {
-    return apiPost(`/orders/${data.orderId}/status`, {
+    return apiPut(`/orders/${data.orderId}/status`, {
       status: data.status,
       note: data.note,
     });
