@@ -1,7 +1,8 @@
 import { useRef, useCallback } from "react";
-// useCallback kept for handleCollapsibleOpen
 import { Link, useLocation } from "@tanstack/react-router";
-import { ChevronDown, Store, ExternalLink } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, Globe, ExternalLink } from "lucide-react";
+import { storefrontUrlQueryOptions } from "~/lib/api.queries";
 import {
   Sidebar,
   SidebarContent,
@@ -28,10 +29,6 @@ import { getFilteredNavSections, type NavItem, type NavSubItem } from "./AdminNa
 import faviconImg from "@/assets/favicon.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import logoLightImg from "@/assets/logo-light.png";
-
-interface AppSidebarProps {
-  storefrontUrl?: string;
-}
 
 function isRouteActive(currentPath: string, href: string): boolean {
   if (href === "/admin") return currentPath === href;
@@ -63,8 +60,9 @@ function getActiveSubItemHref(
   return bestMatch;
 }
 
-export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
+export function AppSidebar() {
   const { permissions, isSuperAdmin } = usePermissions();
+  const { data: storefrontData } = useQuery(storefrontUrlQueryOptions());
   const location = useLocation();
   const currentPath = location.pathname;
   const { state } = useSidebar();
@@ -155,18 +153,18 @@ export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
         ))}
       </SidebarContent>
 
-      {/* Footer — store link only */}
+      {/* Footer — storefront link */}
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="View Store">
+            <SidebarMenuButton asChild tooltip="Visit Storefront">
               <a
-                href={storefrontUrl}
+                href={(storefrontData as Record<string, string> | undefined)?.storefrontUrl || "/"}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <Store className="shrink-0" strokeWidth={1.8} />
-                <span className="flex-1">View Store</span>
+                <Globe className="shrink-0" strokeWidth={1.8} />
+                <span className="flex-1 truncate">Visit Storefront</span>
                 <ExternalLink className="!size-3.5 text-sidebar-foreground/50" />
               </a>
             </SidebarMenuButton>
