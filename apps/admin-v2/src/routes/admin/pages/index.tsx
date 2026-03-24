@@ -49,11 +49,7 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 
 export const Route = createFileRoute("/admin/pages/")({
   validateSearch: searchSchema,
-  loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => {
-    void queryClient.prefetchQuery(pagesQueryOptions(mapParams(deps)));
-  },
-  pendingComponent: () => null,
+  staleTime: 0,
   head: ({ match }) => ({
     meta: [
       {

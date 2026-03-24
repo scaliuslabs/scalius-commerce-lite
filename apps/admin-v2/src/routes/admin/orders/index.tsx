@@ -68,11 +68,7 @@ interface ShipmentStatus {
 
 export const Route = createFileRoute("/admin/orders/")({
   validateSearch: searchSchema,
-  loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => {
-    void queryClient.prefetchQuery(ordersQueryOptions(mapParams(deps)));
-  },
-  pendingComponent: () => null,
+  staleTime: 0,
   head: ({ match }) => ({
     meta: [
       {

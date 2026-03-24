@@ -77,16 +77,15 @@ function mapParams(deps: SearchParams) {
 
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: searchSchema,
-  loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => {
-    // Fire-and-forget prefetch for the exact search params (benefits deep links
-    // and back/forward). pendingComponent: () => null suppresses the route-level
-    // spinner — the component's useQuery + keepPreviousData handles loading UI.
-    void queryClient.prefetchQuery(productsQueryOptions(mapParams(deps)));
+  // No loaderDeps — search/filter/sort/pagination changes must NOT trigger
+  // route transitions (which show the full-page pending spinner). All search-
+  // driven fetching is handled by the component's useQuery + keepPreviousData.
+  // staleTime: 0 ensures data refetches when navigating back from edit pages.
+  staleTime: 0,
+  loader: ({ context: { queryClient } }) => {
     void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
     void queryClient.prefetchQuery(productStatsQueryOptions());
   },
-  pendingComponent: () => null,
   head: ({ match }) => ({
     meta: [
       {
