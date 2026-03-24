@@ -6,7 +6,7 @@ import type { Category } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
-    const category = await queryClient.ensureQueryData(categoryQueryOptions(params.categoryId)).catch(() => null);
+    const category = await queryClient.ensureQueryData({ ...categoryQueryOptions(params.categoryId), staleTime: Infinity }).catch(() => null);
     if (!category) throw redirect({ to: "/admin/categories" });
   },
   head: () => ({

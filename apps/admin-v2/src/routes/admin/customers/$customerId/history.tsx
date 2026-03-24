@@ -5,7 +5,7 @@ import { customerHistoryQueryOptions } from "~/lib/api.queries";
 
 export const Route = createFileRoute("/admin/customers/$customerId/history")({
   loader: async ({ context: { queryClient }, params }) => {
-    const data = await queryClient.ensureQueryData(customerHistoryQueryOptions(params.customerId)).catch(() => null);
+    const data = await queryClient.ensureQueryData({ ...customerHistoryQueryOptions(params.customerId), staleTime: Infinity }).catch(() => null);
     if (!data) throw redirect({ to: "/admin/customers" });
   },
   head: () => ({

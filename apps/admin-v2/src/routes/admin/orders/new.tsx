@@ -63,7 +63,7 @@ export const Route = createFileRoute("/admin/orders/new")({
           batch.map(async (p) => {
             try {
               const detail = await queryClient.ensureQueryData(
-                productQueryOptions(p.id),
+                { ...productQueryOptions(p.id), staleTime: Infinity },
               );
               const d = detail as ProductDetailResult;
               return {

@@ -6,7 +6,7 @@ import type { ProductDetail } from "~/types/api-responses";
 
 export const Route = createFileRoute("/admin/products/$productId/")({
   loader: async ({ params, context: { queryClient } }) => {
-    const product = await queryClient.ensureQueryData(productQueryOptions(params.productId)).catch(() => null);
+    const product = await queryClient.ensureQueryData({ ...productQueryOptions(params.productId), staleTime: Infinity }).catch(() => null);
     if (!product) throw redirect({ to: "/admin/products" });
   },
   head: () => ({

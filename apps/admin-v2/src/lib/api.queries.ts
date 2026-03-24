@@ -137,6 +137,13 @@ const STALE = {
   STATIC: 1000 * 60 * 60,     // 1hr — setup status
 } as const;
 
+// Detail queries use staleTime: 0 (always stale) combined with
+// staleTime: Infinity in route loaders. This implements stale-while-revalidate:
+// - Loader serves cached data instantly (never blocks if cache exists)
+// - Component triggers background refetch immediately after render
+// - UI updates seamlessly when fresh data arrives
+// Result: blazing-fast navigation + always-fresh data.
+
 // ═══════════════════════════════════════════════════════════════════
 //  DASHBOARD
 // ═══════════════════════════════════════════════════════════════════
@@ -171,7 +178,7 @@ export const productQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.products.detail(id),
     queryFn: () => getProduct({ data: { id } }),
-    staleTime: STALE.SLOW,
+    staleTime: 0,
   });
 
 export const productStatsQueryOptions = () =>
@@ -217,7 +224,7 @@ export const categoryQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.categories.detail(id),
     queryFn: () => getCategory({ data: { id } }),
-    staleTime: STALE.SLOW,
+    staleTime: 0,
   });
 
 export const categoryFormOptionsQueryOptions = () =>
@@ -250,7 +257,7 @@ export const collectionQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.collections.detail(id),
     queryFn: () => getCollection({ data: { id } }),
-    staleTime: STALE.SLOW,
+    staleTime: 0,
   });
 
 export const collectionFormOptionsQueryOptions = () =>
@@ -289,14 +296,14 @@ export const orderQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.orders.detail(id),
     queryFn: () => getOrder({ data: { id } }),
-    staleTime: STALE.FAST,
+    staleTime: 0,
   });
 
 export const orderFormDataQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.orders.formData(id),
     queryFn: () => getOrderFormData({ data: { id } }),
-    staleTime: STALE.FAST,
+    staleTime: 0,
   });
 
 export const orderItemsQueryOptions = (orderId: string) =>
@@ -310,21 +317,21 @@ export const orderPaymentsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.payments(orderId),
     queryFn: () => getOrderPayments({ data: { orderId } }),
-    staleTime: STALE.FAST,
+    staleTime: 0,
   });
 
 export const orderCodQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.cod(orderId),
     queryFn: () => getOrderCod({ data: { orderId } }),
-    staleTime: STALE.FAST,
+    staleTime: 0,
   });
 
 export const orderShipmentsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.shipments(orderId),
     queryFn: () => getOrderShipments({ data: { orderId } }),
-    staleTime: STALE.FAST,
+    staleTime: 0,
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -350,14 +357,14 @@ export const customerQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.customers.detail(id),
     queryFn: () => getCustomer({ data: { id } }),
-    staleTime: STALE.SLOW,
+    staleTime: 0,
   });
 
 export const customerHistoryQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.customers.history(id),
     queryFn: () => getCustomerHistory({ data: { id } }),
-    staleTime: STALE.SLOW,
+    staleTime: 0,
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -382,7 +389,7 @@ export const discountQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.discounts.detail(id),
     queryFn: () => getDiscount({ data: { id } }),
-    staleTime: STALE.SLOW,
+    staleTime: 0,
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -408,7 +415,7 @@ export const pageQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.pages.detail(id),
     queryFn: () => getPage({ data: { id } }),
-    staleTime: STALE.SLOW,
+    staleTime: 0,
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -429,7 +436,7 @@ export const widgetQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.widgets.detail(id),
     queryFn: () => getWidget({ data: { id } }),
-    staleTime: STALE.SLOW,
+    staleTime: 0,
   });
 
 export const widgetHistoryQueryOptions = (widgetId: string) =>
@@ -486,7 +493,7 @@ export const analyticsScriptQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.analytics.detail(id),
     queryFn: () => getAnalyticsScript({ data: { id } }),
-    staleTime: STALE.SLOW,
+    staleTime: 0,
   });
 
 // ═══════════════════════════════════════════════════════════════════

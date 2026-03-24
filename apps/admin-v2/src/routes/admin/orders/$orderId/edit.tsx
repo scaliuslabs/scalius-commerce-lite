@@ -20,7 +20,7 @@ interface OrderFormDataResult {
 export const Route = createFileRoute("/admin/orders/$orderId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
     try {
-      await queryClient.ensureQueryData(orderFormDataQueryOptions(params.orderId));
+      await queryClient.ensureQueryData({ ...orderFormDataQueryOptions(params.orderId), staleTime: Infinity });
     } catch {
       throw redirect({ to: "/admin/orders" });
     }
