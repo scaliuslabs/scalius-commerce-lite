@@ -42,8 +42,8 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(collectionsQueryOptions(mapParams(deps)));
+  loader: ({ context: { queryClient }, deps }) => {
+    void queryClient.prefetchQuery(collectionsQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

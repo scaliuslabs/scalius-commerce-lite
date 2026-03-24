@@ -2,7 +2,6 @@ import { type ReactNode, useRef, useEffect, useState, useCallback } from "react"
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";
-import { useDebounce } from "@/hooks/use-debounce";
 
 interface DataTableToolbarProps {
   searchValue: string;
@@ -27,18 +26,42 @@ export function DataTableToolbar({
 }: DataTableToolbarProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [localSearch, setLocalSearch] = useState(searchValue);
-  const debouncedSearch = useDebounce(localSearch, searchDebounceMs);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks whether an immediate (non-debounced) change is in flight.
+  // When true, the external sync effect should NOT overwrite localSearch
+  // because the URL hasn't caught up yet.
+  const pendingClearRef = useRef(false);
 
-  // Sync debounced value to parent
+  // Debounced sync: when user types, wait `searchDebounceMs` then push to URL
   useEffect(() => {
-    if (debouncedSearch !== searchValue) {
-      onSearchChange(debouncedSearch);
+    // If a clear was just dispatched immediately, skip debounce for that value
+    if (pendingClearRef.current) return;
+
+    debounceTimerRef.current = setTimeout(() => {
+      if (localSearch !== searchValue) {
+        onSearchChange(localSearch);
+      }
+    }, searchDebounceMs);
+
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [localSearch, searchDebounceMs, searchValue, onSearchChange]);
+
+  // Sync from URL → local (e.g. back/forward navigation, external resets)
+  // Only sync if we don't have a pending immediate change waiting for URL to catch up.
+  useEffect(() => {
+    if (pendingClearRef.current) {
+      // The URL just caught up with our immediate change — allow future syncs
+      if (searchValue === localSearch) {
+        pendingClearRef.current = false;
+      }
+      return;
     }
-  }, [debouncedSearch, searchValue, onSearchChange]);
-
-  // Sync external value changes (e.g., URL navigation)
-  useEffect(() => {
-    setLocalSearch(searchValue);
+    if (searchValue !== localSearch) {
+      setLocalSearch(searchValue);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchValue]);
 
   // Keyboard shortcut: / to focus search, Escape to clear
@@ -54,20 +77,29 @@ export function DataTableToolbar({
         searchInputRef.current?.focus();
       }
       if (e.key === "Escape" && document.activeElement === searchInputRef.current) {
-        setLocalSearch("");
-        onSearchChange("");
+        clearSearchRef.current();
         searchInputRef.current?.blur();
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onSearchChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const clearSearch = useCallback(() => {
+    // Cancel any pending debounce
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    // Mark that we're doing an immediate change — prevents the external
+    // sync effect from restoring the stale searchValue before URL updates.
+    pendingClearRef.current = true;
     setLocalSearch("");
     onSearchChange("");
     searchInputRef.current?.focus();
   }, [onSearchChange]);
+
+  // Keep a stable ref to clearSearch so the keydown handler always uses the latest
+  const clearSearchRef = useRef(clearSearch);
+  clearSearchRef.current = clearSearch;
 
   return (
     <div className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -83,6 +115,7 @@ export function DataTableToolbar({
           />
           {localSearch && (
             <button
+              type="button"
               onClick={clearSearch}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >

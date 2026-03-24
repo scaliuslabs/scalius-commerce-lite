@@ -28,8 +28,8 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/admin/widgets/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(
+  loader: ({ context: { queryClient }, deps }) => {
+    void queryClient.prefetchQuery(
       widgetsQueryOptions({
         search: deps.search || undefined,
         showTrashed: false,
