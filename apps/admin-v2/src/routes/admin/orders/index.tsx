@@ -8,7 +8,9 @@ import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { DateRange } from "react-day-picker";
 import { formatDateShort } from "@scalius/shared/timestamps";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { ordersQueryOptions } from "~/lib/api.queries";
+import { queryKeys } from "~/lib/query-keys";
 import {
   useUpdateOrderStatus,
   useBulkDeleteOrders,
@@ -88,6 +90,7 @@ export const Route = createFileRoute("/admin/orders/")({
 function OrdersPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { symbol } = useCurrency();
   const showTrashed = search.trashed;
 
@@ -306,9 +309,8 @@ function OrdersPage() {
   // ── Refresh ───────────────────────────────────────────────────
 
   const handleRefresh = useCallback(() => {
-    // Force re-fetch by navigating with the same params
-    handleNavigate({});
-  }, [handleNavigate]);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+  }, [queryClient]);
 
   // ── Auto-refresh ──────────────────────────────────────────────
 
