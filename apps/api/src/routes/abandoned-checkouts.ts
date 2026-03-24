@@ -16,7 +16,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const abandonedCheckoutSchema = z.object({
   checkoutId: z.string().min(1, "checkoutId is required"),
   customerPhone: z.string().optional(),
-  checkoutData: z.record(z.string(), z.string()).openapi({ description: "Checkout data" })
+  checkoutData: z.record(z.string(), z.unknown()).openapi({ description: "Checkout data (arbitrary JSON)" })
 });
 
 const saveAbandonedCheckoutRoute = createRoute({
