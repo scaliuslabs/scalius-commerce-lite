@@ -157,10 +157,13 @@ export async function getDiscountById(db: Database, id: string) {
 }
 
 export async function createDiscount(db: Database, data: CreateDiscountInput) {
+    // Codes are stored uppercase (normalized by validation schema),
+    // but ensure uppercase here too for the uniqueness check.
+    const code = (data.code as string).toUpperCase();
     const existingCode = await db
         .select({ id: discounts.id })
         .from(discounts)
-        .where(and(eq(discounts.code, data.code as string), isNull(discounts.deletedAt)))
+        .where(and(eq(discounts.code, code), isNull(discounts.deletedAt)))
         .get();
 
     if (existingCode) {
@@ -187,7 +190,7 @@ export async function createDiscount(db: Database, data: CreateDiscountInput) {
     const batchOps: unknown[] = [
         db.insert(discounts).values({
             id: discountId,
-            code: data.code as string,
+            code,
             type: data.type as typeof discounts.$inferInsert.type,
             valueType: data.valueType as typeof discounts.$inferInsert.valueType,
             discountValue: data.discountValue as number,
@@ -222,10 +225,11 @@ export async function updateDiscount(db: Database, id: string, data: UpdateDisco
         throw new NotFoundError("Discount not found");
     }
 
+    const code = (data.code as string).toUpperCase();
     const existingCode = await db
         .select({ id: discounts.id })
         .from(discounts)
-        .where(and(eq(discounts.code, data.code as string), sql`${discounts.id} != ${id}`, isNull(discounts.deletedAt)))
+        .where(and(eq(discounts.code, code), sql`${discounts.id} != ${id}`, isNull(discounts.deletedAt)))
         .get();
 
     if (existingCode) {
@@ -261,7 +265,7 @@ export async function updateDiscount(db: Database, id: string, data: UpdateDisco
     // Drizzle D1 batch() requires specific tuple types
     const batchOps: unknown[] = [
         db.update(discounts).set({
-            code: data.code as string,
+            code,
             type: data.type as typeof discounts.$inferInsert.type,
             valueType: data.valueType as typeof discounts.$inferInsert.valueType,
             discountValue: data.discountValue as number,

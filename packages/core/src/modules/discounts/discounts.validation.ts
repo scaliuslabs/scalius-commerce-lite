@@ -6,7 +6,7 @@ const discountTypeEnum = z.nativeEnum(DiscountType);
 const discountValueTypeEnum = z.nativeEnum(DiscountValueType);
 
 const baseDiscountFields = {
-    code: z.string().min(3).max(50),
+    code: z.string().min(3).max(50).transform((v) => v.toUpperCase()),
     type: discountTypeEnum,
     valueType: discountValueTypeEnum,
     discountValue: z.number().positive(),

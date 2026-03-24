@@ -5,14 +5,15 @@
  */
 import { z } from "zod";
 
-/** Discount code: 3-50 chars, alphanumeric + underscores + hyphens */
+/** Discount code: 3-50 chars, alphanumeric + underscores + hyphens, stored uppercase */
 export const discountCodeSchema = z
   .string()
   .min(3, { message: "Code must be at least 3 characters long" })
   .max(50, { message: "Code cannot exceed 50 characters" })
   .regex(/^[a-zA-Z0-9_-]+$/, {
     message: "Code can only contain letters, numbers, underscores, and hyphens",
-  });
+  })
+  .transform((v) => v.toUpperCase());
 
 /** Common optional fields shared across all discount form types */
 export const sharedDiscountFields = {
