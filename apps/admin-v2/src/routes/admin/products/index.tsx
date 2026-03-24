@@ -79,13 +79,14 @@ export const Route = createFileRoute("/admin/products/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => {
-    // prefetchQuery — fire-and-forget. The component renders immediately with
-    // stale data (keepPreviousData) while new results load in the background.
-    // This prevents the route pending spinner from showing on search/filter changes.
+    // Fire-and-forget prefetch for the exact search params (benefits deep links
+    // and back/forward). pendingComponent: () => null suppresses the route-level
+    // spinner — the component's useQuery + keepPreviousData handles loading UI.
     void queryClient.prefetchQuery(productsQueryOptions(mapParams(deps)));
     void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
     void queryClient.prefetchQuery(productStatsQueryOptions());
   },
+  pendingComponent: () => null,
   head: ({ match }) => ({
     meta: [
       {

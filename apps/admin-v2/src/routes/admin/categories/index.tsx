@@ -55,6 +55,7 @@ export const Route = createFileRoute("/admin/categories/")({
   loader: ({ context: { queryClient }, deps }) => {
     void queryClient.prefetchQuery(categoriesQueryOptions(mapParams(deps)));
   },
+  pendingComponent: () => null,
   head: ({ match }) => ({
     meta: [
       {

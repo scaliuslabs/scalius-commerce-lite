@@ -51,6 +51,7 @@ export const Route = createFileRoute("/admin/attributes")({
   loader: ({ context: { queryClient }, deps }) => {
     void queryClient.prefetchQuery(attributesQueryOptions(mapParams(deps)));
   },
+  pendingComponent: () => null,
   head: ({ match }) => ({
     meta: [
       {

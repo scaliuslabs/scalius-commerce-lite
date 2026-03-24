@@ -36,6 +36,7 @@ export const Route = createFileRoute("/admin/widgets/")({
       }),
     );
   },
+  pendingComponent: () => null,
   head: () => ({ meta: [{ title: "Widgets | Scalius Admin" }] }),
   component: WidgetsPage,
 });
