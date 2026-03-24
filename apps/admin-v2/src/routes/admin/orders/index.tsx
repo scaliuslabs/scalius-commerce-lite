@@ -32,9 +32,8 @@ const searchSchema = createListSearchSchema(
   { limit: 10, sort: "updatedAt" },
 ).extend({
   status: z.string().optional().catch(undefined),
-  paymentStatus: z.string().optional().catch(undefined),
-  paymentMethod: z.string().optional().catch(undefined),
-  fulfillmentStatus: z.string().optional().catch(undefined),
+  startDate: z.string().optional().catch(undefined),
+  endDate: z.string().optional().catch(undefined),
 });
 
 type SearchParams = z.infer<typeof searchSchema>;
@@ -50,9 +49,8 @@ function mapParams(deps: SearchParams) {
     sort: deps.sort,
     order: deps.order,
     showTrashed: deps.trashed,
-    paymentStatus: deps.paymentStatus,
-    paymentMethod: deps.paymentMethod,
-    fulfillmentStatus: deps.fulfillmentStatus,
+    startDate: deps.startDate,
+    endDate: deps.endDate,
   };
 }
 
@@ -104,12 +102,17 @@ function OrdersPage() {
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [isShippingDialogOpen, setIsShippingDialogOpen] = useState(false);
   const [isShipping, setIsShipping] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   // Derive filter values directly from URL search params (reactive to back/forward)
   const activeStatus = search.status ?? null;
-  const paymentStatus = search.paymentStatus ?? null;
-  const paymentMethod = search.paymentMethod ?? null;
-  const fulfillmentStatus = search.fulfillmentStatus ?? null;
+
+  // Date range — derive from URL params
+  const dateRange: DateRange | undefined =
+    search.startDate || search.endDate
+      ? {
+          from: search.startDate ? new Date(search.startDate) : undefined,
+          to: search.endDate ? new Date(search.endDate) : undefined,
+        }
+      : undefined;
 
   // Auto-refresh state
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(() => {
@@ -164,34 +167,15 @@ function OrdersPage() {
     [handleNavigate],
   );
 
-  const onPaymentStatusChange = useCallback(
-    (status: string | null) => {
-      handleNavigate({ paymentStatus: status ?? undefined, page: 1 });
-    },
-    [handleNavigate],
-  );
-
-  const onPaymentMethodChange = useCallback(
-    (method: string | null) => {
-      handleNavigate({ paymentMethod: method ?? undefined, page: 1 });
-    },
-    [handleNavigate],
-  );
-
-  const onFulfillmentStatusChange = useCallback(
-    (status: string | null) => {
-      handleNavigate({ fulfillmentStatus: status ?? undefined, page: 1 });
-    },
-    [handleNavigate],
-  );
-
   const onDateRangeChange = useCallback(
     (range: DateRange | undefined) => {
-      setDateRange(range);
-      // Date range filtering triggers a re-fetch via URL params
-      // For now just update local state; the query will re-run
+      handleNavigate({
+        startDate: range?.from ? range.from.toISOString() : undefined,
+        endDate: range?.to ? range.to.toISOString() : undefined,
+        page: 1,
+      });
     },
-    [],
+    [handleNavigate],
   );
 
   // ── Action handlers ───────────────────────────────────────────
@@ -534,12 +518,6 @@ function OrdersPage() {
       showTrashed={showTrashed}
       activeStatus={activeStatus}
       onStatusFilterChange={onStatusFilterChange}
-      paymentStatus={paymentStatus}
-      onPaymentStatusChange={onPaymentStatusChange}
-      paymentMethod={paymentMethod}
-      onPaymentMethodChange={onPaymentMethodChange}
-      fulfillmentStatus={fulfillmentStatus}
-      onFulfillmentStatusChange={onFulfillmentStatusChange}
       dateRange={dateRange}
       onDateRangeChange={onDateRangeChange}
       onBulkDelete={handleBulkDeleteClick}
