@@ -72,7 +72,7 @@ export function useServerTable<TData>({
   onSortingChange,
   enableRowSelection = true,
   enableSorting = true,
-  defaultPageSize = 20,
+  defaultPageSize = 10,
   initialColumnVisibility = {},
 }: UseServerTableOptions<TData>): UseServerTableReturn<TData> {
   // React Query with keepPreviousData — no flash on page/sort change

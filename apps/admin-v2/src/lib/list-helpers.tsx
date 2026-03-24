@@ -54,7 +54,7 @@ export function createListSearchSchema<T extends readonly [string, ...string[]]>
     order?: "asc" | "desc";
   },
 ) {
-  const defaultLimit = defaults?.limit ?? 20;
+  const defaultLimit = defaults?.limit ?? 10;
   const defaultSort = (defaults?.sort ?? sortOptions[0]) as T[number];
   const defaultOrder = defaults?.order ?? "desc";
 
