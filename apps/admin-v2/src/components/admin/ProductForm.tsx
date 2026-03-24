@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form } from "../ui/form";
 import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
+import { ProductBreadcrumb, ProductActionBar } from "./product-form/ProductStickyHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +23,6 @@ import {
   PricingCard,
   StatusCard,
   OrganizationCard,
-  ProductStickyHeader,
   InfoBanner,
   useProductSubmit,
   useProductVariants,
@@ -143,12 +143,9 @@ export function ProductForm({
         isDirty={form.formState.isDirty}
         isSubmitting={isSubmitting}
       />
-      <ProductStickyHeader
+      <ProductBreadcrumb
         productName={form.watch("name")}
         isEdit={isEdit}
-        isSubmitting={isSubmitting}
-        isDirty={form.formState.isDirty}
-        onSave={() => form.handleSubmit(handleSubmit)()}
       />
 
       <Form {...form}>
@@ -224,6 +221,12 @@ export function ProductForm({
           </AlertDialog>
         </form>
       </Form>
+      <ProductActionBar
+        isEdit={isEdit}
+        isSubmitting={isSubmitting}
+        isDirty={form.formState.isDirty}
+        onSave={() => form.handleSubmit(handleSubmit)()}
+      />
     </>
     </ErrorBoundary>
   );

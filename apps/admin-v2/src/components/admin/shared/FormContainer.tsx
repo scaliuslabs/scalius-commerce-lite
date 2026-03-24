@@ -1,7 +1,7 @@
 import type React from "react";
 import type { UseFormReturn, FieldValues } from "react-hook-form";
 import { Form } from "@/components/ui/form";
-import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { FormBreadcrumb, FormActionBar } from "@/components/admin/FormStickyHeader";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 
@@ -33,8 +33,7 @@ interface FormContainerProps<T extends FieldValues> {
 /**
  * Shared form layout wrapper.
  *
- * Renders FormStickyHeader + ErrorBoundary + <Form> provider + <form> element.
- * Forms only need to provide their field content as children.
+ * Layout: Breadcrumb (top) → Form content → Action bar (sticky bottom).
  */
 export function FormContainer<T extends FieldValues>({
   title,
@@ -57,17 +56,11 @@ export function FormContainer<T extends FieldValues>({
           isDirty={form.formState.isDirty}
           isSubmitting={isSubmitting}
         />
-        <FormStickyHeader
+        <FormBreadcrumb
           title={title}
           entityName={entityName}
           isEdit={isEdit}
-          isSubmitting={isSubmitting}
-          isDirty={form.formState.isDirty}
           cancelUrl={backUrl}
-          newUrl={newUrl}
-          newLabel={newLabel}
-          saveLabel={saveLabel}
-          onSave={onSubmit}
         />
         <form
           onSubmit={(e) => {
@@ -78,6 +71,17 @@ export function FormContainer<T extends FieldValues>({
         >
           {children}
         </form>
+        <FormActionBar
+          title={title}
+          isEdit={isEdit}
+          isSubmitting={isSubmitting}
+          isDirty={form.formState.isDirty}
+          cancelUrl={backUrl}
+          newUrl={newUrl}
+          newLabel={newLabel}
+          saveLabel={saveLabel}
+          onSave={onSubmit}
+        />
       </Form>
     </ErrorBoundary>
   );

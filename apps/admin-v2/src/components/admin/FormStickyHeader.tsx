@@ -2,28 +2,63 @@ import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, ChevronRight, Plus } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
-interface FormStickyHeaderProps {
-  /** The section name shown as breadcrumb link (e.g., "Categories") */
+// ── Shared props ────────────────────────────────────────────────────
+
+interface FormHeaderBaseProps {
   title: string;
-  /** The entity name (e.g., category name being edited). Falls back to "New"/"Edit" */
   entityName?: string;
   isEdit: boolean;
+  cancelUrl: string;
+}
+
+interface FormActionBarProps extends FormHeaderBaseProps {
   isSubmitting: boolean;
   isDirty?: boolean;
-  /** URL to navigate back to (e.g., "/admin/categories") */
-  cancelUrl: string;
-  /** URL for "New X" button shown in edit mode (e.g., "/admin/categories/new") */
   newUrl?: string;
-  /** Label for the "New X" button (e.g., "New Category") */
   newLabel?: string;
-  /** Custom save button label. Defaults to "Save {title}" / "Create {title}" */
   saveLabel?: string;
   onSave: () => void;
 }
 
-export function FormStickyHeader({
+// Re-export combined type for convenience
+export type FormStickyHeaderProps = FormActionBarProps;
+
+// ── Breadcrumb (scrolls with content) ───────────────────────────────
+
+export function FormBreadcrumb({
   title,
   entityName,
+  isEdit,
+  cancelUrl,
+}: FormHeaderBaseProps) {
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      <Button variant="ghost" size="icon" asChild className="h-7 w-7">
+        <Link to={cancelUrl}>
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span className="sr-only">Back to {title.toLowerCase()}</span>
+        </Link>
+      </Button>
+      <nav className="flex items-center gap-1 text-sm min-w-0">
+        <Link
+          to={cancelUrl}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {title}
+        </Link>
+        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+        <span className="font-medium truncate">
+          {entityName || (isEdit ? "Edit" : "New")}
+        </span>
+      </nav>
+    </div>
+  );
+}
+
+// ── Action bar (sticky at bottom of scroll area) ────────────────────
+
+export function FormActionBar({
+  title,
   isEdit,
   isSubmitting,
   isDirty = false,
@@ -32,7 +67,7 @@ export function FormStickyHeader({
   newLabel,
   saveLabel,
   onSave,
-}: FormStickyHeaderProps) {
+}: FormActionBarProps) {
   const defaultSaveLabel = isSubmitting
     ? "Saving..."
     : isEdit
@@ -40,36 +75,15 @@ export function FormStickyHeader({
       : saveLabel || `Create ${title.replace(/s$/, "")}`;
 
   return (
-    <div className="sticky top-0 z-30 border-b bg-background -mt-3 sm:-mt-4 md:-mt-6 -mx-3 sm:-mx-4 md:-mx-6">
-      <div className="flex h-12 items-center justify-between gap-4 px-4 sm:px-6">
-        {/* Left side - Breadcrumbs */}
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <Button variant="ghost" size="icon" asChild className="h-7 w-7">
-            <Link to={cancelUrl}>
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span className="sr-only">Back to {title.toLowerCase()}</span>
-            </Link>
-          </Button>
-          <nav className="flex items-center gap-1 text-sm min-w-0">
-            <Link
-              to={cancelUrl}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {title}
-            </Link>
-            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="font-medium truncate">
-              {entityName || (isEdit ? "Edit" : "New")}
+    <div className="sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur-sm -mx-3 sm:-mx-4 md:-mx-6 mt-4">
+      <div className="flex h-14 items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="flex items-center gap-2 text-sm min-w-0">
+          {isDirty && (
+            <span className="text-xs text-amber-600 dark:text-amber-500">
+              Unsaved changes
             </span>
-            {isDirty && (
-              <span className="ml-2 text-xs text-amber-600 dark:text-amber-500 shrink-0">
-                • Unsaved
-              </span>
-            )}
-          </nav>
+          )}
         </div>
-
-        {/* Right side - Action buttons */}
         <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
@@ -77,7 +91,7 @@ export function FormStickyHeader({
             type="button"
             asChild
             disabled={isSubmitting}
-            className="h-8 text-xs hidden sm:inline-flex"
+            className="h-8 text-xs"
           >
             <Link to={cancelUrl}>Discard</Link>
           </Button>
@@ -110,5 +124,21 @@ export function FormStickyHeader({
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Legacy combined component (deprecated — use FormBreadcrumb + FormActionBar) ──
+
+export function FormStickyHeader(props: FormStickyHeaderProps) {
+  return (
+    <>
+      <FormBreadcrumb
+        title={props.title}
+        entityName={props.entityName}
+        isEdit={props.isEdit}
+        cancelUrl={props.cancelUrl}
+      />
+      <FormActionBar {...props} />
+    </>
   );
 }

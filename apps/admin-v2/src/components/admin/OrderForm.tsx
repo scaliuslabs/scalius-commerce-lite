@@ -7,7 +7,7 @@ import { Form } from "@/components/ui/form";
 import { toast } from "sonner";
 import { OrderStatus } from "@/types/api-responses";
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { FormStickyHeader } from "@/components/admin/FormStickyHeader";
+import { FormBreadcrumb, FormActionBar } from "@/components/admin/FormStickyHeader";
 import { useNavigate } from "@tanstack/react-router";
 import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
 import {
@@ -194,16 +194,11 @@ export function OrderForm({
         isDirty={form.formState.isDirty}
         isSubmitting={isSubmitting}
       />
-      <FormStickyHeader
+      <FormBreadcrumb
         title="Orders"
         entityName={isEdit ? `Order #${defaultValues?.id || ""}` : undefined}
         isEdit={isEdit}
-        isSubmitting={isSubmitting}
-        isDirty={form.formState.isDirty}
         cancelUrl="/admin/orders"
-        newUrl="/admin/orders/new"
-        newLabel="New Order"
-        onSave={() => form.handleSubmit(handleSubmit)()}
       />
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6 space-y-4">
@@ -229,6 +224,16 @@ export function OrderForm({
           </OrderFormProvider>
         </form>
       </Form>
+      <FormActionBar
+        title="Orders"
+        isEdit={isEdit}
+        isSubmitting={isSubmitting}
+        isDirty={form.formState.isDirty}
+        cancelUrl="/admin/orders"
+        newUrl="/admin/orders/new"
+        newLabel="New Order"
+        onSave={() => form.handleSubmit(handleSubmit)()}
+      />
     </>
   );
 }
