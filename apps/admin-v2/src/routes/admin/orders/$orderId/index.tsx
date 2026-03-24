@@ -53,9 +53,6 @@ function OrderViewPage() {
     } as Order;
   }, [order, shipments, providers]);
 
-  if (!fullOrder) {
-    return <div>Order not found</div>;
-  }
-
-  return <OrderView order={fullOrder} />;
+  // fullOrder is guaranteed non-null — useSuspenseQuery ensures order exists
+  return <OrderView order={fullOrder!} />;
 }

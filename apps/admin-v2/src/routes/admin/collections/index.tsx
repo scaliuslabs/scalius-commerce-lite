@@ -44,8 +44,8 @@ const defaultApiParams = mapParams(searchSchema.parse({}));
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: searchSchema,
   staleTime: 0,
-  loader: ({ context: { queryClient } }) => {
-    void queryClient.prefetchQuery(collectionsQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(collectionsQueryOptions(defaultApiParams));
   },
   head: ({ match }) => ({
     meta: [

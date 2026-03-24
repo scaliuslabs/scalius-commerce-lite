@@ -55,10 +55,6 @@ function EditDiscountPage() {
     endDate: discount.endDate ? new Date(discount.endDate) : null,
   };
 
-  if (!discount) {
-    return <div>Discount not found</div>;
-  }
-
   const pageTitle = isDuplicate ? "Duplicate Discount" : "Edit Discount";
   const pageDescription = isDuplicate
     ? `Creating a copy of "${discount.code}"`

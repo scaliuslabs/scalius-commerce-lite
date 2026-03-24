@@ -19,10 +19,6 @@ function EditCategoryPage() {
   const { categoryId } = Route.useParams();
   const { data: categoryData } = useSuspenseQuery(categoryQueryOptions(categoryId));
 
-  if (!categoryData) {
-    return <div>Category not found</div>;
-  }
-
   const c = categoryData as Category;
   const defaultValues = {
     ...c,
