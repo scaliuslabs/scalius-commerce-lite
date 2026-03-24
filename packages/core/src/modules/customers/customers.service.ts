@@ -49,8 +49,17 @@ export async function listCustomers(
         whereConditions.push(sql`${customers.deletedAt} IS NULL`);
     }
     if (search) {
-        const cond = ftsMatch("customers_fts", "customers", search);
-        if (cond) whereConditions.push(cond);
+        const digitsOnly = search.replace(/[^0-9]/g, "");
+        const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
+        const ftsCondition = ftsMatch("customers_fts", "customers", search);
+
+        if (looksLikePhone && ftsCondition) {
+            whereConditions.push(sql`(${ftsCondition} OR ${customers.phone} LIKE ${"%" + digitsOnly + "%"})`);
+        } else if (looksLikePhone) {
+            whereConditions.push(sql`${customers.phone} LIKE ${"%" + digitsOnly + "%"}`);
+        } else if (ftsCondition) {
+            whereConditions.push(ftsCondition);
+        }
     }
 
     const whereClause =

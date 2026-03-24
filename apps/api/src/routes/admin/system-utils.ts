@@ -109,8 +109,17 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
 
         const whereConditions = [];
         if (search) {
-            const cond = ftsMatch("abandoned_checkouts_fts", "abandoned_checkouts", search);
-            if (cond) whereConditions.push(cond);
+            const digitsOnly = search.replace(/[^0-9]/g, "");
+            const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
+            const ftsCondition = ftsMatch("abandoned_checkouts_fts", "abandoned_checkouts", search);
+
+            if (looksLikePhone && ftsCondition) {
+                whereConditions.push(sql`(${ftsCondition} OR ${abandonedCheckouts.customerPhone} LIKE ${"%" + digitsOnly + "%"})`);
+            } else if (looksLikePhone) {
+                whereConditions.push(sql`${abandonedCheckouts.customerPhone} LIKE ${"%" + digitsOnly + "%"}`);
+            } else if (ftsCondition) {
+                whereConditions.push(ftsCondition);
+            }
         }
 
         const combinedWhere = whereConditions.length > 0 ? and(...whereConditions) : undefined;
