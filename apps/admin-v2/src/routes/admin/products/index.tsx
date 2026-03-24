@@ -78,15 +78,13 @@ function mapParams(deps: SearchParams) {
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ context: { queryClient }, deps }) => {
-    // prefetchQuery for the list — doesn't block navigation on search/filter
-    // changes. The component uses keepPreviousData to show stale data while
-    // the new results load, keeping the search input focused.
+  loader: ({ context: { queryClient }, deps }) => {
+    // prefetchQuery — fire-and-forget. The component renders immediately with
+    // stale data (keepPreviousData) while new results load in the background.
+    // This prevents the route pending spinner from showing on search/filter changes.
     void queryClient.prefetchQuery(productsQueryOptions(mapParams(deps)));
-    await Promise.all([
-      queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
-      queryClient.ensureQueryData(productStatsQueryOptions()),
-    ]);
+    void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
+    void queryClient.prefetchQuery(productStatsQueryOptions());
   },
   head: ({ match }) => ({
     meta: [
