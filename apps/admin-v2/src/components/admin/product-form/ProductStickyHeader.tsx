@@ -22,8 +22,8 @@ export function ProductStickyHeader({
   onSave,
 }: ProductStickyHeaderProps) {
   return (
-    <div className="sticky top-0 z-50 border-b bg-background -mt-6">
-      <div className="container flex h-12 items-center justify-between gap-4 px-4 sm:px-6">
+    <div className="sticky top-0 z-30 border-b bg-background -mt-3 sm:-mt-4 md:-mt-6 -mx-3 sm:-mx-4 md:-mx-6">
+      <div className="flex h-12 items-center justify-between gap-4 px-4 sm:px-6">
         {/* Left side - Breadcrumbs */}
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <Button variant="ghost" size="icon" asChild className="h-7 w-7">
