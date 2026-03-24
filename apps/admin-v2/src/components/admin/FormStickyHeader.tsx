@@ -1,62 +1,24 @@
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, ChevronRight, Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
-// ── Shared props ────────────────────────────────────────────────────
-
-interface FormHeaderBaseProps {
+export interface FormActionBarProps {
   title: string;
-  entityName?: string;
   isEdit: boolean;
-  cancelUrl: string;
-}
-
-interface FormActionBarProps extends FormHeaderBaseProps {
   isSubmitting: boolean;
   isDirty?: boolean;
+  cancelUrl: string;
   newUrl?: string;
   newLabel?: string;
   saveLabel?: string;
   onSave: () => void;
 }
 
-// Re-export combined type for convenience
-export type FormStickyHeaderProps = FormActionBarProps;
-
-// ── Breadcrumb (scrolls with content) ───────────────────────────────
-
-export function FormBreadcrumb({
-  title,
-  entityName,
-  isEdit,
-  cancelUrl,
-}: FormHeaderBaseProps) {
-  return (
-    <div className="flex items-center gap-2 mb-4">
-      <Button variant="ghost" size="icon" asChild className="h-7 w-7">
-        <Link to={cancelUrl}>
-          <ArrowLeft className="h-3.5 w-3.5" />
-          <span className="sr-only">Back to {title.toLowerCase()}</span>
-        </Link>
-      </Button>
-      <nav className="flex items-center gap-1 text-sm min-w-0">
-        <Link
-          to={cancelUrl}
-          className="text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {title}
-        </Link>
-        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-        <span className="font-medium truncate">
-          {entityName || (isEdit ? "Edit" : "New")}
-        </span>
-      </nav>
-    </div>
-  );
-}
-
-// ── Action bar (sticky at bottom of scroll area) ────────────────────
-
+/**
+ * Form action bar rendered via portal into the layout's bottom slot.
+ * Sits OUTSIDE the scroll container — always at the true bottom edge.
+ */
 export function FormActionBar({
   title,
   isEdit,
@@ -74,12 +36,14 @@ export function FormActionBar({
       ? saveLabel || `Save ${title.replace(/s$/, "")}`
       : saveLabel || `Create ${title.replace(/s$/, "")}`;
 
-  return (
-    <div className="sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur-sm -mx-3 sm:-mx-4 md:-mx-6 mt-4">
-      <div className="flex h-14 items-center justify-between gap-4 px-4 sm:px-6">
+  const portalTarget = document.getElementById("form-action-bar-slot");
+
+  const bar = (
+    <div className="border-t bg-background">
+      <div className="flex h-12 items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex items-center gap-2 text-sm min-w-0">
           {isDirty && (
-            <span className="text-xs text-amber-600 dark:text-amber-500">
+            <span className="text-xs text-amber-600 dark:text-amber-500 font-medium">
               Unsaved changes
             </span>
           )}
@@ -125,20 +89,25 @@ export function FormActionBar({
       </div>
     </div>
   );
+
+  if (portalTarget) {
+    return createPortal(bar, portalTarget);
+  }
+
+  // Fallback if portal target not found (shouldn't happen in admin layout)
+  return bar;
 }
 
-// ── Legacy combined component (deprecated — use FormBreadcrumb + FormActionBar) ──
+// Legacy export — kept for backwards compatibility
+export type FormStickyHeaderProps = FormActionBarProps & {
+  entityName?: string;
+};
 
 export function FormStickyHeader(props: FormStickyHeaderProps) {
-  return (
-    <>
-      <FormBreadcrumb
-        title={props.title}
-        entityName={props.entityName}
-        isEdit={props.isEdit}
-        cancelUrl={props.cancelUrl}
-      />
-      <FormActionBar {...props} />
-    </>
-  );
+  return <FormActionBar {...props} />;
+}
+
+// No-op — breadcrumb removed (topbar handles navigation)
+export function FormBreadcrumb() {
+  return null;
 }

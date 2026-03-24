@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form } from "../ui/form";
 import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
-import { ProductBreadcrumb, ProductActionBar } from "./product-form/ProductStickyHeader";
+import { ProductActionBar } from "./product-form/ProductStickyHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -143,11 +143,6 @@ export function ProductForm({
         isDirty={form.formState.isDirty}
         isSubmitting={isSubmitting}
       />
-      <ProductBreadcrumb
-        productName={form.watch("name")}
-        isEdit={isEdit}
-      />
-
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6">
           {/* Two-Column Layout */}
