@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Card,
   CardContent,
@@ -19,91 +19,94 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getServerFnError } from "@/lib/api-helpers";
+import { useSettingsForm } from "@/hooks/use-settings-form";
+import { queryKeys } from "@/lib/query-keys";
 import { getFirebaseSettings, updateFirebaseSettings } from "@/lib/api.functions";
 
-interface FirebaseConfig {
+interface FirebasePublicConfig {
+  apiKey?: string;
+  authDomain?: string;
+  projectId?: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+  measurementId?: string;
+  vapidKey?: string;
+}
+
+interface FirebaseSettings {
   serviceAccount: string;
-  publicConfig: {
-    apiKey?: string;
-    authDomain?: string;
-    projectId?: string;
-    storageBucket?: string;
-    messagingSenderId?: string;
-    appId?: string;
-    measurementId?: string;
-    vapidKey?: string;
-  };
+  publicConfig: FirebasePublicConfig;
+}
+
+const defaultValues: FirebaseSettings = {
+  serviceAccount: "",
+  publicConfig: {},
+};
+
+function validateServiceAccountJson(
+  json: string,
+): { valid: boolean; error?: string } {
+  if (!json || json.includes("••••")) return { valid: true }; // Skip validation for masked/empty
+  try {
+    const parsed = JSON.parse(json);
+    if (!parsed.private_key)
+      return { valid: false, error: "Missing 'private_key' field" };
+    if (!parsed.client_email)
+      return { valid: false, error: "Missing 'client_email' field" };
+    if (!parsed.project_id)
+      return { valid: false, error: "Missing 'project_id' field" };
+    return { valid: true };
+  } catch {
+    return { valid: false, error: "Invalid JSON format" };
+  }
 }
 
 export default function FirebaseSettingsForm() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { values, setValue, setValues, isLoading, isSaving, handleSubmit } = useSettingsForm<FirebaseSettings>({
+    queryKey: queryKeys.settings.firebase(),
+    fetchFn: () => getFirebaseSettings() as Promise<Partial<FirebaseSettings>>,
+    saveFn: (v) => {
+      // Build payload: only include serviceAccount if it's new (not masked)
+      const payload: { publicConfig: FirebasePublicConfig; serviceAccount?: string } = {
+        publicConfig: v.publicConfig,
+      };
+      if (v.serviceAccount && !v.serviceAccount.includes("••••")) {
+        payload.serviceAccount = v.serviceAccount;
+      }
+      return updateFirebaseSettings({ data: payload as unknown as Record<string, unknown> });
+    },
+    defaultValues,
+    successMessage: "Settings saved successfully!",
+    errorMessage: "Failed to save settings",
+  });
 
-  const [serviceAccountJson, setServiceAccountJson] = useState("");
-  const [publicConfig, setPublicConfig] = useState<
-    FirebaseConfig["publicConfig"]
-  >({});
-  const [serviceAccountStatus, setServiceAccountStatus] = useState<
-    "empty" | "configured" | "invalid"
-  >("empty");
+  // Derive service account status from current values
+  const serviceAccountStatus: "empty" | "configured" | "invalid" = (() => {
+    if (!values.serviceAccount) return "empty";
+    if (values.serviceAccount.includes("••••")) return "configured";
+    const validation = validateServiceAccountJson(values.serviceAccount);
+    return validation.valid ? "configured" : "invalid";
+  })();
 
+  // UI-only state for the raw paste feature
   const [rawPublicConfig, setRawPublicConfig] = useState("");
   const [showRawPaste, setShowRawPaste] = useState(false);
-
-  useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  const fetchSettings = async () => {
-    try {
-      const data = await getFirebaseSettings() as Record<string, unknown>;
-      if (data.serviceAccount && (data.serviceAccount as string).includes("••••")) {
-        setServiceAccountStatus("configured");
-      }
-      setServiceAccountJson((data.serviceAccount as string) || "");
-      setPublicConfig((data.publicConfig as FirebaseConfig["publicConfig"]) || {});
-    } catch {
-      toast.error("Failed to load Firebase settings");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const validateServiceAccountJson = (
-    json: string,
-  ): { valid: boolean; error?: string } => {
-    if (!json || json.includes("••••")) return { valid: true }; // Skip validation for masked/empty
-    try {
-      const parsed = JSON.parse(json);
-      if (!parsed.private_key)
-        return { valid: false, error: "Missing 'private_key' field" };
-      if (!parsed.client_email)
-        return { valid: false, error: "Missing 'client_email' field" };
-      if (!parsed.project_id)
-        return { valid: false, error: "Missing 'project_id' field" };
-      return { valid: true };
-    } catch (e: unknown) {
-      return { valid: false, error: "Invalid JSON format" };
-    }
-  };
 
   const handleServiceAccountChange = (
     e: React.ChangeEvent<HTMLTextAreaElement>,
   ) => {
-    const value = e.target.value;
-    setServiceAccountJson(value);
-    if (value && !value.includes("••••")) {
-      const validation = validateServiceAccountJson(value);
-      setServiceAccountStatus(validation.valid ? "configured" : "invalid");
-    }
+    setValue("serviceAccount", e.target.value);
   };
 
   const handlePublicConfigChange = (
-    key: keyof FirebaseConfig["publicConfig"],
+    key: keyof FirebasePublicConfig,
     value: string,
   ) => {
-    setPublicConfig((prev) => ({ ...prev, [key]: value }));
+    setValues((prev) => ({
+      ...prev,
+      publicConfig: { ...prev.publicConfig, [key]: value },
+    }));
   };
 
   const handleRawPaste = () => {
@@ -125,7 +128,7 @@ export default function FirebaseSettingsForm() {
       input = input.replace(/,(\s*[}\]])/g, "$1");
 
       const parsed = JSON.parse(input);
-      const mapped: FirebaseConfig["publicConfig"] = { ...publicConfig };
+      const mapped: FirebasePublicConfig = { ...values.publicConfig };
       const keys = [
         "apiKey",
         "authDomain",
@@ -138,7 +141,7 @@ export default function FirebaseSettingsForm() {
       keys.forEach((k) => {
         if (parsed[k]) mapped[k] = parsed[k];
       });
-      setPublicConfig(mapped);
+      setValues((prev) => ({ ...prev, publicConfig: mapped }));
       setShowRawPaste(false);
       setRawPublicConfig("");
       toast.success("Config parsed successfully!");
@@ -148,36 +151,22 @@ export default function FirebaseSettingsForm() {
     }
   };
 
-  const handleSubmit = async (e: React.SyntheticEvent) => {
+  // Custom submit with pre-validation for service account JSON
+  const onSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
-    setSaving(true);
 
-    try {
-      const payload: { publicConfig: FirebaseConfig["publicConfig"]; serviceAccount?: string } = { publicConfig };
-
-      if (serviceAccountJson && !serviceAccountJson.includes("••••")) {
-        const validation = validateServiceAccountJson(serviceAccountJson);
-        if (!validation.valid) {
-          toast.error(validation.error || "Invalid Service Account JSON");
-          setSaving(false);
-          return;
-        }
-        payload.serviceAccount = serviceAccountJson;
+    if (values.serviceAccount && !values.serviceAccount.includes("••••")) {
+      const validation = validateServiceAccountJson(values.serviceAccount);
+      if (!validation.valid) {
+        toast.error(validation.error || "Invalid Service Account JSON");
+        return;
       }
-
-      await updateFirebaseSettings({ data: payload });
-      toast.success("Settings saved successfully!");
-      if (payload.serviceAccount) {
-        fetchSettings();
-      }
-    } catch (err) {
-      toast.error(getServerFnError(err, "Failed to save settings"));
-    } finally {
-      setSaving(false);
     }
+
+    await handleSubmit();
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex justify-center p-8">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -227,11 +216,11 @@ export default function FirebaseSettingsForm() {
               id="serviceAccount"
               placeholder='{ "type": "service_account", "project_id": "...", "private_key": "...", ... }'
               className="font-mono text-xs min-h-[150px]"
-              value={serviceAccountJson}
+              value={values.serviceAccount}
               onChange={handleServiceAccountChange}
             />
             {serviceAccountStatus === "configured" &&
-              serviceAccountJson.includes("••••") && (
+              values.serviceAccount.includes("••••") && (
                 <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3" /> Credentials configured.
                   Paste new JSON to replace.
@@ -302,7 +291,7 @@ export default function FirebaseSettingsForm() {
             <div className="space-y-2">
               <Label>API Key</Label>
               <Input
-                value={publicConfig.apiKey || ""}
+                value={values.publicConfig.apiKey || ""}
                 onChange={(e) =>
                   handlePublicConfigChange("apiKey", e.target.value)
                 }
@@ -312,7 +301,7 @@ export default function FirebaseSettingsForm() {
             <div className="space-y-2">
               <Label>Auth Domain</Label>
               <Input
-                value={publicConfig.authDomain || ""}
+                value={values.publicConfig.authDomain || ""}
                 onChange={(e) =>
                   handlePublicConfigChange("authDomain", e.target.value)
                 }
@@ -322,7 +311,7 @@ export default function FirebaseSettingsForm() {
             <div className="space-y-2">
               <Label>Project ID</Label>
               <Input
-                value={publicConfig.projectId || ""}
+                value={values.publicConfig.projectId || ""}
                 onChange={(e) =>
                   handlePublicConfigChange("projectId", e.target.value)
                 }
@@ -332,7 +321,7 @@ export default function FirebaseSettingsForm() {
             <div className="space-y-2">
               <Label>Storage Bucket</Label>
               <Input
-                value={publicConfig.storageBucket || ""}
+                value={values.publicConfig.storageBucket || ""}
                 onChange={(e) =>
                   handlePublicConfigChange("storageBucket", e.target.value)
                 }
@@ -342,7 +331,7 @@ export default function FirebaseSettingsForm() {
             <div className="space-y-2">
               <Label>Messaging Sender ID</Label>
               <Input
-                value={publicConfig.messagingSenderId || ""}
+                value={values.publicConfig.messagingSenderId || ""}
                 onChange={(e) =>
                   handlePublicConfigChange("messagingSenderId", e.target.value)
                 }
@@ -352,7 +341,7 @@ export default function FirebaseSettingsForm() {
             <div className="space-y-2">
               <Label>App ID</Label>
               <Input
-                value={publicConfig.appId || ""}
+                value={values.publicConfig.appId || ""}
                 onChange={(e) =>
                   handlePublicConfigChange("appId", e.target.value)
                 }
@@ -391,7 +380,7 @@ export default function FirebaseSettingsForm() {
           <div className="space-y-2">
             <Label>VAPID Key (Public Key)</Label>
             <Input
-              value={publicConfig.vapidKey || ""}
+              value={values.publicConfig.vapidKey || ""}
               onChange={(e) =>
                 handlePublicConfigChange("vapidKey", e.target.value)
               }
@@ -407,8 +396,8 @@ export default function FirebaseSettingsForm() {
       </Card>
 
       <div className="flex justify-end pt-4 border-t border-border">
-        <Button onClick={handleSubmit} disabled={saving} className="min-w-[160px]">
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button onClick={onSubmit} disabled={isSaving} className="min-w-[160px]">
+          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Save className="mr-2 h-4 w-4" />
           Save All Settings
         </Button>

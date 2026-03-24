@@ -1,7 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AbandonedCheckoutsManager } from "~/components/admin/AbandonedCheckoutsManager";
+import { abandonedCheckoutsQueryOptions } from "~/lib/api.queries";
 
 export const Route = createFileRoute("/admin/abandoned-checkouts")({
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData(
+      abandonedCheckoutsQueryOptions({ page: 1, limit: 20, sort: "updatedAt", order: "desc" }),
+    );
+  },
   head: () => ({ meta: [{ title: "Incomplete Orders | Scalius Admin" }] }),
   component: AbandonedCheckoutsPage,
 });

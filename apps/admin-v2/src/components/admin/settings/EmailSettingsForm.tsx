@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   Card,
   CardContent,
@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 import { Loader2, Save, CheckCircle2, ExternalLink, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getServerFnError } from "@/lib/api-helpers";
+import { useSettingsForm } from "@/hooks/use-settings-form";
+import { queryKeys } from "@/lib/query-keys";
 import { getEmailSettings, updateEmailSettings } from "@/lib/api.functions";
 
 const MASKED_VALUE = "••••••••••••";
@@ -37,46 +37,22 @@ function ResendLogo({ className }: { className?: string }) {
   );
 }
 
+interface EmailSettings {
+  apiKey: string;
+  sender: string;
+}
+
 export default function EmailSettingsForm() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [sender, setSender] = useState("");
-  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  const { values, setValue, isLoading, isSaving, handleSubmit } = useSettingsForm<EmailSettings>({
+    queryKey: queryKeys.settings.email(),
+    fetchFn: () => getEmailSettings() as Promise<Partial<EmailSettings>>,
+    saveFn: (v) => updateEmailSettings({ data: v as unknown as Record<string, unknown> }),
+    defaultValues: { apiKey: "", sender: "" },
+    successMessage: "Email settings saved successfully!",
+    errorMessage: "Failed to save email settings",
+  });
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  const fetchSettings = async () => {
-    try {
-      const data = await getEmailSettings() as Record<string, unknown>;
-      setApiKey((data.apiKey as string) || "");
-      setSender((data.sender as string) || "");
-      setApiKeyConfigured(!!data.apiKey);
-    } catch {
-      toast.error("Failed to load email settings");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e?: React.SyntheticEvent) => {
-    e?.preventDefault();
-    setSaving(true);
-
-    try {
-      await updateEmailSettings({ data: { apiKey, sender } });
-      toast.success("Email settings saved successfully!");
-      fetchSettings();
-    } catch (err) {
-      toast.error(getServerFnError(err, "Failed to save email settings"));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -84,7 +60,9 @@ export default function EmailSettingsForm() {
     );
   }
 
-  const isConfigured = apiKeyConfigured && !!sender;
+  // Derive configured status from current values
+  const apiKeyConfigured = !!values.apiKey;
+  const isConfigured = apiKeyConfigured && !!values.sender;
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -149,11 +127,11 @@ export default function EmailSettingsForm() {
               id="resend-api-key"
               type="password"
               placeholder={apiKeyConfigured ? MASKED_VALUE : "re_xxxxxxxxxxxx"}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              value={values.apiKey}
+              onChange={(e) => setValue("apiKey", e.target.value)}
               className="font-mono"
             />
-            {apiKeyConfigured && apiKey === MASKED_VALUE && (
+            {apiKeyConfigured && values.apiKey === MASKED_VALUE && (
               <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
                 <CheckCircle2 className="h-3 w-3" /> Configured. Type a new key
                 to replace.
@@ -192,8 +170,8 @@ export default function EmailSettingsForm() {
               id="email-sender"
               type="email"
               placeholder="noreply@yourdomain.com"
-              value={sender}
-              onChange={(e) => setSender(e.target.value)}
+              value={values.sender}
+              onChange={(e) => setValue("sender", e.target.value)}
             />
           </div>
         </CardContent>
@@ -206,10 +184,10 @@ export default function EmailSettingsForm() {
         </p>
         <Button
           onClick={() => handleSubmit()}
-          disabled={saving}
+          disabled={isSaving}
           className="min-w-[140px]"
         >
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Save className="mr-2 h-4 w-4" />
           Save Email Settings
         </Button>

@@ -109,6 +109,14 @@ import {
   updateBusinessSettings,
   updateThemeSettings,
   updateSmsSettings,
+  // Product Variants
+  createProductVariant,
+  updateProductVariant,
+  deleteProductVariant,
+  bulkCreateProductVariants,
+  bulkUpdateProductVariants,
+  bulkDeleteProductVariants,
+  duplicateProductVariant,
 } from "./api.functions";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1292,5 +1300,107 @@ export function useBulkRestoreAttributes() {
       toast.success(`${variables.ids.length} attribute(s) restored`);
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to restore attributes")),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  PRODUCT VARIANTS
+// ═══════════════════════════════════════════════════════════════════
+
+export function useCreateProductVariant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { productId: string; variant: Record<string, unknown> }) =>
+      createProductVariant({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      toast.success("Success!", { description: "Variant has been created successfully." });
+    },
+    onError: (err) => toast.error("Error Creating Variant", { description: getServerFnError(err, "An unknown error occurred.") }),
+  });
+}
+
+export function useUpdateProductVariant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { productId: string; variantId: string; variant: Record<string, unknown> }) =>
+      updateProductVariant({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      toast.success("Success!", { description: "Variant has been updated successfully." });
+    },
+    onError: (err) => toast.error("Error Updating Variant", { description: getServerFnError(err, "An unknown error occurred.") }),
+  });
+}
+
+export function useDeleteProductVariant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { productId: string; variantId: string }) =>
+      deleteProductVariant({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      toast.success("Success!", { description: "Variant has been deleted." });
+    },
+    onError: (err) => toast.error("Deletion Failed", { description: getServerFnError(err, "Could not delete variant.") }),
+  });
+}
+
+export function useBulkCreateProductVariants() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { productId: string; variants: Record<string, unknown>[] }) =>
+      bulkCreateProductVariants({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      toast.success("Success!", { description: "Variants created successfully." });
+    },
+    onError: (err) => toast.error("Bulk Creation Failed", { description: getServerFnError(err, "Could not create variants.") }),
+  });
+}
+
+export function useBulkUpdateProductVariants() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { productId: string; updates: Record<string, unknown>[] }) =>
+      bulkUpdateProductVariants({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      toast.success("Success!", { description: "Variants updated successfully." });
+    },
+    onError: (err) => toast.error("Update Failed", { description: getServerFnError(err, "Could not update variants.") }),
+  });
+}
+
+export function useBulkDeleteProductVariants() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { productId: string; variantIds: string[] }) =>
+      bulkDeleteProductVariants({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      toast.success("Success!", { description: `${variables.variantIds.length} variants deleted.` });
+    },
+    onError: (err) => toast.error("Bulk Deletion Failed", { description: getServerFnError(err, "Could not delete variants.") }),
+  });
+}
+
+export function useDuplicateProductVariant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { productId: string; variantId: string }) =>
+      duplicateProductVariant({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      toast.success("Success!", { description: "Variant has been duplicated successfully." });
+    },
+    onError: (err) => toast.error("Duplication Failed", { description: getServerFnError(err, "Could not duplicate variant.") }),
   });
 }
