@@ -1310,13 +1310,7 @@ export const getAbandonedCheckouts = createServerFn({ method: "GET" })
     if (data.search) params.search = data.search;
     if (data.sort) params.sort = data.sort;
     if (data.order) params.order = data.order;
-    try {
-      return await apiGet<unknown>("/abandoned-checkouts", params);
-    } catch (err) {
-      console.error("[getAbandonedCheckouts] API error:", err);
-      // Return safe fallback so TanStack Start RPC serialization doesn't break
-      return { checkouts: [], pagination: { page: data.page ?? 1, limit: data.limit ?? 20, total: 0, totalPages: 0 } };
-    }
+    return apiGet<unknown>("/abandoned-checkouts", params);
   });
 
 export const deleteAbandonedCheckouts = createServerFn({ method: "POST" })
