@@ -1,4 +1,5 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
@@ -25,6 +26,13 @@ function AdminLayout() {
   // Initialize Firebase Cloud Messaging for push notifications
   useFirebaseInit(user?.id);
 
+  // Scroll content area to top on route change
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, 0);
+  }, [pathname]);
+
   return (
     <ThemeProvider>
       <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
@@ -32,8 +40,11 @@ function AdminLayout() {
           <AppSidebar />
           <SidebarInset className="h-svh overflow-hidden">
             <AdminHeader user={user} />
-            <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-gray-50 dark:bg-[#0a0a0a]">
-              <div className="max-w-7xl mx-auto min-h-[50vh]">
+            <div
+              ref={scrollRef}
+              className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 py-2 sm:py-3 bg-gray-50 dark:bg-[#0a0a0a]"
+            >
+              <div className="max-w-7xl mx-auto">
                 <Outlet />
               </div>
             </div>
@@ -41,7 +52,7 @@ function AdminLayout() {
             <div id="form-action-bar-slot" />
           </SidebarInset>
         </SidebarProvider>
-        <Toaster richColors closeButton />
+        <Toaster richColors closeButton position="top-right" />
       </PermissionProvider>
     </ThemeProvider>
   );
