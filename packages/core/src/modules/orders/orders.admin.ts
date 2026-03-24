@@ -73,9 +73,25 @@ export async function listOrders(db: Database, options: {
 
     let rankExpression = undefined;
     if (search) {
-        const cond = ftsMatch("orders_fts", "orders", search);
-        if (cond) {
-            whereConditions.push(cond);
+        // Phone-aware search: if input looks like a phone number (mostly digits
+        // with optional +, spaces, dashes, parens), do a LIKE on customer_phone
+        // with digits stripped. Handles all international formats.
+        const digitsOnly = search.replace(/[^0-9]/g, "");
+        const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
+
+        const ftsCondition = ftsMatch("orders_fts", "orders", search);
+
+        if (looksLikePhone && ftsCondition) {
+            // OR: match via FTS (name, order ID) or LIKE on phone digits
+            whereConditions.push(sql`(${ftsCondition} OR ${orders.customerPhone} LIKE ${"%" + digitsOnly + "%"})`);
+            const sanitized = sanitizeFtsQuery(search);
+            rankExpression = sql`(SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}) ASC`;
+        } else if (looksLikePhone) {
+            // Pure phone search (FTS returned nothing useful)
+            whereConditions.push(sql`${orders.customerPhone} LIKE ${"%" + digitsOnly + "%"}`);
+        } else if (ftsCondition) {
+            // Pure text search (name, order ID)
+            whereConditions.push(ftsCondition);
             const sanitized = sanitizeFtsQuery(search);
             rankExpression = sql`(SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}) ASC`;
         }
