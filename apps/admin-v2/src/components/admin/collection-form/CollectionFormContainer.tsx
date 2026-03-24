@@ -143,7 +143,7 @@ export function CollectionForm({
         isSubmitting={isSubmitting}
       />
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="pt-2 pb-6">
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
             {/* Left Column (2/3) - Main content */}
             <div className="lg:col-span-2 space-y-4">
