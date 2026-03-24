@@ -12,7 +12,7 @@ import {
   FormMessage,
 } from "../../ui/form";
 import { Input } from "../../ui/input";
-import { FormStickyHeader } from "~/components/admin/FormStickyHeader";
+import { FormBreadcrumb, FormActionBar } from "~/components/admin/FormStickyHeader";
 import { useNavigate } from "@tanstack/react-router";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { useQueryClient } from "@tanstack/react-query";
@@ -142,16 +142,11 @@ export function CollectionForm({
         isDirty={form.formState.isDirty}
         isSubmitting={isSubmitting}
       />
-      <FormStickyHeader
+      <FormBreadcrumb
         title="Collections"
         entityName={form.watch("name")}
         isEdit={isEdit}
-        isSubmitting={isSubmitting}
-        isDirty={form.formState.isDirty}
         cancelUrl="/admin/collections"
-        newUrl="/admin/collections/new"
-        newLabel="New Collection"
-        onSave={() => form.handleSubmit(handleSubmit)()}
       />
 
       <Form {...form}>
@@ -204,6 +199,16 @@ export function CollectionForm({
           </div>
         </form>
       </Form>
+      <FormActionBar
+        title="Collections"
+        isEdit={isEdit}
+        isSubmitting={isSubmitting}
+        isDirty={form.formState.isDirty}
+        cancelUrl="/admin/collections"
+        newUrl="/admin/collections/new"
+        newLabel="New Collection"
+        onSave={() => form.handleSubmit(handleSubmit)()}
+      />
     </>
   );
 }
