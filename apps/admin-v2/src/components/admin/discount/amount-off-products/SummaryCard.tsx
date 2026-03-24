@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "../../../ui/card";
-import { format } from "date-fns";
+import { formatDateShort } from "@scalius/shared/timestamps";
 import type { FormValues, Product, Collection } from "./types";
 
 interface SummaryCardProps {
@@ -63,11 +63,11 @@ export function SummaryCard({
           <div className="text-muted-foreground">Period</div>
           <div className="font-medium">
             {form.watch("startDate")
-              ? format(form.watch("startDate")!, "MMM d, yyyy")
+              ? formatDateShort(form.watch("startDate")!)
               : "---"}
-            {" - "}
+            {" — "}
             {form.watch("endDate")
-              ? format(form.watch("endDate")!, "MMM d, yyyy")
+              ? formatDateShort(form.watch("endDate")!)
               : "No end date"}
           </div>
           <div className="text-muted-foreground">Status</div>

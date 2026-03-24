@@ -33,7 +33,7 @@ import { Calendar } from "../../ui/calendar";
 import { CalendarIcon, Percent, Loader2, Info, RefreshCw } from "lucide-react";
 import { Checkbox } from "../../ui/checkbox";
 import { cn } from "@scalius/shared/utils";
-import { format } from "date-fns";
+import { formatDateShort } from "@scalius/shared/timestamps";
 import { Separator } from "../../ui/separator";
 import { toast } from "sonner";
 import { useCreateDiscount, useUpdateDiscount } from "~/lib/api.mutations";
@@ -492,7 +492,7 @@ export function AmountOffOrderForm({
                             >
                               <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
                               {field.value ? (
-                                format(field.value, "PPP") // Format: Sep 10, 2023
+                                formatDateShort(field.value) // Format: Sep 10, 2023
                               ) : (
                                 <span>Pick a date</span>
                               )}
@@ -540,7 +540,7 @@ export function AmountOffOrderForm({
                             >
                               <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
                               {field.value ? (
-                                format(field.value, "PPP")
+                                formatDateShort(field.value)
                               ) : (
                                 <span>No end date</span>
                               )}

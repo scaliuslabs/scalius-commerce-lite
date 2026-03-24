@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../../ui/popover";
 import { Calendar } from "../../../ui/calendar";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { format } from "date-fns";
+import { formatDateShort } from "@scalius/shared/timestamps";
 import type { FormValues } from "./types";
 
 interface ActiveDatesSectionProps {
@@ -56,7 +56,7 @@ export function ActiveDatesSection({ form }: ActiveDatesSectionProps) {
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {field.value &&
                           !isNaN(new Date(field.value).getTime()) ? (
-                          format(new Date(field.value), "PPP")
+                          formatDateShort(field.value)
                         ) : (
                           <span>Pick a date</span>
                         )}
@@ -105,7 +105,7 @@ export function ActiveDatesSection({ form }: ActiveDatesSectionProps) {
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {field.value &&
                             !isNaN(new Date(field.value).getTime()) ? (
-                            format(new Date(field.value), "PPP")
+                            formatDateShort(field.value)
                           ) : (
                             <span>No end date</span>
                           )}

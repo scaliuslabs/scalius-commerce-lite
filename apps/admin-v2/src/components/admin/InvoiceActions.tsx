@@ -22,7 +22,46 @@ export function InvoiceActions({ invoiceNumber }: InvoiceActionsProps) {
         margin: 0,
         filename: `invoice-${invoiceNumber}.pdf`,
         image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          // Strip oklch() CSS variables that html2canvas/html2pdf cannot parse.
+          // Tailwind v4 sets oklch-based custom properties on :root which bleed
+          // into the cloned document and cause a "unsupported color function" error.
+          onclone: (clonedDoc: Document) => {
+            const root = clonedDoc.documentElement;
+            const rootStyle = root.style;
+            // Remove any CSS custom property whose computed value contains oklch
+            const computed = getComputedStyle(document.documentElement);
+            for (let i = computed.length - 1; i >= 0; i--) {
+              const prop = computed[i];
+              if (prop.startsWith("--")) {
+                const val = computed.getPropertyValue(prop);
+                if (val.includes("oklch")) {
+                  rootStyle.removeProperty(prop);
+                }
+              }
+            }
+            // Also remove from <body>
+            const bodyComputed = getComputedStyle(document.body);
+            const clonedBody = clonedDoc.body;
+            for (let i = bodyComputed.length - 1; i >= 0; i--) {
+              const prop = bodyComputed[i];
+              if (prop.startsWith("--")) {
+                const val = bodyComputed.getPropertyValue(prop);
+                if (val.includes("oklch")) {
+                  clonedBody.style.removeProperty(prop);
+                }
+              }
+            }
+            // Force white background on the invoice element
+            const invoiceEl = clonedDoc.getElementById("invoice-document");
+            if (invoiceEl) {
+              invoiceEl.style.background = "white";
+              invoiceEl.style.color = "#374151";
+            }
+          },
+        },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       }).from(element).save();
     } catch (err) {

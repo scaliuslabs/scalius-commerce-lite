@@ -103,15 +103,19 @@ export async function listDiscounts(db: Database, options: { page: number; limit
         });
     }
 
+    // Drizzle's mode:"timestamp" already converts the raw integer (unix seconds)
+    // to a Date object via mapFromDriverValue. We just need .toISOString().
+    // Do NOT do `new Date(Number(date) * 1000)` — that double-converts and
+    // produces dates in year 58196.
     const formattedResults = results.map((discount) => {
         const stats = usageStats[discount.id] || { count: 0, total: 0 };
         return {
             ...discount,
-            createdAt: discount.createdAt ? new Date(Number(discount.createdAt) * 1000).toISOString() : null,
-            updatedAt: discount.updatedAt ? new Date(Number(discount.updatedAt) * 1000).toISOString() : null,
-            deletedAt: discount.deletedAt ? new Date(Number(discount.deletedAt) * 1000).toISOString() : null,
-            startDate: discount.startDate ? new Date(Number(discount.startDate) * 1000).toISOString() : null,
-            endDate: discount.endDate ? new Date(Number(discount.endDate) * 1000).toISOString() : null,
+            createdAt: discount.createdAt instanceof Date ? discount.createdAt.toISOString() : null,
+            updatedAt: discount.updatedAt instanceof Date ? discount.updatedAt.toISOString() : null,
+            deletedAt: discount.deletedAt instanceof Date ? discount.deletedAt.toISOString() : null,
+            startDate: discount.startDate instanceof Date ? discount.startDate.toISOString() : null,
+            endDate: discount.endDate instanceof Date ? discount.endDate.toISOString() : null,
             relatedProducts: relatedProducts[discount.id] || { buy: [], get: [] },
             relatedCollections: relatedCollections[discount.id] || { buy: [], get: [] },
             usageCount: stats.count,
@@ -142,11 +146,11 @@ export async function getDiscountById(db: Database, id: string) {
 
     return {
         ...discount,
-        createdAt: discount.createdAt ? new Date(Number(discount.createdAt) * 1000).toISOString() : null,
-        updatedAt: discount.updatedAt ? new Date(Number(discount.updatedAt) * 1000).toISOString() : null,
-        deletedAt: discount.deletedAt ? new Date(Number(discount.deletedAt) * 1000).toISOString() : null,
-        startDate: discount.startDate ? new Date(Number(discount.startDate) * 1000).toISOString() : null,
-        endDate: discount.endDate ? new Date(Number(discount.endDate) * 1000).toISOString() : null,
+        createdAt: discount.createdAt instanceof Date ? discount.createdAt.toISOString() : null,
+        updatedAt: discount.updatedAt instanceof Date ? discount.updatedAt.toISOString() : null,
+        deletedAt: discount.deletedAt instanceof Date ? discount.deletedAt.toISOString() : null,
+        startDate: discount.startDate instanceof Date ? discount.startDate.toISOString() : null,
+        endDate: discount.endDate instanceof Date ? discount.endDate.toISOString() : null,
         relatedProducts,
         relatedCollections,
     };

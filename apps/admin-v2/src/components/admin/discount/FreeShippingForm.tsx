@@ -25,7 +25,7 @@ import { Calendar } from "../../ui/calendar";
 import { CalendarIcon, RefreshCw } from "lucide-react";
 import { Checkbox } from "../../ui/checkbox";
 import { cn } from "@scalius/shared/utils";
-import { format } from "date-fns";
+import { formatDateShort } from "@scalius/shared/timestamps";
 import { Separator } from "../../ui/separator";
 import {
   Tooltip,
@@ -212,7 +212,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                           >
                             {field.value &&
                               !isNaN(new Date(field.value).getTime()) ? (
-                              format(new Date(field.value), "PPP")
+                              formatDateShort(field.value)
                             ) : (
                               <span>Pick a date</span>
                             )}
@@ -265,7 +265,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                           >
                             {field.value &&
                               !isNaN(new Date(field.value).getTime()) ? (
-                              format(new Date(field.value), "PPP")
+                              formatDateShort(field.value)
                             ) : (
                               <span>No end date</span>
                             )}
@@ -528,11 +528,11 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
               <span className="text-muted-foreground">Period</span>
               <span className="font-medium">
                 {form.watch("startDate")
-                  ? format(form.watch("startDate")!, "MMM d, yyyy")
+                  ? formatDateShort(form.watch("startDate")!)
                   : "---"}
                 {" - "}
                 {form.watch("endDate")
-                  ? format(form.watch("endDate")!, "MMM d, yyyy")
+                  ? formatDateShort(form.watch("endDate")!)
                   : "No end date"}
               </span>
               <span className="text-muted-foreground">Status</span>
