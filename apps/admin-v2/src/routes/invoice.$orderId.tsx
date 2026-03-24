@@ -1,5 +1,4 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { z } from "zod";
 import { createServerFn } from "@tanstack/react-start";
 import { InvoiceActions } from "~/components/admin/InvoiceActions";
 import type { InvoiceData, OrderItem } from "~/types/api-responses";
@@ -12,15 +11,34 @@ const getOrderInvoiceData = createServerFn({ method: "GET" })
     return apiGet<InvoiceData>(`/orders/${data.id}/invoice`);
   });
 
-const searchSchema = z.object({
-  autoprint: z.boolean().default(false).catch(false),
+/**
+ * Verify that the user has a valid admin session.
+ * Reuses the same auth check as admin routes but without loading RBAC.
+ */
+const requireAuth = createServerFn().handler(async () => {
+  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
+  const { getRequestHeader } = await import("@tanstack/react-start/server");
+  initBindings();
+
+  const cookieHeader = getRequestHeader("cookie") ?? "";
+  const headers = new Headers();
+  if (cookieHeader) headers.set("cookie", cookieHeader);
+
+  const authResult = await getAuthSession(headers);
+  if (!authResult?.session || !authResult?.user) {
+    throw redirect({ to: "/auth/login" });
+  }
+  if (authResult.user.twoFactorEnabled && !authResult.session.twoFactorVerified) {
+    throw redirect({ to: "/auth/two-factor" });
+  }
+  return null;
 });
 
-export const Route = createFileRoute("/admin/orders/$orderId/invoice")({
-  validateSearch: searchSchema,
+export const Route = createFileRoute("/invoice/$orderId")({
+  beforeLoad: () => requireAuth(),
   loader: async ({ params }) => {
     const result = await getOrderInvoiceData({ data: { id: params.orderId } }).catch(() => null);
-    if (!result) throw redirect({ to: `/admin/orders/${params.orderId}` as string });
+    if (!result) throw redirect({ to: "/admin/orders" });
     const r = result as InvoiceData;
     return {
       order: r.order,
@@ -29,14 +47,17 @@ export const Route = createFileRoute("/admin/orders/$orderId/invoice")({
     };
   },
   head: ({ loaderData }) => ({
-    meta: [{ title: `Invoice ${loaderData?.invoiceNumber || ""} | Scalius Admin` }],
+    meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { title: `Invoice ${loaderData?.invoiceNumber || ""} | Scalius` },
+    ],
   }),
   component: InvoicePage,
 });
 
 function InvoicePage() {
   const { order, invoiceNumber, businessInfo } = Route.useLoaderData();
-  const { autoprint } = Route.useSearch();
 
   if (!order) {
     return <div>Invoice not found</div>;
@@ -64,7 +85,7 @@ function InvoicePage() {
   const customerAddress = addressParts.join(", ");
 
   return (
-    <>
+    <div style={{ background: "#f9fafb", minHeight: "100vh" }}>
       <style dangerouslySetInnerHTML={{ __html: invoiceStyles }} />
       <InvoiceActions invoiceNumber={invoiceNumber} />
 
@@ -162,12 +183,14 @@ function InvoicePage() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
 const invoiceStyles = `
-.invoice-wrapper { max-width: 210mm; margin: 60px auto 40px; padding: 0 16px; }
+/* Reset — isolate the invoice page from any inherited oklch/Tailwind variables */
+.invoice-wrapper *, .invoice-wrapper *::before, .invoice-wrapper *::after { color: inherit; }
+.invoice-wrapper { max-width: 210mm; margin: 60px auto 40px; padding: 0 16px; color: #374151; font-family: system-ui, -apple-system, sans-serif; }
 .invoice-document { background: white; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 4px; }
 .invoice-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 2px solid #e5e7eb; }
 .business-info h1 { font-size: 24px; font-weight: 700; color: #111827; }
@@ -182,7 +205,7 @@ const invoiceStyles = `
 .items-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; font-weight: 600; padding: 8px 12px; border-bottom: 2px solid #e5e7eb; }
 .items-table th:last-child, .items-table td:last-child { text-align: right; }
 .items-table th:nth-child(4), .items-table td:nth-child(4) { text-align: right; }
-.items-table td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+.items-table td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid #f3f4f6; vertical-align: top; color: #374151; }
 .items-table .variant { font-size: 12px; color: #6b7280; }
 .invoice-totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
 .totals-table { width: 280px; }
@@ -190,5 +213,5 @@ const invoiceStyles = `
 .totals-table .row.discount { color: #059669; }
 .totals-table .row.grand-total { border-top: 2px solid #1f2937; margin-top: 8px; padding-top: 12px; font-size: 16px; font-weight: 700; color: #111827; }
 .invoice-footer { border-top: 1px solid #e5e7eb; padding-top: 16px; text-align: center; font-size: 12px; color: #9ca3af; line-height: 1.6; }
-@media print { .print-hidden { display: none !important; } body { background: white !important; } .invoice-wrapper { margin: 0; padding: 0; max-width: 100%; } .invoice-document { box-shadow: none; border-radius: 0; padding: 10mm 12mm; } @page { size: A4; margin: 10mm 12mm; } }
+@media print { .print-hidden, .print\\:hidden { display: none !important; } body { background: white !important; } .invoice-wrapper { margin: 0; padding: 0; max-width: 100%; } .invoice-document { box-shadow: none; border-radius: 0; padding: 10mm 12mm; } @page { size: A4; margin: 10mm 12mm; } }
 `;

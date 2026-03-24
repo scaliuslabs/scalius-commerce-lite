@@ -15,6 +15,7 @@ import { Route as FirebaseMessagingSwDotjsRouteImport } from './routes/firebase-
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as InvoiceOrderIdRouteImport } from './routes/invoice.$orderId'
 import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
 import { Route as AuthSetup2faRouteImport } from './routes/auth/setup-2fa'
 import { Route as AuthSetupRouteImport } from './routes/auth/setup'
@@ -64,7 +65,6 @@ import { Route as AdminOrdersOrderIdIndexRouteImport } from './routes/admin/orde
 import { Route as ApiV1AdminSplatRouteImport } from './routes/api/v1/admin/$'
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
 import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$pageId/edit'
-import { Route as AdminOrdersOrderIdInvoiceRouteImport } from './routes/admin/orders/$orderId/invoice'
 import { Route as AdminOrdersOrderIdEditRouteImport } from './routes/admin/orders/$orderId/edit'
 import { Route as AdminDiscountsDiscountIdEditRouteImport } from './routes/admin/discounts/$discountId/edit'
 import { Route as AdminCustomersCustomerIdHistoryRouteImport } from './routes/admin/customers/$customerId/history'
@@ -103,6 +103,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
+} as any)
+const InvoiceOrderIdRoute = InvoiceOrderIdRouteImport.update({
+  id: '/invoice/$orderId',
+  path: '/invoice/$orderId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthTwoFactorRoute = AuthTwoFactorRouteImport.update({
   id: '/two-factor',
@@ -356,12 +361,6 @@ const AdminPagesPageIdEditRoute = AdminPagesPageIdEditRouteImport.update({
   path: '/pages/$pageId/edit',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminOrdersOrderIdInvoiceRoute =
-  AdminOrdersOrderIdInvoiceRouteImport.update({
-    id: '/orders/$orderId/invoice',
-    path: '/orders/$orderId/invoice',
-    getParentRoute: () => AdminRoute,
-  } as any)
 const AdminOrdersOrderIdEditRoute = AdminOrdersOrderIdEditRouteImport.update({
   id: '/orders/$orderId/edit',
   path: '/orders/$orderId/edit',
@@ -422,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/auth/setup': typeof AuthSetupRoute
   '/auth/setup-2fa': typeof AuthSetup2faRoute
   '/auth/two-factor': typeof AuthTwoFactorRoute
+  '/invoice/$orderId': typeof InvoiceOrderIdRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/analytics/new': typeof AdminAnalyticsNewRoute
   '/admin/categories/new': typeof AdminCategoriesNewRoute
@@ -462,7 +462,6 @@ export interface FileRoutesByFullPath {
   '/admin/customers/$customerId/history': typeof AdminCustomersCustomerIdHistoryRoute
   '/admin/discounts/$discountId/edit': typeof AdminDiscountsDiscountIdEditRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
-  '/admin/orders/$orderId/invoice': typeof AdminOrdersOrderIdInvoiceRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
@@ -486,6 +485,7 @@ export interface FileRoutesByTo {
   '/auth/setup': typeof AuthSetupRoute
   '/auth/setup-2fa': typeof AuthSetup2faRoute
   '/auth/two-factor': typeof AuthTwoFactorRoute
+  '/invoice/$orderId': typeof InvoiceOrderIdRoute
   '/admin': typeof AdminIndexRoute
   '/admin/analytics/new': typeof AdminAnalyticsNewRoute
   '/admin/categories/new': typeof AdminCategoriesNewRoute
@@ -526,7 +526,6 @@ export interface FileRoutesByTo {
   '/admin/customers/$customerId/history': typeof AdminCustomersCustomerIdHistoryRoute
   '/admin/discounts/$discountId/edit': typeof AdminDiscountsDiscountIdEditRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
-  '/admin/orders/$orderId/invoice': typeof AdminOrdersOrderIdInvoiceRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
@@ -552,6 +551,7 @@ export interface FileRoutesById {
   '/auth/setup': typeof AuthSetupRoute
   '/auth/setup-2fa': typeof AuthSetup2faRoute
   '/auth/two-factor': typeof AuthTwoFactorRoute
+  '/invoice/$orderId': typeof InvoiceOrderIdRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/analytics/new': typeof AdminAnalyticsNewRoute
   '/admin/categories/new': typeof AdminCategoriesNewRoute
@@ -592,7 +592,6 @@ export interface FileRoutesById {
   '/admin/customers/$customerId/history': typeof AdminCustomersCustomerIdHistoryRoute
   '/admin/discounts/$discountId/edit': typeof AdminDiscountsDiscountIdEditRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
-  '/admin/orders/$orderId/invoice': typeof AdminOrdersOrderIdInvoiceRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
@@ -619,6 +618,7 @@ export interface FileRouteTypes {
     | '/auth/setup'
     | '/auth/setup-2fa'
     | '/auth/two-factor'
+    | '/invoice/$orderId'
     | '/admin/'
     | '/admin/analytics/new'
     | '/admin/categories/new'
@@ -659,7 +659,6 @@ export interface FileRouteTypes {
     | '/admin/customers/$customerId/history'
     | '/admin/discounts/$discountId/edit'
     | '/admin/orders/$orderId/edit'
-    | '/admin/orders/$orderId/invoice'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
     | '/api/v1/admin/$'
@@ -683,6 +682,7 @@ export interface FileRouteTypes {
     | '/auth/setup'
     | '/auth/setup-2fa'
     | '/auth/two-factor'
+    | '/invoice/$orderId'
     | '/admin'
     | '/admin/analytics/new'
     | '/admin/categories/new'
@@ -723,7 +723,6 @@ export interface FileRouteTypes {
     | '/admin/customers/$customerId/history'
     | '/admin/discounts/$discountId/edit'
     | '/admin/orders/$orderId/edit'
-    | '/admin/orders/$orderId/invoice'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
     | '/api/v1/admin/$'
@@ -748,6 +747,7 @@ export interface FileRouteTypes {
     | '/auth/setup'
     | '/auth/setup-2fa'
     | '/auth/two-factor'
+    | '/invoice/$orderId'
     | '/admin/'
     | '/admin/analytics/new'
     | '/admin/categories/new'
@@ -788,7 +788,6 @@ export interface FileRouteTypes {
     | '/admin/customers/$customerId/history'
     | '/admin/discounts/$discountId/edit'
     | '/admin/orders/$orderId/edit'
-    | '/admin/orders/$orderId/invoice'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
     | '/api/v1/admin/$'
@@ -803,6 +802,7 @@ export interface RootRouteChildren {
   HealthRoute: typeof HealthRoute
   ScannerRoute: typeof ScannerRoute
   ApiScannerTokenRoute: typeof ApiScannerTokenRoute
+  InvoiceOrderIdRoute: typeof InvoiceOrderIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiV1AdminSplatRoute: typeof ApiV1AdminSplatRoute
 }
@@ -850,6 +850,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/invoice/$orderId': {
+      id: '/invoice/$orderId'
+      path: '/invoice/$orderId'
+      fullPath: '/invoice/$orderId'
+      preLoaderRoute: typeof InvoiceOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/auth/two-factor': {
       id: '/auth/two-factor'
@@ -1194,13 +1201,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPagesPageIdEditRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/orders/$orderId/invoice': {
-      id: '/admin/orders/$orderId/invoice'
-      path: '/orders/$orderId/invoice'
-      fullPath: '/admin/orders/$orderId/invoice'
-      preLoaderRoute: typeof AdminOrdersOrderIdInvoiceRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/orders/$orderId/edit': {
       id: '/admin/orders/$orderId/edit'
       path: '/orders/$orderId/edit'
@@ -1298,7 +1298,6 @@ interface AdminRouteChildren {
   AdminCustomersCustomerIdHistoryRoute: typeof AdminCustomersCustomerIdHistoryRoute
   AdminDiscountsDiscountIdEditRoute: typeof AdminDiscountsDiscountIdEditRoute
   AdminOrdersOrderIdEditRoute: typeof AdminOrdersOrderIdEditRoute
-  AdminOrdersOrderIdInvoiceRoute: typeof AdminOrdersOrderIdInvoiceRoute
   AdminPagesPageIdEditRoute: typeof AdminPagesPageIdEditRoute
   AdminProductsProductIdEditRoute: typeof AdminProductsProductIdEditRoute
   AdminOrdersOrderIdIndexRoute: typeof AdminOrdersOrderIdIndexRoute
@@ -1350,7 +1349,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCustomersCustomerIdHistoryRoute: AdminCustomersCustomerIdHistoryRoute,
   AdminDiscountsDiscountIdEditRoute: AdminDiscountsDiscountIdEditRoute,
   AdminOrdersOrderIdEditRoute: AdminOrdersOrderIdEditRoute,
-  AdminOrdersOrderIdInvoiceRoute: AdminOrdersOrderIdInvoiceRoute,
   AdminPagesPageIdEditRoute: AdminPagesPageIdEditRoute,
   AdminProductsProductIdEditRoute: AdminProductsProductIdEditRoute,
   AdminOrdersOrderIdIndexRoute: AdminOrdersOrderIdIndexRoute,
@@ -1386,6 +1384,7 @@ const rootRouteChildren: RootRouteChildren = {
   HealthRoute: HealthRoute,
   ScannerRoute: ScannerRoute,
   ApiScannerTokenRoute: ApiScannerTokenRoute,
+  InvoiceOrderIdRoute: InvoiceOrderIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiV1AdminSplatRoute: ApiV1AdminSplatRoute,
 }

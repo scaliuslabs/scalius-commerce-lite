@@ -24,7 +24,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { usePermissions } from "@/contexts/PermissionContext";
-import { getFilteredNavSections, type NavItem } from "./AdminNav";
+import { getFilteredNavSections, type NavItem, type NavSubItem } from "./AdminNav";
 import faviconImg from "@/assets/favicon.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import logoLightImg from "@/assets/logo-light.png";
@@ -36,6 +36,31 @@ interface AppSidebarProps {
 function isRouteActive(currentPath: string, href: string): boolean {
   if (href === "/admin") return currentPath === href;
   return currentPath === href || currentPath.startsWith(href + "/");
+}
+
+/**
+ * Determine which sub-item is active.
+ * Uses startsWith matching so nested pages (e.g. /admin/products/abc/edit)
+ * keep the parent sub-item (Products) highlighted.
+ *
+ * When multiple sub-items match via startsWith (e.g. /admin/settings and
+ * /admin/settings/theme both match /admin/settings/theme), the longest
+ * (most specific) href wins.
+ */
+function getActiveSubItemHref(
+  currentPath: string,
+  subItems: NavSubItem[],
+): string | null {
+  let bestMatch: string | null = null;
+  for (const sub of subItems) {
+    const href = sub.href.replace(/\/$/, "");
+    if (currentPath === href || currentPath.startsWith(href + "/")) {
+      if (!bestMatch || href.length > bestMatch.length) {
+        bestMatch = href;
+      }
+    }
+  }
+  return bestMatch;
 }
 
 export function AppSidebar({ storefrontUrl = "/" }: AppSidebarProps) {
@@ -166,6 +191,11 @@ function CollapsibleNavItem({
     isRouteActive(normalizedPath, item.href) ||
     (item.subItems?.some((sub) => isRouteActive(normalizedPath, sub.href)) ?? false);
 
+  // Determine which sub-item is active (longest/most-specific match wins)
+  const activeSubHref = item.subItems
+    ? getActiveSubItemHref(normalizedPath, item.subItems)
+    : null;
+
   return (
     <Collapsible
       asChild
@@ -185,23 +215,27 @@ function CollapsibleNavItem({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <SidebarMenuSub>
-            {item.subItems?.map((subItem) => (
-              <SidebarMenuSubItem key={subItem.href}>
-                <SidebarMenuSubButton
-                  asChild
-                  isActive={normalizedPath === subItem.href.replace(/\/$/, "")}
-                  tooltip={subItem.name}
-                  className={normalizedPath === subItem.href.replace(/\/$/, "") ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
-                >
-                  <Link to={subItem.href}>
-                    {subItem.icon && (
-                      <subItem.icon className="shrink-0" strokeWidth={1.8} />
-                    )}
-                    <span>{subItem.name}</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-            ))}
+            {item.subItems?.map((subItem) => {
+              const subHref = subItem.href.replace(/\/$/, "");
+              const isSubActive = activeSubHref === subHref;
+              return (
+                <SidebarMenuSubItem key={subItem.href}>
+                  <SidebarMenuSubButton
+                    asChild
+                    isActive={isSubActive}
+                    tooltip={subItem.name}
+                    className={isSubActive ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
+                  >
+                    <Link to={subItem.href}>
+                      {subItem.icon && (
+                        <subItem.icon className="shrink-0" strokeWidth={1.8} />
+                      )}
+                      <span>{subItem.name}</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              );
+            })}
           </SidebarMenuSub>
         </CollapsibleContent>
       </SidebarMenuItem>

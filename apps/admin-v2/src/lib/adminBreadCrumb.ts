@@ -15,53 +15,53 @@ export function generateAdminBreadcrumbs(
 ): BreadcrumbItem[] {
   const pathSegments = currentPath.split("/").filter(Boolean);
 
-  const breadcrumbItems = pathSegments
-    .map((segment: string, index: number): BreadcrumbItem | null => {
-      // Special handling for customer history page
-      if (
-        pathSegments[0] === "admin" &&
-        pathSegments[1] === "customers" &&
-        pathSegments[3] === "history"
-      ) {
-        if (index === 0) return { title: "Admin", href: "/admin" };
-        if (index === 1)
-          return { title: "Customers", href: "/admin/customers" };
-        if (index === 3) return { title: "History" };
-        return null;
-      }
+  // Drop the leading "admin" segment — the Breadcrumb component already
+  // renders a Home icon that links to /admin, so including "Admin" as a
+  // text breadcrumb would duplicate it.
+  const segments = pathSegments[0] === "admin" ? pathSegments.slice(1) : pathSegments;
 
-      // Special handling for admin pages with IDs - exclude the ID segment
-      const adminPagesWithIds = [
-        "categories",
-        "collections",
-        "pages",
-        "widgets",
-        "discounts",
-        "analytics",
-        "customers",
-        "products",
-        "orders",
-      ];
+  // If we're on exactly /admin (dashboard), no extra breadcrumb items needed
+  // — the Home icon alone is sufficient.
+  if (segments.length === 0) return [];
 
-      if (
-        pathSegments[0] === "admin" &&
-        adminPagesWithIds.includes(pathSegments[1]) &&
-        pathSegments[2] && // has an ID
-        index === 2 // this is the ID segment
-      ) {
-        return null; // Exclude ID segment completely from breadcrumb
-      }
+  // Entities that use /:id/ sub-routes (view, edit, history, invoice, etc.)
+  const entitiesWithIds = new Set([
+    "categories",
+    "collections",
+    "pages",
+    "widgets",
+    "discounts",
+    "analytics",
+    "customers",
+    "products",
+    "orders",
+  ]);
 
-      // Generate normal breadcrumb item
-      const href = `/${pathSegments.slice(0, index + 1).join("/")}`;
-      return {
-        title: segment.charAt(0).toUpperCase() + segment.slice(1),
-        href: index === pathSegments.length - 1 ? undefined : href,
-      };
-    })
-    .filter(
-      (item: BreadcrumbItem | null): item is BreadcrumbItem => item !== null,
-    );
+  const breadcrumbItems: BreadcrumbItem[] = [];
+
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+
+    // Skip ID segments (e.g. the UUID between "products" and "edit")
+    if (i >= 1 && entitiesWithIds.has(segments[0]) && i === 1) {
+      // segments[1] is the ID — skip it
+      continue;
+    }
+
+    const href = `/admin/${segments.slice(0, i + 1).join("/")}`;
+    const isLast = i === segments.length - 1;
+
+    // Friendly title: capitalize, handle hyphenated words
+    const title = segment
+      .split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+
+    breadcrumbItems.push({
+      title,
+      href: isLast ? undefined : href,
+    });
+  }
 
   return breadcrumbItems;
 }

@@ -198,7 +198,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             asChild
             className="h-9 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
           >
-            <Link to={`/admin/orders/${order.id}/invoice` as string} target="_blank" rel="noopener noreferrer">
+            <Link to={`/invoice/${order.id}` as string} target="_blank" rel="noopener noreferrer">
               <Printer className="h-4 w-4" />
               Print Invoice
             </Link>
