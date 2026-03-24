@@ -79,8 +79,6 @@ import {
   getNavigationPreviewProducts,
   // Fraud Checker
   getFraudCheckerProviders,
-  // Abandoned Checkouts
-  getAbandonedCheckouts,
   // RBAC
   getRbacRoles,
   getRbacPermissions,
@@ -579,7 +577,21 @@ export const abandonedCheckoutsQueryOptions = (params: {
 }) =>
   queryOptions({
     queryKey: queryKeys.abandonedCheckouts.list(params),
-    queryFn: () => getAbandonedCheckouts({ data: params }),
+    queryFn: async () => {
+      // Fetch via admin API proxy (standard JSON) instead of server function RPC.
+      // The checkoutData field contains large serialized order objects that can
+      // break TanStack Start's custom RPC serialization.
+      const sp = new URLSearchParams();
+      if (params.page) sp.set("page", String(params.page));
+      if (params.limit) sp.set("limit", String(params.limit));
+      if (params.search) sp.set("search", params.search);
+      if (params.sort) sp.set("sort", params.sort);
+      if (params.order) sp.set("order", params.order);
+      const res = await fetch(`/api/v1/admin/abandoned-checkouts?${sp.toString()}`);
+      if (!res.ok) throw new Error(`Failed to fetch abandoned checkouts: ${res.status}`);
+      const body = await res.json() as { success: boolean; data?: unknown };
+      return (body.data ?? body) as { checkouts: unknown[]; pagination: unknown };
+    },
     staleTime: STALE.MODERATE,
   });
 
