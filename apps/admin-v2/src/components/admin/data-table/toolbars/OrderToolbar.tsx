@@ -170,7 +170,7 @@ export function OrderToolbar({
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1.5">
       <DataTableToolbar
         searchValue={searchValue}
         onSearchChange={onSearchChange}
@@ -183,15 +183,15 @@ export function OrderToolbar({
 
       {/* Status filter pills */}
       {!showTrashed && (
-        <div className="flex flex-wrap items-center gap-1.5 pb-1 border-t border-border pt-3">
-          <span className="text-xs font-medium text-muted-foreground mr-2">
+        <div className="flex flex-wrap items-center gap-1.5 pb-2">
+          <span className="text-xs font-medium text-muted-foreground mr-1">
             Status:
           </span>
           <Button
             variant={activeStatus === null ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onStatusFilterChange(null)}
-            className="h-7 text-xs font-medium transition-colors"
+            className="h-7 px-2.5 text-xs font-medium"
           >
             All
           </Button>
@@ -203,7 +203,7 @@ export function OrderToolbar({
               }
               size="sm"
               onClick={() => onStatusFilterChange(filter.value)}
-              className="h-7 text-xs font-medium transition-colors"
+              className="h-7 px-2.5 text-xs font-medium"
             >
               {filter.label}
             </Button>
