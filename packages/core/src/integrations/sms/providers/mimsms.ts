@@ -42,12 +42,13 @@ export class MimSmsProvider implements SmsProvider {
       }),
     });
 
-    const json = (await res.json()) as {
-      statusCode: string;
-      status: string;
-      trxnId: string;
-      responseResult: string;
-    };
+    const text = await res.text();
+    let json: { statusCode: string; status: string; trxnId: string; responseResult: string };
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return { success: false, rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+    }
 
     if (json.statusCode === "200" && json.status === "Success") {
       return {

@@ -34,11 +34,13 @@ export class SmsNetBdProvider implements SmsProvider {
       body: form,
     });
 
-    const json = (await res.json()) as {
-      error: number;
-      msg: string;
-      data?: { request_id?: number };
-    };
+    const text = await res.text();
+    let json: { error: number; msg: string; data?: { request_id?: number } };
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return { success: false, rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+    }
 
     if (json.error === 0) {
       return {

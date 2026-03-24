@@ -46,7 +46,8 @@ export class GennetProvider implements SmsProvider {
       }),
     });
 
-    const json = (await res.json()) as {
+    const text = await res.text();
+    let json: {
       status: string;
       status_code: number;
       error_message: string;
@@ -56,6 +57,11 @@ export class GennetProvider implements SmsProvider {
         csms_id: string;
       }>;
     };
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return { success: false, rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+    }
 
     // Duplicate csms_id (4023) means already sent — treat as success on retry
     if (json.status === "SUCCESS" && json.status_code === 200) {
