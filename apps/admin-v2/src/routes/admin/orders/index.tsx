@@ -64,11 +64,16 @@ interface ShipmentStatus {
   [key: string]: unknown;
 }
 
+const defaultApiParams = mapParams(searchSchema.parse({}));
+
 // ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/orders/")({
   validateSearch: searchSchema,
   staleTime: 0,
+  loader: ({ context: { queryClient } }) => {
+    void queryClient.prefetchQuery(ordersQueryOptions(defaultApiParams));
+  },
   head: ({ match }) => ({
     meta: [
       {
@@ -100,18 +105,11 @@ function OrdersPage() {
   const [isShippingDialogOpen, setIsShippingDialogOpen] = useState(false);
   const [isShipping, setIsShipping] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [activeStatus, setActiveStatus] = useState<string | null>(
-    search.status ?? null,
-  );
-  const [paymentStatus, setPaymentStatus] = useState<string | null>(
-    search.paymentStatus ?? null,
-  );
-  const [paymentMethod, setPaymentMethod] = useState<string | null>(
-    search.paymentMethod ?? null,
-  );
-  const [fulfillmentStatus, setFulfillmentStatus] = useState<string | null>(
-    search.fulfillmentStatus ?? null,
-  );
+  // Derive filter values directly from URL search params (reactive to back/forward)
+  const activeStatus = search.status ?? null;
+  const paymentStatus = search.paymentStatus ?? null;
+  const paymentMethod = search.paymentMethod ?? null;
+  const fulfillmentStatus = search.fulfillmentStatus ?? null;
 
   // Auto-refresh state
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(() => {
@@ -161,7 +159,6 @@ function OrdersPage() {
 
   const onStatusFilterChange = useCallback(
     (status: string | null) => {
-      setActiveStatus(status);
       handleNavigate({ status: status ?? undefined, page: 1 });
     },
     [handleNavigate],
@@ -169,7 +166,6 @@ function OrdersPage() {
 
   const onPaymentStatusChange = useCallback(
     (status: string | null) => {
-      setPaymentStatus(status);
       handleNavigate({ paymentStatus: status ?? undefined, page: 1 });
     },
     [handleNavigate],
@@ -177,7 +173,6 @@ function OrdersPage() {
 
   const onPaymentMethodChange = useCallback(
     (method: string | null) => {
-      setPaymentMethod(method);
       handleNavigate({ paymentMethod: method ?? undefined, page: 1 });
     },
     [handleNavigate],
@@ -185,7 +180,6 @@ function OrdersPage() {
 
   const onFulfillmentStatusChange = useCallback(
     (status: string | null) => {
-      setFulfillmentStatus(status);
       handleNavigate({ fulfillmentStatus: status ?? undefined, page: 1 });
     },
     [handleNavigate],

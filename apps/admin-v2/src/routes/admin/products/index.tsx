@@ -73,16 +73,18 @@ function mapParams(deps: SearchParams) {
   };
 }
 
+// ── Default params for initial prefetch ───────────────────────────
+// Computed once at module level so the loader prefetches the exact cache
+// key the component will query on first mount (no blank flash).
+const defaultApiParams = mapParams(searchSchema.parse({}));
+
 // ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: searchSchema,
-  // No loaderDeps — search/filter/sort/pagination changes must NOT trigger
-  // route transitions (which show the full-page pending spinner). All search-
-  // driven fetching is handled by the component's useQuery + keepPreviousData.
-  // staleTime: 0 ensures data refetches when navigating back from edit pages.
   staleTime: 0,
   loader: ({ context: { queryClient } }) => {
+    void queryClient.prefetchQuery(productsQueryOptions(defaultApiParams));
     void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
     void queryClient.prefetchQuery(productStatsQueryOptions());
   },
