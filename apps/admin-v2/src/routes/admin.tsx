@@ -42,7 +42,7 @@ function AdminLayout() {
             <AdminHeader user={user} />
             <div
               ref={scrollRef}
-              className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
+              className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-4 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
             >
               <div className="max-w-7xl mx-auto">
                 <Outlet />

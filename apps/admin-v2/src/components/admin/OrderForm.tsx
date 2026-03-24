@@ -195,7 +195,7 @@ export function OrderForm({
         isSubmitting={isSubmitting}
       />
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="pb-6 space-y-4">
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="-mt-4 pb-6 space-y-4">
           <OrderFormProvider
             form={form}
             products={products}

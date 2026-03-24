@@ -47,7 +47,7 @@ export function FormContainer<T extends FieldValues>({
   form,
   onSubmit,
   children,
-  formClassName = "pb-6",
+  formClassName = "-mt-4 pb-6",
 }: FormContainerProps<T>) {
   return (
     <ErrorBoundary>
