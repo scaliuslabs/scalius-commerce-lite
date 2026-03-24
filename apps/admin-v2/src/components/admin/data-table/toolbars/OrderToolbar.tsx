@@ -1,13 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
   Plus,
@@ -20,7 +13,6 @@ import {
 import { DataTableToolbar } from "../DataTableToolbar";
 import type { DateRange } from "react-day-picker";
 import { DateRangePickerWithPresets } from "~/components/admin/order-list/DateRangePickerWithPresets";
-import React from "react";
 
 const statusFilters = [
   { value: "pending", label: "Pending" },
@@ -44,13 +36,6 @@ interface OrderToolbarProps {
   // Status filter
   activeStatus: string | null;
   onStatusFilterChange: (status: string | null) => void;
-  // Payment/fulfillment filters
-  paymentStatus: string | null;
-  onPaymentStatusChange: (status: string | null) => void;
-  paymentMethod: string | null;
-  onPaymentMethodChange: (method: string | null) => void;
-  fulfillmentStatus: string | null;
-  onFulfillmentStatusChange: (status: string | null) => void;
   // Date range
   dateRange: DateRange | undefined;
   onDateRangeChange: (range: DateRange | undefined) => void;
@@ -73,12 +58,6 @@ export function OrderToolbar({
   showTrashed,
   activeStatus,
   onStatusFilterChange,
-  paymentStatus,
-  onPaymentStatusChange,
-  paymentMethod,
-  onPaymentMethodChange,
-  fulfillmentStatus,
-  onFulfillmentStatusChange,
   dateRange,
   onDateRangeChange,
   onBulkDelete,
@@ -161,6 +140,10 @@ export function OrderToolbar({
 
   const filters: ReactNode = (
     <div className="flex items-center gap-2">
+      <DateRangePickerWithPresets
+        date={dateRange}
+        setDate={onDateRangeChange}
+      />
       <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50">
         <Checkbox
           id="auto-refresh"
@@ -175,7 +158,7 @@ export function OrderToolbar({
           <RefreshCw
             className={`h-3 w-3 ${autoRefreshEnabled ? "animate-spin" : ""}`}
           />
-          <span>Auto-refresh</span>
+          <span>Auto</span>
           {autoRefreshEnabled && (
             <span className="font-mono font-medium text-primary">
               {countdown}s
@@ -187,7 +170,7 @@ export function OrderToolbar({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <DataTableToolbar
         searchValue={searchValue}
         onSearchChange={onSearchChange}
@@ -198,75 +181,9 @@ export function OrderToolbar({
         filters={filters}
       />
 
-      {/* Filter row: date range + payment/fulfillment dropdowns */}
-      <div className="flex flex-wrap gap-3 pb-2">
-        <DateRangePickerWithPresets
-          date={dateRange}
-          setDate={onDateRangeChange}
-        />
-
-        {!showTrashed && (
-          <div className="flex flex-wrap flex-1 gap-3">
-            <Select
-              value={paymentStatus || "all"}
-              onValueChange={(val) =>
-                onPaymentStatusChange(val === "all" ? null : val)
-              }
-            >
-              <SelectTrigger className="w-[140px] text-xs h-9 bg-background">
-                <SelectValue placeholder="Payment Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any Pay Status</SelectItem>
-                <SelectItem value="unpaid">Unpaid</SelectItem>
-                <SelectItem value="partial">Partial</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="refunded">Refunded</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={paymentMethod || "all"}
-              onValueChange={(val) =>
-                onPaymentMethodChange(val === "all" ? null : val)
-              }
-            >
-              <SelectTrigger className="w-[140px] text-xs h-9 bg-background">
-                <SelectValue placeholder="Payment Method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any Method</SelectItem>
-                <SelectItem value="stripe">Stripe</SelectItem>
-                <SelectItem value="sslcommerz">SSLCommerz</SelectItem>
-                <SelectItem value="cod">COD</SelectItem>
-                <SelectItem value="polar">Polar</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={fulfillmentStatus || "all"}
-              onValueChange={(val) =>
-                onFulfillmentStatusChange(val === "all" ? null : val)
-              }
-            >
-              <SelectTrigger className="w-[140px] text-xs h-9 bg-background">
-                <SelectValue placeholder="Fulfillment" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any Fulfillment</SelectItem>
-                <SelectItem value="unfulfilled">Unfulfilled</SelectItem>
-                <SelectItem value="partial">Partial</SelectItem>
-                <SelectItem value="fulfilled">Fulfilled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-      </div>
-
       {/* Status filter pills */}
       {!showTrashed && (
-        <div className="flex flex-wrap items-center gap-1.5 pb-2 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center gap-1.5 pb-1 border-t border-border pt-3">
           <span className="text-xs font-medium text-muted-foreground mr-2">
             Status:
           </span>
@@ -274,7 +191,7 @@ export function OrderToolbar({
             variant={activeStatus === null ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onStatusFilterChange(null)}
-            className="h-8 text-xs font-medium transition-colors"
+            className="h-7 text-xs font-medium transition-colors"
           >
             All
           </Button>
@@ -286,7 +203,7 @@ export function OrderToolbar({
               }
               size="sm"
               onClick={() => onStatusFilterChange(filter.value)}
-              className="h-8 text-xs font-medium transition-colors"
+              className="h-7 text-xs font-medium transition-colors"
             >
               {filter.label}
             </Button>
