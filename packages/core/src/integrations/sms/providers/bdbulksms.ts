@@ -29,11 +29,13 @@ export class BdBulkSmsProvider implements SmsProvider {
       }),
     });
 
-    const json = (await res.json()) as Array<{
-      to: string;
-      status: string;
-      statusmsg: string;
-    }>;
+    const text = await res.text();
+    let json: Array<{ to: string; status: string; statusmsg: string }>;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return { success: false, rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+    }
 
     const first = json[0];
     if (first && first.status === "SENT") {
