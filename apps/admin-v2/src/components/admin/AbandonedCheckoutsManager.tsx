@@ -48,6 +48,7 @@ import {
   Mail,
   MapPin,
   Package,
+  X,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import type { AbandonedCheckout } from "@/types/api-responses";
@@ -464,8 +465,17 @@ export function AbandonedCheckoutsManager() {
               placeholder="Search by phone, ID, or cart items..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8"
+              className="pl-8 pr-8"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {selectedIds.size > 0 && (

@@ -79,8 +79,11 @@ export const Route = createFileRoute("/admin/products/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps }) => {
+    // prefetchQuery for the list — doesn't block navigation on search/filter
+    // changes. The component uses keepPreviousData to show stale data while
+    // the new results load, keeping the search input focused.
+    void queryClient.prefetchQuery(productsQueryOptions(mapParams(deps)));
     await Promise.all([
-      queryClient.ensureQueryData(productsQueryOptions(mapParams(deps))),
       queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
       queryClient.ensureQueryData(productStatsQueryOptions()),
     ]);
