@@ -420,11 +420,13 @@ async function handleApplyDiscount() {
   const codeInput = document.getElementById(
     "discountCodeInput",
   ) as HTMLInputElement;
-  const code = codeInput.value.trim();
+  const code = codeInput.value.trim().toUpperCase();
   if (!code) {
     showDiscountMessage("Please enter a discount code", "error");
     return;
   }
+  // Reflect the normalized code back in the input
+  codeInput.value = code;
 
   const { items, totalAmount, discount: existingDiscount } = cartStore.get();
   if (Object.keys(items).length === 0) {

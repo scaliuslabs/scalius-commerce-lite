@@ -107,6 +107,10 @@ export async function isDiscountValid(
     customerPhone?: string,
     currencySymbol: string = "",
 ) {
+    // Normalize code to uppercase — codes are stored uppercase (Shopify convention),
+    // but customers may type lowercase on the storefront.
+    const normalizedCode = code.toUpperCase();
+
     // Get current timestamp
     const currentTime = Math.floor(Date.now() / 1000);
 
@@ -116,7 +120,7 @@ export async function isDiscountValid(
         .from(discounts)
         .where(
             and(
-                eq(discounts.code, code),
+                eq(discounts.code, normalizedCode),
                 eq(discounts.isActive, true),
                 isNull(discounts.deletedAt),
                 sql`${discounts.startDate} <= ${currentTime}`,
