@@ -47,9 +47,14 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
   };
 }
 
+const defaultApiParams = mapParams(searchSchema.parse({}));
+
 export const Route = createFileRoute("/admin/customers/")({
   validateSearch: searchSchema,
   staleTime: 0,
+  loader: ({ context: { queryClient } }) => {
+    void queryClient.prefetchQuery(customersQueryOptions(defaultApiParams));
+  },
   head: ({ match }) => ({
     meta: [
       {
