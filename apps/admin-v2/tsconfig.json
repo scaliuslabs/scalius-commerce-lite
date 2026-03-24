@@ -17,7 +17,6 @@
       "~/*": ["./src/*"],
       "@/*": ["./src/*"],
       "@scalius/core/*": ["../../packages/core/src/*"],
-      "@scalius/database/*": ["../../packages/database/src/*"],
       "@scalius/shared/*": ["../../packages/shared/src/*"]
     }
   },
