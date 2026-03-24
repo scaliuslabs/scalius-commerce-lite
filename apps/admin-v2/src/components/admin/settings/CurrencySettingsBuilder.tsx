@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -9,12 +9,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
 import { Loader2, Save, Info, Search, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@scalius/shared/utils";
-import { getServerFnError } from "@/lib/api-helpers";
+import { useSettingsForm } from "@/hooks/use-settings-form";
+import { queryKeys } from "@/lib/query-keys";
 import { getCurrencySettings, updateCurrencySettings } from "@/lib/api.functions";
 
 interface CurrencyEntry {
@@ -214,19 +214,26 @@ const CURRENCIES: CurrencyEntry[] = [
 
 const currencyMap = new Map<string, CurrencyEntry>(CURRENCIES.map((c) => [c.code, c]));
 
+interface CurrencySettings {
+  currencyCode: string;
+  currencySymbol: string;
+  usdExchangeRate: string;
+}
+
 export default function CurrencySettingsBuilder() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [currencyCode, setCurrencyCode] = useState("BDT");
-  const [currencySymbol, setCurrencySymbol] = useState("\u09F3");
-  const [usdExchangeRate, setUsdExchangeRate] = useState("1");
+  const { values, setValue, setValues, isLoading, isSaving, handleSubmit } = useSettingsForm<CurrencySettings>({
+    queryKey: queryKeys.settings.currency(),
+    fetchFn: () => getCurrencySettings() as Promise<Partial<CurrencySettings>>,
+    saveFn: (v) => updateCurrencySettings({ data: v as unknown as Record<string, unknown> }),
+    defaultValues: { currencyCode: "BDT", currencySymbol: "\u09F3", usdExchangeRate: "1" },
+    successMessage: "Currency settings saved successfully!",
+    errorMessage: "Failed to save currency settings",
+  });
+
+  // UI-only state for the currency picker
   const [search, setSearch] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetchSettings();
-  }, []);
 
   // Close picker on outside click
   useEffect(() => {
@@ -240,44 +247,15 @@ export default function CurrencySettingsBuilder() {
     return () => document.removeEventListener("mousedown", handler);
   }, [pickerOpen]);
 
-  const fetchSettings = async () => {
-    try {
-      const data = await getCurrencySettings() as Record<string, unknown>;
-      setCurrencyCode((data.currencyCode as string) || "BDT");
-      setCurrencySymbol((data.currencySymbol as string) || "\u09F3");
-      setUsdExchangeRate((data.usdExchangeRate as string) || "1");
-    } catch {
-      toast.error("Failed to load currency settings");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleCurrencySelect = (code: string) => {
-    setCurrencyCode(code);
     const currency = currencyMap.get(code);
     if (currency) {
-      setCurrencySymbol(currency.symbol);
+      setValues((prev) => ({ ...prev, currencyCode: code, currencySymbol: currency.symbol }));
+    } else {
+      setValue("currencyCode", code);
     }
     setPickerOpen(false);
     setSearch("");
-  };
-
-  const handleSubmit = async (e?: React.SyntheticEvent) => {
-    e?.preventDefault();
-    setSaving(true);
-
-    try {
-      await updateCurrencySettings({
-        data: { currencyCode, currencySymbol, usdExchangeRate },
-      });
-      toast.success("Currency settings saved successfully!");
-      fetchSettings();
-    } catch (err) {
-      toast.error(getServerFnError(err, "Failed to save currency settings"));
-    } finally {
-      setSaving(false);
-    }
   };
 
   const filteredCurrencies = useMemo(() => {
@@ -291,9 +269,9 @@ export default function CurrencySettingsBuilder() {
     );
   }, [search]);
 
-  const selectedCurrency = currencyMap.get(currencyCode);
+  const selectedCurrency = currencyMap.get(values.currencyCode);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -352,7 +330,7 @@ export default function CurrencySettingsBuilder() {
                 ) : (
                   <div className="divide-y">
                     {filteredCurrencies.map((c) => {
-                      const isSelected = c.code === currencyCode;
+                      const isSelected = c.code === values.currencyCode;
                       return (
                         <button
                           key={c.code}
@@ -387,9 +365,9 @@ export default function CurrencySettingsBuilder() {
             <Label htmlFor="currency-symbol">Currency Symbol</Label>
             <Input
               id="currency-symbol"
-              placeholder="e.g. \u09F3"
-              value={currencySymbol}
-              onChange={(e) => setCurrencySymbol(e.target.value)}
+              placeholder="e.g. ৳"
+              value={values.currencySymbol}
+              onChange={(e) => setValue("currencySymbol", e.target.value)}
               className="max-w-xs"
             />
             <p className="text-xs text-muted-foreground">
@@ -405,12 +383,12 @@ export default function CurrencySettingsBuilder() {
               min="0"
               step="any"
               placeholder="e.g. 120"
-              value={usdExchangeRate}
-              onChange={(e) => setUsdExchangeRate(e.target.value)}
+              value={values.usdExchangeRate}
+              onChange={(e) => setValue("usdExchangeRate", e.target.value)}
               className="max-w-xs"
             />
             <p className="text-xs text-muted-foreground">
-              How many {currencyCode} equal 1 USD. Example: if 1 USD = 120 {currencyCode}, enter 120.
+              How many {values.currencyCode} equal 1 USD. Example: if 1 USD = 120 {values.currencyCode}, enter 120.
             </p>
           </div>
         </CardContent>
@@ -419,10 +397,10 @@ export default function CurrencySettingsBuilder() {
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
           onClick={() => handleSubmit()}
-          disabled={saving}
+          disabled={isSaving}
           className="min-w-[140px]"
         >
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Save className="mr-2 h-4 w-4" />
           Save Currency Settings
         </Button>

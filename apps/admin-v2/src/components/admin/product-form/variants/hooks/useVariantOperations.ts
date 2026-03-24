@@ -1,18 +1,25 @@
 // src/components/admin/ProductForm/variants/hooks/useVariantOperations.ts
 
-import { useState } from "react";
-import { toast } from "sonner";
 import type { ProductVariant, VariantFormValues, BulkGeneratedVariant } from "../types";
-import { getServerFnError } from "@/lib/api-helpers";
 import {
-  createProductVariant,
-  updateProductVariant,
-  deleteProductVariant,
-  bulkDeleteProductVariants,
-  bulkCreateProductVariants,
-  bulkUpdateProductVariants,
-  duplicateProductVariant,
-} from "@/lib/api.functions";
+  useCreateProductVariant,
+  useUpdateProductVariant,
+  useDeleteProductVariant,
+  useBulkDeleteProductVariants,
+  useBulkCreateProductVariants,
+  useBulkUpdateProductVariants,
+  useDuplicateProductVariant,
+} from "@/lib/api.mutations";
+
+function toProductVariant(result: unknown): ProductVariant {
+  const r = result as Record<string, unknown>;
+  return {
+    ...r,
+    createdAt: new Date(r.createdAt as string),
+    updatedAt: new Date(r.updatedAt as string),
+    deletedAt: r.deletedAt ? new Date(r.deletedAt as string) : null,
+  } as ProductVariant;
+}
 
 export interface UseVariantOperationsReturn {
   createVariant: (
@@ -47,33 +54,36 @@ export interface UseVariantOperationsReturn {
 }
 
 export function useVariantOperations(): UseVariantOperationsReturn {
-  const [isLoading, setIsLoading] = useState(false);
+  const createMutation = useCreateProductVariant();
+  const updateMutation = useUpdateProductVariant();
+  const deleteMutation = useDeleteProductVariant();
+  const bulkDeleteMutation = useBulkDeleteProductVariants();
+  const bulkCreateMutation = useBulkCreateProductVariants();
+  const bulkUpdateMutation = useBulkUpdateProductVariants();
+  const duplicateMutation = useDuplicateProductVariant();
+
+  const isLoading =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    deleteMutation.isPending ||
+    bulkDeleteMutation.isPending ||
+    bulkCreateMutation.isPending ||
+    bulkUpdateMutation.isPending ||
+    duplicateMutation.isPending;
 
   const createVariant = async (
     productId: string,
     values: VariantFormValues
   ): Promise<ProductVariant | null> => {
-    setIsLoading(true);
     try {
-      const result = await createProductVariant({
-        data: { productId, variant: values as unknown as Record<string, unknown> },
-      }) as Record<string, unknown>;
-      const savedVariant: ProductVariant = {
-        ...result,
-        createdAt: new Date(result.createdAt as string),
-        updatedAt: new Date(result.updatedAt as string),
-        deletedAt: result.deletedAt ? new Date(result.deletedAt as string) : null,
-      } as ProductVariant;
-
-      toast.success("Success!", { description: "Variant has been created successfully." });
-
-      return savedVariant;
-    } catch (error: unknown) {
-      console.error("Failed to create variant:", error);
-      toast.error("Error Creating Variant", { description: getServerFnError(error, "An unknown error occurred.") });
+      const result = await createMutation.mutateAsync({
+        productId,
+        variant: values as unknown as Record<string, unknown>,
+      });
+      return toProductVariant(result);
+    } catch {
+      // Error toast is handled by the mutation's onError
       return null;
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -82,44 +92,24 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     variantId: string,
     values: VariantFormValues
   ): Promise<ProductVariant | null> => {
-    setIsLoading(true);
     try {
-      const result = await updateProductVariant({
-        data: { productId, variantId, variant: values as unknown as Record<string, unknown> },
-      }) as Record<string, unknown>;
-      const savedVariant: ProductVariant = {
-        ...result,
-        createdAt: new Date(result.createdAt as string),
-        updatedAt: new Date(result.updatedAt as string),
-        deletedAt: result.deletedAt ? new Date(result.deletedAt as string) : null,
-      } as ProductVariant;
-
-      toast.success("Success!", { description: "Variant has been updated successfully." });
-
-      return savedVariant;
-    } catch (error: unknown) {
-      console.error("Failed to update variant:", error);
-      toast.error("Error Updating Variant", { description: getServerFnError(error, "An unknown error occurred.") });
+      const result = await updateMutation.mutateAsync({
+        productId,
+        variantId,
+        variant: values as unknown as Record<string, unknown>,
+      });
+      return toProductVariant(result);
+    } catch {
       return null;
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const deleteVariant = async (productId: string, variantId: string): Promise<boolean> => {
-    setIsLoading(true);
     try {
-      await deleteProductVariant({ data: { productId, variantId } });
-
-      toast.success("Success!", { description: "Variant has been deleted." });
-
+      await deleteMutation.mutateAsync({ productId, variantId });
       return true;
-    } catch (error: unknown) {
-      console.error("Failed to delete variant:", error);
-      toast.error("Deletion Failed", { description: getServerFnError(error, "Could not delete variant.") });
+    } catch {
       return false;
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -127,19 +117,11 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     productId: string,
     variantIds: string[]
   ): Promise<boolean> => {
-    setIsLoading(true);
     try {
-      await bulkDeleteProductVariants({ data: { productId, variantIds } });
-
-      toast.success("Success!", { description: `${variantIds.length} variants deleted.` });
-
+      await bulkDeleteMutation.mutateAsync({ productId, variantIds });
       return true;
-    } catch (error: unknown) {
-      console.error("Failed to bulk delete variants:", error);
-      toast.error("Bulk Deletion Failed", { description: getServerFnError(error, "Could not delete variants.") });
+    } catch {
       return false;
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -155,21 +137,14 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       stock?: number;
     }>
   ): Promise<boolean> => {
-    setIsLoading(true);
     try {
-      await bulkUpdateProductVariants({
-        data: { productId, updates: updates as Record<string, unknown>[] },
+      await bulkUpdateMutation.mutateAsync({
+        productId,
+        updates: updates as Record<string, unknown>[],
       });
-
-      toast.success("Success!", { description: "Variants updated successfully." });
-
       return true;
-    } catch (error: unknown) {
-      console.error("Failed to bulk update variants:", error);
-      toast.error("Update Failed", { description: getServerFnError(error, "Could not update variants.") });
+    } catch {
       return false;
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -177,27 +152,18 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     productId: string,
     variants: BulkGeneratedVariant[]
   ): Promise<ProductVariant[]> => {
-    setIsLoading(true);
     try {
-      const result = await bulkCreateProductVariants({
-        data: { productId, variants: variants as unknown as Record<string, unknown>[] },
-      }) as Record<string, unknown>;
-      const savedVariants: ProductVariant[] = (result.variants as Record<string, unknown>[]).map((v) => ({
-        ...v,
-        createdAt: new Date(v.createdAt as string),
-        updatedAt: new Date(v.updatedAt as string),
-        deletedAt: v.deletedAt ? new Date(v.deletedAt as string) : null,
-      })) as ProductVariant[];
-
-      toast.success("Success!", { description: `${savedVariants.length} variants created successfully.` });
-
+      const result = await bulkCreateMutation.mutateAsync({
+        productId,
+        variants: variants as unknown as Record<string, unknown>[],
+      });
+      const r = result as Record<string, unknown>;
+      const savedVariants: ProductVariant[] = (r.variants as Record<string, unknown>[]).map(
+        (v) => toProductVariant(v)
+      );
       return savedVariants;
-    } catch (error: unknown) {
-      console.error("Failed to bulk create variants:", error);
-      toast.error("Bulk Creation Failed", { description: getServerFnError(error, "Could not create variants.") });
+    } catch {
       return [];
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -205,27 +171,11 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     productId: string,
     variantId: string
   ): Promise<ProductVariant | null> => {
-    setIsLoading(true);
     try {
-      const result = await duplicateProductVariant({
-        data: { productId, variantId },
-      }) as Record<string, unknown>;
-      const savedVariant: ProductVariant = {
-        ...result,
-        createdAt: new Date(result.createdAt as string),
-        updatedAt: new Date(result.updatedAt as string),
-        deletedAt: result.deletedAt ? new Date(result.deletedAt as string) : null,
-      } as ProductVariant;
-
-      toast.success("Success!", { description: "Variant has been duplicated successfully." });
-
-      return savedVariant;
-    } catch (error: unknown) {
-      console.error("Failed to duplicate variant:", error);
-      toast.error("Duplication Failed", { description: getServerFnError(error, "Could not duplicate variant.") });
+      const result = await duplicateMutation.mutateAsync({ productId, variantId });
+      return toProductVariant(result);
+    } catch {
       return null;
-    } finally {
-      setIsLoading(false);
     }
   };
 

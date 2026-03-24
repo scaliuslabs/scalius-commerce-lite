@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
     Card,
     CardContent,
@@ -16,10 +16,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
 import { Loader2, Save, CheckCircle2, ExternalLink } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getServerFnError } from "@/lib/api-helpers";
+import { useSettingsForm } from "@/hooks/use-settings-form";
+import { queryKeys } from "@/lib/query-keys";
 import {
     getAuthSettings,
     updateAuthSettings,
@@ -29,114 +29,115 @@ import {
 
 const MASKED_VALUE = "••••••••••••";
 
+interface AuthAndSmsSettings {
+    // Auth settings
+    authVerificationMethod: string;
+    whatsappAccessToken: string;
+    whatsappPhoneNumberId: string;
+    whatsappTemplateName: string;
+    // SMS settings
+    smsProvider: string;
+    smsnetbdApiKey: string;
+    smsnetbdSenderId: string;
+    bdbulksmsToken: string;
+    mimsmsUsername: string;
+    mimsmsApiKey: string;
+    mimsmsSenderName: string;
+    gennetApiToken: string;
+    gennetBaseUrl: string;
+    gennetSid: string;
+}
+
+const defaultValues: AuthAndSmsSettings = {
+    authVerificationMethod: "email",
+    whatsappAccessToken: "",
+    whatsappPhoneNumberId: "",
+    whatsappTemplateName: "auth_otp",
+    smsProvider: "",
+    smsnetbdApiKey: "",
+    smsnetbdSenderId: "",
+    bdbulksmsToken: "",
+    mimsmsUsername: "",
+    mimsmsApiKey: "",
+    mimsmsSenderName: "",
+    gennetApiToken: "",
+    gennetBaseUrl: "",
+    gennetSid: "",
+};
+
+async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
+    const result: Partial<AuthAndSmsSettings> = {};
+
+    const authData = await getAuthSettings() as Record<string, unknown>;
+    result.authVerificationMethod = (authData.authVerificationMethod as string) || "email";
+    result.whatsappAccessToken = (authData.whatsappAccessToken as string) || "";
+    result.whatsappPhoneNumberId = (authData.whatsappPhoneNumberId as string) || "";
+    result.whatsappTemplateName = (authData.whatsappTemplateName as string) || "auth_otp";
+
+    // SMS fetch is non-fatal
+    try {
+        const smsData = await getSmsSettings() as Record<string, unknown>;
+        result.smsProvider = (smsData.activeProvider as string) || "";
+        result.smsnetbdApiKey = (smsData.smsnetbdApiKey as string) || "";
+        result.smsnetbdSenderId = (smsData.smsnetbdSenderId as string) || "";
+        result.bdbulksmsToken = (smsData.bdbulksmsToken as string) || "";
+        result.mimsmsUsername = (smsData.mimsmsUsername as string) || "";
+        result.mimsmsApiKey = (smsData.mimsmsApiKey as string) || "";
+        result.mimsmsSenderName = (smsData.mimsmsSenderName as string) || "";
+        result.gennetApiToken = (smsData.gennetApiToken as string) || "";
+        result.gennetBaseUrl = (smsData.gennetBaseUrl as string) || "";
+        result.gennetSid = (smsData.gennetSid as string) || "";
+    } catch {
+        // SMS settings fetch failure is non-fatal
+    }
+
+    return result;
+}
+
+async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
+    await updateAuthSettings({
+        data: {
+            authVerificationMethod: v.authVerificationMethod,
+            whatsappAccessToken: v.whatsappAccessToken,
+            whatsappPhoneNumberId: v.whatsappPhoneNumberId,
+            whatsappTemplateName: v.whatsappTemplateName,
+        },
+    });
+
+    // Save SMS settings separately (different endpoint, different storage)
+    if (v.authVerificationMethod === "sms_otp" && v.smsProvider) {
+        await updateSmsSettings({
+            data: {
+                activeProvider: v.smsProvider,
+                smsnetbdApiKey: v.smsnetbdApiKey,
+                smsnetbdSenderId: v.smsnetbdSenderId,
+                bdbulksmsToken: v.bdbulksmsToken,
+                mimsmsUsername: v.mimsmsUsername,
+                mimsmsApiKey: v.mimsmsApiKey,
+                mimsmsSenderName: v.mimsmsSenderName,
+                gennetApiToken: v.gennetApiToken,
+                gennetBaseUrl: v.gennetBaseUrl,
+                gennetSid: v.gennetSid,
+            },
+        });
+    }
+}
+
 export default function AuthSettingsBuilder() {
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
+    const { values, setValue, isLoading, isSaving, handleSubmit } = useSettingsForm<AuthAndSmsSettings>({
+        queryKey: queryKeys.settings.auth(),
+        fetchFn: fetchAuthAndSms,
+        saveFn: saveAuthAndSms,
+        defaultValues,
+        successMessage: "Auth settings saved successfully!",
+        errorMessage: "Failed to save auth settings",
+    });
 
-    const [authVerificationMethod, setAuthVerificationMethod] = useState<string>("email");
+    // Derive configured status from current values
+    const accessTokenConfigured = !!values.whatsappAccessToken;
+    const smsConfigured = !!values.smsProvider;
 
-    const [whatsappAccessToken, setWhatsappAccessToken] = useState("");
-    const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState("");
-    const [whatsappTemplateName, setWhatsappTemplateName] = useState("auth_otp");
-
-    const [accessTokenConfigured, setAccessTokenConfigured] = useState(false);
-
-    // SMS OTP provider settings
-    const [smsProvider, setSmsProvider] = useState<string>("");
-    const [smsnetbdApiKey, setSmsnetbdApiKey] = useState("");
-    const [smsnetbdSenderId, setSmsnetbdSenderId] = useState("");
-    const [bdbulksmsToken, setBdbulksmsToken] = useState("");
-    const [mimsmsUsername, setMimsmsUsername] = useState("");
-    const [mimsmsApiKey, setMimsmsApiKey] = useState("");
-    const [mimsmsSenderName, setMimsmsSenderName] = useState("");
-    const [gennetApiToken, setGennetApiToken] = useState("");
-    const [gennetBaseUrl, setGennetBaseUrl] = useState("");
-    const [gennetSid, setGennetSid] = useState("");
-    const [smsConfigured, setSmsConfigured] = useState(false);
-
-    useEffect(() => {
-        fetchSettings();
-    }, []);
-
-    const fetchSettings = async () => {
-        try {
-            const data = await getAuthSettings() as Record<string, unknown>;
-            setAuthVerificationMethod((data.authVerificationMethod as string) || "email");
-            setWhatsappAccessToken((data.whatsappAccessToken as string) || "");
-            setWhatsappPhoneNumberId((data.whatsappPhoneNumberId as string) || "");
-            setWhatsappTemplateName((data.whatsappTemplateName as string) || "auth_otp");
-            setAccessTokenConfigured(!!data.whatsappAccessToken);
-
-            // Also fetch SMS settings
-            try {
-                const smsData = await getSmsSettings() as Record<string, unknown>;
-                setSmsProvider((smsData.activeProvider as string) || "");
-                setSmsnetbdApiKey((smsData.smsnetbdApiKey as string) || "");
-                setSmsnetbdSenderId((smsData.smsnetbdSenderId as string) || "");
-                setBdbulksmsToken((smsData.bdbulksmsToken as string) || "");
-                setMimsmsUsername((smsData.mimsmsUsername as string) || "");
-                setMimsmsApiKey((smsData.mimsmsApiKey as string) || "");
-                setMimsmsSenderName((smsData.mimsmsSenderName as string) || "");
-                setGennetApiToken((smsData.gennetApiToken as string) || "");
-                setGennetBaseUrl((smsData.gennetBaseUrl as string) || "");
-                setGennetSid((smsData.gennetSid as string) || "");
-                setSmsConfigured(!!smsData.activeProvider);
-            } catch {
-                // SMS settings fetch failure is non-fatal
-            }
-        } catch {
-            toast.error("Failed to load auth settings");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSubmit = async (e?: React.SyntheticEvent) => {
-        e?.preventDefault();
-        setSaving(true);
-
-        try {
-            await updateAuthSettings({
-                data: {
-                    authVerificationMethod,
-                    whatsappAccessToken,
-                    whatsappPhoneNumberId,
-                    whatsappTemplateName,
-                },
-            });
-
-            // Save SMS settings separately (different endpoint, different storage)
-            if (authVerificationMethod === "sms_otp" && smsProvider) {
-                try {
-                    await updateSmsSettings({
-                        data: {
-                            activeProvider: smsProvider,
-                            smsnetbdApiKey,
-                            smsnetbdSenderId,
-                            bdbulksmsToken,
-                            mimsmsUsername,
-                            mimsmsApiKey,
-                            mimsmsSenderName,
-                            gennetApiToken,
-                            gennetBaseUrl,
-                            gennetSid,
-                        },
-                    });
-                } catch (err) {
-                    toast.error(getServerFnError(err, "Failed to save SMS settings"));
-                    return;
-                }
-            }
-            toast.success("Auth settings saved successfully!");
-            fetchSettings();
-        } catch (err) {
-            toast.error(getServerFnError(err, "Failed to save auth settings"));
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -160,8 +161,8 @@ export default function AuthSettingsBuilder() {
                             How customers verify their identity when creating an account or logging in.
                         </p>
                         <Select
-                            value={authVerificationMethod}
-                            onValueChange={(val) => setAuthVerificationMethod(val)}
+                            value={values.authVerificationMethod}
+                            onValueChange={(val) => setValue("authVerificationMethod", val)}
                         >
                             <SelectTrigger className="w-full max-w-xs">
                                 <SelectValue placeholder="Select verification method" />
@@ -177,8 +178,8 @@ export default function AuthSettingsBuilder() {
                 </CardContent>
             </Card>
 
-            {(authVerificationMethod === "phone" ||
-                authVerificationMethod === "both") && (
+            {(values.authVerificationMethod === "phone" ||
+                values.authVerificationMethod === "both") && (
                     <Card className="border-green-500/20 dark:bg-green-950/10">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-base flex items-center gap-2">
@@ -219,12 +220,12 @@ export default function AuthSettingsBuilder() {
                                             ? MASKED_VALUE
                                             : "EAAxXXXXXXXXXXXXXXXXXXXXXX"
                                     }
-                                    value={whatsappAccessToken}
-                                    onChange={(e) => setWhatsappAccessToken(e.target.value)}
+                                    value={values.whatsappAccessToken}
+                                    onChange={(e) => setValue("whatsappAccessToken", e.target.value)}
                                     className="font-mono"
                                 />
                                 {accessTokenConfigured &&
-                                    whatsappAccessToken === MASKED_VALUE && (
+                                    values.whatsappAccessToken === MASKED_VALUE && (
                                         <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
                                             <CheckCircle2 className="h-3 w-3" /> Token configured.
                                         </p>
@@ -237,8 +238,8 @@ export default function AuthSettingsBuilder() {
                                     <Input
                                         id="wa-phone-id"
                                         placeholder="e.g. 1045934589234"
-                                        value={whatsappPhoneNumberId}
-                                        onChange={(e) => setWhatsappPhoneNumberId(e.target.value)}
+                                        value={values.whatsappPhoneNumberId}
+                                        onChange={(e) => setValue("whatsappPhoneNumberId", e.target.value)}
                                     />
                                 </div>
                                 <div className="space-y-1.5">
@@ -246,8 +247,8 @@ export default function AuthSettingsBuilder() {
                                     <Input
                                         id="wa-template"
                                         placeholder="e.g. auth_otp"
-                                        value={whatsappTemplateName}
-                                        onChange={(e) => setWhatsappTemplateName(e.target.value)}
+                                        value={values.whatsappTemplateName}
+                                        onChange={(e) => setValue("whatsappTemplateName", e.target.value)}
                                     />
                                 </div>
                             </div>
@@ -255,7 +256,7 @@ export default function AuthSettingsBuilder() {
                     </Card>
                 )}
 
-            {authVerificationMethod === "sms_otp" && (
+            {values.authVerificationMethod === "sms_otp" && (
                 <Card className="border-blue-500/20 dark:bg-blue-950/10">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center gap-2">
@@ -272,7 +273,7 @@ export default function AuthSettingsBuilder() {
                     <CardContent className="space-y-4">
                         <div className="space-y-1.5">
                             <Label>SMS Provider</Label>
-                            <Select value={smsProvider} onValueChange={setSmsProvider}>
+                            <Select value={values.smsProvider} onValueChange={(val) => setValue("smsProvider", val)}>
                                 <SelectTrigger className="w-full max-w-xs">
                                     <SelectValue placeholder="Select SMS provider" />
                                 </SelectTrigger>
@@ -286,16 +287,16 @@ export default function AuthSettingsBuilder() {
                         </div>
 
                         {/* SMS.net.bd fields */}
-                        {smsProvider === "smsnetbd" && (
+                        {values.smsProvider === "smsnetbd" && (
                             <div className="space-y-3 pt-2 border-t">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="smsnetbd-api-key">API Key</Label>
                                     <Input
                                         id="smsnetbd-api-key"
                                         type="password"
-                                        placeholder={smsnetbdApiKey === MASKED_VALUE ? MASKED_VALUE : "Enter your SMS.net.bd API key"}
-                                        value={smsnetbdApiKey}
-                                        onChange={(e) => setSmsnetbdApiKey(e.target.value)}
+                                        placeholder={values.smsnetbdApiKey === MASKED_VALUE ? MASKED_VALUE : "Enter your SMS.net.bd API key"}
+                                        value={values.smsnetbdApiKey}
+                                        onChange={(e) => setValue("smsnetbdApiKey", e.target.value)}
                                         className="font-mono"
                                     />
                                 </div>
@@ -304,24 +305,24 @@ export default function AuthSettingsBuilder() {
                                     <Input
                                         id="smsnetbd-sender-id"
                                         placeholder="Leave blank for default"
-                                        value={smsnetbdSenderId}
-                                        onChange={(e) => setSmsnetbdSenderId(e.target.value)}
+                                        value={values.smsnetbdSenderId}
+                                        onChange={(e) => setValue("smsnetbdSenderId", e.target.value)}
                                     />
                                 </div>
                             </div>
                         )}
 
                         {/* BDBulkSMS fields */}
-                        {smsProvider === "bdbulksms" && (
+                        {values.smsProvider === "bdbulksms" && (
                             <div className="space-y-3 pt-2 border-t">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="bdbulksms-token">API Token</Label>
                                     <Input
                                         id="bdbulksms-token"
                                         type="password"
-                                        placeholder={bdbulksmsToken === MASKED_VALUE ? MASKED_VALUE : "Enter your BDBulkSMS token"}
-                                        value={bdbulksmsToken}
-                                        onChange={(e) => setBdbulksmsToken(e.target.value)}
+                                        placeholder={values.bdbulksmsToken === MASKED_VALUE ? MASKED_VALUE : "Enter your BDBulkSMS token"}
+                                        value={values.bdbulksmsToken}
+                                        onChange={(e) => setValue("bdbulksmsToken", e.target.value)}
                                         className="font-mono"
                                     />
                                     <p className="text-xs text-muted-foreground">
@@ -335,7 +336,7 @@ export default function AuthSettingsBuilder() {
                         )}
 
                         {/* MIM SMS fields */}
-                        {smsProvider === "mimsms" && (
+                        {values.smsProvider === "mimsms" && (
                             <div className="space-y-3 pt-2 border-t">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="mimsms-username">Username (Email)</Label>
@@ -343,8 +344,8 @@ export default function AuthSettingsBuilder() {
                                         id="mimsms-username"
                                         type="email"
                                         placeholder="you@example.com"
-                                        value={mimsmsUsername}
-                                        onChange={(e) => setMimsmsUsername(e.target.value)}
+                                        value={values.mimsmsUsername}
+                                        onChange={(e) => setValue("mimsmsUsername", e.target.value)}
                                     />
                                 </div>
                                 <div className="space-y-1.5">
@@ -352,9 +353,9 @@ export default function AuthSettingsBuilder() {
                                     <Input
                                         id="mimsms-api-key"
                                         type="password"
-                                        placeholder={mimsmsApiKey === MASKED_VALUE ? MASKED_VALUE : "Enter your MIM SMS API key"}
-                                        value={mimsmsApiKey}
-                                        onChange={(e) => setMimsmsApiKey(e.target.value)}
+                                        placeholder={values.mimsmsApiKey === MASKED_VALUE ? MASKED_VALUE : "Enter your MIM SMS API key"}
+                                        value={values.mimsmsApiKey}
+                                        onChange={(e) => setValue("mimsmsApiKey", e.target.value)}
                                         className="font-mono"
                                     />
                                 </div>
@@ -363,8 +364,8 @@ export default function AuthSettingsBuilder() {
                                     <Input
                                         id="mimsms-sender-name"
                                         placeholder="Must be registered with MIM SMS"
-                                        value={mimsmsSenderName}
-                                        onChange={(e) => setMimsmsSenderName(e.target.value)}
+                                        value={values.mimsmsSenderName}
+                                        onChange={(e) => setValue("mimsmsSenderName", e.target.value)}
                                     />
                                     <p className="text-xs text-muted-foreground">
                                         Your sender name must be pre-approved by MIM SMS before it will work.
@@ -374,16 +375,16 @@ export default function AuthSettingsBuilder() {
                         )}
 
                         {/* Gennet iSMS fields */}
-                        {smsProvider === "gennet" && (
+                        {values.smsProvider === "gennet" && (
                             <div className="space-y-3 pt-2 border-t">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="gennet-api-token">API Token</Label>
                                     <Input
                                         id="gennet-api-token"
                                         type="password"
-                                        placeholder={gennetApiToken === MASKED_VALUE ? MASKED_VALUE : "Enter your Gennet API token"}
-                                        value={gennetApiToken}
-                                        onChange={(e) => setGennetApiToken(e.target.value)}
+                                        placeholder={values.gennetApiToken === MASKED_VALUE ? MASKED_VALUE : "Enter your Gennet API token"}
+                                        value={values.gennetApiToken}
+                                        onChange={(e) => setValue("gennetApiToken", e.target.value)}
                                         className="font-mono"
                                     />
                                 </div>
@@ -392,8 +393,8 @@ export default function AuthSettingsBuilder() {
                                     <Input
                                         id="gennet-base-url"
                                         placeholder="https://yoursubdomain.gennet.com.bd"
-                                        value={gennetBaseUrl}
-                                        onChange={(e) => setGennetBaseUrl(e.target.value)}
+                                        value={values.gennetBaseUrl}
+                                        onChange={(e) => setValue("gennetBaseUrl", e.target.value)}
                                     />
                                     <p className="text-xs text-muted-foreground">
                                         Account-specific domain provided by GenNet on signup.
@@ -404,8 +405,8 @@ export default function AuthSettingsBuilder() {
                                     <Input
                                         id="gennet-sid"
                                         placeholder="Assigned by GenNet"
-                                        value={gennetSid}
-                                        onChange={(e) => setGennetSid(e.target.value)}
+                                        value={values.gennetSid}
+                                        onChange={(e) => setValue("gennetSid", e.target.value)}
                                     />
                                 </div>
                             </div>
@@ -417,10 +418,10 @@ export default function AuthSettingsBuilder() {
             <div className="flex justify-end pt-4 border-t border-border">
                 <Button
                     onClick={() => handleSubmit()}
-                    disabled={saving}
+                    disabled={isSaving}
                     className="min-w-[140px]"
                 >
-                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     <Save className="mr-2 h-4 w-4" />
                     Save Auth Settings
                 </Button>
