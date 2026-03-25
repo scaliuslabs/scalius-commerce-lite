@@ -181,6 +181,10 @@ export function MediaManagerPage() {
                   onFileDelete={mm.handleDeleteConfirmation}
                   onFilePreview={mm.handleFilePreview}
                   onToggleSelection={mm.toggleFileSelection}
+                  onEditAltText={(file) => {
+                    mm.setPreviewFile(file);
+                    mm.setShowPreview(true);
+                  }}
                   onLoadMore={mm.loadMore}
                   emptyMessage={
                     mm.filters.search
@@ -203,6 +207,7 @@ export function MediaManagerPage() {
         onOpenChange={mm.setShowPreview}
         onNavigateNext={mm.navigateToNextImage}
         onNavigatePrev={mm.navigateToPrevImage}
+        onAltTextUpdate={mm.handleAltTextUpdate}
       />
 
       {/* Single Delete Confirmation */}

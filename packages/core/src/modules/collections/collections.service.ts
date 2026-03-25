@@ -238,6 +238,14 @@ const buildCollectionProductSelect = () => ({
         ORDER BY "product_images"."sort_order" ASC
         LIMIT 1
     )`.as("imageUrl"),
+    imageAlt: sql<string | null>`(
+        SELECT "product_images"."alt"
+        FROM "product_images"
+        WHERE "product_images"."product_id" = "products"."id"
+          AND "product_images"."is_primary" = 1
+        ORDER BY "product_images"."sort_order" ASC
+        LIMIT 1
+    )`.as("imageAlt"),
     hasVariants: sql<boolean>`EXISTS(
         SELECT 1
         FROM "product_variants"
@@ -257,6 +265,7 @@ type RawProduct = {
     freeDelivery: boolean;
     categoryId: string | null;
     imageUrl: string | null;
+    imageAlt: string | null;
     hasVariants: boolean;
 };
 

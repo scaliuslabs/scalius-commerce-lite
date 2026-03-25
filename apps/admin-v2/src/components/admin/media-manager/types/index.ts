@@ -6,6 +6,9 @@ export interface MediaFile {
   filename: string;
   size: number;
   mimeType?: string; // Optional for backward compatibility
+  altText?: string | null;
+  width?: number | null;
+  height?: number | null;
   folderId?: string | null;
   createdAt: Date;
   updatedAt?: Date;
@@ -80,6 +83,7 @@ export interface MediaPreviewDialogProps {
   onNavigateNext: () => void;
   onNavigatePrev: () => void;
   onSelect?: (file: MediaFile) => void;
+  onAltTextUpdate?: (fileId: string, altText: string) => Promise<void>;
 }
 
 export interface MediaFilterOptions {
@@ -87,6 +91,7 @@ export interface MediaFilterOptions {
   folderId?: string | null;
   sortBy?: "createdAt" | "filename" | "size";
   sortOrder?: "asc" | "desc";
+  mimeType?: string;
   fileType?: string;
   dateFrom?: Date;
   dateTo?: Date;

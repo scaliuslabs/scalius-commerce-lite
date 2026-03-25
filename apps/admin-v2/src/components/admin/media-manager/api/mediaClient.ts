@@ -44,6 +44,7 @@ export class MediaApiClient {
         folderId: filters.folderId ?? undefined,
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
+        type: filters.mimeType ?? undefined,
       },
     });
     return data as MediaApiResponse;
@@ -212,6 +213,19 @@ export class MediaApiClient {
   ): Promise<MediaFile> {
     const data = await updateMedia({
       data: { fileId, update: updates },
+    }) as { file: MediaFile };
+    return data.file;
+  }
+
+  /**
+   * Update file alt text
+   */
+  static async updateAltText(
+    fileId: string,
+    altText: string,
+  ): Promise<MediaFile> {
+    const data = await updateMedia({
+      data: { fileId, update: { altText } },
     }) as { file: MediaFile };
     return data.file;
   }

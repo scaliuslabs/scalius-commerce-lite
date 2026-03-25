@@ -116,7 +116,7 @@ const optimizedImages = images.map((img) => {
               client:media="(min-width: 1024px)"
               initialImage={optimizedImages[0]?.mainUrl || "/img/no-image.webp"}
               initialZoomImage={optimizedImages[0]?.zoomUrl}
-              alt={product.name}
+              alt={images[0]?.alt || product.name}
               aspectRatio="aspect-square"
             />
           </div>
@@ -130,7 +130,7 @@ const optimizedImages = images.map((img) => {
               src={optimizedImages[0]?.mainUrl || "/img/no-image.webp"}
               srcset={`${optimizedImages[0]?.mainMobileSmall || ''} 400w, ${optimizedImages[0]?.mainUrl || ''} 600w`}
               sizes="(max-width: 640px) 400px, 600px"
-              alt={product.name}
+              alt={images[0]?.alt || product.name}
               width="600"
               height="600"
               class="h-full w-full object-contain object-center"
@@ -226,7 +226,7 @@ const optimizedImages = images.map((img) => {
     <img
       id="fullscreen-image"
       src=""
-      alt="Zoom view"
+      alt={`${product.name} — zoomed view`}
       class="max-w-full max-h-full object-contain transition-transform duration-100 ease-out origin-center will-change-transform"
     />
   </div>

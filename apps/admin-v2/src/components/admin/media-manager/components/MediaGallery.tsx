@@ -18,6 +18,7 @@ interface MediaGalleryProps {
   onFileDelete: (fileId: string) => void;
   onFilePreview: (file: MediaFile, e: React.MouseEvent) => void;
   onToggleSelection: (fileId: string) => void;
+  onEditAltText?: (file: MediaFile) => void;
   onLoadMore?: () => void;
   emptyMessage?: string;
   className?: string;
@@ -52,6 +53,7 @@ export function MediaGallery({
   onFileDelete,
   onFilePreview,
   onToggleSelection,
+  onEditAltText,
   onLoadMore,
   emptyMessage = "No media files found",
   className = "",
@@ -97,6 +99,7 @@ export function MediaGallery({
               onDelete={() => onFileDelete(file.id)}
               onPreview={(e) => onFilePreview(file, e)}
               onToggleSelection={() => onToggleSelection(file.id)}
+              onEditAltText={onEditAltText}
             />
           ))}
         </div>

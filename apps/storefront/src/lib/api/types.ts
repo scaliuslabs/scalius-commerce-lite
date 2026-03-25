@@ -122,6 +122,7 @@ export interface Product {
   updatedAt: string;
   deletedAt: string | null;
   imageUrl?: string | null;
+  imageAlt?: string | null;
   category?: CategorySummary;
   hasVariants: boolean;
 }
