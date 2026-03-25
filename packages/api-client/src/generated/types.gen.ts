@@ -2117,6 +2117,7 @@ export type PostApiV1CustomerAuthVerifyOtpData = {
         code: string;
         name?: string;
         phone?: string;
+        email?: string;
     };
     path?: never;
     query?: never;
@@ -3343,10 +3344,10 @@ export type PostApiV1AbandonedCheckoutsData = {
         checkoutId: string;
         customerPhone?: string;
         /**
-         * Checkout data
+         * Checkout data (arbitrary JSON)
          */
         checkoutData: {
-            [key: string]: string;
+            [key: string]: unknown;
         };
     };
     path?: never;
@@ -4953,7 +4954,7 @@ export type GetApiV1AdminCategoriesData = {
          */
         page?: number | null;
         /**
-         * Items per page
+         * Items per page (max 500 for selector dropdowns)
          */
         limit?: number | null;
         /**
@@ -10546,6 +10547,18 @@ export type GetApiV1AdminMediaData = {
          * Folder ID filter
          */
         folderId?: string;
+        /**
+         * Sort field
+         */
+        sortBy?: 'createdAt' | 'size' | 'filename';
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'asc' | 'desc';
+        /**
+         * MIME type filter prefix (e.g. 'image/')
+         */
+        mimeType?: string;
     };
     url: '/api/v1/admin/media';
 };
@@ -10623,6 +10636,9 @@ export type GetApiV1AdminMediaResponses = {
                 url: string;
                 size: number;
                 mimeType: string;
+                altText?: string | null;
+                width?: number | null;
+                height?: number | null;
                 folderId: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -10720,6 +10736,9 @@ export type PostApiV1AdminMediaUploadResponses = {
                 url: string;
                 size: number;
                 mimeType: string;
+                altText?: string | null;
+                width?: number | null;
+                height?: number | null;
                 folderId: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -10731,6 +10750,9 @@ export type PostApiV1AdminMediaUploadResponses = {
                 url: string;
                 size: number;
                 mimeType: string;
+                altText?: string | null;
+                width?: number | null;
+                height?: number | null;
                 folderId: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -10750,6 +10772,9 @@ export type PostApiV1AdminMediaUploadResponses = {
                 url: string;
                 size: number;
                 mimeType: string;
+                altText?: string | null;
+                width?: number | null;
+                height?: number | null;
                 folderId: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -10761,6 +10786,9 @@ export type PostApiV1AdminMediaUploadResponses = {
                 url: string;
                 size: number;
                 mimeType: string;
+                altText?: string | null;
+                width?: number | null;
+                height?: number | null;
                 folderId: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -10853,6 +10881,7 @@ export type DeleteApiV1AdminMediaByIdResponse = DeleteApiV1AdminMediaByIdRespons
 export type PatchApiV1AdminMediaByIdData = {
     body?: {
         filename?: string;
+        altText?: string | null;
         folderId?: string | null;
     };
     path: {
@@ -10935,6 +10964,9 @@ export type PatchApiV1AdminMediaByIdResponses = {
                 url: string;
                 size: number;
                 mimeType: string;
+                altText?: string | null;
+                width?: number | null;
+                height?: number | null;
                 folderId: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -10949,6 +10981,7 @@ export type PatchApiV1AdminMediaByIdResponse = PatchApiV1AdminMediaByIdResponses
 export type PutApiV1AdminMediaByIdData = {
     body?: {
         filename?: string;
+        altText?: string | null;
         folderId?: string | null;
     };
     path: {
@@ -11031,6 +11064,9 @@ export type PutApiV1AdminMediaByIdResponses = {
                 url: string;
                 size: number;
                 mimeType: string;
+                altText?: string | null;
+                width?: number | null;
+                height?: number | null;
                 folderId: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -15818,6 +15854,196 @@ export type PutApiV1AdminSettingsAllowedCountriesResponses = {
 
 export type PutApiV1AdminSettingsAllowedCountriesResponse = PutApiV1AdminSettingsAllowedCountriesResponses[keyof PutApiV1AdminSettingsAllowedCountriesResponses];
 
+export type GetApiV1AdminSettingsBusinessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/business';
+};
+
+export type GetApiV1AdminSettingsBusinessErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsBusinessError = GetApiV1AdminSettingsBusinessErrors[keyof GetApiV1AdminSettingsBusinessErrors];
+
+export type GetApiV1AdminSettingsBusinessResponses = {
+    /**
+     * Business settings
+     */
+    200: {
+        success: true;
+        data: {
+            companyName: string;
+            legalName: string;
+            addressLine1: string;
+            addressLine2: string;
+            city: string;
+            stateRegion: string;
+            postalCode: string;
+            country: string;
+            phone: string;
+            email: string;
+            taxId: string;
+            invoicePrefix: string;
+            invoiceFooterText: string;
+            invoiceLogoUrl: string;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsBusinessResponse = GetApiV1AdminSettingsBusinessResponses[keyof GetApiV1AdminSettingsBusinessResponses];
+
+export type PostApiV1AdminSettingsBusinessData = {
+    body?: {
+        companyName?: string;
+        legalName?: string;
+        addressLine1?: string;
+        addressLine2?: string;
+        city?: string;
+        stateRegion?: string;
+        postalCode?: string;
+        country?: string;
+        phone?: string;
+        email?: string;
+        taxId?: string;
+        invoicePrefix?: string;
+        invoiceFooterText?: string;
+        invoiceLogoUrl?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/business';
+};
+
+export type PostApiV1AdminSettingsBusinessErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsBusinessError = PostApiV1AdminSettingsBusinessErrors[keyof PostApiV1AdminSettingsBusinessErrors];
+
+export type PostApiV1AdminSettingsBusinessResponses = {
+    /**
+     * Business settings saved
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsBusinessResponse = PostApiV1AdminSettingsBusinessResponses[keyof PostApiV1AdminSettingsBusinessResponses];
+
 export type GetApiV1AdminSettingsOpenrouterData = {
     body?: never;
     path?: never;
@@ -19737,6 +19963,358 @@ export type PutApiV1AdminSettingsNotificationChannelsResponses = {
 
 export type PutApiV1AdminSettingsNotificationChannelsResponse = PutApiV1AdminSettingsNotificationChannelsResponses[keyof PutApiV1AdminSettingsNotificationChannelsResponses];
 
+export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/notification-channels/admin-channels';
+};
+
+export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsError = GetApiV1AdminSettingsNotificationChannelsAdminChannelsErrors[keyof GetApiV1AdminSettingsNotificationChannelsAdminChannelsErrors];
+
+export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponses = {
+    /**
+     * Admin notification channel configuration
+     */
+    200: {
+        success: true;
+        data: {
+            channels: {
+                [key: string]: Array<string>;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponse = GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponses[keyof GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponses];
+
+export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
+    body?: {
+        channels: {
+            [key: string]: Array<string>;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/notification-channels/admin-channels';
+};
+
+export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsError = PutApiV1AdminSettingsNotificationChannelsAdminChannelsErrors[keyof PutApiV1AdminSettingsNotificationChannelsAdminChannelsErrors];
+
+export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses = {
+    /**
+     * Updated admin notification channel configuration
+     */
+    200: {
+        success: true;
+        data: {
+            channels: {
+                [key: string]: Array<string>;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponse = PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses[keyof PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses];
+
+export type GetApiV1AdminSettingsSmsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/sms';
+};
+
+export type GetApiV1AdminSettingsSmsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSmsError = GetApiV1AdminSettingsSmsErrors[keyof GetApiV1AdminSettingsSmsErrors];
+
+export type GetApiV1AdminSettingsSmsResponses = {
+    /**
+     * SMS settings
+     */
+    200: {
+        success: true;
+        data: {
+            activeProvider: string | null;
+            bdbulksmsToken: string;
+            mimsmsUsername: string;
+            mimsmsApiKey: string;
+            mimsmsSenderName: string;
+            smsnetbdApiKey: string;
+            smsnetbdSenderId: string;
+            gennetApiToken: string;
+            gennetBaseUrl: string;
+            gennetSid: string;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSmsResponse = GetApiV1AdminSettingsSmsResponses[keyof GetApiV1AdminSettingsSmsResponses];
+
+export type PostApiV1AdminSettingsSmsData = {
+    body?: {
+        activeProvider?: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet';
+        bdbulksmsToken?: string;
+        mimsmsUsername?: string;
+        mimsmsApiKey?: string;
+        mimsmsSenderName?: string;
+        smsnetbdApiKey?: string;
+        smsnetbdSenderId?: string;
+        gennetApiToken?: string;
+        gennetBaseUrl?: string;
+        gennetSid?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/sms';
+};
+
+export type PostApiV1AdminSettingsSmsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsSmsError = PostApiV1AdminSettingsSmsErrors[keyof PostApiV1AdminSettingsSmsErrors];
+
+export type PostApiV1AdminSettingsSmsResponses = {
+    /**
+     * SMS settings saved
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsSmsResponse = PostApiV1AdminSettingsSmsResponses[keyof PostApiV1AdminSettingsSmsResponses];
+
 export type PutApiV1AdminOrdersByIdStatusData = {
     body?: {
         status: string;
@@ -20245,6 +20823,154 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
 };
 
 export type PostApiV1AdminOrdersByIdRefundResponse = PostApiV1AdminOrdersByIdRefundResponses[keyof PostApiV1AdminOrdersByIdRefundResponses];
+
+export type GetApiV1AdminOrdersIdInvoiceData = {
+    body?: never;
+    path: {
+        /**
+         * Order ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/:id/invoice';
+};
+
+export type GetApiV1AdminOrdersIdInvoiceErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersIdInvoiceError = GetApiV1AdminOrdersIdInvoiceErrors[keyof GetApiV1AdminOrdersIdInvoiceErrors];
+
+export type GetApiV1AdminOrdersIdInvoiceResponses = {
+    /**
+     * Invoice data with order details, business info, and invoice number
+     */
+    200: {
+        success: true;
+        data: {
+            order: {
+                id: string;
+                customerName: string;
+                customerPhone: string;
+                customerEmail: string | null;
+                totalAmount: number;
+                shippingCharge: number;
+                discountAmount: number | null;
+                status: string;
+                paymentStatus: string;
+                paymentMethod: string;
+                shippingAddress: string;
+                city: string;
+                zone: string;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                items: Array<{
+                    id: string;
+                    productId: string;
+                    variantId: string | null;
+                    quantity: number;
+                    price: number;
+                    productName: string | null;
+                    productImage: string | null;
+                    variantSize: string | null;
+                    variantColor: string | null;
+                    [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | null) | (string | null);
+                }>;
+                [key: string]: unknown | string | (string | null) | number | (number | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | number) | (string | number) | Array<{
+                    id: string;
+                    productId: string;
+                    variantId: string | null;
+                    quantity: number;
+                    price: number;
+                    productName: string | null;
+                    productImage: string | null;
+                    variantSize: string | null;
+                    variantColor: string | null;
+                    [key: string]: unknown | string | (string | null) | number | (string | null) | (string | null) | (string | null) | (string | null);
+                }>;
+            };
+            invoiceNumber: string;
+            invoiceNum: number;
+            businessInfo: {
+                companyName: string;
+                legalName: string;
+                addressLine1: string;
+                addressLine2: string;
+                city: string;
+                stateRegion: string;
+                postalCode: string;
+                country: string;
+                phone: string;
+                email: string;
+                taxId: string;
+                invoicePrefix: string;
+                invoiceFooterText: string;
+                invoiceLogoUrl: string;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersIdInvoiceResponse = GetApiV1AdminOrdersIdInvoiceResponses[keyof GetApiV1AdminOrdersIdInvoiceResponses];
 
 export type GetApiV1AdminOrdersData = {
     body?: never;
@@ -22230,6 +22956,8 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateData = {
             discountType: 'percentage' | 'flat';
             discountPercentage: number | null;
             discountAmount: number | null;
+            colorSortOrder?: number;
+            sizeSortOrder?: number;
         }>;
     };
     path: {
@@ -24150,7 +24878,7 @@ export type GetApiV1AdminAttributesData = {
          */
         page?: number | null;
         /**
-         * Items per page
+         * Items per page (max 500 for selector dropdowns)
          */
         limit?: number | null;
         /**
@@ -27026,10 +27754,10 @@ export type PostApiV1AdminSettingsAbandonedCheckoutsData = {
         checkoutId: string;
         customerPhone?: string;
         /**
-         * Checkout data
+         * Checkout data (arbitrary JSON)
          */
         checkoutData: {
-            [key: string]: string;
+            [key: string]: unknown;
         };
     };
     path?: never;

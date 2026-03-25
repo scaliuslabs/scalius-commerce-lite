@@ -6104,6 +6104,9 @@
                   },
                   "phone": {
                     "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -9869,9 +9872,9 @@
                   "checkoutData": {
                     "type": "object",
                     "additionalProperties": {
-                      "type": "string"
+                      "nullable": true
                     },
-                    "description": "Checkout data"
+                    "description": "Checkout data (arbitrary JSON)"
                   }
                 },
                 "required": [
@@ -14525,11 +14528,12 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 500,
               "default": 10,
-              "description": "Items per page"
+              "description": "Items per page (max 500 for selector dropdowns)"
             },
             "required": false,
-            "description": "Items per page",
+            "description": "Items per page (max 500 for selector dropdowns)",
             "name": "limit",
             "in": "query"
           },
@@ -17301,6 +17305,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 20,
               "description": "Items per page"
             },
@@ -20524,6 +20529,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 10,
               "description": "Items per page"
             },
@@ -22425,6 +22431,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 10,
               "description": "Items per page"
             },
@@ -29934,6 +29941,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 10,
               "description": "Items per page"
             },
@@ -32370,6 +32378,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 10,
               "description": "Items per page"
             },
@@ -32397,6 +32406,47 @@
             "required": false,
             "description": "Folder ID filter",
             "name": "folderId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "createdAt",
+                "size",
+                "filename"
+              ],
+              "default": "createdAt",
+              "description": "Sort field"
+            },
+            "required": false,
+            "description": "Sort field",
+            "name": "sortBy",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc",
+              "description": "Sort direction"
+            },
+            "required": false,
+            "description": "Sort direction",
+            "name": "sortOrder",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "MIME type filter prefix (e.g. 'image/')"
+            },
+            "required": false,
+            "description": "MIME type filter prefix (e.g. 'image/')",
+            "name": "mimeType",
             "in": "query"
           }
         ],
@@ -32436,6 +32486,18 @@
                               },
                               "mimeType": {
                                 "type": "string"
+                              },
+                              "altText": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "width": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "number",
+                                "nullable": true
                               },
                               "folderId": {
                                 "type": "string",
@@ -32772,6 +32834,18 @@
                               "mimeType": {
                                 "type": "string"
                               },
+                              "altText": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "width": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "folderId": {
                                 "type": "string",
                                 "nullable": true
@@ -32875,6 +32949,18 @@
                               },
                               "mimeType": {
                                 "type": "string"
+                              },
+                              "altText": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "width": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "number",
+                                "nullable": true
                               },
                               "folderId": {
                                 "type": "string",
@@ -33172,6 +33258,10 @@
                   "filename": {
                     "type": "string"
                   },
+                  "altText": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "folderId": {
                     "type": "string",
                     "nullable": true
@@ -33215,6 +33305,18 @@
                             },
                             "mimeType": {
                               "type": "string"
+                            },
+                            "altText": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "width": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "height": {
+                              "type": "number",
+                              "nullable": true
                             },
                             "folderId": {
                               "type": "string",
@@ -33506,6 +33608,10 @@
                   "filename": {
                     "type": "string"
                   },
+                  "altText": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "folderId": {
                     "type": "string",
                     "nullable": true
@@ -33549,6 +33655,18 @@
                             },
                             "mimeType": {
                               "type": "string"
+                            },
+                            "altText": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "width": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "height": {
+                              "type": "number",
+                              "nullable": true
                             },
                             "folderId": {
                               "type": "string",
@@ -35200,6 +35318,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 50,
               "description": "Items per page"
             },
@@ -37735,6 +37854,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 10,
               "description": "Max results"
             },
@@ -48776,6 +48896,595 @@
         }
       }
     },
+    "/api/v1/admin/settings/business": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get business settings",
+        "responses": {
+          "200": {
+            "description": "Business settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "companyName": {
+                          "type": "string"
+                        },
+                        "legalName": {
+                          "type": "string"
+                        },
+                        "addressLine1": {
+                          "type": "string"
+                        },
+                        "addressLine2": {
+                          "type": "string"
+                        },
+                        "city": {
+                          "type": "string"
+                        },
+                        "stateRegion": {
+                          "type": "string"
+                        },
+                        "postalCode": {
+                          "type": "string"
+                        },
+                        "country": {
+                          "type": "string"
+                        },
+                        "phone": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "taxId": {
+                          "type": "string"
+                        },
+                        "invoicePrefix": {
+                          "type": "string"
+                        },
+                        "invoiceFooterText": {
+                          "type": "string"
+                        },
+                        "invoiceLogoUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "companyName",
+                        "legalName",
+                        "addressLine1",
+                        "addressLine2",
+                        "city",
+                        "stateRegion",
+                        "postalCode",
+                        "country",
+                        "phone",
+                        "email",
+                        "taxId",
+                        "invoicePrefix",
+                        "invoiceFooterText",
+                        "invoiceLogoUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Save business settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "companyName": {
+                    "type": "string"
+                  },
+                  "legalName": {
+                    "type": "string"
+                  },
+                  "addressLine1": {
+                    "type": "string"
+                  },
+                  "addressLine2": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": "string"
+                  },
+                  "stateRegion": {
+                    "type": "string"
+                  },
+                  "postalCode": {
+                    "type": "string"
+                  },
+                  "country": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "taxId": {
+                    "type": "string"
+                  },
+                  "invoicePrefix": {
+                    "type": "string"
+                  },
+                  "invoiceFooterText": {
+                    "type": "string"
+                  },
+                  "invoiceLogoUrl": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Business settings saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/settings/openrouter": {
       "get": {
         "tags": [
@@ -53543,6 +54252,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 10,
               "description": "Items per page"
             },
@@ -59734,6 +60444,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 20,
               "description": "Items per page"
             },
@@ -60851,6 +61562,1093 @@
                       },
                       "required": [
                         "channels"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/settings/notification-channels/admin-channels": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get admin notification channel settings per order status",
+        "responses": {
+          "200": {
+            "description": "Admin notification channel configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "channels": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "channels"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Update admin notification channel settings per order status",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channels": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "channels"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated admin notification channel configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "channels": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "channels"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/settings/sms": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get SMS provider settings",
+        "responses": {
+          "200": {
+            "description": "SMS settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "activeProvider": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "bdbulksmsToken": {
+                          "type": "string"
+                        },
+                        "mimsmsUsername": {
+                          "type": "string"
+                        },
+                        "mimsmsApiKey": {
+                          "type": "string"
+                        },
+                        "mimsmsSenderName": {
+                          "type": "string"
+                        },
+                        "smsnetbdApiKey": {
+                          "type": "string"
+                        },
+                        "smsnetbdSenderId": {
+                          "type": "string"
+                        },
+                        "gennetApiToken": {
+                          "type": "string"
+                        },
+                        "gennetBaseUrl": {
+                          "type": "string"
+                        },
+                        "gennetSid": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "activeProvider",
+                        "bdbulksmsToken",
+                        "mimsmsUsername",
+                        "mimsmsApiKey",
+                        "mimsmsSenderName",
+                        "smsnetbdApiKey",
+                        "smsnetbdSenderId",
+                        "gennetApiToken",
+                        "gennetBaseUrl",
+                        "gennetSid"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Save SMS provider settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "activeProvider": {
+                    "type": "string",
+                    "enum": [
+                      "smsnetbd",
+                      "bdbulksms",
+                      "mimsms",
+                      "gennet"
+                    ]
+                  },
+                  "bdbulksmsToken": {
+                    "type": "string"
+                  },
+                  "mimsmsUsername": {
+                    "type": "string"
+                  },
+                  "mimsmsApiKey": {
+                    "type": "string"
+                  },
+                  "mimsmsSenderName": {
+                    "type": "string"
+                  },
+                  "smsnetbdApiKey": {
+                    "type": "string"
+                  },
+                  "smsnetbdSenderId": {
+                    "type": "string"
+                  },
+                  "gennetApiToken": {
+                    "type": "string"
+                  },
+                  "gennetBaseUrl": {
+                    "type": "string"
+                  },
+                  "gennetSid": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SMS settings saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
                       ]
                     }
                   },
@@ -62566,6 +64364,491 @@
                   "required": [
                     "success",
                     "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/orders/:id/invoice": {
+      "get": {
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Get invoice data for an order",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Order ID"
+            },
+            "required": true,
+            "description": "Order ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice data with order details, business info, and invoice number",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "order": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            },
+                            "customerPhone": {
+                              "type": "string"
+                            },
+                            "customerEmail": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "totalAmount": {
+                              "type": "number"
+                            },
+                            "shippingCharge": {
+                              "type": "number"
+                            },
+                            "discountAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "paymentStatus": {
+                              "type": "string"
+                            },
+                            "paymentMethod": {
+                              "type": "string"
+                            },
+                            "shippingAddress": {
+                              "type": "string"
+                            },
+                            "city": {
+                              "type": "string"
+                            },
+                            "zone": {
+                              "type": "string"
+                            },
+                            "area": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "cityName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zoneName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "areaName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "productId": {
+                                    "type": "string"
+                                  },
+                                  "variantId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "quantity": {
+                                    "type": "number"
+                                  },
+                                  "price": {
+                                    "type": "number"
+                                  },
+                                  "productName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "productImage": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "variantSize": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "variantColor": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "productId",
+                                  "variantId",
+                                  "quantity",
+                                  "price",
+                                  "productName",
+                                  "productImage",
+                                  "variantSize",
+                                  "variantColor"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "customerName",
+                            "customerPhone",
+                            "customerEmail",
+                            "totalAmount",
+                            "shippingCharge",
+                            "discountAmount",
+                            "status",
+                            "paymentStatus",
+                            "paymentMethod",
+                            "shippingAddress",
+                            "city",
+                            "zone",
+                            "area",
+                            "cityName",
+                            "zoneName",
+                            "areaName",
+                            "createdAt",
+                            "updatedAt",
+                            "items"
+                          ],
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "invoiceNumber": {
+                          "type": "string"
+                        },
+                        "invoiceNum": {
+                          "type": "number"
+                        },
+                        "businessInfo": {
+                          "type": "object",
+                          "properties": {
+                            "companyName": {
+                              "type": "string"
+                            },
+                            "legalName": {
+                              "type": "string"
+                            },
+                            "addressLine1": {
+                              "type": "string"
+                            },
+                            "addressLine2": {
+                              "type": "string"
+                            },
+                            "city": {
+                              "type": "string"
+                            },
+                            "stateRegion": {
+                              "type": "string"
+                            },
+                            "postalCode": {
+                              "type": "string"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "phone": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "taxId": {
+                              "type": "string"
+                            },
+                            "invoicePrefix": {
+                              "type": "string"
+                            },
+                            "invoiceFooterText": {
+                              "type": "string"
+                            },
+                            "invoiceLogoUrl": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "companyName",
+                            "legalName",
+                            "addressLine1",
+                            "addressLine2",
+                            "city",
+                            "stateRegion",
+                            "postalCode",
+                            "country",
+                            "phone",
+                            "email",
+                            "taxId",
+                            "invoicePrefix",
+                            "invoiceFooterText",
+                            "invoiceLogoUrl"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "order",
+                        "invoiceNumber",
+                        "invoiceNum",
+                        "businessInfo"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
                   ]
                 }
               }
@@ -65005,6 +67288,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 10,
               "description": "Items per page"
             },
@@ -69255,6 +71539,14 @@
                         "discountAmount": {
                           "type": "number",
                           "nullable": true,
+                          "minimum": 0
+                        },
+                        "colorSortOrder": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "sizeSortOrder": {
+                          "type": "number",
                           "minimum": 0
                         }
                       },
@@ -75396,11 +77688,12 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 500,
               "default": 10,
-              "description": "Items per page"
+              "description": "Items per page (max 500 for selector dropdowns)"
             },
             "required": false,
-            "description": "Items per page",
+            "description": "Items per page (max 500 for selector dropdowns)",
             "name": "limit",
             "in": "query"
           },
@@ -77693,6 +79986,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 20,
               "description": "Items per page"
             },
@@ -78824,6 +81118,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 100,
               "default": 20,
               "description": "Items per page"
             },
@@ -79833,6 +82128,7 @@
             "schema": {
               "type": "number",
               "nullable": true,
+              "maximum": 500,
               "default": 100,
               "description": "Items per page"
             },
@@ -84336,9 +86632,9 @@
                   "checkoutData": {
                     "type": "object",
                     "additionalProperties": {
-                      "type": "string"
+                      "nullable": true
                     },
-                    "description": "Checkout data"
+                    "description": "Checkout data (arbitrary JSON)"
                   }
                 },
                 "required": [
