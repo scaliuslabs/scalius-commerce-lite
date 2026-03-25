@@ -90,50 +90,59 @@ export const ProductSelectionSection = React.memo(
             setIsLoadingMore(true);
           }
 
-          // When only 1 category selected, use server-side filter.
-          // When multiple selected, fetch all and filter client-side.
-          const categoryId =
-            selectedCategoryIds.length === 1
-              ? selectedCategoryIds[0]
-              : undefined;
+          if (selectedCategoryIds.length > 1) {
+            // Multiple categories: fetch per category and merge (deduped)
+            const allProducts = new Map<string, Product>();
+            await Promise.all(
+              selectedCategoryIds.map(async (catId) => {
+                const data = (await getProducts({
+                  data: {
+                    limit: 50,
+                    page: 1,
+                    search: search?.trim() || undefined,
+                    categoryId: catId,
+                  },
+                })) as { products?: Product[] };
+                for (const p of data.products || []) {
+                  allProducts.set(p.id, p);
+                }
+              }),
+            );
+            const merged = Array.from(allProducts.values());
+            setDisplayedProducts(merged);
+            setTotalPages(1);
+            setTotalProducts(merged.length);
+            setCurrentPage(1);
+          } else {
+            // 0 or 1 category: standard paginated fetch
+            const categoryId =
+              selectedCategoryIds.length === 1
+                ? selectedCategoryIds[0]
+                : undefined;
+            lastCategoryFilterRef.current = categoryId;
 
-          lastCategoryFilterRef.current = categoryId;
+            const data = (await getProducts({
+              data: {
+                limit: PAGE_SIZE,
+                page,
+                search: search?.trim() || undefined,
+                categoryId,
+              },
+            })) as {
+              products?: Product[];
+              pagination?: { totalPages: number; total: number };
+            };
 
-          const data = (await getProducts({
-            data: {
-              limit: selectedCategoryIds.length > 1 ? 100 : PAGE_SIZE,
-              page: selectedCategoryIds.length > 1 ? 1 : page,
-              search: search?.trim() || undefined,
-              categoryId,
-            },
-          })) as {
-            products?: Product[];
-            pagination?: { totalPages: number; total: number };
-          };
-
-          if (data.products) {
-            // When multiple categories selected, filter client-side by category name
-            let filtered = data.products as Product[];
-            if (selectedCategoryIds.length > 1) {
-              // Build a set of selected category names for matching
-              const selectedCatNames = new Set(
-                categories
-                  .filter((c) => selectedCategoryIds.includes(c.id))
-                  .map((c) => c.name),
-              );
-              filtered = (data.products as Array<Product & { categoryName?: string }>).filter(
-                (p) => p.categoryName && selectedCatNames.has(p.categoryName),
-              );
+            if (data.products) {
+              if (page === 1) {
+                setDisplayedProducts(data.products);
+              } else {
+                setDisplayedProducts((prev) => [...prev, ...data.products!]);
+              }
+              setTotalPages(data.pagination?.totalPages || 1);
+              setTotalProducts(data.pagination?.total || 0);
+              setCurrentPage(page);
             }
-
-            if (page === 1) {
-              setDisplayedProducts(filtered);
-            } else {
-              setDisplayedProducts((prev) => [...prev, ...filtered]);
-            }
-            setTotalPages(selectedCategoryIds.length > 1 ? 1 : (data.pagination?.totalPages || 1));
-            setTotalProducts(selectedCategoryIds.length > 1 ? filtered.length : (data.pagination?.total || 0));
-            setCurrentPage(page);
           }
         } catch (error: unknown) {
           console.error("Error loading products:", error);
@@ -142,7 +151,7 @@ export const ProductSelectionSection = React.memo(
           setIsLoadingMore(false);
         }
       },
-      [selectedCategoryIds, categories],
+      [selectedCategoryIds],
     );
 
     // Load products when the popover opens
