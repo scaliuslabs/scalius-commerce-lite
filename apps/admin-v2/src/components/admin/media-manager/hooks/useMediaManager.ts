@@ -111,11 +111,14 @@ export function useMediaManager({
       },
     });
 
+  // Map folder ID to API param: "all" = no filter, null = "root" (uncategorized), else folder ID
+  const toFolderParam = (id: string | null): string =>
+    id === "all" ? "all" : id === null ? "root" : id;
+
   // Load files when folder changes (for page mode)
   useEffect(() => {
     if (autoLoad) {
-      const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
-      applyFilters({ ...filters, folderId: folderParam });
+      applyFilters({ ...filters, folderId: toFolderParam(currentFolderId) });
     }
   }, [currentFolderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -131,8 +134,7 @@ export function useMediaManager({
     (newFilters: typeof filters) => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
-        const folderParam = currentFolderIdRef.current === "all" ? "all" : currentFolderIdRef.current;
-        applyFiltersRef.current({ ...newFilters, folderId: folderParam });
+        applyFiltersRef.current({ ...newFilters, folderId: toFolderParam(currentFolderIdRef.current) });
       }, 500);
     },
     [], // stable — reads latest values from refs
