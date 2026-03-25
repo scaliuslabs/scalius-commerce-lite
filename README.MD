@@ -14,7 +14,7 @@
 </h4>
 
 <p align="center">
-  Full-stack e-commerce platform — admin dashboard, storefront, and API — Turborepo monorepo with Astro, Hono, and Cloudflare D1.
+  Full-stack e-commerce platform — admin dashboard, storefront, and API — deployed as Cloudflare Workers. Turborepo monorepo with TanStack Start, Astro, Hono, and Cloudflare D1.
 </p>
 
 <p align="center">
@@ -41,70 +41,47 @@
   </a>
 </p>
 
-## Get Started
+## Overview
 
-Scalius Commerce Lite is a **Turborepo monorepo** containing three Cloudflare Workers and five shared packages:
-
-- **Admin dashboard** (`apps/admin`) — Astro 6 SSR + React 19 admin UI
-- **API worker** (`apps/api`) — Standalone Hono API + queue consumer
-- **Storefront** (`apps/storefront`) — Astro 6 SSR + React 19 customer-facing store
-
-Admin and storefront communicate with the API worker via **Cloudflare Service Bindings** (zero-latency, no network hop in production).
-
-### Monorepo structure
+Scalius Commerce Lite is a **Turborepo monorepo** containing three Cloudflare Workers and five shared packages. All workers communicate via **Cloudflare Service Bindings** (zero-latency RPC in production).
 
 ```text
 apps/
-  admin/          # @scalius/admin — Astro 6 SSR admin dashboard (Cloudflare Worker)
+  admin-v2/       # @scalius/admin-v2 — TanStack Start admin dashboard (Cloudflare Worker)
   api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
   storefront/     # @scalius/storefront — Astro 6 SSR customer store (Cloudflare Worker)
+  admin/          # @scalius/admin — (deprecated) Astro 6 admin, replaced by admin-v2
 packages/
-  api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec
-  core/           # @scalius/core — Domain modules, auth, integrations, search
-  database/       # @scalius/database — Drizzle schema, client, migrations
-  shared/         # @scalius/shared — Pure utility functions (currency, image-optimizer, etc.)
-  tsconfig/       # @scalius/tsconfig — Shared TypeScript configs
-scripts/          # Dev setup, deploy, reset, dev server wrapper
+  api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec (249 paths, 27k+ types)
+  core/           # @scalius/core — 21 domain modules, auth, integrations, FTS5 search
+  database/       # @scalius/database — Drizzle schema (13 files, 52 tables), migrations
+  shared/         # @scalius/shared — 65+ pure utility functions across 21 modules
+  tsconfig/       # @scalius/tsconfig — Shared TypeScript configs (base, astro, worker)
+scripts/          # Dev setup, deploy pipeline, dev server wrapper
 ```
 
-### Key URLs (local dev)
+> **Note:** The original Astro-based admin dashboard (`apps/admin/`) is deprecated and being replaced by the TanStack Start rebuild (`apps/admin-v2/`).
 
-| URL | Service |
-|-----|---------|
-| `http://localhost:4321/admin` | Admin dashboard |
-| `http://localhost:4321/auth/login` | Auth pages |
-| `http://localhost:4322` | Storefront |
-| `http://localhost:8787/api/v1/` | API root |
-| `http://localhost:8787/api/v1/docs` | Swagger UI (interactive API docs) |
-| `http://localhost:8787/api/v1/openapi.json` | OpenAPI 3.0 spec (221 paths) |
-| `http://localhost:8787/api/v1/health` | Health check |
-
-### Tech stack
+### Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Monorepo | Turborepo + pnpm workspaces |
-| Admin & Storefront | Astro 6 (SSR, Cloudflare adapter) + Vite 7 + React 19 |
+| Admin Dashboard | TanStack Start + TanStack Router + TanStack Query + React 19 |
+| Storefront | Astro 6 SSR + React 19 |
 | API | Hono + @hono/zod-openapi (auto-generated OpenAPI/Swagger) |
 | Database | Cloudflare D1 (SQLite) + Drizzle ORM + FTS5 full-text search |
-| UI | Tailwind CSS v4 + shadcn/ui |
-| Auth | Better Auth (email/password + optional admin 2FA) |
+| UI | Tailwind CSS v4 + shadcn/ui + Radix primitives |
+| Auth | Better Auth (email/password + optional 2FA with TOTP/email OTP) |
 | Caching | Cloudflare KV + in-memory L1 + Cache API L2 (storefront) |
-| Storage | Cloudflare R2 for media uploads |
-| Queues | Cloudflare Queues for async processing (payments, notifications, OTP) |
-| Testing | Vitest (174 tests across shared utils, product/order validation) |
+| Storage | Cloudflare R2 for media + Cloudflare Image Resizing |
+| Queues | Cloudflare Queues (payments, notifications, OTP, order ingestion) |
+| Payments | Stripe, SSLCommerz, Polar, COD |
+| Delivery | Pathao, Steadfast (webhook-driven tracking) |
+| Notifications | Email (Resend), SMS (4 providers), Firebase Cloud Messaging |
+| AI | OpenRouter LLM integration for widget/content generation |
+| CI/CD | GitHub Actions (lint → typecheck → build → test) |
 | Deploy | Cloudflare Workers via Wrangler |
-
-### Features
-
-- **Commerce**: products (variants, images, rich content), categories, attributes, collections
-- **Sales**: orders, customers, abandoned checkouts, discounts
-- **Storefront content**: header/footer builders, navigation, pages, hero sliders, widgets
-- **Operations**: shipping methods, delivery providers/shipments, fraud checker, cache management
-- **Media**: R2-backed uploads + Cloudflare Image Resizing via CDN
-- **Notifications**: admin push notifications for new orders (Firebase Cloud Messaging)
-- **AI**: OpenRouter-powered widget/content generation and prompt tooling
-- **Security**: optional admin 2FA (authenticator app or email OTP), RBAC, rate limiting, CSP
 
 ---
 
@@ -112,113 +89,286 @@ scripts/          # Dev setup, deploy, reset, dev server wrapper
 
 ```mermaid
 flowchart TB
-    subgraph Admin ["Admin Worker (Astro 6 SSR)"]
-        AdminPages[Astro Pages /admin]
-        AuthPages[Better Auth /api/auth/*]
+    subgraph AdminV2 ["Admin Dashboard (TanStack Start)"]
+        direction TB
+        TSRouter["TanStack Router<br/>(60+ pages)"]
+        TSQuery["TanStack Query<br/>(78 queryOptions, 126 mutations)"]
+        ServerFns["252 Server Functions<br/>(createServerFn)"]
     end
 
-    subgraph Storefront ["Storefront Worker (Astro 6 SSR)"]
-        StorefrontPages[Product/Cart/Checkout Pages]
-        EdgeCache[L1 + L2 Edge Cache]
+    subgraph Storefront ["Storefront (Astro 6 SSR)"]
+        direction TB
+        AstroPages["SSR Pages<br/>(product, cart, checkout, search)"]
+        EdgeCache["L1 In-Memory + L2 Cache API<br/>(KV-versioned invalidation)"]
+        SDKClient["SDK Client<br/>(@scalius/api-client)"]
     end
 
     subgraph API ["API Worker (Hono)"]
-        HonoApp[Hono App /api/v1/*]
-        QueueConsumer[Queue Consumer]
+        direction TB
+        HonoApp["160+ Endpoints<br/>(@hono/zod-openapi)"]
+        QueueConsumer["Queue Consumer<br/>(payments, notifications, OTP)"]
+        CoreModules["@scalius/core<br/>(21 domain modules)"]
     end
 
-    subgraph Infra [Cloudflare Infrastructure]
-        D1[(D1 Database)]
-        KV[(KV Cache/Session)]
-        R2[(R2 Media Storage)]
-        Queues[Queues]
+    subgraph Infra ["Cloudflare Infrastructure"]
+        D1[(D1 Database<br/>52 tables)]
+        KV[(KV Namespaces<br/>cache + sessions + auth)]
+        R2[(R2 Bucket<br/>media storage)]
+        Queues["4 Queues<br/>(payment-events, notifications,<br/>auth-otp, order-ingest)"]
     end
 
-    AdminPages -->|Service Binding env.API| HonoApp
-    StorefrontPages -->|Service Binding env.BACKEND_API| HonoApp
-    HonoApp --> D1
-    HonoApp -->|Cache| KV
-    HonoApp --> R2
-    HonoApp -->|Enqueue| Queues
+    subgraph External ["External Services"]
+        Stripe["Stripe"]
+        SSLCommerz["SSLCommerz"]
+        Polar["Polar"]
+        Pathao["Pathao"]
+        Steadfast["Steadfast"]
+        Firebase["Firebase FCM"]
+        SMS["SMS Providers (4)"]
+        Resend["Resend Email"]
+        OpenRouter["OpenRouter LLM"]
+    end
+
+    AdminV2 -->|"Service Binding (env.API)"| API
+    Storefront -->|"Service Binding (env.BACKEND_API)"| API
+    API --> D1
+    API --> KV
+    API --> R2
+    API -->|Enqueue| Queues
     Queues -->|Consume| QueueConsumer
+    QueueConsumer --> Firebase
+    QueueConsumer --> SMS
+    QueueConsumer --> Resend
+    HonoApp --> CoreModules
+    Storefront --> EdgeCache
+
+    API -.->|Webhooks| Stripe
+    API -.->|Webhooks| SSLCommerz
+    API -.->|Webhooks| Polar
+    API -.->|Webhooks| Pathao
+    API -.->|Webhooks| Steadfast
+    AdminV2 -.-> OpenRouter
 ```
 
-### Admin Worker (`apps/admin`)
+### Service Binding Topology
 
-- Astro 6 SSR pages + React 19 components
-- Owns auth pages (`/api/auth/*` via Better Auth)
-- Middleware handles session validation, RBAC, CSP headers
-- Proxies `/api/v1/*` to the API worker via service binding (prod) or Vite proxy (dev)
-
-### Storefront Worker (`apps/storefront`)
-
-- Astro 6 SSR + React 19 customer-facing store
-- Product pages, cart, checkout, search, account, sitemaps
-- Service binding `BACKEND_API` -> API worker (0ms latency in prod)
-- Two-tier caching: L1 in-memory + L2 Cloudflare Cache API with KV version control
-- Imports `@scalius/shared` (utilities) and `@scalius/api-client` (types). Does NOT import `@scalius/core` or `@scalius/database` directly.
-
-### API Worker (`apps/api`)
-
-- Standalone Hono app at `/api/v1/*` with auto-generated OpenAPI spec
-- All routes use `@hono/zod-openapi` `createRoute()` for type-safe request validation + Swagger docs
-- Thin HTTP layer delegates to `@scalius/core` domain services
-- Standardized error handling via `ApiError` classes (`apps/api/src/utils/api-error.ts`)
-- Queue consumer handles payment events, order notifications, OTP delivery, order ingestion
-
-### Shared Packages (JIT — no build step)
-
-All packages are consumed directly as TypeScript by the bundler (esbuild/wrangler). No compilation step needed.
-
-| Package | Purpose |
-|---------|---------|
-| `@scalius/api-client` | Generated SDK from OpenAPI spec (types + client functions) |
-| `@scalius/core` | Domain services (`src/modules/`), Better Auth, RBAC, integrations, FTS5 search |
-| `@scalius/database` | Drizzle schema (11 domain files), `getDb()` client factory, migrations |
-| `@scalius/shared` | Pure utilities (currency, image-optimizer, media-url, CORS, rate-limit) |
-| `@scalius/tsconfig` | Shared TypeScript configs (base, astro, worker) |
-
-### Dependency graph
-
+```mermaid
+graph LR
+    A["Admin-V2<br/>:4323"] -->|env.API| C["API Worker<br/>:8787"]
+    B["Storefront<br/>:4322"] -->|env.BACKEND_API| C
+    C --> D[(D1)]
+    C --> E[(KV)]
+    C --> F[(R2)]
 ```
-@scalius/shared          -> (no deps)
-@scalius/database        -> drizzle-orm, @scalius/shared
-@scalius/core            -> @scalius/database, @scalius/shared, better-auth, zod
-@scalius/api-client      -> (generated, no runtime deps)
-@scalius/api             -> @scalius/core, @scalius/database, @scalius/shared, hono
-@scalius/admin           -> @scalius/core, @scalius/database, @scalius/shared, @scalius/api-client, astro, react
-@scalius/storefront      -> @scalius/shared, @scalius/api-client, astro, react
+
+In production, service bindings are zero-latency RPC calls (no HTTP overhead). In development, they fall back to `fetch("http://localhost:8787")`.
+
+---
+
+## Features
+
+### Commerce
+- Products with variants (size, color, SKU, barcode), images, rich content, attributes
+- Categories, collections (manual & dynamic), product attributes
+- Inventory management with stock versioning (CAS), reservations, low-stock alerts
+- FTS5 full-text search with Bengali tokenizer support
+
+### Sales
+- Orders with 11-state machine (pending → processing → confirmed → shipped → delivered → completed)
+- 3 payment gateways (Stripe, SSLCommerz, Polar) + Cash on Delivery
+- Atomic payment processing via `db.batch()` with idempotency indexes
+- Discounts (percentage, fixed, free shipping) with eligibility rules
+- Abandoned checkout tracking and recovery
+- Customer management with order history
+
+### Storefront Content
+- Header/footer builders (JSON config)
+- Navigation builder with drag-and-drop hierarchy
+- CMS pages with Tiptap rich text editor
+- Hero slider management (desktop + mobile variants)
+- Homepage widgets with AI-powered generation (OpenRouter LLM)
+
+### Operations
+- 2 delivery providers (Pathao, Steadfast) with webhook-driven tracking
+- Shipping methods (flat-rate, weight-based, zone-based)
+- Fraud checker (manual merchant tool per order)
+- Cache management dashboard (KV stats, selective purge)
+- Invoice generation and PDF download
+
+### Notifications
+- 9 notification types (order placed → refunded)
+- 3 channels: Email (Resend), SMS (4 providers), FCM push
+- Per-status channel independence (configurable per event type)
+- Queue-driven async delivery
+
+### Security
+- Better Auth with optional 2FA (TOTP authenticator + email OTP + backup codes)
+- RBAC with 80+ permissions across 14 categories
+- Rate limiting per endpoint
+- AES-GCM credential encryption for provider secrets
+- Webhook signature verification (per-provider)
+- Compare-and-swap (CAS) concurrency control on order/inventory updates
+
+---
+
+## Admin Dashboard (`apps/admin-v2/`)
+
+The admin dashboard is built with **TanStack Start** — a full-stack React framework on Cloudflare Workers.
+
+### Data Flow
+
+```mermaid
+flowchart LR
+    SF["createServerFn<br/>(252 functions)"] --> QO["queryOptions<br/>(78 wrappers)"]
+    QO --> L["Route Loader<br/>(ensureQueryData)"]
+    L --> C["Component<br/>(useSuspenseQuery)"]
+    C --> M["useMutation<br/>(126 hooks)"]
+    M -->|invalidateQueries| QO
 ```
+
+- **Server Functions** (`api.functions.ts`): 252 typed RPC functions that call the API worker
+- **Query Options** (`api.queries.ts`): 78 React Query wrappers with 7 staleTime tiers (10s → 1hr)
+- **Mutations** (`api.mutations.ts`): 126 hooks with cache invalidation and toast notifications
+- **Stale-While-Revalidate**: Detail queries use `staleTime: 0` + loader `staleTime: Infinity` for instant navigation
+
+### Pages (60+)
+
+| Section | Pages |
+|---------|-------|
+| Dashboard | Stats, recent orders, activity |
+| Products | List, create, edit, view, variants, images, SEO |
+| Orders | List, create, edit, view, shipments, payments, invoices |
+| Categories | List, create, edit |
+| Collections | List, create, edit, trash, drag-and-drop reorder |
+| Customers | List, create, edit, history |
+| Discounts | List, create (3 types), edit |
+| Pages (CMS) | List, create, edit with Tiptap editor |
+| Widgets | List, edit with AI generation, history/restore |
+| Attributes | List, inline edit, value management |
+| Inventory | Stock levels, adjustments, alerts |
+| Media | File browser with folders, upload, move, delete |
+| Analytics | Tracking script management |
+| Settings | 12+ tabs (general, checkout, payments, delivery, notifications, auth, etc.) |
+
+### Key Libraries
+
+TanStack Start, TanStack Router, TanStack Query, TanStack Table, React 19, shadcn/ui, Tailwind v4, React Hook Form, Zod, Tiptap, dnd-kit, Recharts, Sonner, Firebase
+
+---
+
+## Storefront (`apps/storefront/`)
+
+The storefront is an **Astro 6 SSR** application with React 19 islands for interactivity.
+
+### Pages
+
+| Page | Description |
+|------|-------------|
+| Homepage | Hero slider, widgets, collections |
+| Product (`/products/[slug]`) | Gallery, variants, JSON-LD, OG meta |
+| Category (`/categories/[slug]`) | Product grid with attribute filters |
+| Search (`/search`) | FTS5-powered with price/attribute filters |
+| Cart | Line items, discount codes, shipping calculator |
+| Checkout | Multi-gateway payment selection |
+| Order Success | Confirmation with tracking link |
+| CMS Pages (`/[slug]`) | Dynamic content pages |
+
+### Caching (Two-Tier)
+
+- **L1**: In-memory Map (max 1000 entries, LRU eviction, per-isolate)
+- **L2**: Cloudflare Cache API with KV version control (survives cold starts)
+- **Invalidation**: `POST /api/purge-cache` bumps KV version; all edge caches become stale
+- **Cache busting**: `BUILD_ID` in cache key ensures new deploys never serve stale HTML
+
+### SEO
+
+- JSON-LD schemas (Product, BreadcrumbList)
+- Open Graph + Twitter Card meta tags
+- Canonical URLs, robots.txt, XML sitemaps
+- Cloudflare Image Resizing for responsive images
+
+---
+
+## API Worker (`apps/api/`)
+
+Standalone **Hono** app with auto-generated OpenAPI spec and interactive Swagger UI.
+
+### Endpoints (~160)
+
+| Namespace | Auth | Endpoints | Purpose |
+|-----------|------|-----------|---------|
+| `/api/v1/admin/**` | Session/JWT + RBAC | ~110 | Admin CRUD operations |
+| `/api/v1/products`, `/categories`, etc. | None | ~30 | Public storefront data |
+| `/api/v1/orders/**` | JWT | 3 | Customer order management |
+| `/api/v1/payment/**` | None | 3 | Payment session creation |
+| `/api/v1/webhooks/**` | Signature | 5 | Gateway callbacks |
+| `/api/v1/health`, `/docs` | None | 4 | System endpoints |
+
+### Queue Processing
+
+| Queue | Messages | Batch Size |
+|-------|----------|------------|
+| `payment-events` | `payment.stripe.*`, `payment.sslcommerz.*`, `payment.polar.*` | 10 |
+| `order-notifications` | `order.notification` (9 types) | 20 |
+| `auth-otp` | `auth.send_otp` (email, SMS, WhatsApp) | 10 |
+| `order-ingest` | `order.ingest` (batch creation) | 100 |
+
+### Response Contract
+
+All success responses: `{ "success": true, "data": T }`
+All error responses: `{ "success": false, "error": { "code": "...", "message": "..." } }`
+
+---
+
+## Database (`packages/database/`)
+
+**52 tables** across 13 schema files, powered by Drizzle ORM on Cloudflare D1 (SQLite).
+
+| Domain | Tables | Key Tables |
+|--------|--------|------------|
+| Auth | 5 | user, session, account, verification, twoFactor |
+| RBAC | 5 | permissions, roles, rolePermissions, userRoles, userPermissions |
+| Products | 10 | products, productVariants, productImages, categories, collections, productAttributes, media, mediaFolders |
+| Orders | 7 | orders, orderItems, orderPayments, paymentPlans, codTracking, webhookEvents, abandonedCheckouts |
+| Customers | 2 | customers, customerHistory |
+| Inventory | 2 | inventoryMovements, productLowStockAlerts |
+| Delivery | 3 | deliveryLocations, deliveryProviders, deliveryShipments |
+| Marketing | 6 | discounts, discountProducts, discountCollections, discountUsage, metaConversionsSettings, metaConversionsLogs |
+| Content | 6 | pages, widgets, widgetHistory, heroSections, heroSliders, pageTemplates |
+| System | 6 | settings, siteSettings, analytics, adminFcmTokens, shippingMethods, checkoutLanguages |
+
+**34 migrations** applied. FTS5 full-text search with Bengali tokenizer (migration 0031).
 
 ---
 
 ## Scripts
 
-All commands run from the repo root:
-
 ```bash
 # Development
-pnpm dev              # Start admin :4321 + API :8787
-pnpm dev:storefront   # Start storefront :4322 + API :8787
-pnpm dev:all          # Start all three workers (staggered to avoid port conflicts)
+pnpm dev                # Start admin-v2 :4323 + API :8787
+pnpm dev:storefront     # Start storefront :4322 + API :8787
+pnpm dev:all            # Start all three workers (staggered startup)
 
 # Build & Deploy
-pnpm build            # Build all workspaces
-pnpm deploy           # Build + migrate + deploy all workers
+pnpm build              # Build all workspaces via Turbo
+pnpm deploy             # Typecheck → build → migrate → deploy all workers
+pnpm deploy:api         # Deploy API worker only
+pnpm deploy:admin-v2    # Deploy admin-v2 worker only
+pnpm deploy:storefront  # Deploy storefront worker only
 
 # Database
-pnpm db:generate      # Generate Drizzle migrations from schema changes
-pnpm db:migrate:local # Apply pending migrations locally
-pnpm db:studio        # Drizzle Studio DB browser
+pnpm db:generate        # Generate Drizzle migrations from schema changes
+pnpm db:migrate:local   # Apply pending migrations locally
+pnpm db:studio          # Open Drizzle Studio DB browser
 
-# Testing
-pnpm test             # Run all tests via vitest
-pnpm test:watch       # Run tests in watch mode
+# Testing & Quality
+pnpm test               # Run all tests via Vitest
+pnpm typecheck          # TypeScript type checking (tsc, NOT esbuild)
+pnpm generate:sdk       # Regenerate API client from OpenAPI spec
 
 # Setup & Maintenance
-pnpm dev:setup        # First-time local setup (creates .dev.vars, applies migrations)
-pnpm dev:reset        # Wipe local DB and re-apply migrations
-pnpm generate:sdk     # Regenerate API client from OpenAPI spec
+pnpm dev:setup          # First-time local setup (secrets + env + migrations)
+pnpm dev:reset          # Wipe local DB and re-apply all migrations
 ```
 
 ---
@@ -231,133 +381,59 @@ pnpm generate:sdk     # Regenerate API client from OpenAPI spec
 pnpm dev:setup
 ```
 
-This creates `.dev.vars` in each app directory, creates `apps/admin/.env.development`, and applies D1 migrations to the local database.
+Generates secrets, creates `.dev.vars` files, and applies D1 migrations.
 
-### 2) Start the app
+### 2) Start development servers
 
 ```bash
-pnpm dev          # Admin + API
-pnpm dev:all      # All three workers
+pnpm dev              # Admin-v2 + API
+pnpm dev:all          # All three workers
 ```
 
-The dev server uses `scripts/dev.sh` which:
-- Kills stale processes from previous runs automatically
-- Starts workers with staggered delays to prevent Vite inspector port conflicts
-- Cleans up all child processes on Ctrl+C
+The dev wrapper (`scripts/dev.sh`) kills stale processes, staggers startup (3s delays to prevent Vite inspector port conflicts), and cleans up on Ctrl+C.
 
 ### 3) Create the first admin account
 
-Visit `http://localhost:4321/admin`. If no admin exists, middleware redirects to `/auth/setup`. The first account is created as super admin and RBAC roles/permissions are seeded automatically.
+Visit `http://localhost:4323/admin`. If no admin exists, you're redirected to `/auth/setup`. The first account becomes super admin and RBAC permissions auto-seed.
 
-### 4) Reset commands
+### 4) Local URLs
 
-```bash
-pnpm dev:reset        # Wipe .wrangler/state and re-apply all migrations
-pnpm db:migrate:local # Apply pending migrations without wiping data
-```
+| URL | Service |
+|-----|---------|
+| `http://localhost:4323/admin` | Admin Dashboard (TanStack Start) |
+| `http://localhost:4322` | Storefront |
+| `http://localhost:8787/api/v1/docs` | Swagger UI (interactive API docs) |
+| `http://localhost:8787/api/v1/openapi.json` | OpenAPI 3.0 spec |
+| `http://localhost:8787/api/v1/health` | Health check |
 
 ---
 
 ## Environment Variables
 
-Each worker has its own configuration files. `pnpm dev:setup` generates everything automatically.
+`pnpm dev:setup` generates everything automatically. Each worker has:
 
-### Configuration surfaces
+- **`wrangler.jsonc`** — Cloudflare bindings and non-secret vars
+- **`.dev.vars`** — Runtime secrets (gitignored)
 
-1. **`wrangler.jsonc`** (per worker) — Cloudflare bindings and non-secret production vars
-2. **`.dev.vars`** (per worker) — Runtime secrets for local development
-3. **`.env.development`** (`apps/admin/` only) — Vite/Astro build-time vars
-4. **Admin dashboard settings** — Third-party providers stored in the database
+### Required Secrets
 
-See `.dev.vars.example` and `.env.example` at the repo root for reference.
+| Variable | Shared By | Purpose |
+|----------|-----------|---------|
+| `BETTER_AUTH_SECRET` | API + Admin-v2 | Session signing |
+| `JWT_SECRET` | API + Admin-v2 + Storefront | JWT signing |
+| `API_TOKEN` | All workers | Internal machine-to-machine auth |
+| `PURGE_TOKEN` | Storefront | Cache purge authentication |
 
-### Runtime secrets (`.dev.vars`)
+### Dashboard-Configured Integrations
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `BETTER_AUTH_SECRET` | Yes | Better Auth signing secret |
-| `JWT_SECRET` | Yes | JWT signing for protected API flows |
-| `API_TOKEN` | Yes | Machine-to-machine token for `/api/v1/auth/token` |
-| `BETTER_AUTH_URL` | Yes | Auth callback origin (`http://localhost:4321` locally) |
-| `PUBLIC_API_BASE_URL` | Yes | API base URL (`http://localhost:8787` locally) |
-| `STOREFRONT_URL` | Yes | Storefront origin for redirects/payment callbacks |
-
-### Dashboard-configured integrations
-
-| Integration | Where to configure |
+| Integration | Settings Location |
 |-------------|-------------------|
-| Resend email key + sender | **Settings -> Email** |
-| Firebase public config + service account | **Settings -> Notifications** |
-| Stripe / SSLCommerz / Polar + payment methods | **Settings -> Payments** |
-| Delivery provider credentials | **Settings -> Delivery Providers** |
-| OpenRouter API key | Widget generator settings dialog |
-
----
-
-## API Documentation
-
-- **Swagger UI**: `http://localhost:8787/api/v1/docs` — interactive API explorer with all 221 routes
-- **OpenAPI spec**: `http://localhost:8787/api/v1/openapi.json` — auto-generated from route definitions
-- **Auth**: Click "Authorize" in Swagger UI and enter a Bearer JWT token (obtain via `GET /auth/token` with `X-API-Token` header)
-
-### Route namespacing
-
-| Prefix | Auth | Purpose |
-|--------|------|---------|
-| `/api/v1/admin/**` | Session/JWT + RBAC | Admin CRUD operations |
-| `/api/v1/orders/**` | JWT | Customer order management |
-| `/api/v1/cache/**` | Admin JWT | Cache management |
-| `/api/v1/products`, `/categories`, etc. | None | Public storefront endpoints |
-| `/api/v1/webhooks/**` | Signature verification | Payment gateway callbacks |
-
-### Consolidated endpoints (reduce client round-trips)
-
-- `GET /api/v1/storefront/homepage` — hero sliders, widgets, collections, SEO
-- `GET /api/v1/storefront/layout` — header/footer, navigation, analytics scripts
-
----
-
-## Database & Migrations
-
-- **Schema**: `packages/database/src/schema/` (11 domain files)
-- **Client**: `packages/database/src/client.ts` (`getDb()` factory)
-- **Migrations**: `packages/database/migrations/`
-- **ORM**: Drizzle ORM 0.45.x
-
-### Full-text search (FTS5)
-
-All text search uses **SQLite FTS5** with external content tables. INSERT/UPDATE/DELETE triggers keep indexes in sync automatically.
-
-- FTS5 tables: `products_fts`, `product_variants_fts`, `categories_fts`, `pages_fts`, `orders_fts`, `customers_fts`, `discounts_fts`, `abandoned_checkouts_fts`
-- Query helpers: `packages/core/src/search/fts5.ts`
-
----
-
-## Queues
-
-| Queue | Purpose | DLQ |
-|-------|---------|-----|
-| `payment-events` | Payment gateway webhook events (Stripe, SSLCommerz, Polar) | Yes |
-| `order-notifications` | Push notifications for new orders | No |
-| `auth-otp` | Async email/OTP delivery | Yes |
-| `order-ingest` | High-concurrency order creation with batched inventory | Yes |
-
-Queue consumer: `apps/api/src/queue-consumer.ts`
-
----
-
-## Testing
-
-```bash
-pnpm test          # Run all tests
-pnpm test:watch    # Watch mode
-```
-
-Test suites:
-- `packages/shared/src/__tests__/utils.test.ts` — Shared utility functions (86 tests)
-- `packages/core/src/modules/products/__tests__/validation.test.ts` — Product schemas (37 tests)
-- `packages/core/src/modules/orders/__tests__/validation.test.ts` — Order schemas (51 tests)
-- `apps/api/src/__tests__/health.test.ts` — API smoke test (2 tests)
+| Email (Resend) | Settings → Email |
+| Firebase (FCM) | Settings → Notifications |
+| Stripe / SSLCommerz / Polar | Settings → Checkout → Payment Gateways |
+| Pathao / Steadfast | Settings → Delivery Providers |
+| SMS Providers | Settings → Checkout → SMS |
+| OpenRouter (AI) | Widget editor settings |
 
 ---
 
@@ -367,70 +443,42 @@ Test suites:
 pnpm deploy
 ```
 
-Runs `scripts/deploy.mjs` which:
-1. Applies D1 migrations (remote)
-2. Builds all workers
-3. Deploys to Cloudflare Workers via Wrangler
+Pipeline: `typecheck → build → migrate (remote D1) → deploy all workers`
 
-### Production domains
+### Production Domains
 
-| Domain | Worker |
-|--------|--------|
-| `dashboard.scalius.com` | scalius-admin |
-| `api.scalius.com` | scalius-api |
-| `storefront.scalius.com` | scalius-storefront |
-| `cloud.scalius.com` | R2 bucket (CDN + Image Resizing) |
+| Domain | Worker | Purpose |
+|--------|--------|---------|
+| `dashboard.scalius.com` | scalius-admin-v2 | Admin Dashboard |
+| `api.scalius.com` | scalius-api | REST API |
+| `storefront.scalius.com` | scalius-storefront | Customer Store |
+| `cloud.scalius.com` | R2 Bucket | Media CDN + Image Resizing |
 
----
+### Cloudflare Bindings (All Workers)
 
-## Key File Paths
-
-| File | Purpose |
-|------|---------|
-| `apps/api/src/worker.ts` | API Worker entry (WorkerEntrypoint) |
-| `apps/api/src/app.ts` | Hono app with all route mounts + OpenAPI config |
-| `apps/api/src/utils/api-error.ts` | Standardized error classes (ApiError, ValidationError, etc.) |
-| `apps/api/src/utils/api-response.ts` | Response helpers (ok, created, paginated, noContent) |
-| `apps/api/src/queue-consumer.ts` | Queue message handler |
-| `apps/admin/src/middleware.ts` | Auth + RBAC + CSP middleware |
-| `apps/admin/src/lib/auth-client.ts` | Better Auth React client |
-| `apps/storefront/src/middleware.ts` | Caching + API context middleware |
-| `apps/storefront/src/lib/api/client.ts` | Storefront API client (JWT + service binding) |
-| `apps/storefront/src/lib/edge-cache.ts` | Two-tier caching layer |
-| `packages/core/src/auth/auth.ts` | Better Auth server config |
-| `packages/core/src/modules/customers/customer-auth.service.ts` | Customer auth service (OTP, sessions) |
-| `packages/database/src/schema/` | Drizzle schema (11 files) |
-| `packages/database/migrations/` | SQL migrations |
-| `packages/api-client/src/generated/` | Generated SDK types + client |
-| `scripts/dev.sh` | Dev server wrapper (staggered start + cleanup) |
-
----
-
-## Recent Changes (March 2026)
-
-Major refactor from monolith to Turborepo monorepo:
-
-- Migrated all 67 API routes to `@hono/zod-openapi` with `createRoute()` for auto-generated OpenAPI
-- Created `@scalius/api-client` package with generated SDK
-- Extracted business logic from route handlers into `@scalius/core` services
-- Deduplicated storefront utilities into `@scalius/shared`
-- Added 174 tests (vitest)
-- Upgraded all dependencies to latest (Drizzle 0.45, Astro 6.0.4, wrangler 4.73, etc.)
-
-### Known backlog
-
-- **SDK regeneration needed**: The `@scalius/api-client` types are generated from an older spec. Run `pnpm generate:sdk` after starting the API to regenerate from the live 221-path spec.
-- **Response standardization**: API response helpers (`ok()`, `paginated()`) exist but aren't used by routes yet. Routes still use raw `c.json()` with inconsistent shapes.
-- **Major version upgrades pending**: TipTap 2->3, Firebase 11->12, Recharts 2->3, react-day-picker 8->9
-- **ESLint**: Not yet configured. `.prettierrc.mjs` exists for formatting.
+| Binding | Type | Purpose |
+|---------|------|---------|
+| `DB` | D1 | Shared SQLite database (52 tables) |
+| `CACHE` | KV | General caching |
+| `SESSION` | KV | Better Auth sessions |
+| `SHARED_AUTH_CACHE` | KV | Cross-worker auth token cache |
+| `BUCKET` | R2 | Media file storage |
+| `API` / `BACKEND_API` | Service Binding | Admin/Storefront → API |
 
 ---
 
 ## Troubleshooting
 
-- **"CRITICAL SECURITY ERROR: Using default JWT secret"** — Set `JWT_SECRET` in `.dev.vars` or production secrets.
-- **"BETTER_AUTH_SECRET is not set"** — Set in `.dev.vars`. Generate: `openssl rand -base64 32`
-- **Auth sign-in loops** — Ensure admin runs on `http://localhost:4321`. Run `pnpm dev:setup --force` to regenerate env files.
-- **Port conflicts on startup** — The dev script (`scripts/dev.sh`) auto-kills stale processes. If issues persist, manually run: `lsof -ti :8787,:4321,:4322 | xargs kill -9`
-- **D1 errors in dev** — Run `pnpm db:migrate:local` or `pnpm dev:reset` for a clean database.
-- **Swagger UI shows "No parameters"** — Ensure `@hono/zod-openapi` is v1.2.2+ (Zod v4 compatible). Check `apps/api/package.json`.
+| Problem | Solution |
+|---------|----------|
+| Port conflicts on startup | `lsof -ti :8787,:4321,:4322,:4323 \| xargs kill -9` |
+| Auth sign-in loops | Run `pnpm dev:setup --force` to regenerate env files |
+| D1 errors in dev | Run `pnpm dev:reset` for a clean database |
+| "Using default JWT secret" | Set `JWT_SECRET` in `.dev.vars` |
+| Stale OpenAPI types | Run `pnpm generate:sdk` with API running |
+
+---
+
+## License
+
+[AGPL v3](LICENSE)

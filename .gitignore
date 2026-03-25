@@ -43,3 +43,6 @@ tests/
 skills-lock.json
 /temp-doc
 /tanstack-router
+/docs
+/.github
+CLAUDE.md
