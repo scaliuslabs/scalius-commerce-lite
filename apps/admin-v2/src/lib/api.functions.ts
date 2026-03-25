@@ -1228,7 +1228,11 @@ export const moveMediaFiles = createServerFn({ method: "POST" })
     (data: { fileIds: string[]; targetFolderId: string | null }) => data,
   )
   .handler(async ({ data }) => {
-    return apiPost("/media/move", data);
+    // Map frontend field name to API schema field name
+    return apiPost("/media/move", {
+      fileIds: data.fileIds,
+      folderId: data.targetFolderId,
+    });
   });
 
 export const deleteMediaFolder = createServerFn({ method: "POST" })
