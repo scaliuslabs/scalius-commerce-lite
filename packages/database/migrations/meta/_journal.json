@@ -232,6 +232,13 @@
       "when": 1774130915687,
       "tag": "0032_lyrical_adam_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1774406719482,
+      "tag": "0033_shallow_marvel_zombies",
+      "breakpoints": true
     }
   ]
 }

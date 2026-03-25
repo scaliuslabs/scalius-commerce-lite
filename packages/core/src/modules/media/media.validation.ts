@@ -3,6 +3,7 @@ import { z } from "zod";
 
 export const updateMediaSchema = z.object({
     filename: z.string().optional(),
+    altText: z.string().nullable().optional(),
     folderId: z.string().nullable().optional(),
 });
 
