@@ -155,14 +155,14 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
     const productsList = await query.orderBy(orderBy).limit(limit).offset(offset).all();
     const productIds = productsList.map((p) => p.id);
 
-    let imageMap = new Map<string, string>();
+    let imageMap = new Map<string, { url: string; alt: string | null }>();
     if (productIds.length > 0) {
         const images = await db
-            .select({ productId: productImages.productId, url: productImages.url })
+            .select({ productId: productImages.productId, url: productImages.url, alt: productImages.alt })
             .from(productImages)
             .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
             .all();
-        imageMap = new Map(images.map((img: { productId: string; url: string }) => [img.productId, img.url]));
+        imageMap = new Map(images.map((img: { productId: string; url: string; alt: string | null }) => [img.productId, { url: img.url, alt: img.alt }]));
     }
 
     let categoryMap = new Map<string, { id: string; name: string; slug: string }>();
@@ -176,18 +176,22 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
     }
 
-    const productsWithImages = productsList.map(({ variantCount, ...product }: { variantCount: number; id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean; categoryId: string | null; createdAt: number; updatedAt: number }) => ({
-        ...product,
-        hasVariants: variantCount > 0,
-        imageUrl: imageMap.get(product.id) || null,
-        category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,
-        createdAt: unixToDate(product.createdAt)?.toISOString() || null,
-        updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
-        discountedPrice: calculateDiscountedPrice(
-            product.price, product.discountType,
-            product.discountPercentage, product.discountAmount,
-        ),
-    }));
+    const productsWithImages = productsList.map(({ variantCount, ...product }: { variantCount: number; id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean; categoryId: string | null; createdAt: number; updatedAt: number }) => {
+        const imgData = imageMap.get(product.id);
+        return {
+            ...product,
+            hasVariants: variantCount > 0,
+            imageUrl: imgData?.url || null,
+            imageAlt: imgData?.alt || null,
+            category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,
+            createdAt: unixToDate(product.createdAt)?.toISOString() || null,
+            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
+            discountedPrice: calculateDiscountedPrice(
+                product.price, product.discountType,
+                product.discountPercentage, product.discountAmount,
+            ),
+        };
+    });
 
     // Count query
     let countQuery = db
@@ -345,21 +349,25 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                 if (relatedProds.length === 0) return { type: "relatedProducts", data: [] };
 
                 const relatedIds = relatedProds.map((p) => p.id);
-                const relatedImages: Array<{ productId: string; url: string }> = await db
-                    .select({ productId: productImages.productId, url: productImages.url })
+                const relatedImages: Array<{ productId: string; url: string; alt: string | null }> = await db
+                    .select({ productId: productImages.productId, url: productImages.url, alt: productImages.alt })
                     .from(productImages)
                     .where(and(inArray(productImages.productId, relatedIds), eq(productImages.isPrimary, true)))
                     .all();
 
-                const relatedImageMap = new Map(relatedImages.map((img: { productId: string; url: string }) => [img.productId, img.url]));
+                const relatedImageMap = new Map(relatedImages.map((img: { productId: string; url: string; alt: string | null }) => [img.productId, { url: img.url, alt: img.alt }]));
 
                 return {
                     type: "relatedProducts",
-                    data: relatedProds.map((rp) => ({
-                        ...rp,
-                        imageUrl: relatedImageMap.get(rp.id) || null,
-                        discountedPrice: calculateDiscountedPrice(rp.price, rp.discountType, rp.discountPercentage, rp.discountAmount),
-                    })),
+                    data: relatedProds.map((rp) => {
+                        const imgData = relatedImageMap.get(rp.id);
+                        return {
+                            ...rp,
+                            imageUrl: imgData?.url || null,
+                            imageAlt: imgData?.alt || null,
+                            discountedPrice: calculateDiscountedPrice(rp.price, rp.discountType, rp.discountPercentage, rp.discountAmount),
+                        };
+                    }),
                 };
             })(),
         );
@@ -487,10 +495,10 @@ export async function searchStorefrontProducts(
         productIds.length > 0
             ? await Promise.all([
                 db
-                    .select({ productId: productImages.productId, url: productImages.url })
+                    .select({ productId: productImages.productId, url: productImages.url, alt: productImages.alt })
                     .from(productImages)
                     .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
-                    .all() as Promise<Array<{ productId: string; url: string }>>,
+                    .all() as Promise<Array<{ productId: string; url: string; alt: string | null }>>,
                 db
                     .select({
                         id: productVariants.id,
@@ -515,17 +523,21 @@ export async function searchStorefrontProducts(
             : [[], []];
 
     const imageMap = new Map(
-        (images as Array<{ productId: string; url: string }>).map((img) => [img.productId, img.url]),
+        (images as Array<{ productId: string; url: string; alt: string | null }>).map((img) => [img.productId, { url: img.url, alt: img.alt }]),
     );
 
     return {
-        data: results.map((product) => ({
-            ...product,
-            imageUrl: imageMap.get(product.id) || null,
-            variants: (variants as Array<{ productId: string } & Record<string, unknown>>).filter(
-                (v) => v.productId === product.id,
-            ),
-        })),
+        data: results.map((product) => {
+            const imgData = imageMap.get(product.id);
+            return {
+                ...product,
+                imageUrl: imgData?.url || null,
+                imageAlt: imgData?.alt || null,
+                variants: (variants as Array<{ productId: string } & Record<string, unknown>>).filter(
+                    (v) => v.productId === product.id,
+                ),
+            };
+        }),
         pagination: {
             page,
             limit,

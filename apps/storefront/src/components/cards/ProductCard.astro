@@ -39,7 +39,9 @@ const productImageUrl = getOptimizedImageUrl(product.imageUrl, {
     >
       <img
         src={productImageUrl}
-        alt={product.name}
+        alt={product.imageAlt || product.name}
+        width={400}
+        height={400}
         loading="lazy"
         decoding="async"
         class="w-full h-full object-contain object-center transition-transform duration-700 ease-out group-hover:scale-110"

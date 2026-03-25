@@ -33,7 +33,7 @@ const formatPrice = (price: number) =>
                 {relatedProduct.imageUrl ? (
                   <img
                     src={getOptimizedImageUrl(relatedProduct.imageUrl, { width: 300, height: 300 })}
-                    alt={relatedProduct.name}
+                    alt={relatedProduct.imageAlt || relatedProduct.name}
                     width={300}
                     height={300}
                     class="h-full w-full object-contain object-center group-hover:scale-105 transition-all duration-300 mix-blend-multiply"

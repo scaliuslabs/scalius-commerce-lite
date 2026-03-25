@@ -10,6 +10,8 @@ import {
   CheckSquare,
   Square,
   Upload as UploadIcon,
+  ArrowUpDown,
+  Filter,
 } from "lucide-react";
 import type { MediaFilterOptions, MediaFolder } from "../types";
 import {
@@ -19,6 +21,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+
+/** Sort presets map to sortBy + sortOrder params */
+const SORT_OPTIONS = [
+  { label: "Newest", value: "newest", sortBy: "createdAt" as const, sortOrder: "desc" as const },
+  { label: "Oldest", value: "oldest", sortBy: "createdAt" as const, sortOrder: "asc" as const },
+  { label: "Largest", value: "largest", sortBy: "size" as const, sortOrder: "desc" as const },
+  { label: "Smallest", value: "smallest", sortBy: "size" as const, sortOrder: "asc" as const },
+  { label: "Name A-Z", value: "name-asc", sortBy: "filename" as const, sortOrder: "asc" as const },
+  { label: "Name Z-A", value: "name-desc", sortBy: "filename" as const, sortOrder: "desc" as const },
+] as const;
+
+const TYPE_OPTIONS = [
+  { label: "All Files", value: "all", mimeType: undefined },
+  { label: "Images", value: "images", mimeType: "image" },
+  { label: "Videos", value: "videos", mimeType: "video" },
+  { label: "Documents", value: "documents", mimeType: "application" },
+] as const;
 
 interface MediaFilterBarProps {
   filters: Partial<MediaFilterOptions>;
@@ -36,6 +55,20 @@ interface MediaFilterBarProps {
   onMoveToFolder?: (folderId: string | null) => void;
   onUpload?: (files: FileList | null) => Promise<void>;
   isUploading?: boolean;
+}
+
+/** Derive the sort preset value from current filters */
+function getSortValue(filters: Partial<MediaFilterOptions>): string {
+  const match = SORT_OPTIONS.find(
+    (o) => o.sortBy === filters.sortBy && o.sortOrder === filters.sortOrder,
+  );
+  return match?.value ?? "newest";
+}
+
+/** Derive the type filter value from current filters */
+function getTypeValue(filters: Partial<MediaFilterOptions>): string {
+  const match = TYPE_OPTIONS.find((o) => o.mimeType === filters.mimeType);
+  return match?.value ?? "all";
 }
 
 export function MediaFilterBar({
@@ -107,6 +140,50 @@ export function MediaFilterBar({
           >
             <Search className="h-3.5 w-3.5" />
           </Button>
+
+          {/* Sort Dropdown */}
+          <Select
+            value={getSortValue(filters)}
+            onValueChange={(value) => {
+              const opt = SORT_OPTIONS.find((o) => o.value === value);
+              if (opt) {
+                onFiltersChange({ ...filters, sortBy: opt.sortBy, sortOrder: opt.sortOrder });
+              }
+            }}
+          >
+            <SelectTrigger className="h-8 w-[120px] text-xs">
+              <ArrowUpDown className="h-3 w-3 mr-1 shrink-0" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Type Filter */}
+          <Select
+            value={getTypeValue(filters)}
+            onValueChange={(value) => {
+              const opt = TYPE_OPTIONS.find((o) => o.value === value);
+              onFiltersChange({ ...filters, mimeType: opt?.mimeType });
+            }}
+          >
+            <SelectTrigger className="h-8 w-[120px] text-xs">
+              <Filter className="h-3 w-3 mr-1 shrink-0" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TYPE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {/* Selection Mode Toggle - NO NESTED BUTTONS */}
           <Button type="button"

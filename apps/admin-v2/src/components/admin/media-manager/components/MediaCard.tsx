@@ -11,6 +11,7 @@ import {
   Download,
   Link as LinkIcon,
   MoreVertical,
+  TextCursorInput,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -31,6 +32,7 @@ interface MediaCardProps {
   onDelete: () => void;
   onPreview: (e: React.MouseEvent) => void;
   onToggleSelection: () => void;
+  onEditAltText?: (file: MediaFile) => void;
 }
 
 export function MediaCard({
@@ -41,6 +43,7 @@ export function MediaCard({
   onDelete,
   onPreview,
   onToggleSelection,
+  onEditAltText,
 }: MediaCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -135,6 +138,15 @@ export function MediaCard({
         )}
 
         <div className="relative aspect-square overflow-hidden rounded-md bg-muted/30">
+          {/* Alt text badge */}
+          {file.altText && (
+            <div className="absolute right-1.5 top-1.5 z-10">
+              <span className="inline-flex items-center rounded bg-black/60 px-1 py-0.5 text-[9px] font-semibold leading-none text-white backdrop-blur-sm">
+                ALT
+              </span>
+            </div>
+          )}
+
           {/* Simple loading background */}
           {!imageLoaded && !imageError && shouldLoad && (
             <div className="absolute inset-0 bg-muted/40" />
@@ -217,6 +229,17 @@ export function MediaCard({
                       <Download className="mr-2 h-4 w-4" />
                       Download
                     </DropdownMenuItem>
+                    {onEditAltText && (
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditAltText(file);
+                        }}
+                      >
+                        <TextCursorInput className="mr-2 h-4 w-4" />
+                        Edit Alt Text
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
@@ -247,7 +270,11 @@ export function MediaCard({
           </p>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{formatFileSize(file.size)}</span>
-            <span className="text-[10px]">{formatDate(file.createdAt)}</span>
+            {file.width && file.height ? (
+              <span className="text-[10px]">{file.width}x{file.height}</span>
+            ) : (
+              <span className="text-[10px]">{formatDate(file.createdAt)}</span>
+            )}
           </div>
         </div>
       </CardContent>

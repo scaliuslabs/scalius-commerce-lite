@@ -159,6 +159,7 @@ export function useMediaFiles(autoLoad: boolean = false) {
 
   return {
     files,
+    setFiles,
     isLoading,
     isLoadingMore,
     currentPage,

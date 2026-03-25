@@ -238,6 +238,10 @@ export function MediaManager({
                   onFileDelete={mm.handleDeleteConfirmation}
                   onFilePreview={mm.handleFilePreview}
                   onToggleSelection={mm.toggleFileSelection}
+                  onEditAltText={(file) => {
+                    mm.setPreviewFile(file);
+                    mm.setShowPreview(true);
+                  }}
                   onLoadMore={mm.loadMore}
                   emptyMessage={
                     mm.filters.search
@@ -260,6 +264,7 @@ export function MediaManager({
         onOpenChange={mm.setShowPreview}
         onNavigateNext={mm.navigateToNextImage}
         onNavigatePrev={mm.navigateToPrevImage}
+        onAltTextUpdate={mm.handleAltTextUpdate}
         onSelect={
           onSelect
             ? (file) => {

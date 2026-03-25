@@ -44,6 +44,7 @@ export function useMediaManager({
 
   const {
     files,
+    setFiles,
     isLoading,
     isLoadingMore,
     currentPage,
@@ -217,15 +218,41 @@ export function useMediaManager({
   const handleMoveToFolder = async (folderId: string | null) => {
     if (selectedFileIds.length === 0) return;
     try {
+      const count = selectedFileIds.length;
       await MediaApiClient.moveFilesToFolder(selectedFileIds, folderId);
+      const folderName = folderId
+        ? folders.find((f) => f.id === folderId)?.name || "folder"
+        : "Uncategorized";
       toast.success("Files Moved", {
-        description: `Successfully moved ${selectedFileIds.length} file${selectedFileIds.length !== 1 ? "s" : ""}.`,
+        description: `Moved ${count} file${count !== 1 ? "s" : ""} to '${folderName}'.`,
       });
       setSelectedFileIds([]);
-      reloadFiles();
+      setSelectionMode(false);
+      // Navigate to the target folder
+      moveToFolder(folderId);
     } catch (error: unknown) {
       toast.error("Move Failed", {
         description: (error instanceof Error ? error.message : String(error)) || "Could not move files. Please try again.",
+      });
+    }
+  };
+
+  const handleAltTextUpdate = async (fileId: string, altText: string) => {
+    try {
+      const updatedFile = await MediaApiClient.updateAltText(fileId, altText);
+      const newAltText = updatedFile.altText ?? altText;
+      // Update the file in the local list
+      setFiles((prev: MediaFile[]) =>
+        prev.map((f: MediaFile) => (f.id === fileId ? { ...f, altText: newAltText } : f)),
+      );
+      // Also update preview file if it's the same one
+      if (previewFile && previewFile.id === fileId) {
+        setPreviewFile({ ...previewFile, altText: newAltText });
+      }
+      toast.success("Alt Text Updated", { description: "Alt text has been saved." });
+    } catch (error: unknown) {
+      toast.error("Update Failed", {
+        description: (error instanceof Error ? error.message : String(error)) || "Could not update alt text.",
       });
     }
   };
@@ -308,6 +335,7 @@ export function useMediaManager({
     handleBulkDelete,
     handleMoveToFolder,
     handleAddSelectedFiles,
+    handleAltTextUpdate,
     navigateToNextImage,
     navigateToPrevImage,
   };

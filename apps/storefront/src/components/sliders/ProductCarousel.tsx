@@ -42,7 +42,9 @@ function ProductCarouselCard({ product }: { product: Product }) {
         >
           <img
             src={productImageUrl}
-            alt={product.name}
+            alt={product.imageAlt || product.name}
+            width={400}
+            height={400}
             className="h-full w-full object-contain object-center transition-transform duration-700 ease-out group-hover:scale-110"
             loading="lazy"
             decoding="async"
