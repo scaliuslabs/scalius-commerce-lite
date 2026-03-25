@@ -13,8 +13,8 @@ import { OrderItemsTable } from "./OrderItemsTable";
 import { updateOrderItems } from "@/store/orderStore";
 import type { Product } from "./types";
 
-const productsPerPage = 20;
-const initialProductsToShow = 20;
+const productsPerPage = 10;
+const initialProductsToShow = 10;
 
 export function OrderItemsSection() {
   const { form, products: allProducts, refs } = useOrderForm();

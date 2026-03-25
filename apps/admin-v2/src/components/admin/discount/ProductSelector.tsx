@@ -21,6 +21,7 @@ interface Product {
   id: string;
   name: string;
   price: number;
+  primaryImage?: string | null;
   discountPercentage?: number | null;
   variants?: Array<{
     id: string;
@@ -98,18 +99,9 @@ export function ProductSelector({
         setIsLoadingMore(true);
       }
 
-      // Build query parameters
-      const params = new URLSearchParams();
-      params.append("limit", "20");
-      params.append("page", page.toString());
-
-      if (searchTerm.trim()) {
-        params.append("search", searchTerm.trim());
-      }
-
       const data = await getProducts({
         data: {
-          limit: 20,
+          limit: 10,
           page,
           search: searchTerm.trim() || undefined,
         },
@@ -233,13 +225,24 @@ export function ProductSelector({
                         <div className="flex items-center gap-2 truncate">
                           <Check
                             className={cn(
-                              "mr-2 h-4 w-4",
+                              "mr-2 h-4 w-4 shrink-0",
                               isSelected ? "opacity-100" : "opacity-0",
                             )}
                           />
+                          {product.primaryImage ? (
+                            <img
+                              src={product.primaryImage}
+                              alt=""
+                              className="h-6 w-6 rounded object-cover shrink-0"
+                            />
+                          ) : (
+                            <div className="h-6 w-6 rounded bg-muted flex items-center justify-center shrink-0">
+                              <Tag className="h-3 w-3 text-muted-foreground" />
+                            </div>
+                          )}
                           <span className="truncate">{product.name}</span>
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-sm text-muted-foreground shrink-0 ml-2">
                           {symbol}{product.price}
                         </div>
                       </div>

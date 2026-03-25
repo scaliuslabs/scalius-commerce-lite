@@ -1,5 +1,5 @@
 // src/components/admin/navigation/AddNavItemDialog.tsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -38,9 +38,18 @@ import {
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
 import type { NavigationItem, NavigationSource } from "./types";
-import { getNavigationItems, getAttributes, getAttributeValues, getNavigationPreviewProducts } from "~/lib/api.functions";
+import {
+  getNavigationItems,
+  getCategories,
+  getPages,
+  getAttributes,
+  getAttributeValues,
+  getNavigationPreviewProducts,
+} from "~/lib/api.functions";
 
 type NavItemType = "category" | "page" | "dynamic" | "custom" | "label";
+
+const PAGE_SIZE = 10;
 
 interface AttributeFilter {
   id: string;
@@ -49,6 +58,26 @@ interface AttributeFilter {
   attributeSlug: string;
   value: string;
 }
+
+interface PaginatedState {
+  items: NavigationSource[];
+  total: number;
+  page: number;
+  hasMore: boolean;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  search: string;
+}
+
+const initialPaginatedState: PaginatedState = {
+  items: [],
+  total: 0,
+  page: 1,
+  hasMore: false,
+  isLoading: false,
+  isLoadingMore: false,
+  search: "",
+};
 
 interface AddNavItemDialogProps {
   open: boolean;
@@ -68,19 +97,27 @@ export function AddNavItemDialog({
   const [activeType, setActiveType] = useState<NavItemType>("category");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Data sources
-  const [categories, setCategories] = useState<NavigationSource[]>([]);
-  const [pages, setPages] = useState<NavigationSource[]>([]);
+  // Paginated data sources
+  const [catState, setCatState] = useState<PaginatedState>(initialPaginatedState);
+  const [pageState, setPageState] = useState<PaginatedState>(initialPaginatedState);
+
+  // All categories for the dynamic link dropdown (loaded from navigation items)
+  const [allCategories, setAllCategories] = useState<NavigationSource[]>([]);
   const [attributes, setAttributes] = useState<
     { id: string; name: string; slug: string }[]
   >([]);
 
-  // Selection states
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
-    new Set(),
-  );
-  const [selectedPages, setSelectedPages] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
+  // Selection states — store full item data so selections persist across pages/searches
+  const [selectedCategoryMap, setSelectedCategoryMap] = useState<
+    Map<string, NavigationSource>
+  >(new Map());
+  const [selectedPageMap, setSelectedPageMap] = useState<
+    Map<string, NavigationSource>
+  >(new Map());
+
+  // Search input states (before debounce)
+  const [catSearchInput, setCatSearchInput] = useState("");
+  const [pageSearchInput, setPageSearchInput] = useState("");
 
   // Custom/Label states
   const [customLabel, setCustomLabel] = useState("");
@@ -99,7 +136,123 @@ export function AddNavItemDialog({
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
-  // Fetch sources on open
+  // Refs for debounce timers
+  const catSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pageSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Fetch categories (paginated) ──────────────────────────────
+  const fetchCategories = useCallback(
+    async (search: string, page: number, append: boolean) => {
+      if (append) {
+        setCatState((prev) => ({ ...prev, isLoadingMore: true }));
+      } else {
+        setCatState((prev) => ({ ...prev, isLoading: true }));
+      }
+
+      try {
+        const data = (await getCategories({
+          data: { page, limit: PAGE_SIZE, search: search || undefined },
+        })) as {
+          categories?: Array<{ id: string; name: string; slug: string; [key: string]: unknown }>;
+          pagination?: { total: number; totalPages: number; page: number };
+        };
+
+        const cats: NavigationSource[] = (data.categories || []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          type: "category",
+          url: `/categories/${c.slug}`,
+        }));
+
+        const pagination = data.pagination || { total: 0, totalPages: 1, page: 1 };
+
+        setCatState((prev) => ({
+          items: append ? [...prev.items, ...cats] : cats,
+          total: pagination.total,
+          page: pagination.page,
+          hasMore: pagination.page < pagination.totalPages,
+          isLoading: false,
+          isLoadingMore: false,
+          search,
+        }));
+      } catch (error: unknown) {
+        console.error("Error fetching categories:", error);
+        setCatState((prev) => ({ ...prev, isLoading: false, isLoadingMore: false }));
+      }
+    },
+    [],
+  );
+
+  // ── Fetch pages (paginated) ───────────────────────────────────
+  const fetchPages = useCallback(
+    async (search: string, page: number, append: boolean) => {
+      if (append) {
+        setPageState((prev) => ({ ...prev, isLoadingMore: true }));
+      } else {
+        setPageState((prev) => ({ ...prev, isLoading: true }));
+      }
+
+      try {
+        const data = (await getPages({
+          data: { page, limit: PAGE_SIZE, search: search || undefined },
+        })) as {
+          pages?: Array<{ id: string; title?: string; name?: string; slug: string; [key: string]: unknown }>;
+          pagination?: { total: number; totalPages: number; page: number };
+        };
+
+        const pgs: NavigationSource[] = (data.pages || []).map((p) => ({
+          id: p.id,
+          name: p.title || p.name || p.slug,
+          slug: p.slug,
+          type: "page",
+          url: `/pages/${p.slug}`,
+        }));
+
+        const pagination = data.pagination || { total: 0, totalPages: 1, page: 1 };
+
+        setPageState((prev) => ({
+          items: append ? [...prev.items, ...pgs] : pgs,
+          total: pagination.total,
+          page: pagination.page,
+          hasMore: pagination.page < pagination.totalPages,
+          isLoading: false,
+          isLoadingMore: false,
+          search,
+        }));
+      } catch (error: unknown) {
+        console.error("Error fetching pages:", error);
+        setPageState((prev) => ({ ...prev, isLoading: false, isLoadingMore: false }));
+      }
+    },
+    [],
+  );
+
+  // ── Debounced search for categories ───────────────────────────
+  useEffect(() => {
+    if (!open) return;
+    if (catSearchTimerRef.current) clearTimeout(catSearchTimerRef.current);
+    catSearchTimerRef.current = setTimeout(() => {
+      fetchCategories(catSearchInput, 1, false);
+    }, 300);
+    return () => {
+      if (catSearchTimerRef.current) clearTimeout(catSearchTimerRef.current);
+    };
+  }, [catSearchInput, open, fetchCategories]);
+
+  // ── Debounced search for pages ────────────────────────────────
+  useEffect(() => {
+    if (!open) return;
+    if (pageSearchTimerRef.current) clearTimeout(pageSearchTimerRef.current);
+    pageSearchTimerRef.current = setTimeout(() => {
+      fetchPages(pageSearchInput, 1, false);
+    }, 300);
+    return () => {
+      if (pageSearchTimerRef.current) clearTimeout(pageSearchTimerRef.current);
+    };
+  }, [pageSearchInput, open, fetchPages]);
+
+  // ── Fetch dynamic-link data on dialog open ────────────────────
   useEffect(() => {
     if (!open) return;
 
@@ -112,10 +265,14 @@ export function AddNavItemDialog({
         ]);
 
         const items = navData.items as Record<string, NavigationSource[]> | undefined;
-        setCategories(items?.categories || []);
-        setPages(items?.pages || []);
+        setAllCategories(items?.categories || []);
 
-        const attrs = (attrData.attributes || []) as Array<{ id: string; name: string; slug: string; filterable?: boolean }>;
+        const attrs = (attrData.attributes || []) as Array<{
+          id: string;
+          name: string;
+          slug: string;
+          filterable?: boolean;
+        }>;
         setAttributes(
           attrs
             .filter((a) => a.filterable !== false)
@@ -134,9 +291,12 @@ export function AddNavItemDialog({
   // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
-      setSelectedCategories(new Set());
-      setSelectedPages(new Set());
-      setSearchQuery("");
+      setSelectedCategoryMap(new Map());
+      setSelectedPageMap(new Map());
+      setCatSearchInput("");
+      setPageSearchInput("");
+      setCatState(initialPaginatedState);
+      setPageState(initialPaginatedState);
       setCustomLabel("");
       setCustomUrl("");
       setDynamicCategory("");
@@ -153,10 +313,15 @@ export function AddNavItemDialog({
 
       setLoadingAttrValues((prev) => ({ ...prev, [attributeId]: true }));
       try {
-        const data = await getAttributeValues({ data: { attributeId } }) as Record<string, unknown>;
+        const data = (await getAttributeValues({
+          data: { attributeId },
+        })) as Record<string, unknown>;
         setAttributeValues((prev) => ({
           ...prev,
-          [attributeId]: (data.values || []) as { value: string; productCount: number }[],
+          [attributeId]: (data.values || []) as {
+            value: string;
+            productCount: number;
+          }[],
         }));
       } catch (error: unknown) {
         console.error("Error fetching attribute values:", error);
@@ -177,14 +342,18 @@ export function AddNavItemDialog({
     const fetchPreview = async () => {
       setIsLoadingPreview(true);
       try {
-        const params: Record<string, string> = { categoryId: dynamicCategory };
+        const params: Record<string, string> = {
+          categoryId: dynamicCategory,
+        };
         dynamicFilters.forEach((f) => {
           if (f.attributeSlug && f.value) {
             params[f.attributeSlug] = f.value;
           }
         });
 
-        const data = await getNavigationPreviewProducts({ data: params }) as Record<string, unknown>;
+        const data = (await getNavigationPreviewProducts({
+          data: params,
+        })) as Record<string, unknown>;
         setPreviewCount(data.count as number);
       } catch (error: unknown) {
         console.error("Error fetching preview:", error);
@@ -200,7 +369,7 @@ export function AddNavItemDialog({
   // Generate dynamic link URL
   const generateDynamicUrl = useCallback(() => {
     if (!dynamicCategory) return "";
-    const category = categories.find((c) => c.id === dynamicCategory);
+    const category = allCategories.find((c) => c.id === dynamicCategory);
     if (!category) return "";
 
     const params = new URLSearchParams();
@@ -214,43 +383,54 @@ export function AddNavItemDialog({
     });
 
     return `/categories/${category.slug}?${params.toString()}`;
-  }, [dynamicCategory, categories, dynamicFilters]);
+  }, [dynamicCategory, allCategories, dynamicFilters]);
 
-  // Filter items by search
-  const filteredCategories = categories.filter((c) =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-  const filteredPages = pages.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  // ── Selection toggle helpers ──────────────────────────────────
+  const toggleCategory = (cat: NavigationSource) => {
+    setSelectedCategoryMap((prev) => {
+      const next = new Map(prev);
+      if (next.has(cat.id)) {
+        next.delete(cat.id);
+      } else {
+        next.set(cat.id, cat);
+      }
+      return next;
+    });
+  };
+
+  const togglePage = (page: NavigationSource) => {
+    setSelectedPageMap((prev) => {
+      const next = new Map(prev);
+      if (next.has(page.id)) {
+        next.delete(page.id);
+      } else {
+        next.set(page.id, page);
+      }
+      return next;
+    });
+  };
 
   // Handle add
   const handleAdd = () => {
     const newItems: NavigationItem[] = [];
 
     if (activeType === "category") {
-      selectedCategories.forEach((id) => {
-        const cat = categories.find((c) => c.id === id);
-        if (cat) {
-          newItems.push({
-            id: nanoid(),
-            title: cat.name,
-            href: cat.url,
-            subMenu: [],
-          });
-        }
+      selectedCategoryMap.forEach((cat) => {
+        newItems.push({
+          id: nanoid(),
+          title: cat.name,
+          href: cat.url,
+          subMenu: [],
+        });
       });
     } else if (activeType === "page") {
-      selectedPages.forEach((id) => {
-        const page = pages.find((p) => p.id === id);
-        if (page) {
-          newItems.push({
-            id: nanoid(),
-            title: page.name,
-            href: page.url,
-            subMenu: [],
-          });
-        }
+      selectedPageMap.forEach((page) => {
+        newItems.push({
+          id: nanoid(),
+          title: page.name,
+          href: page.url,
+          subMenu: [],
+        });
       });
     } else if (activeType === "dynamic") {
       const url = generateDynamicUrl();
@@ -290,8 +470,8 @@ export function AddNavItemDialog({
 
   // Check if can add
   const canAdd = () => {
-    if (activeType === "category") return selectedCategories.size > 0;
-    if (activeType === "page") return selectedPages.size > 0;
+    if (activeType === "category") return selectedCategoryMap.size > 0;
+    if (activeType === "page") return selectedPageMap.size > 0;
     if (activeType === "dynamic") return dynamicCategory && dynamicLabel.trim();
     if (activeType === "custom") return customLabel.trim();
     if (activeType === "label") return customLabel.trim();
@@ -299,7 +479,11 @@ export function AddNavItemDialog({
   };
 
   const typeInfo = {
-    category: { icon: FolderOpen, label: "Category", color: "text-blue-500" },
+    category: {
+      icon: FolderOpen,
+      label: "Category",
+      color: "text-blue-500",
+    },
     page: { icon: FileText, label: "Page", color: "text-green-500" },
     dynamic: { icon: Sparkles, label: "Dynamic", color: "text-purple-500" },
     custom: { icon: Link2, label: "Custom Link", color: "text-orange-500" },
@@ -351,7 +535,7 @@ export function AddNavItemDialog({
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {isLoading ? (
+          {isLoading && activeType === "dynamic" ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
@@ -364,64 +548,97 @@ export function AddNavItemDialog({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Search categories..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      value={catSearchInput}
+                      onChange={(e) => setCatSearchInput(e.target.value)}
                       className="pl-9"
                     />
                   </div>
 
-                  {filteredCategories.length === 0 ? (
+                  {catState.isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : catState.items.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
                       <p>No categories found</p>
                     </div>
                   ) : (
-                    <ScrollArea className="h-[300px] border rounded-lg">
-                      <div className="divide-y">
-                        {filteredCategories.map((cat) => (
-                          <div
-                            key={cat.id}
-                            className={cn(
-                              "flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors",
-                              selectedCategories.has(cat.id) && "bg-primary/10",
-                            )}
-                            onClick={() => {
-                              setSelectedCategories((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(cat.id)) next.delete(cat.id);
-                                else next.add(cat.id);
-                                return next;
-                              });
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedCategories.has(cat.id)}
-                              onCheckedChange={() => { }}
-                            />
-                            <div className="flex-1">
-                              <div className="font-medium">{cat.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {cat.url}
-                              </div>
-                            </div>
-                            {selectedCategories.has(cat.id) && (
-                              <Check className="h-4 w-4 text-primary" />
-                            )}
-                          </div>
-                        ))}
+                    <>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>
+                          Showing {catState.items.length} of {catState.total}{" "}
+                          {catState.total === 1 ? "category" : "categories"}
+                        </span>
                       </div>
-                    </ScrollArea>
+
+                      <ScrollArea className="h-[300px] border rounded-lg">
+                        <div className="divide-y">
+                          {catState.items.map((cat) => (
+                            <div
+                              key={cat.id}
+                              className={cn(
+                                "flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors",
+                                selectedCategoryMap.has(cat.id) &&
+                                  "bg-primary/10",
+                              )}
+                              onClick={() => toggleCategory(cat)}
+                            >
+                              <Checkbox
+                                checked={selectedCategoryMap.has(cat.id)}
+                                onCheckedChange={() => {}}
+                              />
+                              <div className="flex-1">
+                                <div className="font-medium">{cat.name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {cat.url}
+                                </div>
+                              </div>
+                              {selectedCategoryMap.has(cat.id) && (
+                                <Check className="h-4 w-4 text-primary" />
+                              )}
+                            </div>
+                          ))}
+
+                          {catState.hasMore && (
+                            <div className="p-3 flex justify-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={catState.isLoadingMore}
+                                onClick={() =>
+                                  fetchCategories(
+                                    catState.search,
+                                    catState.page + 1,
+                                    true,
+                                  )
+                                }
+                              >
+                                {catState.isLoadingMore ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    Loading...
+                                  </>
+                                ) : (
+                                  "Load More"
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </>
                   )}
 
-                  {selectedCategories.size > 0 && (
+                  {selectedCategoryMap.size > 0 && (
                     <div className="flex items-center justify-between p-2 bg-primary/10 rounded-lg">
                       <span className="text-sm font-medium">
-                        {selectedCategories.size} selected
+                        {selectedCategoryMap.size} selected
                       </span>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setSelectedCategories(new Set())}
+                        onClick={() => setSelectedCategoryMap(new Map())}
                       >
                         Clear
                       </Button>
@@ -437,64 +654,96 @@ export function AddNavItemDialog({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Search pages..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      value={pageSearchInput}
+                      onChange={(e) => setPageSearchInput(e.target.value)}
                       className="pl-9"
                     />
                   </div>
 
-                  {filteredPages.length === 0 ? (
+                  {pageState.isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : pageState.items.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
                       <p>No pages found</p>
                     </div>
                   ) : (
-                    <ScrollArea className="h-[300px] border rounded-lg">
-                      <div className="divide-y">
-                        {filteredPages.map((page) => (
-                          <div
-                            key={page.id}
-                            className={cn(
-                              "flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors",
-                              selectedPages.has(page.id) && "bg-primary/10",
-                            )}
-                            onClick={() => {
-                              setSelectedPages((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(page.id)) next.delete(page.id);
-                                else next.add(page.id);
-                                return next;
-                              });
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedPages.has(page.id)}
-                              onCheckedChange={() => { }}
-                            />
-                            <div className="flex-1">
-                              <div className="font-medium">{page.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {page.url}
-                              </div>
-                            </div>
-                            {selectedPages.has(page.id) && (
-                              <Check className="h-4 w-4 text-primary" />
-                            )}
-                          </div>
-                        ))}
+                    <>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>
+                          Showing {pageState.items.length} of {pageState.total}{" "}
+                          {pageState.total === 1 ? "page" : "pages"}
+                        </span>
                       </div>
-                    </ScrollArea>
+
+                      <ScrollArea className="h-[300px] border rounded-lg">
+                        <div className="divide-y">
+                          {pageState.items.map((page) => (
+                            <div
+                              key={page.id}
+                              className={cn(
+                                "flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors",
+                                selectedPageMap.has(page.id) && "bg-primary/10",
+                              )}
+                              onClick={() => togglePage(page)}
+                            >
+                              <Checkbox
+                                checked={selectedPageMap.has(page.id)}
+                                onCheckedChange={() => {}}
+                              />
+                              <div className="flex-1">
+                                <div className="font-medium">{page.name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {page.url}
+                                </div>
+                              </div>
+                              {selectedPageMap.has(page.id) && (
+                                <Check className="h-4 w-4 text-primary" />
+                              )}
+                            </div>
+                          ))}
+
+                          {pageState.hasMore && (
+                            <div className="p-3 flex justify-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={pageState.isLoadingMore}
+                                onClick={() =>
+                                  fetchPages(
+                                    pageState.search,
+                                    pageState.page + 1,
+                                    true,
+                                  )
+                                }
+                              >
+                                {pageState.isLoadingMore ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    Loading...
+                                  </>
+                                ) : (
+                                  "Load More"
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </>
                   )}
 
-                  {selectedPages.size > 0 && (
+                  {selectedPageMap.size > 0 && (
                     <div className="flex items-center justify-between p-2 bg-primary/10 rounded-lg">
                       <span className="text-sm font-medium">
-                        {selectedPages.size} selected
+                        {selectedPageMap.size} selected
                       </span>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setSelectedPages(new Set())}
+                        onClick={() => setSelectedPageMap(new Map())}
                       >
                         Clear
                       </Button>
@@ -516,7 +765,7 @@ export function AddNavItemDialog({
                         <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {categories.map((cat) => (
+                        {allCategories.map((cat) => (
                           <SelectItem key={cat.id} value={cat.id}>
                             {cat.name}
                           </SelectItem>
@@ -573,12 +822,12 @@ export function AddNavItemDialog({
                                       prev.map((f) =>
                                         f.id === filter.id
                                           ? {
-                                            ...f,
-                                            attributeId: val,
-                                            attributeName: attr?.name || "",
-                                            attributeSlug: attr?.slug || "",
-                                            value: "",
-                                          }
+                                              ...f,
+                                              attributeId: val,
+                                              attributeName: attr?.name || "",
+                                              attributeSlug: attr?.slug || "",
+                                              value: "",
+                                            }
                                           : f,
                                       ),
                                     );
@@ -748,8 +997,8 @@ export function AddNavItemDialog({
           <Button onClick={handleAdd} disabled={!canAdd()}>
             <Plus className="h-4 w-4 mr-2" />
             Add Item
-            {(activeType === "category" && selectedCategories.size > 1) ||
-              (activeType === "page" && selectedPages.size > 1)
+            {(activeType === "category" && selectedCategoryMap.size > 1) ||
+            (activeType === "page" && selectedPageMap.size > 1)
               ? "s"
               : ""}
           </Button>

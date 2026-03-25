@@ -1,5 +1,5 @@
 //src/components/admin/discount/CollectionSelector.tsx
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Command,
   CommandEmpty,
@@ -10,7 +10,7 @@ import {
 } from "../../ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
 import { Button } from "../../ui/button";
-import { Check, ChevronsUpDown, Folder, X } from "lucide-react";
+import { Check, ChevronsUpDown, Folder, Loader2, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
 import { getCollections } from "~/lib/api.functions";
@@ -21,6 +21,7 @@ interface Collection {
   name: string;
   description: string | null;
   slug: string;
+  type?: "manual" | "dynamic";
 }
 
 interface CollectionSelectorProps {
@@ -32,6 +33,8 @@ interface CollectionSelectorProps {
   maxItems?: number;
 }
 
+const PAGE_SIZE = 10;
+
 export function CollectionSelector({
   selectedCollections = [] as Collection[],
   onChange,
@@ -42,67 +45,96 @@ export function CollectionSelector({
 }: CollectionSelectorProps) {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [filteredCollections, setFilteredCollections] = useState<Collection[]>(
-    [],
-  );
+  const [displayedCollections, setDisplayedCollections] = useState<
+    Collection[]
+  >([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCollections, setTotalCollections] = useState(0);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resolvedRef = useRef(false);
 
-  // Load initial collections
+  // Resolve initially selected collections that only have IDs (name === id)
   useEffect(() => {
-    const fetchCollections = async () => {
+    if (resolvedRef.current) return;
+
+    const needsResolution = selectedCollections.some(
+      (c) => c.name === c.id || !c.name,
+    );
+    if (!needsResolution || selectedCollections.length === 0) return;
+
+    resolvedRef.current = true;
+
+    const resolveNames = async () => {
       try {
-        const data = await getCollections({ data: { limit: 50 } }) as { collections: Record<string, unknown>[] };
-        const collectionsArray = data.collections || [];
-        if (collectionsArray.length > 0) {
-          const mappedCollections = collectionsArray.map((c: Record<string, unknown>) => ({
-            id: c.id as string,
-            name: c.name as string,
-            description: (c.description as string) || null,
-            slug: (c.slug as string) || "",
-          }));
-          setCollections(mappedCollections);
-          setFilteredCollections(mappedCollections);
+        const data = (await getCollections({
+          data: { limit: 100 },
+        })) as {
+          collections: Array<{
+            id: string;
+            name: string;
+            type?: "manual" | "dynamic";
+          }>;
+        };
+        const allCollections = data.collections || [];
+        const collectionMap = new Map(
+          allCollections.map((c) => [c.id, c]),
+        );
+
+        const resolved = selectedCollections.map((sc) => {
+          const found = collectionMap.get(sc.id);
+          if (found && (sc.name === sc.id || !sc.name)) {
+            return {
+              ...sc,
+              name: found.name,
+              type: found.type || sc.type,
+            };
+          }
+          return sc;
+        });
+
+        // Only update if names actually changed
+        if (
+          resolved.some(
+            (r, i) =>
+              r.name !== selectedCollections[i].name ||
+              r.type !== selectedCollections[i].type,
+          )
+        ) {
+          onChange(resolved);
         }
       } catch (error: unknown) {
-        console.error("Error fetching collections:", error);
+        console.error("Error resolving collection names:", error);
       }
     };
 
-    fetchCollections();
-  }, []);
+    void resolveNames();
+  }, [selectedCollections, onChange]);
 
-  // Handle search
+  // Load collections when dropdown opens
   useEffect(() => {
+    if (open) {
+      loadCollections();
+    }
+  }, [open]);
+
+  // Handle search input changes
+  useEffect(() => {
+    if (!open) return;
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    if (!searchTerm.trim()) {
-      setFilteredCollections(collections);
-      return;
+    // Reset to first page when search term changes
+    if (currentPage !== 1) {
+      setCurrentPage(1);
     }
 
-    setIsSearching(true);
-
-    // Debounce search to avoid too many API calls
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const data = await getCollections({ data: { search: searchTerm, limit: 20 } }) as { collections: Record<string, unknown>[] };
-        const collectionsArray = data.collections || [];
-        const mappedCollections = collectionsArray.map((c: Record<string, unknown>) => ({
-          id: c.id as string,
-          name: c.name as string,
-          description: (c.description as string) || null,
-          slug: (c.slug as string) || "",
-        }));
-        setFilteredCollections(mappedCollections);
-      } catch (error: unknown) {
-        console.error("Error searching collections:", error);
-      } finally {
-        setIsSearching(false);
-      }
+    searchTimeoutRef.current = setTimeout(() => {
+      loadCollections();
     }, 300);
 
     return () => {
@@ -110,7 +142,60 @@ export function CollectionSelector({
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchTerm, collections]);
+  }, [searchTerm, open]);
+
+  // Main function to load collections
+  const loadCollections = async (page = 1) => {
+    try {
+      if (page === 1) {
+        setIsSearching(true);
+      } else {
+        setIsLoadingMore(true);
+      }
+
+      const data = (await getCollections({
+        data: {
+          limit: PAGE_SIZE,
+          page,
+          search: searchTerm.trim() || undefined,
+        },
+      })) as {
+        collections?: Array<Record<string, unknown>>;
+        pagination?: { totalPages: number; total: number };
+      };
+
+      const collectionsArray = data.collections || [];
+      const mapped: Collection[] = collectionsArray.map((c) => ({
+        id: c.id as string,
+        name: c.name as string,
+        description: (c.description as string) || null,
+        slug: (c.slug as string) || "",
+        type: (c.type as "manual" | "dynamic") || undefined,
+      }));
+
+      if (page === 1) {
+        setDisplayedCollections(mapped);
+      } else {
+        setDisplayedCollections((prev) => [...prev, ...mapped]);
+      }
+
+      setTotalPages(data.pagination?.totalPages || 1);
+      setTotalCollections(data.pagination?.total || 0);
+      setCurrentPage(page);
+    } catch (error: unknown) {
+      console.error("Error loading collections:", error);
+    } finally {
+      setIsSearching(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Load more collections for pagination
+  const loadMoreCollections = () => {
+    if (currentPage < totalPages && !isLoadingMore) {
+      loadCollections(currentPage + 1);
+    }
+  };
 
   const handleSelectCollection = (collection: Collection) => {
     // Check if collection is already selected
@@ -142,9 +227,26 @@ export function CollectionSelector({
     onChange(newSelectedCollections);
   };
 
+  // Memoize selected collection lookup for better performance
+  const selectedCollectionsMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    selectedCollections.forEach((collection) => {
+      map.set(collection.id, true);
+    });
+    return map;
+  }, [selectedCollections]);
+
   return (
     <div className={className}>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={(newOpen) => {
+          setOpen(newOpen);
+          if (!newOpen) {
+            setSearchTerm("");
+          }
+        }}
+      >
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -165,7 +267,7 @@ export function CollectionSelector({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0">
-          <Command>
+          <Command shouldFilter={false}>
             <CommandInput
               placeholder="Search collections..."
               value={searchTerm}
@@ -173,13 +275,18 @@ export function CollectionSelector({
             />
             <CommandList>
               <CommandEmpty>
-                {isSearching ? "Searching..." : "No collections found."}
+                {isSearching ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                    <span>Searching collections...</span>
+                  </div>
+                ) : (
+                  "No collections found."
+                )}
               </CommandEmpty>
               <CommandGroup>
-                {filteredCollections.map((collection) => {
-                  const isSelected = selectedCollections.some(
-                    (c) => c.id === collection.id,
-                  );
+                {displayedCollections.map((collection) => {
+                  const isSelected = selectedCollectionsMap.has(collection.id);
                   return (
                     <CommandItem
                       key={collection.id}
@@ -190,17 +297,51 @@ export function CollectionSelector({
                         <div className="flex items-center gap-2 truncate">
                           <Check
                             className={cn(
-                              "mr-2 h-4 w-4",
+                              "mr-2 h-4 w-4 shrink-0",
                               isSelected ? "opacity-100" : "opacity-0",
                             )}
                           />
                           <span className="truncate">{collection.name}</span>
                         </div>
+                        {collection.type && (
+                          <Badge
+                            variant="outline"
+                            className="ml-2 shrink-0 text-[10px] px-1.5 py-0"
+                          >
+                            {collection.type === "manual"
+                              ? "Manual"
+                              : "Dynamic"}
+                          </Badge>
+                        )}
                       </div>
                     </CommandItem>
                   );
                 })}
               </CommandGroup>
+
+              {currentPage < totalPages && (
+                <div className="py-2 px-2 border-t">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    size="sm"
+                    onClick={loadMoreCollections}
+                    disabled={isLoadingMore}
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        Load More ({displayedCollections.length} of{" "}
+                        {totalCollections})
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </CommandList>
           </Command>
         </PopoverContent>
@@ -215,7 +356,17 @@ export function CollectionSelector({
               variant="secondary"
               className="flex items-center gap-1 pr-1.5"
             >
-              <span className="truncate max-w-[180px]">{collection.name}</span>
+              <span className="truncate max-w-[180px]">
+                {collection.name}
+              </span>
+              {collection.type && (
+                <Badge
+                  variant="outline"
+                  className="ml-1 text-[10px] px-1 py-0 border-muted-foreground/30"
+                >
+                  {collection.type === "manual" ? "M" : "D"}
+                </Badge>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { AmountOffProductsForm } from "~/components/admin/discount/amount-off-products";
 import { AmountOffOrderForm } from "~/components/admin/discount/AmountOffOrderForm";
 import { FreeShippingForm } from "~/components/admin/discount/FreeShippingForm";
-import { discountQueryOptions, collectionFormOptionsQueryOptions } from "~/lib/api.queries";
+import { discountQueryOptions, collectionFormOptionsQueryOptions, collectionsQueryOptions } from "~/lib/api.queries";
 import type { Discount, CollectionFormOptionsData } from "~/types/api-responses";
 
 const searchSchema = z.object({
@@ -17,6 +17,7 @@ export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
     const [discountResult] = await Promise.all([
       queryClient.ensureQueryData({ ...discountQueryOptions(params.discountId), staleTime: Infinity }).catch(() => null),
       queryClient.ensureQueryData(collectionFormOptionsQueryOptions()),
+      queryClient.ensureQueryData(collectionsQueryOptions({ limit: 100 })),
     ]);
     if (!discountResult) throw redirect({ to: "/admin/discounts" });
   },
@@ -33,6 +34,7 @@ function EditDiscountPage() {
   const { duplicate: isDuplicate } = Route.useSearch();
   const { data: discountResult } = useSuspenseQuery(discountQueryOptions(discountId));
   const { data: formOptions } = useSuspenseQuery(collectionFormOptionsQueryOptions());
+  const { data: collectionsData } = useSuspenseQuery(collectionsQueryOptions({ limit: 100 }));
 
   const discount = discountResult as Discount;
   const fo = formOptions as CollectionFormOptionsData;
@@ -46,9 +48,20 @@ function EditDiscountPage() {
     ...(discount.relatedCollections?.buy || []),
     ...(discount.relatedCollections?.get || []),
   ];
-  const selectedCollections = allCollectionIds.map((colId: string) => ({
-    id: colId, name: colId, description: null, slug: "",
-  }));
+
+  // Build a lookup map of all collections to resolve names from IDs
+  const collectionsArray = (collectionsData as { collections?: Array<{ id: string; name: string; type?: string }> })?.collections || [];
+  const collectionsMap = new Map(collectionsArray.map((c) => [c.id, c]));
+  const selectedCollections = allCollectionIds.map((colId: string) => {
+    const found = collectionsMap.get(colId);
+    return {
+      id: colId,
+      name: found?.name || colId,
+      description: null,
+      slug: "",
+      type: (found?.type as "manual" | "dynamic") || undefined,
+    };
+  });
   const formattedDiscount = {
     ...discount,
     startDate: discount.startDate ? new Date(discount.startDate) : new Date(),
