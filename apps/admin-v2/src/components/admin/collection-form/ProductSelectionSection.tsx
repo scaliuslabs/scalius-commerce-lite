@@ -90,9 +90,10 @@ export const ProductSelectionSection = React.memo(
             setIsLoadingMore(true);
           }
 
-          // Use the first selected category as a filter (API supports single categoryId)
+          // When only 1 category selected, use server-side filter.
+          // When multiple selected, fetch all and filter client-side.
           const categoryId =
-            selectedCategoryIds.length > 0
+            selectedCategoryIds.length === 1
               ? selectedCategoryIds[0]
               : undefined;
 
@@ -100,8 +101,8 @@ export const ProductSelectionSection = React.memo(
 
           const data = (await getProducts({
             data: {
-              limit: PAGE_SIZE,
-              page,
+              limit: selectedCategoryIds.length > 1 ? 100 : PAGE_SIZE,
+              page: selectedCategoryIds.length > 1 ? 1 : page,
               search: search?.trim() || undefined,
               categoryId,
             },
@@ -111,13 +112,22 @@ export const ProductSelectionSection = React.memo(
           };
 
           if (data.products) {
-            if (page === 1) {
-              setDisplayedProducts(data.products);
-            } else {
-              setDisplayedProducts((prev) => [...prev, ...data.products!]);
+            // When multiple categories selected, filter client-side
+            let filtered = data.products;
+            if (selectedCategoryIds.length > 1) {
+              const catSet = new Set(selectedCategoryIds);
+              filtered = data.products.filter(
+                (p) => p.categoryId && catSet.has(p.categoryId),
+              );
             }
-            setTotalPages(data.pagination?.totalPages || 1);
-            setTotalProducts(data.pagination?.total || 0);
+
+            if (page === 1) {
+              setDisplayedProducts(filtered);
+            } else {
+              setDisplayedProducts((prev) => [...prev, ...filtered]);
+            }
+            setTotalPages(selectedCategoryIds.length > 1 ? 1 : (data.pagination?.totalPages || 1));
+            setTotalProducts(selectedCategoryIds.length > 1 ? filtered.length : (data.pagination?.total || 0));
             setCurrentPage(page);
           }
         } catch (error: unknown) {
