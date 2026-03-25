@@ -62,7 +62,8 @@ export function MediaManager({
   // Load files and folders when dialog opens OR when folder changes
   useEffect(() => {
     if (dialogOpen) {
-      const folderParam = mm.currentFolderId === "all" ? "all" : mm.currentFolderId;
+      const fid = mm.currentFolderId;
+      const folderParam = fid === "all" ? "all" : fid === null ? "root" : fid;
       mm.loadFiles(1, { ...mm.filters, folderId: folderParam });
       mm.loadFolders();
     }

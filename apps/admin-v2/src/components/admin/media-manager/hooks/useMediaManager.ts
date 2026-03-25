@@ -72,7 +72,7 @@ export function useMediaManager({
       acceptedTypes: acceptedFileTypes,
       folderId: currentFolderId === "all" ? null : currentFolderId,
       onUploadComplete: (uploadedFiles) => {
-        const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
+        const folderParam = toFolderParam(currentFolderId);
         if (autoLoad) {
           applyFilters({ ...filters, folderId: folderParam });
         } else {
@@ -188,7 +188,7 @@ export function useMediaManager({
   };
 
   const reloadFiles = () => {
-    const folderParam = currentFolderId === "all" ? "all" : currentFolderId;
+    const folderParam = toFolderParam(currentFolderId);
     if (autoLoad) {
       applyFilters({ ...filters, folderId: folderParam });
     } else {
