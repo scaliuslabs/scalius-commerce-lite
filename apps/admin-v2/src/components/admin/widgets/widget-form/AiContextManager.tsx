@@ -55,10 +55,13 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
     setProductSearchQuery,
     isFetchingProducts,
     productsToShow,
-    debouncedProductSearch,
     hasMoreProducts,
-    fetchProductsForSelector,
-    productPage,
+    loadMoreProducts,
+    categorySearchQuery,
+    setCategorySearchQuery,
+    hasMoreCategories,
+    loadMoreCategories,
+    isFetchingCategories,
   } = context;
 
   const maxImagesForModel = selectedModel ? getMaxImages(selectedModel) : 10;
@@ -144,12 +147,12 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                     </CommandItem>
                   ))}
                 </CommandGroup>
-                {!debouncedProductSearch.trim() && hasMoreProducts && (
+                {hasMoreProducts && (
                   <CommandItem
-                    onSelect={() => fetchProductsForSelector(productPage + 1)}
+                    onSelect={() => loadMoreProducts()}
                     className="justify-center text-center text-sm text-primary cursor-pointer aria-selected:bg-transparent"
                   >
-                    {isFetchingProducts && productPage > 1 ? (
+                    {isFetchingProducts ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       "Load More"
@@ -195,10 +198,17 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
               className={cn(
                 allCategoriesSelected && "opacity-50 pointer-events-none",
               )}
+              shouldFilter={false}
             >
-              <CommandInput placeholder="Search categories..." />
+              <CommandInput
+                placeholder="Search categories..."
+                value={categorySearchQuery}
+                onValueChange={setCategorySearchQuery}
+              />
               <CommandList>
-                <CommandEmpty>No categories found.</CommandEmpty>
+                <CommandEmpty>
+                  {isFetchingCategories ? "Loading..." : "No categories found."}
+                </CommandEmpty>
                 <CommandGroup>
                   {allCategoriesList.map((category) => (
                     <CommandItem
@@ -217,6 +227,18 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                     </CommandItem>
                   ))}
                 </CommandGroup>
+                {hasMoreCategories && (
+                  <CommandItem
+                    onSelect={() => loadMoreCategories()}
+                    className="justify-center text-center text-sm text-primary cursor-pointer aria-selected:bg-transparent"
+                  >
+                    {isFetchingCategories ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Load More"
+                    )}
+                  </CommandItem>
+                )}
               </CommandList>
             </Command>
           </PopoverContent>

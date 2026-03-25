@@ -171,7 +171,6 @@ export function CollectionForm({
               <ProductSelectionSection
                 form={form}
                 categories={categories}
-                filteredProducts={filteredProducts}
                 selectedCategories={selectedCategories}
                 selectedProducts={selectedProducts}
                 selectedCategoryIds={selectedCategoryIds}
