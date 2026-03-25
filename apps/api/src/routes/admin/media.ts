@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
-import { ApiError } from "../../utils/api-error";
+import { NotFoundError } from "../../utils/api-error";
 import {
     successEnvelope,
     paginatedEnvelope,
@@ -183,7 +183,7 @@ app.openapi(moveRoute, async (c) => {
     const { fileIds, folderId } = c.req.valid("json");
     const { movedCount } = await moveMediaFiles(db, fileIds, folderId || null);
     if (movedCount === 0) {
-        throw new ApiError(404, "No files were moved — they may have been deleted");
+        throw new NotFoundError("No files were moved — they may have been deleted");
     }
     return ok(c, { message: `Moved ${movedCount} file(s)`, movedCount });
 });
