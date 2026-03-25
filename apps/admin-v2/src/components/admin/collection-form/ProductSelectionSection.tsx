@@ -112,12 +112,17 @@ export const ProductSelectionSection = React.memo(
           };
 
           if (data.products) {
-            // When multiple categories selected, filter client-side
-            let filtered = data.products;
+            // When multiple categories selected, filter client-side by category name
+            let filtered = data.products as Product[];
             if (selectedCategoryIds.length > 1) {
-              const catSet = new Set(selectedCategoryIds);
-              filtered = data.products.filter(
-                (p) => p.categoryId && catSet.has(p.categoryId),
+              // Build a set of selected category names for matching
+              const selectedCatNames = new Set(
+                categories
+                  .filter((c) => selectedCategoryIds.includes(c.id))
+                  .map((c) => c.name),
+              );
+              filtered = (data.products as Array<Product & { categoryName?: string }>).filter(
+                (p) => p.categoryName && selectedCatNames.has(p.categoryName),
               );
             }
 
@@ -137,7 +142,7 @@ export const ProductSelectionSection = React.memo(
           setIsLoadingMore(false);
         }
       },
-      [selectedCategoryIds],
+      [selectedCategoryIds, categories],
     );
 
     // Load products when the popover opens
