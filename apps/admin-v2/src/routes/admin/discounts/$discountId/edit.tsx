@@ -6,6 +6,7 @@ import { AmountOffOrderForm } from "~/components/admin/discount/AmountOffOrderFo
 import { FreeShippingForm } from "~/components/admin/discount/FreeShippingForm";
 import { discountQueryOptions, collectionFormOptionsQueryOptions, collectionsQueryOptions } from "~/lib/api.queries";
 import type { Discount, CollectionFormOptionsData } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 const searchSchema = z.object({
   duplicate: z.boolean().default(false).catch(false),
@@ -26,6 +27,7 @@ export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
       title: `${match.search.duplicate ? "Duplicate" : "Edit"} Discount | Scalius Admin`,
     }],
   }),
+  errorComponent: RouteErrorComponent,
   component: EditDiscountPage,
 });
 

@@ -203,7 +203,7 @@ export function AmountOffProductsContainer({
             <Button
               type="button"
               variant="outline"
-              onClick={() => window.history.back()}
+              onClick={() => navigate({ to: "/admin/discounts" })}
               disabled={isSubmitting}
             >
               Cancel

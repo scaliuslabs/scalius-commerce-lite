@@ -3,6 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { CustomerForm } from "~/components/admin/CustomerForm";
 import { customerQueryOptions } from "~/lib/api.queries";
 import type { Customer } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/customers/$customerId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/admin/customers/$customerId/edit")({
   head: () => ({
     meta: [{ title: "Edit Customer | Scalius Admin" }],
   }),
+  errorComponent: RouteErrorComponent,
   component: EditCustomerPage,
 });
 

@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash2, Tag } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
 import { discountsQueryOptions } from "~/lib/api.queries";
 import { useCurrency } from "~/hooks/use-currency";
 import {
@@ -58,6 +58,7 @@ export const Route = createFileRoute("/admin/discounts/")({
     ],
   }),
   component: DiscountsPage,
+  errorComponent: RouteErrorComponent,
 });
 
 function DiscountsPage() {

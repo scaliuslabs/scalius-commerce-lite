@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Tag, Plus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import {
@@ -65,6 +65,7 @@ export const Route = createFileRoute("/admin/categories/")({
     ],
   }),
   component: CategoriesPage,
+  errorComponent: RouteErrorComponent,
 });
 
 function CategoriesPage() {

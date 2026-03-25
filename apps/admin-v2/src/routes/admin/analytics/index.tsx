@@ -3,12 +3,14 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { AnalyticsList } from "~/components/admin/AnalyticsList";
 import { analyticsScriptsQueryOptions } from "~/lib/api.queries";
 import type { AnalyticsScript } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/analytics/")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(analyticsScriptsQueryOptions());
   },
   head: () => ({ meta: [{ title: "Analytics Scripts | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: AnalyticsPage,
 });
 

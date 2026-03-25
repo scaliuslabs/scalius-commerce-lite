@@ -106,7 +106,7 @@ export function CollectionSelector({
           onChange(resolved);
         }
       } catch (error: unknown) {
-        console.error("Error resolving collection names:", error);
+        if (import.meta.env.DEV) console.error("Error resolving collection names:", error);
       }
     };
 
@@ -183,7 +183,7 @@ export function CollectionSelector({
       setTotalCollections(data.pagination?.total || 0);
       setCurrentPage(page);
     } catch (error: unknown) {
-      console.error("Error loading collections:", error);
+      if (import.meta.env.DEV) console.error("Error loading collections:", error);
     } finally {
       setIsSearching(false);
       setIsLoadingMore(false);

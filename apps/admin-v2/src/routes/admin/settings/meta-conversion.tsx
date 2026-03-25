@@ -3,12 +3,14 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { MetaConversionsManager } from "~/components/admin/meta-conversions";
 import { metaConversionsSettingsQueryOptions } from "~/lib/api.queries";
 import type { MetaConversionsSettingsResponse } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/settings/meta-conversion")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(metaConversionsSettingsQueryOptions());
   },
   head: () => ({ meta: [{ title: "Meta Conversions API | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: MetaConversionPage,
 });
 

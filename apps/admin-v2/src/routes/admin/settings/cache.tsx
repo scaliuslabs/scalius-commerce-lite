@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CacheManager } from "~/components/admin/CacheManager";
 import { cacheStatsQueryOptions, cacheLastClearedQueryOptions, cacheGroupsQueryOptions } from "~/lib/api.queries";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/settings/cache")({
   loader: async ({ context: { queryClient } }) => {
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/admin/settings/cache")({
     ]);
   },
   head: () => ({ meta: [{ title: "Cache Settings | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: CacheSettingsPage,
 });
 

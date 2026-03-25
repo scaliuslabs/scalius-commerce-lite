@@ -1,16 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  getDeliveryLocations,
-  getDeliveryProviders,
-  createDeliveryLocation,
-  updateDeliveryLocation,
-  deleteDeliveryLocation,
-  bulkDeleteDeliveryLocations,
-  cleanAllDeliveryLocations,
+  deliveryLocationsQueryOptions,
+  deliveryProvidersQueryOptions,
+  importPathaoStatusQueryOptions,
+} from "~/lib/api.queries";
+import { queryKeys } from "~/lib/query-keys";
+import {
+  useCreateDeliveryLocation,
+  useUpdateDeliveryLocation,
+  useDeleteDeliveryLocation,
+  useBulkDeleteDeliveryLocations,
+  useCleanAllDeliveryLocations,
+} from "~/lib/api.mutations";
+import {
   importPathaoLocations,
-  getImportPathaoStatus,
   resetImportPathao,
 } from "~/lib/api.functions";
 
@@ -63,21 +69,21 @@ const INITIAL_FORM: LocationFormData = {
   isActive: true,
 };
 
+const DEFAULT_PAGINATION: PaginationState = {
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+};
+
 export function useDeliveryLocations() {
+  const queryClient = useQueryClient();
+
   const [activeTab, setActiveTab] = useState<"city" | "zone" | "area">("city");
-  const [filteredLocations, setFilteredLocations] = useState<Location[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
-  const [parentLocations, setParentLocations] = useState<Location[]>([]);
-  const [loadingParents, setLoadingParents] = useState(false);
-
-  const [pagination, setPagination] = useState<PaginationState>({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 1,
-  });
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
 
   // Form state
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -88,121 +94,129 @@ export function useDeliveryLocations() {
 
   // Delete state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
+  const [deletingLocationId, setDeletingLocationId] = useState<string | null>(
+    null,
+  );
 
   // Bulk selection
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [isCleanAllDialogOpen, setIsCleanAllDialogOpen] = useState(false);
 
-  // Pathao import
-  const [hasPathaoProvider, setHasPathaoProvider] = useState(false);
+  // Pathao import (kept as local state — this is a streaming/polling operation)
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState<PathaoImportProgress | null>(null);
+  const [importProgress, setImportProgress] =
+    useState<PathaoImportProgress | null>(null);
   const importAbortRef = useRef(false);
 
-  // Check if Pathao provider is configured and active
-  useEffect(() => {
-    const checkPathaoProvider = async () => {
-      try {
-        const providers = await getDeliveryProviders() as Array<{ type: string; isActive: boolean }>;
-        const hasActive = providers.some(
-          (p) => p.type === "pathao" && p.isActive,
-        );
-        setHasPathaoProvider(hasActive);
-      } catch {
-        // Silently fail -- button just won't show
-      }
+  // ── Queries ──────────────────────────────────────────────────────
+
+  // Build location query params
+  const locationParams = (() => {
+    const params: Record<string, string | number | boolean | undefined> = {
+      type: activeTab,
+      page,
+      limit,
     };
-    checkPathaoProvider();
-  }, []);
+    if (selectedParent && (activeTab === "zone" || activeTab === "area")) {
+      params.parentId = selectedParent;
+    }
+    if (searchQuery.trim() !== "") {
+      params.search = searchQuery.trim();
+    }
+    return params;
+  })();
 
-  // On mount, check if an import is already in progress
+  const { data: locationsData, isLoading: loading } = useQuery({
+    ...deliveryLocationsQueryOptions(locationParams),
+    placeholderData: (prev) => prev,
+  });
+
+  const rawLocations = locationsData as
+    | { locations?: Location[]; pagination?: PaginationState }
+    | undefined;
+  const filteredLocations = rawLocations?.locations ?? [];
+  const pagination = rawLocations?.pagination ?? DEFAULT_PAGINATION;
+
+  // Parent locations for zone/area tabs
+  const parentType = activeTab === "zone" ? "city" : "zone";
+  const parentQueryEnabled = activeTab === "zone" || activeTab === "area";
+
+  const { data: parentData, isLoading: loadingParents } = useQuery({
+    ...deliveryLocationsQueryOptions({ type: parentType, limit: 500 }),
+    enabled: parentQueryEnabled,
+  });
+
+  const parentLocations =
+    (
+      parentData as
+        | { locations?: Location[] }
+        | undefined
+    )?.locations ?? [];
+
+  // Pathao provider check
+  const { data: providersData } = useQuery(deliveryProvidersQueryOptions());
+  const hasPathaoProvider = (() => {
+    const providers = (Array.isArray(providersData) ? providersData : []) as Array<{
+      type: string;
+      isActive: boolean;
+    }>;
+    return providers.some((p) => p.type === "pathao" && p.isActive);
+  })();
+
+  // Check for existing import on mount
+  const { data: importStatusData } = useQuery({
+    ...importPathaoStatusQueryOptions(),
+    refetchOnMount: true,
+    retry: false,
+  });
+
   useEffect(() => {
-    const checkExistingImport = async () => {
-      try {
-        const data = await getImportPathaoStatus() as PathaoImportProgress;
-        if (data.status === "importing") {
-          setImportProgress(data);
-          setImporting(true);
-          resumeImport();
-        }
-      } catch {
-        // No in-progress import
-      }
-    };
-    checkExistingImport();
-  }, []);
-
-  const loadLocations = async (
-    page = pagination.page,
-    limit = pagination.limit,
-  ) => {
-    try {
-      setLoading(true);
-      const params: Record<string, string | number | boolean | undefined> = {
-        type: activeTab,
-        page,
-        limit,
-      };
-      if (selectedParent && (activeTab === "zone" || activeTab === "area")) {
-        params.parentId = selectedParent;
-      }
-      if (searchQuery.trim() !== "") {
-        params.search = searchQuery.trim();
-      }
-
-      const result = await getDeliveryLocations({ data: params }) as {
-        locations: Location[];
-        pagination: PaginationState;
-      };
-      setFilteredLocations(result.locations);
-      setPagination({
-        page: result.pagination.page,
-        limit: result.pagination.limit,
-        total: result.pagination.total,
-        totalPages: result.pagination.totalPages,
-      });
-    } catch (error: unknown) {
-      console.error("Error loading locations:", error);
-      toast.error("Failed to load locations");
-    } finally {
-      setLoading(false);
+    const statusData = importStatusData as PathaoImportProgress | undefined;
+    if (statusData?.status === "importing" && !importing) {
+      setImportProgress(statusData);
+      setImporting(true);
+      resumeImport();
     }
-  };
+  }, [importStatusData]);
 
-  const loadParentLocations = async (parentType: "city" | "zone") => {
-    try {
-      setLoadingParents(true);
-      const result = await getDeliveryLocations({
-        data: { type: parentType, limit: 500 },
-      }) as { locations: Location[] };
-      setParentLocations(result.locations);
-    } catch (error: unknown) {
-      console.error(`Error loading ${parentType}s:`, error);
-      toast.error(`Failed to load ${parentType}s`);
-    } finally {
-      setLoadingParents(false);
-    }
-  };
+  // ── Mutations ────────────────────────────────────────────────────
+
+  const createMutation = useCreateDeliveryLocation();
+  const updateMutation = useUpdateDeliveryLocation();
+  const deleteMutation = useDeleteDeliveryLocation();
+  const bulkDeleteMutation = useBulkDeleteDeliveryLocations();
+  const cleanAllMutation = useCleanAllDeliveryLocations();
+
+  // ── Pathao Import (streaming, not a simple mutation) ─────────────
 
   const resumeImport = useCallback(async () => {
     importAbortRef.current = false;
     setImporting(true);
     try {
       while (!importAbortRef.current) {
-        const data = await importPathaoLocations({ data: {} }) as PathaoImportProgress;
+        const data = (await importPathaoLocations({
+          data: {},
+        })) as PathaoImportProgress;
         setImportProgress(data);
 
         if (data.status === "complete") {
           toast.success(
             `Import complete! Created ${data.stats.citiesCreated} cities, ${data.stats.zonesCreated} zones, ${data.stats.areasCreated} areas.` +
-              (data.stats.citiesUpdated + data.stats.zonesUpdated + data.stats.areasUpdated > 0
+              (data.stats.citiesUpdated +
+                data.stats.zonesUpdated +
+                data.stats.areasUpdated >
+              0
                 ? ` Updated ${data.stats.citiesUpdated} cities, ${data.stats.zonesUpdated} zones, ${data.stats.areasUpdated} areas.`
                 : ""),
           );
-          loadLocations(1, pagination.limit);
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.settings.deliveryLocations(),
+          });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.settings.deliveryLocationsAll(),
+          });
           break;
         }
         if (data.status === "error") {
@@ -221,7 +235,7 @@ export function useDeliveryLocations() {
     } finally {
       setImporting(false);
     }
-  }, []);
+  }, [queryClient]);
 
   const startImport = () => {
     setShowImportConfirm(false);
@@ -247,19 +261,7 @@ export function useDeliveryLocations() {
     resumeImport();
   };
 
-  // Load locations when tab/filter changes
-  useEffect(() => {
-    loadLocations(1, pagination.limit);
-  }, [activeTab, selectedParent, searchQuery]);
-
-  // Load parent locations when needed
-  useEffect(() => {
-    if (activeTab === "zone") {
-      loadParentLocations("city");
-    } else if (activeTab === "area") {
-      loadParentLocations("zone");
-    }
-  }, [activeTab]);
+  // ── Handlers ─────────────────────────────────────────────────────
 
   const handleEditLocation = (location: Location) => {
     setEditingLocation(location);
@@ -285,7 +287,9 @@ export function useDeliveryLocations() {
       activeTab !== "city" &&
       (!formData.parentId || formData.parentId === "_none")
     ) {
-      toast.error(`Please select a ${activeTab === "zone" ? "city" : "zone"}`);
+      toast.error(
+        `Please select a ${activeTab === "zone" ? "city" : "zone"}`,
+      );
       return;
     }
 
@@ -302,24 +306,17 @@ export function useDeliveryLocations() {
       };
 
       if (editMode) {
-        await updateDeliveryLocation({
-          data: { id: editingLocation!.id, update: locationData },
+        await updateMutation.mutateAsync({
+          id: editingLocation!.id,
+          update: locationData,
         });
       } else {
-        await createDeliveryLocation({ data: locationData });
+        await createMutation.mutateAsync(locationData);
       }
-      toast.success(
-        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} ${editMode ? "updated" : "created"} successfully`,
-      );
-
+      // Toast handled by mutation hook
       closeDialog();
-      loadLocations(pagination.page, pagination.limit);
-    } catch (error: unknown) {
-      console.error(
-        `Error ${editMode ? "updating" : "creating"} location:`,
-        error,
-      );
-      toast.error(error instanceof Error ? error.message : `Failed to ${editMode ? "update" : "create"} ${activeTab}`);
+    } catch {
+      // Error toast handled by mutation hook
     } finally {
       setIsSubmitting(false);
     }
@@ -339,41 +336,35 @@ export function useDeliveryLocations() {
     if (!deletingLocationId) return;
 
     try {
-      await deleteDeliveryLocation({ data: { id: deletingLocationId } });
-      toast.success(
-        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} deleted successfully`,
-      );
-      loadLocations(pagination.page, pagination.limit);
+      await deleteMutation.mutateAsync({ id: deletingLocationId });
+      // Toast handled by mutation hook
       closeDeleteDialog();
-    } catch (error: unknown) {
-      console.error(`Error deleting ${activeTab}:`, error);
-      toast.error(getServerFnError(error, `Failed to delete ${activeTab}`));
+    } catch {
+      // Error toast handled by mutation hook
       closeDeleteDialog();
     }
   };
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      await updateDeliveryLocation({
-        data: { id, update: { isActive: !currentStatus } },
+      await updateMutation.mutateAsync({
+        id,
+        update: { isActive: !currentStatus },
       });
-      toast.success(
-        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} status updated`,
-      );
-      loadLocations();
-    } catch (error: unknown) {
-      console.error(`Error updating ${activeTab} status:`, error);
-      toast.error(getServerFnError(error, `Failed to update ${activeTab} status`));
+      // Toast handled by mutation hook
+    } catch {
+      // Error toast handled by mutation hook
     }
   };
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > pagination.totalPages) return;
-    loadLocations(newPage, pagination.limit);
+    setPage(newPage);
   };
 
   const handleLimitChange = (newLimit: number) => {
-    loadLocations(1, newLimit);
+    setLimit(newLimit);
+    setPage(1);
   };
 
   const closeDialog = () => {
@@ -412,16 +403,11 @@ export function useDeliveryLocations() {
     if (selectedLocationIds.length === 0) return;
 
     try {
-      await bulkDeleteDeliveryLocations({ data: { ids: selectedLocationIds } });
-      toast.success(
-        `${selectedLocationIds.length} ${activeTab}(s) deleted successfully`,
-      );
+      await bulkDeleteMutation.mutateAsync({ ids: selectedLocationIds });
       setSelectedLocationIds([]);
-      loadLocations(pagination.page, pagination.limit);
       setIsBulkDeleteDialogOpen(false);
-    } catch (error: unknown) {
-      console.error(`Error bulk deleting ${activeTab}s:`, error);
-      toast.error(getServerFnError(error, `Failed to delete selected ${activeTab}s`));
+    } catch {
+      // Error toast handled by mutation hook
       setIsBulkDeleteDialogOpen(false);
     }
   };
@@ -432,14 +418,11 @@ export function useDeliveryLocations() {
 
   const confirmCleanAll = async () => {
     try {
-      await cleanAllDeliveryLocations();
-      toast.success("All delivery locations have been cleared.");
+      await cleanAllMutation.mutateAsync();
       setSelectedLocationIds([]);
-      loadLocations(1, pagination.limit);
       setIsCleanAllDialogOpen(false);
-    } catch (error: unknown) {
-      console.error("Error cleaning all delivery locations:", error);
-      toast.error(getServerFnError(error, "Failed to clean all delivery locations"));
+    } catch {
+      // Error toast handled by mutation hook
       setIsCleanAllDialogOpen(false);
     }
   };

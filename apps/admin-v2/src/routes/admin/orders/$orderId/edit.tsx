@@ -3,6 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { OrderForm } from "~/components/admin/OrderForm";
 import { orderFormDataQueryOptions } from "~/lib/api.queries";
 import type { ProductVariant } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 interface OrderFormProduct {
   id: string;
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/admin/orders/$orderId/edit")({
   head: ({ params }) => ({
     meta: [{ title: `Edit Order #${params.orderId} | Scalius Admin` }],
   }),
+  errorComponent: RouteErrorComponent,
   component: EditOrderPage,
 });
 

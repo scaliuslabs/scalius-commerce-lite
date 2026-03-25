@@ -1,15 +1,21 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useNavigate } from "@tanstack/react-router";
-import { getServerFnError } from "@/lib/api-helpers";
+import { shippingMethodsQueryOptions } from "~/lib/api.queries";
+import { queryKeys } from "~/lib/query-keys";
 import {
-  getShippingMethods,
-  createShippingMethod,
-  updateShippingMethod,
-  deleteShippingMethod,
-  permanentDeleteShippingMethod,
-  restoreShippingMethod,
+  useCreateShippingMethod,
+  useUpdateShippingMethod,
+  useDeleteShippingMethod,
+  usePermanentDeleteShippingMethod,
+  useRestoreShippingMethod,
+} from "~/lib/api.mutations";
+import {
+  deleteShippingMethod as deleteShippingMethodFn,
+  permanentDeleteShippingMethod as permanentDeleteShippingMethodFn,
+  restoreShippingMethod as restoreShippingMethodFn,
 } from "@/lib/api.functions";
+import { getServerFnError } from "@/lib/api-helpers";
 
 // Local type replacing @scalius/database/schema import
 export interface ShippingMethod {
@@ -42,296 +48,235 @@ interface PaginationState {
   hasPrevPage: boolean;
 }
 
+const DEFAULT_PAGINATION: PaginationState = {
+  total: 0,
+  page: 1,
+  limit: 10,
+  totalPages: 1,
+  hasNextPage: false,
+  hasPrevPage: false,
+};
+
 export function useShippingMethods() {
-  const navigate = useNavigate();
-  const [methods, setMethods] = useState<ShippingMethod[]>([]);
-  const [pagination, setPagination] = useState<PaginationState>({
-    total: 0,
-    page: 1,
-    limit: 10,
-    totalPages: 1,
-    hasNextPage: false,
-    hasPrevPage: false,
-  });
+  const queryClient = useQueryClient();
+
+  // Local filter/sort/pagination state (sub-tab component, no URL params)
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [searchQuery, setSearchQuery] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [sort, setSort] = useState<{ field: SortField; order: SortOrder }>({
     field: "sortOrder",
     order: "asc",
   });
-  const [selectedMethods, setSelectedMethods] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = useState(false);
-  const [isActionLoading, setIsActionLoading] = useState(false);
-  const [showTrashed, setShowTrashed] = useState(false);
-
-  const fetchMethods = useCallback(
-    async (
-      pageToFetch = pagination.page,
-      limitToFetch = pagination.limit,
-      currentSearch = searchQuery,
-      currentSort = sort,
-      currentShowTrashed = showTrashed,
-    ) => {
-      setIsLoading(true);
-      try {
-        const data = await getShippingMethods({
-          data: {
-            page: pageToFetch,
-            limit: limitToFetch,
-            ...(currentSearch ? { search: currentSearch } : {}),
-            sort: currentSort.field,
-            order: currentSort.order,
-            ...(currentShowTrashed ? { trashed: true } : {}),
-          },
-        }) as Record<string, unknown>;
-
-        setMethods((data.shippingMethods || []) as ShippingMethod[]);
-        setPagination(
-          (data.pagination as PaginationState) || {
-            total: 0,
-            page: 1,
-            limit: 10,
-            totalPages: 1,
-            hasNextPage: false,
-            hasPrevPage: false,
-          },
-        );
-      } catch (error: unknown) {
-        console.error("Error fetching shipping methods:", error);
-        toast.error("Could not load shipping methods.");
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [pagination.page, pagination.limit, searchQuery, sort, showTrashed],
+  const [selectedMethods, setSelectedMethods] = useState<Set<string>>(
+    new Set(),
   );
+  const [showTrashed, setShowTrashed] = useState(false);
+  const [isBulkLoading, setIsBulkLoading] = useState(false);
 
-  useEffect(() => {
-    fetchMethods();
-  }, [fetchMethods]);
+  // Build query params
+  const queryParams = useMemo(() => {
+    const params: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort?: string;
+      order?: string;
+      trashed?: boolean;
+    } = {
+      page,
+      limit,
+      sort: sort.field,
+      order: sort.order,
+    };
+    if (appliedSearch) params.search = appliedSearch;
+    if (showTrashed) params.trashed = true;
+    return params;
+  }, [page, limit, sort.field, sort.order, appliedSearch, showTrashed]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    setSearchQuery(params.get("search") || "");
-    const sortFieldFromUrl = params.get("sort") as SortField | null;
-    const sortOrderFromUrl = params.get("order") as SortOrder | null;
-    if (sortFieldFromUrl && sortOrderFromUrl) {
-      setSort({ field: sortFieldFromUrl, order: sortOrderFromUrl });
-    }
-    setShowTrashed(params.get("trashed") === "true");
-  }, []);
+  // Main list query
+  const { data, isLoading, isFetching } = useQuery({
+    ...shippingMethodsQueryOptions(queryParams),
+    placeholderData: (prev) => prev,
+  });
 
+  // Parse response
+  const rawData = data as
+    | { shippingMethods?: ShippingMethod[]; pagination?: PaginationState }
+    | undefined;
+
+  const methods = (rawData?.shippingMethods ?? []) as ShippingMethod[];
+  const pagination = rawData?.pagination ?? DEFAULT_PAGINATION;
+
+  // Mutations
+  const createMutation = useCreateShippingMethod();
+  const updateMutation = useUpdateShippingMethod();
+  const deleteMutation = useDeleteShippingMethod();
+  const permanentDeleteMutation = usePermanentDeleteShippingMethod();
+  const restoreMutation = useRestoreShippingMethod();
+
+  const isActionLoading =
+    isBulkLoading ||
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    deleteMutation.isPending ||
+    permanentDeleteMutation.isPending ||
+    restoreMutation.isPending;
+
+  // Handlers
   const handleSearch = useCallback(
     (e?: React.SyntheticEvent) => {
       if (e) e.preventDefault();
-      void navigate({
-        search: ((prev: any) => {
-          const next = { ...prev, page: 1 };
-          if (searchQuery.trim()) next.search = searchQuery.trim();
-          else delete next.search;
-          return next;
-        }) as any,
-        replace: true,
-      });
-      fetchMethods(1, pagination.limit, searchQuery, sort, showTrashed);
+      setAppliedSearch(searchQuery.trim());
+      setPage(1);
     },
-    [searchQuery, pagination.limit, sort, showTrashed, fetchMethods, navigate],
+    [searchQuery],
   );
 
   const handleSort = useCallback(
     (field: SortField) => {
       const newOrder: SortOrder =
         sort.field === field && sort.order === "asc" ? "desc" : "asc";
-      const newSort = { field, order: newOrder };
-      setSort(newSort);
-      void navigate({
-        search: ((prev: any) => ({
-          ...prev,
-          sort: field,
-          order: newOrder,
-          page: 1,
-        })) as any,
-        replace: true,
-      });
-      fetchMethods(1, pagination.limit, searchQuery, newSort, showTrashed);
+      setSort({ field, order: newOrder });
+      setPage(1);
     },
-    [sort, pagination.limit, searchQuery, showTrashed, fetchMethods, navigate],
+    [sort],
   );
 
   const handlePageChange = useCallback(
     (newPage: number) => {
       if (newPage < 1 || newPage > pagination.totalPages) return;
-      void navigate({
-        search: ((prev: any) => ({ ...prev, page: newPage })) as any,
-        replace: true,
-      });
-      fetchMethods(newPage, pagination.limit, searchQuery, sort, showTrashed);
+      setPage(newPage);
     },
-    [pagination.totalPages, pagination.limit, searchQuery, sort, showTrashed, fetchMethods, navigate],
+    [pagination.totalPages],
   );
 
-  const handleLimitChange = useCallback(
-    (newLimit: number) => {
-      void navigate({
-        search: ((prev: any) => ({
-          ...prev,
-          limit: newLimit,
-          page: 1,
-        })) as any,
-        replace: true,
-      });
-      fetchMethods(1, newLimit, searchQuery, sort, showTrashed);
-    },
-    [searchQuery, sort, showTrashed, fetchMethods, navigate],
-  );
+  const handleLimitChange = useCallback((newLimit: number) => {
+    setLimit(newLimit);
+    setPage(1);
+  }, []);
 
   const toggleTrash = useCallback(() => {
-    const newShowTrashed = !showTrashed;
-    setShowTrashed(newShowTrashed);
-    void navigate({
-      search: ((prev: any) => {
-        const next = { ...prev, page: 1 };
-        if (newShowTrashed) next.trashed = "true";
-        else delete next.trashed;
-        return next;
-      }) as any,
-      replace: true,
-    });
-    fetchMethods(1, pagination.limit, searchQuery, sort, newShowTrashed);
-  }, [showTrashed, pagination.limit, searchQuery, sort, fetchMethods, navigate]);
+    setShowTrashed((prev) => !prev);
+    setPage(1);
+  }, []);
 
   const clearFilters = useCallback(() => {
     setSearchQuery("");
-    void navigate({
-      search: ((prev: any) => {
-        const next = { ...prev, page: 1 };
-        delete next.search;
-        return next;
-      }) as any,
-      replace: true,
-    });
-    fetchMethods(1, pagination.limit, "", sort, showTrashed);
-  }, [pagination.limit, sort, showTrashed, fetchMethods, navigate]);
+    setAppliedSearch("");
+    setPage(1);
+  }, []);
 
-  const handleFormSubmit = async (
-    formData: Partial<ShippingMethod>,
-    editingMethodId: string | null,
-  ): Promise<boolean> => {
-    setIsActionLoading(true);
-    try {
-      if (editingMethodId) {
-        await updateShippingMethod({
-          data: { id: editingMethodId, update: formData as Record<string, unknown> },
-        });
-      } else {
-        await createShippingMethod({ data: formData as Record<string, unknown> });
-      }
-      toast.success(`Shipping method ${editingMethodId ? "updated" : "created"} successfully.`);
-      fetchMethods(editingMethodId ? pagination.page : 1);
-      return true;
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, "An unexpected error occurred."));
-      return false;
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    setIsActionLoading(true);
-    try {
-      await deleteShippingMethod({ data: { id } });
-      toast.success("Shipping method moved to trash.");
-      fetchMethods(pagination.page);
-      setSelectedMethods((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Failed to move to trash."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handlePermanentDelete = async (id: string) => {
-    setIsActionLoading(true);
-    try {
-      await permanentDeleteShippingMethod({ data: { id } });
-      toast.success("Shipping method permanently deleted.");
-      fetchMethods(pagination.page);
-      setSelectedMethods((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Failed to permanently delete method."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleRestore = async (id: string) => {
-    setIsActionLoading(true);
-    try {
-      await restoreShippingMethod({ data: { id } });
-      toast.success("Shipping method restored successfully.");
-      fetchMethods(pagination.page);
-      setSelectedMethods((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Failed to restore shipping method."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleBulkAction = async (
-    action: "trash" | "deletePermanent" | "restore",
-  ) => {
-    if (selectedMethods.size === 0) return;
-    setIsActionLoading(true);
-    const ids = Array.from(selectedMethods);
-
-    try {
-      let successCount = 0;
-      for (const id of ids) {
-        try {
-          if (action === "trash") {
-            await deleteShippingMethod({ data: { id } });
-          } else if (action === "deletePermanent") {
-            await permanentDeleteShippingMethod({ data: { id } });
-          } else if (action === "restore") {
-            await restoreShippingMethod({ data: { id } });
-          }
-          successCount++;
-        } catch {
-          // Individual failures are counted below
+  const handleFormSubmit = useCallback(
+    async (
+      formData: Partial<ShippingMethod>,
+      editingMethodId: string | null,
+    ): Promise<boolean> => {
+      try {
+        if (editingMethodId) {
+          await updateMutation.mutateAsync({
+            id: editingMethodId,
+            update: formData as Record<string, unknown>,
+          });
+        } else {
+          await createMutation.mutateAsync(
+            formData as Record<string, unknown>,
+          );
+          setPage(1);
         }
+        return true;
+      } catch {
+        return false;
       }
+    },
+    [updateMutation, createMutation],
+  );
 
-      if (successCount > 0) {
-        toast.success(
-          `${successCount} of ${ids.length} methods ${action === "trash" ? "moved to trash" : action === "deletePermanent" ? "permanently deleted" : "restored"}.`,
+  const handleDelete = useCallback(
+    async (id: string) => {
+      await deleteMutation.mutateAsync({ id });
+      setSelectedMethods((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+    [deleteMutation],
+  );
+
+  const handlePermanentDelete = useCallback(
+    async (id: string) => {
+      await permanentDeleteMutation.mutateAsync({ id });
+      setSelectedMethods((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+    [permanentDeleteMutation],
+  );
+
+  const handleRestore = useCallback(
+    async (id: string) => {
+      await restoreMutation.mutateAsync({ id });
+      setSelectedMethods((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+    [restoreMutation],
+  );
+
+  const handleBulkAction = useCallback(
+    async (action: "trash" | "deletePermanent" | "restore") => {
+      if (selectedMethods.size === 0) return;
+      setIsBulkLoading(true);
+      const ids = Array.from(selectedMethods);
+
+      try {
+        let successCount = 0;
+        for (const id of ids) {
+          try {
+            if (action === "trash") {
+              await deleteShippingMethodFn({ data: { id } });
+            } else if (action === "deletePermanent") {
+              await permanentDeleteShippingMethodFn({ data: { id } });
+            } else if (action === "restore") {
+              await restoreShippingMethodFn({ data: { id } });
+            }
+            successCount++;
+          } catch {
+            // Individual failures counted below
+          }
+        }
+
+        if (successCount > 0) {
+          toast.success(
+            `${successCount} of ${ids.length} methods ${action === "trash" ? "moved to trash" : action === "deletePermanent" ? "permanently deleted" : "restored"}.`,
+          );
+        }
+        if (successCount < ids.length) {
+          toast.info(
+            `Failed to process ${ids.length - successCount} methods.`,
+          );
+        }
+
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.settings.shippingMethods(),
+        });
+        setSelectedMethods(new Set());
+      } catch (error: unknown) {
+        toast.error(
+          getServerFnError(error, `Failed to ${action} methods.`),
         );
+      } finally {
+        setIsBulkLoading(false);
       }
-      if (successCount < ids.length) {
-        toast.info(`Failed to process ${ids.length - successCount} methods.`);
-      }
-
-      fetchMethods(pagination.page);
-      setSelectedMethods(new Set());
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, `Failed to ${action} methods.`));
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
+    },
+    [selectedMethods, queryClient],
+  );
 
   const selectAllCheckedState = useMemo(() => {
     if (methods.length === 0) return false;
@@ -370,7 +315,7 @@ export function useShippingMethods() {
     setSearchQuery,
     sort,
     selectedMethods,
-    isLoading,
+    isLoading: isLoading || isFetching,
     isActionLoading,
     showTrashed,
     hasActiveFilters,

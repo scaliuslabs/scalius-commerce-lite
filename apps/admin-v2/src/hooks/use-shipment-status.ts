@@ -56,7 +56,7 @@ export function useShipmentStatus() {
 
       return updatedShipment;
     } catch (error: unknown) {
-      console.error("Error refreshing status:", error);
+      if (import.meta.env.DEV) console.error("Error refreshing status:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to refresh status",
       );

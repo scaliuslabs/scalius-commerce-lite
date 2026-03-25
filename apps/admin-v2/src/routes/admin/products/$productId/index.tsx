@@ -3,6 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductView } from "~/components/admin/ProductView";
 import { productQueryOptions } from "~/lib/api.queries";
 import type { ProductDetail } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/products/$productId/")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/admin/products/$productId/")({
   head: () => ({
     meta: [{ title: "Product | Scalius Admin" }],
   }),
+  errorComponent: RouteErrorComponent,
   component: ProductViewPage,
 });
 

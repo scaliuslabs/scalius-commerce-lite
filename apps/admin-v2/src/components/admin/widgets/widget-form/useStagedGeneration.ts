@@ -114,7 +114,7 @@ Respond ONLY with the JSON object, no markdown formatting.`,
 
       return plan;
     } catch (error: unknown) {
-      console.error("Error creating plan:", error);
+      if (import.meta.env.DEV) console.error("Error creating plan:", error);
       toast.error(`Planning failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
@@ -218,7 +218,7 @@ Respond with the section code in tag format.`,
         timestamp: Date.now(),
       };
     } catch (error: unknown) {
-      console.error(`Error generating section ${sectionIndex}:`, error);
+      if (import.meta.env.DEV) console.error(`Error generating section ${sectionIndex}:`, error);
 
       // Retry logic with exponential backoff
       if (retryAttempt < MAX_RETRIES) {
@@ -342,7 +342,7 @@ ${generatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${
         css: combinedCss,
       };
     } catch (error: unknown) {
-      console.error("Staged generation error:", error);
+      if (import.meta.env.DEV) console.error("Staged generation error:", error);
       setState(prev => ({
         ...prev,
         currentStage: 'error',

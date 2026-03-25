@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AbandonedCheckoutsManager } from "~/components/admin/AbandonedCheckoutsManager";
 import { abandonedCheckoutsQueryOptions } from "~/lib/api.queries";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/abandoned-checkouts")({
   loader: async ({ context: { queryClient } }) => {
@@ -9,6 +10,7 @@ export const Route = createFileRoute("/admin/abandoned-checkouts")({
     );
   },
   head: () => ({ meta: [{ title: "Incomplete Orders | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: AbandonedCheckoutsPage,
 });
 

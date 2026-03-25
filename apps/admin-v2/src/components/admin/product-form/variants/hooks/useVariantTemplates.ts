@@ -29,7 +29,7 @@ export function useVariantTemplates(): UseVariantTemplatesReturn {
         setTemplates(templatesWithDates);
       }
     } catch (error: unknown) {
-      console.error("Failed to load variant templates:", error);
+      if (import.meta.env.DEV) console.error("Failed to load variant templates:", error);
     }
   }, []);
 
@@ -38,7 +38,7 @@ export function useVariantTemplates(): UseVariantTemplatesReturn {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
     } catch (error: unknown) {
-      console.error("Failed to save variant templates:", error);
+      if (import.meta.env.DEV) console.error("Failed to save variant templates:", error);
     }
   }, [templates]);
 

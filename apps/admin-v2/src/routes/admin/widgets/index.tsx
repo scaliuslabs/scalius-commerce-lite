@@ -18,6 +18,7 @@ import {
 } from "~/components/admin/data-table";
 import { getWidgetColumns } from "~/components/admin/data-table/columns/widget-columns";
 import type { Widget, WidgetListResponse } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 const searchSchema = z.object({
   page: z.number().default(1).catch(1),
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/admin/widgets/")({
     await queryClient.ensureQueryData(widgetsQueryOptions({ showTrashed: false }));
   },
   head: () => ({ meta: [{ title: "Widgets | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: WidgetsPage,
 });
 

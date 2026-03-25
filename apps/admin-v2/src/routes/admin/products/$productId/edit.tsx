@@ -6,6 +6,7 @@ import { productQueryOptions, categoryFormOptionsQueryOptions } from "~/lib/api.
 import type { ProductDetail, ProductImageDetail, ProductVariant } from "~/types/api-responses";
 import type { Category } from "~/components/admin/product-form/types";
 import type { ProductVariant as LocalProductVariant } from "~/components/admin/product-form/variants/types";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/products/$productId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/admin/products/$productId/edit")({
   head: ({ loaderData }) => ({
     meta: [{ title: `Edit Product | Scalius Admin` }],
   }),
+  errorComponent: RouteErrorComponent,
   component: EditProductPage,
 });
 

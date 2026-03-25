@@ -149,7 +149,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
       }
 
     } catch (error: unknown) {
-      console.error(`Error generating content:`, error);
+      if (import.meta.env.DEV) console.error(`Error generating content:`, error);
       toast.error(ERROR_MESSAGES.generationFailed(error instanceof Error ? error.message : String(error)));
       setIsPreviewOpen(false);
     } finally {
@@ -190,7 +190,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
             if (validation.valid) {
               setGeneratedContent(tagResult.data as { html: string; css: string });
             } else {
-              console.error("Invalid widget structure:", validation.error);
+              if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
               toast.error(`Invalid response: ${validation.error}`);
               setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
             }
@@ -202,12 +202,12 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
               if (validation.valid) {
                 setGeneratedContent(jsonParsed.data as { html: string; css: string });
               } else {
-                console.error("Invalid widget structure:", validation.error);
+                if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
                 toast.error(`Invalid response: ${validation.error}`);
                 setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
               }
             } else {
-              console.error("Failed to parse response:", tagResult.error, accumulatedJson);
+              if (import.meta.env.DEV) console.error("Failed to parse response:", tagResult.error, accumulatedJson);
               toast.error("Failed to parse AI response.");
               setGeneratedContent({ html: '<p class="text-destructive">Error parsing response.</p>', css: '' });
             }
@@ -240,7 +240,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
       }
 
     } catch (error: unknown) {
-      console.error(`Error generating content:`, error);
+      if (import.meta.env.DEV) console.error(`Error generating content:`, error);
       toast.error(`Generation failed: ${error instanceof Error ? error.message : String(error)}`);
       setIsPreviewOpen(false);
     } finally {
@@ -306,7 +306,7 @@ ${aiContext.selectedImages.length > 0 ? `\n\n**Note**: ${aiContext.selectedImage
       toast.success("Standalone prompt copied! Paste it into any AI chatbot.", { id: toastId });
 
     } catch (error: unknown) {
-      console.error("Error preparing prompt for copy:", error);
+      if (import.meta.env.DEV) console.error("Error preparing prompt for copy:", error);
       toast.error(`Failed to copy prompt: ${error instanceof Error ? error.message : String(error)}`, { id: toastId });
     }
   };

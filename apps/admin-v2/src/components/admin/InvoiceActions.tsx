@@ -80,7 +80,7 @@ export function InvoiceActions({ invoiceNumber }: InvoiceActionsProps) {
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       }).from(element).save();
     } catch (err) {
-      console.error("PDF generation failed:", err);
+      if (import.meta.env.DEV) console.error("PDF generation failed:", err);
     } finally {
       setDownloading(false);
     }

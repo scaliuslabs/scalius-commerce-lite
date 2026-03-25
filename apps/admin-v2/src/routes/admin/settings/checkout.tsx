@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import CheckoutSettingsPage from "~/components/admin/settings/CheckoutSettingsPage";
 import { authSettingsQueryOptions, paymentMethodsQueryOptions, shippingMethodsQueryOptions } from "~/lib/api.queries";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/settings/checkout")({
   loader: async ({ context: { queryClient } }) => {
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/admin/settings/checkout")({
     ]);
   },
   head: () => ({ meta: [{ title: "Checkout Settings | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: CheckoutPage,
 });
 

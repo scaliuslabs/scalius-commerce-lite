@@ -68,19 +68,19 @@ export function LocationSelector() {
                 const areaResult = await getDeliveryLocations({ data: { type: "area", parentId: initialZone } }) as Record<string, unknown>;
                 setAreas(areaResult.locations as Location[]);
               } catch (error: unknown) {
-                console.error("Error loading initial areas:", error);
+                if (import.meta.env.DEV) console.error("Error loading initial areas:", error);
               } finally {
                 setLoadingAreas(false);
               }
             }
           } catch (error: unknown) {
-            console.error("Error loading initial zones:", error);
+            if (import.meta.env.DEV) console.error("Error loading initial zones:", error);
           } finally {
             setLoadingZones(false);
           }
         }
       } catch (error: unknown) {
-        console.error("Error loading initial cities:", error);
+        if (import.meta.env.DEV) console.error("Error loading initial cities:", error);
       } finally {
         setLoadingCities(false);
       }
@@ -176,7 +176,7 @@ export function LocationSelector() {
       const result = await getDeliveryLocations({ data: { type: "zone", parentId: cityId } }) as Record<string, unknown>;
       setZones(result.locations as Location[]);
     } catch (error: unknown) {
-      console.error("Error loading zones:", error);
+      if (import.meta.env.DEV) console.error("Error loading zones:", error);
     } finally {
       setLoadingZones(false);
     }
@@ -188,7 +188,7 @@ export function LocationSelector() {
       const result = await getDeliveryLocations({ data: { type: "area", parentId: zoneId } }) as Record<string, unknown>;
       setAreas(result.locations as Location[]);
     } catch (error: unknown) {
-      console.error("Error loading areas:", error);
+      if (import.meta.env.DEV) console.error("Error loading areas:", error);
     } finally {
       setLoadingAreas(false);
     }

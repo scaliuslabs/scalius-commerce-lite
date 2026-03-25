@@ -146,7 +146,7 @@ export function VariantImportExport({
         fileInputRef.current.value = "";
       }
     } catch (error: unknown) {
-      console.error("Failed to import variants:", error);
+      if (import.meta.env.DEV) console.error("Failed to import variants:", error);
     } finally {
       setIsImporting(false);
     }

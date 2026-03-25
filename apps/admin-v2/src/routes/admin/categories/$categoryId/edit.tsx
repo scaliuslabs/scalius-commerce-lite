@@ -3,6 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { CategoryForm } from "~/components/admin/CategoryForm";
 import { categoryQueryOptions } from "~/lib/api.queries";
 import type { Category } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
   head: () => ({
     meta: [{ title: "Edit Category | Scalius Admin" }],
   }),
+  errorComponent: RouteErrorComponent,
   component: EditCategoryPage,
 });
 
