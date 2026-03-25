@@ -40,7 +40,10 @@ const listRoute = createRoute({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
-            folderId: z.string().optional().openapi({ description: "Folder ID filter" })
+            folderId: z.string().optional().openapi({ description: "Folder ID filter" }),
+            sortBy: z.enum(["createdAt", "size", "filename"]).optional().default("createdAt").openapi({ description: "Sort field" }),
+            sortOrder: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort direction" }),
+            mimeType: z.string().optional().openapi({ description: "MIME type filter prefix (e.g. 'image/')" }),
         })
     },
     responses: {
@@ -55,7 +58,12 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
-    const result = await listMediaFiles(db, query.page, query.limit, query.search || "", query.folderId);
+    const result = await listMediaFiles(
+        db, query.page, query.limit, query.search || "", query.folderId,
+        query.sortBy as "createdAt" | "size" | "filename",
+        query.sortOrder as "asc" | "desc",
+        query.mimeType,
+    );
     return ok(c, result);
 });
 
@@ -173,8 +181,11 @@ const moveRoute = createRoute({
 app.openapi(moveRoute, async (c) => {
     const db = c.get("db");
     const { fileIds, folderId } = c.req.valid("json");
-    await moveMediaFiles(db, fileIds, folderId || null);
-    return ok(c, { message: `Moved ${fileIds.length} file(s)` });
+    const { movedCount } = await moveMediaFiles(db, fileIds, folderId || null);
+    if (movedCount === 0) {
+        throw new ApiError(404, "No files were moved — they may have been deleted");
+    }
+    return ok(c, { message: `Moved ${movedCount} file(s)`, movedCount });
 });
 
 // ── Delete File ──

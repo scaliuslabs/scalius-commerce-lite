@@ -218,6 +218,9 @@ export const media = sqliteTable("media", {
     url: text("url").notNull(),
     size: integer("size").notNull(),
     mimeType: text("mime_type").notNull(),
+    altText: text("alt_text"),
+    width: integer("width"),
+    height: integer("height"),
     folderId: text("folder_id").references(() => mediaFolders.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()

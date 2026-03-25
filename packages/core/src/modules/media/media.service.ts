@@ -1,7 +1,7 @@
 // src/modules/media/media.service.ts
 import { media, mediaFolders } from "@scalius/database/schema";
 import { deleteFile, uploadFile, extractKeyFromUrl } from "../../integrations/storage";
-import { desc, isNull, sql, like, eq, inArray } from "drizzle-orm";
+import { desc, asc, isNull, sql, like, eq, inArray, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
@@ -11,7 +11,19 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const MAX_FILES_PER_UPLOAD = 50; // Increased to 50 for robust bulk uploads
 const BATCH_SIZE = 5;
 
-export async function listMediaFiles(dbOp: Database, page: number, limit: number, searchQuery: string, folderId?: string) {
+type SortField = "createdAt" | "size" | "filename";
+type SortOrder = "asc" | "desc";
+
+export async function listMediaFiles(
+    dbOp: Database,
+    page: number,
+    limit: number,
+    searchQuery: string,
+    folderId?: string,
+    sortBy: SortField = "createdAt",
+    sortOrder: SortOrder = "desc",
+    mimeTypeFilter?: string,
+) {
     const offset = (page - 1) * limit;
     const conditions = [isNull(media.deletedAt)];
 
@@ -25,15 +37,23 @@ export async function listMediaFiles(dbOp: Database, page: number, limit: number
         }
     }
 
+    if (mimeTypeFilter) {
+        conditions.push(like(media.mimeType, `${mimeTypeFilter}%`));
+    }
+
     const whereClause = sql.join(conditions, sql` AND `);
     const countArr = await dbOp.select({ count: sql<number>`count(*)` }).from(media).where(whereClause);
     const count = countArr[0]?.count ?? 0;
+
+    // Build order by clause
+    const sortColumn = sortBy === "size" ? media.size : sortBy === "filename" ? media.filename : media.createdAt;
+    const orderFn = sortOrder === "asc" ? asc : desc;
 
     const files = await dbOp
         .select()
         .from(media)
         .where(whereClause)
-        .orderBy(desc(media.createdAt))
+        .orderBy(orderFn(sortColumn))
         .limit(limit)
         .offset(offset);
 
@@ -48,7 +68,12 @@ export async function listMediaFiles(dbOp: Database, page: number, limit: number
     };
 }
 
-export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: string | null) {
+export async function uploadMediaFiles(
+    dbOp: Database,
+    files: File[],
+    folderId: string | null,
+    metadata?: Array<{ altText?: string; width?: number; height?: number }>,
+) {
     if (!files.length) {
         throw new ValidationError("No files provided");
     }
@@ -85,6 +110,7 @@ export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: 
                 }
 
                 const uploadResult = await uploadFile(file);
+                const fileMeta = metadata?.[fileIndex];
 
                 const mediaFileArr = await dbOp.insert(media).values({
                     id: "media_" + nanoid(),
@@ -92,6 +118,9 @@ export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: 
                     url: uploadResult.url,
                     size: uploadResult.size,
                     mimeType: uploadResult.mimeType,
+                    altText: fileMeta?.altText || null,
+                    width: fileMeta?.width || null,
+                    height: fileMeta?.height || null,
                     folderId: folderId || null,
                     createdAt: sql`(unixepoch())`,
                     updatedAt: sql`(unixepoch())`,
@@ -105,6 +134,9 @@ export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: 
                         filename: mediaFile.filename,
                         size: mediaFile.size,
                         mimeType: mediaFile.mimeType,
+                        altText: mediaFile.altText,
+                        width: mediaFile.width,
+                        height: mediaFile.height,
                         createdAt: mediaFile.createdAt,
                     });
                 }
@@ -148,14 +180,22 @@ export async function uploadMediaFiles(dbOp: Database, files: File[], folderId: 
     return response;
 }
 
-export async function updateMediaFile(dbOp: Database, id: string, data: { filename?: string; folderId?: string | null }) {
-    const [file] = await dbOp.select().from(media).where(eq(media.id, id));
+export async function updateMediaFile(
+    dbOp: Database,
+    id: string,
+    data: { filename?: string; altText?: string; folderId?: string | null },
+) {
+    const [file] = await dbOp
+        .select()
+        .from(media)
+        .where(and(eq(media.id, id), isNull(media.deletedAt)));
     if (!file) {
         throw new NotFoundError("File not found");
     }
 
     const updates: Record<string, unknown> = { updatedAt: sql`(unixepoch())` };
     if (data.filename !== undefined) updates.filename = data.filename;
+    if (data.altText !== undefined) updates.altText = data.altText;
     if (data.folderId !== undefined) updates.folderId = data.folderId || null;
 
     const [updatedFile] = await dbOp.update(media).set(updates).where(eq(media.id, id)).returning();
@@ -173,8 +213,25 @@ export async function deleteMediaFile(dbOp: Database, id: string) {
     await deleteFile(key);
 }
 
-export async function moveMediaFiles(dbOp: Database, fileIds: string[], folderId: string | null) {
-    await dbOp.update(media).set({ folderId: folderId || null, updatedAt: sql`(unixepoch())` }).where(inArray(media.id, fileIds));
+/**
+ * Move files to a target folder. Only moves active (non-deleted) files.
+ * Returns the count of files actually moved for verification.
+ */
+export async function moveMediaFiles(
+    dbOp: Database,
+    fileIds: string[],
+    folderId: string | null,
+): Promise<{ movedCount: number }> {
+    if (fileIds.length === 0) return { movedCount: 0 };
+
+    // Only move active (non-deleted) files
+    const result = await dbOp
+        .update(media)
+        .set({ folderId: folderId || null, updatedAt: sql`(unixepoch())` })
+        .where(and(inArray(media.id, fileIds), isNull(media.deletedAt)))
+        .returning({ id: media.id });
+
+    return { movedCount: result.length };
 }
 
 export async function listMediaFolders(dbOp: Database) {
