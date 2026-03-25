@@ -146,7 +146,7 @@ export default function FirebaseSettingsForm() {
       setRawPublicConfig("");
       toast.success("Config parsed successfully!");
     } catch (e: unknown) {
-      console.error("Parse error:", e);
+      if (import.meta.env.DEV) console.error("Parse error:", e);
       toast.error("Could not parse config. Please check format.");
     }
   };

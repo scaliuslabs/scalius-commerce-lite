@@ -183,7 +183,7 @@ export function MediaCard({
               onLoad={() => setImageLoaded(true)}
               onError={() => {
                 setImageError(true);
-                console.error(`Failed to load image: ${file.filename}`);
+                if (import.meta.env.DEV) console.error(`Failed to load image: ${file.filename}`);
               }}
               // Critical: constrain rendering size
               style={{

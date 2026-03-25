@@ -3,6 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { categoryFormOptionsQueryOptions } from "~/lib/api.queries";
 import type { Category } from "~/components/admin/product-form/types";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 const defaultValues = {
   name: "",
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/admin/products/new")({
     await queryClient.ensureQueryData(categoryFormOptionsQueryOptions());
   },
   head: () => ({ meta: [{ title: "New Product | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: NewProductPage,
 });
 

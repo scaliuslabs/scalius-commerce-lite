@@ -170,8 +170,8 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           if (tagResult.success && tagResult.data) {
             const validation = validateParsedWidget(tagResult.data);
             if (!validation.valid) {
-              console.error('Tag-based validation failed:', validation.error);
-              console.error('Parsed data:', tagResult.data);
+              if (import.meta.env.DEV) console.error('Tag-based validation failed:', validation.error);
+              if (import.meta.env.DEV) console.error('Parsed data:', tagResult.data);
               throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
             }
             improvedContent = tagResult.data as { html: string; css: string };
@@ -179,16 +179,16 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
             // Fallback to JSON parsing
             const parsed = parseJSONSafely(accumulatedJson);
             if (!parsed.success) {
-              console.error('All parsing strategies failed');
-              console.error('Tag error:', tagResult.error);
-              console.error('JSON error:', parsed.error);
+              if (import.meta.env.DEV) console.error('All parsing strategies failed');
+              if (import.meta.env.DEV) console.error('Tag error:', tagResult.error);
+              if (import.meta.env.DEV) console.error('JSON error:', parsed.error);
               throw new Error(`Parsing failed: Neither tag-based nor JSON format detected. Check browser console for raw output.`);
             }
 
             const validation = validateWidgetJSON(parsed.data);
             if (!validation.valid) {
-              console.error('JSON validation failed:', validation.error);
-              console.error('Parsed data:', parsed.data);
+              if (import.meta.env.DEV) console.error('JSON validation failed:', validation.error);
+              if (import.meta.env.DEV) console.error('Parsed data:', parsed.data);
               throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
             }
             improvedContent = parsed.data as { html: string; css: string };
@@ -255,7 +255,7 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
 
               toast.success(SUCCESS_MESSAGES.sectionImproved(targetSection, sections.length));
             } catch (mergeError: unknown) {
-              console.error('Failed to merge section:', mergeError);
+              if (import.meta.env.DEV) console.error('Failed to merge section:', mergeError);
               toast.error(ERROR_MESSAGES.sectionMergeFailed);
               // Fallback: just show the improved section
               setContentToImprove(improvedContent);
@@ -299,7 +299,7 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
 
       return true;
     } catch (error: unknown) {
-      console.error('Error improving content:', error);
+      if (import.meta.env.DEV) console.error('Error improving content:', error);
       toast.error(ERROR_MESSAGES.generationFailed((error instanceof Error ? error.message : String(error))));
       return false;
     } finally {

@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { PlusCircle, Trash2, Layers } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
 import { collectionsQueryOptions } from "~/lib/api.queries";
 import {
   useUpdateCollection,
@@ -55,6 +55,7 @@ export const Route = createFileRoute("/admin/collections/")({
     ],
   }),
   component: CollectionsPage,
+  errorComponent: RouteErrorComponent,
 });
 
 function CollectionsPage() {

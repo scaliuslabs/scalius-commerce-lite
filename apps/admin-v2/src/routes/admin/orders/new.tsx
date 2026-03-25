@@ -5,6 +5,7 @@ import {
   productQueryOptions,
 } from "~/lib/api.queries";
 import type { ProductVariant } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 interface ProductListResult {
   products?: Array<{
@@ -96,6 +97,7 @@ export const Route = createFileRoute("/admin/orders/new")({
     }
   },
   head: () => ({ meta: [{ title: "New Order | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: NewOrderPage,
 });
 

@@ -3,6 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { PageForm } from "~/components/admin/PageForm";
 import { pageQueryOptions } from "~/lib/api.queries";
 import type { Page } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/pages/$pageId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/admin/pages/$pageId/edit")({
   head: () => ({
     meta: [{ title: "Edit Page | Scalius Admin" }],
   }),
+  errorComponent: RouteErrorComponent,
   component: EditPagePage,
 });
 

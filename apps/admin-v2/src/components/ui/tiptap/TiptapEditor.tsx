@@ -157,7 +157,7 @@ export function TiptapEditor({
       className={cn(
         "flex flex-col bg-background transition-colors",
         isFullscreen
-          ? "fixed inset-0 z-9999 h-dvh w-screen"
+          ? "fixed inset-0 z-[9999] h-dvh w-screen"
           : "border rounded-md",
         !isFullscreen && className,
       )}

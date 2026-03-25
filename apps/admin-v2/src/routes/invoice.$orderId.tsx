@@ -149,7 +149,7 @@ function InvoicePage() {
                 const variant = [item.variantSize, item.variantColor].filter(Boolean).join(" / ");
                 const lineTotal = item.price * item.quantity;
                 return (
-                  <tr key={index}>
+                  <tr key={item.id || `item-${index}`}>
                     <td>{index + 1}</td>
                     <td>
                       {item.productName || "Unknown Product"}

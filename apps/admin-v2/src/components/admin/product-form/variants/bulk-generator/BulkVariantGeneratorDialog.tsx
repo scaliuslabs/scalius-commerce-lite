@@ -116,7 +116,7 @@ export function BulkVariantGenerator({
       setDiscountValue(null);
       setOpen(false);
     } catch (error: unknown) {
-      console.error("Failed to generate variants:", error);
+      if (import.meta.env.DEV) console.error("Failed to generate variants:", error);
     } finally {
       setIsGenerating(false);
     }

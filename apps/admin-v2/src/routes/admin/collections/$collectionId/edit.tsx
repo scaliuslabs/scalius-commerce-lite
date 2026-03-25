@@ -4,6 +4,7 @@ import { CollectionForm } from "~/components/admin/collection-form";
 import { collectionQueryOptions, collectionFormOptionsQueryOptions } from "~/lib/api.queries";
 import type { Collection } from "~/types/api-responses";
 import type { Category, Product } from "~/components/admin/collection-form/types";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -14,6 +15,7 @@ export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
     if (!collection) throw redirect({ to: "/admin/collections" });
   },
   head: () => ({ meta: [{ title: "Edit Collection | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: EditCollectionPage,
 });
 

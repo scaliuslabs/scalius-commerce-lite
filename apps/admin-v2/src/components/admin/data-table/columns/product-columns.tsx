@@ -52,7 +52,7 @@ function copyProductShortcode(slug: string) {
     })
     .catch((err) => {
       toast.error("Failed to copy shortcode.");
-      console.error("Failed to copy shortcode: ", err);
+      if (import.meta.env.DEV) console.error("Failed to copy shortcode: ", err);
     });
 }
 

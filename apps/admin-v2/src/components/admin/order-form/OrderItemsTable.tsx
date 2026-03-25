@@ -67,7 +67,7 @@ export function OrderItemsTable() {
               );
 
               return (
-                <TableRow key={`${item.productId}-${item.variantId}-${index}`}>
+                <TableRow key={item.variantId ? `${item.productId}-${item.variantId}` : item.productId}>
                   <TableCell className="font-medium">
                     {product?.name ?? "Unknown Product"}
                   </TableCell>

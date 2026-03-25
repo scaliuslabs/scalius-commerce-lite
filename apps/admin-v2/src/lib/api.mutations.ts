@@ -117,6 +117,35 @@ import {
   bulkUpdateProductVariants,
   bulkDeleteProductVariants,
   duplicateProductVariant,
+  // Checkout Languages
+  createCheckoutLanguage,
+  updateCheckoutLanguage,
+  softDeleteCheckoutLanguage,
+  deleteCheckoutLanguage,
+  restoreCheckoutLanguage,
+  // Shipping Methods
+  createShippingMethod,
+  updateShippingMethod,
+  deleteShippingMethod,
+  permanentDeleteShippingMethod,
+  restoreShippingMethod,
+  // Delivery Locations
+  createDeliveryLocation,
+  updateDeliveryLocation,
+  deleteDeliveryLocation,
+  bulkDeleteDeliveryLocations,
+  cleanAllDeliveryLocations,
+  // Media
+  deleteMedia,
+  updateMedia,
+  moveMediaFiles,
+  createMediaFolder,
+  deleteMediaFolder,
+  renameMediaFolder,
+  // Widget History
+  createWidgetHistorySnapshot,
+  deleteWidgetHistory,
+  restoreWidgetHistory,
 } from "./api.functions";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -480,8 +509,7 @@ export function useUpdateSettings(category: string) {
 export function useSaveHeaderConfig() {
   const queryClient = useQueryClient();
   return useMutation({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: (data: any) => saveHeaderConfig({ data }),
+    mutationFn: (data: Record<string, unknown>) => saveHeaderConfig({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.general() });
       toast.success("Header config saved");
@@ -493,8 +521,7 @@ export function useSaveHeaderConfig() {
 export function useSaveFooterConfig() {
   const queryClient = useQueryClient();
   return useMutation({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: (data: any) => saveFooterConfig({ data }),
+    mutationFn: (data: Record<string, unknown>) => saveFooterConfig({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.general() });
       toast.success("Footer config saved");
@@ -795,12 +822,27 @@ export function useToggleDiscountStatus() {
   return useMutation({
     mutationFn: (data: { id: string; isActive?: boolean }) =>
       toggleDiscountStatus({ data }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.discounts.detail(variables.id) });
-      toast.success("Discount status toggled");
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.discounts.detail(variables.id) });
+      const previous = queryClient.getQueryData(queryKeys.discounts.detail(variables.id));
+      queryClient.setQueryData(queryKeys.discounts.detail(variables.id), (old: any) =>
+        old ? { ...old, isActive: variables.isActive } : old
+      );
+      return { previous };
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to toggle discount status")),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
+      toast.success("Discount status updated");
+    },
+    onError: (err, variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.discounts.detail(variables.id), context.previous);
+      }
+      toast.error(getServerFnError(err, "Failed to toggle discount status"));
+    },
+    onSettled: (_data, _err, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.discounts.detail(variables.id) });
+    },
   });
 }
 
@@ -1315,9 +1357,9 @@ export function useCreateProductVariant() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
-      toast.success("Success!", { description: "Variant has been created successfully." });
+      toast.success("Variant created");
     },
-    onError: (err) => toast.error("Error Creating Variant", { description: getServerFnError(err, "An unknown error occurred.") }),
+    onError: (err) => toast.error(getServerFnError(err, "Failed to create variant")),
   });
 }
 
@@ -1329,9 +1371,9 @@ export function useUpdateProductVariant() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
-      toast.success("Success!", { description: "Variant has been updated successfully." });
+      toast.success("Variant updated");
     },
-    onError: (err) => toast.error("Error Updating Variant", { description: getServerFnError(err, "An unknown error occurred.") }),
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update variant")),
   });
 }
 
@@ -1343,9 +1385,9 @@ export function useDeleteProductVariant() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
-      toast.success("Success!", { description: "Variant has been deleted." });
+      toast.success("Variant deleted");
     },
-    onError: (err) => toast.error("Deletion Failed", { description: getServerFnError(err, "Could not delete variant.") }),
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete variant")),
   });
 }
 
@@ -1357,9 +1399,9 @@ export function useBulkCreateProductVariants() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
-      toast.success("Success!", { description: "Variants created successfully." });
+      toast.success("Variants created");
     },
-    onError: (err) => toast.error("Bulk Creation Failed", { description: getServerFnError(err, "Could not create variants.") }),
+    onError: (err) => toast.error(getServerFnError(err, "Failed to create variants")),
   });
 }
 
@@ -1371,9 +1413,9 @@ export function useBulkUpdateProductVariants() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
-      toast.success("Success!", { description: "Variants updated successfully." });
+      toast.success("Variants updated");
     },
-    onError: (err) => toast.error("Update Failed", { description: getServerFnError(err, "Could not update variants.") }),
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update variants")),
   });
 }
 
@@ -1385,9 +1427,9 @@ export function useBulkDeleteProductVariants() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
-      toast.success("Success!", { description: `${variables.variantIds.length} variants deleted.` });
+      toast.success(`${variables.variantIds.length} variants deleted`);
     },
-    onError: (err) => toast.error("Bulk Deletion Failed", { description: getServerFnError(err, "Could not delete variants.") }),
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete variants")),
   });
 }
 
@@ -1399,8 +1441,346 @@ export function useDuplicateProductVariant() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
-      toast.success("Success!", { description: "Variant has been duplicated successfully." });
+      toast.success("Variant duplicated");
     },
-    onError: (err) => toast.error("Duplication Failed", { description: getServerFnError(err, "Could not duplicate variant.") }),
+    onError: (err) => toast.error(getServerFnError(err, "Failed to duplicate variant")),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MEDIA
+// ═══════════════════════════════════════════════════════════════════
+
+export function useDeleteMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (fileId: string) => deleteMedia({ data: { fileId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.media.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
+      toast.success("File deleted");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete file")),
+  });
+}
+
+export function useUpdateMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { fileId: string; update: Record<string, unknown> }) =>
+      updateMedia({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.media.list() });
+      toast.success("File updated");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update file")),
+  });
+}
+
+export function useMoveMediaFiles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { fileIds: string[]; targetFolderId: string | null }) =>
+      moveMediaFiles({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.media.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
+      toast.success("Files moved");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to move files")),
+  });
+}
+
+export function useCreateMediaFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; parentId?: string }) =>
+      createMediaFolder({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
+      toast.success("Folder created");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to create folder")),
+  });
+}
+
+export function useDeleteMediaFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (folderId: string) => deleteMediaFolder({ data: { folderId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.media.list() });
+      toast.success("Folder deleted");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete folder")),
+  });
+}
+
+export function useRenameMediaFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { folderId: string; name: string }) =>
+      renameMediaFolder({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
+      toast.success("Folder renamed");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to rename folder")),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  WIDGET HISTORY
+// ═══════════════════════════════════════════════════════════════════
+
+export function useCreateWidgetHistorySnapshot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { widgetId: string; snapshot: Record<string, unknown> }) =>
+      createWidgetHistorySnapshot({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.widgets.history(variables.widgetId) });
+      toast.success("History snapshot created");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to create history snapshot")),
+  });
+}
+
+export function useDeleteWidgetHistory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { widgetId: string; historyId: string }) =>
+      deleteWidgetHistory({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.widgets.history(variables.widgetId) });
+      toast.success("History entry deleted");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete history entry")),
+  });
+}
+
+export function useRestoreWidgetHistory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { widgetId: string; historyId: string }) =>
+      restoreWidgetHistory({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.widgets.history(variables.widgetId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.widgets.detail(variables.widgetId) });
+      toast.success("Widget restored from history");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to restore from history")),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CHECKOUT LANGUAGES
+// ═══════════════════════════════════════════════════════════════════
+
+export function useCreateCheckoutLanguage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      createCheckoutLanguage({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      toast.success("Checkout language created");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to create checkout language")),
+  });
+}
+
+export function useUpdateCheckoutLanguage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; update: Record<string, unknown> }) =>
+      updateCheckoutLanguage({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      toast.success("Checkout language updated");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update checkout language")),
+  });
+}
+
+export function useSoftDeleteCheckoutLanguage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string }) =>
+      softDeleteCheckoutLanguage({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      toast.success("Checkout language moved to trash");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to move to trash")),
+  });
+}
+
+export function useDeleteCheckoutLanguage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string }) =>
+      deleteCheckoutLanguage({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      toast.success("Checkout language permanently deleted");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete")),
+  });
+}
+
+export function useRestoreCheckoutLanguage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string }) =>
+      restoreCheckoutLanguage({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      toast.success("Checkout language restored");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to restore language")),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SHIPPING METHODS
+// ═══════════════════════════════════════════════════════════════════
+
+export function useCreateShippingMethod() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      createShippingMethod({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      toast.success("Shipping method created");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to create shipping method")),
+  });
+}
+
+export function useUpdateShippingMethod() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; update: Record<string, unknown> }) =>
+      updateShippingMethod({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      toast.success("Shipping method updated");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update shipping method")),
+  });
+}
+
+export function useDeleteShippingMethod() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string }) =>
+      deleteShippingMethod({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      toast.success("Shipping method moved to trash");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to move to trash")),
+  });
+}
+
+export function usePermanentDeleteShippingMethod() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string }) =>
+      permanentDeleteShippingMethod({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      toast.success("Shipping method permanently deleted");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete method")),
+  });
+}
+
+export function useRestoreShippingMethod() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string }) =>
+      restoreShippingMethod({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      toast.success("Shipping method restored");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to restore shipping method")),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DELIVERY LOCATIONS
+// ═══════════════════════════════════════════════════════════════════
+
+export function useCreateDeliveryLocation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      createDeliveryLocation({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      toast.success("Location created");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to create location")),
+  });
+}
+
+export function useUpdateDeliveryLocation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; update: Record<string, unknown> }) =>
+      updateDeliveryLocation({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      toast.success("Location updated");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update location")),
+  });
+}
+
+export function useDeleteDeliveryLocation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string }) =>
+      deleteDeliveryLocation({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      toast.success("Location deleted");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete location")),
+  });
+}
+
+export function useBulkDeleteDeliveryLocations() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { ids: string[] }) =>
+      bulkDeleteDeliveryLocations({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      toast.success(`${variables.ids.length} location(s) deleted`);
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to delete locations")),
+  });
+}
+
+export function useCleanAllDeliveryLocations() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => cleanAllDeliveryLocations(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      toast.success("All delivery locations cleared");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to clean all delivery locations")),
   });
 }

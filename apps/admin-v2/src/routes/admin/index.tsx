@@ -5,12 +5,14 @@ import { RecentOrders } from "~/components/admin/RecentOrders";
 import { QuickActions } from "~/components/admin/QuickActions";
 import { WelcomeBanner } from "~/components/admin/WelcomeBanner";
 import { dashboardQueryOptions } from "~/lib/api.queries";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(dashboardQueryOptions());
   },
   head: () => ({ meta: [{ title: "Dashboard | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: DashboardPage,
 });
 

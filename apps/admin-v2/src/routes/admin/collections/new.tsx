@@ -3,12 +3,14 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { CollectionForm } from "~/components/admin/collection-form";
 import { collectionFormOptionsQueryOptions } from "~/lib/api.queries";
 import type { Category, Product } from "~/components/admin/collection-form/types";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/collections/new")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(collectionFormOptionsQueryOptions());
   },
   head: () => ({ meta: [{ title: "New Collection | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: NewCollectionPage,
 });
 

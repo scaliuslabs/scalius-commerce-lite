@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { Tags, Trash2, Plus } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
 import { attributesQueryOptions } from "~/lib/api.queries";
 import {
   useUpdateAttribute,
@@ -61,6 +61,7 @@ export const Route = createFileRoute("/admin/attributes")({
     ],
   }),
   component: AttributesPage,
+  errorComponent: RouteErrorComponent,
 });
 
 function AttributesPage() {

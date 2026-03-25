@@ -65,23 +65,11 @@ export function ProductForm({
     hasVariantImagesEnabled(defaultValues?.metaDescription) || false,
   );
 
-  // Fetch variants and extract unique colors
+  // Fetch variants and extract unique colors (React Query auto-refetches on invalidation)
   const { uniqueColorOptions, refreshVariants } = useProductVariants({
     productId: defaultValues?.id,
     isEdit,
   });
-
-  // Listen for variant changes to refresh color options
-  React.useEffect(() => {
-    const handleVariantChange = () => {
-      if (isEdit && defaultValues?.id) {
-        refreshVariants();
-      }
-    };
-
-    window.addEventListener("variantChanged", handleVariantChange);
-    return () => window.removeEventListener("variantChanged", handleVariantChange);
-  }, [isEdit, defaultValues?.id, refreshVariants]);
 
   // Set up client-side rendering flag
   React.useEffect(() => {

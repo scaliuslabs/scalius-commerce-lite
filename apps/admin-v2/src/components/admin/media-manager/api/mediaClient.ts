@@ -85,7 +85,7 @@ export class MediaApiClient {
       try {
         rawData = await response.json();
       } catch (parseError) {
-        console.error("Failed to parse upload response:", parseError);
+        if (import.meta.env.DEV) console.error("Failed to parse upload response:", parseError);
         throw new Error(
           "Upload failed: Server returned an invalid response. Please try again."
         );
@@ -159,7 +159,7 @@ export class MediaApiClient {
         success++;
       } catch (error: unknown) {
         failed++;
-        console.error(`Failed to delete file ${fileId}:`, error);
+        if (import.meta.env.DEV) console.error(`Failed to delete file ${fileId}:`, error);
       }
     }
 

@@ -3,12 +3,14 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { FraudCheckerSettings } from "~/components/admin/FraudCheckerSettings";
 import { fraudCheckerProvidersQueryOptions } from "~/lib/api.queries";
 import type { FraudCheckerProvider } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/settings/fraud-checker")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions());
   },
   head: () => ({ meta: [{ title: "Fraud Checker | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: FraudCheckerPage,
 });
 

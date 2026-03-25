@@ -1,15 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { toast } from "sonner";
-import { useNavigate } from "@tanstack/react-router";
-import { getServerFnError } from "~/lib/api-helpers";
+import { useState, useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { checkoutLanguagesQueryOptions } from "~/lib/api.queries";
 import {
-  getCheckoutLanguages,
-  createCheckoutLanguage,
-  updateCheckoutLanguage,
-  softDeleteCheckoutLanguage,
-  deleteCheckoutLanguage,
-  restoreCheckoutLanguage,
-} from "~/lib/api.functions";
+  useCreateCheckoutLanguage,
+  useUpdateCheckoutLanguage,
+  useSoftDeleteCheckoutLanguage,
+  useDeleteCheckoutLanguage,
+  useRestoreCheckoutLanguage,
+} from "~/lib/api.mutations";
 
 // Local type replacing @scalius/database/schema import
 export interface CheckoutLanguage {
@@ -91,256 +89,173 @@ interface PaginationState {
   hasPrevPage: boolean;
 }
 
+const DEFAULT_PAGINATION: PaginationState = {
+  total: 0,
+  page: 1,
+  limit: 10,
+  totalPages: 1,
+  hasNextPage: false,
+  hasPrevPage: false,
+};
+
 export function useLanguages() {
-  const navigate = useNavigate();
-  const [languages, setLanguages] = useState<ManagerCheckoutLanguage[]>([]);
-  const [pagination, setPagination] = useState<PaginationState>({
-    total: 0,
-    page: 1,
-    limit: 10,
-    totalPages: 1,
-    hasNextPage: false,
-    hasPrevPage: false,
-  });
+  const queryClient = useQueryClient();
+
+  // Local filter/sort/pagination state (sub-tab component, no URL params)
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
   const [searchQuery, setSearchQuery] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [sort, setSort] = useState<{ field: SortField; order: SortOrder }>({
     field: "name",
     order: "asc",
   });
-  const [isLoading, setIsLoading] = useState(false);
-  const [isActionLoading, setIsActionLoading] = useState(false);
   const [showTrashed, setShowTrashed] = useState(false);
-  const initialLoadDone = useRef(false);
 
-  const fetchLanguages = useCallback(
-    async (
-      pageToFetch = pagination.page,
-      limitToFetch = pagination.limit,
-      currentSearch = searchQuery,
-      currentSort = sort,
-      currentShowTrashed = showTrashed,
-    ) => {
-      setIsLoading(true);
-      try {
-        const params: Record<string, string | number | boolean | undefined> = {
-          page: pageToFetch,
-          limit: limitToFetch,
-          sort: currentSort.field,
-          order: currentSort.order,
-        };
-        if (currentSearch) params.search = currentSearch;
-        if (currentShowTrashed) params.trashed = true;
+  // Build query params
+  const queryParams = useMemo(() => {
+    const params: Record<string, string | number | boolean | undefined> = {
+      page,
+      limit,
+      sort: sort.field,
+      order: sort.order,
+    };
+    if (appliedSearch) params.search = appliedSearch;
+    if (showTrashed) params.trashed = true;
+    return params;
+  }, [page, limit, sort.field, sort.order, appliedSearch, showTrashed]);
 
-        const data = await getCheckoutLanguages({ data: params }) as {
-          languages: Record<string, unknown>[];
-          pagination: PaginationState;
-        };
+  // Main list query
+  const { data, isLoading, isFetching } = useQuery({
+    ...checkoutLanguagesQueryOptions(queryParams),
+    placeholderData: (prev) => prev, // keepPreviousData equivalent
+  });
 
-        const parsedLanguages = (data.languages || []).map((lang: Record<string, unknown>) => ({
-          ...lang,
-          languageData:
-            typeof lang.languageData === "string"
-              ? JSON.parse(lang.languageData as string)
-              : lang.languageData,
-          fieldVisibility:
-            typeof lang.fieldVisibility === "string"
-              ? JSON.parse(lang.fieldVisibility as string)
-              : lang.fieldVisibility,
-        })) as unknown as ManagerCheckoutLanguage[];
+  // Parse response
+  const rawData = data as
+    | { languages?: Record<string, unknown>[]; pagination?: PaginationState }
+    | undefined;
 
-        setLanguages(parsedLanguages);
-        setPagination(
-          data.pagination || {
-            total: 0,
-            page: 1,
-            limit: 10,
-            totalPages: 1,
-            hasNextPage: false,
-            hasPrevPage: false,
-          },
-        );
-      } catch (error: unknown) {
-        console.error("Error fetching checkout languages:", error);
-        toast.error("Could not load checkout languages.");
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [pagination.page, pagination.limit, searchQuery, sort, showTrashed],
-  );
+  const languages = useMemo<ManagerCheckoutLanguage[]>(() => {
+    if (!rawData?.languages) return [];
+    return rawData.languages.map((lang) => ({
+      ...lang,
+      languageData:
+        typeof lang.languageData === "string"
+          ? JSON.parse(lang.languageData as string)
+          : lang.languageData,
+      fieldVisibility:
+        typeof lang.fieldVisibility === "string"
+          ? JSON.parse(lang.fieldVisibility as string)
+          : lang.fieldVisibility,
+    })) as unknown as ManagerCheckoutLanguage[];
+  }, [rawData?.languages]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const pageFromUrl = parseInt(params.get("page") || "1");
-    const limitFromUrl = parseInt(params.get("limit") || "10");
-    const searchFromUrl = params.get("search") || "";
-    const sortFieldFromUrl = params.get("sort") as SortField | null;
-    const sortOrderFromUrl = params.get("order") as SortOrder | null;
-    const showTrashedFromUrl = params.get("trashed") === "true";
+  const pagination = rawData?.pagination ?? DEFAULT_PAGINATION;
 
-    setSearchQuery(searchFromUrl);
-    if (sortFieldFromUrl && sortOrderFromUrl) {
-      setSort({ field: sortFieldFromUrl, order: sortOrderFromUrl });
-    }
-    setShowTrashed(showTrashedFromUrl);
+  // Mutations
+  const createMutation = useCreateCheckoutLanguage();
+  const updateMutation = useUpdateCheckoutLanguage();
+  const softDeleteMutation = useSoftDeleteCheckoutLanguage();
+  const deleteMutation = useDeleteCheckoutLanguage();
+  const restoreMutation = useRestoreCheckoutLanguage();
 
-    fetchLanguages(
-      pageFromUrl,
-      limitFromUrl,
-      searchFromUrl,
-      sortFieldFromUrl && sortOrderFromUrl
-        ? { field: sortFieldFromUrl, order: sortOrderFromUrl }
-        : { field: "name", order: "asc" },
-      showTrashedFromUrl,
-    );
-    initialLoadDone.current = true;
-  }, []);
+  const isActionLoading =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    softDeleteMutation.isPending ||
+    deleteMutation.isPending ||
+    restoreMutation.isPending;
 
-  useEffect(() => {
-    if (initialLoadDone.current) {
-      fetchLanguages();
-    }
-  }, [fetchLanguages]);
-
+  // Handlers
   const handleSearch = useCallback(
     (e?: React.SyntheticEvent) => {
       if (e) e.preventDefault();
-      void navigate({
-        search: ((prev: any) => {
-          const next = { ...prev, page: 1 };
-          if (searchQuery.trim()) next.search = searchQuery.trim();
-          else delete next.search;
-          return next;
-        }) as any,
-        replace: true,
-      });
-      fetchLanguages(1, pagination.limit, searchQuery, sort, showTrashed);
+      setAppliedSearch(searchQuery.trim());
+      setPage(1);
     },
-    [searchQuery, pagination.limit, sort, showTrashed, fetchLanguages, navigate],
+    [searchQuery],
   );
 
   const handleSort = useCallback(
     (field: SortField) => {
       const newOrder: SortOrder =
         sort.field === field && sort.order === "asc" ? "desc" : "asc";
-      const newSort = { field, order: newOrder };
-      setSort(newSort);
-      void navigate({
-        search: ((prev: any) => ({
-          ...prev,
-          sort: field,
-          order: newOrder,
-          page: 1,
-        })) as any,
-        replace: true,
-      });
-      fetchLanguages(1, pagination.limit, searchQuery, newSort, showTrashed);
+      setSort({ field, order: newOrder });
+      setPage(1);
     },
-    [sort, pagination.limit, searchQuery, showTrashed, fetchLanguages, navigate],
+    [sort],
   );
 
   const toggleTrash = useCallback(() => {
-    const newShowTrashed = !showTrashed;
-    setShowTrashed(newShowTrashed);
-    void navigate({
-      search: ((prev: any) => {
-        const next = { ...prev, page: 1 };
-        if (newShowTrashed) next.trashed = "true";
-        else delete next.trashed;
-        return next;
-      }) as any,
-      replace: true,
-    });
-    fetchLanguages(1, pagination.limit, searchQuery, sort, newShowTrashed);
-  }, [showTrashed, pagination.limit, searchQuery, sort, fetchLanguages, navigate]);
+    setShowTrashed((prev) => !prev);
+    setPage(1);
+  }, []);
 
   const clearFilters = useCallback(() => {
     setSearchQuery("");
-    void navigate({
-      search: ((prev: any) => {
-        const next = { ...prev, page: 1 };
-        delete next.search;
-        return next;
-      }) as any,
-      replace: true,
-    });
-    fetchLanguages(1, pagination.limit, "", sort, showTrashed);
-  }, [pagination.limit, sort, showTrashed, fetchLanguages, navigate]);
+    setAppliedSearch("");
+    setPage(1);
+  }, []);
 
-  const handleSetActive = async (id: string, isActive: boolean) => {
-    setIsActionLoading(true);
-    try {
-      await updateCheckoutLanguage({ data: { id, update: { isActive } } });
-      toast.success("Language active state updated successfully.");
-      fetchLanguages(pagination.page);
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Failed to update active state."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
+  const handleSetActive = useCallback(
+    async (id: string, isActive: boolean) => {
+      await updateMutation.mutateAsync({ id, update: { isActive } });
+    },
+    [updateMutation],
+  );
 
-  const handleFormSubmit = async (
-    formData: Partial<ManagerCheckoutLanguage>,
-    editingLanguageId: string | null,
-  ): Promise<boolean> => {
-    setIsActionLoading(true);
-    try {
-      if (editingLanguageId) {
-        await updateCheckoutLanguage({ data: { id: editingLanguageId, update: formData as Record<string, unknown> } });
-      } else {
-        await createCheckoutLanguage({ data: formData as Record<string, unknown> });
+  const handleFormSubmit = useCallback(
+    async (
+      formData: Partial<ManagerCheckoutLanguage>,
+      editingLanguageId: string | null,
+    ): Promise<boolean> => {
+      try {
+        if (editingLanguageId) {
+          await updateMutation.mutateAsync({
+            id: editingLanguageId,
+            update: formData as Record<string, unknown>,
+          });
+        } else {
+          await createMutation.mutateAsync(
+            formData as Record<string, unknown>,
+          );
+          setPage(1);
+        }
+        return true;
+      } catch {
+        return false;
       }
-      toast.success(`Checkout language ${editingLanguageId ? "updated" : "created"} successfully.`);
-      fetchLanguages(editingLanguageId ? pagination.page : 1);
-      return true;
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, `Failed to ${editingLanguageId ? "update" : "create"} checkout language`));
-      return false;
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
+    },
+    [updateMutation, createMutation],
+  );
 
-  const handleSoftDelete = async (language: ManagerCheckoutLanguage) => {
-    setIsActionLoading(true);
-    try {
-      await softDeleteCheckoutLanguage({ data: { id: language.id } });
-      toast.success(`"${language.name}" moved to trash.`);
-      fetchLanguages(pagination.page);
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Failed to move to trash."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
+  const handleSoftDelete = useCallback(
+    async (language: ManagerCheckoutLanguage) => {
+      await softDeleteMutation.mutateAsync({ id: language.id });
+    },
+    [softDeleteMutation],
+  );
 
-  const handlePermanentDelete = async (language: ManagerCheckoutLanguage) => {
-    setIsActionLoading(true);
-    try {
-      await deleteCheckoutLanguage({ data: { id: language.id } });
-      toast.success(`"${language.name}" permanently deleted.`);
-      fetchLanguages(pagination.page);
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Failed to permanently delete."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
+  const handlePermanentDelete = useCallback(
+    async (language: ManagerCheckoutLanguage) => {
+      await deleteMutation.mutateAsync({ id: language.id });
+    },
+    [deleteMutation],
+  );
 
-  const handleRestore = async (language: ManagerCheckoutLanguage) => {
-    setIsActionLoading(true);
-    try {
-      await restoreCheckoutLanguage({ data: { id: language.id } });
-      toast.success(`"${language.name}" restored successfully.`);
-      fetchLanguages(pagination.page);
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Failed to restore language."));
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
+  const handleRestore = useCallback(
+    async (language: ManagerCheckoutLanguage) => {
+      await restoreMutation.mutateAsync({ id: language.id });
+    },
+    [restoreMutation],
+  );
+
+  const fetchLanguages = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ["settings", "checkout-languages"],
+    });
+  }, [queryClient]);
 
   const hasActiveFilters = searchQuery.trim().length > 0;
 
@@ -350,7 +265,7 @@ export function useLanguages() {
     searchQuery,
     setSearchQuery,
     sort,
-    isLoading,
+    isLoading: isLoading || isFetching,
     isActionLoading,
     showTrashed,
     hasActiveFilters,

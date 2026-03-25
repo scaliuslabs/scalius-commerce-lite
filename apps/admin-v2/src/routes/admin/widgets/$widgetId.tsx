@@ -4,6 +4,7 @@ import { WidgetForm } from "~/components/admin/widgets/WidgetForm";
 import { widgetQueryOptions, widgetsQueryOptions } from "~/lib/api.queries";
 import type { Widget, WidgetListResponse } from "~/types/api-responses";
 import { WidgetPlacementRule } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/widgets/$widgetId")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/admin/widgets/$widgetId")({
   head: () => ({
     meta: [{ title: "Widget | Scalius Admin" }],
   }),
+  errorComponent: RouteErrorComponent,
   component: WidgetFormPage,
 });
 

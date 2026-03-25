@@ -39,7 +39,7 @@ export function useAdminUsers() {
       const result = await getAdminUsersFn() as unknown as { users: AdminUser[] };
       setAdminUsers(result.users);
     } catch {
-      console.error("Failed to fetch admin users");
+      if (import.meta.env.DEV) console.error("Failed to fetch admin users");
     } finally {
       setIsLoading(false);
     }
@@ -50,7 +50,7 @@ export function useAdminUsers() {
       const result = await getRbacRoles() as unknown as { roles: Role[] };
       setAvailableRoles(result.roles.filter((r: Role) => r.name !== "super_admin"));
     } catch {
-      console.error("Failed to fetch roles");
+      if (import.meta.env.DEV) console.error("Failed to fetch roles");
     }
   };
 

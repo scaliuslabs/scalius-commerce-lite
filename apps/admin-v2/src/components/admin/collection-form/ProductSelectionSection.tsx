@@ -145,7 +145,7 @@ export const ProductSelectionSection = React.memo(
             }
           }
         } catch (error: unknown) {
-          console.error("Error loading products:", error);
+          if (import.meta.env.DEV) console.error("Error loading products:", error);
         } finally {
           setIsSearching(false);
           setIsLoadingMore(false);

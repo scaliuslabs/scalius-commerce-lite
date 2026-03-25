@@ -177,7 +177,7 @@ export function AddNavItemDialog({
           search,
         }));
       } catch (error: unknown) {
-        console.error("Error fetching categories:", error);
+        if (import.meta.env.DEV) console.error("Error fetching categories:", error);
         setCatState((prev) => ({ ...prev, isLoading: false, isLoadingMore: false }));
       }
     },
@@ -221,7 +221,7 @@ export function AddNavItemDialog({
           search,
         }));
       } catch (error: unknown) {
-        console.error("Error fetching pages:", error);
+        if (import.meta.env.DEV) console.error("Error fetching pages:", error);
         setPageState((prev) => ({ ...prev, isLoading: false, isLoadingMore: false }));
       }
     },
@@ -279,7 +279,7 @@ export function AddNavItemDialog({
             .map((a) => ({ id: a.id, name: a.name, slug: a.slug })),
         );
       } catch (error: unknown) {
-        console.error("Error fetching data:", error);
+        if (import.meta.env.DEV) console.error("Error fetching data:", error);
       } finally {
         setIsLoading(false);
       }
@@ -324,7 +324,7 @@ export function AddNavItemDialog({
           }[],
         }));
       } catch (error: unknown) {
-        console.error("Error fetching attribute values:", error);
+        if (import.meta.env.DEV) console.error("Error fetching attribute values:", error);
       } finally {
         setLoadingAttrValues((prev) => ({ ...prev, [attributeId]: false }));
       }
@@ -356,7 +356,7 @@ export function AddNavItemDialog({
         })) as Record<string, unknown>;
         setPreviewCount(data.count as number);
       } catch (error: unknown) {
-        console.error("Error fetching preview:", error);
+        if (import.meta.env.DEV) console.error("Error fetching preview:", error);
       } finally {
         setIsLoadingPreview(false);
       }

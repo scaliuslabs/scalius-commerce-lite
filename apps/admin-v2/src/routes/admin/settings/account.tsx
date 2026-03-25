@@ -6,6 +6,7 @@ import {
   rbacPermissionsQueryOptions,
 } from "~/lib/api.queries";
 import type { AccountSecurity, RbacPermission } from "~/types/api-responses";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/settings/account")({
   loader: async ({ context: { queryClient } }) => {
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/admin/settings/account")({
     ]);
   },
   head: () => ({ meta: [{ title: "Account Settings | Scalius Admin" }] }),
+  errorComponent: RouteErrorComponent,
   component: AccountSettingsPage,
 });
 

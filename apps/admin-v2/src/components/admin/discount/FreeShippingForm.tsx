@@ -556,7 +556,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => window.history.back()}
+            onClick={() => navigate({ to: "/admin/discounts" })}
             disabled={isSubmitting}
           >
             Cancel

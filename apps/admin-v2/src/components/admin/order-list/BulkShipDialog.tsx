@@ -1,4 +1,5 @@
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -15,14 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select";
-import { toast } from "sonner";
 import { LoaderCircle, Truck } from "lucide-react";
-
-interface Provider {
-  id: string;
-  name: string;
-  isActive: boolean;
-}
+import { toast } from "sonner";
+import { deliveryProvidersQueryOptions } from "~/lib/api.queries";
+import type { DeliveryProviderRecord } from "~/types/api-responses";
 
 interface BulkShipDialogProps {
   isOpen: boolean;
@@ -39,30 +36,16 @@ export function BulkShipDialog({
   onConfirm,
   itemCount,
 }: BulkShipDialogProps) {
-  const [providers, setProviders] = React.useState<Provider[]>([]);
-  const [isLoadingProviders, setIsLoadingProviders] = React.useState(false);
   const [selectedProvider, setSelectedProvider] = React.useState("");
 
-  React.useEffect(() => {
-    if (isOpen) {
-      const fetchProviders = async () => {
-        setIsLoadingProviders(true);
-        try {
-          const { getDeliveryProviders } = await import("@/lib/api.functions");
-          const data = await getDeliveryProviders() as Provider[];
-          const activeProviders = (Array.isArray(data) ? data : []).filter((p: Provider) => p.isActive);
-          setProviders(activeProviders);
-        } catch (error) {
-          console.error("Error fetching providers:", error);
-          toast.error("Error", { description: "Failed to load delivery providers" });
-        } finally {
-          setIsLoadingProviders(false);
-        }
-      };
-
-      fetchProviders();
-    }
-  }, [isOpen]);
+  const { data: providers = [], isLoading: isLoadingProviders } = useQuery({
+    ...deliveryProvidersQueryOptions(),
+    enabled: isOpen,
+    select: (data) =>
+      (Array.isArray(data) ? (data as DeliveryProviderRecord[]) : []).filter(
+        (p) => p.isActive,
+      ),
+  });
 
   const handleSubmit = () => {
     if (!selectedProvider) {

@@ -144,7 +144,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
         toast.info('Loaded saved AI context for this widget.');
       } catch (e: unknown) {
-        console.error('Failed to parse widget AI context', e);
+        if (import.meta.env.DEV) console.error('Failed to parse widget AI context', e);
       }
     }
   }, [widget]);

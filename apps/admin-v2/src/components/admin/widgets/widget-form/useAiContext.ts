@@ -67,7 +67,7 @@ export const useAiContext = (
       const pagination = data.pagination as Record<string, unknown>;
       setHasMoreProducts((pagination.totalPages as number) > pageToFetch);
     } catch (error: unknown) {
-      console.error("Failed to fetch latest products:", error);
+      if (import.meta.env.DEV) console.error("Failed to fetch latest products:", error);
       toast.error("Could not load products.");
     } finally {
       setIsFetchingProducts(false);
@@ -93,7 +93,7 @@ export const useAiContext = (
       const pagination = data.pagination as Record<string, unknown>;
       setHasMoreSearchProducts((pagination.totalPages as number) > pageToFetch);
     } catch (error) {
-      console.error("Failed to search products:", error);
+      if (import.meta.env.DEV) console.error("Failed to search products:", error);
     } finally {
       setIsFetchingProducts(false);
     }
@@ -148,7 +148,7 @@ export const useAiContext = (
         setHasMoreCategories(newCategories.length >= PAGE_SIZE);
       }
     } catch (error) {
-      console.error("Failed to fetch categories:", error);
+      if (import.meta.env.DEV) console.error("Failed to fetch categories:", error);
     } finally {
       setIsFetchingCategories(false);
     }

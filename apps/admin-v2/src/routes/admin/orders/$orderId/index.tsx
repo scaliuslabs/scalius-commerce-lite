@@ -9,6 +9,7 @@ import {
   orderShipmentsQueryOptions,
   deliveryProvidersQueryOptions,
 } from "~/lib/api.queries";
+import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/orders/$orderId/")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/admin/orders/$orderId/")({
   head: ({ params }) => ({
     meta: [{ title: `Order #${params.orderId} | Scalius Admin` }],
   }),
+  errorComponent: RouteErrorComponent,
   component: OrderViewPage,
 });
 
