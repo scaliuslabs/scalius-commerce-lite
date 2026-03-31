@@ -567,6 +567,11 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   "/api/v1/admin/abandoned-checkouts": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
+    POST: { permission: PERMISSIONS.ORDERS_DELETE },
+    DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
+  },
+  "/api/v1/admin/abandoned-checkouts/*": {
+    DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
   },
 
   // =============================================
@@ -655,6 +660,61 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/fcm-token-cleanup": {
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
+
+  // =============================================
+  // Auth Management API (admin user CRUD, 2FA, profile)
+  // =============================================
+  "/api/v1/admin/auth/users": {
+    GET: { permission: PERMISSIONS.TEAM_MANAGE },
+    POST: { permission: PERMISSIONS.TEAM_MANAGE },
+  },
+  "/api/v1/admin/auth/users/*": {
+    DELETE: { permission: PERMISSIONS.TEAM_MANAGE },
+  },
+  "/api/v1/admin/auth/change-password": {
+    POST: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Any authenticated admin
+  },
+  "/api/v1/admin/auth/update-profile": {
+    POST: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Any authenticated admin
+  },
+  "/api/v1/admin/auth/2fa/*": {
+    GET: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Own 2FA info
+    POST: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Own 2FA management
+  },
+  "/api/v1/admin/auth/account-security": {
+    GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
+  },
+
+  // =============================================
+  // AI Context & Prompts API
+  // =============================================
+  "/api/v1/admin/ai-context": {
+    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
+    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
+  },
+  "/api/v1/admin/ai-context/*": {
+    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
+    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
+  },
+  "/api/v1/admin/ai-prompts": {
+    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
+    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
+  },
+  "/api/v1/admin/ai-prompts/*": {
+    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
+  },
+
+  // =============================================
+  // OpenRouter AI Generation API
+  // =============================================
+  "/api/v1/admin/openrouter": {
+    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
+  },
+  "/api/v1/admin/openrouter/*": {
+    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
+    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
+  },
+
 };
 
 /**
