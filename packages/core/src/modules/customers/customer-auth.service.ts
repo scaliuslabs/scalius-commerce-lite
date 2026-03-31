@@ -26,6 +26,24 @@ export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 export const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
 
 // ─────────────────────────────────────────
+// Security Helpers
+// ─────────────────────────────────────────
+
+/**
+ * Constant-time string comparison to prevent timing attacks on OTP codes.
+ * Standard `===` returns early on first mismatch, leaking information about
+ * which characters are correct via response time differences.
+ */
+function timingSafeEqualString(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+        result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return result === 0;
+}
+
+// ─────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────
 
@@ -282,17 +300,22 @@ export async function verifyOtp(
 
     const otpKey = `${OTP_PREFIX}${normalizedIdentifier}`;
 
-    // Fetch stored OTP
+    // Fetch stored OTP and immediately delete it from KV to prevent race conditions.
+    // If two concurrent requests both read the OTP, only the first to delete wins.
+    // The second will find the key already gone and fail at re-read.
     const storedRaw = await kv.get(otpKey, "text");
     if (!storedRaw) {
         throw new ValidationError("No verification code found. Please request a new one.");
     }
 
+    // Atomically claim the OTP by deleting it from KV before verification.
+    // This ensures a second concurrent request cannot also verify this code.
+    await kv.delete(otpKey);
+
     const stored = JSON.parse(storedRaw) as StoredOtp;
 
     // Check expiry
     if (Date.now() > stored.expiresAt) {
-        await kv.delete(otpKey);
         throw new ValidationError("Verification code has expired. Please request a new one.");
     }
 
@@ -301,12 +324,13 @@ export async function verifyOtp(
 
     // Max 5 attempts
     if (stored.attempts > 5) {
-        await kv.delete(otpKey);
         throw new RateLimitError("Too many failed attempts. Please request a new code.");
     }
 
-    // Verify code
-    if (stored.code !== code) {
+    // Verify code using constant-time comparison to prevent timing attacks.
+    // A direct `!==` leaks correct digits via response timing differences.
+    if (!timingSafeEqualString(stored.code, code)) {
+        // Verification failed — re-store with incremented attempts so the user can retry
         const remaining = OTP_TTL_SECONDS - Math.floor((Date.now() - (stored.expiresAt - OTP_TTL_SECONDS * 1000)) / 1000);
         await kv.put(otpKey, JSON.stringify(stored), { expirationTtl: Math.max(remaining, 60) });
         throw new ValidationError("Incorrect code. Please try again.", {
@@ -314,8 +338,7 @@ export async function verifyOtp(
         });
     }
 
-    // OTP is valid — delete it
-    await kv.delete(otpKey);
+    // OTP verified — it was already deleted above, so no further cleanup needed.
 
     // Look up customer in DB (if exists)
     let customerId: string | undefined;

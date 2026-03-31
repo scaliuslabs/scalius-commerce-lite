@@ -188,10 +188,11 @@ app.openapi(createUserRoute, async (c) => {
         }
 
         if (emailFailed) {
+            // SECURITY: Never return credentials in API responses.
+            // The admin who created the user must use the "reset password" flow instead.
             return created(c, {
-                message: "Admin user created but invitation email failed to send. Please share the temporary password securely.",
+                message: "Admin user created but invitation email failed to send. Please use the password reset flow to set their credentials, or check your email provider configuration.",
                 user: { id: signUpResult.user.id, name, email },
-                tempPassword,
                 emailFailed: true
             });
         }
@@ -578,9 +579,21 @@ setupApp.openapi(setupRoute, async (c) => {
         const db = c.get("db");
         const env = c.env as Env;
 
-        // KV-based rate limiting: 5 requests per IP per hour
+        // Check admin exists FIRST (before rate limiting) — this is the primary guard
+        const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
+        const adminExists = (adminResult[0]?.count ?? 0) > 0;
+
+        if (adminExists) {
+            const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
+            console.warn(`[SECURITY] Setup endpoint accessed after admin exists. IP: ${ip}`);
+            throw new ForbiddenError("An admin user already exists. Please use the login page.");
+        }
+
+        // KV-based rate limiting + creation lock: prevents both brute force and
+        // concurrent first-admin creation race conditions.
         const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
         const rateLimitKey = `setup_rate:${ip}`;
+        const setupLockKey = "setup:admin_creation_lock";
         const kv = env.CACHE as KVNamespace | undefined;
         if (kv) {
             const raw = await kv.get(rateLimitKey);
@@ -589,17 +602,17 @@ setupApp.openapi(setupRoute, async (c) => {
                 throw new RateLimitError("Too many setup attempts. Try again later.", 3600);
             }
             await kv.put(rateLimitKey, String(attempts + 1), { expirationTtl: 3600 });
+
+            // Acquire a short-lived lock to prevent concurrent admin creation.
+            // If another request is already creating the first admin, this will fail.
+            const existingLock = await kv.get(setupLockKey);
+            if (existingLock) {
+                throw new ConflictError("Admin setup is already in progress. Please wait.");
+            }
+            await kv.put(setupLockKey, "1", { expirationTtl: 30 });
         }
 
         const auth = createAuth(env);
-
-        const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
-        const adminExists = (adminResult[0]?.count ?? 0) > 0;
-
-        if (adminExists) {
-            console.warn(`[SECURITY] Setup endpoint accessed after admin exists. IP: ${c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown"}`);
-            throw new ForbiddenError("An admin user already exists. Please use the login page.");
-        }
 
         const { name, email, password } = c.req.valid("json");
 
