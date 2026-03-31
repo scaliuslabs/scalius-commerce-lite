@@ -91,7 +91,15 @@ export function PricingAvailabilitySection({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Discount Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={(value) => {
+                    field.onChange(value);
+                    // Clear the unused field to prevent stale validation errors
+                    if (value === "flat") {
+                      form.setValue("discountPercentage", 0, { shouldValidate: true, shouldDirty: true });
+                    } else {
+                      form.setValue("discountAmount", 0, { shouldValidate: true, shouldDirty: true });
+                    }
+                  }} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select discount type" />

@@ -49,12 +49,19 @@ export const variantFormSchema = z.object({
   discountPercentage: z.coerce
     .number({ message: "Must be a number" })
     .min(0, "Discount cannot be negative.")
-    .max(100, "Discount cannot exceed 100%.")
     .nullable(),
   discountAmount: z.coerce
     .number({ message: "Must be a number" })
     .min(0, "Discount cannot be negative.")
     .nullable(),
+}).superRefine((data, ctx) => {
+  if (data.discountType === "percentage" && (data.discountPercentage ?? 0) > 100) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Percentage discount cannot exceed 100%.",
+      path: ["discountPercentage"],
+    });
+  }
 });
 
 export type VariantFormValues = z.infer<typeof variantFormSchema>;

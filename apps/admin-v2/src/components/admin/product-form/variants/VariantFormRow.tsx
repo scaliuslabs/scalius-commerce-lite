@@ -270,7 +270,14 @@ export function VariantFormRow({
               render={({ field }) => (
                 <FormItem className="w-20">
                   <FormControl>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={(value) => {
+                      field.onChange(value);
+                      if (value === "flat") {
+                        form.setValue("discountPercentage", null);
+                      } else {
+                        form.setValue("discountAmount", null);
+                      }
+                    }} value={field.value}>
                       <SelectTrigger className="h-9">
                         <SelectValue />
                       </SelectTrigger>
