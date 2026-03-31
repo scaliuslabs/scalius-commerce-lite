@@ -158,7 +158,7 @@ export async function processRefund(
     params: RefundRequest,
     encryptionKey?: string,
 ): Promise<RefundResult> {
-    // 1. Fetch order
+    // 1. Fetch order (include version for CAS to prevent concurrent refund races)
     const order = await db
         .select({
             id: orders.id,
@@ -167,6 +167,7 @@ export async function processRefund(
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
             status: orders.status,
+            version: orders.version,
         })
         .from(orders)
         .where(eq(orders.id, params.orderId))
@@ -262,6 +263,11 @@ export async function processRefund(
         orderStatusUpdate.status = OrderStatus.PARTIALLY_REFUNDED;
     }
 
+    // CAS: Use version to prevent concurrent refund races. If another refund
+    // modified this order between our read and this write, the WHERE clause
+    // won't match and the order update silently applies to 0 rows.
+    const nextVersion = order.version + 1;
+
     await db.batch([
         db.insert(orderPayments).values({
             id: refundPaymentId,
@@ -282,11 +288,30 @@ export async function processRefund(
         db.update(orders).set({
             paidAmount: newPaidAmount,
             paymentStatus: isFullRefund ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL,
+            version: nextVersion,
             ...orderStatusUpdate,
             updatedAt: sql`unixepoch()`,
-        }).where(eq(orders.id, params.orderId)),
+        }).where(and(eq(orders.id, params.orderId), eq(orders.version, order.version))),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ] as any);
+
+    // Verify CAS succeeded — if version didn't advance, a concurrent refund beat us.
+    // The refund payment record was inserted but the order wasn't updated, which is
+    // inconsistent. We must clean up the orphaned refund record and fail.
+    const postOrder = await db
+        .select({ version: orders.version })
+        .from(orders)
+        .where(eq(orders.id, params.orderId))
+        .get();
+
+    if (postOrder && postOrder.version !== nextVersion) {
+        // CAS failed: another refund modified the order concurrently.
+        // Remove the orphaned refund payment record we just inserted.
+        await db.delete(orderPayments).where(eq(orderPayments.id, refundPaymentId));
+        throw new ConflictError(
+            "Refund failed due to a concurrent modification. Please retry."
+        );
+    }
 
     // 5. Handle inventory on full refund:
     //    - If still reserved (pre-ship): release reservations

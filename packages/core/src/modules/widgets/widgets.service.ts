@@ -13,6 +13,7 @@ import {
     type CreateWidgetInput,
     type UpdateWidgetInput,
 } from "./widgets.validation";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
 export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type UpdateWidgetInput };
 
@@ -20,13 +21,29 @@ export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type Up
 // HTML Sanitization
 // ─────────────────────────────────────────
 
-/** Strip dangerous HTML patterns before serving widget content to storefront */
+/** Strip dangerous HTML patterns before serving widget content to storefront.
+ *  Delegates to the shared sanitizer which handles entity-encoded event handlers,
+ *  null bytes, CSS expressions, dangerous tags, and protocol-based XSS vectors. */
 function sanitizeWidgetHtml(html: string): string {
     if (!html) return html;
-    return html
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-        .replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-        .replace(/javascript\s*:/gi, "blocked:");
+    return sanitizeHtml(html);
+}
+
+/** Strip dangerous CSS patterns from widget stylesheets.
+ *  Removes: @import (external stylesheet loading), expression() (IE script exec),
+ *  url(javascript:...), behavior/binding properties (IE/Firefox script exec). */
+function sanitizeWidgetCss(css: string): string {
+    if (!css) return css;
+    let result = css;
+    // Remove @import rules (can load external stylesheets with script content)
+    result = result.replace(/@import\b[^;]*;?/gi, "");
+    // Remove expression() (IE CSS expressions execute JavaScript)
+    result = result.replace(/expression\s*\(/gi, "blocked(");
+    // Remove url(javascript:...) and url(vbscript:...)
+    result = result.replace(/url\s*\(\s*(['"]?\s*(?:javascript|vbscript)\s*:)/gi, "url(blocked:");
+    // Remove behavior and -moz-binding (IE/Firefox script execution via CSS)
+    result = result.replace(/(?:behavior|(?:-moz-|-webkit-)?binding)\s*:/gi, "blocked:");
+    return result;
 }
 
 // ─────────────────────────────────────────
@@ -87,8 +104,9 @@ export async function getActiveWidgetById(db: Database, id: string) {
         .where(and(eq(widgets.id, id), eq(widgets.isActive, true), isNull(widgets.deletedAt)))
         .get() ?? null;
 
-    if (widget && widget.htmlContent) {
-        widget.htmlContent = sanitizeWidgetHtml(widget.htmlContent);
+    if (widget) {
+        if (widget.htmlContent) widget.htmlContent = sanitizeWidgetHtml(widget.htmlContent);
+        if (widget.cssContent) widget.cssContent = sanitizeWidgetCss(widget.cssContent);
     }
     return widget;
 }
@@ -106,6 +124,7 @@ export async function getActiveHomepageWidgets(db: Database) {
     return result.map((w) => ({
         ...w,
         htmlContent: w.htmlContent ? sanitizeWidgetHtml(w.htmlContent) : w.htmlContent,
+        cssContent: w.cssContent ? sanitizeWidgetCss(w.cssContent) : w.cssContent,
     }));
 }
 
