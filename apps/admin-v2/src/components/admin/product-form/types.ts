@@ -26,7 +26,6 @@ export const productFormSchema = z.object({
   discountPercentage: z
     .number()
     .min(0, "Discount must be greater than or equal to 0")
-    .max(100, "Discount must be less than or equal to 100")
     .nullish(),
   discountAmount: z
     .number()
@@ -67,6 +66,15 @@ export const productFormSchema = z.object({
     )
     .optional(),
   slugEdited: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  // Only enforce max 100 for percentage discounts — flat amounts can be any value
+  if (data.discountType === "percentage" && (data.discountPercentage ?? 0) > 100) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Percentage discount must be less than or equal to 100",
+      path: ["discountPercentage"],
+    });
+  }
 });
 
 export type ProductFormValues = z.infer<typeof productFormSchema>;
