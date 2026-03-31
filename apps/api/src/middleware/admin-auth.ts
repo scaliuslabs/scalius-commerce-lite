@@ -112,8 +112,9 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // permissions for super admins — no need for a separate isSuperAdmin() query.
     const userPerms = await getUserPermissions(db, user.id);
 
-    // Gate: must be super admin (has all perms) or have admin role
-    const hasAdminAccess = user.role === "admin" || userPerms.size > 0;
+    // Gate: must have at least one RBAC permission (super admins get all).
+    // Do NOT fall back to legacy user.role check — RBAC is the source of truth.
+    const hasAdminAccess = userPerms.size > 0;
 
     if (!hasAdminAccess) {
         throw new ForbiddenError("Admin access required");
