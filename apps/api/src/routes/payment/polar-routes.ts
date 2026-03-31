@@ -93,7 +93,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 
     // Get configured currency
     const currencyConfig = await getCurrencyConfig(db);
-    const currency = (body.currency ?? currencyConfig.code).toLowerCase();
+    let currency = (body.currency ?? currencyConfig.code).toLowerCase();
 
     // Determine the correct amount based on payment type
     let paymentAmount = order.totalAmount;
@@ -108,6 +108,28 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         if (plan) {
             paymentAmount = plan.balanceDue;
         }
+    }
+
+    // Polar only supports specific currencies. If the store currency isn't
+    // supported, convert the amount to USD using the configured exchange rate.
+    const POLAR_SUPPORTED_CURRENCIES = new Set([
+        "aed", "ars", "aud", "brl", "cad", "chf", "clp", "cny", "cop", "czk",
+        "dkk", "eur", "gbp", "hkd", "huf", "idr", "ils", "inr", "jpy", "krw",
+        "mxn", "myr", "nok", "nzd", "pen", "php", "pln", "ron", "sar", "sek",
+        "sgd", "thb", "try", "twd", "usd", "zar",
+    ]);
+
+    if (!POLAR_SUPPORTED_CURRENCIES.has(currency)) {
+        const rate = currencyConfig.usdExchangeRate;
+        if (!rate || rate <= 0) {
+            throw new ApiError(400, "CURRENCY_ERROR",
+                `Currency "${currency.toUpperCase()}" is not supported by Polar and no USD exchange rate is configured. ` +
+                `Please set a USD exchange rate in Settings > Currency.`
+            );
+        }
+        console.log(`[Polar] Converting ${currency.toUpperCase()} → USD at rate ${rate} for order ${orderId}`);
+        paymentAmount = Math.round((paymentAmount / rate) * 100) / 100; // Round to 2 decimals
+        currency = "usd";
     }
 
     // Convert major-unit amount to smallest currency unit using ISO 4217 decimals.

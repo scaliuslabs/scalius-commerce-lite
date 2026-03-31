@@ -394,7 +394,8 @@ export class SSLCommerzProvider implements PaymentProvider {
       throw new ValidationError("SSLCommerz bank_tran_id is required for refunds");
     }
 
-    const refundTranId = `REF-${params.transactionId}-${Date.now()}`;
+    // SSLCommerz docs: refund_trans_id max 30 chars. Use a short unique ID.
+    const refundTranId = `REF${Date.now().toString(36).toUpperCase()}`;
     const result = await initiateSSLCommerzRefund(
       this.settings.storeId,
       this.settings.storePassword,

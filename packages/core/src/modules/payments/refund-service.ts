@@ -125,14 +125,16 @@ async function dispatchRefund(
 
     // Determine the correct amount for each gateway's convention:
     // Stripe & Polar expect smallest currency unit; SSLCommerz expects major units.
+    // Stripe: undefined = full refund. SSLCommerz: amount is always required.
     let providerAmount: number | undefined;
-    if (!isFullRefund) {
-        if (gateway === "stripe" || gateway === "polar") {
+    if (gateway === "stripe" || gateway === "polar") {
+        // Stripe/Polar: only pass amount for partial refunds (undefined = full refund)
+        if (!isFullRefund) {
             providerAmount = Math.round(refundAmount * Math.pow(10, currencyDecimals));
-        } else {
-            // SSLCommerz and COD use major units
-            providerAmount = refundAmount;
         }
+    } else {
+        // SSLCommerz and COD: always pass the explicit amount (required by their API)
+        providerAmount = refundAmount;
     }
 
     const result = await provider.createRefund({
