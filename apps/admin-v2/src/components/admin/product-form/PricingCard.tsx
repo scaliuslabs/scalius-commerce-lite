@@ -1,5 +1,4 @@
 // src/components/admin/product-form/PricingCard.tsx
-import { memo } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -24,7 +23,9 @@ interface PricingCardProps {
   form: UseFormReturn<ProductFormValues>;
 }
 
-export const PricingCard = memo(function PricingCard({ form }: PricingCardProps) {
+// Not memoized: form.watch("discountType") requires re-renders on value change.
+// memo() blocks this because the `form` object reference never changes.
+export function PricingCard({ form }: PricingCardProps) {
   const { symbol } = useCurrency();
   const discountType = form.watch("discountType");
 
@@ -164,4 +165,4 @@ export const PricingCard = memo(function PricingCard({ form }: PricingCardProps)
       </CardContent>
     </Card>
   );
-});
+}
