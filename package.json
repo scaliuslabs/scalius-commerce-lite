@@ -7,6 +7,7 @@
     "dev": "bash scripts/dev.sh --filter=@scalius/admin --filter=@scalius/api",
     "dev:all": "bash scripts/dev.sh",
     "dev:storefront": "bash scripts/dev.sh --filter=@scalius/storefront --filter=@scalius/api",
+    "prebuild": "node scripts/copy-flags.mjs",
     "build": "turbo build",
     "deploy": "node scripts/deploy.mjs",
     "deploy:api": "turbo deploy --filter=@scalius/api",
