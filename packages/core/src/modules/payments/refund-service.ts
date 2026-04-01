@@ -113,7 +113,7 @@ async function dispatchRefund(
     db: Database,
     kv: KVNamespace | undefined,
     gateway: PaymentGateway,
-    payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null; polarCheckoutId?: string | null },
+    payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null; polarCheckoutId?: string | null; metadata?: string | null },
     refundAmount: number,
     isFullRefund: boolean,
     currencyDecimals: number,
@@ -130,7 +130,27 @@ async function dispatchRefund(
     if (gateway === "stripe" || gateway === "polar") {
         // Stripe/Polar: only pass amount for partial refunds (undefined = full refund)
         if (!isFullRefund) {
-            providerAmount = Math.round(refundAmount * Math.pow(10, currencyDecimals));
+            let gatewayRefundAmount = refundAmount;
+            let gatewayDecimals = currencyDecimals;
+
+            // For Polar with currency conversion: the payment was charged in a
+            // different currency (e.g. USD) but refundAmount is in store currency
+            // (e.g. BDT). Convert using the exchange rate stored at payment time.
+            if (gateway === "polar" && payment.metadata) {
+                try {
+                    const meta = typeof payment.metadata === "string"
+                        ? JSON.parse(payment.metadata)
+                        : payment.metadata;
+                    const storedRate = parseFloat(meta?.exchangeRate);
+                    const gatewayCurrency = meta?.gatewayCurrency;
+                    if (storedRate && storedRate !== 1 && gatewayCurrency) {
+                        gatewayRefundAmount = Math.round((refundAmount / storedRate) * 100) / 100;
+                        gatewayDecimals = getDecimalPlaces(gatewayCurrency);
+                    }
+                } catch { /* metadata parse failed — use store currency as-is */ }
+            }
+
+            providerAmount = Math.round(gatewayRefundAmount * Math.pow(10, gatewayDecimals));
         }
     } else {
         // SSLCommerz and COD: always pass the explicit amount (required by their API)
@@ -282,8 +302,7 @@ export async function processRefund(
             // Refund records must NOT copy the original payment's unique gateway IDs —
             // partial unique indexes (e.g., UNIQUE(orderId, stripePaymentIntentId))
             // would reject the insert. Refund is identified by metadata.refundId instead.
-            stripeChargeId: payment.stripeChargeId,
-            metadata: JSON.stringify({ refundId, reason: params.reason }),
+            metadata: JSON.stringify({ refundId, reason: params.reason, gateway }),
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),
