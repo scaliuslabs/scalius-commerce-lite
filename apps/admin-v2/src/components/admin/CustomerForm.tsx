@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import type { Country } from "react-phone-number-input";
-import { getFlagUrl } from "@scalius/shared/phone-flags";
+import { FLAG_URL } from "@scalius/shared/phone-flags";
 import {
   FormControl,
   FormField,
@@ -191,7 +191,7 @@ export function CustomerForm({
                       <FormControl>
                         <PhoneInput
                           international
-                          flagUrl={getFlagUrl()}
+                          flagUrl={FLAG_URL}
                           defaultCountry={effectiveDefaultCountry}
                           countries={effectiveCountries}
                           value={field.value}

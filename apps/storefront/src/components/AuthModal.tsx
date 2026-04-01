@@ -10,7 +10,7 @@ import { createApiUrl } from "@/lib/api/client";
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { isValidPhoneNumber, formatPhoneForDisplay } from "@scalius/shared/customer-utils";
-import { getFlagUrl } from "@scalius/shared/phone-flags";
+import { FLAG_URL } from "@scalius/shared/phone-flags";
 import type { Country } from "react-phone-number-input";
 
 /**
@@ -401,7 +401,7 @@ export default function AuthModal() {
               ) : (
                 <PhoneInput
                   international
-                  flagUrl={getFlagUrl(typeof window !== "undefined" ? window.__CDN_DOMAIN__ : undefined)}
+                  flagUrl={FLAG_URL}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input Country type is narrower than our string union
                   defaultCountry={effectiveDefaultCountry as any}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input countries prop expects exact Country[] tuple
@@ -418,7 +418,7 @@ export default function AuthModal() {
                 <label className="text-sm font-medium text-foreground">Phone Number (Required)</label>
                 <PhoneInput
                   international
-                  flagUrl={getFlagUrl(typeof window !== "undefined" ? window.__CDN_DOMAIN__ : undefined)}
+                  flagUrl={FLAG_URL}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input Country type is narrower than our string union
                   defaultCountry={effectiveDefaultCountry as any}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input countries prop expects exact Country[] tuple
