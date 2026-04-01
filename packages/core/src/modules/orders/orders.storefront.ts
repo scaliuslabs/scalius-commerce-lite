@@ -219,12 +219,24 @@ export async function createStorefrontOrder(
 
         if (item.variantId) {
             const variant = variantMap.get(item.variantId)!;
+            const product = productMap.get(item.productId)!;
             unitPrice = variant.price;
 
-            if (variant.discountType === "percentage" && (variant.discountPercentage ?? 0) > 0) {
-                unitPrice = unitPrice * (1 - (variant.discountPercentage ?? 0) / 100);
-            } else if (variant.discountType === "flat" && (variant.discountAmount ?? 0) > 0) {
-                unitPrice = Math.max(0, unitPrice - (variant.discountAmount ?? 0));
+            // Variant discount overrides product discount; if variant has none, fall back to product discount
+            const variantHasDiscount =
+                (variant.discountType === "percentage" && (variant.discountPercentage ?? 0) > 0) ||
+                (variant.discountType === "flat" && (variant.discountAmount ?? 0) > 0);
+
+            if (variantHasDiscount) {
+                if (variant.discountType === "percentage" && (variant.discountPercentage ?? 0) > 0) {
+                    unitPrice = unitPrice * (1 - (variant.discountPercentage ?? 0) / 100);
+                } else if (variant.discountType === "flat" && (variant.discountAmount ?? 0) > 0) {
+                    unitPrice = Math.max(0, unitPrice - (variant.discountAmount ?? 0));
+                }
+            } else if (product.discountType === "percentage" && (product.discountPercentage ?? 0) > 0) {
+                unitPrice = unitPrice * (1 - (product.discountPercentage ?? 0) / 100);
+            } else if (product.discountType === "flat" && (product.discountAmount ?? 0) > 0) {
+                unitPrice = Math.max(0, unitPrice - (product.discountAmount ?? 0));
             }
         } else {
             const product = productMap.get(item.productId)!;

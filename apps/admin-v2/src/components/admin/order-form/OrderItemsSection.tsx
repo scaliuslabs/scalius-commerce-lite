@@ -96,6 +96,22 @@ export function OrderItemsSection() {
     const variant = variantId ? product.variants.find((v) => v.id === variantId) : null;
     const basePrice = variant ? variant.price : product.price;
 
+    // Variant discount overrides product discount
+    const variantHasDiscount = variant && (
+      (variant.discountType === "flat" && variant.discountAmount && variant.discountAmount > 0) ||
+      (variant.discountType === "percentage" && variant.discountPercentage && variant.discountPercentage > 0)
+    );
+
+    if (variantHasDiscount && variant) {
+      if (variant.discountType === "flat" && variant.discountAmount && variant.discountAmount > 0) {
+        return Math.max(0, basePrice - variant.discountAmount).toFixed(2);
+      }
+      if (variant.discountType === "percentage" && variant.discountPercentage && variant.discountPercentage > 0) {
+        return (basePrice - basePrice * (variant.discountPercentage / 100)).toFixed(2);
+      }
+    }
+
+    // Fall back to product discount
     if (product.discountType === "flat" && product.discountAmount && product.discountAmount > 0) {
       return Math.max(0, basePrice - product.discountAmount).toFixed(2);
     }
@@ -112,11 +128,22 @@ export function OrderItemsSection() {
     const variant = selectedVariant ? selectedProduct.variants.find((v) => v.id === selectedVariant) : null;
     let basePrice = variant ? variant.price : selectedProduct.price;
 
-    if (selectedProduct.discountType === "flat" && selectedProduct.discountAmount && selectedProduct.discountAmount > 0) {
+    // Variant discount overrides product discount
+    const variantHasDiscount = variant && (
+      (variant.discountType === "flat" && variant.discountAmount && variant.discountAmount > 0) ||
+      (variant.discountType === "percentage" && variant.discountPercentage && variant.discountPercentage > 0)
+    );
+
+    if (variantHasDiscount && variant) {
+      if (variant.discountType === "flat" && variant.discountAmount && variant.discountAmount > 0) {
+        basePrice = Math.max(0, basePrice - variant.discountAmount);
+      } else if (variant.discountType === "percentage" && variant.discountPercentage && variant.discountPercentage > 0) {
+        basePrice = basePrice - basePrice * (variant.discountPercentage / 100);
+      }
+    } else if (selectedProduct.discountType === "flat" && selectedProduct.discountAmount && selectedProduct.discountAmount > 0) {
       basePrice = Math.max(0, basePrice - selectedProduct.discountAmount);
     } else if (selectedProduct.discountPercentage && selectedProduct.discountPercentage > 0) {
-      const discountAmount = basePrice * (selectedProduct.discountPercentage / 100);
-      basePrice = basePrice - discountAmount;
+      basePrice = basePrice - basePrice * (selectedProduct.discountPercentage / 100);
     }
 
     const newItems = [
