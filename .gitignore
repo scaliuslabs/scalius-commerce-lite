@@ -3,6 +3,8 @@ dist/
 .wrangler
 # generated types
 .astro/
+# copied during build (scripts/copy-flags.mjs)
+**/public/flags/
 
 # turbo
 .turbo/
