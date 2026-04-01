@@ -2,7 +2,7 @@ import React from "react";
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import type { Country } from "react-phone-number-input";
-import { getFlagUrl } from "@scalius/shared/phone-flags";
+import { FLAG_URL } from "@scalius/shared/phone-flags";
 import {
   Card,
   CardContent,
@@ -114,7 +114,7 @@ export function CustomerInfoSection() {
                 <FormControl>
                   <PhoneInput
                     international
-                    flagUrl={getFlagUrl()}
+                    flagUrl={FLAG_URL}
                     defaultCountry={effectiveDefaultCountry}
                     countries={effectiveCountries}
                     value={field.value}
