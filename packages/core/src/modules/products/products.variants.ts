@@ -144,8 +144,8 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
             barcode: data.barcode || null,
             barcodeType: data.barcodeType || null,
             discountType: data.discountType || "percentage",
-            discountPercentage: data.discountPercentage || null,
-            discountAmount: data.discountAmount || null,
+            discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
+            discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         })
@@ -187,8 +187,8 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
             barcode: data.barcode || null,
             barcodeType: data.barcodeType || null,
             discountType: data.discountType || "percentage",
-            discountPercentage: data.discountPercentage || null,
-            discountAmount: data.discountAmount || null,
+            discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
+            discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
             updatedAt: sql`unixepoch()`,
         })
         .where(eq(productVariants.id, variantId))

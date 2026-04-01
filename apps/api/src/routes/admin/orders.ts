@@ -83,6 +83,8 @@ const formDataProductSchema = z.object({
     name: z.string(),
     price: z.number(),
     discountPercentage: z.number(),
+    discountType: z.string().nullable(),
+    discountAmount: z.number(),
     variants: z.array(productVariantSchema),
 }).passthrough();
 
@@ -512,6 +514,8 @@ app.openapi(getFormDataRoute, (async (c: any) => {
                 name: products.name,
                 price: products.price,
                 discountPercentage: products.discountPercentage,
+                discountType: products.discountType,
+                discountAmount: products.discountAmount,
             })
             .from(products)
             .where(isNull(products.deletedAt)),

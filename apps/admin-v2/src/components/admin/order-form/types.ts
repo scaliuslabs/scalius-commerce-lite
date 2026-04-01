@@ -13,6 +13,9 @@ export interface Product {
       sku: string;
       price: number;
       stock: number;
+      discountType?: string | null;
+      discountPercentage?: number | null;
+      discountAmount?: number | null;
     }[];
   }
   
