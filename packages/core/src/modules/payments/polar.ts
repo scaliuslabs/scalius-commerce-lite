@@ -241,12 +241,27 @@ export async function processPolarWebhookRefund(
             return { success: true };
         }
 
-        // Convert from smallest currency unit (cents) to major unit
-        const decimals = getDecimalPlaces(params.currency);
-        const refundedMajor = roundPrice(params.amountRefunded / Math.pow(10, decimals));
-
         const isFullRefund = params.polarStatus === "refunded";
-        const newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - refundedMajor));
+
+        // For currency-converted payments (e.g. BDT→USD), the refunded amount from
+        // Polar is in the gateway currency (USD cents), but order.paidAmount is in
+        // store currency (BDT). Use the ratio of refunded/total to calculate the
+        // local-currency refund amount. This works universally regardless of whether
+        // currency conversion happened (ratio is the same in any currency).
+        let newPaidAmount: number;
+        if (isFullRefund) {
+            newPaidAmount = 0;
+        } else if (params.totalAmount > 0) {
+            const refundRatio = params.amountRefunded / params.totalAmount;
+            const localRefundAmount = roundPrice((order.paidAmount ?? 0) * refundRatio);
+            newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - localRefundAmount));
+        } else {
+            // Fallback: direct conversion (only correct when currencies match)
+            const decimals = getDecimalPlaces(params.currency);
+            const refundedMajor = roundPrice(params.amountRefunded / Math.pow(10, decimals));
+            newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - refundedMajor));
+        }
+
         const newPaymentStatus = isFullRefund
             ? PaymentStatus.REFUNDED
             : PaymentStatus.PARTIAL;

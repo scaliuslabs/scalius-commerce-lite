@@ -312,16 +312,33 @@ async function processQueueMessage(
       // Convert smallest currency unit → major unit using ISO 4217 decimals.
       const polarCurrency = payload.currency ?? "usd";
       const polarDecimals = getDecimalPlaces(polarCurrency);
-      const amountInMajor = (payload.amount ?? 0) / Math.pow(10, polarDecimals);
+      const gatewayAmountMajor = (payload.amount ?? 0) / Math.pow(10, polarDecimals);
+
+      // If currency was converted (e.g. BDT→USD), the checkout metadata contains
+      // the original local-currency amount. Use it so paidAmount matches totalAmount's
+      // currency. Without this, a $8.40 USD payment would be recorded as ৳8.40 against
+      // a ৳1000 order, incorrectly marking it as partial.
+      const originalAmount = payload.metadata?.originalAmount
+        ? parseFloat(payload.metadata.originalAmount)
+        : null;
+      const recordAmount = originalAmount != null && !isNaN(originalAmount)
+        ? originalAmount
+        : gatewayAmountMajor;
+
       await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "polar",
         paymentType: (payload.paymentType as "full" | "deposit" | "balance") ?? "full",
         polarCheckoutId: payload.checkoutId,
-        amount: amountInMajor,
-        metadata: { currency: payload.currency ?? "usd", ...payload.metadata },
+        amount: recordAmount,
+        metadata: {
+          gatewayCurrency: polarCurrency,
+          gatewayAmount: gatewayAmountMajor,
+          exchangeRate: payload.metadata?.exchangeRate ?? "1",
+          ...payload.metadata,
+        },
       });
-      console.log(`[Queue] Polar payment confirmed for order ${payload.orderId}`);
+      console.log(`[Queue] Polar payment confirmed for order ${payload.orderId} (recorded: ${recordAmount}, gateway: ${gatewayAmountMajor} ${polarCurrency})`);
       break;
     }
 

@@ -119,6 +119,12 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         "sgd", "thb", "try", "twd", "usd", "zar",
     ]);
 
+    // Track the original local currency amount before any conversion.
+    // All DB amounts (orders, paymentPlans, orderPayments) must stay in store currency.
+    const originalLocalAmount = paymentAmount;
+    const originalCurrency = currency;
+    let exchangeRate = 1;
+
     if (!POLAR_SUPPORTED_CURRENCIES.has(currency)) {
         const rate = currencyConfig.usdExchangeRate;
         if (!rate || rate <= 0) {
@@ -128,6 +134,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
             );
         }
         console.log(`[Polar] Converting ${currency.toUpperCase()} → USD at rate ${rate} for order ${orderId}`);
+        exchangeRate = rate;
         paymentAmount = Math.round((paymentAmount / rate) * 100) / 100; // Round to 2 decimals
         currency = "usd";
     }
@@ -152,7 +159,12 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         customerEmail: body.customerEmail,
         metadata: {
             orderId,
-            paymentType: type
+            paymentType: type,
+            // Roundtrip original amounts through Polar webhook so the queue consumer
+            // can record paidAmount in store currency, not gateway currency.
+            originalAmount: String(originalLocalAmount),
+            originalCurrency,
+            exchangeRate: String(exchangeRate),
         }
     });
 
@@ -170,9 +182,10 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         })
         .where(eq(orders.id, orderId));
 
-    // Set up payment plan for deposit orders
+    // Set up payment plan for deposit orders.
+    // Use original local currency amounts — NOT the converted gateway amount.
     if (type === "deposit") {
-        const depositAmount = paymentAmount;
+        const depositAmount = originalLocalAmount;
         const balanceDue = order.totalAmount - depositAmount;
 
         await db
