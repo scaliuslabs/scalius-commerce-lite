@@ -2,6 +2,7 @@ import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { useState, useEffect, useMemo } from "react";
 import type { Country } from "react-phone-number-input";
+import { getFlagUrl } from "@scalius/shared/phone-flags";
 
 interface PhoneFieldProps {
   name: string;
@@ -77,6 +78,7 @@ export default function PhoneField({
         international
         defaultCountry={effectiveDefaultCountry as any}
         countries={effectiveCountries as any}
+        flagUrl={getFlagUrl(window.__CDN_DOMAIN__)}
         value={value}
         onChange={(v) => setValue(v || "")}
         placeholder={placeholder || "Phone number"}
