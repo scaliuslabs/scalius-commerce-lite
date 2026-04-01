@@ -78,7 +78,7 @@ export default function PhoneField({
         international
         defaultCountry={effectiveDefaultCountry as any}
         countries={effectiveCountries as any}
-        flagUrl={getFlagUrl(window.__CDN_DOMAIN__)}
+        flagUrl={getFlagUrl(typeof window !== "undefined" ? window.__CDN_DOMAIN__ : undefined)}
         value={value}
         onChange={(v) => setValue(v || "")}
         placeholder={placeholder || "Phone number"}
