@@ -4,8 +4,8 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
-    "dev": "bash scripts/dev.sh --filter=@scalius/admin-v2 --filter=@scalius/api",
-    "dev:all": "bash scripts/dev.sh",
+    "dev": "bash scripts/dev.sh",
+    "dev:admin": "bash scripts/dev.sh --filter=@scalius/admin-v2 --filter=@scalius/api",
     "dev:storefront": "bash scripts/dev.sh --filter=@scalius/storefront --filter=@scalius/api",
     "prebuild": "node scripts/copy-flags.mjs",
     "build": "turbo build",
