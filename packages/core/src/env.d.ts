@@ -2,7 +2,7 @@
 // Ambient Cloudflare Workers Env declaration for @scalius/core.
 //
 // The concrete Env interface is declared in each app's own env.d.ts
-// (apps/api/src/env.d.ts, apps/admin/src/env.d.ts, apps/storefront/src/env.d.ts)
+// (apps/api/src/env.d.ts, apps/admin-v2/src/env.d.ts, apps/storefront/src/env.d.ts)
 // with app-specific bindings. This file declares the minimal shape that
 // @scalius/core actually accesses, so the package typechecks on its own.
 //

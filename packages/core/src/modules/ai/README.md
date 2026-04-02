@@ -78,7 +78,7 @@ The admin widget form calls API routes which proxy requests to OpenRouter. The c
   - `serializeAiContext()` -- Validates and stringifies for DB storage
   - `mergeAiContext()` -- Merges partial updates with existing context
 
-### Admin Hooks (`apps/admin/src/components/admin/widgets/widget-form/`)
+### Admin Hooks (`apps/admin-v2/src/components/admin/widgets/widget-form/`)
 
 - **`useAiGenerator.ts`** -- Main generation orchestrator hook
 - **`useAiImprover.ts`** -- Improvement workflow

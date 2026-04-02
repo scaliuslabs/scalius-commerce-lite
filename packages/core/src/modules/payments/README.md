@@ -90,7 +90,7 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | `src/pages/api/checkout/polar-session.ts` | SSR proxy: calls `POST /payment/polar/session`, unwraps envelope, 15s timeout |
 | `src/pages/checkout.astro` | Checkout page: injects `__CHECKOUT_CONFIG__`, imports `initCheckoutPage` |
 
-### Admin (`apps/admin/src/components/admin/settings/`)
+### Admin (`apps/admin-v2/src/components/admin/settings/`)
 
 | File | Purpose |
 |------|---------|

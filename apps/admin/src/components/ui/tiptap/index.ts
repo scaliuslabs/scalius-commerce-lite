@@ -1,1 +1,0 @@
-export { TiptapEditor } from "./TiptapEditor";

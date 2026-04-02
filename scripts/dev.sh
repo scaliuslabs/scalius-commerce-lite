@@ -7,7 +7,7 @@
 # 2. Zombie processes: Node/workerd children survive Ctrl+C.
 #    Aggressive cleanup kills everything on dev ports.
 
-DEV_PORTS="8787,4321,4322,4323,9229,9230,9231,9232,9233"
+DEV_PORTS="8787,4322,4323,9229,9230,9231,9232,9233"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 kill_dev_ports() {
@@ -49,8 +49,8 @@ echo "Starting API worker (port 8787)..."
 
 sleep 3
 
-echo "Starting admin dashboard (port 4321)..."
-(cd "$ROOT_DIR/apps/admin" && pnpm dev) &
+echo "Starting admin dashboard (port 4323)..."
+(cd "$ROOT_DIR/apps/admin-v2" && pnpm dev) &
 
 sleep 3
 
@@ -60,7 +60,7 @@ echo "Starting storefront (port 4322)..."
 echo ""
 echo "All dev servers starting. Ctrl+C to stop all."
 echo "  API:        http://localhost:8787"
-echo "  Admin:      http://localhost:4321"
+echo "  Admin:      http://localhost:4323"
 echo "  Storefront: http://localhost:4322"
 echo "  Swagger:    http://localhost:8787/api/v1/docs"
 echo ""
