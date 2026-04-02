@@ -609,7 +609,7 @@ setupApp.openapi(setupRoute, async (c) => {
             if (existingLock) {
                 throw new ConflictError("Admin setup is already in progress. Please wait.");
             }
-            await kv.put(setupLockKey, "1", { expirationTtl: 30 });
+            await kv.put(setupLockKey, "1", { expirationTtl: 60 });
         }
 
         const auth = createAuth(env);
