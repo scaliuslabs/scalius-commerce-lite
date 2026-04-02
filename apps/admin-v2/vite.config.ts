@@ -30,7 +30,10 @@ export default defineConfig({
     // Official TanStack Start + Cloudflare plugin order:
     // tailwind → cloudflare → tanstackStart → react
     tailwindcss(),
-    cloudflare({ viteEnvironment: { name: "ssr" } }),
+    cloudflare({
+      viteEnvironment: { name: "ssr" },
+      persistState: { path: "../../.wrangler/state" },
+    }),
     tanstackStart(),
     viteReact(),
   ],
