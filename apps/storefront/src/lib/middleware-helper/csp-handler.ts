@@ -105,15 +105,15 @@ const ESSENTIAL_WORKER_SRC = [
   "blob:", // Often used by Partytown or other libraries for web workers
 ];
 
-// Common third-party domains that are typically safe and commonly used
+// Universal third-party domains needed for common integrations
 const COMMON_THIRD_PARTY_DOMAINS = [
+  // Google Services (Analytics, Tag Manager, Firebase, APIs)
   "https://*.googleapis.com",
   "https://*.gstatic.com",
   "https://*.google.com",
   "https://www.googletagmanager.com",
   "https://*.google-analytics.com",
   "https://*.analytics.google.com",
-  "https://vitals.vercel-insights.com",
   "https://cdn.jsdelivr.net",
   // Cloudflare Web Analytics / Insights
   "https://static.cloudflareinsights.com",
@@ -174,20 +174,14 @@ function getFrameSrcDirectives(additionalDomains: string[]): string[] {
 }
 
 // Generate img-src directives
-function getImgSrcDirectives(additionalDomains: string[], env?: CspEnv): string[] {
-  const cdnUrl = (env?.CDN_DOMAIN_URL || "")?.trim();
-  const directives = [
+function getImgSrcDirectives(additionalDomains: string[], platformDomains: string[], localDevSources: string[]): string[] {
+  return [
     ...ESSENTIAL_IMG_SRC,
-    "https://www.facebook.com", // For Facebook Pixel noscript tag
+    "https://www.facebook.com", // Facebook Pixel noscript tag
+    ...localDevSources,
+    ...platformDomains,
     ...additionalDomains,
   ];
-
-  if (cdnUrl) {
-    const cleanCdnUrl = cdnUrl.replace(/^https?:\/\//, "");
-    directives.push(`https://${cleanCdnUrl}`, `https://*.${cleanCdnUrl}`);
-  }
-
-  return directives;
 }
 
 // Generate worker-src directives
@@ -196,26 +190,63 @@ function getWorkerSrcDirectives(additionalDomains: string[]): string[] {
 }
 
 /**
+ * Collect all platform-owned URLs from env so they are automatically CSP-allowed.
+ * Handles both https (production) and http (local dev) schemes.
+ */
+function getPlatformDomains(env?: CspEnv): string[] {
+  const urls: string[] = [];
+  const envKeys = [
+    "CDN_DOMAIN_URL",
+    "R2_PUBLIC_URL",
+    "PUBLIC_API_BASE_URL",
+    "STOREFRONT_URL",
+  ] as const;
+
+  for (const key of envKeys) {
+    const raw = (env?.[key] as string | undefined)?.trim();
+    if (!raw) continue;
+
+    try {
+      const hasScheme = /^https?:\/\//.test(raw);
+      if (hasScheme) {
+        const parsed = new URL(raw);
+        urls.push(parsed.origin);
+        urls.push(`${parsed.protocol}//*.${parsed.hostname}`);
+      } else {
+        // Bare domain (e.g. CDN_DOMAIN_URL = "cloud.scalius.com")
+        urls.push(`https://${raw}`, `https://*.${raw}`);
+      }
+    } catch {
+      urls.push(`https://${raw}`, `https://*.${raw}`);
+    }
+  }
+
+  return urls;
+}
+
+/**
  * Applies Content Security Policy (CSP) headers to a given Response object.
- *
- * @param response The Astro Response object to modify.
- * @param env Cloudflare runtime environment object
- * @returns The Response object with CSP headers applied.
+ * All platform domains derived from env vars — no hardcoded URLs.
  */
 export async function setPageCspHeader(response: Response, env?: CspEnv): Promise<Response> {
-  // Compute additional domains ONCE (was previously called 5 times, once per directive builder)
   const additionalDomains = await parseAdditionalDomains(env);
+  const platformDomains = getPlatformDomains(env);
+
+  // Dev mode detection — allow http://localhost in dev, never in production
+  const apiUrl = (env?.PUBLIC_API_BASE_URL || "")?.trim();
+  const isDev = apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1");
+  const localDevSources = isDev ? ["http://localhost:*", "http://127.0.0.1:*"] : [];
 
   const cspDirectives = [
     `script-src ${getScriptSrcDirectives(additionalDomains).join(" ")}`,
     `connect-src ${getConnectSrcDirectives(additionalDomains, env).join(" ")}`,
     `frame-src ${getFrameSrcDirectives(additionalDomains).join(" ")}`,
-    `img-src ${getImgSrcDirectives(additionalDomains, env).join(" ")}`,
-    "object-src 'none'", // Disallow plugins like Flash
+    `img-src ${getImgSrcDirectives(additionalDomains, platformDomains, localDevSources).join(" ")}`,
+    "object-src 'none'",
     `worker-src ${getWorkerSrcDirectives(additionalDomains).join(" ")}`,
     "base-uri 'self'",
-    "form-action 'self' https://www.facebook.com https://*.sslcommerz.com https://*.stripe.com", // Allow form submissions
-    "frame-ancestors 'self'", // Prevent clickjacking
+    "form-action 'self' https://www.facebook.com https://*.sslcommerz.com https://*.stripe.com",
+    "frame-ancestors 'self'",
   ];
 
   response.headers.set("Content-Security-Policy", [...new Set(cspDirectives)].join("; "));

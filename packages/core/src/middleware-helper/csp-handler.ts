@@ -28,10 +28,6 @@ const ESSENTIAL_DOMAINS = [
   "unpkg.com",
   "cdnjs.cloudflare.com",
 
-  // Vercel
-  "vercel.app",
-  "vercel.com",
-
   // Cloudflare
   "cloudflareinsights.com",
   "static.cloudflareinsights.com",
