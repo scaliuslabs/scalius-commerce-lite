@@ -46,4 +46,4 @@ run(
 console.log("\n" + "=".repeat(50));
 console.log("✅ Database reset complete!");
 console.log("   Start fresh with: pnpm dev");
-console.log("   Then visit http://localhost:4321/admin to create a new admin account.\n");
+console.log("   Then visit http://localhost:4323/admin to create a new admin account.\n");
