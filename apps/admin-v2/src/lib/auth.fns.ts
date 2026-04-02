@@ -69,12 +69,15 @@ export const loginPageGuard = createServerFn().handler(async () => {
 
   // Check if any admin exists in local Better Auth DB
   const { env } = await import("cloudflare:workers");
-  let adminExists = false;
+  let adminExists = true; // fail-closed: assume admin exists unless proven otherwise
   try {
     const result = await env.DB.prepare("SELECT COUNT(*) as count FROM user").first<{ count: number }>();
     adminExists = (result?.count ?? 0) > 0;
-  } catch {
-    // DB error (e.g. table missing after reset) — treat as no admin
+  } catch (e: unknown) {
+    // "no such table" = fresh DB after reset → no admin
+    // Any other DB error = fail-closed, show login (safe for production)
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("no such table")) adminExists = false;
   }
   if (!adminExists) {
     throw redirect({ to: "/auth/setup" });
@@ -112,12 +115,13 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   initBindings();
 
   // Check if any admin exists in local Better Auth DB
-  let adminExists = false;
+  let adminExists = true; // fail-closed
   try {
     const result = await env.DB.prepare("SELECT COUNT(*) as count FROM user").first<{ count: number }>();
     adminExists = (result?.count ?? 0) > 0;
-  } catch {
-    // DB error (e.g. table missing after reset) — treat as no admin
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("no such table")) adminExists = false;
   }
   if (!adminExists) {
     throw redirect({ to: "/auth/setup" });
