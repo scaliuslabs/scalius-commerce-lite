@@ -55,11 +55,18 @@ export async function createOrder(
       const checkoutToken = data.data.checkoutToken;
       const initialOrderId = data.data.orderId;
 
-      let attempts = 0;
-      const maxAttempts = 30; // 30 * 1.5s = 45s max wait time
+      // Adaptive polling: start fast (200ms), back off gradually.
+      // The queue typically completes in 2-3s. Fixed 1.5s intervals waste
+      // 15-20s; adaptive polling catches completion in 3-4s on average.
+      const pollIntervals = [
+        200, 200, 300, 300, 500, 500, 500,  // First 2.5s: aggressive
+        1000, 1000, 1000, 1000,             // Next 4s: moderate
+        2000, 2000, 2000, 2000, 2000,       // Next 10s: relaxed
+        3000, 3000, 3000, 3000,             // Final 12s: slow
+      ]; // Total: ~28.5s across 20 attempts
 
-      while (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
+      for (let i = 0; i < pollIntervals.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, pollIntervals[i]));
 
         const statusRes = await fetchWithRetry(createApiUrl(`/orders/status/${checkoutToken}`), {}, 2, 5000, true);
 
@@ -74,7 +81,6 @@ export async function createOrder(
             return { success: false, error: statusData.error || "Order ingestion failed during high traffic. Please try again." };
           }
         }
-        attempts++;
       }
 
       return { success: false, error: "Order processing timed out. Please check your order history." };
