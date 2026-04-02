@@ -342,9 +342,13 @@ export class PolarProvider implements PaymentProvider {
                 ? "fraudulent" as const
                 : "customer_request" as const;
 
+        if (!params.amount || params.amount <= 0) {
+            throw new ValidationError("Polar requires an explicit positive refund amount");
+        }
+
         const result = await createPolarRefund(this.settings, {
             polarOrderId: params.transactionId,
-            amount: params.amount ?? 0,
+            amount: params.amount,
             reason,
             comment: params.metadata?.comment,
         });

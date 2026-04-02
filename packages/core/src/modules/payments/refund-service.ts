@@ -124,36 +124,39 @@ async function dispatchRefund(
     const provider = await resolveProvider(db, kv, gateway, encryptionKey);
 
     // Determine the correct amount for each gateway's convention:
-    // Stripe & Polar expect smallest currency unit; SSLCommerz expects major units.
-    // Stripe: undefined = full refund. SSLCommerz: amount is always required.
+    // Stripe: smallest currency unit, undefined = full refund
+    // Polar: smallest currency unit, always requires explicit positive amount
+    // SSLCommerz/COD: major units, always required
     let providerAmount: number | undefined;
-    if (gateway === "stripe" || gateway === "polar") {
-        // Stripe/Polar: only pass amount for partial refunds (undefined = full refund)
+    if (gateway === "stripe") {
+        // Stripe accepts undefined for full refund
         if (!isFullRefund) {
-            let gatewayRefundAmount = refundAmount;
-            let gatewayDecimals = currencyDecimals;
-
-            // For Polar with currency conversion: the payment was charged in a
-            // different currency (e.g. USD) but refundAmount is in store currency
-            // (e.g. BDT). Convert using the exchange rate stored at payment time.
-            if (gateway === "polar" && payment.metadata) {
-                try {
-                    const meta = typeof payment.metadata === "string"
-                        ? JSON.parse(payment.metadata)
-                        : payment.metadata;
-                    const storedRate = parseFloat(meta?.exchangeRate);
-                    const gatewayCurrency = meta?.gatewayCurrency;
-                    if (storedRate && storedRate !== 1 && gatewayCurrency) {
-                        gatewayRefundAmount = Math.round((refundAmount / storedRate) * 100) / 100;
-                        gatewayDecimals = getDecimalPlaces(gatewayCurrency);
-                    }
-                } catch { /* metadata parse failed — use store currency as-is */ }
-            }
-
-            providerAmount = Math.round(gatewayRefundAmount * Math.pow(10, gatewayDecimals));
+            providerAmount = Math.round(refundAmount * Math.pow(10, currencyDecimals));
         }
+    } else if (gateway === "polar") {
+        // Polar ALWAYS requires an explicit positive amount (no "refund all" shorthand).
+        // If the payment used currency conversion (e.g. BDT→USD), convert the
+        // store-currency refund amount to gateway currency using the stored rate.
+        let gatewayRefundAmount = refundAmount;
+        let gatewayDecimals = currencyDecimals;
+
+        if (payment.metadata) {
+            try {
+                const meta = typeof payment.metadata === "string"
+                    ? JSON.parse(payment.metadata)
+                    : payment.metadata;
+                const storedRate = parseFloat(meta?.exchangeRate);
+                const gatewayCurrency = meta?.gatewayCurrency;
+                if (storedRate && storedRate !== 1 && gatewayCurrency) {
+                    gatewayRefundAmount = Math.round((refundAmount / storedRate) * 100) / 100;
+                    gatewayDecimals = getDecimalPlaces(gatewayCurrency);
+                }
+            } catch { /* metadata parse failed — use store currency as-is */ }
+        }
+
+        providerAmount = Math.round(gatewayRefundAmount * Math.pow(10, gatewayDecimals));
     } else {
-        // SSLCommerz and COD: always pass the explicit amount (required by their API)
+        // SSLCommerz and COD: always pass the explicit amount in major units
         providerAmount = refundAmount;
     }
 
