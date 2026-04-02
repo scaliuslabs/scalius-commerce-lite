@@ -72,7 +72,7 @@ Customer Auth Flow (storefront):
 
 ### Auth Client (admin frontend)
 
-`apps/admin/src/lib/auth-client.ts` -- `createAuthClient()` with `twoFactorClient` (redirects to `/auth/two-factor`) and `adminClient` plugins. Exports `signIn`, `signUp`, `signOut`, `useSession`, `getSession`, `twoFactor`, `admin`.
+`apps/admin-v2/src/lib/auth-client.ts` -- `createAuthClient()` with `twoFactorClient` (redirects to `/auth/two-factor`) and `adminClient` plugins. Exports `signIn`, `signUp`, `signOut`, `useSession`, `getSession`, `twoFactor`, `admin`.
 
 ## RBAC System
 

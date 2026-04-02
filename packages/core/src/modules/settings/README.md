@@ -105,7 +105,7 @@ interface CurrencyConfig {
 @scalius/shared/currency.ts              -- formatPrice(), formatPriceShort(), getDecimalPlaces(), getCurrencySymbol(), getCurrencyCode()
 @scalius/shared/price-utils.ts           -- roundPrice(), addPrices(), subtractPrice(), calculatePercentageDiscount()
 @scalius/core/modules/settings           -- getCurrencyConfig() (DB + KV cache)
-apps/admin/src/hooks/useCurrency.ts      -- React hook that fetches config and delegates to shared formatPrice()
+apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config and delegates to shared formatPrice()
 ```
 
 - `currency.js` library powers all price formatting with precision arithmetic

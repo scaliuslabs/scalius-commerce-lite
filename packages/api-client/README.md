@@ -115,7 +115,7 @@ pnpm generate:sdk
 
 Both admin and storefront import types and SDK methods:
 
-- **Admin** (`apps/admin/`) -- imports response types for type annotations and SDK methods for API calls via service binding
+- **Admin** (`apps/admin-v2/`) -- imports response types for type annotations and SDK methods for API calls via service binding
 - **Storefront** (`apps/storefront/`) -- imports response types for its API client layer and L1/L2 cache typing
 
 ## Dependencies

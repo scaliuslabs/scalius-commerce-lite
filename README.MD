@@ -50,7 +50,6 @@ apps/
   admin-v2/       # @scalius/admin-v2 — TanStack Start admin dashboard (Cloudflare Worker)
   api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
   storefront/     # @scalius/storefront — Astro 6 SSR customer store (Cloudflare Worker)
-  admin/          # @scalius/admin — (deprecated) Astro 6 admin, replaced by admin-v2
 packages/
   api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec (249 paths, 27k+ types)
   core/           # @scalius/core — 21 domain modules, auth, integrations, FTS5 search
@@ -59,8 +58,6 @@ packages/
   tsconfig/       # @scalius/tsconfig — Shared TypeScript configs (base, astro, worker)
 scripts/          # Dev setup, deploy pipeline, dev server wrapper
 ```
-
-> **Note:** The original Astro-based admin dashboard (`apps/admin/`) is deprecated and being replaced by the TanStack Start rebuild (`apps/admin-v2/`).
 
 ### Tech Stack
 

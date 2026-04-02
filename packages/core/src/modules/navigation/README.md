@@ -87,7 +87,7 @@ Exported type: `SaveNavigationConfigInput`.
 
 ### Admin Side
 
-The `AddNavItemDialog` component (`apps/admin/src/components/admin/navigation/AddNavItemDialog.tsx`) fetches items via `GET /api/v1/admin/navigation/items` to populate the category and page picker lists.
+The `AddNavItemDialog` component (`apps/admin-v2/src/components/admin/navigation/AddNavItemDialog.tsx`) fetches items via `GET /api/v1/admin/navigation/items` to populate the category and page picker lists.
 
 ### Admin API Route (`apps/api/src/routes/admin/navigation.ts`)
 
