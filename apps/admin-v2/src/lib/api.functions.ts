@@ -556,6 +556,14 @@ export const createOrderShipment = createServerFn({ method: "POST" })
     return apiPost(`/orders/${data.orderId}/shipments`, body);
   });
 
+export const updateFulfillmentStatus = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: { orderId: string; status: string }) => data,
+  )
+  .handler(async ({ data }) => {
+    return apiPut(`/orders/${data.orderId}/fulfillment-status`, { status: data.status });
+  });
+
 export const updateShipment = createServerFn({ method: "POST" })
   .inputValidator(
     (data: { shipmentId: string; update: Record<string, unknown> }) => data,
