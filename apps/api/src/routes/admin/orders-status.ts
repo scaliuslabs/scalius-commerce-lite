@@ -2,8 +2,9 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
 import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, createShipment, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
-import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
+import { deliveryShipments, codTracking, orders, FulfillmentStatus } from "@scalius/database/schema";
+import { eq, sql } from "drizzle-orm";
+import { validateTransition } from "@scalius/core/modules/orders/order-state-machine";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
@@ -246,6 +247,41 @@ app.openapi(postFulfillRoute, async (c) => {
     return created(c, result);
 });
 
+// ─── PUT /:id/fulfillment-status ─────────────────────────────────────────────
+
+const updateFulfillmentStatusRoute = createRoute({
+    method: "put",
+    path: "/{id}/fulfillment-status",
+    tags: ["Admin - Orders"],
+    summary: "Manually update order fulfillment status",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: z.object({ status: z.enum(["pending", "partial", "complete"]) }) } } }
+    },
+    responses: {
+        200: {
+            description: "Fulfillment status updated",
+            content: { "application/json": { schema: messageResponse } },
+        },
+    }
+});
+
+app.openapi(updateFulfillmentStatusRoute, async (c) => {
+    const db = c.get("db");
+    const orderId = c.req.valid("param").id;
+    const { status } = c.req.valid("json");
+
+    const order = await db.select({ fulfillmentStatus: orders.fulfillmentStatus }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundError("Order not found");
+
+    if (order.fulfillmentStatus !== status) {
+        validateTransition("fulfillment", order.fulfillmentStatus, status);
+        await db.update(orders).set({ fulfillmentStatus: status, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
+    }
+
+    return ok(c, { message: "Fulfillment status updated" });
+});
+
 // ─── GET /:id/shipments ──────────────────────────────────────────────────────
 
 const getShipmentsRoute = createRoute({
@@ -320,6 +356,14 @@ app.openapi(createShipmentRoute, async (c) => {
         console.error(`Failed to create shipment for order ${orderId}: ${shipmentResult.message}`);
         throw new ValidationError(shipmentResult.message || "Failed to create shipment");
     }
+
+    // Update fulfillmentStatus to COMPLETE — provider shipments cover the entire order.
+    // This mirrors what bulkShipOrders() does. Safe because fulfillmentStatus is a
+    // display-only field with no business logic dependencies.
+    await db.update(orders).set({
+        fulfillmentStatus: FulfillmentStatus.COMPLETE,
+        updatedAt: sql`unixepoch()`,
+    }).where(eq(orders.id, orderId));
 
     const provider = await getDeliveryProvider(db, data.providerId);
     const createdShipmentRecord = await getLatestShipment(db, orderId);

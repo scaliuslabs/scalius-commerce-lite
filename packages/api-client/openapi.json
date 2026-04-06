@@ -63339,6 +63339,81 @@
         }
       }
     },
+    "/api/v1/admin/orders/{id}/fulfillment-status": {
+      "put": {
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Manually update order fulfillment status",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "partial",
+                      "complete"
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fulfillment status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/orders/{id}/shipments": {
       "get": {
         "tags": [
@@ -66498,6 +66573,13 @@
                               "discountPercentage": {
                                 "type": "number"
                               },
+                              "discountType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "discountAmount": {
+                                "type": "number"
+                              },
                               "variants": {
                                 "type": "array",
                                 "items": {
@@ -66653,6 +66735,8 @@
                               "name",
                               "price",
                               "discountPercentage",
+                              "discountType",
+                              "discountAmount",
                               "variants"
                             ],
                             "additionalProperties": {

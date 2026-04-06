@@ -36,6 +36,7 @@ import {
   updateOrder,
   updateOrderStatus,
   createOrderShipment,
+  updateFulfillmentStatus,
   updateOrderCod,
   refundOrder,
   returnOrder,
@@ -408,6 +409,19 @@ export function useCreateOrderShipment() {
       toast.success("Shipment created");
     },
     onError: (err) => toast.error(getServerFnError(err, "Failed to create shipment")),
+  });
+}
+
+export function useUpdateFulfillmentStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { orderId: string; status: string }) =>
+      updateFulfillmentStatus({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
+      toast.success("Fulfillment status updated");
+    },
+    onError: (err) => toast.error(getServerFnError(err, "Failed to update fulfillment status")),
   });
 }
 

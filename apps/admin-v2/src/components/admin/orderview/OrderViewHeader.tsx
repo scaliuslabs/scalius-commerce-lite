@@ -2,6 +2,13 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Phone,
   Mail,
   MapPin,
@@ -18,6 +25,7 @@ import type { Order } from "./types";
 import { getStatusBadgeClass, formatDate } from "@scalius/shared/utils";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { useUpdateFulfillmentStatus } from "@/lib/api.mutations";
 
 interface OrderViewHeaderProps {
   order: Order;
@@ -51,6 +59,7 @@ const InfoItem = ({
 
 export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   const { symbol } = useCurrency();
+  const fulfillmentMutation = useUpdateFulfillmentStatus();
   const getStatusBadge = (status: string) => {
     const { badgeClass } = getStatusBadgeClass(status);
     return (
@@ -179,12 +188,24 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             )}
             {order.fulfillmentStatus && (
               <InfoItem icon={Package} label="Fulfillment">
-                <Badge
-                  variant="secondary"
-                  className={`text-xs ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}
+                <Select
+                  value={order.fulfillmentStatus}
+                  onValueChange={(value) => {
+                    if (value !== order.fulfillmentStatus) {
+                      fulfillmentMutation.mutate({ orderId: order.id, status: value });
+                    }
+                  }}
+                  disabled={fulfillmentMutation.isPending}
                 >
-                  {order.fulfillmentStatus.charAt(0).toUpperCase() + order.fulfillmentStatus.slice(1)}
-                </Badge>
+                  <SelectTrigger className={`h-7 w-auto min-w-[100px] gap-1 rounded-full border-0 px-2.5 text-xs font-medium ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="partial">Partial</SelectItem>
+                    <SelectItem value="complete">Complete</SelectItem>
+                  </SelectContent>
+                </Select>
               </InfoItem>
             )}
           </div>

@@ -20470,6 +20470,31 @@ export type PostApiV1AdminOrdersByIdFulfillResponses = {
 
 export type PostApiV1AdminOrdersByIdFulfillResponse = PostApiV1AdminOrdersByIdFulfillResponses[keyof PostApiV1AdminOrdersByIdFulfillResponses];
 
+export type PutApiV1AdminOrdersByIdFulfillmentStatusData = {
+    body?: {
+        status: 'pending' | 'partial' | 'complete';
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/fulfillment-status';
+};
+
+export type PutApiV1AdminOrdersByIdFulfillmentStatusResponses = {
+    /**
+     * Fulfillment status updated
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type PutApiV1AdminOrdersByIdFulfillmentStatusResponse = PutApiV1AdminOrdersByIdFulfillmentStatusResponses[keyof PutApiV1AdminOrdersByIdFulfillmentStatusResponses];
+
 export type GetApiV1AdminOrdersByIdShipmentsData = {
     body?: never;
     path: {
@@ -21482,6 +21507,8 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 name: string;
                 price: number;
                 discountPercentage: number;
+                discountType: string | null;
+                discountAmount: number;
                 variants: Array<{
                     id: string;
                     productId: string;
@@ -21512,7 +21539,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     stockVersion?: number;
                     version?: number;
                 }>;
-                [key: string]: unknown | string | number | Array<{
+                [key: string]: unknown | string | number | (string | null) | Array<{
                     id: string;
                     productId: string;
                     size: string | null;
