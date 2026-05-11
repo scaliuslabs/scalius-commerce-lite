@@ -19,7 +19,7 @@ import { applyInventoryForStatusChange } from "../inventory/inventory-transition
 import { reserveStockBatch, deductMultiple, releaseMultiple } from "../inventory";
 import type { ReservationEntry } from "../inventory";
 
-import { sql, desc, eq, inArray, isNull, and } from "drizzle-orm";
+import { sql, desc, eq, inArray, isNull, and, type SQL } from "drizzle-orm";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
@@ -29,10 +29,34 @@ import type { CreateOrderInput } from "./orders.validation";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { validateTransition } from "./order-state-machine";
 import type { OrderShipmentSummary, OrderDetails } from "./orders.types";
+import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
 
 // ─────────────────────────────────────────
 // Service functions
 // ─────────────────────────────────────────
+
+function buildPhoneSearchCondition(searchTerms: string[]): SQL | undefined {
+    if (searchTerms.length === 0) return undefined;
+
+    const normalizedCustomerPhone = sql<string>`
+        replace(
+            replace(
+                replace(
+                    replace(
+                        replace(
+                            replace(${orders.customerPhone}, '+', ''),
+                        ' ', ''),
+                    '-', ''),
+                '(', ''),
+            ')', ''),
+        '.', '')
+    `;
+
+    return sql`(${sql.join(
+        searchTerms.map((term) => sql`${normalizedCustomerPhone} LIKE ${`%${term}%`}`),
+        sql` OR `,
+    )})`;
+}
 
 /**
  * Returns a paginated, searchable list of orders for the admin dashboard.
@@ -63,7 +87,7 @@ export async function listOrders(db: Database, options: {
     const limit = Math.min(Math.max(rawLimit, 1), 100);
     const offset = (page - 1) * limit;
 
-    const whereConditions = [];
+    const whereConditions: SQL[] = [];
 
     if (showTrashed) {
         whereConditions.push(sql`${orders.deletedAt} IS NOT NULL`);
@@ -71,28 +95,20 @@ export async function listOrders(db: Database, options: {
         whereConditions.push(sql`${orders.deletedAt} IS NULL`);
     }
 
-    let rankExpression = undefined;
-    if (search) {
-        // Phone-aware search: if input looks like a phone number (mostly digits
-        // with optional +, spaces, dashes, parens), do a LIKE on customer_phone
-        // with digits stripped. Handles all international formats.
-        const digitsOnly = search.replace(/[^0-9]/g, "");
-        const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
+    let rankExpression: SQL | undefined = undefined;
+    const trimmedSearch = search?.trim();
+    if (trimmedSearch) {
+        const phoneSearchTerms = buildPhoneSearchTerms(trimmedSearch);
+        const phoneCondition = buildPhoneSearchCondition(phoneSearchTerms);
+        const ftsCondition = ftsMatch("orders_fts", "orders", trimmedSearch);
 
-        const ftsCondition = ftsMatch("orders_fts", "orders", search);
-
-        if (looksLikePhone && ftsCondition) {
-            // OR: match via FTS (name, order ID) or LIKE on phone digits
-            whereConditions.push(sql`(${ftsCondition} OR ${orders.customerPhone} LIKE ${"%" + digitsOnly + "%"})`);
-            const sanitized = sanitizeFtsQuery(search);
+        if (isLikelyPhoneSearch(trimmedSearch) && phoneCondition) {
+            whereConditions.push(ftsCondition ? sql`(${ftsCondition} OR ${phoneCondition})` : phoneCondition);
+            const sanitized = sanitizeFtsQuery(trimmedSearch);
             rankExpression = sql`(SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}) ASC`;
-        } else if (looksLikePhone) {
-            // Pure phone search (FTS returned nothing useful)
-            whereConditions.push(sql`${orders.customerPhone} LIKE ${"%" + digitsOnly + "%"}`);
         } else if (ftsCondition) {
-            // Pure text search (name, order ID)
             whereConditions.push(ftsCondition);
-            const sanitized = sanitizeFtsQuery(search);
+            const sanitized = sanitizeFtsQuery(trimmedSearch);
             rankExpression = sql`(SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}) ASC`;
         }
     }
