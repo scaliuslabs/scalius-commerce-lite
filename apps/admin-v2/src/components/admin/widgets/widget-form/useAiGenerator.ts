@@ -6,7 +6,7 @@ import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
-import { readChatCompletionStream } from './ai-stream';
+import { extractChatCompletionContent } from './ai-stream';
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
@@ -45,6 +45,8 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<{ html: string; css: string; } | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [rawOutput, setRawOutput] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [useStagedMode, setUseStagedMode] = useState(true); // Toggle for staged generation (default: true)
 
@@ -89,13 +91,8 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
         widgetModel = null;
       }
 
-      const globalModel = localStorage.getItem(`global_preferred_ai_model_${provider}`)
-        || localStorage.getItem("global_preferred_ai_model");
-
       if (widgetModel && models.some((m) => m.id === widgetModel)) {
         setSelectedModel(widgetModel);
-      } else if (globalModel && models.some((m) => m.id === globalModel)) {
-        setSelectedModel(globalModel);
       } else if (defaultModel) {
         setSelectedModel(defaultModel);
       } else {
@@ -125,10 +122,9 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
     }
 
     setIsLoadingPrompt(true);
-    setGeneratedContent({
-      html: '<div class="flex items-center justify-center h-full"><div class="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div></div>',
-      css: ''
-    });
+    setGenerationError(null);
+    setRawOutput(null);
+    setGeneratedContent(null);
     setIsPreviewOpen(true);
 
     try {
@@ -196,6 +192,8 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
     } catch (error: unknown) {
       if (import.meta.env.DEV) console.error(`Error generating content:`, error);
       toast.error(ERROR_MESSAGES.generationFailed(error instanceof Error ? error.message : String(error)));
+      setGenerationError(error instanceof Error ? error.message : String(error));
+      setGeneratedContent(null);
       setIsPreviewOpen(false);
     } finally {
       setIsLoadingPrompt(false);
@@ -211,19 +209,20 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
           provider: activeProvider,
           messages: messages,
           model: selectedModel,
-          stream: true,
+          stream: false,
         }),
       });
 
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || errorData.error?.message || "Failed to generate content.");
       }
 
-      const accumulatedJson = await readChatCompletionStream(response);
+      const content = extractChatCompletionContent(await response.json());
+      setRawOutput(content);
 
       // Try tag-based parsing first (primary), then fall back to JSON
-      const tagResult = parseTagBasedResponse(accumulatedJson);
+      const tagResult = parseTagBasedResponse(content);
 
       if (tagResult.success && tagResult.data) {
         const validation = validateParsedWidget(tagResult.data);
@@ -231,31 +230,30 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
           setGeneratedContent(tagResult.data as { html: string; css: string });
         } else {
           if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
-          toast.error(`Invalid response: ${validation.error}`);
-          setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
+          throw new Error(`Invalid response: ${validation.error}`);
         }
       } else {
         // Fallback to JSON parsing
-        const jsonParsed = parseJSONSafely(accumulatedJson);
+        const jsonParsed = parseJSONSafely(content);
         if (jsonParsed.success) {
           const validation = validateWidgetJSON(jsonParsed.data);
           if (validation.valid) {
             setGeneratedContent(jsonParsed.data as { html: string; css: string });
           } else {
             if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
-            toast.error(`Invalid response: ${validation.error}`);
-            setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
+            throw new Error(`Invalid response: ${validation.error}`);
           }
         } else {
-          if (import.meta.env.DEV) console.error("Failed to parse response:", tagResult.error, accumulatedJson);
-          toast.error("Failed to parse AI response.");
-          setGeneratedContent({ html: '<p class="text-destructive">Error parsing response.</p>', css: '' });
+          if (import.meta.env.DEV) console.error("Failed to parse response:", tagResult.error, content);
+          throw new Error("Failed to parse AI response.");
         }
       }
 
     } catch (error: unknown) {
       if (import.meta.env.DEV) console.error(`Error generating content:`, error);
       toast.error(`Generation failed: ${error instanceof Error ? error.message : String(error)}`);
+      setGenerationError(error instanceof Error ? error.message : String(error));
+      setGeneratedContent(null);
       setIsPreviewOpen(false);
     } finally {
       setIsLoadingPrompt(false);
@@ -352,6 +350,9 @@ ${aiContext.selectedImages.length > 0 ? `\n\n**Note**: ${aiContext.selectedImage
     setIsModelSelectorOpen,
     generatedContent,
     setGeneratedContent,
+    generationError,
+    rawOutput,
+    canAcceptGenerated: Boolean(generatedContent && !generationError && !isLoadingPrompt),
     isPreviewOpen,
     setIsPreviewOpen,
     useStagedMode,

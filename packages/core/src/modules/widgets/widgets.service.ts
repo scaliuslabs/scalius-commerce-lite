@@ -138,8 +138,8 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
         .values({
             id: "wid_" + nanoid(),
             name: data.name,
-            htmlContent: data.htmlContent,
-            cssContent: data.cssContent,
+            htmlContent: sanitizeWidgetHtml(data.htmlContent),
+            cssContent: data.cssContent ? sanitizeWidgetCss(data.cssContent) : data.cssContent,
             isActive: data.isActive,
             displayTarget: data.displayTarget,
             placementRule: data.placementRule,
@@ -157,8 +157,8 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
 
     const updateData: Record<string, unknown> = { updatedAt: sql`unixepoch()` };
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.htmlContent !== undefined) updateData.htmlContent = data.htmlContent;
-    if (data.cssContent !== undefined) updateData.cssContent = data.cssContent;
+    if (data.htmlContent !== undefined) updateData.htmlContent = sanitizeWidgetHtml(data.htmlContent);
+    if (data.cssContent !== undefined) updateData.cssContent = data.cssContent ? sanitizeWidgetCss(data.cssContent) : data.cssContent;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.displayTarget !== undefined) updateData.displayTarget = data.displayTarget;
     if (data.placementRule !== undefined) updateData.placementRule = data.placementRule;

@@ -10,6 +10,12 @@ interface RawProduct {
   id: string;
   name: string;
   slug: string;
+  price?: number;
+  isActive?: boolean;
+  category?: { name: string };
+  sku?: string;
+  variantCount?: number;
+  imageCount?: number;
   primaryImage: string | null;
 }
 
@@ -60,6 +66,12 @@ export const useAiContext = (
         id: p.id,
         name: p.name,
         slug: p.slug,
+        price: p.price,
+        isActive: p.isActive,
+        category: p.category,
+        sku: p.sku,
+        variantCount: p.variantCount,
+        imageCount: p.imageCount,
         primaryImage: p.primaryImage,
       }));
       setLatestProducts((prev) => pageToFetch === 1 ? newProducts : [...prev, ...newProducts]);
@@ -86,6 +98,12 @@ export const useAiContext = (
         id: p.id,
         name: p.name,
         slug: p.slug,
+        price: p.price,
+        isActive: p.isActive,
+        category: p.category,
+        sku: p.sku,
+        variantCount: p.variantCount,
+        imageCount: p.imageCount,
         primaryImage: p.primaryImage,
       }));
       setProductSearchResults((prev) => pageToFetch === 1 ? newProducts : [...prev, ...newProducts]);

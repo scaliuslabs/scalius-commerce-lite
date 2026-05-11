@@ -34,7 +34,8 @@ import {
   ChevronRight,
   ChevronLeft,
   FileText,
-  History
+  History,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '@scalius/shared/utils';
 import { sanitizeHtml } from '@scalius/shared/html-sanitize';
@@ -57,7 +58,9 @@ interface FullScreenEditorProps {
   onClose: () => void;
   content: { html: string; css: string } | null;
   rawOutput?: string; // For error recovery
+  error?: string | null;
   onAccept: () => void;
+  canAccept?: boolean;
   onImprove?: (prompt: string, targetSection?: number) => Promise<void> | Promise<boolean>;
   onRequestImprovement?: () => void; // Handler to switch from preview to improvement mode
   mode: EditorMode;
@@ -82,7 +85,9 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
   onClose,
   content,
   rawOutput,
+  error,
   onAccept,
+  canAccept = true,
   onImprove,
   onRequestImprovement,
   mode,
@@ -110,8 +115,11 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
       setActiveView('preview');
     } else {
       setShowPanel(mode === 'improvement');
+      if (!content && rawOutput) {
+        setActiveView('raw');
+      }
     }
-  }, [isOpen, mode]);
+  }, [isOpen, mode, content, rawOutput]);
 
   if (!isOpen) return null;
 
@@ -149,6 +157,13 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
     'improvement': 'Improvement Editor',
     'live-preview': 'Live Preview',
   };
+
+  const previewCss = content?.css
+    ? content.css
+        .replace(/@import[^;]+;?/gi, "")
+        .replace(/expression\s*\(/gi, "blocked(")
+        .replace(/url\s*\(\s*(['"]?\s*javascript\s*:)/gi, "url(blocked:")
+    : "";
 
   return (
     <div className="fixed inset-0 bg-background z-[100] flex flex-col">
@@ -200,7 +215,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
             )}
 
             {/* View Toggles */}
-            {!isProcessing && content && (
+            {!isProcessing && (content || rawOutput) && (
               <>
                 {mode === 'improvement' && (
                   <Button
@@ -214,6 +229,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                 <Button
                   size="sm"
                   variant={activeView === 'preview' ? 'default' : 'outline'}
+                  disabled={!content}
                   onClick={() => setActiveView('preview')}
                 >
                   Preview
@@ -221,6 +237,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                 <Button
                   size="sm"
                   variant={activeView === 'code' ? 'default' : 'outline'}
+                  disabled={!content}
                   onClick={() => setActiveView('code')}
                 >
                   <Code className="h-4 w-4 mr-2" />
@@ -265,7 +282,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                     Improve
                   </Button>
                 )}
-                <Button size="sm" onClick={onAccept}>
+                <Button size="sm" onClick={onAccept} disabled={!canAccept}>
                   <Check className="h-4 w-4 mr-2" />
                   {mode === 'improvement' ? 'Accept & Close' : 'Accept'}
                 </Button>
@@ -304,6 +321,22 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                 </p>
               </div>
             </div>
+          ) : activeView === 'raw' && rawOutput ? (
+            <div className="h-full p-6 overflow-auto">
+              <div className="max-w-6xl mx-auto">
+                <div className="bg-card rounded-lg border p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Raw AI Output</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Use this if parsing failed. Fix it manually, then paste it back into the form.
+                    </p>
+                  </div>
+                  <pre className="text-sm overflow-auto bg-muted p-4 rounded whitespace-pre-wrap">
+                    <code>{rawOutput}</code>
+                  </pre>
+                </div>
+              </div>
+            </div>
           ) : activeView === 'code' && content ? (
             <div className="h-full p-6 overflow-auto">
               <div className="max-w-6xl mx-auto space-y-4">
@@ -321,23 +354,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                 </div>
               </div>
             </div>
-          ) : activeView === 'raw' && rawOutput ? (
-            <div className="h-full p-6 overflow-auto">
-              <div className="max-w-6xl mx-auto">
-                <div className="bg-card rounded-lg border p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Raw AI Output</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Use this if JSON parsing failed. You can manually fix and paste back.
-                    </p>
-                  </div>
-                  <pre className="text-sm overflow-auto bg-muted p-4 rounded whitespace-pre-wrap">
-                    <code>{rawOutput}</code>
-                  </pre>
-                </div>
-              </div>
-            </div>
-          ) : (
+          ) : content ? (
             <div className="h-full flex items-center justify-center p-8">
               <div
                 className={cn(
@@ -361,7 +378,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                             padding: 0;
                             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                           }
-                          ${content.css}
+                          ${previewCss}
                         </style>
                       </head>
                       <body>
@@ -373,6 +390,28 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                   sandbox=""
                   title="Widget Preview"
                 />
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center p-8">
+              <div className="max-w-md rounded-lg border bg-card p-6 text-center shadow-sm">
+                <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
+                <h3 className="mt-4 text-lg font-semibold">Generation needs review</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {error || 'The AI provider did not return valid widget HTML/CSS.'}
+                </p>
+                {rawOutput && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => setActiveView('raw')}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    View raw output
+                  </Button>
+                )}
               </div>
             </div>
           )}

@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import type { StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
+import { GENERATION_CONFIG } from '@scalius/core/modules/ai/ai-config';
 import { extractChatCompletionContent } from './ai-stream';
 
 type PromptMessage = StructuredPromptResult['messages'][number];
@@ -109,6 +110,19 @@ Respond ONLY with the JSON object, no markdown formatting.`,
       if (plan.totalSections !== plan.sectionDescriptions.length) {
         throw new Error("Plan section count mismatch");
       }
+
+      if (
+        plan.totalSections < GENERATION_CONFIG.stagedGeneration.minSections ||
+        plan.totalSections > GENERATION_CONFIG.stagedGeneration.maxSections
+      ) {
+        throw new Error(
+          `Plan requested ${plan.totalSections} sections. Use ${GENERATION_CONFIG.stagedGeneration.minSections}-${GENERATION_CONFIG.stagedGeneration.maxSections} sections.`,
+        );
+      }
+
+      plan.sectionDescriptions = plan.sectionDescriptions.map((description, index) =>
+        String(description || `Section ${index + 1}`).slice(0, 160),
+      );
 
       return plan;
     } catch (error: unknown) {

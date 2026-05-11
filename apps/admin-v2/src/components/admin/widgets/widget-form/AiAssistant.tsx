@@ -6,7 +6,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Wand2, ChevronDown, Clipboard, ChevronsUpDown, Check, Eye, Headphones, Layers } from 'lucide-react';
+import { Wand2, ChevronDown, Clipboard, ChevronsUpDown, Check, Eye, Headphones, Layers, Sparkles } from 'lucide-react';
 import { cn } from '@scalius/shared/utils';
 import { AiContextManager } from './AiContextManager';
 import { useAiContext } from './useAiContext';
@@ -80,11 +80,8 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                                 <CommandItem
                                     key={model.id}
                                     value={model.id}
-                                    onSelect={(currentValue) => {
-                                        const newModelId = currentValue === selectedModel ? "" : model.id;
-                                        setSelectedModel(newModelId);
-                                        // Save globally for next widget creation + save to widget's aiContext on form submission
-                                        localStorage.setItem(`global_preferred_ai_model_${activeProvider}`, newModelId);
+                                    onSelect={() => {
+                                        setSelectedModel(model.id);
                                         setIsModelSelectorOpen(false);
                                         setModelSearchQuery("");
                                     }}
@@ -124,15 +121,15 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
       }}
       className="cursor-pointer hover:bg-muted/50 transition-colors overflow-hidden"
     >
-      <div className="flex items-center justify-between p-4">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Wand2 className="h-6 w-6" />
+      <div className="flex items-center justify-between p-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Wand2 className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold">AI Content Assistant</h3>
-            <p className="text-sm text-muted-foreground">
-              Generate new HTML and CSS for widgets, pages, and collections.
+            <h3 className="text-base font-semibold">AI Widget Studio</h3>
+            <p className="text-xs text-muted-foreground">
+              Build scoped storefront sections from products, images, categories, and instructions.
             </p>
           </div>
         </div>
@@ -146,37 +143,39 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
       {isAiHelperOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="cursor-auto border-t p-6 space-y-6"
+          className="cursor-auto border-t p-4 space-y-4"
         >
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-4">
           <div className="space-y-2">
-            <h4 className="font-medium">1. Choose Content Type</h4>
+            <h4 className="text-sm font-medium">Content goal</h4>
             <RadioGroup
               onValueChange={(
                 value: "widget" | "landing-page" | "collection",
               ) => setPromptType(value)}
               value={promptType}
-              className="flex flex-wrap gap-4"
+              className="grid gap-2 sm:grid-cols-3"
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 rounded-md border p-2">
                 <RadioGroupItem value="widget" id="type-widget" />
                 <Label htmlFor="type-widget">Homepage Widget</Label>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 rounded-md border p-2">
                 <RadioGroupItem
                   value="landing-page"
                   id="type-landing-page"
                 />
-                <Label htmlFor="type-landing-page">Landing Page</Label>
+                <Label htmlFor="type-landing-page">Landing Section</Label>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 rounded-md border p-2">
                 <RadioGroupItem value="collection" id="type-collection" />
-                <Label htmlFor="type-collection">Collection Page</Label>
+                <Label htmlFor="type-collection">Collection Section</Label>
               </div>
             </RadioGroup>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="model">Select AI Model</Label>
+            <Label htmlFor="model">AI model</Label>
             {ModelSelector}
             {!isApiKeySet && <p className="text-xs text-muted-foreground">Configure the active provider in General Settings &gt; Widget AI.</p>}
           </div>
@@ -186,7 +185,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
               <Layers className="h-5 w-5 text-muted-foreground" />
               <div className="space-y-0.5">
                 <Label htmlFor="staged-mode" className="text-sm font-medium cursor-pointer">
-                  Staged Generation
+                  Staged generation
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   Generate complex widgets in sections with progressive rendering
@@ -241,7 +240,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
           )}
 
           <div className="space-y-4">
-            <h4 className="font-medium">2. Add Context (Optional)</h4>
+            <h4 className="text-sm font-medium">Store context</h4>
             <AiContextManager
               context={aiContext}
               selectedModel={selectedModel}
@@ -250,13 +249,13 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
           </div>
 
           <div className="space-y-2">
-            <h4 className="font-medium">3. Describe Your Request</h4>
+            <h4 className="text-sm font-medium">Merchant instructions</h4>
             <Textarea
               id="userPrompt"
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
-              rows={6}
-              placeholder="Example: A hero banner with a countdown to our summer sale..."
+              rows={5}
+              placeholder="Example: Create a premium Eid campaign section with selected products, strong offer cards, trust badges, and one clear buy-now CTA per product."
             />
           </div>
 
@@ -269,7 +268,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                   size="lg"
                   title="Copy prompt for use in external AI chatbots (ChatGPT, Claude, etc.)"
               >
-                  <Clipboard className="mr-2 h-4 w-4" /> Copy Prompt
+                  <Clipboard className="mr-2 h-4 w-4" /> Copy
               </Button>
               <Button
                   type="button"
@@ -277,8 +276,18 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                   disabled={isLoadingPrompt || !userPrompt.trim() || !isApiKeySet}
                   size="lg"
               >
-                  <Wand2 className="mr-2 h-4 w-4" /> Generate with AI
+                  <Sparkles className="mr-2 h-4 w-4" /> Generate
               </Button>
+          </div>
+            </div>
+            <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+              <div className="font-medium text-foreground">Production guardrails</div>
+              <div className="mt-2 space-y-1">
+                <p>Uses only HTML/CSS. Scripts are rejected before storefront rendering.</p>
+                <p>Selected products provide real buy-now URLs, pricing, images, and category context.</p>
+                <p>Staged mode is best for rich multi-section storefront content.</p>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateText, streamText, type LanguageModel, type ModelMessage } from "ai";
+import { generateText, Output, type LanguageModel, type ModelMessage } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { getClientIp, rateLimit } from "@scalius/shared/rate-limit";
 import {
@@ -19,7 +19,7 @@ import {
 import { ok } from "../../utils/api-response";
 import { RateLimitError, ServiceUnavailableError, ValidationError } from "../../utils/api-error";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
-import { getEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -51,6 +51,7 @@ const generateSchema = z
     images: z
       .array(z.object({ url: z.string(), mimeType: z.string().optional() }).passthrough())
       .optional(),
+    operation: z.enum(["create", "improve"]).optional(),
   })
   .refine((data) => data.messages || data.prompt, {
     message: "Messages or prompt is required.",
@@ -60,9 +61,14 @@ const generateStagedSchema = z.object({
   provider: providerEnum.optional(),
   model: z.string().optional(),
   messages: z.array(messageSchema).min(1),
-  stage: z.string().optional(),
-  sectionIndex: z.number().optional(),
-  totalSections: z.number().optional(),
+  stage: z.enum(["plan", "generate"]).optional(),
+  sectionIndex: z.number().int().min(0).max(GENERATION_CONFIG.stagedGeneration.maxSections - 1).optional(),
+  totalSections: z
+    .number()
+    .int()
+    .min(GENERATION_CONFIG.stagedGeneration.minSections)
+    .max(GENERATION_CONFIG.stagedGeneration.maxSections)
+    .optional(),
 });
 
 interface AiModelInfo {
@@ -87,6 +93,44 @@ const MAX_IMAGES = GENERATION_CONFIG.context.maxImages;
 const MAX_MODEL_ID_CHARS = 200;
 const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
+const widgetOutputSchema = z.object({
+  html: z.string().min(1),
+  css: z.string().optional(),
+});
+
+const stagedPlanOutputSchema = z.object({
+  totalSections: z
+    .number()
+    .int()
+    .min(GENERATION_CONFIG.stagedGeneration.minSections)
+    .max(GENERATION_CONFIG.stagedGeneration.maxSections),
+  sectionDescriptions: z
+    .array(z.string().min(1).max(160))
+    .min(GENERATION_CONFIG.stagedGeneration.minSections)
+    .max(GENERATION_CONFIG.stagedGeneration.maxSections),
+  estimatedTokens: z.number().int().positive().optional(),
+});
+
+type GenerateTextOptions = Parameters<typeof generateText>[0];
+type GenerationUsage = {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+};
+
+interface WidgetGenerationResult {
+  text: string;
+  usage: GenerationUsage;
+}
+
+function shouldUseStructuredOutput(provider: WidgetAiProvider): boolean {
+  // Cloudflare documents structured outputs for Kimi, but the current
+  // workers-ai-provider + AI SDK output path can trigger upstream 504s with
+  // the Workers AI binding. Keep Cloudflare fast and reliable with text/tag
+  // output until we add a native Cloudflare structured-output adapter.
+  return provider !== "cloudflare";
+}
+
 function jsonHeaders(headers: HeadersInit = {}) {
   return { Accept: "application/json", ...headers };
 }
@@ -105,7 +149,9 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 function supportsVisionForModel(provider: WidgetAiProvider, model: string): boolean {
   if (provider === "gemini") return true;
   if (provider === "cloudflare") {
-    return /kimi-k2\.6|llava|vision/i.test(model);
+    // The Workers AI provider does not accept remote image URL parts. Keep
+    // Cloudflare text-only until the server converts selected images to bytes.
+    return false;
   }
   if (provider === "openai") {
     return /gpt-4o|gpt-5|vision/i.test(model);
@@ -629,9 +675,85 @@ function openAiCompatibleStream(textStream: AsyncIterable<string>): Response {
   });
 }
 
+async function* singleChunkStream(text: string): AsyncIterable<string> {
+  yield text;
+}
+
+function usageFromResult(result: { totalUsage?: GenerationUsage }): GenerationUsage {
+  return {
+    inputTokens: result.totalUsage?.inputTokens,
+    outputTokens: result.totalUsage?.outputTokens,
+    totalTokens: result.totalUsage?.totalTokens,
+  };
+}
+
+function widgetOutputToTaggedText(output: z.infer<typeof widgetOutputSchema>): string {
+  return `<htmljs>\n${output.html.trim()}\n</htmljs>\n\n<css>\n${(output.css ?? "").trim()}\n</css>`;
+}
+
+async function generateWidgetContent(
+  options: GenerateTextOptions,
+  provider: WidgetAiProvider,
+): Promise<WidgetGenerationResult> {
+  if (shouldUseStructuredOutput(provider)) {
+    try {
+      const result = await generateText({
+        ...options,
+        output: Output.object({
+          schema: widgetOutputSchema,
+        }),
+      });
+
+      const output = widgetOutputSchema.parse(result.output);
+      return {
+        text: widgetOutputToTaggedText(output),
+        usage: usageFromResult(result),
+      };
+    } catch (error) {
+      console.warn("Structured widget generation failed, falling back to text:", error);
+    }
+  }
+
+  const result = await generateText(options);
+  return {
+    text: result.text,
+    usage: usageFromResult(result),
+  };
+}
+
+async function generateStagedPlan(
+  options: GenerateTextOptions,
+  provider: WidgetAiProvider,
+): Promise<WidgetGenerationResult> {
+  if (shouldUseStructuredOutput(provider)) {
+    try {
+      const result = await generateText({
+        ...options,
+        output: Output.object({
+          schema: stagedPlanOutputSchema,
+        }),
+      });
+
+      const output = stagedPlanOutputSchema.parse(result.output);
+      return {
+        text: JSON.stringify(output),
+        usage: usageFromResult(result),
+      };
+    } catch (error) {
+      console.warn("Structured staged plan generation failed, falling back to text:", error);
+    }
+  }
+
+  const result = await generateText(options);
+  return {
+    text: result.text,
+    usage: usageFromResult(result),
+  };
+}
+
 async function runtimeSettings(c: any) {
   const db = c.get("db");
-  return getWidgetAiRuntimeSettings(db, c.env, getEncryptionKey(c.env));
+  return getWidgetAiRuntimeSettings(db, c.env, getCredentialEncryptionKey(c.env));
 }
 
 const listModelsRoute = createRoute({
@@ -714,25 +836,24 @@ app.openapi(generateRoute, async (c) => {
     model,
     messages,
     allowSystemInMessages: true,
-    temperature: settings.generation.generationTemperature,
+    temperature:
+      payload.operation === "improve"
+        ? settings.generation.improvementTemperature
+        : settings.generation.generationTemperature,
     maxOutputTokens: settings.generation.maxOutputTokens,
-    timeout: { totalMs: getTimeout("generation") },
+    timeout: { totalMs: getTimeout(payload.operation === "improve" ? "improvement" : "generation") },
     maxRetries: 2,
   };
 
   if (payload.stream) {
-    const result = streamText(generationOptions);
-    return openAiCompatibleStream(result.textStream);
+    const result = await generateWidgetContent(generationOptions, provider);
+    return openAiCompatibleStream(singleChunkStream(result.text));
   }
 
-  const result = await generateText(generationOptions);
+  const result = await generateWidgetContent(generationOptions, provider);
   return ok(
     c,
-    openAiCompatibleJson(result.text, provider, modelId, {
-      inputTokens: result.totalUsage.inputTokens,
-      outputTokens: result.totalUsage.outputTokens,
-      totalTokens: result.totalUsage.totalTokens,
-    }),
+    openAiCompatibleJson(result.text, provider, modelId, result.usage),
   );
 });
 
@@ -763,7 +884,7 @@ app.openapi(generateStagedRoute, async (c) => {
   const provider = getConfiguredProvider(settings, payload.provider);
   const modelId = getModelId(provider, payload.model, settings);
   const model = getLanguageModel(provider, modelId, settings, c.env);
-  const result = await generateText({
+  const generationOptions = {
     model,
     messages: normalizeMessages(payload.messages),
     allowSystemInMessages: true,
@@ -777,14 +898,15 @@ app.openapi(generateStagedRoute, async (c) => {
         payload.stage === "plan" ? getTimeout("planning") : getTimeout("generation"),
     },
     maxRetries: 2,
-  });
+  };
+
+  const result =
+    payload.stage === "plan"
+      ? await generateStagedPlan(generationOptions, provider)
+      : await generateWidgetContent(generationOptions, provider);
 
   const response = {
-    ...openAiCompatibleJson(result.text, provider, modelId, {
-      inputTokens: result.totalUsage.inputTokens,
-      outputTokens: result.totalUsage.outputTokens,
-      totalTokens: result.totalUsage.totalTokens,
-    }),
+    ...openAiCompatibleJson(result.text, provider, modelId, result.usage),
   } as Record<string, unknown>;
 
   if (payload.stage !== undefined) response.stage = payload.stage;

@@ -6,7 +6,7 @@ import {
 } from "@scalius/core/modules/ai";
 import { ok } from "../../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../../schemas/responses";
-import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -14,11 +14,16 @@ const providerEnum = z.enum(AI_PROVIDER_IDS);
 
 const providerConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  defaultModel: z.string().optional(),
-  baseUrl: z.string().optional(),
-  appName: z.string().optional(),
-  appUrl: z.string().optional(),
-  accountId: z.string().optional(),
+  defaultModel: z.string().max(200).optional(),
+  baseUrl: z.string().max(200).optional(),
+  appName: z.string().max(80).optional(),
+  appUrl: z.string().max(200).optional(),
+  accountId: z
+    .string()
+    .max(32)
+    .regex(/^[a-f0-9]{32}$/i, "Cloudflare account ID must be a 32-character hex string.")
+    .or(z.literal(""))
+    .optional(),
 });
 
 const updateSchema = z.object({
@@ -43,18 +48,18 @@ const updateSchema = z.object({
     .optional(),
   prompts: z
     .object({
-      widget: z.string().optional(),
-      "landing-page": z.string().optional(),
-      collection: z.string().optional(),
+      widget: z.string().max(20000).optional(),
+      "landing-page": z.string().max(20000).optional(),
+      collection: z.string().max(20000).optional(),
     })
     .partial()
     .optional(),
   apiKeys: z
     .object({
-      openrouter: z.string().optional(),
-      openai: z.string().optional(),
-      gemini: z.string().optional(),
-      cloudflare: z.string().optional(),
+      openrouter: z.string().min(1).max(4096).optional(),
+      openai: z.string().min(1).max(4096).optional(),
+      gemini: z.string().min(1).max(4096).optional(),
+      cloudflare: z.string().min(1).max(4096).optional(),
     })
     .partial()
     .optional(),
@@ -79,7 +84,7 @@ const getSettingsRoute = createRoute({
 
 app.openapi(getSettingsRoute, async (c) => {
   const db = c.get("db");
-  const encKey = getEncryptionKey(c.env);
+  const encKey = getCredentialEncryptionKey(c.env);
   const settings = await getWidgetAiAdminSettings(db, c.env, encKey);
   return ok(c, settings);
 });
@@ -109,7 +114,7 @@ app.openapi(updateSettingsRoute, async (c) => {
   const hasSecretWrite =
     Object.values(payload.apiKeys ?? {}).some((value) => value?.trim()) ||
     (payload.clearApiKeys?.length ?? 0) > 0;
-  const encKey = hasSecretWrite ? requireEncryptionKey(c.env) : getEncryptionKey(c.env);
+  const encKey = hasSecretWrite ? requireEncryptionKey(c.env) : getCredentialEncryptionKey(c.env);
   await updateWidgetAiSettings(db, payload, encKey);
   const settings = await getWidgetAiAdminSettings(db, c.env, encKey);
   return ok(c, settings);

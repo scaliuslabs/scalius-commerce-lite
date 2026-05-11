@@ -8,6 +8,7 @@ This folder is for Codex operational context only. Treat source code, tests, dep
 
 - `CODEBASE-MAP.md` - implementation-derived architecture map and data-flow notes.
 - `WIDGET-AI.md` - current widget AI provider/prompt architecture and verification targets.
+- `WIDGET-SYSTEM.md` - widget/page-builder purpose, quality bar, and reliability requirements.
 - `ISSUE-LOG.md` - GitHub issue work queue, commit references, and verification status.
 
 ## Rules For Updating

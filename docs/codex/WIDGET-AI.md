@@ -24,8 +24,9 @@ Widget generation is provider-neutral and dashboard-configurable.
 - Saving provider keys requires `CREDENTIAL_ENCRYPTION_KEY`; there is no JWT-secret fallback for AI secrets.
 - Non-secret provider configuration is stored in key `widget_generation_config`.
 - Runtime generation uses Vercel AI SDK providers for OpenRouter, OpenAI, Gemini, and Cloudflare Workers AI.
+- Widget and staged-section generation prefers AI SDK structured object output for providers where that path is reliable, then converts successful `{ html, css }` objects back to the editor's tag format. Cloudflare/Kimi currently uses text/tag output because the Workers AI binding path can gateway-timeout when AI SDK structured output is enabled.
 - The fresh-install default provider is Cloudflare Workers AI with `@cf/moonshotai/kimi-k2.6`.
-- The generation API preserves the OpenAI-style `choices[].message.content` and streaming `choices[].delta.content` shapes because the widget editor parser consumes that shape.
+- The generation API preserves the OpenAI-style `choices[].message.content` shape because the widget editor parser consumes that shape. Simple editor generation uses non-streaming generation for Cloudflare/Kimi reliability; `stream: true` responses are emitted as a single SSE text chunk instead of depending on provider-native streaming.
 - Widget previews are sanitized and scriptless. Generated widgets should be HTML/CSS only; scripts are stripped before preview/storefront rendering.
 - Provider base URLs are constrained to official HTTPS endpoints to avoid sending merchant API keys to arbitrary proxy URLs.
 - Browser/password-manager autofill is disabled on provider model and key inputs to prevent accidental credential saves.
@@ -35,7 +36,7 @@ Widget generation is provider-neutral and dashboard-configurable.
 
 - `/api/v1/admin/settings/widget-ai` returns masked credential status and local prompt text.
 - `/api/v1/admin/ai/models?provider=openrouter|openai|gemini|cloudflare` returns provider model options or configured fallbacks.
-- `/api/v1/admin/ai/generate` streams text/event-stream for simple generation.
-- `/api/v1/admin/ai/generate-staged` returns JSON with `choices[0].message.content`.
+- `/api/v1/admin/ai/generate` returns JSON with `choices[0].message.content`; with `stream: true`, it returns one OpenAI-style SSE content chunk plus `[DONE]`.
+- `/api/v1/admin/ai/generate-staged` returns JSON with `choices[0].message.content`; plans are structured JSON strings, sections are tag-format widget content.
 - Admin `General Settings > Widget AI` can save provider config, model IDs, prompt overrides, and key replacement/clearing.
 - Admin widget editor can load active provider models and generate/improve content through `/api/v1/admin/ai/*`.

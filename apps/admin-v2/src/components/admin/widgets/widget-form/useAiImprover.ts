@@ -144,6 +144,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           messages: promptResult.messages,
           model: aiGenerator.selectedModel,
           stream: true,
+          operation: 'improve',
         }),
       });
 

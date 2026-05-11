@@ -21,6 +21,8 @@ import { ImageIcon, Package, Tags, X, Check, Loader2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useAiContext } from "./useAiContext";
 import { getMaxImages } from "@scalius/core/modules/ai/ai-config";
+import { toast } from "sonner";
+import type { MediaFile } from "./types";
 
 interface AiContextManagerProps {
   context: ReturnType<typeof useAiContext>;
@@ -66,6 +68,32 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
 
   const maxImagesForModel = selectedModel ? getMaxImages(selectedModel) : 10;
 
+  const addOneImage = (file: MediaFile) => {
+    if (selectedImages.some((img) => img.url === file.url)) return;
+    if (selectedImages.length >= maxImagesForModel) {
+      toast.error(`This model can use up to ${maxImagesForModel} images.`);
+      return;
+    }
+    handleImageSelect(file);
+  };
+
+  const addManyImages = (files: MediaFile[]) => {
+    const uniqueNewFiles = files.filter(
+      (file) => !selectedImages.some((img) => img.url === file.url),
+    );
+    const availableSlots = Math.max(0, maxImagesForModel - selectedImages.length);
+    const filesToAdd = uniqueNewFiles.slice(0, availableSlots);
+    if (filesToAdd.length > 0) handleMultiImageSelect(filesToAdd);
+    if (uniqueNewFiles.length > filesToAdd.length) {
+      toast.error(`Added ${filesToAdd.length}; skipped ${uniqueNewFiles.length - filesToAdd.length} over the ${maxImagesForModel}-image limit.`);
+    }
+  };
+
+  const formatPrice = (value?: number) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)
+      : null;
+
   const gridClass =
     variant === "compact"
       ? "grid grid-cols-1 gap-2"
@@ -94,8 +122,8 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
           >
             <div className="p-3 border-b">
               <MediaManager
-                onSelect={handleImageSelect}
-                onSelectMultiple={handleMultiImageSelect}
+                onSelect={addOneImage}
+                onSelectMultiple={addManyImages}
                 selectedFiles={selectedImages}
                 triggerLabel="Select Images"
                 dialogClassName={variant === "compact" ? "z-[102]" : undefined}
@@ -127,7 +155,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
             align="start"
             sideOffset={5}
           >
-            <Command>
+            <Command shouldFilter={false}>
               <CommandInput
                 placeholder="Search for products..."
                 value={productSearchQuery}
@@ -138,14 +166,45 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                   {isFetchingProducts ? "Loading..." : "No products found."}
                 </CommandEmpty>
                 <CommandGroup>
-                  {productsToShow.map((product) => (
+                  {productsToShow.map((product) => {
+                    const isSelected = selectedProducts.some((p) => p.id === product.id);
+                    const price = formatPrice(product.price);
+                    return (
                     <CommandItem
                       key={product.id}
                       onSelect={() => handleProductSelect(product)}
+                      className="gap-3"
                     >
-                      {product.name}
+                      {product.primaryImage ? (
+                        <img
+                          src={product.primaryImage}
+                          alt=""
+                          className="h-10 w-10 rounded-md object-cover border"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-muted">
+                          <Package className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium">{product.name}</span>
+                          {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                          {price && <span>{price}</span>}
+                          {product.category?.name && <span>{product.category.name}</span>}
+                          {product.sku && <span>SKU {product.sku}</span>}
+                          {typeof product.variantCount === "number" && product.variantCount > 0 && (
+                            <span>{product.variantCount} variants</span>
+                          )}
+                          {product.isActive === false && <span className="text-amber-600">Inactive</span>}
+                        </div>
+                      </div>
                     </CommandItem>
-                  ))}
+                    );
+                  })}
                 </CommandGroup>
                 {hasMoreProducts && (
                   <CommandItem

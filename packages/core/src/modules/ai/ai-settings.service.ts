@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
 import {
-  decryptCredentialsGraceful,
+  decryptCredentials,
   encryptCredentials,
 } from "@scalius/core/utils/credential-encryption";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
@@ -148,6 +148,15 @@ function asString(value: unknown, fallback = "") {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
+function normalizeCloudflareAccountId(value: unknown, fallback = ""): string {
+  const accountId = asString(value, fallback);
+  if (!accountId) return "";
+  if (!/^[a-f0-9]{32}$/i.test(accountId)) {
+    throw new ValidationError("Cloudflare account ID must be a 32-character hex string.");
+  }
+  return accountId.toLowerCase();
+}
+
 function normalizeBaseUrl(
   provider: "openrouter" | "openai" | "gemini",
   value: unknown,
@@ -218,7 +227,10 @@ function normalizeProvider(
   }
 
   if (provider === "cloudflare") {
-    normalized.accountId = asString(input.accountId, defaults.accountId);
+    normalized.accountId = normalizeCloudflareAccountId(
+      input.accountId,
+      defaults.accountId,
+    );
   }
 
   return normalized;
@@ -328,12 +340,18 @@ async function readApiKeys(
   values: Record<string, string>,
   encryptionKey?: string,
 ): Promise<Partial<Record<WidgetAiProvider, string>>> {
+  if (!encryptionKey) return {};
+
   const entries = await Promise.all(
     AI_PROVIDER_IDS.map(async (provider) => {
       const stored = values[API_KEY_KEYS[provider]];
       if (!stored) return [provider, undefined] as const;
-      const decrypted = await decryptCredentialsGraceful(stored, encryptionKey);
-      return [provider, decrypted] as const;
+      try {
+        const decrypted = await decryptCredentials(stored, encryptionKey);
+        return [provider, decrypted] as const;
+      } catch {
+        return [provider, undefined] as const;
+      }
     }),
   );
 
@@ -452,7 +470,7 @@ async function upsertSecretSetting(
     );
   }
   const stored = await encryptCredentials(value, encryptionKey);
-  await upsertPlainSetting(db, AI_SETTINGS_CATEGORY, key, stored);
+  await upsertPlainSetting(db, AI_SETTINGS_CATEGORY, key, stored, "secret");
 }
 
 export async function updateWidgetAiSettings(
