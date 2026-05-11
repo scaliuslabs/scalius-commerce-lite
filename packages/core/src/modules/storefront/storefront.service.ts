@@ -14,9 +14,10 @@ import {
   categories,
   pages,
   settings,
+  WidgetPlacementRule,
   type Analytics,
 } from "@scalius/database/schema";
-import { eq, isNull, and, asc, sql } from "drizzle-orm";
+import { eq, isNull, and, asc, sql, ne } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   processAnalyticsScript,
@@ -108,6 +109,7 @@ export async function getHomepageData(db: Database) {
         and(
           eq(widgets.isActive, true),
           eq(widgets.displayTarget, "homepage"),
+          ne(widgets.placementRule, WidgetPlacementRule.STANDALONE),
           isNull(widgets.deletedAt),
         ),
       )
@@ -159,8 +161,9 @@ export async function getHomepageData(db: Database) {
   };
 
   // Process Widgets
-  const formattedWidgets = (widgetResults as Record<string, unknown>[]).map(
-    (widget) => ({
+  const formattedWidgets = (widgetResults as Record<string, unknown>[])
+    .filter((widget) => widget.placementRule !== WidgetPlacementRule.STANDALONE)
+    .map((widget) => ({
       id: widget.id,
       name: widget.name,
       htmlContent:
@@ -176,8 +179,7 @@ export async function getHomepageData(db: Database) {
       placementRule: widget.placementRule,
       referenceCollectionId: widget.referenceCollectionId,
       sortOrder: widget.sortOrder,
-    }),
-  );
+    }));
 
   // === BATCH 2: Products for collections ===
   const parsedCollections = (

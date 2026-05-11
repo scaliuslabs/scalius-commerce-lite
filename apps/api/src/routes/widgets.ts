@@ -10,22 +10,13 @@ import { widgetSchema } from "../schemas/entities";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use(
-  "/active/homepage",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
-    keyPrefix: "api:widgets:active-homepage:",
-    varyByQuery: false,
-    methods: ["GET"]
-  }),
-);
-
-app.use(
   "/:id",
   cacheMiddleware({
     ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:widgets:single:",
     varyByQuery: false,
-    methods: ["GET"]
+    methods: ["GET"],
+    cacheCondition: (c) => !c.req.path.endsWith("/widgets/active/homepage"),
   }),
 );
 
@@ -85,6 +76,7 @@ const getActiveHomepageWidgetsRoute = createRoute({
 app.openapi(getActiveHomepageWidgetsRoute, async (c) => {
   const db = c.get("db");
   const activeWidgets = await getActiveHomepageWidgets(db);
+  c.header("Cache-Control", "no-store, max-age=0");
   return ok(c, { widgets: activeWidgets });
 });
 
