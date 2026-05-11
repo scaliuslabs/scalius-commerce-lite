@@ -20,7 +20,7 @@
     "db:migrate:local": "turbo db:migrate:local --filter=@scalius/api",
     "db:migrate:remote": "turbo db:migrate:remote --filter=@scalius/api",
     "db:studio": "drizzle-kit studio --config packages/database/drizzle.config.ts",
-    "generate:sdk": "turbo generate --filter=@scalius/api-client",
+    "generate:sdk": "turbo run generate --filter=@scalius/api-client",
     "lint": "turbo lint",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"

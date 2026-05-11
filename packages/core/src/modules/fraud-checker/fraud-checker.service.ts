@@ -11,17 +11,26 @@ import {
   ValidationError,
   ServiceUnavailableError,
 } from "@scalius/core/errors";
-import { getFraudCheckProvider } from "./provider";
-import type { FraudCheckResult as ProviderFraudCheckResult } from "./provider";
+import {
+  getFraudCheckProvider,
+  getFraudCheckProviderDefinition,
+  isFraudCheckProviderType,
+} from "./provider";
+import type {
+  FraudCheckProviderType,
+  FraudCheckResult as ProviderFraudCheckResult,
+} from "./provider";
 
 export interface FraudCheckerProvider {
   id: string;
   name: string;
   apiUrl: string;
   apiKey: string;
+  apiSecret?: string;
+  userId?: string;
   isActive: boolean;
   /** Optional provider type key — defaults to "default". */
-  providerType?: string;
+  providerType?: FraudCheckProviderType;
 }
 
 export interface FraudCheckResult {
@@ -99,8 +108,25 @@ export async function saveFraudProvider(
   db: Database,
   provider: Omit<FraudCheckerProvider, "id"> & { id?: string },
 ): Promise<FraudCheckerProvider> {
-  if (!provider.name || !provider.apiUrl || !provider.apiKey) {
-    throw new ValidationError("Missing required fields: name, apiUrl, apiKey");
+  const providerType = provider.providerType ?? "default";
+  if (!isFraudCheckProviderType(providerType)) {
+    throw new ValidationError(`Unsupported fraud checker provider type: ${providerType}`);
+  }
+
+  const definition = getFraudCheckProviderDefinition(providerType);
+  const requiredFields = [
+    ["name", provider.name],
+    ["apiUrl", provider.apiUrl],
+    ...definition.requiredFields.map((field) => [field, provider[field]] as const),
+  ];
+  const missingFields = requiredFields
+    .filter(([, value]) => !value || String(value).trim() === "")
+    .map(([field]) => field);
+
+  if (missingFields.length > 0) {
+    throw new ValidationError(
+      `Missing required fields for ${definition.label}: ${missingFields.join(", ")}`,
+    );
   }
 
   const providerId = provider.id || nanoid();
@@ -109,8 +135,10 @@ export async function saveFraudProvider(
     name: provider.name,
     apiUrl: provider.apiUrl,
     apiKey: provider.apiKey,
+    ...(provider.apiSecret ? { apiSecret: provider.apiSecret } : {}),
+    ...(provider.userId ? { userId: provider.userId } : {}),
     isActive: provider.isActive,
-    providerType: provider.providerType ?? "default",
+    providerType,
   };
 
   // Check if provider exists
@@ -203,8 +231,12 @@ export async function fraudLookup(
   try {
     const result = await checkProvider.lookup(
       phone,
-      provider.apiUrl,
-      provider.apiKey,
+      {
+        apiUrl: provider.apiUrl,
+        apiKey: provider.apiKey,
+        apiSecret: provider.apiSecret,
+        userId: provider.userId,
+      },
     );
 
     return {

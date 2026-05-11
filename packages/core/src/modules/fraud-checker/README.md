@@ -8,7 +8,7 @@ Phone number fraud risk assessment via pluggable providers. Admin-only manual lo
 |------|---------|
 | `index.ts` | Barrel exports: service functions + types, provider interface + registry |
 | `fraud-checker.service.ts` | Standalone functions for provider CRUD, phone lookup, connection testing |
-| `provider.ts` | `FraudCheckProvider` interface, `DefaultFraudCheckProvider`, provider registry (`registerFraudCheckProvider`, `getFraudCheckProvider`) |
+| `provider.ts` | `FraudCheckProvider` interface, Bangladesh provider adapters, provider presets, provider registry (`registerFraudCheckProvider`, `getFraudCheckProvider`) |
 
 ## Provider Interface (`provider.ts`)
 
@@ -17,7 +17,7 @@ Every fraud check provider implements:
 ```typescript
 interface FraudCheckProvider {
   readonly name: string;
-  lookup(phone: string, apiUrl: string, apiKey: string): Promise<FraudCheckResult>;
+  lookup(phone: string, config: FraudCheckProviderConfig): Promise<FraudCheckResult>;
 }
 ```
 
@@ -31,9 +31,18 @@ interface FraudCheckResult {
 }
 ```
 
-### Default Provider
+### Built-In Providers
 
-`DefaultFraudCheckProvider` sends an HTTP POST with phone as FormData and Bearer token auth. Uses `formatPhoneForProvider()` from `@scalius/shared/customer-utils` for phone normalization. Expects a JSON response with parcel delivery statistics.
+Provider configuration presets live in `FRAUD_CHECK_PROVIDER_DEFINITIONS`, which is also used by the admin UI to show the right credential fields.
+
+| Provider type | Adapter | Auth | Request |
+|---------------|---------|------|---------|
+| `default` | `DefaultFraudCheckProvider` | `Authorization: Bearer <apiKey>` | `FormData(phone)` |
+| `fraudbd` | `FraudBdCheckProvider` | `api_key` / `API-KEY` header | JSON `{ phone }` |
+| `fraudguard` | `FraudGuardCheckProvider` | `X-API-KEY` + `X-API-SECRET` headers | JSON `{ phone }` |
+| `ecourier` | `ECourierFraudCheckProvider` | `API-KEY` + `API-SECRET` + `USER-ID` headers | JSON `{ mobile }` |
+
+All providers normalize their responses into `mobile_number`, `total_parcels`, `total_delivered`, `total_cancel`, and optional per-courier `apis` stats so existing order UI consumers do not need provider-specific branches.
 
 Risk level calculation:
 - `total_parcels === 0` -> `"unknown"`
@@ -53,7 +62,7 @@ Stores provider configurations in the `settings` table with `category = "fraud-c
 |----------|-----------|-------|
 | `getFraudProviders` | `(db)` | List all configured providers from settings table. Parses JSON values, filters out parse failures. |
 | `getFraudProvider` | `(db, id)` | Get single provider by settings key. Returns null if not found or parse fails. |
-| `saveFraudProvider` | `(db, provider)` | Create or update. Validates `name`, `apiUrl`, `apiKey` required (throws `ValidationError`). Defaults `providerType` to `"default"`. Uses `unixepoch()` for timestamps. |
+| `saveFraudProvider` | `(db, provider)` | Create or update. Validates `name`, `apiUrl`, and provider-specific credentials from `FRAUD_CHECK_PROVIDER_DEFINITIONS`. Defaults `providerType` to `"default"`. Uses `unixepoch()` for timestamps. |
 | `deleteFraudProvider` | `(db, id)` | Hard-delete. Throws `NotFoundError` if missing. |
 | `testFraudProvider` | `(db, id)` | Tests connection by looking up phone `"+8801700000000"`. Throws `NotFoundError` if provider missing. |
 | `fraudLookup` | `(provider, phone)` | Look up a phone number using a specific provider config. Resolves provider implementation via `getFraudCheckProvider(providerType)`. Throws `ServiceUnavailableError` on failure. |
@@ -61,7 +70,7 @@ Stores provider configurations in the `settings` table with `category = "fraud-c
 
 ### Exported Types
 
-- **`FraudCheckerProvider`** (from service): `{ id, name, apiUrl, apiKey, isActive, providerType? }` -- the stored config shape
+- **`FraudCheckerProvider`** (from service): `{ id, name, apiUrl, apiKey, apiSecret?, userId?, isActive, providerType? }` -- the stored config shape
 - **`FraudCheckResult`** (from service): `{ success, data?, riskLevel?, error? }` -- the service-level result
 - **`FraudCheckProvider`** (from provider): interface that providers implement
 - **`ProviderFraudCheckResult`** (from provider, re-exported): `{ riskLevel, details, raw? }` -- the provider-level result
@@ -69,8 +78,9 @@ Stores provider configurations in the `settings` table with `category = "fraud-c
 ## Adding a Custom Provider
 
 1. Create a class implementing `FraudCheckProvider` with a unique `name` and `lookup` method
-2. Call `registerFraudCheckProvider(new MyProvider())` at module load time
-3. Admin saves config with `providerType: "my-provider"` -- the registry auto-resolves it
+2. Add a matching entry to `FRAUD_CHECK_PROVIDER_DEFINITIONS`
+3. Call `registerFraudCheckProvider(new MyProvider())` at module load time
+4. Admin saves config with `providerType: "my-provider"` -- the registry auto-resolves it
 
 ## Dependencies
 

@@ -575,6 +575,9 @@ export interface FraudCheckerProvider {
   name: string;
   apiUrl: string;
   apiKey: string;
+  apiSecret?: string;
+  userId?: string;
+  providerType?: string;
   isActive: boolean;
   createdAt: Date | string | number;
   updatedAt: Date | string | number;

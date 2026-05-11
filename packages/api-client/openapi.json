@@ -32448,6 +32448,16 @@
             "description": "MIME type filter prefix (e.g. 'image/')",
             "name": "mimeType",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Legacy MIME type filter prefix"
+            },
+            "required": false,
+            "description": "Legacy MIME type filter prefix",
+            "name": "type",
+            "in": "query"
           }
         ],
         "responses": {
@@ -35335,6 +35345,37 @@
             "required": false,
             "description": "Alert status filter",
             "name": "alertStatus",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "productName",
+                "sku",
+                "available"
+              ],
+              "default": "available",
+              "description": "Sort field"
+            },
+            "required": false,
+            "description": "Sort field",
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc",
+              "description": "Sort order"
+            },
+            "required": false,
+            "description": "Sort order",
+            "name": "order",
             "in": "query"
           }
         ],
@@ -40594,8 +40635,23 @@
                           "apiKey": {
                             "type": "string"
                           },
+                          "apiSecret": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
                           "isActive": {
                             "type": "boolean"
+                          },
+                          "providerType": {
+                            "type": "string",
+                            "enum": [
+                              "default",
+                              "fraudbd",
+                              "fraudguard",
+                              "ecourier"
+                            ]
                           }
                         },
                         "required": [
@@ -40844,9 +40900,25 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "apiSecret": {
+                    "type": "string"
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
                   "isActive": {
                     "type": "boolean",
                     "default": true
+                  },
+                  "providerType": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "fraudbd",
+                      "fraudguard",
+                      "ecourier"
+                    ],
+                    "default": "default"
                   }
                 },
                 "required": [
@@ -40887,8 +40959,23 @@
                         "apiKey": {
                           "type": "string"
                         },
+                        "apiSecret": {
+                          "type": "string"
+                        },
+                        "userId": {
+                          "type": "string"
+                        },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "providerType": {
+                          "type": "string",
+                          "enum": [
+                            "default",
+                            "fraudbd",
+                            "fraudguard",
+                            "ecourier"
+                          ]
                         }
                       },
                       "required": [
@@ -41140,9 +41227,25 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "apiSecret": {
+                    "type": "string"
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
                   "isActive": {
                     "type": "boolean",
                     "default": true
+                  },
+                  "providerType": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "fraudbd",
+                      "fraudguard",
+                      "ecourier"
+                    ],
+                    "default": "default"
                   }
                 },
                 "required": [
@@ -41184,8 +41287,23 @@
                         "apiKey": {
                           "type": "string"
                         },
+                        "apiSecret": {
+                          "type": "string"
+                        },
+                        "userId": {
+                          "type": "string"
+                        },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "providerType": {
+                          "type": "string",
+                          "enum": [
+                            "default",
+                            "fraudbd",
+                            "fraudguard",
+                            "ecourier"
+                          ]
                         }
                       },
                       "required": [

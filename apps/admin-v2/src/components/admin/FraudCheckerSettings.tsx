@@ -14,6 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -32,18 +39,39 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Loader2, Plus, Pencil, Trash2, TestTube } from "lucide-react";
+import {
+  FRAUD_CHECK_PROVIDER_DEFINITIONS,
+  getFraudCheckProviderDefinition,
+} from "@scalius/core/modules/fraud-checker/provider";
 
 import type { FraudCheckerProvider } from "@/types/api-responses";
+import type { FraudCheckProviderType } from "@scalius/core/modules/fraud-checker/provider";
 
 // ── Types & Validation ──
 
 type FraudProvider = FraudCheckerProvider;
 
 const providerSchema = z.object({
+  providerType: z.string().min(1, "Provider type is required"),
   name: z.string().min(1, "Name is required"),
   apiUrl: z.string().min(1, "API URL is required"),
   apiKey: z.string().min(1, "API key is required"),
+  apiSecret: z.string().optional(),
+  userId: z.string().optional(),
   isActive: z.boolean(),
+}).superRefine((values, ctx) => {
+  const definition = getFraudCheckProviderDefinition(values.providerType);
+
+  for (const field of definition.requiredFields) {
+    const value = values[field];
+    if (!value || value.trim() === "") {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message: `${definition[field === "apiKey" ? "apiKeyLabel" : field === "apiSecret" ? "apiSecretLabel" : "userIdLabel"] ?? field} is required`,
+      });
+    }
+  }
 });
 
 type ProviderFormValues = z.infer<typeof providerSchema>;
@@ -51,6 +79,8 @@ type ProviderFormValues = z.infer<typeof providerSchema>;
 interface FraudCheckerSettingsProps {
   providers: FraudCheckerProvider[];
 }
+
+const DEFAULT_PROVIDER_TYPE: FraudCheckProviderType = "default";
 
 // ── Component ──
 
@@ -68,19 +98,70 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
   const form = useForm<ProviderFormValues>({
     resolver: zodResolver(providerSchema),
     defaultValues: {
+      providerType: DEFAULT_PROVIDER_TYPE,
       name: "",
-      apiUrl: "https://fraudchecker.link/api/v1/qc/",
+      apiUrl: getFraudCheckProviderDefinition(DEFAULT_PROVIDER_TYPE).defaultApiUrl,
       apiKey: "",
+      apiSecret: "",
+      userId: "",
       isActive: false,
     },
   });
 
+  const providerType = form.watch("providerType") || DEFAULT_PROVIDER_TYPE;
+  const providerDefinition = getFraudCheckProviderDefinition(providerType);
+  const needsApiSecret = providerDefinition.requiredFields.includes("apiSecret");
+  const needsUserId = providerDefinition.requiredFields.includes("userId");
+
   const resetForm = (provider?: FraudProvider) => {
+    const definition = getFraudCheckProviderDefinition(provider?.providerType ?? DEFAULT_PROVIDER_TYPE);
     form.reset(
       provider
-        ? { name: provider.name, apiUrl: provider.apiUrl, apiKey: provider.apiKey, isActive: provider.isActive }
-        : { name: "", apiUrl: "https://fraudchecker.link/api/v1/qc/", apiKey: "", isActive: false },
+        ? {
+            providerType: provider.providerType ?? DEFAULT_PROVIDER_TYPE,
+            name: provider.name,
+            apiUrl: provider.apiUrl || definition.defaultApiUrl,
+            apiKey: provider.apiKey,
+            apiSecret: provider.apiSecret ?? "",
+            userId: provider.userId ?? "",
+            isActive: provider.isActive,
+          }
+        : {
+            providerType: DEFAULT_PROVIDER_TYPE,
+            name: "",
+            apiUrl: definition.defaultApiUrl,
+            apiKey: "",
+            apiSecret: "",
+            userId: "",
+            isActive: false,
+          },
     );
+  };
+
+  const handleProviderTypeChange = (value: string) => {
+    const nextDefinition = getFraudCheckProviderDefinition(value);
+    const currentDefinition = getFraudCheckProviderDefinition(form.getValues("providerType"));
+    const currentName = form.getValues("name");
+    const currentUrl = form.getValues("apiUrl");
+    const presetNames = FRAUD_CHECK_PROVIDER_DEFINITIONS.map((definition) => definition.label);
+
+    form.setValue("providerType", nextDefinition.value, { shouldDirty: true });
+
+    if (!currentName || presetNames.includes(currentName)) {
+      form.setValue("name", nextDefinition.value === DEFAULT_PROVIDER_TYPE ? "" : nextDefinition.label, { shouldDirty: true });
+    }
+
+    if (!currentUrl || currentUrl === currentDefinition.defaultApiUrl) {
+      form.setValue("apiUrl", nextDefinition.defaultApiUrl, { shouldDirty: true });
+    }
+
+    if (!nextDefinition.requiredFields.includes("apiSecret")) {
+      form.setValue("apiSecret", "", { shouldDirty: true });
+    }
+
+    if (!nextDefinition.requiredFields.includes("userId")) {
+      form.setValue("userId", "", { shouldDirty: true });
+    }
   };
 
   const handleSelect = (provider: FraudProvider) => {
@@ -207,6 +288,9 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                       }`}
                     />
                     <span className="font-medium truncate">{provider.name}</span>
+                    <Badge variant="outline" className="hidden sm:inline-flex text-[10px] px-1.5 py-0">
+                      {getFraudCheckProviderDefinition(provider.providerType).shortLabel}
+                    </Badge>
                     <Badge variant={provider.isActive ? "default" : "secondary"} className="ml-auto text-[10px] px-1.5 py-0">
                       {provider.isActive ? "Active" : "Inactive"}
                     </Badge>
@@ -232,6 +316,26 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
           <CardContent>
             {(selectedProvider || isCreating) && isEditing ? (
               <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="providerType" className="text-xs">Provider</Label>
+                  <Select value={providerType} onValueChange={handleProviderTypeChange}>
+                    <SelectTrigger id="providerType" className="h-8 text-sm">
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FRAUD_CHECK_PROVIDER_DEFINITIONS.map((definition) => (
+                        <SelectItem key={definition.value} value={definition.value}>
+                          {definition.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">{providerDefinition.helpText}</p>
+                  {form.formState.errors.providerType && (
+                    <p className="text-xs text-destructive">{form.formState.errors.providerType.message}</p>
+                  )}
+                </div>
+
                 <div className="space-y-1.5">
                   <Label htmlFor="name" className="text-xs">Name</Label>
                   <Input
@@ -259,7 +363,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="apiKey" className="text-xs">API Key</Label>
+                  <Label htmlFor="apiKey" className="text-xs">{providerDefinition.apiKeyLabel}</Label>
                   <Input
                     id="apiKey"
                     type="password"
@@ -271,6 +375,37 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                     <p className="text-xs text-destructive">{form.formState.errors.apiKey.message}</p>
                   )}
                 </div>
+
+                {needsApiSecret && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="apiSecret" className="text-xs">{providerDefinition.apiSecretLabel}</Label>
+                    <Input
+                      id="apiSecret"
+                      type="password"
+                      {...form.register("apiSecret")}
+                      className="h-8 text-sm"
+                      placeholder="Enter API secret"
+                    />
+                    {form.formState.errors.apiSecret && (
+                      <p className="text-xs text-destructive">{form.formState.errors.apiSecret.message}</p>
+                    )}
+                  </div>
+                )}
+
+                {needsUserId && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="userId" className="text-xs">{providerDefinition.userIdLabel}</Label>
+                    <Input
+                      id="userId"
+                      {...form.register("userId")}
+                      className="h-8 text-sm"
+                      placeholder="Enter user ID"
+                    />
+                    {form.formState.errors.userId && (
+                      <p className="text-xs text-destructive">{form.formState.errors.userId.message}</p>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2">
                   <Switch
@@ -296,6 +431,18 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
             ) : selectedProvider ? (
               <div className="space-y-4">
                 <div className="space-y-1.5">
+                  <Label className="text-xs">Provider</Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {getFraudCheckProviderDefinition(selectedProvider.providerType).label}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {getFraudCheckProviderDefinition(selectedProvider.providerType).helpText}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
                   <Label htmlFor="name" className="text-xs">Name</Label>
                   <p className="text-sm">{selectedProvider.name}</p>
                 </div>
@@ -306,9 +453,27 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="apiKey" className="text-xs">API Key</Label>
+                  <Label className="text-xs">{getFraudCheckProviderDefinition(selectedProvider.providerType).apiKeyLabel}</Label>
                   <p className="text-sm text-muted-foreground">{"*".repeat(12)}</p>
                 </div>
+
+                {getFraudCheckProviderDefinition(selectedProvider.providerType).requiredFields.includes("apiSecret") && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">
+                      {getFraudCheckProviderDefinition(selectedProvider.providerType).apiSecretLabel}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">{"*".repeat(12)}</p>
+                  </div>
+                )}
+
+                {getFraudCheckProviderDefinition(selectedProvider.providerType).requiredFields.includes("userId") && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">
+                      {getFraudCheckProviderDefinition(selectedProvider.providerType).userIdLabel}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">{selectedProvider.userId || "Not configured"}</p>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2">
                   <Switch

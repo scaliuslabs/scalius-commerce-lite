@@ -8,6 +8,8 @@ const clientShimPath = resolve(generatedDir, "client-core.ts");
 const clientGenPath = resolve(generatedDir, "client.gen.ts");
 const sdkGenPath = resolve(generatedDir, "sdk.gen.ts");
 
+const ensureFinalNewline = (content) => content.endsWith("\n") ? content : `${content}\n`;
+
 const shim = `// Generated post-process shim for dev/runtime module resolution.
 // The generated SDK sources need a stable local module, while the repo runs the
 // packages directly from source in Vite/Workers dev. Re-export the official ESM
@@ -17,18 +19,18 @@ export * from "@hey-api/client-fetch";
 
 mkdirSync(dirname(clientShimPath), { recursive: true });
 writeFileSync(clientShimPath, shim);
-console.log(\`Generated runtime shim at \${clientShimPath}\`);
+console.log(`Generated runtime shim at ${clientShimPath}`);
 
 const clientGen = readFileSync(clientGenPath, "utf8").replaceAll(
   "from './client';",
   "from './client-core';",
 );
-writeFileSync(clientGenPath, clientGen);
+writeFileSync(clientGenPath, ensureFinalNewline(clientGen));
 
 const sdkGen = readFileSync(sdkGenPath, "utf8").replaceAll(
   "from './client';",
   "from './client-core';",
 );
-writeFileSync(sdkGenPath, sdkGen);
+writeFileSync(sdkGenPath, ensureFinalNewline(sdkGen));
 
 console.log("Rewrote generated imports to ./client-core");
