@@ -65,11 +65,17 @@ export function AppSidebar() {
   const { data: storefrontData } = useQuery(storefrontUrlQueryOptions());
   const location = useLocation();
   const currentPath = location.pathname;
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const sidebarContentRef = useRef<HTMLDivElement>(null);
 
   const navSections = getFilteredNavSections(permissions, isSuperAdmin);
+
+  const closeMobileSidebar = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, setOpenMobile]);
 
   // Auto-scroll sidebar when a collapsible section is opened
   const handleCollapsibleOpen = useCallback((open: boolean, itemName: string) => {
@@ -88,7 +94,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       {/* Header — logo, aligned with header bar */}
       <SidebarHeader className="h-14 flex items-center border-b border-sidebar-border px-3 shrink-0">
-        <Link to="/admin" className="flex items-center min-w-0">
+        <Link to="/admin" className="flex items-center min-w-0" onClick={closeMobileSidebar}>
           {isCollapsed ? (
             <img
               src={faviconImg}
@@ -129,6 +135,7 @@ export function AppSidebar() {
                       key={item.href}
                       item={item}
                       currentPath={currentPath}
+                      onNavigate={closeMobileSidebar}
                       onOpenChange={(open) => handleCollapsibleOpen(open, item.name)}
                     />
                   ) : (
@@ -139,7 +146,7 @@ export function AppSidebar() {
                         tooltip={item.name}
                         className={isRouteActive(currentPath, item.href) ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
                       >
-                        <Link to={item.href}>
+                        <Link to={item.href} onClick={closeMobileSidebar}>
                           <item.icon className="shrink-0" strokeWidth={1.8} />
                           <span>{item.name}</span>
                         </Link>
@@ -162,6 +169,7 @@ export function AppSidebar() {
                 href={(storefrontData as Record<string, string> | undefined)?.storefrontUrl || "/"}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={closeMobileSidebar}
               >
                 <Globe className="shrink-0" strokeWidth={1.8} />
                 <span className="flex-1 truncate">Visit Storefront</span>
@@ -178,10 +186,12 @@ export function AppSidebar() {
 function CollapsibleNavItem({
   item,
   currentPath,
+  onNavigate,
   onOpenChange,
 }: {
   item: NavItem;
   currentPath: string;
+  onNavigate?: () => void;
   onOpenChange?: (open: boolean) => void;
 }) {
   const normalizedPath = currentPath.replace(/\/$/, ""); // strip trailing slash
@@ -224,7 +234,7 @@ function CollapsibleNavItem({
                     tooltip={subItem.name}
                     className={isSubActive ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
                   >
-                    <Link to={subItem.href}>
+                    <Link to={subItem.href} onClick={onNavigate}>
                       {subItem.icon && (
                         <subItem.icon className="shrink-0" strokeWidth={1.8} />
                       )}
