@@ -139,7 +139,7 @@ app.openapi(createUserRoute, async (c) => {
     try {
         const db = c.get("db");
         const sessionUser = c.get("user");
-        const env = c.get("env") || process.env;
+        const env = c.env;
         const auth = createAuth(env);
 
         if (sessionUser.role !== "admin") {
@@ -276,7 +276,7 @@ const changePasswordRoute = createRoute({
 
 app.openapi(changePasswordRoute, async (c) => {
     try {
-        const env = c.get("env") || process.env;
+        const env = c.env;
         const auth = createAuth(env);
         const { currentPassword, newPassword } = c.req.valid("json");
 
@@ -463,7 +463,7 @@ const verify2faRoute = createRoute({
 app.openapi(verify2faRoute, async (c) => {
     try {
         const db = c.get("db");
-        const env = c.get("env") || process.env;
+        const env = c.env;
         const auth = createAuth(env);
         const { code, trustDevice, type } = c.req.valid("json");
 
