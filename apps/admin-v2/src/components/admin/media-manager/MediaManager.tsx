@@ -127,7 +127,7 @@ export function MediaManager({
             }
           }}
         >
-          <div className="flex h-full">
+          <div className="flex h-full min-h-0 flex-col md:flex-row">
             {/* Folder sidebar */}
             <FolderBrowser
               folders={mm.folders}
@@ -135,7 +135,7 @@ export function MediaManager({
               onFolderSelect={mm.moveToFolder}
               onFolderCreate={mm.createFolder}
               onFolderDelete={mm.deleteFolder}
-              className={mm.folderSidebarCollapsed ? "w-12" : "w-64"}
+              className={mm.folderSidebarCollapsed ? "w-full shrink-0 md:w-12" : "w-full shrink-0 md:w-64"}
               isCollapsed={mm.folderSidebarCollapsed}
               onToggleCollapse={() =>
                 mm.setFolderSidebarCollapsed(!mm.folderSidebarCollapsed)
@@ -143,10 +143,10 @@ export function MediaManager({
             />
 
             {/* Main content */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {/* Compact Header */}
               <div className="px-4 py-2 border-b shrink-0">
-                <div className="flex items-center justify-between mb-2">
+                <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <DialogTitle className="text-base">Media Library</DialogTitle>
                   {mm.isUploading && mm.uploadProgress.length > 0 && (
                     <div className="text-xs text-muted-foreground flex items-center gap-2">
@@ -190,7 +190,7 @@ export function MediaManager({
               </div>
 
               {/* Gallery */}
-              <div className="flex-1 overflow-hidden px-4 pb-4 pt-2 relative">
+              <div className="relative min-h-0 flex-1 overflow-hidden px-4 pb-4 pt-2">
                 {mm.isUploading && (
                   <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-md flex items-center justify-center pointer-events-none">
                     <div className="bg-card p-6 rounded-lg shadow-lg border border-border/50 min-w-[280px]">

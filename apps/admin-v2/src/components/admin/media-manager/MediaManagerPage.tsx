@@ -31,10 +31,10 @@ export function MediaManagerPage() {
   return (
     <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the media manager. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <>
-      <Card className="w-full">
+      <Card className="w-full overflow-hidden">
         <CardContent className="p-0">
           <div
-            className="flex h-[calc(100vh-10rem)] relative"
+            className="relative flex h-[calc(100svh-10rem)] min-h-[34rem] flex-col md:flex-row"
             onDragEnter={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -79,7 +79,7 @@ export function MediaManagerPage() {
               onFolderSelect={mm.moveToFolder}
               onFolderCreate={mm.createFolder}
               onFolderDelete={mm.deleteFolder}
-              className={mm.folderSidebarCollapsed ? "w-12" : "w-64"}
+              className={mm.folderSidebarCollapsed ? "w-full shrink-0 md:w-12" : "w-full shrink-0 md:w-64"}
               isCollapsed={mm.folderSidebarCollapsed}
               onToggleCollapse={() =>
                 mm.setFolderSidebarCollapsed(!mm.folderSidebarCollapsed)
@@ -87,10 +87,10 @@ export function MediaManagerPage() {
             />
 
             {/* Main content */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {/* Compact header */}
               <div className="border-b px-4 py-2 bg-muted/10 shrink-0">
-                <div className="flex items-center justify-between mb-2">
+                <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="text-base font-semibold">Media Library</h2>
                   {mm.isUploading && mm.uploadProgress.length > 0 && (
                     <div className="text-xs text-muted-foreground flex items-center gap-2">
@@ -132,7 +132,7 @@ export function MediaManagerPage() {
               </div>
 
               {/* Gallery */}
-              <div className="flex-1 overflow-hidden px-4 pb-4 pt-2 relative">
+              <div className="relative min-h-0 flex-1 overflow-hidden px-4 pb-4 pt-2">
                 {mm.isUploading && (
                   <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-md flex items-center justify-center pointer-events-none">
                     <div className="bg-card p-6 rounded-lg shadow-lg border border-border/50 min-w-[280px]">
