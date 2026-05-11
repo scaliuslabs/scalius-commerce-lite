@@ -4,6 +4,7 @@ import type { Product, ProductImage } from "@/lib/api";
 import { GALLERY_CONFIG } from "./config";
 import ProductImageZoom from "./ProductImageZoom";
 import { Maximize2, X, ChevronDown, ChevronUp } from "lucide-react";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 interface Props {
   product: Product;
@@ -15,41 +16,51 @@ const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
 const hasMultipleImages = images.length > 1;
 
-/**
- * Format image URL targeting the CDN directly instead of bouncing through the local astro/worker proxy.
- * If the image is on the configured CDN domain, instruct the edge to resize it directly.
- * CDN domain resolved from Cloudflare Worker runtime env (wrangler.jsonc vars).
- */
-import { env as cfEnv } from "cloudflare:workers";
-const cdnDomainRaw = ((cfEnv as unknown as Env)?.CDN_DOMAIN_URL as string) || '';
-const cdnHost = cdnDomainRaw.replace(/^https?:\/\//, '');
-
-function getCloudOptimizedUrl(url: string, width: number, height: number, quality: number) {
-  if (!url || !cdnHost) return url || '';
-  if (url.includes(cdnHost)) {
-    const isFullUrl = url.startsWith('http');
-    const relativePath = isFullUrl ? new URL(url).pathname : url;
-    return `https://${cdnHost}/cdn-cgi/image/onerror=redirect,width=${width},height=${height},quality=${quality},format=auto,fit=cover${relativePath}`;
-  }
-  return url;
-}
-
 const optimizedImages = images.map((img) => {
   return {
     original: img,
-    thumbUrl: getCloudOptimizedUrl(img.url, desktopThumb.imageSize, desktopThumb.imageSize, 80),
-    mainUrl: getCloudOptimizedUrl(img.url, 600, 600, 85),
-    mainMobileSmall: getCloudOptimizedUrl(img.url, 400, 400, 80),
-    zoomUrl: getCloudOptimizedUrl(img.url, 1400, 1400, 85),
+    thumbUrl: getOptimizedImageUrl(img.url, {
+      width: desktopThumb.imageSize,
+      height: desktopThumb.imageSize,
+      quality: 80,
+      format: "auto",
+      fit: "cover",
+    }),
+    mainUrl: getOptimizedImageUrl(img.url, {
+      width: 600,
+      height: 600,
+      quality: 85,
+      format: "auto",
+      fit: "cover",
+    }),
+    mainMobileSmall: getOptimizedImageUrl(img.url, {
+      width: 400,
+      height: 400,
+      quality: 80,
+      format: "auto",
+      fit: "cover",
+    }),
+    zoomUrl: getOptimizedImageUrl(img.url, {
+      width: 1400,
+      height: 1400,
+      quality: 85,
+      format: "auto",
+      fit: "cover",
+    }),
   };
 });
 ---
 
-<div id="product-gallery" class="lg:col-span-7 xl:col-span-6 relative w-full group/gallery">
+<div
+  id="product-gallery"
+  class="lg:col-span-7 xl:col-span-6 relative w-full group/gallery"
+>
   <div
     class:list={[
       "flex flex-col gap-3 lg:gap-5 lg:sticky",
-      hasMultipleImages ? "lg:grid lg:grid-cols-[80px_1fr] xl:grid-cols-[100px_1fr]" : "lg:block"
+      hasMultipleImages
+        ? "lg:grid lg:grid-cols-[80px_1fr] xl:grid-cols-[100px_1fr]"
+        : "lg:block",
     ]}
     style="top: 5rem;"
   >
@@ -62,7 +73,7 @@ const optimizedImages = images.map((img) => {
             role="button"
             aria-label="Scroll up"
           >
-             <div class="p-0.5 bg-white rounded-full text-gray-500 shadow-xs border border-gray-100 hover:text-black hover:scale-110 transition-transform duration-200 animate-bounce">
+            <div class="p-0.5 bg-white rounded-full text-gray-500 shadow-xs border border-gray-100 hover:text-black hover:scale-110 transition-transform duration-200 animate-bounce">
               <ChevronUp className="w-4 h-4" />
             </div>
           </div>
@@ -81,7 +92,10 @@ const optimizedImages = images.map((img) => {
               >
                 <img
                   src={imgData.thumbUrl}
-                  alt={imgData.original.alt || `${product.name} thumbnail ${index + 1}`}
+                  alt={
+                    imgData.original.alt ||
+                    `${product.name} thumbnail ${index + 1}`
+                  }
                   width={desktopThumb.imageSize}
                   height={desktopThumb.imageSize}
                   class="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-110"
@@ -128,7 +142,7 @@ const optimizedImages = images.map((img) => {
             <img
               id="mobile-main-image"
               src={optimizedImages[0]?.mainUrl || "/img/no-image.webp"}
-              srcset={`${optimizedImages[0]?.mainMobileSmall || ''} 400w, ${optimizedImages[0]?.mainUrl || ''} 600w`}
+              srcset={`${optimizedImages[0]?.mainMobileSmall || ""} 400w, ${optimizedImages[0]?.mainUrl || ""} 600w`}
               sizes="(max-width: 640px) 400px, 600px"
               alt={images[0]?.alt || product.name}
               width="600"
@@ -149,18 +163,21 @@ const optimizedImages = images.map((img) => {
         {
           hasMultipleImages && (
             <div class="lg:hidden w-[18vw] max-w-[80px] shrink-0 relative">
-                <div
+              <div
                 id="mobile-thumb-scroll-top"
                 class="absolute -top-1 left-0 right-0 h-8 z-10 opacity-0 pointer-events-none transition-opacity duration-300 flex items-start justify-center cursor-pointer select-none"
                 role="button"
                 aria-label="Scroll up"
               >
-                 <div class="p-0.5 bg-white rounded-full text-gray-500 shadow-xs border border-gray-100 hover:text-black hover:scale-110 transition-transform duration-200 animate-bounce">
+                <div class="p-0.5 bg-white rounded-full text-gray-500 shadow-xs border border-gray-100 hover:text-black hover:scale-110 transition-transform duration-200 animate-bounce">
                   <ChevronUp className="w-3 h-3" />
                 </div>
               </div>
 
-              <div id="mobile-thumbnails" class="absolute inset-0 overflow-y-auto scrollbar-hide pb-2 touch-pan-y snap-y snap-mandatory">
+              <div
+                id="mobile-thumbnails"
+                class="absolute inset-0 overflow-y-auto scrollbar-hide pb-2 touch-pan-y snap-y snap-mandatory"
+              >
                 <div class="flex flex-col gap-2.5 pt-1">
                   {optimizedImages.map((imgData, index) => (
                     <button
@@ -171,7 +188,9 @@ const optimizedImages = images.map((img) => {
                     >
                       <img
                         src={imgData.thumbUrl}
-                        alt={imgData.original.alt || `${product.name} thumbnail`}
+                        alt={
+                          imgData.original.alt || `${product.name} thumbnail`
+                        }
                         width={mobileThumb.imageSize}
                         height={mobileThumb.imageSize}
                         class="h-full w-full object-cover object-center"
@@ -183,7 +202,7 @@ const optimizedImages = images.map((img) => {
                 </div>
               </div>
 
-               <div
+              <div
                 id="mobile-thumb-scroll-bottom"
                 class="absolute bottom-0 left-0 right-0 h-10 z-10 flex items-end justify-center pb-1 transition-opacity duration-300 opacity-0 pointer-events-none cursor-pointer select-none"
                 role="button"
@@ -264,7 +283,7 @@ const optimizedImages = images.map((img) => {
   .custom-scrollbar:hover::-webkit-scrollbar-thumb {
     background-color: #94a3b8;
   }
-  
+
   /* Active State Override */
   .thumbnail-btn .thumb-ring.\!border-black {
     border-color: #000 !important;
@@ -273,69 +292,73 @@ const optimizedImages = images.map((img) => {
 
 <script>
   const imageCache = new Map<string, HTMLImageElement>();
-  
+
   function preloadImage(url: string): Promise<void> {
     if (!url || imageCache.has(url)) return Promise.resolve();
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => { imageCache.set(url, img); resolve(); };
+      img.onload = () => {
+        imageCache.set(url, img);
+        resolve();
+      };
       img.onerror = () => resolve();
       img.src = url;
     });
   }
 
-  function preloadAllGalleryImages() {
-    const thumbs = document.querySelectorAll<HTMLElement>('.thumbnail-btn');
+  function canPreloadHeavyImages() {
+    const connection = (navigator as any).connection;
+    return (
+      !connection?.saveData &&
+      (!connection || connection.effectiveType === "4g")
+    );
+  }
+
+  function preloadInitialGalleryImages() {
+    const thumbs = document.querySelectorAll<HTMLElement>(".thumbnail-btn");
     const mainUrls: string[] = [];
-    const zoomUrls: string[] = [];
-    
+
     thumbs.forEach((btn, _i) => {
       const mainUrl = btn.dataset.imageUrl;
-      const zoomUrl = btn.dataset.zoomUrl;
       if (mainUrl) mainUrls.push(mainUrl);
-      if (zoomUrl) zoomUrls.push(zoomUrl);
     });
-    
-    mainUrls.forEach(url => preloadImage(url));
-    
-    const connection = (navigator as any).connection;
-    const isFastConnection = !connection || connection.effectiveType === '4g';
-    if (isFastConnection) {
-      setTimeout(() => {
-        zoomUrls.forEach(url => preloadImage(url));
-      }, 1000);
-    }
+
+    mainUrls.slice(0, 2).forEach((url) => preloadImage(url));
   }
 
   function initGallery() {
     const gallery = document.getElementById("product-gallery");
-    if(!gallery) return;
+    if (!gallery) return;
 
     const thumbs = gallery.querySelectorAll<HTMLElement>(".thumbnail-btn");
     let hoverTimeout: number | null = null;
-    let lastSwitchedUrl = '';
+    let lastSwitchedUrl = "";
 
     if (thumbs.length > 0) {
       updateActiveRing(thumbs[0] as HTMLElement);
-      
-      if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(preloadAllGalleryImages, { timeout: 2000 });
+
+      if ("requestIdleCallback" in window) {
+        (window as any).requestIdleCallback(preloadInitialGalleryImages, {
+          timeout: 2000,
+        });
       } else {
-        setTimeout(preloadAllGalleryImages, 500);
+        setTimeout(preloadInitialGalleryImages, 500);
       }
 
       gallery.addEventListener("click", (e) => {
-        const btn = (e.target as HTMLElement).closest(".thumbnail-btn") as HTMLElement;
+        const btn = (e.target as HTMLElement).closest(
+          ".thumbnail-btn",
+        ) as HTMLElement;
         if (!btn || !gallery.contains(btn)) return;
-        handleThumbClick(btn);
+        handleThumbClick(btn, true);
       });
-      
+
       if (window.matchMedia("(hover: hover)").matches) {
-        thumbs.forEach(btn => {
+        thumbs.forEach((btn) => {
           btn.addEventListener("mouseenter", () => {
             if (hoverTimeout) clearTimeout(hoverTimeout);
             hoverTimeout = window.setTimeout(() => {
-              handleThumbClick(btn as HTMLElement);
+              handleThumbClick(btn as HTMLElement, false);
             }, 50);
           });
           btn.addEventListener("mouseleave", () => {
@@ -348,57 +371,57 @@ const optimizedImages = images.map((img) => {
       }
     }
 
-    function handleThumbClick(target: HTMLElement) {
-       const url = target.dataset.imageUrl;
-       const zoomUrl = target.dataset.zoomUrl || url; 
-       
-       if (!url || url === lastSwitchedUrl) return;
-       lastSwitchedUrl = url;
+    function handleThumbClick(target: HTMLElement, shouldPreloadZoom: boolean) {
+      const url = target.dataset.imageUrl;
+      const zoomUrl = target.dataset.zoomUrl || url;
 
-       updateActiveRing(target);
+      if (!url || url === lastSwitchedUrl) return;
+      lastSwitchedUrl = url;
 
-       window.dispatchEvent(
-         new CustomEvent("product-image-change", {
-           detail: { url, zoomUrl },
-         })
-       );
+      updateActiveRing(target);
 
-       const mobileImg = document.getElementById(
-         "mobile-main-image"
-       ) as HTMLImageElement;
-       if (mobileImg) {
-          mobileImg.removeAttribute('srcset');
-          mobileImg.removeAttribute('sizes');
-          mobileImg.style.opacity = '0.5';
-          mobileImg.src = url;
-          mobileImg.onload = () => { mobileImg.style.opacity = '1'; };
-       }
+      window.dispatchEvent(
+        new CustomEvent("product-image-change", {
+          detail: { url, zoomUrl },
+        }),
+      );
 
-       const fsImg = document.getElementById(
-         "fullscreen-image"
-       ) as HTMLImageElement;
-       if (fsImg) fsImg.src = zoomUrl || url;
+      const mobileImg = document.getElementById(
+        "mobile-main-image",
+      ) as HTMLImageElement;
+      if (mobileImg) {
+        mobileImg.removeAttribute("srcset");
+        mobileImg.removeAttribute("sizes");
+        mobileImg.style.opacity = "0.5";
+        mobileImg.src = url;
+        mobileImg.onload = () => {
+          mobileImg.style.opacity = "1";
+        };
+      }
+
+      if (shouldPreloadZoom && zoomUrl && canPreloadHeavyImages()) {
+        preloadImage(zoomUrl);
+      }
     }
 
     window.addEventListener("controller-image-update", ((e: CustomEvent) => {
       const url = e.detail?.url;
       if (!url) return;
 
-      const mobileImg = document.getElementById("mobile-main-image") as HTMLImageElement;
+      const mobileImg = document.getElementById(
+        "mobile-main-image",
+      ) as HTMLImageElement;
       if (mobileImg) {
-        mobileImg.removeAttribute('srcset');
-        mobileImg.removeAttribute('sizes');
+        mobileImg.removeAttribute("srcset");
+        mobileImg.removeAttribute("sizes");
         mobileImg.src = url;
       }
 
-      const fsImg = document.getElementById("fullscreen-image") as HTMLImageElement;
-      if (fsImg) fsImg.src = url;
-
       const galleryEl = document.getElementById("product-gallery");
       if (!galleryEl) return;
-      
+
       const matchingThumb = galleryEl.querySelector<HTMLElement>(
-        `.thumbnail-btn[data-image-url="${url}"]`
+        `.thumbnail-btn[data-image-url="${url}"]`,
       );
       if (matchingThumb) {
         updateActiveRing(matchingThumb);
@@ -413,11 +436,17 @@ const optimizedImages = images.map((img) => {
       .forEach((ring) => ring.classList.remove("!border-black"));
     const ring = activeBtn.querySelector(".thumb-ring");
     if (ring) ring.classList.add("!border-black");
-    
-    document.querySelectorAll(".thumbnail-btn").forEach(btn => btn.classList.remove("ring-2", "ring-black/5"));
+
+    document
+      .querySelectorAll(".thumbnail-btn")
+      .forEach((btn) => btn.classList.remove("ring-2", "ring-black/5"));
   }
 
-  function setupScrollIndicators(containerId: string, topBtnId: string, bottomBtnId: string) {
+  function setupScrollIndicators(
+    containerId: string,
+    topBtnId: string,
+    bottomBtnId: string,
+  ) {
     const container = document.getElementById(containerId);
     const topIndicator = document.getElementById(topBtnId);
     const bottomIndicator = document.getElementById(bottomBtnId);
@@ -441,7 +470,9 @@ const optimizedImages = images.map((img) => {
       const { scrollTop, scrollHeight, clientHeight } = container;
       const isScrollable = scrollHeight > clientHeight;
       const showTop = scrollTop > 10;
-      const showBottom = isScrollable && Math.round(scrollTop + clientHeight) < scrollHeight - 10;
+      const showBottom =
+        isScrollable &&
+        Math.round(scrollTop + clientHeight) < scrollHeight - 10;
 
       // DELAY WRITES to next animation frame to prevent Read-Write layout thrashing Reflows
       requestAnimationFrame(() => {
@@ -465,8 +496,16 @@ const optimizedImages = images.map((img) => {
   }
 
   function initScrollIndicators() {
-    setupScrollIndicators("desktop-thumbnails", "thumb-scroll-top", "thumb-scroll-bottom");
-    setupScrollIndicators("mobile-thumbnails", "mobile-thumb-scroll-top", "mobile-thumb-scroll-bottom");
+    setupScrollIndicators(
+      "desktop-thumbnails",
+      "thumb-scroll-top",
+      "thumb-scroll-bottom",
+    );
+    setupScrollIndicators(
+      "mobile-thumbnails",
+      "mobile-thumb-scroll-top",
+      "mobile-thumb-scroll-bottom",
+    );
   }
 
   function initMobileZoom() {
@@ -490,14 +529,23 @@ const optimizedImages = images.map((img) => {
     };
 
     const openModal = () => {
-      const activeThumb = document.querySelector(".thumbnail-btn .thumb-ring.\\!border-black")?.closest(".thumbnail-btn") as HTMLElement;
-      let srcToUse = activeThumb?.dataset.zoomUrl || (document.getElementById("mobile-main-image") as HTMLImageElement)?.src || "";
-      
+      const activeThumb = document
+        .querySelector(".thumbnail-btn .thumb-ring.\\!border-black")
+        ?.closest(".thumbnail-btn") as HTMLElement;
+      let srcToUse =
+        activeThumb?.dataset.zoomUrl ||
+        (document.getElementById("mobile-main-image") as HTMLImageElement)
+          ?.src ||
+        "";
+
       if (srcToUse) img.src = srcToUse;
 
       modal.classList.remove("pointer-events-none", "opacity-0");
       document.body.style.overflow = "hidden";
-      scale = 1; pointX = 0; pointY = 0; setTransform();
+      scale = 1;
+      pointX = 0;
+      pointY = 0;
+      setTransform();
     };
 
     const closeModal = () => {
@@ -511,7 +559,9 @@ const optimizedImages = images.map((img) => {
     let initialPinchDistance = 0;
     let initialScale = 1;
 
-    container.addEventListener("touchstart", (e) => {
+    container.addEventListener(
+      "touchstart",
+      (e) => {
         if (e.touches.length === 2) {
           e.preventDefault();
           const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -523,15 +573,22 @@ const optimizedImages = images.map((img) => {
           startX = e.touches[0].clientX - pointX;
           startY = e.touches[0].clientY - pointY;
         }
-    }, { passive: false });
+      },
+      { passive: false },
+    );
 
-    container.addEventListener("touchmove", (e) => {
+    container.addEventListener(
+      "touchmove",
+      (e) => {
         if (e.touches.length === 2) {
           e.preventDefault();
           const dx = e.touches[0].clientX - e.touches[1].clientX;
           const dy = e.touches[0].clientY - e.touches[1].clientY;
           const distance = Math.hypot(dx, dy);
-          scale = Math.min(Math.max(1, initialScale * (distance / initialPinchDistance)), 4);
+          scale = Math.min(
+            Math.max(1, initialScale * (distance / initialPinchDistance)),
+            4,
+          );
           setTransform();
         } else if (e.touches.length === 1 && isDragging) {
           e.preventDefault();
@@ -539,31 +596,47 @@ const optimizedImages = images.map((img) => {
           pointY = e.touches[0].clientY - startY;
           setTransform();
         }
-    }, { passive: false });
+      },
+      { passive: false },
+    );
 
     container.addEventListener("touchend", () => {
       isDragging = false;
       if (scale < 1.1) {
-        scale = 1; pointX = 0; pointY = 0; setTransform();
+        scale = 1;
+        pointX = 0;
+        pointY = 0;
+        setTransform();
       }
     });
-    
+
     let lastTap = 0;
     container.addEventListener("click", () => {
-       const now = Date.now();
-       if (now - lastTap < 300) {
-           if(scale > 1) { scale = 1; pointX = 0; pointY = 0; }
-           else { scale = 2.5; pointX = 0; pointY = 0; }
-           setTransform();
-       }
-       lastTap = now;
+      const now = Date.now();
+      if (now - lastTap < 300) {
+        if (scale > 1) {
+          scale = 1;
+          pointX = 0;
+          pointY = 0;
+        } else {
+          scale = 2.5;
+          pointX = 0;
+          pointY = 0;
+        }
+        setTransform();
+      }
+      lastTap = now;
     });
   }
 
   document.addEventListener("astro:page-load", () => {
-    initGallery(); initScrollIndicators(); initMobileZoom();
+    initGallery();
+    initScrollIndicators();
+    initMobileZoom();
   });
   document.addEventListener("DOMContentLoaded", () => {
-    initGallery(); initScrollIndicators(); initMobileZoom();
+    initGallery();
+    initScrollIndicators();
+    initMobileZoom();
   });
 </script>

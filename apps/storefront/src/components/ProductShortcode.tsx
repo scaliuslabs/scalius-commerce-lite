@@ -11,6 +11,7 @@ import { Minus, Plus, ShoppingCart, Check } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol, getCurrencyCode } from "@/lib/currency";
 import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 interface ProductShortcodeProps {
   productData: ProductPageData;
@@ -49,18 +50,25 @@ export default function ProductShortcode({
 
   const finalPrice = matchingVariant
     ? getVariantDiscountedPrice(
-      matchingVariant.price,
-      product.price,
-      matchingVariant.discountType,
-      matchingVariant.discountPercentage,
-      matchingVariant.discountAmount,
-      product.discountType,
-      product.discountPercentage,
-      product.discountAmount,
-    )
+        matchingVariant.price,
+        product.price,
+        matchingVariant.discountType,
+        matchingVariant.discountPercentage,
+        matchingVariant.discountAmount,
+        product.discountType,
+        product.discountPercentage,
+        product.discountAmount,
+      )
     : product.discountedPrice;
   const originalPrice = matchingVariant?.price || product.price;
   const hasDiscount = finalPrice < originalPrice;
+  const currentDisplayImage = getOptimizedImageUrl(currentImage, {
+    width: 600,
+    height: 600,
+    quality: 85,
+    format: "auto",
+    fit: "cover",
+  });
 
   useEffect(() => {
     if (isVariantImagesEnabled && selectedColor) {
@@ -136,7 +144,7 @@ export default function ProductShortcode({
         <div>
           <div className="aspect-square overflow-hidden rounded-lg bg-gray-50 border border-gray-100">
             <img
-              src={currentImage}
+              src={currentDisplayImage || "/placeholder.jpg"}
               alt={product.name}
               className="w-full h-full object-cover"
             />
@@ -155,7 +163,13 @@ export default function ProductShortcode({
                   )}
                 >
                   <img
-                    src={img.url}
+                    src={getOptimizedImageUrl(img.url, {
+                      width: 120,
+                      height: 120,
+                      quality: 75,
+                      format: "auto",
+                      fit: "cover",
+                    })}
                     alt={img.alt || product.name}
                     className="w-full h-full object-cover"
                   />
@@ -172,11 +186,13 @@ export default function ProductShortcode({
           </h3>
           <div className="flex items-center gap-3">
             <span className="text-2xl sm:text-3xl font-bold text-destructive">
-              {getCurrencySymbol()}{finalPrice.toLocaleString()}
+              {getCurrencySymbol()}
+              {finalPrice.toLocaleString()}
             </span>
             {hasDiscount && (
               <span className="text-lg text-gray-500 line-through">
-                {getCurrencySymbol()}{originalPrice.toLocaleString()}
+                {getCurrencySymbol()}
+                {originalPrice.toLocaleString()}
               </span>
             )}
           </div>

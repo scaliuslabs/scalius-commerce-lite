@@ -15,7 +15,6 @@ export default defineConfig({
 
   image: {
     domains: CDN_DOMAINS,
-    remotePatterns: [{ protocol: "https" }],
   },
 
   prefetch: {
@@ -39,12 +38,17 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     resolve: {
-      dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
+      dedupe: [
+        "react",
+        "react-dom",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+      ],
       alias:
         process.env.NODE_ENV === "production"
           ? {
-            "react-dom/server": "react-dom/server.edge",
-          }
+              "react-dom/server": "react-dom/server.edge",
+            }
           : undefined,
     },
     ssr: {

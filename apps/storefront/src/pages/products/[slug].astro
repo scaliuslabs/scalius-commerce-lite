@@ -1,6 +1,5 @@
 ---
 import { getProductBySlug } from "@/lib/api";
-import { env as cfEnv } from "cloudflare:workers";
 import Layout from "@/layouts/Layout.astro";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
@@ -16,8 +15,8 @@ if (!slug) {
 }
 
 // Parallel fetch: layout data + product data
-const { layoutData, pageData: productData } = await loadPageWithLayout(
-  () => getProductBySlug(slug)
+const { layoutData, pageData: productData } = await loadPageWithLayout(() =>
+  getProductBySlug(slug),
 );
 if (!productData) {
   return new Response(null, { status: 404 });
@@ -26,7 +25,7 @@ if (!productData) {
 const { product, category, images, variants, relatedProducts } = productData;
 
 const isVariantSpecificImagesEnabled = !!product.metaDescription?.includes(
-  "<!--variant_images:enabled-->"
+  "<!--variant_images:enabled-->",
 );
 const cleanMetaDescription =
   product.metaDescription
@@ -69,68 +68,87 @@ const canonicalUrl = `${storefrontUrl}/products/${product.slug}`;
 // OG image: 1200x630 for social sharing (per OG-05)
 const primaryImageUrl = images[0]?.url || product.imageUrl || null;
 const ogImageUrl = primaryImageUrl
-  ? getOptimizedImageUrl(primaryImageUrl, { width: 1200, height: 630, quality: 85, format: "auto", fit: "cover" })
+  ? getOptimizedImageUrl(primaryImageUrl, {
+      width: 1200,
+      height: 630,
+      quality: 85,
+      format: "auto",
+      fit: "cover",
+    })
   : null;
 
 // Description for OG and JSON-LD -- strip HTML (per research constraint)
-const seoDescription = (cleanMetaDescription || product.description || product.name)
+const seoDescription = (
+  cleanMetaDescription ||
+  product.description ||
+  product.name
+)
   .replace(/<[^>]+>/g, "")
   .slice(0, 200);
 
 // Store name for JSON-LD seller and brand fallback
-const storeName = layoutData?.footer?.copyrightText || layoutData?.header?.logo?.alt || "Store";
+const storeName =
+  layoutData?.footer?.copyrightText || layoutData?.header?.logo?.alt || "Store";
 
 // Brand from product attributes (mirrors facebook-feed.xml.ts pattern)
-const brandAttribute = product.attributes?.find((a: { name: string }) => a.name.toLowerCase() === "brand");
+const brandAttribute = product.attributes?.find(
+  (a: { name: string }) => a.name.toLowerCase() === "brand",
+);
 const brandName = brandAttribute?.value || storeName;
 
 // Primary SKU
 const primarySku = variants[0]?.sku || product.id;
 
 // priceValidUntil -- end of next year, ISO 8601 date
-const priceValidUntil = new Date(new Date().getFullYear() + 1, 11, 31).toISOString().split("T")[0];
+const priceValidUntil = new Date(new Date().getFullYear() + 1, 11, 31)
+  .toISOString()
+  .split("T")[0];
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
 const productJsonLd = JSON.stringify({
   "@context": "https://schema.org",
   "@type": "Product",
-  "name": product.name,
-  "description": (product.description || product.name).replace(/<[^>]+>/g, ""),
-  ...(ogImageUrl ? { "image": [ogImageUrl] } : {}),
-  "sku": primarySku,
-  "brand": { "@type": "Brand", "name": brandName },
-  "offers": {
+  name: product.name,
+  description: (product.description || product.name).replace(/<[^>]+>/g, ""),
+  ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
+  sku: primarySku,
+  brand: { "@type": "Brand", name: brandName },
+  offers: {
     "@type": "Offer",
-    "url": canonicalUrl,
-    "priceCurrency": currencyCode,
-    "price": product.discountedPrice.toFixed(2),
-    "priceValidUntil": priceValidUntil,
-    "availability": "https://schema.org/InStock",
-    "itemCondition": "https://schema.org/NewCondition",
-    "seller": { "@type": "Organization", "name": storeName }
-  }
+    url: canonicalUrl,
+    priceCurrency: currencyCode,
+    price: product.discountedPrice.toFixed(2),
+    priceValidUntil: priceValidUntil,
+    availability: "https://schema.org/InStock",
+    itemCondition: "https://schema.org/NewCondition",
+    seller: { "@type": "Organization", name: storeName },
+  },
 });
 
 // BreadcrumbList JSON-LD -- per SEO-02
 const breadcrumbItems = [
-  { "@type": "ListItem", "position": 1, "name": "Home", "item": `${storefrontUrl}/` },
-  ...(productCategory ? [{
-    "@type": "ListItem",
-    "position": 2,
-    "name": productCategory.name,
-    "item": `${storefrontUrl}/categories/${productCategory.slug}`
-  }] : []),
+  { "@type": "ListItem", position: 1, name: "Home", item: `${storefrontUrl}/` },
+  ...(productCategory
+    ? [
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: productCategory.name,
+          item: `${storefrontUrl}/categories/${productCategory.slug}`,
+        },
+      ]
+    : []),
   {
     "@type": "ListItem",
-    "position": productCategory ? 3 : 2,
-    "name": product.name,
-    "item": canonicalUrl
-  }
+    position: productCategory ? 3 : 2,
+    name: product.name,
+    item: canonicalUrl,
+  },
 ];
 const breadcrumbJsonLd = JSON.stringify({
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
-  "itemListElement": breadcrumbItems
+  itemListElement: breadcrumbItems,
 });
 ---
 
@@ -145,23 +163,24 @@ const breadcrumbJsonLd = JSON.stringify({
   ogCurrency={currencyCode}
 >
   <Fragment slot="head">
-    {images.length > 0 && (() => {
-      const cdnDom = ((cfEnv as unknown as Env)?.CDN_DOMAIN_URL as string || '').replace(/^https?:\/\//, '');
-      const imgUrl = images[0].url;
-      const preloadHref = cdnDom && imgUrl.includes(cdnDom)
-        ? `https://${cdnDom}/cdn-cgi/image/onerror=redirect,width=600,height=600,quality=85,format=auto,fit=cover${new URL(imgUrl).pathname}`
-        : imgUrl;
-      return (
+    {
+      images.length > 0 && (
         <link
           rel="preload"
           as="image"
-          href={preloadHref}
+          href={getOptimizedImageUrl(images[0].url, {
+            width: 600,
+            height: 600,
+            quality: 85,
+            format: "auto",
+            fit: "cover",
+          })}
           fetchpriority="high"
         />
-      );
-    })()}
-    <script type="application/ld+json" set:html={productJsonLd} />
-    <script type="application/ld+json" set:html={breadcrumbJsonLd} />
+      )
+    }
+    <script is:inline type="application/ld+json" set:html={productJsonLd} />
+    <script is:inline type="application/ld+json" set:html={breadcrumbJsonLd} />
   </Fragment>
 
   <main
@@ -207,19 +226,30 @@ const breadcrumbJsonLd = JSON.stringify({
       </div>
     </section>
 
-    <RelatedProducts relatedProducts={relatedProducts} currencySymbol={currencySymbol} />
+    <RelatedProducts
+      relatedProducts={relatedProducts}
+      currencySymbol={currencySymbol}
+    />
   </main>
 </Layout>
 
 <script>
   // Defer the product controller to break the critical chain for pricing-engine.js.
   // The controller only needs to run after DOM is ready (init() does DOM queries).
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      import('@/components/product/scripts/product-controller').then(m => m.init());
-    }, { once: true });
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => {
+        import("@/components/product/scripts/product-controller").then((m) =>
+          m.init(),
+        );
+      },
+      { once: true },
+    );
   } else {
-    import('@/components/product/scripts/product-controller').then(m => m.init());
+    import("@/components/product/scripts/product-controller").then((m) =>
+      m.init(),
+    );
   }
 </script>
 <script>

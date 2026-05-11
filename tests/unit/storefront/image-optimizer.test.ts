@@ -8,7 +8,7 @@ describe("storefront image optimization URLs", () => {
     const optimized = getOptimizedImageUrl(
       "https://cloud.scalius.com/pages/combo-offer.webp",
       { width: 1280, height: 640, quality: 85, format: "auto", fit: "cover" },
-      { cdnBase, isDev: false },
+      { cdnBase, cdnHosts: ["cloud.scalius.com"], isDev: false },
     );
 
     expect(optimized).toBe(
@@ -20,7 +20,7 @@ describe("storefront image optimization URLs", () => {
     const optimized = getOptimizedImageUrl(
       "pages/combo-offer.webp",
       { width: 1280, height: 640, quality: 85, format: "auto", fit: "cover" },
-      { cdnBase, isDev: false },
+      { cdnBase, cdnHosts: ["cloud.scalius.com"], isDev: false },
     );
 
     expect(optimized).toContain("https://cloud.scalius.com/cdn-cgi/image/");
@@ -32,16 +32,64 @@ describe("storefront image optimization URLs", () => {
       "https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=400/image.webp";
 
     expect(
-      getOptimizedImageUrl(optimized, undefined, { cdnBase, isDev: false }),
+      getOptimizedImageUrl(optimized, undefined, {
+        cdnBase,
+        cdnHosts: ["cloud.scalius.com"],
+        isDev: false,
+      }),
     ).toBe(optimized);
   });
 
-  it("skips Cloudflare transforms in development", () => {
+  it("still optimizes remote CDN images in development", () => {
     expect(
       getOptimizedImageUrl("pages/combo-offer.webp", undefined, {
         cdnBase,
+        cdnHosts: ["cloud.scalius.com"],
         isDev: true,
       }),
-    ).toBe("https://cloud.scalius.com/pages/combo-offer.webp");
+    ).toContain("https://cloud.scalius.com/cdn-cgi/image/");
+  });
+
+  it("does not rewrite local HTTP media URLs in development", () => {
+    expect(
+      getOptimizedImageUrl(
+        "http://localhost:8787/api/v1/media/local.webp",
+        undefined,
+        {
+          cdnBase,
+          cdnHosts: ["cloud.scalius.com"],
+          isDev: true,
+        },
+      ),
+    ).toBe("http://localhost:8787/api/v1/media/local.webp");
+  });
+
+  it("does not rewrite absolute URLs from hosts outside the CDN allow-list", () => {
+    expect(
+      getOptimizedImageUrl(
+        "https://example.com/image.webp?signature=abc",
+        undefined,
+        {
+          cdnBase,
+          cdnHosts: ["cloud.scalius.com"],
+          isDev: false,
+        },
+      ),
+    ).toBe("https://example.com/image.webp?signature=abc");
+  });
+
+  it("rewrites additional CDN hosts only when they are explicitly allow-listed", () => {
+    const optimized = getOptimizedImageUrl(
+      "https://media.example-cdn.com/products/image.webp?version=1",
+      { width: 400, height: 400 },
+      {
+        cdnBase,
+        cdnHosts: ["cloud.scalius.com", "media.example-cdn.com"],
+        isDev: false,
+      },
+    );
+
+    expect(optimized).toContain("https://media.example-cdn.com/cdn-cgi/image/");
+    expect(optimized).toContain("/products/image.webp?version=1");
   });
 });

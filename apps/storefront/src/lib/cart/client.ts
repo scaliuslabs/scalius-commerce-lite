@@ -16,6 +16,7 @@ import {
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { trackFbAddToCart, trackFbInitiateCheckout } from "@/lib/analytics";
 import { nanoid } from "nanoid";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -46,7 +47,11 @@ function getCheckoutId(): string {
 }
 
 interface CheckoutFormData {
-  [key: string]: FormDataEntryValue | { items: unknown[]; totalAmount: number; discount: unknown } | { id: string; fee: number } | undefined;
+  [key: string]:
+    | FormDataEntryValue
+    | { items: unknown[]; totalAmount: number; discount: unknown }
+    | { id: string; fee: number }
+    | undefined;
   cart?: { items: unknown[]; totalAmount: number; discount: unknown };
   shipping?: { id: string; fee: number };
   customerPhone?: FormDataEntryValue;
@@ -329,21 +334,29 @@ export async function renderCartItems() {
 
   const csym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
   cartItemsContainer.innerHTML = Object.values(items)
-    .map(
-      (item) => {
-        // Escape all user-supplied strings to prevent XSS via innerHTML
-        const safeName = escapeHtml(item.name || "");
-        const safeImage = escapeHtml(item.image || "/placeholder.jpg");
-        const safeId = escapeHtml(item.id || "");
-        const safeVariantId = escapeHtml(item.variantId || "");
-        const safeSize = item.size ? escapeHtml(item.size) : "";
-        const safeColor = item.color ? escapeHtml(item.color) : "";
+    .map((item) => {
+      // Escape all user-supplied strings to prevent XSS via innerHTML
+      const safeName = escapeHtml(item.name || "");
+      const safeImage = escapeHtml(
+        getOptimizedImageUrl(item.image || "/placeholder.jpg", {
+          width: 96,
+          height: 96,
+          quality: 75,
+          format: "auto",
+          fit: "cover",
+        }),
+      );
+      const safeId = escapeHtml(item.id || "");
+      const safeVariantId = escapeHtml(item.variantId || "");
+      const safeSize = item.size ? escapeHtml(item.size) : "";
+      const safeColor = item.color ? escapeHtml(item.color) : "";
 
-        const variantInfo = safeSize || safeColor
+      const variantInfo =
+        safeSize || safeColor
           ? `<div class="space-x-1">${safeSize ? `<span>Size: ${safeSize}</span>` : ""}${safeSize && safeColor ? "<span>•</span>" : ""}${safeColor ? `<span>Color: ${safeColor}</span>` : ""}</div>`
           : "";
 
-        return `
+      return `
       <div class="py-2.5 sm:py-3 first:pt-0"><div class="flex gap-2.5 sm:gap-3">
           <div class="w-16 h-16 sm:w-20 sm:h-20 bg-muted rounded-lg overflow-hidden shrink-0"><img src="${safeImage}" alt="${safeName}" class="w-full h-full object-cover" /></div>
           <div class="flex-1 min-w-0">
@@ -361,8 +374,7 @@ export async function renderCartItems() {
             </div>
           </div>
         </div></div>`;
-      },
-    )
+    })
     .join("");
 
   await updateTotals();
@@ -546,7 +558,10 @@ export async function initCartFunctionality() {
     // Reset discount when delivery option changes
     if (cartStore.get().discount) {
       removeDiscount();
-      showDiscountMessage("Discount removed — delivery option changed.", "info");
+      showDiscountMessage(
+        "Discount removed — delivery option changed.",
+        "info",
+      );
     }
     updateTotals();
     handleAbandonedCheckout();

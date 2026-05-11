@@ -65,7 +65,10 @@ import { adminRbacRoutes } from "./routes/admin/rbac";
 import { adminSettingsRoutes } from "./routes/admin/settings";
 import { adminOrdersRoutes } from "./routes/admin/orders";
 import { adminProductsRoutes } from "./routes/admin/products";
-import { adminAuthManagementRoutes, authSetupRoutes } from "./routes/admin/auth-management";
+import {
+  adminAuthManagementRoutes,
+  authSetupRoutes,
+} from "./routes/admin/auth-management";
 import { adminAiContextRoutes } from "./routes/admin/ai-context";
 import { adminAiPromptsRoutes } from "./routes/admin/ai-prompts";
 import { adminOpenRouterRoutes } from "./routes/admin/openrouter";
@@ -76,6 +79,25 @@ import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 // Create typed OpenAPIHono app with Cloudflare Workers Env bindings
 // basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
 const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
+
+function getR2PublicUrl(env: Env, requestUrl: string): string {
+  const configured = ((env.R2_PUBLIC_URL as string | undefined) || "").trim();
+
+  try {
+    const url = new URL(requestUrl);
+    if (
+      url.hostname === "localhost" ||
+      url.hostname === "127.0.0.1" ||
+      url.hostname === "[::1]"
+    ) {
+      return `${url.origin}/api/v1/media`;
+    }
+  } catch {
+    // Fall through to configured public URL.
+  }
+
+  return configured;
+}
 
 // Global error handler — ensures ALL uncaught errors return JSON, not plain text.
 // Hono's built-in default returns c.text("Internal Server Error", 500) which causes
@@ -120,7 +142,7 @@ app.use("*", async (c, next) => {
   c.set("db", db);
   if (c.env.CACHE) initKv(c.env.CACHE);
   if (c.env.BUCKET) {
-    initStorage(c.env.BUCKET, (c.env.R2_PUBLIC_URL as string) || "");
+    initStorage(c.env.BUCKET, getR2PublicUrl(c.env, c.req.url));
   }
   await next();
 });
@@ -154,13 +176,18 @@ app.use("*", async (c, next) => {
   c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   // Only add HSTS if not localhost
   if (!c.req.url.includes("localhost")) {
-    c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    c.header(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains",
+    );
   }
 });
 
 app.use("*", async (c, next) => {
   // Use PUBLIC_API_BASE_URL from CF Workers env binding, fallback to request origin
-  const baseUrl = (c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin).trim();
+  const baseUrl = (
+    c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin
+  ).trim();
 
   c.header("X-Proxy-Base-URL", `${baseUrl}/api/v1`);
   await next();
@@ -211,7 +238,7 @@ app.route("/seo", seoRoutes);
 // Local development media server route
 if (process.env.NODE_ENV === "development") {
   app.route("/media", serveMediaRoute);
-}// Add health check endpoint (relative path '/health')
+} // Add health check endpoint (relative path '/health')
 app.get("/health", async (c) => {
   try {
     const { getCacheStats, getCacheType } = await import("./utils/kv-cache");

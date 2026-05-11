@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 interface SearchResultItem {
   id: string;
@@ -113,7 +114,9 @@ export default function CommandPalette() {
 
     const timer = setTimeout(async () => {
       try {
-        const apiBaseUrl = (typeof window !== "undefined" && window.__API_BASE_URL__) || "/api/v1";
+        const apiBaseUrl =
+          (typeof window !== "undefined" && window.__API_BASE_URL__) ||
+          "/api/v1";
         const params = new URLSearchParams({
           q: query,
           limit: "8",
@@ -305,7 +308,13 @@ export default function CommandPalette() {
                           <div className="h-10 w-10 rounded bg-white p-0.5 border border-gray-100 mr-3 overflow-hidden shrink-0">
                             {p.imageUrl ? (
                               <img
-                                src={p.imageUrl}
+                                src={getOptimizedImageUrl(p.imageUrl, {
+                                  width: 80,
+                                  height: 80,
+                                  quality: 75,
+                                  format: "auto",
+                                  fit: "contain",
+                                })}
                                 alt={p.name}
                                 className="h-full w-full object-contain"
                               />
@@ -320,10 +329,14 @@ export default function CommandPalette() {
                             <div className="text-xs text-gray-500 font-medium">
                               {p.discountedPrice ? (
                                 <span className="text-primary">
-                                  {getCurrencySymbol()}{p.discountedPrice.toLocaleString()}
+                                  {getCurrencySymbol()}
+                                  {p.discountedPrice.toLocaleString()}
                                 </span>
                               ) : (
-                                <span>{getCurrencySymbol()}{p.price?.toLocaleString()}</span>
+                                <span>
+                                  {getCurrencySymbol()}
+                                  {p.price?.toLocaleString()}
+                                </span>
                               )}
                             </div>
                           </div>
