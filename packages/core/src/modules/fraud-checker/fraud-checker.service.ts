@@ -40,6 +40,11 @@ export interface FraudCheckResult {
     total_parcels: number;
     total_delivered: number;
     total_cancel: number;
+    provider_status?: string;
+    message?: string;
+    customer_tag?: string;
+    success_rate?: number;
+    cancel_rate?: number;
     apis?: Record<
       string,
       {

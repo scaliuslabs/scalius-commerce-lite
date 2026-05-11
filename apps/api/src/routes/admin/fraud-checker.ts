@@ -3,13 +3,13 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider, fraudLookupWithActiveProvider } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
+import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/provider";
 
 import { ok, created } from "../../utils/api-response";
-import { ValidationError } from "../../utils/api-error";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
-const providerTypeSchema = z.enum(["default", "fraudbd", "fraudguard", "ecourier"]);
+const providerTypeSchema = z.enum(FRAUD_CHECK_PROVIDER_TYPES);
 
 function maskProviderSecrets<T extends { apiKey?: string; apiSecret?: string }>(provider: T): T {
     return {
@@ -195,6 +195,24 @@ const lookupSchema = z.object({
     phone: z.string().min(1),
 });
 
+const lookupResponseSchema = z.object({
+    mobile_number: z.string().optional(),
+    total_parcels: z.number().optional(),
+    total_delivered: z.number().optional(),
+    total_cancel: z.number().optional(),
+    provider_status: z.string().optional(),
+    message: z.string().optional(),
+    customer_tag: z.string().optional(),
+    success_rate: z.number().optional(),
+    cancel_rate: z.number().optional(),
+    riskLevel: z.enum(["low", "medium", "high", "unknown"]).optional(),
+    apis: z.record(z.string(), z.object({
+        total_parcels: z.number(),
+        total_delivered_parcels: z.number(),
+        total_cancelled_parcels: z.number(),
+    })).optional(),
+}).passthrough();
+
 const lookupRoute = createRoute({
     method: "post",
     path: "/lookup",
@@ -204,7 +222,7 @@ const lookupRoute = createRoute({
         body: { content: { "application/json": { schema: lookupSchema } } }
     },
     responses: {
-        200: { description: "Lookup result", content: { "application/json": { schema: successEnvelope(z.object({}).passthrough()) } } },
+        200: { description: "Lookup result", content: { "application/json": { schema: successEnvelope(lookupResponseSchema) } } },
         ...errorResponses,
     }
 });
@@ -213,7 +231,10 @@ app.openapi(lookupRoute, async (c) => {
     const db = c.get("db");
     const { phone } = c.req.valid("json");
     const result = await fraudLookupWithActiveProvider(db, phone);
-    return ok(c, result.data ?? {});
+    return ok(c, {
+        ...(result.data ?? {}),
+        ...(result.riskLevel ? { riskLevel: result.riskLevel } : {}),
+    });
 });
 
 export { app as adminFraudCheckerRoutes };

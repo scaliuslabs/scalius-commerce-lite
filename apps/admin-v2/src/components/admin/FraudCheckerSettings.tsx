@@ -38,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Pencil, Trash2, TestTube } from "lucide-react";
+import { ExternalLink, Loader2, Plus, Pencil, Trash2, TestTube } from "lucide-react";
 import {
   FRAUD_CHECK_PROVIDER_DEFINITIONS,
   getFraudCheckProviderDefinition,
@@ -331,6 +331,20 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">{providerDefinition.helpText}</p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>{providerDefinition.requestFormatHint}</span>
+                    {providerDefinition.docsUrl && (
+                      <a
+                        href={providerDefinition.docsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        Provider docs
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
                   {form.formState.errors.providerType && (
                     <p className="text-xs text-destructive">{form.formState.errors.providerType.message}</p>
                   )}
@@ -439,7 +453,21 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                     <span className="text-xs text-muted-foreground">
                       {getFraudCheckProviderDefinition(selectedProvider.providerType).helpText}
                     </span>
+                    {getFraudCheckProviderDefinition(selectedProvider.providerType).docsUrl && (
+                      <a
+                        href={getFraudCheckProviderDefinition(selectedProvider.providerType).docsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        Provider docs
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    {getFraudCheckProviderDefinition(selectedProvider.providerType).requestFormatHint}
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">
