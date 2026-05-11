@@ -525,6 +525,7 @@ export const mediaListQueryOptions = (params: {
   limit?: number;
   search?: string;
   folderId?: string;
+  mimeType?: string;
   type?: string;
   sortBy?: string;
   sortOrder?: string;

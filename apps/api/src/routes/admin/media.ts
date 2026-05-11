@@ -44,6 +44,7 @@ const listRoute = createRoute({
             sortBy: z.enum(["createdAt", "size", "filename"]).optional().default("createdAt").openapi({ description: "Sort field" }),
             sortOrder: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort direction" }),
             mimeType: z.string().optional().openapi({ description: "MIME type filter prefix (e.g. 'image/')" }),
+            type: z.string().optional().openapi({ description: "Legacy MIME type filter prefix" }),
         })
     },
     responses: {
@@ -62,7 +63,7 @@ app.openapi(listRoute, async (c) => {
         db, query.page, query.limit, query.search || "", query.folderId,
         query.sortBy as "createdAt" | "size" | "filename",
         query.sortOrder as "asc" | "desc",
-        query.mimeType,
+        query.mimeType ?? query.type,
     );
     return ok(c, result);
 });
