@@ -108,9 +108,9 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
     }
   };
 
-  const handleToggleActive = async (id: string, _currentStatus: boolean) => {
+  const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      await toggleAnalyticsScript({ data: { id } });
+      await toggleAnalyticsScript({ data: { id, isActive: !currentStatus } });
       queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
       queryClient.invalidateQueries({ queryKey: ["analytics", "detail", id] });
       toast.success("Updated", { description: "Analytics script status has been updated." });

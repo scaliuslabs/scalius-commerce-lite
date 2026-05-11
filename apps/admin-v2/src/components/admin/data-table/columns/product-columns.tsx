@@ -92,6 +92,7 @@ export function getProductColumns(
       ),
       cell: ({ row }) => {
         const product = row.original;
+        const isTrashed = opts.showTrashed;
         return (
           <div>
             <div
@@ -104,7 +105,11 @@ export function getProductColumns(
               SKU: {product.sku || "N/A"}
             </div>
             <div className="mt-1 flex items-center gap-1 flex-wrap">
-              {product.isActive ? (
+              {isTrashed ? (
+                <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                  Trashed
+                </Badge>
+              ) : product.isActive ? (
                 <Badge
                   variant="outline"
                   className="text-xs px-1.5 py-0.5 border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"

@@ -6,6 +6,7 @@ import { Button } from "~/components/ui/button";
 import { widgetsQueryOptions } from "~/lib/api.queries";
 import {
   useDeleteWidget,
+  usePermanentDeleteWidget,
   useRestoreWidget,
   useBulkDeleteWidgets,
 } from "~/lib/api.mutations";
@@ -41,6 +42,7 @@ function WidgetsTrashPage() {
 
   // Mutations
   const deleteMutation = useDeleteWidget();
+  const permanentDeleteMutation = usePermanentDeleteWidget();
   const restoreMutation = useRestoreWidget();
   const bulkDeleteMutation = useBulkDeleteWidgets();
 
@@ -57,10 +59,10 @@ function WidgetsTrashPage() {
           void navigate({ to: `/admin/widgets/${id}` as string }),
         onDelete: (id) => deleteMutation.mutate(id),
         onRestore: (id) => restoreMutation.mutate(id),
-        onPermanentDelete: (id) => deleteMutation.mutate(id),
+        onPermanentDelete: (id) => permanentDeleteMutation.mutate(id),
         onCopyShortcode: () => {},
       }),
-    [navigate, deleteMutation, restoreMutation, collectionsRef],
+    [navigate, deleteMutation, permanentDeleteMutation, restoreMutation, collectionsRef],
   );
 
   // Data selector — client-side pagination for widgets

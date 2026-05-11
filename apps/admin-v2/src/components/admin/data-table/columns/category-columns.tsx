@@ -106,10 +106,9 @@ export function getCategoryColumns(
     createDateColumn<CategoryListItem>("updatedAt", "Last Updated"),
     createActionsColumn<CategoryListItem>({
       showTrashed: opts.showTrashed,
-      onView: (c) =>
-        !opts.showTrashed
-          ? window.open(opts.getStorefrontPath(`/categories/${c.slug}`), "_blank")
-          : undefined,
+      onView: !opts.showTrashed
+        ? (c) => window.open(opts.getStorefrontPath(`/categories/${c.slug}`), "_blank")
+        : undefined,
       onEdit: (c) => opts.onEdit(c.id),
       onDelete: (c) => opts.onDelete(c.id),
       onRestore: (c) => opts.onRestore(c.id),

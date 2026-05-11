@@ -71,18 +71,23 @@ export function getWidgetColumns(
     {
       accessorKey: "isActive",
       header: "Status",
-      cell: ({ row }) => (
-        <Badge
-          variant={row.original.isActive ? "default" : "secondary"}
-          className={
-            row.original.isActive
-              ? "bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-950/50 dark:text-green-400"
-              : "bg-muted text-muted-foreground"
-          }
-        >
-          {row.original.isActive ? "Active" : "Inactive"}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const isTrashed = opts.showTrashed || !!row.original.deletedAt;
+        return (
+          <Badge
+            variant={isTrashed ? "secondary" : row.original.isActive ? "default" : "secondary"}
+            className={
+              isTrashed
+                ? "bg-muted text-muted-foreground"
+                : row.original.isActive
+                  ? "bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-950/50 dark:text-green-400"
+                  : "bg-muted text-muted-foreground"
+            }
+          >
+            {isTrashed ? "Trashed" : row.original.isActive ? "Active" : "Inactive"}
+          </Badge>
+        );
+      },
       enableSorting: false,
       size: 100,
     },
