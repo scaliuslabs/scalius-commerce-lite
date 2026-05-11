@@ -9,6 +9,15 @@ import { ValidationError } from "../../utils/api-error";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
+const providerTypeSchema = z.enum(["default", "fraudbd", "fraudguard", "ecourier"]);
+
+function maskProviderSecrets<T extends { apiKey?: string; apiSecret?: string }>(provider: T): T {
+    return {
+        ...provider,
+        apiKey: provider.apiKey ? MASKED_VALUE : "",
+        ...(provider.apiSecret !== undefined ? { apiSecret: provider.apiSecret ? MASKED_VALUE : "" } : {}),
+    };
+}
 
 // ── List Providers ──
 
@@ -17,7 +26,10 @@ const fraudProviderSchema = z.object({
     name: z.string(),
     apiUrl: z.string(),
     apiKey: z.string(),
+    apiSecret: z.string().optional(),
+    userId: z.string().optional(),
     isActive: z.boolean(),
+    providerType: providerTypeSchema.optional(),
 }).passthrough();
 
 const listRoute = createRoute({
@@ -35,10 +47,7 @@ app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const providers = await getFraudProviders(db);
 
-    const maskedProviders = providers.map((provider) => ({
-        ...provider,
-        apiKey: provider.apiKey ? MASKED_VALUE : ""
-    }));
+    const maskedProviders = providers.map(maskProviderSecrets);
 
     return ok(c, maskedProviders);
 });
@@ -49,7 +58,10 @@ const createProviderSchema = z.object({
     name: z.string().min(1),
     apiUrl: z.string().min(1),
     apiKey: z.string().min(1),
+    apiSecret: z.string().optional(),
+    userId: z.string().optional(),
     isActive: z.boolean().optional().default(true),
+    providerType: providerTypeSchema.optional().default("default"),
 });
 
 const createProviderRoute = createRoute({
@@ -72,10 +84,7 @@ app.openapi(createProviderRoute, async (c) => {
 
     const savedProvider = await saveFraudProvider(db, provider);
 
-    const maskedResponse = {
-        ...savedProvider,
-        apiKey: savedProvider.apiKey ? MASKED_VALUE : ""
-    };
+    const maskedResponse = maskProviderSecrets(savedProvider);
 
     return created(c, maskedResponse);
 });
@@ -87,7 +96,10 @@ const updateProviderSchema = z.object({
     name: z.string().min(1),
     apiUrl: z.string().min(1),
     apiKey: z.string().min(1),
+    apiSecret: z.string().optional(),
+    userId: z.string().optional(),
     isActive: z.boolean().default(true),
+    providerType: providerTypeSchema.optional().default("default"),
 });
 
 const updateProviderRoute = createRoute({
@@ -108,6 +120,7 @@ app.openapi(updateProviderRoute, async (c) => {
     const db = c.get("db");
     const validated = c.req.valid("json");
     let apiKey = validated.apiKey;
+    let apiSecret = validated.apiSecret;
 
     if (apiKey === MASKED_VALUE) {
         const existingProvider = await getFraudProvider(db, validated.id);
@@ -116,12 +129,16 @@ app.openapi(updateProviderRoute, async (c) => {
         }
     }
 
-    const savedProvider = await saveFraudProvider(db, { ...validated, apiKey });
+    if (apiSecret === MASKED_VALUE) {
+        const existingProvider = await getFraudProvider(db, validated.id);
+        if (existingProvider?.apiSecret) {
+            apiSecret = existingProvider.apiSecret;
+        }
+    }
 
-    const maskedResponse = {
-        ...savedProvider,
-        apiKey: savedProvider.apiKey ? MASKED_VALUE : ""
-    };
+    const savedProvider = await saveFraudProvider(db, { ...validated, apiKey, apiSecret });
+
+    const maskedResponse = maskProviderSecrets(savedProvider);
 
     return ok(c, maskedResponse);
 });

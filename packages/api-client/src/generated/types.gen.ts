@@ -10559,6 +10559,10 @@ export type GetApiV1AdminMediaData = {
          * MIME type filter prefix (e.g. 'image/')
          */
         mimeType?: string;
+        /**
+         * Legacy MIME type filter prefix
+         */
+        type?: string;
     };
     url: '/api/v1/admin/media';
 };
@@ -11447,6 +11451,14 @@ export type GetApiV1AdminInventoryData = {
          * Alert status filter
          */
         alertStatus?: string;
+        /**
+         * Sort field
+         */
+        sort?: 'productName' | 'sku' | 'available';
+        /**
+         * Sort order
+         */
+        order?: 'asc' | 'desc';
     };
     url: '/api/v1/admin/inventory';
 };
@@ -13268,8 +13280,11 @@ export type GetApiV1AdminFraudCheckerResponses = {
             name: string;
             apiUrl: string;
             apiKey: string;
+            apiSecret?: string;
+            userId?: string;
             isActive: boolean;
-            [key: string]: unknown | string | boolean;
+            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+            [key: string]: unknown | string | boolean | ('default' | 'fraudbd' | 'fraudguard' | 'ecourier') | undefined;
         }>;
     };
 };
@@ -13281,7 +13296,10 @@ export type PostApiV1AdminFraudCheckerData = {
         name: string;
         apiUrl: string;
         apiKey: string;
+        apiSecret?: string;
+        userId?: string;
         isActive?: boolean;
+        providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
     };
     path?: never;
     query?: never;
@@ -13359,8 +13377,11 @@ export type PostApiV1AdminFraudCheckerResponses = {
             name: string;
             apiUrl: string;
             apiKey: string;
+            apiSecret?: string;
+            userId?: string;
             isActive: boolean;
-            [key: string]: unknown | string | boolean;
+            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+            [key: string]: unknown | string | boolean | ('default' | 'fraudbd' | 'fraudguard' | 'ecourier') | undefined;
         };
     };
 };
@@ -13373,7 +13394,10 @@ export type PutApiV1AdminFraudCheckerData = {
         name: string;
         apiUrl: string;
         apiKey: string;
+        apiSecret?: string;
+        userId?: string;
         isActive?: boolean;
+        providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
     };
     path?: never;
     query?: never;
@@ -13451,8 +13475,11 @@ export type PutApiV1AdminFraudCheckerResponses = {
             name: string;
             apiUrl: string;
             apiKey: string;
+            apiSecret?: string;
+            userId?: string;
             isActive: boolean;
-            [key: string]: unknown | string | boolean;
+            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+            [key: string]: unknown | string | boolean | ('default' | 'fraudbd' | 'fraudguard' | 'ecourier') | undefined;
         };
     };
 };
