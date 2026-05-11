@@ -13806,7 +13806,30 @@ export type PostApiV1AdminFraudCheckerLookupResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            mobile_number?: string;
+            total_parcels?: number;
+            total_delivered?: number;
+            total_cancel?: number;
+            provider_status?: string;
+            message?: string;
+            customer_tag?: string;
+            success_rate?: number;
+            cancel_rate?: number;
+            riskLevel?: 'low' | 'medium' | 'high' | 'unknown';
+            apis?: {
+                [key: string]: {
+                    total_parcels: number;
+                    total_delivered_parcels: number;
+                    total_cancelled_parcels: number;
+                };
+            };
+            [key: string]: unknown | string | number | ('low' | 'medium' | 'high' | 'unknown') | {
+                [key: string]: {
+                    total_parcels: number;
+                    total_delivered_parcels: number;
+                    total_cancelled_parcels: number;
+                };
+            } | undefined;
         };
     };
 };

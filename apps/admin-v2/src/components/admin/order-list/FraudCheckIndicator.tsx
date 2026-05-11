@@ -15,15 +15,35 @@ interface FraudCheckIndicatorProps {
   orderId: string;
 }
 
+type RiskLevel = "low" | "medium" | "high" | "unknown";
+
+interface CourierFraudStats {
+  total_parcels: number;
+  total_delivered_parcels: number;
+  total_cancelled_parcels: number;
+}
+
+interface FraudLookupData {
+  mobile_number?: string;
+  total_parcels?: number;
+  total_delivered?: number;
+  total_cancel?: number;
+  provider_status?: string;
+  message?: string;
+  customer_tag?: string;
+  riskLevel?: RiskLevel;
+  apis?: Record<string, CourierFraudStats>;
+}
+
 export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [fraudData, setFraudData] = useState<any>(null);
+  const [fraudData, setFraudData] = useState<FraudLookupData | null>(null);
 
   const handleCheck = async () => {
     setIsLoading(true);
     try {
-      const result = await fraudCheckerLookup({ data: { phone } });
+      const result = await fraudCheckerLookup({ data: { phone } }) as FraudLookupData;
       setFraudData(result);
     } catch (error) {
       toast.error("Check Failed", { description: getServerFnError(error, "Failed to check fraud data") });
@@ -39,34 +59,46 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
     }
   };
 
+  const getDeliveryRate = () => {
+    if (!fraudData?.total_parcels) return 0;
+    return ((fraudData.total_delivered ?? 0) / fraudData.total_parcels) * 100;
+  };
+
+  const getRiskLevel = (): RiskLevel => {
+    if (!fraudData) return "unknown";
+    if (fraudData.riskLevel) return fraudData.riskLevel;
+    const deliveryRate =
+      (fraudData.total_parcels ?? 0) > 0 ? getDeliveryRate() : 0;
+
+    if ((fraudData.total_parcels ?? 0) === 0) return "unknown";
+    if (deliveryRate >= 80) return "low";
+    if (deliveryRate >= 50) return "medium";
+    return "high";
+  };
+
   const getStatusIcon = () => {
     if (!fraudData) return <Shield className="h-4 w-4" />;
 
-    const deliveryRate =
-      fraudData.total_parcels > 0
-        ? (fraudData.total_delivered / fraudData.total_parcels) * 100
-        : 0;
-
-    if (deliveryRate >= 80) {
+    const riskLevel = getRiskLevel();
+    if (riskLevel === "low") {
       return <ShieldCheck className="h-4 w-4 text-green-600" />;
-    } else if (deliveryRate >= 50) {
+    } else if (riskLevel === "medium") {
       return <Shield className="h-4 w-4 text-yellow-600" />;
-    } else {
+    } else if (riskLevel === "high") {
       return <ShieldAlert className="h-4 w-4 text-red-600" />;
     }
+
+    return <Shield className="h-4 w-4 text-gray-600" />;
   };
 
   const getStatusColor = () => {
     if (!fraudData) return "text-gray-600";
+    const riskLevel = getRiskLevel();
 
-    const deliveryRate =
-      fraudData.total_parcels > 0
-        ? (fraudData.total_delivered / fraudData.total_parcels) * 100
-        : 0;
-
-    if (deliveryRate >= 80) return "text-green-600";
-    if (deliveryRate >= 50) return "text-yellow-600";
-    return "text-red-600";
+    if (riskLevel === "low") return "text-green-600";
+    if (riskLevel === "medium") return "text-yellow-600";
+    if (riskLevel === "high") return "text-red-600";
+    return "text-gray-600";
   };
 
   return (
@@ -109,42 +141,59 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded bg-[var(--muted)] p-2">
                   <p className="text-xs text-[var(--muted-foreground)]">Total</p>
-                  <p className="text-lg font-semibold">{fraudData.total_parcels}</p>
+                  <p className="text-lg font-semibold">{fraudData.total_parcels ?? 0}</p>
                 </div>
                 <div className="rounded bg-green-50 dark:bg-green-900/20 p-2">
                   <p className="text-xs text-green-600 dark:text-green-400">Delivered</p>
                   <p className="text-lg font-semibold text-green-700 dark:text-green-300">
-                    {fraudData.total_delivered}
+                    {fraudData.total_delivered ?? 0}
                   </p>
                 </div>
                 <div className="rounded bg-red-50 dark:bg-red-900/20 p-2">
                   <p className="text-xs text-red-600 dark:text-red-400">Cancelled</p>
                   <p className="text-lg font-semibold text-red-700 dark:text-red-300">
-                    {fraudData.total_cancel}
+                    {fraudData.total_cancel ?? 0}
                   </p>
                 </div>
               </div>
 
-              {fraudData.total_parcels > 0 && (
+              <div className="rounded bg-[var(--muted)] p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--muted-foreground)]">Risk</span>
+                  <span className={`text-sm font-semibold capitalize ${getStatusColor()}`}>
+                    {getRiskLevel()}
+                  </span>
+                </div>
+                {(fraudData.provider_status || fraudData.customer_tag || fraudData.message) && (
+                  <div className="mt-2 space-y-1 text-xs text-[var(--muted-foreground)]">
+                    {(fraudData.provider_status || fraudData.customer_tag) && (
+                      <p>Status: {fraudData.provider_status || fraudData.customer_tag}</p>
+                    )}
+                    {fraudData.message && <p>{fraudData.message}</p>}
+                  </div>
+                )}
+              </div>
+
+              {(fraudData.total_parcels ?? 0) > 0 && (
                 <div className="rounded bg-[var(--muted)] p-3">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs text-[var(--muted-foreground)]">
                       Delivery Rate
                     </span>
                     <span className={`text-sm font-semibold ${getStatusColor()}`}>
-                      {((fraudData.total_delivered / fraudData.total_parcels) * 100).toFixed(1)}%
+                      {getDeliveryRate().toFixed(1)}%
                     </span>
                   </div>
                   <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div
-                      className={`h-full ${((fraudData.total_delivered / fraudData.total_parcels) * 100) >= 80
+                      className={`h-full ${getDeliveryRate() >= 80
                           ? "bg-green-500"
-                          : ((fraudData.total_delivered / fraudData.total_parcels) * 100) >= 50
+                          : getDeliveryRate() >= 50
                             ? "bg-yellow-500"
                             : "bg-red-500"
                         }`}
                       style={{
-                        width: `${(fraudData.total_delivered / fraudData.total_parcels) * 100}%`,
+                        width: `${getDeliveryRate()}%`,
                       }}
                     />
                   </div>
@@ -156,7 +205,7 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
                   <p className="text-xs font-medium text-[var(--muted-foreground)]">
                     Courier Breakdown
                   </p>
-                  {Object.entries(fraudData.apis).map(([courier, data]: [string, any]) => (
+                  {Object.entries(fraudData.apis).map(([courier, data]) => (
                     <div key={courier} className="rounded border border-[var(--border)] p-2">
                       <p className="text-xs font-medium mb-1">{courier}</p>
                       <div className="grid grid-cols-3 gap-1 text-xs">

@@ -2,7 +2,14 @@
 // Provider interface and registry for fraud checker integrations.
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 
-export type FraudCheckProviderType = "default" | "fraudbd" | "fraudguard" | "ecourier";
+export const FRAUD_CHECK_PROVIDER_TYPES = [
+  "default",
+  "fraudbd",
+  "fraudguard",
+  "ecourier",
+] as const;
+
+export type FraudCheckProviderType = (typeof FRAUD_CHECK_PROVIDER_TYPES)[number];
 
 export interface FraudCheckProviderDefinition {
   value: FraudCheckProviderType;
@@ -13,6 +20,9 @@ export interface FraudCheckProviderDefinition {
   apiSecretLabel?: string;
   userIdLabel?: string;
   helpText: string;
+  docsUrl?: string;
+  requestFormatHint: string;
+  responseModel: "courier-stats" | "status";
   requiredFields: Array<"apiKey" | "apiSecret" | "userId">;
 }
 
@@ -23,6 +33,8 @@ const DEFAULT_FRAUD_CHECK_PROVIDER_DEFINITION: FraudCheckProviderDefinition = {
   defaultApiUrl: "https://fraudchecker.link/api/v1/qc/",
   apiKeyLabel: "Bearer Token",
   helpText: "Use an existing custom endpoint that accepts FormData phone and Bearer token auth.",
+  requestFormatHint: "POST FormData with phone and Authorization Bearer token.",
+  responseModel: "courier-stats",
   requiredFields: ["apiKey"],
 };
 
@@ -32,9 +44,12 @@ export const FRAUD_CHECK_PROVIDER_DEFINITIONS: readonly FraudCheckProviderDefini
     value: "fraudbd",
     label: "FraudBD",
     shortLabel: "FraudBD",
-    defaultApiUrl: "https://api.fraudbd.com/api/check-courier-info",
+    defaultApiUrl: "https://fraudbd.com/api/check-courier-info",
     apiKeyLabel: "API Key",
-    helpText: "Dedicated Bangladesh courier delivery history API with sandbox support.",
+    helpText: "Bangladesh courier history API with Pathao, Steadfast, Paperfly, and RedX summaries plus sandbox support.",
+    docsUrl: "https://fraudbd.com/api-documentation",
+    requestFormatHint: "POST JSON with phone_number and api_key header.",
+    responseModel: "courier-stats",
     requiredFields: ["apiKey"],
   },
   {
@@ -44,7 +59,10 @@ export const FRAUD_CHECK_PROVIDER_DEFINITIONS: readonly FraudCheckProviderDefini
     defaultApiUrl: "https://fraudguard.slope.com.bd/api/v1/fraud-check",
     apiKeyLabel: "API Key",
     apiSecretLabel: "API Secret",
-    helpText: "Bangladesh fraud check API using key and secret headers.",
+    helpText: "Bangladesh fraud check API with delivery success rate, customer tag, and courier stats.",
+    docsUrl: "https://fraudguard.slope.com.bd/api-documentation",
+    requestFormatHint: "POST JSON with phone_number, X-API-KEY, and X-API-SECRET.",
+    responseModel: "courier-stats",
     requiredFields: ["apiKey", "apiSecret"],
   },
   {
@@ -55,7 +73,10 @@ export const FRAUD_CHECK_PROVIDER_DEFINITIONS: readonly FraudCheckProviderDefini
     apiKeyLabel: "API Key",
     apiSecretLabel: "API Secret",
     userIdLabel: "User ID",
-    helpText: "Official eCourier merchant fraud alert endpoint.",
+    helpText: "Official eCourier merchant fraud alert endpoint returning customer status such as Warning, New Customer, or Verified.",
+    docsUrl: "https://ecourier.com.bd/wp-content/uploads/eCourier_Merchant_API_Document_General_v3-7.pdf",
+    requestFormatHint: "POST JSON with number, API-KEY, API-SECRET, and USER-ID.",
+    responseModel: "status",
     requiredFields: ["apiKey", "apiSecret", "userId"],
   },
 ];
@@ -107,6 +128,11 @@ interface NormalizedFraudStats {
   total_parcels: number;
   total_delivered: number;
   total_cancel: number;
+  provider_status?: string;
+  message?: string;
+  customer_tag?: string;
+  success_rate?: number;
+  cancel_rate?: number;
   apis?: Record<
     string,
     {
@@ -137,7 +163,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function asNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value.replace(/,/g, ""));
+    const parsed = Number(value.replace(/[% ,]/g, ""));
     if (Number.isFinite(parsed)) return parsed;
   }
   return undefined;
@@ -200,6 +226,45 @@ function findString(value: unknown, aliases: string[]): string | undefined {
   return undefined;
 }
 
+function findValue(value: unknown, aliases: string[]): unknown {
+  const aliasSet = new Set(aliases.map(normalizeKey));
+  const queue: unknown[] = [value];
+  const seen = new Set<object>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    const record = asRecord(current);
+    if (!record || seen.has(record)) continue;
+    seen.add(record);
+
+    for (const [key, entry] of Object.entries(record)) {
+      if (aliasSet.has(normalizeKey(key))) {
+        return entry;
+      }
+    }
+
+    queue.push(...Object.values(record));
+  }
+
+  return undefined;
+}
+
+function stringifyMessage(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => typeof entry === "string" ? entry : undefined)
+      .filter(Boolean)
+      .join(", ") || undefined;
+  }
+  return undefined;
+}
+
 function pickPayload(raw: unknown): unknown {
   const record = asRecord(raw);
   if (!record) return raw;
@@ -215,11 +280,11 @@ function pickPayload(raw: unknown): unknown {
 
 function normalizeCourierStats(value: unknown): NormalizedFraudStats | null {
   const total =
-    findNumber(value, ["total_parcels", "total_parcel", "total_orders", "total_order", "total_delivery", "total_deliveries", "total"]);
+    findNumber(value, ["total_parcels", "total_parcel", "total_orders", "total_order", "orders", "total_delivery", "total_deliveries", "total"]);
   const delivered =
     findNumber(value, ["total_delivered", "total_delivered_parcels", "delivered_parcels", "successful_delivery", "success_parcel", "success", "delivered"]);
   const cancelled =
-    findNumber(value, ["total_cancel", "total_cancelled_parcels", "total_cancelled", "cancelled_parcels", "canceled_delivery", "cancelled_delivery", "cancel_parcel", "cancelled", "canceled", "returned"]);
+    findNumber(value, ["total_cancel", "total_cancelled_parcels", "total_cancelled", "cancelled_parcels", "canceled_delivery", "cancelled_delivery", "cancel_parcel", "cancelled", "canceled", "cancel", "returned"]);
 
   if (total === undefined && delivered === undefined && cancelled === undefined) {
     return null;
@@ -230,6 +295,11 @@ function normalizeCourierStats(value: unknown): NormalizedFraudStats | null {
     total_parcels: total ?? (delivered ?? 0) + (cancelled ?? 0),
     total_delivered: delivered ?? 0,
     total_cancel: cancelled ?? 0,
+    provider_status: findString(value, ["customer_status", "customer_tag", "fraud_status", "risk_level", "riskLevel", "status"]),
+    message: stringifyMessage(findValue(value, ["customer_message", "message", "risk_message", "description"])),
+    customer_tag: findString(value, ["customer_tag", "customerTag", "data_type"]),
+    success_rate: findNumber(value, ["successRate", "success_rate", "delivery_success_rate"]),
+    cancel_rate: findNumber(value, ["cancelRate", "cancel_rate"]),
   };
 }
 
@@ -242,6 +312,8 @@ function findCourierBreakdown(raw: unknown): NormalizedFraudStats["apis"] | unde
     record.apis
     ?? record.couriers
     ?? record.courier
+    ?? record.Summaries
+    ?? record.summaries
     ?? record.courier_stats
     ?? record.courierStats
     ?? record.courier_data
@@ -273,11 +345,34 @@ function findCourierBreakdown(raw: unknown): NormalizedFraudStats["apis"] | unde
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
+function normalizeStatusResponse(raw: unknown, phone: string): NormalizedFraudStats | null {
+  const payload = pickPayload(raw);
+  const status = findString(payload, ["customer_status", "customer_tag", "fraud_status", "risk_level", "riskLevel", "status"])
+    ?? findString(raw, ["customer_status", "customer_tag", "fraud_status", "risk_level", "riskLevel", "status"]);
+  const message = stringifyMessage(findValue(payload, ["customer_message", "message", "risk_message", "description"]))
+    ?? stringifyMessage(findValue(raw, ["customer_message", "message", "risk_message", "description"]));
+
+  if (!status && !message) return null;
+
+  return {
+    mobile_number: findString(payload, ["mobile_number", "mobile", "phone", "phone_number", "recipient_mobile"]) ?? toLocalPhone(phone),
+    total_parcels: 0,
+    total_delivered: 0,
+    total_cancel: 0,
+    provider_status: status,
+    message,
+    customer_tag: findString(payload, ["customer_tag", "customerTag", "data_type"]),
+  };
+}
+
 function normalizeFraudResponse(raw: unknown, phone: string): NormalizedFraudStats {
   const payload = pickPayload(raw);
   const stats = normalizeCourierStats(payload) ?? normalizeCourierStats(raw);
   if (!stats) {
-    throw new Error("Provider response did not include courier delivery statistics");
+    const statusOnly = normalizeStatusResponse(raw, phone);
+    if (statusOnly) return statusOnly;
+
+    throw new Error("Provider response did not include fraud status or courier delivery statistics");
   }
 
   return {
@@ -287,7 +382,29 @@ function normalizeFraudResponse(raw: unknown, phone: string): NormalizedFraudSta
   };
 }
 
+function riskFromStatus(status: string | undefined): "low" | "medium" | "high" | "unknown" {
+  if (!status) return "unknown";
+
+  const normalized = status.toLowerCase();
+  if (
+    /\b(warning|fraud|blacklist|blacklisted|blocked|high|risky|bad|danger)\b/.test(normalized)
+  ) {
+    return "high";
+  }
+  if (/\b(medium|moderate|suspicious|caution|watch)\b/.test(normalized)) {
+    return "medium";
+  }
+  if (/\b(verified|good|excellent|safe|clear|new customer|low)\b/.test(normalized)) {
+    return "low";
+  }
+
+  return "unknown";
+}
+
 function computeRiskLevel(data: NormalizedFraudStats): "low" | "medium" | "high" | "unknown" {
+  const statusRisk = riskFromStatus(data.provider_status ?? data.customer_tag);
+  if (statusRisk !== "unknown") return statusRisk;
+
   const { total_parcels, total_cancel } = data;
 
   if (total_parcels === 0) return "unknown";
@@ -366,9 +483,8 @@ export class FraudBdCheckProvider implements FraudCheckProvider {
         "Content-Type": "application/json",
         Accept: "application/json",
         api_key: config.apiKey,
-        "API-KEY": config.apiKey,
       },
-      body: JSON.stringify({ phone: toLocalPhone(phone) }),
+      body: JSON.stringify({ phone_number: toLocalPhone(phone) }),
     });
 
     return toProviderResult(await readProviderJson(response), phone);
@@ -387,7 +503,7 @@ export class FraudGuardCheckProvider implements FraudCheckProvider {
         "X-API-KEY": config.apiKey,
         "X-API-SECRET": config.apiSecret ?? "",
       },
-      body: JSON.stringify({ phone: toLocalPhone(phone) }),
+      body: JSON.stringify({ phone_number: toLocalPhone(phone) }),
     });
 
     return toProviderResult(await readProviderJson(response), phone);
@@ -407,7 +523,7 @@ export class ECourierFraudCheckProvider implements FraudCheckProvider {
         "API-SECRET": config.apiSecret ?? "",
         "USER-ID": config.userId ?? "",
       },
-      body: JSON.stringify({ mobile: toLocalPhone(phone) }),
+      body: JSON.stringify({ number: toLocalPhone(phone) }),
     });
 
     return toProviderResult(await readProviderJson(response), phone);

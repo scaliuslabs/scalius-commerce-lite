@@ -25,14 +25,16 @@ describe("Bangladesh fraud checker providers", () => {
     const fetchMock = mockJsonResponse({
       data: {
         mobile_number: "01711111111",
-        total_parcels: 10,
-        total_delivered: 8,
-        total_cancel: 2,
-        apis: {
-          steadfast: {
-            total_parcels: 6,
-            total_delivered_parcels: 5,
-            total_cancelled_parcels: 1,
+        totalSummary: {
+          total: 10,
+          success: 8,
+          cancel: 2,
+        },
+        Summaries: {
+          Steadfast: {
+            total: 6,
+            success: 5,
+            cancel: 1,
           },
         },
       },
@@ -48,16 +50,15 @@ describe("Bangladesh fraud checker providers", () => {
     const [, init] = firstCall!;
     expect(init?.headers).toMatchObject({
       api_key: "fraudbd-key",
-      "API-KEY": "fraudbd-key",
     });
-    expect(JSON.parse(String(init?.body))).toEqual({ phone: "01711111111" });
+    expect(JSON.parse(String(init?.body))).toEqual({ phone_number: "01711111111" });
     expect(result.riskLevel).toBe("medium");
     expect(result.details).toMatchObject({
       total_parcels: 10,
       total_delivered: 8,
       total_cancel: 2,
       apis: {
-        steadfast: {
+        Steadfast: {
           total_parcels: 6,
           total_delivered_parcels: 5,
           total_cancelled_parcels: 1,
@@ -98,7 +99,7 @@ describe("Bangladesh fraud checker providers", () => {
       "X-API-KEY": "guard-key",
       "X-API-SECRET": "guard-secret",
     });
-    expect(JSON.parse(String(init?.body))).toEqual({ phone: "01811111111" });
+    expect(JSON.parse(String(init?.body))).toEqual({ phone_number: "01811111111" });
     expect(result.details).toMatchObject({
       total_parcels: 4,
       total_delivered: 3,
@@ -115,11 +116,10 @@ describe("Bangladesh fraud checker providers", () => {
 
   it("calls eCourier with merchant credential headers", async () => {
     const fetchMock = mockJsonResponse({
-      data: {
-        total_parcel: 3,
-        success_parcel: 3,
-        cancel_parcel: 0,
-      },
+      customer_status: "Warning!",
+      customer_message: [
+        "This customer has a risky delivery history. Please review before dispatch.",
+      ],
     });
 
     const result = await new ECourierFraudCheckProvider().lookup("+8801911111111", {
@@ -137,12 +137,15 @@ describe("Bangladesh fraud checker providers", () => {
       "API-SECRET": "ecourier-secret",
       "USER-ID": "merchant-user-id",
     });
-    expect(JSON.parse(String(init?.body))).toEqual({ mobile: "01911111111" });
-    expect(result.riskLevel).toBe("low");
+    expect(JSON.parse(String(init?.body))).toEqual({ number: "01911111111" });
+    expect(result.riskLevel).toBe("high");
     expect(result.details).toMatchObject({
-      total_parcels: 3,
-      total_delivered: 3,
+      mobile_number: "01911111111",
+      total_parcels: 0,
+      total_delivered: 0,
       total_cancel: 0,
+      provider_status: "Warning!",
+      message: "This customer has a risky delivery history. Please review before dispatch.",
     });
   });
 

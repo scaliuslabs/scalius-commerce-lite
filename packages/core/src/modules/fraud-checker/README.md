@@ -38,13 +38,16 @@ Provider configuration presets live in `FRAUD_CHECK_PROVIDER_DEFINITIONS`, which
 | Provider type | Adapter | Auth | Request |
 |---------------|---------|------|---------|
 | `default` | `DefaultFraudCheckProvider` | `Authorization: Bearer <apiKey>` | `FormData(phone)` |
-| `fraudbd` | `FraudBdCheckProvider` | `api_key` / `API-KEY` header | JSON `{ phone }` |
-| `fraudguard` | `FraudGuardCheckProvider` | `X-API-KEY` + `X-API-SECRET` headers | JSON `{ phone }` |
-| `ecourier` | `ECourierFraudCheckProvider` | `API-KEY` + `API-SECRET` + `USER-ID` headers | JSON `{ mobile }` |
+| `fraudbd` | `FraudBdCheckProvider` | `api_key` header | JSON `{ phone_number }` |
+| `fraudguard` | `FraudGuardCheckProvider` | `X-API-KEY` + `X-API-SECRET` headers | JSON `{ phone_number }` |
+| `ecourier` | `ECourierFraudCheckProvider` | `API-KEY` + `API-SECRET` + `USER-ID` headers | JSON `{ number }` |
 
-All providers normalize their responses into `mobile_number`, `total_parcels`, `total_delivered`, `total_cancel`, and optional per-courier `apis` stats so existing order UI consumers do not need provider-specific branches.
+Courier-stat providers normalize their responses into `mobile_number`, `total_parcels`, `total_delivered`, `total_cancel`, and optional per-courier `apis` stats so existing order UI consumers do not need provider-specific branches. Status-only providers, such as eCourier Fraud Alert, return the same total fields as zero plus `provider_status`/`message`; the provider status drives `riskLevel`.
 
 Risk level calculation:
+- Provider status containing warning/fraud/blacklist/blocked/high/risky/bad/danger -> `"high"`
+- Provider status containing medium/moderate/suspicious/caution/watch -> `"medium"`
+- Provider status containing verified/good/excellent/safe/clear/new customer/low -> `"low"`
 - `total_parcels === 0` -> `"unknown"`
 - Cancel rate >= 50% -> `"high"`
 - Cancel rate >= 20% -> `"medium"`
@@ -52,7 +55,7 @@ Risk level calculation:
 
 ### Provider Registry
 
-In-memory `Map<string, FraudCheckProvider>`. The `"default"` provider is registered on module load. Custom providers are registered via `registerFraudCheckProvider()`. Lookup via `getFraudCheckProvider()` falls back to `"default"` when the requested type is not found.
+In-memory `Map<string, FraudCheckProvider>`. The `"default"` provider is registered on module load. Custom providers are registered via `registerFraudCheckProvider()`. Lookup via `getFraudCheckProvider()` only falls back for empty/default requests; unknown provider types throw so misconfiguration is visible.
 
 ## Service Functions (`fraud-checker.service.ts`)
 

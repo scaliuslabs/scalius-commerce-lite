@@ -42584,7 +42584,66 @@
                     },
                     "data": {
                       "type": "object",
-                      "properties": {},
+                      "properties": {
+                        "mobile_number": {
+                          "type": "string"
+                        },
+                        "total_parcels": {
+                          "type": "number"
+                        },
+                        "total_delivered": {
+                          "type": "number"
+                        },
+                        "total_cancel": {
+                          "type": "number"
+                        },
+                        "provider_status": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "customer_tag": {
+                          "type": "string"
+                        },
+                        "success_rate": {
+                          "type": "number"
+                        },
+                        "cancel_rate": {
+                          "type": "number"
+                        },
+                        "riskLevel": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "unknown"
+                          ]
+                        },
+                        "apis": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "total_parcels": {
+                                "type": "number"
+                              },
+                              "total_delivered_parcels": {
+                                "type": "number"
+                              },
+                              "total_cancelled_parcels": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "total_parcels",
+                              "total_delivered_parcels",
+                              "total_cancelled_parcels"
+                            ]
+                          }
+                        }
+                      },
                       "additionalProperties": {
                         "nullable": true
                       }
