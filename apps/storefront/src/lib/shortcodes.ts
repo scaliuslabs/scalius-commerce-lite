@@ -1,6 +1,8 @@
 // src/lib/shortcodes.ts
 import { getProductBySlug, getWidgetById } from "@/lib/api";
 import { scopeCss } from "@scalius/shared/css-scope";
+import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
+import { normalizeWidgetCss, normalizeWidgetHtml } from "./widget-content";
 
 export interface ShortcodeMatch {
   fullMatch: string;
@@ -51,9 +53,10 @@ export async function renderWidgetShortcode(widgetId: string): Promise<string> {
     }
 
     const scopeClass = `sw-${widgetId}`;
-    let html = widgetData.htmlContent;
-    if (widgetData.cssContent) {
-      html = `<style>${scopeCss(widgetData.cssContent, scopeClass)}</style>${html}`;
+    let html = normalizeWidgetHtml(widgetData.htmlContent);
+    const css = normalizeWidgetCss(widgetData.cssContent);
+    if (css) {
+      html = `<style>${scopeCss(css, scopeClass)}</style>${html}`;
     }
 
     return `<div class="widget-shortcode not-prose ${scopeClass}" data-widget-id="${widgetId}">${html}</div>`;
@@ -87,8 +90,9 @@ export async function renderProductShortcode(
 
 // REFACTORED: Parallel processing — resolve all shortcodes concurrently, then replace
 export async function processShortcodes(content: string): Promise<string> {
-  const shortcodes = parseShortcodes(content);
-  if (shortcodes.length === 0) return content;
+  const normalizedContent = unwrapParagraphWrappedShortcodes(content);
+  const shortcodes = parseShortcodes(normalizedContent);
+  if (shortcodes.length === 0) return normalizedContent;
 
   // Phase 1: Resolve all shortcodes in parallel (each triggers an API call)
   const resolvedMap = new Map<string, string>();
@@ -105,9 +109,9 @@ export async function processShortcodes(content: string): Promise<string> {
   );
 
   // Phase 2: Replace all resolved shortcodes in a single pass
-  let processedContent = content;
+  let processedContent = normalizedContent;
   for (const [original, replacement] of resolvedMap) {
-    processedContent = processedContent.replace(original, replacement);
+    processedContent = processedContent.split(original).join(replacement);
   }
 
   return processedContent;
