@@ -168,6 +168,7 @@ const layoutData = await getLayoutData();
   import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
   import { escapeHtml } from "@scalius/shared/html-escape";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+  import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 
 
@@ -199,9 +200,20 @@ const layoutData = await getLayoutData();
     const itemCount = order.items.reduce((s, i) => s + i.quantity, 0);
 
     // Item details layout (shown when expanded)
-    const itemDetails = order.items.map((item) =>
-      `<div class="flex items-start gap-4 py-3">
-        <img src="${escapeHtml(item.productImage || "/placeholder.jpg")}" alt="" class="w-12 h-12 rounded-md object-cover border border-border shrink-0 bg-card" loading="lazy" />
+    const itemDetails = order.items.map((item) => {
+      const imageUrl = getOptimizedImageUrl(
+        item.productImage || "/placeholder.jpg",
+        {
+          width: 96,
+          height: 96,
+          quality: 80,
+          format: "auto",
+          fit: "cover",
+        },
+      );
+
+      return `<div class="flex items-start gap-4 py-3">
+        <img src="${escapeHtml(imageUrl)}" alt="" class="w-12 h-12 rounded-md object-cover border border-border shrink-0 bg-card" loading="lazy" />
         <div class="flex-1 min-w-0">
           <p class="text-sm font-semibold text-foreground truncate">${escapeHtml(item.productName || "Product")}</p>
           ${(item.variantSize || item.variantColor)
@@ -212,8 +224,8 @@ const layoutData = await getLayoutData();
           <p class="text-sm font-bold text-foreground">${formatCurrency(item.quantity * item.price)}</p>
           <p class="text-[11px] text-muted-foreground mt-0.5">${item.quantity} × ${formatCurrency(item.price)}</p>
         </div>
-      </div>`
-    ).join("");
+      </div>`;
+    }).join("");
 
     return `
       <div class="order-card bg-card border border-border rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">

@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   Search,
 } from "lucide-react";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 
 const params = Astro.url.searchParams;
 const query = params.get("q") || "";
@@ -57,6 +58,7 @@ try {
     getFilterableAttributes({ searchQuery: query }),
   ]);
   layoutData = fetchedLayoutData;
+  setRuntimeImageCdnPolicy(layoutData?.media);
   productsResponse = fetchedProducts;
   attributes = fetchedAttributes || [];
 } catch (e: unknown) {

@@ -1,6 +1,10 @@
 // src/lib/shortcodes.ts
 import { getProductBySlug, getWidgetById } from "@/lib/api";
 import { scopeCss } from "@scalius/shared/css-scope";
+import {
+  optimizeCssImageUrls,
+  optimizeRichContentImages,
+} from "./rich-content-media";
 import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
 import { normalizeWidgetCss, normalizeWidgetHtml } from "./widget-content";
 
@@ -53,8 +57,10 @@ export async function renderWidgetShortcode(widgetId: string): Promise<string> {
     }
 
     const scopeClass = `sw-${widgetId}`;
-    let html = normalizeWidgetHtml(widgetData.htmlContent);
-    const css = normalizeWidgetCss(widgetData.cssContent);
+    let html = optimizeRichContentImages(
+      normalizeWidgetHtml(widgetData.htmlContent),
+    );
+    const css = optimizeCssImageUrls(normalizeWidgetCss(widgetData.cssContent));
     if (css) {
       html = `<style>${scopeCss(css, scopeClass)}</style>${html}`;
     }
