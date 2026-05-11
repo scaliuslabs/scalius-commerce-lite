@@ -4,6 +4,7 @@ import { createApiUrl, fetchWithRetry, getConfiguredSdkAuthClient } from "./clie
 import type { Order, CreateOrderPayload } from "./types";
 import { unwrapData } from "./unwrap";
 import { getApiV1OrdersById } from "@scalius/api-client/sdk";
+import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
 
 /**
  * Submits a new order to the backend.
@@ -35,16 +36,14 @@ export async function createOrder(
 
     const data = await response.json() as {
       success?: boolean;
-      error?: string | { message?: string };
-      details?: string;
-      message?: string;
+      error?: unknown;
+      details?: unknown;
+      message?: unknown;
       data?: { id?: string; orderId?: string; checkoutToken?: string };
     };
 
     if (!response.ok || !data.success) {
-      const errorMsg = typeof data.error === 'string'
-        ? data.error
-        : (typeof data.error === 'object' && data.error?.message) || data.details || data.message || "Order creation failed";
+      const errorMsg = getCheckoutErrorMessage(data);
 
       console.error("Failed to create order:", errorMsg);
       return { success: false, error: errorMsg };

@@ -2,6 +2,8 @@
  * Creates an order via the server-side proxy.
  * Shared by all gateway handlers.
  */
+import { getCheckoutErrorMessage } from "./error-messages";
+
 export async function createOrder(
   checkoutData: Record<string, unknown>,
   paymentMethod: string,
@@ -48,12 +50,9 @@ export async function createOrder(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({} as Record<string, unknown>));
-    const errObj = err.error;
-    const errMsg =
-      typeof errObj === "string"
-        ? errObj
-        : (errObj as Record<string, unknown> | undefined)?.message || `Order creation failed (${res.status})`;
-    throw new Error(errMsg as string);
+    throw new Error(
+      getCheckoutErrorMessage(err, `Order creation failed (${res.status})`),
+    );
   }
 
   const data = await res.json();

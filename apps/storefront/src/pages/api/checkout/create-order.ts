@@ -4,6 +4,7 @@
 
 import type { APIRoute } from "astro";
 import { createOrder } from "@/lib/api/orders";
+import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -12,7 +13,10 @@ export const POST: APIRoute = async ({ request }) => {
     const result = await createOrder(payload);
 
     if (!result.success) {
-      return new Response(JSON.stringify({ success: false, error: result.error }), {
+      return new Response(JSON.stringify({
+        success: false,
+        error: getCheckoutErrorMessage(result.error),
+      }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
