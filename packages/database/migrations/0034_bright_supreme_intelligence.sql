@@ -1,0 +1,1 @@
+ALTER TABLE `pages` ADD `featured_image` text;

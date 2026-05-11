@@ -3786,6 +3786,85 @@
                               "hideTitle": {
                                 "type": "boolean"
                               },
+                              "featuredImage": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  },
+                                  "filename": {
+                                    "type": "string"
+                                  },
+                                  "size": {
+                                    "type": "number"
+                                  },
+                                  "mimeType": {
+                                    "type": "string"
+                                  },
+                                  "altText": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "width": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "height": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "folderId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "createdAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  },
+                                  "updatedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "url",
+                                  "filename",
+                                  "size"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              },
+                              "publishedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
                               "sortOrder": {
                                 "type": "number"
                               },
@@ -3995,6 +4074,85 @@
                             },
                             "hideTitle": {
                               "type": "boolean"
+                            },
+                            "featuredImage": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                },
+                                "filename": {
+                                  "type": "string"
+                                },
+                                "size": {
+                                  "type": "number"
+                                },
+                                "mimeType": {
+                                  "type": "string"
+                                },
+                                "altText": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "width": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "height": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "folderId": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "createdAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                },
+                                "updatedAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "url",
+                                "filename",
+                                "size"
+                              ],
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            },
+                            "publishedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "nullable": true
+                                }
+                              ]
                             },
                             "sortOrder": {
                               "type": "number"
@@ -4260,6 +4418,85 @@
                             },
                             "hideTitle": {
                               "type": "boolean"
+                            },
+                            "featuredImage": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                },
+                                "filename": {
+                                  "type": "string"
+                                },
+                                "size": {
+                                  "type": "number"
+                                },
+                                "mimeType": {
+                                  "type": "string"
+                                },
+                                "altText": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "width": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "height": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "folderId": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "createdAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                },
+                                "updatedAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "url",
+                                "filename",
+                                "size"
+                              ],
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            },
+                            "publishedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "nullable": true
+                                }
+                              ]
                             },
                             "sortOrder": {
                               "type": "number"
@@ -11019,42 +11256,6 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/api/v1/media/{key}": {
-      "get": {
-        "tags": [
-          "Media Server"
-        ],
-        "summary": "Serve R2 objects in local development",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "key",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Media file",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "nullable": true
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "500": {
-            "description": "R2 bucket not available"
           }
         }
       }
@@ -22538,6 +22739,85 @@
                               "hideTitle": {
                                 "type": "boolean"
                               },
+                              "featuredImage": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  },
+                                  "filename": {
+                                    "type": "string"
+                                  },
+                                  "size": {
+                                    "type": "number"
+                                  },
+                                  "mimeType": {
+                                    "type": "string"
+                                  },
+                                  "altText": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "width": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "height": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "folderId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "createdAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  },
+                                  "updatedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "url",
+                                  "filename",
+                                  "size"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              },
+                              "publishedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
                               "sortOrder": {
                                 "type": "number"
                               },
@@ -22872,9 +23152,83 @@
                     "type": "string",
                     "nullable": true
                   },
-                  "isPublished": {
-                    "type": "boolean",
-                    "default": true
+                  "featuredImage": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "url": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "filename": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "size": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "mimeType": {
+                        "type": "string"
+                      },
+                      "altText": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "width": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "height": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "folderId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "createdAt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        ]
+                      },
+                      "updatedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "url",
+                      "filename",
+                      "size"
+                    ],
+                    "additionalProperties": {
+                      "nullable": true
+                    }
                   },
                   "publishedAt": {
                     "anyOf": [
@@ -22889,6 +23243,10 @@
                         "nullable": true
                       }
                     ]
+                  },
+                  "isPublished": {
+                    "type": "boolean",
+                    "default": true
                   },
                   "sortOrder": {
                     "type": "number",
@@ -24409,6 +24767,85 @@
                         "hideTitle": {
                           "type": "boolean"
                         },
+                        "featuredImage": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "filename": {
+                              "type": "string"
+                            },
+                            "size": {
+                              "type": "number"
+                            },
+                            "mimeType": {
+                              "type": "string"
+                            },
+                            "altText": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "width": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "height": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "folderId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "url",
+                            "filename",
+                            "size"
+                          ],
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "publishedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "nullable": true
+                            }
+                          ]
+                        },
                         "sortOrder": {
                           "type": "number"
                         },
@@ -24724,8 +25161,7 @@
                     "nullable": true
                   },
                   "isPublished": {
-                    "type": "boolean",
-                    "default": true
+                    "type": "boolean"
                   },
                   "publishedAt": {
                     "anyOf": [
@@ -24742,20 +25178,94 @@
                     ]
                   },
                   "sortOrder": {
-                    "type": "number",
-                    "default": 0
+                    "type": "number"
                   },
                   "hideHeader": {
-                    "type": "boolean",
-                    "default": false
+                    "type": "boolean"
                   },
                   "hideFooter": {
-                    "type": "boolean",
-                    "default": false
+                    "type": "boolean"
                   },
                   "hideTitle": {
-                    "type": "boolean",
-                    "default": false
+                    "type": "boolean"
+                  },
+                  "featuredImage": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "url": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "filename": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "size": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "mimeType": {
+                        "type": "string"
+                      },
+                      "altText": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "width": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "height": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "folderId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "createdAt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        ]
+                      },
+                      "updatedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "url",
+                      "filename",
+                      "size"
+                    ],
+                    "additionalProperties": {
+                      "nullable": true
+                    }
                   }
                 }
               }

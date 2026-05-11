@@ -10,8 +10,16 @@ async function generateSpec() {
   try {
     const appPath = resolve(monorepoRoot, "apps/api/src/app");
     const { default: app } = await import(appPath);
-    const response = await app.request("/api/v1/openapi.json");
-    const spec = await response.json();
+    const spec = app.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: {
+        title: "Scalius Commerce API",
+        version: "1.0.0",
+        description:
+          "E-commerce platform API powering admin dashboard and storefront",
+      },
+      servers: [{ url: "/", description: "Default" }],
+    });
     writeSpec(spec);
     return;
   } catch (e) {
