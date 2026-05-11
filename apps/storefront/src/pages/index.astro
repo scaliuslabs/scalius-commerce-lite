@@ -12,10 +12,11 @@ import {
 import { loadPageWithLayout } from "@/lib/page-data";
 import { scopeCss } from "@scalius/shared/css-scope";
 import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import { optimizeRichContentImages } from "@/lib/rich-content-media";
 
 // Parallel fetch: layout data + homepage data
-const { layoutData, pageData: homepageData } = await loadPageWithLayout(
-  () => getHomepageData()
+const { layoutData, pageData: homepageData } = await loadPageWithLayout(() =>
+  getHomepageData(),
 );
 
 const seo = homepageData?.seo ?? {
@@ -66,10 +67,10 @@ const sortBySortOrder = (a: ApiWidget, b: ApiWidget) =>
 fixedTopWidgets.sort(sortBySortOrder);
 fixedBottomWidgets.sort(sortBySortOrder);
 Object.values(widgetsBeforeCollection).forEach((widgets) =>
-  widgets.sort(sortBySortOrder)
+  widgets.sort(sortBySortOrder),
 );
 Object.values(widgetsAfterCollection).forEach((widgets) =>
-  widgets.sort(sortBySortOrder)
+  widgets.sort(sortBySortOrder),
 );
 
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -80,15 +81,19 @@ const storefrontUrl = getRuntimeStorefrontUrl();
 const canonicalUrl = `${storefrontUrl}/`;
 
 function isCollection1(
-  collection: CollectionWithProducts
+  collection: CollectionWithProducts,
 ): collection is CollectionWithProducts & { type: "manual" } {
   return collection.type === "manual";
 }
 
 function isCollection2(
-  collection: CollectionWithProducts
+  collection: CollectionWithProducts,
 ): collection is CollectionWithProducts & { type: "dynamic" } {
   return collection.type === "dynamic";
+}
+
+function widgetHtml(widget: ApiWidget): string {
+  return optimizeRichContentImages(widget.htmlContent || "");
 }
 ---
 
@@ -102,8 +107,10 @@ function isCollection2(
   {
     fixedTopWidgets.map((widget) => (
       <div class={`widget-container cms-widget-frame sw-${widget.id}`}>
-        {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
-        <div set:html={widget.htmlContent} />
+        {widget.cssContent && (
+          <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />
+        )}
+        <div set:html={widgetHtml(widget)} />
       </div>
     ))
   }
@@ -117,19 +124,36 @@ function isCollection2(
       activeCollections.map((collection) => (
         <Fragment key={collection.id}>
           {(widgetsBeforeCollection[collection.id] || []).map((widget) => (
-            <div class={`widget-container cms-widget-frame mb-2 sw-${widget.id}`}>
-              {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
-              <div set:html={widget.htmlContent} />
+            <div
+              class={`widget-container cms-widget-frame mb-2 sw-${widget.id}`}
+            >
+              {widget.cssContent && (
+                <style
+                  set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)}
+                />
+              )}
+              <div set:html={widgetHtml(widget)} />
             </div>
           ))}
 
-          {isCollection1(collection) && <Collection1 collection={collection} currencySymbol={currencySymbol} />}
+          {isCollection1(collection) && (
+            <Collection1
+              collection={collection}
+              currencySymbol={currencySymbol}
+            />
+          )}
           {isCollection2(collection) && <Collection2 collection={collection} />}
 
           {(widgetsAfterCollection[collection.id] || []).map((widget) => (
-            <div class={`widget-container cms-widget-frame mt-2 sw-${widget.id}`}>
-              {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
-              <div set:html={widget.htmlContent} />
+            <div
+              class={`widget-container cms-widget-frame mt-2 sw-${widget.id}`}
+            >
+              {widget.cssContent && (
+                <style
+                  set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)}
+                />
+              )}
+              <div set:html={widgetHtml(widget)} />
             </div>
           ))}
         </Fragment>
@@ -140,8 +164,10 @@ function isCollection2(
   {
     fixedBottomWidgets.map((widget) => (
       <div class={`widget-container cms-widget-frame mt-1 sw-${widget.id}`}>
-        {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
-        <div set:html={widget.htmlContent} />
+        {widget.cssContent && (
+          <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />
+        )}
+        <div set:html={widgetHtml(widget)} />
       </div>
     ))
   }

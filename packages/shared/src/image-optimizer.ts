@@ -39,6 +39,11 @@ export interface ImageOptimizationOptions {
 
 export interface ImageContext {
   /**
+   * Enables Cloudflare Image Resizing rewrites. When false, the optimizer only
+   * resolves bare keys to the configured CDN base and leaves image URLs raw.
+   */
+  enabled?: boolean;
+  /**
    * CDN base URL for resolving bare R2 keys (e.g. "https://cloud.scalius.com").
    * When omitted, bare keys are returned unresolved.
    */
@@ -49,6 +54,13 @@ export interface ImageContext {
    * being rewritten into a /cdn-cgi/image/ path that would likely fail.
    */
   cdnHosts?: string[];
+  /**
+   * Source hostnames whose object paths should be served from `cdnBase`.
+   * Use this for merchant-controlled CDN alias/cutover cases where the same
+   * R2 object keys are reachable from an older public hostname and the
+   * storefront should emit only the canonical CDN host.
+   */
+  cdnHostAliases?: string[];
   /**
    * Whether we are in a development environment. When true, local/relative
    * images are not rewritten through /cdn-cgi/image/.
@@ -120,6 +132,16 @@ function getAllowedCdnHosts(
     if (normalized) hosts.add(normalized);
   }
 
+  return hosts;
+}
+
+/** @internal Pure — builds the host alias set from context. */
+function getAliasCdnHosts(ctx: ImageContext | undefined): Set<string> {
+  const hosts = new Set<string>();
+  for (const host of ctx?.cdnHostAliases ?? []) {
+    const normalized = toHostname(host);
+    if (normalized) hosts.add(normalized);
+  }
   return hosts;
 }
 
@@ -222,10 +244,12 @@ export function getOptimizedImageUrl(
   const cdnBase = ctx?.cdnBase ?? detectCdnBase();
   const isDev = ctx?.isDev ?? detectIsDev();
   const allowedHosts = getAllowedCdnHosts(ctx, cdnBase);
+  const aliasHosts = getAliasCdnHosts(ctx);
 
   // Resolve bare keys to full CDN URLs
   const resolved = resolveMediaUrl(originalUrl, cdnBase);
   if (!resolved) return "";
+  if (ctx?.enabled === false) return resolved;
 
   // Already optimized
   if (resolved.includes("/cdn-cgi/image/")) return resolved;
@@ -238,6 +262,13 @@ export function getOptimizedImageUrl(
   if (/^https?:\/\//.test(resolved)) {
     try {
       const url = new URL(resolved);
+      const canonicalBaseHost = toHostname(cdnBase);
+      if (canonicalBaseHost && aliasHosts.has(url.hostname.toLowerCase())) {
+        const canonicalBase = new URL(
+          cdnBase.includes("://") ? cdnBase : `https://${cdnBase}`,
+        );
+        return `${canonicalBase.origin}/cdn-cgi/image/${params}${url.pathname}${url.search}`;
+      }
       if (!canResizeAbsoluteUrl(url, allowedHosts)) return resolved;
       return `${url.origin}/cdn-cgi/image/${params}${url.pathname}${url.search}`;
     } catch {

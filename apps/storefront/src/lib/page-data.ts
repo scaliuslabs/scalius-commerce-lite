@@ -2,6 +2,7 @@
 // Utility for parallelizing layout and page data fetches to reduce cold start latency
 
 import { getLayoutData, type LayoutData } from "./api";
+import { setRuntimeImageCdnPolicy } from "./api/runtime-env";
 
 export type PageDataResult<T> = {
   layoutData: LayoutData | null;
@@ -30,6 +31,7 @@ export async function loadPageWithLayout<T>(
     getLayoutData(),
     pageDataFetcher(),
   ]);
+  setRuntimeImageCdnPolicy(layoutData?.media);
   return { layoutData, pageData };
 }
 
@@ -38,5 +40,7 @@ export async function loadPageWithLayout<T>(
  * @returns Layout data or null if fetch fails
  */
 export async function loadLayoutOnly(): Promise<LayoutData | null> {
-  return getLayoutData();
+  const layoutData = await getLayoutData();
+  setRuntimeImageCdnPolicy(layoutData?.media);
+  return layoutData;
 }

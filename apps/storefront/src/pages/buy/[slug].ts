@@ -1,6 +1,8 @@
 import type { APIRoute } from "astro";
 import { getProductBySlug } from "@/lib/api";
 import { getLayoutData } from "@/lib/api/storefront";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import type { CartItem } from "@/store/cart";
 import { escapeHtml } from "@scalius/shared/html-escape";
 
@@ -23,6 +25,7 @@ export const GET: APIRoute = async ({ params, url }) => {
 
     const { product, images, variants, category } = productData;
     const layoutData = await getLayoutData();
+    setRuntimeImageCdnPolicy(layoutData?.media);
     const currencyCode = layoutData?.currency?.code ?? "BDT";
     const searchParams = url.searchParams;
     const requestedVariantId = searchParams.get("variant");
@@ -85,12 +88,20 @@ export const GET: APIRoute = async ({ params, url }) => {
       }
     }
 
+    const primaryImageUrl =
+      images.find((img) => img.isPrimary)?.url || images[0]?.url || "";
     const cartItem: CartItem = {
       id: product.id,
       slug: product.slug,
       name: product.name,
       price: finalPrice,
-      image: images.find((img) => img.isPrimary)?.url || images[0]?.url,
+      image: primaryImageUrl
+        ? getOptimizedImageUrl(primaryImageUrl, {
+            width: 160,
+            height: 160,
+            quality: 75,
+          })
+        : "",
       quantity: quantity,
       variantId: itemToAdd?.id,
       size: itemToAdd?.size || undefined,
@@ -160,7 +171,7 @@ export const GET: APIRoute = async ({ params, url }) => {
         <script>
           try {
             sessionStorage.setItem('quickBuyData', JSON.stringify(${JSON.stringify(dataToStore)}));
-          } catch (e: unknown) {
+          } catch (e) {
             console.error('Could not save quick-buy data to session storage.', e);
           } finally {
             setTimeout(() => {

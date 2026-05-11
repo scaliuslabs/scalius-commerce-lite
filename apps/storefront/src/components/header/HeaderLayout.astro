@@ -65,22 +65,28 @@ const { headerData } = Astro.props;
         class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:translate-x-0 lg:translate-y-0 shrink-0 z-20 flex items-center justify-center lg:justify-start"
       >
         <a href="/" class="block group" aria-label="Go to homepage">
-          {headerData.logo.src ? (
-            <img
-              src={getOptimizedImageUrl(headerData.logo.src, { width: 240, height: 80, fit: "contain" })}
-              alt={headerData.logo.alt}
-              class="h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-transform duration-300 group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
-              width={240}
-              height={80}
-              loading="eager"
-              fetchpriority="high"
-              decoding="async"
-            />
-          ) : (
-            <span class="font-bold text-xl tracking-tight transition-transform duration-300 group-hover:scale-[1.02]">
-              {headerData.logo.alt}
-            </span>
-          )}
+          {
+            headerData.logo.src ? (
+              <img
+                src={getOptimizedImageUrl(headerData.logo.src, {
+                  width: 240,
+                  height: 80,
+                  fit: "contain",
+                })}
+                alt={headerData.logo.alt}
+                class="h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-transform duration-300 group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
+                width={240}
+                height={80}
+                loading="eager"
+                fetchpriority="high"
+                decoding="async"
+              />
+            ) : (
+              <span class="font-bold text-xl tracking-tight transition-transform duration-300 group-hover:scale-[1.02]">
+                {headerData.logo.alt}
+              </span>
+            )
+          }
         </a>
       </div>
 
@@ -133,7 +139,11 @@ const { headerData } = Astro.props;
                   >
                     {item.iconUrl ? (
                       <img
-                        src={item.iconUrl}
+                        src={getOptimizedImageUrl(item.iconUrl, {
+                          width: 32,
+                          height: 32,
+                          fit: "contain",
+                        })}
                         alt={displayTitle}
                         class="w-4 h-4 object-contain"
                         loading="lazy"
@@ -184,7 +194,9 @@ const { headerData } = Astro.props;
             )
         }
 
-        <div class="group flex items-center h-9 lg:h-11 bg-card-foreground text-card transition-all duration-300 rounded-full pl-1 pr-1 lg:pr-1.5 shadow-md hover:shadow-xl hover:-translate-y-0.5 shrink-0 relative">
+        <div
+          class="group flex items-center h-9 lg:h-11 bg-card-foreground text-card transition-all duration-300 rounded-full pl-1 pr-1 lg:pr-1.5 shadow-md hover:shadow-xl hover:-translate-y-0.5 shrink-0 relative"
+        >
           <a
             id="account-link"
             href="/account"
@@ -192,8 +204,18 @@ const { headerData } = Astro.props;
             aria-label="My Account"
             title="My Account"
           >
-            <svg class="h-4 w-4 lg:h-[18px] lg:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"></path>
+            <svg
+              class="h-4 w-4 lg:h-[18px] lg:w-[18px]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              stroke-width="1.8"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+              ></path>
             </svg>
           </a>
 
@@ -254,7 +276,7 @@ const { headerData } = Astro.props;
     const height = header.offsetHeight;
     document.documentElement.style.setProperty(
       "--header-height",
-      `${height}px`
+      `${height}px`,
     );
   }
 
@@ -282,7 +304,7 @@ const { headerData } = Astro.props;
       {
         root: null,
         threshold: 0,
-      }
+      },
     );
 
     observer.observe(sentinel);
@@ -330,7 +352,9 @@ const { headerData } = Astro.props;
 
   // Handle account icon click (check for cs_auth cookie)
   function checkCustomerSession() {
-    const hasCookie = document.cookie.split(";").some((c) => c.trim().startsWith("cs_auth=1"));
+    const hasCookie = document.cookie
+      .split(";")
+      .some((c) => c.trim().startsWith("cs_auth=1"));
     const accountLink = document.getElementById("account-link");
     if (accountLink) {
       accountLink.onclick = (e) => {

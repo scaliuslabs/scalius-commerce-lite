@@ -1,6 +1,7 @@
 ---
 import type { NavigationItem, SocialLink } from "@/lib/api";
 import { X, ChevronDown, Phone, ChevronRight } from "lucide-react";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 interface Props {
   navigation: NavigationItem[];
@@ -125,7 +126,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                                 </a>
                                               </li>
                                             );
-                                          }
+                                          },
                                         )}
                                       </ul>
                                     </div>
@@ -213,7 +214,11 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
               >
                 {item.iconUrl ? (
                   <img
-                    src={item.iconUrl}
+                    src={getOptimizedImageUrl(item.iconUrl, {
+                      width: 32,
+                      height: 32,
+                      fit: "contain",
+                    })}
                     alt={displayTitle}
                     class="w-4 h-4 object-contain"
                     loading="lazy"

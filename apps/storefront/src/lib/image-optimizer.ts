@@ -11,7 +11,12 @@ import {
   type ImageOptimizationOptions,
   type ImageContext,
 } from "@scalius/shared/image-optimizer";
-import { getCdnBase, getCdnHosts } from "./media-url";
+import {
+  getCdnBase,
+  getCdnCanonicalHostAliases,
+  getCdnHosts,
+  getImageOptimizationEnabled,
+} from "./media-url";
 
 export type { ImageOptimizationOptions, ImageContext };
 
@@ -22,7 +27,13 @@ const isDev =
 
 /** Build the storefront's ImageContext lazily */
 function getCtx(): ImageContext {
-  return { cdnBase: getCdnBase(), cdnHosts: getCdnHosts(), isDev };
+  return {
+    enabled: getImageOptimizationEnabled(),
+    cdnBase: getCdnBase(),
+    cdnHosts: getCdnHosts(),
+    cdnHostAliases: getCdnCanonicalHostAliases(),
+    isDev,
+  };
 }
 
 /**

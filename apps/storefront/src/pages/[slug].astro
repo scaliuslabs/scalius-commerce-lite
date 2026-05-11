@@ -7,8 +7,12 @@ import RichContent from "../components/RichContent.astro";
 import { getPageBySlug, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
-import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import {
+  getRuntimeStorefrontUrl,
+  setRuntimeImageCdnPolicy,
+} from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { optimizeRichContentImages } from "@/lib/rich-content-media";
 
 const { slug } = Astro.params;
 
@@ -56,6 +60,7 @@ const [layoutData, page] = await Promise.all([
   getLayoutData(),
   getPageBySlug(slug),
 ]);
+setRuntimeImageCdnPolicy(layoutData?.media);
 
 if (!page) {
   return new Response(null, { status: 404 });
@@ -76,6 +81,7 @@ if (page.content) {
     processedContent = page.content;
   }
 }
+processedContent = optimizeRichContentImages(processedContent);
 
 const hasProductShortcode = processedContent.includes(
   'class="product-shortcode-container"',

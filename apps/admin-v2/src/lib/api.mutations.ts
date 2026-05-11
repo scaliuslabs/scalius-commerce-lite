@@ -109,6 +109,7 @@ import {
   updateFirebaseSettings,
   updateBusinessSettings,
   updateThemeSettings,
+  updateMediaSettings,
   updateSmsSettings,
   // Product Variants
   createProductVariant,
@@ -156,14 +157,14 @@ import {
 export function useCreateProduct() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createProduct({ data }),
+    mutationFn: (data: Record<string, unknown>) => createProduct({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
       toast.success("Product created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create product")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create product")),
   });
 }
 
@@ -174,10 +175,13 @@ export function useUpdateProduct() {
       updateProduct({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.id),
+      });
       toast.success("Product updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update product")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update product")),
   });
 }
 
@@ -191,7 +195,8 @@ export function useDeleteProduct() {
       queryClient.removeQueries({ queryKey: queryKeys.products.detail(id) });
       toast.success("Product moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete product")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete product")),
   });
 }
 
@@ -205,7 +210,10 @@ export function usePermanentDeleteProduct() {
       queryClient.removeQueries({ queryKey: queryKeys.products.detail(id) });
       toast.success("Product permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete product")),
+    onError: (err) =>
+      toast.error(
+        getServerFnError(err, "Failed to permanently delete product"),
+      ),
   });
 }
 
@@ -216,10 +224,13 @@ export function useRestoreProduct() {
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(id),
+      });
       toast.success("Product restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore product")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore product")),
   });
 }
 
@@ -237,7 +248,8 @@ export function useBulkDeleteProducts() {
           : `${variables.productIds.length} products moved to trash`,
       );
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete products")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete products")),
   });
 }
 
@@ -248,14 +260,16 @@ export function useBulkDeleteProducts() {
 export function useCreateCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createCategory({ data }),
+    mutationFn: (data: Record<string, unknown>) => createCategory({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.formOptions(),
+      });
       toast.success("Category created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create category")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create category")),
   });
 }
 
@@ -266,11 +280,16 @@ export function useUpdateCategory() {
       updateCategory({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.detail(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.detail(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.formOptions(),
+      });
       toast.success("Category updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update category")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update category")),
   });
 }
 
@@ -280,11 +299,14 @@ export function useDeleteCategory() {
     mutationFn: (id: string) => deleteCategory({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.formOptions(),
+      });
       queryClient.removeQueries({ queryKey: queryKeys.categories.detail(id) });
       toast.success("Category moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete category")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete category")),
   });
 }
 
@@ -294,11 +316,16 @@ export function usePermanentDeleteCategory() {
     mutationFn: (id: string) => deleteCategoryPermanent({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.formOptions(),
+      });
       queryClient.removeQueries({ queryKey: queryKeys.categories.detail(id) });
       toast.success("Category permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete category")),
+    onError: (err) =>
+      toast.error(
+        getServerFnError(err, "Failed to permanently delete category"),
+      ),
   });
 }
 
@@ -308,11 +335,16 @@ export function useRestoreCategory() {
     mutationFn: (id: string) => restoreCategory({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.detail(id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.formOptions(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.detail(id),
+      });
       toast.success("Category restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore category")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore category")),
   });
 }
 
@@ -323,14 +355,17 @@ export function useBulkDeleteCategories() {
       bulkDeleteCategories({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.formOptions(),
+      });
       toast.success(
         variables.permanent
           ? `${variables.categoryIds.length} categories permanently deleted`
           : `${variables.categoryIds.length} categories moved to trash`,
       );
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete categories")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete categories")),
   });
 }
 
@@ -341,10 +376,13 @@ export function useBulkRestoreCategories() {
       bulkRestoreCategories({ data: { categoryIds } }),
     onSuccess: (_data, categoryIds) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.formOptions(),
+      });
       toast.success(`${categoryIds.length} categories restored`);
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore categories")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore categories")),
   });
 }
 
@@ -355,13 +393,13 @@ export function useBulkRestoreCategories() {
 export function useCreateOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createOrder({ data }),
+    mutationFn: (data: Record<string, unknown>) => createOrder({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       toast.success("Order created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create order")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create order")),
   });
 }
 
@@ -372,10 +410,13 @@ export function useUpdateOrder() {
       updateOrder({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.id),
+      });
       toast.success("Order updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update order")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update order")),
   });
 }
 
@@ -386,10 +427,13 @@ export function useUpdateOrderStatus() {
       updateOrderStatus({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
       toast.success(`Order status updated to ${variables.status}`);
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update order status")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update order status")),
   });
 }
 
@@ -404,11 +448,16 @@ export function useCreateOrderShipment() {
     }) => createOrderShipment({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(variables.orderId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.shipments(variables.orderId),
+      });
       toast.success("Shipment created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create shipment")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create shipment")),
   });
 }
 
@@ -418,10 +467,13 @@ export function useUpdateFulfillmentStatus() {
     mutationFn: (data: { orderId: string; status: string }) =>
       updateFulfillmentStatus({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
       toast.success("Fulfillment status updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update fulfillment status")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update fulfillment status")),
   });
 }
 
@@ -432,26 +484,39 @@ export function useRefundOrder() {
       refundOrder({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.payments(variables.orderId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.payments(variables.orderId),
+      });
       toast.success("Refund processed");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to process refund")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to process refund")),
   });
 }
 
 export function useUpdateOrderCod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderId: string; action: string } & Record<string, unknown>) =>
-      updateOrderCod({ data }),
+    mutationFn: (
+      data: { orderId: string; action: string } & Record<string, unknown>,
+    ) => updateOrderCod({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.payments(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.cod(variables.orderId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.payments(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.cod(variables.orderId),
+      });
       toast.success("COD action recorded");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to record COD action")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to record COD action")),
   });
 }
 
@@ -466,10 +531,13 @@ export function useReturnOrder() {
     }) => returnOrder({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
       toast.success("Return processed");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to process return")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to process return")),
   });
 }
 
@@ -482,7 +550,8 @@ export function useRestoreOrder() {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(id) });
       toast.success("Order restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore order")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore order")),
   });
 }
 
@@ -499,7 +568,8 @@ export function useBulkDeleteOrders() {
           : `${variables.orderIds.length} orders moved to trash`,
       );
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete orders")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete orders")),
   });
 }
 
@@ -513,10 +583,13 @@ export function useUpdateSettings(category: string) {
     mutationFn: (settings: Record<string, unknown>) =>
       updateSettingsByCategory({ data: { category, settings } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.byCategory(category) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.byCategory(category),
+      });
       toast.success("Settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update settings")),
   });
 }
 
@@ -528,7 +601,8 @@ export function useSaveHeaderConfig() {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.general() });
       toast.success("Header config saved");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to save header config")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to save header config")),
   });
 }
 
@@ -540,7 +614,8 @@ export function useSaveFooterConfig() {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.general() });
       toast.success("Footer config saved");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to save footer config")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to save footer config")),
   });
 }
 
@@ -550,10 +625,13 @@ export function useUpdateStorefrontUrl() {
     mutationFn: (storefrontUrl: string) =>
       updateStorefrontUrl({ data: { storefrontUrl } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.storefrontUrl() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.storefrontUrl(),
+      });
       toast.success("Storefront URL updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update storefront URL")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update storefront URL")),
   });
 }
 
@@ -563,23 +641,26 @@ export function useUpdateCurrencySettings() {
     mutationFn: (data: Record<string, unknown>) =>
       updateCurrencySettings({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.currency() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.currency(),
+      });
       toast.success("Currency settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update currency settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update currency settings")),
   });
 }
 
 export function useUpdateSeoSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      updateSeoSettings({ data }),
+    mutationFn: (data: Record<string, unknown>) => updateSeoSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.seo() });
       toast.success("SEO settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update SEO settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update SEO settings")),
   });
 }
 
@@ -589,23 +670,26 @@ export function useUpdateSecuritySettings() {
     mutationFn: (data: Record<string, unknown>) =>
       updateSecuritySettings({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.security() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.security(),
+      });
       toast.success("Security settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update security settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update security settings")),
   });
 }
 
 export function useUpdateAuthSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      updateAuthSettings({ data }),
+    mutationFn: (data: Record<string, unknown>) => updateAuthSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.auth() });
       toast.success("Auth settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update auth settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update auth settings")),
   });
 }
 
@@ -618,7 +702,8 @@ export function useUpdateEmailSettings() {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.email() });
       toast.success("Email settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update email settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update email settings")),
   });
 }
 
@@ -628,10 +713,13 @@ export function useUpdateFirebaseSettings() {
     mutationFn: (data: Record<string, unknown>) =>
       updateFirebaseSettings({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.firebase() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.firebase(),
+      });
       toast.success("Firebase settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update Firebase settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update Firebase settings")),
   });
 }
 
@@ -641,10 +729,13 @@ export function useUpdateBusinessSettings() {
     mutationFn: (data: Record<string, unknown>) =>
       updateBusinessSettings({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.business() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.business(),
+      });
       toast.success("Business settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update business settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update business settings")),
   });
 }
 
@@ -657,20 +748,35 @@ export function useUpdateThemeSettings() {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.theme() });
       toast.success("Theme settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update theme settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update theme settings")),
+  });
+}
+
+export function useUpdateMediaSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      updateMediaSettings({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.media() });
+      toast.success("Media settings updated");
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update media settings")),
   });
 }
 
 export function useUpdateSmsSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      updateSmsSettings({ data }),
+    mutationFn: (data: Record<string, unknown>) => updateSmsSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.sms() });
       toast.success("SMS settings updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update SMS settings")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update SMS settings")),
   });
 }
 
@@ -681,13 +787,13 @@ export function useUpdateSmsSettings() {
 export function useCreateCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createCustomer({ data }),
+    mutationFn: (data: Record<string, unknown>) => createCustomer({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
       toast.success("Customer created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create customer")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create customer")),
   });
 }
 
@@ -698,10 +804,13 @@ export function useUpdateCustomer() {
       updateCustomer({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.customers.detail(variables.id),
+      });
       toast.success("Customer updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update customer")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update customer")),
   });
 }
 
@@ -714,7 +823,8 @@ export function useDeleteCustomer() {
       queryClient.removeQueries({ queryKey: queryKeys.customers.detail(id) });
       toast.success("Customer moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete customer")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete customer")),
   });
 }
 
@@ -727,7 +837,10 @@ export function usePermanentDeleteCustomer() {
       queryClient.removeQueries({ queryKey: queryKeys.customers.detail(id) });
       toast.success("Customer permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete customer")),
+    onError: (err) =>
+      toast.error(
+        getServerFnError(err, "Failed to permanently delete customer"),
+      ),
   });
 }
 
@@ -737,10 +850,13 @@ export function useRestoreCustomer() {
     mutationFn: (id: string) => restoreCustomer({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.customers.detail(id),
+      });
       toast.success("Customer restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore customer")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore customer")),
   });
 }
 
@@ -757,7 +873,8 @@ export function useBulkDeleteCustomers() {
           : `${variables.customerIds.length} customers moved to trash`,
       );
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete customers")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete customers")),
   });
 }
 
@@ -768,13 +885,13 @@ export function useBulkDeleteCustomers() {
 export function useCreateDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createDiscount({ data }),
+    mutationFn: (data: Record<string, unknown>) => createDiscount({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       toast.success("Discount created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create discount")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create discount")),
   });
 }
 
@@ -785,10 +902,13 @@ export function useUpdateDiscount() {
       updateDiscount({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.discounts.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.discounts.detail(variables.id),
+      });
       toast.success("Discount updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update discount")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update discount")),
   });
 }
 
@@ -801,7 +921,8 @@ export function useDeleteDiscount() {
       queryClient.removeQueries({ queryKey: queryKeys.discounts.detail(id) });
       toast.success("Discount moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete discount")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete discount")),
   });
 }
 
@@ -814,7 +935,10 @@ export function usePermanentDeleteDiscount() {
       queryClient.removeQueries({ queryKey: queryKeys.discounts.detail(id) });
       toast.success("Discount permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete discount")),
+    onError: (err) =>
+      toast.error(
+        getServerFnError(err, "Failed to permanently delete discount"),
+      ),
   });
 }
 
@@ -824,10 +948,13 @@ export function useRestoreDiscount() {
     mutationFn: (id: string) => restoreDiscount({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.discounts.detail(id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.discounts.detail(id),
+      });
       toast.success("Discount restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore discount")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore discount")),
   });
 }
 
@@ -837,10 +964,15 @@ export function useToggleDiscountStatus() {
     mutationFn: (data: { id: string; isActive?: boolean }) =>
       toggleDiscountStatus({ data }),
     onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.discounts.detail(variables.id) });
-      const previous = queryClient.getQueryData(queryKeys.discounts.detail(variables.id));
-      queryClient.setQueryData(queryKeys.discounts.detail(variables.id), (old: any) =>
-        old ? { ...old, isActive: variables.isActive } : old
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.discounts.detail(variables.id),
+      });
+      const previous = queryClient.getQueryData(
+        queryKeys.discounts.detail(variables.id),
+      );
+      queryClient.setQueryData(
+        queryKeys.discounts.detail(variables.id),
+        (old: any) => (old ? { ...old, isActive: variables.isActive } : old),
       );
       return { previous };
     },
@@ -850,12 +982,17 @@ export function useToggleDiscountStatus() {
     },
     onError: (err, variables, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(queryKeys.discounts.detail(variables.id), context.previous);
+        queryClient.setQueryData(
+          queryKeys.discounts.detail(variables.id),
+          context.previous,
+        );
       }
       toast.error(getServerFnError(err, "Failed to toggle discount status"));
     },
     onSettled: (_data, _err, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.discounts.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.discounts.detail(variables.id),
+      });
     },
   });
 }
@@ -863,13 +1000,17 @@ export function useToggleDiscountStatus() {
 export function useBulkDeleteDiscounts() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { discountIds?: string[]; ids?: string[]; permanent?: boolean }) =>
-      bulkDeleteDiscounts({ data }),
+    mutationFn: (data: {
+      discountIds?: string[];
+      ids?: string[];
+      permanent?: boolean;
+    }) => bulkDeleteDiscounts({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       toast.success("Discounts deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete discounts")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete discounts")),
   });
 }
 
@@ -882,7 +1023,8 @@ export function useBulkRestoreDiscounts() {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       toast.success("Discounts restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore discounts")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore discounts")),
   });
 }
 
@@ -893,13 +1035,13 @@ export function useBulkRestoreDiscounts() {
 export function useCreatePage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createPage({ data }),
+    mutationFn: (data: Record<string, unknown>) => createPage({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       toast.success("Page created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create page")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create page")),
   });
 }
 
@@ -910,10 +1052,13 @@ export function useUpdatePage() {
       updatePage({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pages.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pages.detail(variables.id),
+      });
       toast.success("Page updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update page")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update page")),
   });
 }
 
@@ -926,7 +1071,8 @@ export function useDeletePage() {
       queryClient.removeQueries({ queryKey: queryKeys.pages.detail(id) });
       toast.success("Page moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete page")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete page")),
   });
 }
 
@@ -939,7 +1085,8 @@ export function usePermanentDeletePage() {
       queryClient.removeQueries({ queryKey: queryKeys.pages.detail(id) });
       toast.success("Page permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete page")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to permanently delete page")),
   });
 }
 
@@ -952,7 +1099,8 @@ export function useRestorePage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.detail(id) });
       toast.success("Page restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore page")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore page")),
   });
 }
 
@@ -969,7 +1117,8 @@ export function useBulkDeletePages() {
           : `${variables.pageIds.length} pages moved to trash`,
       );
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete pages")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete pages")),
   });
 }
 
@@ -981,7 +1130,8 @@ export function useBulkRestorePages() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       toast.success(`${ids.length} pages restored`);
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore pages")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore pages")),
   });
 }
 
@@ -992,13 +1142,13 @@ export function useBulkRestorePages() {
 export function useCreateWidget() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createWidget({ data }),
+    mutationFn: (data: Record<string, unknown>) => createWidget({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.widgets.list() });
       toast.success("Widget created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create widget")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create widget")),
   });
 }
 
@@ -1009,10 +1159,13 @@ export function useUpdateWidget() {
       updateWidget({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.widgets.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.widgets.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.widgets.detail(variables.id),
+      });
       toast.success("Widget updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update widget")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update widget")),
   });
 }
 
@@ -1025,7 +1178,8 @@ export function useDeleteWidget() {
       queryClient.removeQueries({ queryKey: queryKeys.widgets.detail(id) });
       toast.success("Widget moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete widget")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete widget")),
   });
 }
 
@@ -1038,7 +1192,8 @@ export function usePermanentDeleteWidget() {
       queryClient.removeQueries({ queryKey: queryKeys.widgets.detail(id) });
       toast.success("Widget permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete widget")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to permanently delete widget")),
   });
 }
 
@@ -1051,7 +1206,8 @@ export function useRestoreWidget() {
       queryClient.invalidateQueries({ queryKey: queryKeys.widgets.detail(id) });
       toast.success("Widget restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore widget")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore widget")),
   });
 }
 
@@ -1068,7 +1224,8 @@ export function useBulkDeleteWidgets() {
           : `${variables.ids.length} widgets moved to trash`,
       );
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete widgets")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete widgets")),
   });
 }
 
@@ -1080,7 +1237,8 @@ export function useBulkRestoreWidgets() {
       queryClient.invalidateQueries({ queryKey: queryKeys.widgets.list() });
       toast.success(`${ids.length} widgets restored`);
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore widgets")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore widgets")),
   });
 }
 
@@ -1097,7 +1255,8 @@ export function useCreateAnalyticsScript() {
       queryClient.invalidateQueries({ queryKey: queryKeys.analytics.list() });
       toast.success("Analytics script created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create analytics script")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create analytics script")),
   });
 }
 
@@ -1108,10 +1267,13 @@ export function useUpdateAnalyticsScript() {
       updateAnalyticsScript({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.analytics.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.analytics.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.analytics.detail(variables.id),
+      });
       toast.success("Analytics script updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update analytics script")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update analytics script")),
   });
 }
 
@@ -1124,7 +1286,8 @@ export function useDeleteAnalyticsScript() {
       queryClient.removeQueries({ queryKey: queryKeys.analytics.detail(id) });
       toast.success("Analytics script deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete analytics script")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete analytics script")),
   });
 }
 
@@ -1135,14 +1298,16 @@ export function useDeleteAnalyticsScript() {
 export function useCreateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createCollection({ data }),
+    mutationFn: (data: Record<string, unknown>) => createCollection({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.formOptions(),
+      });
       toast.success("Collection created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create collection")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create collection")),
   });
 }
 
@@ -1153,11 +1318,16 @@ export function useUpdateCollection() {
       updateCollection({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.detail(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.formOptions(),
+      });
       toast.success("Collection updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update collection")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update collection")),
   });
 }
 
@@ -1167,11 +1337,14 @@ export function useDeleteCollection() {
     mutationFn: (id: string) => deleteCollection({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.formOptions(),
+      });
       queryClient.removeQueries({ queryKey: queryKeys.collections.detail(id) });
       toast.success("Collection moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete collection")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete collection")),
   });
 }
 
@@ -1181,11 +1354,16 @@ export function usePermanentDeleteCollection() {
     mutationFn: (id: string) => deleteCollectionPermanent({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.formOptions(),
+      });
       queryClient.removeQueries({ queryKey: queryKeys.collections.detail(id) });
       toast.success("Collection permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete collection")),
+    onError: (err) =>
+      toast.error(
+        getServerFnError(err, "Failed to permanently delete collection"),
+      ),
   });
 }
 
@@ -1195,11 +1373,16 @@ export function useRestoreCollection() {
     mutationFn: (id: string) => restoreCollection({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.formOptions() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.formOptions(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.detail(id),
+      });
       toast.success("Collection restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore collection")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore collection")),
   });
 }
 
@@ -1211,7 +1394,8 @@ export function useReorderCollections() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to reorder collections")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to reorder collections")),
   });
 }
 
@@ -1219,27 +1403,36 @@ export function useBulkDeleteCollections() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { ids: string[]; permanent?: boolean }) =>
-      bulkDeleteCollections({ data: { collectionIds: data.ids, permanent: data.permanent } }),
+      bulkDeleteCollections({
+        data: { collectionIds: data.ids, permanent: data.permanent },
+      }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.formOptions() });
-      toast.success(`${variables.ids.length} collection(s) ${variables.permanent ? "permanently deleted" : "moved to trash"}`);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.formOptions(),
+      });
+      toast.success(
+        `${variables.ids.length} collection(s) ${variables.permanent ? "permanently deleted" : "moved to trash"}`,
+      );
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete collections")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete collections")),
   });
 }
 
 export function useBulkRestoreCollections() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { ids: string[] }) =>
-      bulkRestoreCollections({ data }),
+    mutationFn: (data: { ids: string[] }) => bulkRestoreCollections({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.formOptions() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.formOptions(),
+      });
       toast.success(`${variables.ids.length} collection(s) restored`);
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore collections")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore collections")),
   });
 }
 
@@ -1250,13 +1443,13 @@ export function useBulkRestoreCollections() {
 export function useCreateAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createAttribute({ data }),
+    mutationFn: (data: Record<string, unknown>) => createAttribute({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
       toast.success("Attribute created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create attribute")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create attribute")),
   });
 }
 
@@ -1267,10 +1460,13 @@ export function useUpdateAttribute() {
       updateAttribute({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.attributes.detail(variables.id),
+      });
       toast.success("Attribute updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update attribute")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update attribute")),
   });
 }
 
@@ -1280,11 +1476,14 @@ export function useDeleteAttribute() {
     mutationFn: (id: string) => deleteAttribute({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.values() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.attributes.values(),
+      });
       queryClient.removeQueries({ queryKey: queryKeys.attributes.detail(id) });
       toast.success("Attribute moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete attribute")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete attribute")),
   });
 }
 
@@ -1294,11 +1493,16 @@ export function usePermanentDeleteAttribute() {
     mutationFn: (id: string) => deleteAttributePermanent({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.values() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.attributes.values(),
+      });
       queryClient.removeQueries({ queryKey: queryKeys.attributes.detail(id) });
       toast.success("Attribute permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete attribute")),
+    onError: (err) =>
+      toast.error(
+        getServerFnError(err, "Failed to permanently delete attribute"),
+      ),
   });
 }
 
@@ -1308,26 +1512,38 @@ export function useRestoreAttribute() {
     mutationFn: (id: string) => restoreAttribute({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.values() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.detail(id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.attributes.values(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.attributes.detail(id),
+      });
       toast.success("Attribute restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore attribute")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore attribute")),
   });
 }
 
 export function useUpdateAttributeValues() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { attributeId: string; values: { name: string; slug: string }[] }) =>
-      updateAttributeValues({ data }),
+    mutationFn: (data: {
+      attributeId: string;
+      values: { name: string; slug: string }[];
+    }) => updateAttributeValues({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.values() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.detail(variables.attributeId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.attributes.values(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.attributes.detail(variables.attributeId),
+      });
       toast.success("Attribute values updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update attribute values")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update attribute values")),
   });
 }
 
@@ -1338,24 +1554,31 @@ export function useBulkDeleteAttributes() {
       bulkDeleteAttributes({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.values() });
-      toast.success(`${variables.ids.length} attribute(s) ${variables.permanent ? "permanently deleted" : "moved to trash"}`);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.attributes.values(),
+      });
+      toast.success(
+        `${variables.ids.length} attribute(s) ${variables.permanent ? "permanently deleted" : "moved to trash"}`,
+      );
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete attributes")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete attributes")),
   });
 }
 
 export function useBulkRestoreAttributes() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { ids: string[] }) =>
-      bulkRestoreAttributes({ data }),
+    mutationFn: (data: { ids: string[] }) => bulkRestoreAttributes({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.values() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.attributes.values(),
+      });
       toast.success(`${variables.ids.length} attribute(s) restored`);
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore attributes")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore attributes")),
   });
 }
 
@@ -1366,28 +1589,43 @@ export function useBulkRestoreAttributes() {
 export function useCreateProductVariant() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { productId: string; variant: Record<string, unknown> }) =>
-      createProductVariant({ data }),
+    mutationFn: (data: {
+      productId: string;
+      variant: Record<string, unknown>;
+    }) => createProductVariant({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.variants(variables.productId),
+      });
       toast.success("Variant created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create variant")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create variant")),
   });
 }
 
 export function useUpdateProductVariant() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { productId: string; variantId: string; variant: Record<string, unknown> }) =>
-      updateProductVariant({ data }),
+    mutationFn: (data: {
+      productId: string;
+      variantId: string;
+      variant: Record<string, unknown>;
+    }) => updateProductVariant({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.variants(variables.productId),
+      });
       toast.success("Variant updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update variant")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update variant")),
   });
 }
 
@@ -1397,39 +1635,58 @@ export function useDeleteProductVariant() {
     mutationFn: (data: { productId: string; variantId: string }) =>
       deleteProductVariant({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.variants(variables.productId),
+      });
       toast.success("Variant deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete variant")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete variant")),
   });
 }
 
 export function useBulkCreateProductVariants() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { productId: string; variants: Record<string, unknown>[] }) =>
-      bulkCreateProductVariants({ data }),
+    mutationFn: (data: {
+      productId: string;
+      variants: Record<string, unknown>[];
+    }) => bulkCreateProductVariants({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.variants(variables.productId),
+      });
       toast.success("Variants created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create variants")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create variants")),
   });
 }
 
 export function useBulkUpdateProductVariants() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { productId: string; updates: Record<string, unknown>[] }) =>
-      bulkUpdateProductVariants({ data }),
+    mutationFn: (data: {
+      productId: string;
+      updates: Record<string, unknown>[];
+    }) => bulkUpdateProductVariants({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.variants(variables.productId),
+      });
       toast.success("Variants updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update variants")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update variants")),
   });
 }
 
@@ -1439,11 +1696,16 @@ export function useBulkDeleteProductVariants() {
     mutationFn: (data: { productId: string; variantIds: string[] }) =>
       bulkDeleteProductVariants({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.variants(variables.productId),
+      });
       toast.success(`${variables.variantIds.length} variants deleted`);
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete variants")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete variants")),
   });
 }
 
@@ -1453,11 +1715,16 @@ export function useDuplicateProductVariant() {
     mutationFn: (data: { productId: string; variantId: string }) =>
       duplicateProductVariant({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.variants(variables.productId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.variants(variables.productId),
+      });
       toast.success("Variant duplicated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to duplicate variant")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to duplicate variant")),
   });
 }
 
@@ -1474,7 +1741,8 @@ export function useDeleteMedia() {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
       toast.success("File deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete file")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete file")),
   });
 }
 
@@ -1487,7 +1755,8 @@ export function useUpdateMedia() {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.list() });
       toast.success("File updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update file")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update file")),
   });
 }
 
@@ -1501,7 +1770,8 @@ export function useMoveMediaFiles() {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
       toast.success("Files moved");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to move files")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to move files")),
   });
 }
 
@@ -1514,7 +1784,8 @@ export function useCreateMediaFolder() {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
       toast.success("Folder created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create folder")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create folder")),
   });
 }
 
@@ -1527,7 +1798,8 @@ export function useDeleteMediaFolder() {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.list() });
       toast.success("Folder deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete folder")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete folder")),
   });
 }
 
@@ -1540,7 +1812,8 @@ export function useRenameMediaFolder() {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
       toast.success("Folder renamed");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to rename folder")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to rename folder")),
   });
 }
 
@@ -1551,13 +1824,18 @@ export function useRenameMediaFolder() {
 export function useCreateWidgetHistorySnapshot() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { widgetId: string; snapshot: Record<string, unknown> }) =>
-      createWidgetHistorySnapshot({ data }),
+    mutationFn: (data: {
+      widgetId: string;
+      snapshot: Record<string, unknown>;
+    }) => createWidgetHistorySnapshot({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.widgets.history(variables.widgetId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.widgets.history(variables.widgetId),
+      });
       toast.success("History snapshot created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create history snapshot")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create history snapshot")),
   });
 }
 
@@ -1567,10 +1845,13 @@ export function useDeleteWidgetHistory() {
     mutationFn: (data: { widgetId: string; historyId: string }) =>
       deleteWidgetHistory({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.widgets.history(variables.widgetId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.widgets.history(variables.widgetId),
+      });
       toast.success("History entry deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete history entry")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete history entry")),
   });
 }
 
@@ -1580,11 +1861,16 @@ export function useRestoreWidgetHistory() {
     mutationFn: (data: { widgetId: string; historyId: string }) =>
       restoreWidgetHistory({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.widgets.history(variables.widgetId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.widgets.detail(variables.widgetId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.widgets.history(variables.widgetId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.widgets.detail(variables.widgetId),
+      });
       toast.success("Widget restored from history");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore from history")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore from history")),
   });
 }
 
@@ -1598,10 +1884,13 @@ export function useCreateCheckoutLanguage() {
     mutationFn: (data: Record<string, unknown>) =>
       createCheckoutLanguage({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.checkoutLanguages(),
+      });
       toast.success("Checkout language created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create checkout language")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create checkout language")),
   });
 }
 
@@ -1611,49 +1900,58 @@ export function useUpdateCheckoutLanguage() {
     mutationFn: (data: { id: string; update: Record<string, unknown> }) =>
       updateCheckoutLanguage({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.checkoutLanguages(),
+      });
       toast.success("Checkout language updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update checkout language")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update checkout language")),
   });
 }
 
 export function useSoftDeleteCheckoutLanguage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) =>
-      softDeleteCheckoutLanguage({ data }),
+    mutationFn: (data: { id: string }) => softDeleteCheckoutLanguage({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.checkoutLanguages(),
+      });
       toast.success("Checkout language moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to move to trash")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to move to trash")),
   });
 }
 
 export function useDeleteCheckoutLanguage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) =>
-      deleteCheckoutLanguage({ data }),
+    mutationFn: (data: { id: string }) => deleteCheckoutLanguage({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.checkoutLanguages(),
+      });
       toast.success("Checkout language permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to permanently delete")),
   });
 }
 
 export function useRestoreCheckoutLanguage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) =>
-      restoreCheckoutLanguage({ data }),
+    mutationFn: (data: { id: string }) => restoreCheckoutLanguage({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.checkoutLanguages(),
+      });
       toast.success("Checkout language restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore language")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore language")),
   });
 }
 
@@ -1667,10 +1965,13 @@ export function useCreateShippingMethod() {
     mutationFn: (data: Record<string, unknown>) =>
       createShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.shippingMethods(),
+      });
       toast.success("Shipping method created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create shipping method")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create shipping method")),
   });
 }
 
@@ -1680,23 +1981,28 @@ export function useUpdateShippingMethod() {
     mutationFn: (data: { id: string; update: Record<string, unknown> }) =>
       updateShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.shippingMethods(),
+      });
       toast.success("Shipping method updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update shipping method")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update shipping method")),
   });
 }
 
 export function useDeleteShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) =>
-      deleteShippingMethod({ data }),
+    mutationFn: (data: { id: string }) => deleteShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.shippingMethods(),
+      });
       toast.success("Shipping method moved to trash");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to move to trash")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to move to trash")),
   });
 }
 
@@ -1706,23 +2012,28 @@ export function usePermanentDeleteShippingMethod() {
     mutationFn: (data: { id: string }) =>
       permanentDeleteShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.shippingMethods(),
+      });
       toast.success("Shipping method permanently deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to permanently delete method")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to permanently delete method")),
   });
 }
 
 export function useRestoreShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) =>
-      restoreShippingMethod({ data }),
+    mutationFn: (data: { id: string }) => restoreShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.shippingMethods() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.shippingMethods(),
+      });
       toast.success("Shipping method restored");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to restore shipping method")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to restore shipping method")),
   });
 }
 
@@ -1736,11 +2047,16 @@ export function useCreateDeliveryLocation() {
     mutationFn: (data: Record<string, unknown>) =>
       createDeliveryLocation({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocations(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocationsAll(),
+      });
       toast.success("Location created");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to create location")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create location")),
   });
 }
 
@@ -1750,25 +2066,34 @@ export function useUpdateDeliveryLocation() {
     mutationFn: (data: { id: string; update: Record<string, unknown> }) =>
       updateDeliveryLocation({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocations(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocationsAll(),
+      });
       toast.success("Location updated");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to update location")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update location")),
   });
 }
 
 export function useDeleteDeliveryLocation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) =>
-      deleteDeliveryLocation({ data }),
+    mutationFn: (data: { id: string }) => deleteDeliveryLocation({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocations(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocationsAll(),
+      });
       toast.success("Location deleted");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete location")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete location")),
   });
 }
 
@@ -1778,11 +2103,16 @@ export function useBulkDeleteDeliveryLocations() {
     mutationFn: (data: { ids: string[] }) =>
       bulkDeleteDeliveryLocations({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocations(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocationsAll(),
+      });
       toast.success(`${variables.ids.length} location(s) deleted`);
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to delete locations")),
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to delete locations")),
   });
 }
 
@@ -1791,10 +2121,17 @@ export function useCleanAllDeliveryLocations() {
   return useMutation({
     mutationFn: () => cleanAllDeliveryLocations(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocations() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.deliveryLocationsAll() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocations(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.deliveryLocationsAll(),
+      });
       toast.success("All delivery locations cleared");
     },
-    onError: (err) => toast.error(getServerFnError(err, "Failed to clean all delivery locations")),
+    onError: (err) =>
+      toast.error(
+        getServerFnError(err, "Failed to clean all delivery locations"),
+      ),
   });
 }

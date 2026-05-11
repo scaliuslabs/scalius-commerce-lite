@@ -98,6 +98,7 @@ import {
   getFirebaseSettings,
   getBusinessSettings,
   getThemeSettings,
+  getMediaSettings,
   getSmsSettings,
   getOpenRouterSettings,
   getMetaConversionsSettings,
@@ -128,13 +129,13 @@ import {
 
 // Query staleTime constants (how long data is considered fresh)
 const STALE = {
-  REALTIME: 1000 * 10,        // 10s — data that changes frequently
-  FAST: 1000 * 30,            // 30s — orders, inventory
-  MODERATE: 1000 * 60 * 2,    // 2min — lists, dashboard
-  SLOW: 1000 * 60 * 5,        // 5min — entity details, media
-  LOOKUP: 1000 * 60 * 10,     // 10min — form options, lookups
-  CONFIG: 1000 * 60 * 30,     // 30min — settings, RBAC
-  STATIC: 1000 * 60 * 60,     // 1hr — setup status
+  REALTIME: 1000 * 10, // 10s — data that changes frequently
+  FAST: 1000 * 30, // 30s — orders, inventory
+  MODERATE: 1000 * 60 * 2, // 2min — lists, dashboard
+  SLOW: 1000 * 60 * 5, // 5min — entity details, media
+  LOOKUP: 1000 * 60 * 10, // 10min — form options, lookups
+  CONFIG: 1000 * 60 * 30, // 30min — settings, RBAC
+  STATIC: 1000 * 60 * 60, // 1hr — setup status
 } as const;
 
 // Detail queries use staleTime: 0 (always stale) combined with
@@ -554,7 +555,9 @@ export const navigationItemsQueryOptions = () =>
     staleTime: STALE.LOOKUP,
   });
 
-export const navigationPreviewProductsQueryOptions = (params: Record<string, string>) =>
+export const navigationPreviewProductsQueryOptions = (
+  params: Record<string, string>,
+) =>
   queryOptions({
     queryKey: queryKeys.navigation.previewProducts(params),
     queryFn: () => getNavigationPreviewProducts({ data: params }),
@@ -595,10 +598,16 @@ export const abandonedCheckoutsQueryOptions = (params: {
       if (params.search) sp.set("search", params.search);
       if (params.sort) sp.set("sort", params.sort);
       if (params.order) sp.set("order", params.order);
-      const res = await fetch(`/api/v1/admin/abandoned-checkouts?${sp.toString()}`);
-      if (!res.ok) throw new Error(`Failed to fetch abandoned checkouts: ${res.status}`);
-      const body = await res.json() as { success: boolean; data?: unknown };
-      return (body.data ?? body) as { checkouts: unknown[]; pagination: unknown };
+      const res = await fetch(
+        `/api/v1/admin/abandoned-checkouts?${sp.toString()}`,
+      );
+      if (!res.ok)
+        throw new Error(`Failed to fetch abandoned checkouts: ${res.status}`);
+      const body = (await res.json()) as { success: boolean; data?: unknown };
+      return (body.data ?? body) as {
+        checkouts: unknown[];
+        pagination: unknown;
+      };
     },
     staleTime: STALE.MODERATE,
   });
@@ -727,6 +736,13 @@ export const themeSettingsQueryOptions = () =>
     staleTime: STALE.CONFIG,
   });
 
+export const mediaSettingsQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.settings.media(),
+    queryFn: () => getMediaSettings(),
+    staleTime: STALE.CONFIG,
+  });
+
 export const smsSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.sms(),
@@ -800,7 +816,9 @@ export const deliveryProvidersQueryOptions = () =>
     staleTime: STALE.CONFIG,
   });
 
-export const deliveryLocationsQueryOptions = (params: Record<string, string | number | boolean | undefined>) =>
+export const deliveryLocationsQueryOptions = (
+  params: Record<string, string | number | boolean | undefined>,
+) =>
   queryOptions({
     queryKey: queryKeys.settings.deliveryLocations(params),
     queryFn: () => getDeliveryLocations({ data: params }),
@@ -821,7 +839,9 @@ export const importPathaoStatusQueryOptions = () =>
     staleTime: STALE.LOOKUP,
   });
 
-export const checkoutLanguagesQueryOptions = (params: Record<string, string | number | boolean | undefined>) =>
+export const checkoutLanguagesQueryOptions = (
+  params: Record<string, string | number | boolean | undefined>,
+) =>
   queryOptions({
     queryKey: queryKeys.settings.checkoutLanguages(params),
     queryFn: () => getCheckoutLanguages({ data: params }),

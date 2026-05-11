@@ -20,24 +20,47 @@ export interface InvalidationGroupDef {
 export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   products: {
     label: "Products",
-    description: "Product listings, search results, and homepage product sections",
+    description:
+      "Product listings, search results, and homepage product sections",
     kvPrefixes: ["api:products:", "api:search:", "api:storefront:homepage:"],
     bumpsHtml: true,
-    storefrontPrefixes: ["product_slug_", "product_variants_", "all_products_", "category_products_", "storefront_homepage_"],
+    storefrontPrefixes: [
+      "product_slug_",
+      "product_variants_",
+      "all_products_",
+      "category_products_",
+      "storefront_homepage_",
+    ],
   },
   categories: {
     label: "Categories",
     description: "Category pages, navigation menus, and search",
-    kvPrefixes: ["api:categories:", "api:navigation:", "api:search:", "api:attributes:category", "api:storefront:homepage:"],
+    kvPrefixes: [
+      "api:categories:",
+      "api:navigation:",
+      "api:search:",
+      "api:attributes:category",
+      "api:storefront:homepage:",
+    ],
     bumpsHtml: true,
-    storefrontPrefixes: ["category_slug_", "global_all_categories", "category_products_", "filterable_attrs_category_", "storefront_homepage_"],
+    storefrontPrefixes: [
+      "category_slug_",
+      "global_all_categories",
+      "category_products_",
+      "filterable_attrs_category_",
+      "storefront_homepage_",
+    ],
   },
   collections: {
     label: "Collections",
     description: "Collection pages and homepage collection sections",
     kvPrefixes: ["api:collections:", "api:storefront:homepage:"],
     bumpsHtml: true,
-    storefrontPrefixes: ["global_all_collections", "collection_by_id_", "storefront_homepage_"],
+    storefrontPrefixes: [
+      "global_all_collections",
+      "collection_by_id_",
+      "storefront_homepage_",
+    ],
   },
   pages: {
     label: "Pages",
@@ -48,24 +71,65 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   },
   layout: {
     label: "Layout",
-    description: "Header, footer, navigation, analytics, and site-wide settings",
-    kvPrefixes: ["api:header:", "api:footer:", "api:navigation:", "api:analytics:", "api:storefront:layout:", "api:storefront:csp:"],
+    description:
+      "Header, footer, navigation, analytics, and site-wide settings",
+    kvPrefixes: [
+      "api:header:",
+      "api:footer:",
+      "api:navigation:",
+      "api:analytics:",
+      "api:storefront:layout:",
+      "api:storefront:csp:",
+    ],
     bumpsHtml: true,
-    storefrontPrefixes: ["storefront_layout_", "global_header_data", "global_footer_data", "global_navigation_", "global_analytics_config", "global_security_settings"],
+    storefrontPrefixes: [
+      "storefront_layout_",
+      "global_header_data",
+      "global_footer_data",
+      "global_navigation_",
+      "global_analytics_config",
+      "global_security_settings",
+    ],
+  },
+  media: {
+    label: "Media",
+    description: "CDN host policy and image optimization settings",
+    kvPrefixes: ["api:storefront:layout:", "api:storefront:homepage:"],
+    bumpsHtml: true,
+    storefrontPrefixes: ["storefront_layout_", "storefront_homepage_"],
   },
   homepage: {
     label: "Homepage",
     description: "Hero sliders, widgets, SEO settings",
-    kvPrefixes: ["api:hero:", "api:widgets:active-homepage:", "api:widgets:single:", "api:seo:", "api:storefront:homepage:"],
+    kvPrefixes: [
+      "api:hero:",
+      "api:widgets:active-homepage:",
+      "api:widgets:single:",
+      "api:seo:",
+      "api:storefront:homepage:",
+    ],
     bumpsHtml: true,
-    storefrontPrefixes: ["homepage_hero_sliders", "global_homepage_widgets", "widget_", "global_seo_settings", "storefront_homepage_"],
+    storefrontPrefixes: [
+      "homepage_hero_sliders",
+      "global_homepage_widgets",
+      "widget_",
+      "global_seo_settings",
+      "storefront_homepage_",
+    ],
   },
   checkout: {
     label: "Checkout",
     description: "Shipping methods, delivery locations, payment settings",
     kvPrefixes: ["api:shipping-methods:", "api:locations:"],
     bumpsHtml: false,
-    storefrontPrefixes: ["global_shipping_cities", "shipping_zones_", "shipping_areas_", "global_shipping_methods", "checkout_config", "global_checkout_language"],
+    storefrontPrefixes: [
+      "global_shipping_cities",
+      "shipping_zones_",
+      "shipping_areas_",
+      "global_shipping_methods",
+      "checkout_config",
+      "global_checkout_language",
+    ],
   },
   search: {
     label: "Search",
@@ -77,7 +141,11 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   attributes: {
     label: "Attributes",
     description: "Product attributes and filterable attributes",
-    kvPrefixes: ["api:attributes:filterable", "api:attributes:category", "api:attributes:category-slug"],
+    kvPrefixes: [
+      "api:attributes:filterable",
+      "api:attributes:category",
+      "api:attributes:category-slug",
+    ],
     bumpsHtml: true,
     storefrontPrefixes: ["filterable_attrs_"],
   },
@@ -102,6 +170,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/seo": ["homepage"],
   "/api/v1/admin/settings/security": ["layout"],
   "/api/v1/admin/settings/theme": ["layout"],
+  "/api/v1/admin/settings/media": ["media"],
   "/api/v1/admin/settings/currency": ["layout", "products"],
   "/api/v1/admin/settings/auth": ["checkout"],
   "/api/v1/admin/settings/delivery-locations": ["checkout"],
@@ -218,7 +287,9 @@ export async function invalidateGroups(
   const uniquePrefixes = [...prefixes];
   if (uniquePrefixes.length === 0) return;
 
-  console.log(`[Cache] Invalidating groups [${groups.join(", ")}] – ${uniquePrefixes.length} KV prefix(es)`);
+  console.log(
+    `[Cache] Invalidating groups [${groups.join(", ")}] – ${uniquePrefixes.length} KV prefix(es)`,
+  );
 
   await Promise.all(
     uniquePrefixes.map((prefix) => deleteCacheByPattern(`${prefix}*`, kv)),

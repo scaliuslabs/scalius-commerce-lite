@@ -7,15 +7,20 @@
  * https://www.facebook.com/business/help/120325381656392
  */
 
-import type { APIRoute } from 'astro';
-import { getAllProducts } from '@/lib/api/products';
-import type { Product } from '@/lib/api/types';
+import type { APIRoute, APIContext } from "astro";
+import { getAllProducts } from "@/lib/api/products";
+import type { Product } from "@/lib/api/types";
 import {
   getGoogleCategory,
   getFacebookCategory,
   escapeXmlCategory,
-} from '@/lib/category-mapping';
-import { getLayoutData } from '@/lib/api';
+} from "@/lib/category-mapping";
+import { getLayoutData } from "@/lib/api";
+import {
+  getRuntimeStorefrontUrl,
+  setRuntimeImageCdnPolicy,
+} from "@/lib/api/runtime-env";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 export const prerender = false;
 
@@ -26,13 +31,13 @@ const MAX_LIMIT = 5000;
  * Escapes XML special characters
  */
 function escapeXml(text: string | null | undefined): string {
-  if (!text) return '';
+  if (!text) return "";
   return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 /**
@@ -40,42 +45,51 @@ function escapeXml(text: string | null | undefined): string {
  * Uses ISO 4217 decimal places per currency (e.g., JPY=0, BDT/USD=2, BHD=3).
  */
 function formatFeedPrice(price: number, currencyCode: string): string {
-  const decimals = currencyCode === "JPY" || currencyCode === "KRW" || currencyCode === "VND" ? 0
-    : currencyCode === "BHD" || currencyCode === "KWD" || currencyCode === "OMR" ? 3
-    : 2; // Most currencies use 2 decimals
+  const decimals =
+    currencyCode === "JPY" || currencyCode === "KRW" || currencyCode === "VND"
+      ? 0
+      : currencyCode === "BHD" ||
+          currencyCode === "KWD" ||
+          currencyCode === "OMR"
+        ? 3
+        : 2; // Most currencies use 2 decimals
   return `${price.toFixed(decimals)} ${currencyCode}`;
 }
 
 /**
  * Determines product availability based on stock and active status
  */
-function getAvailability(product: Product): 'in stock' | 'out of stock' {
+function getAvailability(product: Product): "in stock" | "out of stock" {
   // If product is explicitly marked as inactive, it's out of stock
   // Treat undefined isActive as active (since API list endpoint doesn't return this field)
   if (product.isActive === false) {
-    return 'out of stock';
+    return "out of stock";
   }
 
   // For products with variants, we'll mark as in stock if the product itself is active
   // Individual variant stock is handled by variants having their own availability
-  return 'in stock';
+  return "in stock";
 }
 
 /**
  * Generates a single product item for the feed
  */
-function generateProductItem(product: Product, baseUrl: string, currencyCode: string): string {
+function generateProductItem(
+  product: Product,
+  baseUrl: string,
+  currencyCode: string,
+): string {
   const productUrl = `${baseUrl}/products/${product.slug}`;
   const availability = getAvailability(product);
 
   // Get category mappings
-  const categorySlug = product.category?.slug || '';
-  const categoryName = product.category?.name || '';
+  const categorySlug = product.category?.slug || "";
+  const categoryName = product.category?.name || "";
   const googleCategory = escapeXmlCategory(getGoogleCategory(categorySlug));
   const facebookCategory = escapeXmlCategory(getFacebookCategory(categorySlug));
 
   // Build the item XML
-  let item = '  <item>\n';
+  let item = "  <item>\n";
 
   // Required fields
   item += `    <g:id>${escapeXml(product.id)}</g:id>\n`;
@@ -88,14 +102,20 @@ function generateProductItem(product: Product, baseUrl: string, currencyCode: st
 
   // Image (required)
   if (product.imageUrl) {
-    item += `    <g:image_link>${escapeXml(product.imageUrl)}</g:image_link>\n`;
+    const imageUrl = getOptimizedImageUrl(product.imageUrl, {
+      width: 1200,
+      quality: 90,
+      format: "auto",
+      fit: "scale-down",
+    });
+    item += `    <g:image_link>${escapeXml(imageUrl)}</g:image_link>\n`;
   }
 
   // Brand - try to get from attributes
   const brandAttribute = product.attributes?.find(
-    (attr) => attr.name.toLowerCase() === 'brand'
+    (attr) => attr.name.toLowerCase() === "brand",
   );
-  const brand = brandAttribute?.value || 'Generic';
+  const brand = brandAttribute?.value || "Generic";
   item += `    <g:brand>${escapeXml(brand)}</g:brand>\n`;
 
   // Optional fields
@@ -120,17 +140,17 @@ function generateProductItem(product: Product, baseUrl: string, currencyCode: st
     product.attributes.forEach((attr) => {
       const attrName = attr.name.toLowerCase();
 
-      if (attrName === 'color' || attrName === 'colour') {
+      if (attrName === "color" || attrName === "colour") {
         item += `    <g:color>${escapeXml(attr.value)}</g:color>\n`;
-      } else if (attrName === 'size') {
+      } else if (attrName === "size") {
         item += `    <g:size>${escapeXml(attr.value)}</g:size>\n`;
-      } else if (attrName === 'material') {
+      } else if (attrName === "material") {
         item += `    <g:material>${escapeXml(attr.value)}</g:material>\n`;
-      } else if (attrName === 'gender') {
+      } else if (attrName === "gender") {
         item += `    <g:gender>${escapeXml(attr.value)}</g:gender>\n`;
-      } else if (attrName === 'age_group' || attrName === 'age group') {
+      } else if (attrName === "age_group" || attrName === "age group") {
         item += `    <g:age_group>${escapeXml(attr.value)}</g:age_group>\n`;
-      } else if (attrName === 'pattern') {
+      } else if (attrName === "pattern") {
         item += `    <g:pattern>${escapeXml(attr.value)}</g:pattern>\n`;
       }
     });
@@ -145,43 +165,44 @@ function generateProductItem(product: Product, baseUrl: string, currencyCode: st
     item += `    </g:shipping>\n`;
   }
 
-  item += '  </item>\n';
+  item += "  </item>\n";
   return item;
 }
 
 /**
  * Generates the complete Facebook product feed
  */
-function generateFacebookFeed(products: Product[], baseUrl: string, currencyCode: string): string {
+function generateFacebookFeed(
+  products: Product[],
+  baseUrl: string,
+  currencyCode: string,
+): string {
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   xml += '<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">\n';
-  xml += '<channel>\n';
-  xml += `<title>${escapeXml('Product Catalog')}</title>\n`;
+  xml += "<channel>\n";
+  xml += `<title>${escapeXml("Product Catalog")}</title>\n`;
   xml += `<link>${escapeXml(baseUrl)}</link>\n`;
-  xml += `<description>${escapeXml('Complete product catalog for Facebook/Instagram shopping')}</description>\n`;
+  xml += `<description>${escapeXml("Complete product catalog for Facebook/Instagram shopping")}</description>\n`;
 
   for (const product of products) {
     xml += generateProductItem(product, baseUrl, currencyCode);
   }
 
-  xml += '</channel>\n';
-  xml += '</rss>';
+  xml += "</channel>\n";
+  xml += "</rss>";
   return xml;
 }
-
-import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
-import type { APIContext } from 'astro';
 
 export const GET: APIRoute = async ({ url }: APIContext) => {
   try {
     const baseUrl = getRuntimeStorefrontUrl();
     if (!baseUrl) {
-      return new Response('STOREFRONT_URL not configured', { status: 500 });
+      return new Response("STOREFRONT_URL not configured", { status: 500 });
     }
 
     // Get pagination parameters
-    const pageParam = url.searchParams.get('page');
-    const limitParam = url.searchParams.get('limit');
+    const pageParam = url.searchParams.get("page");
+    const limitParam = url.searchParams.get("limit");
 
     const page = pageParam ? parseInt(pageParam, 10) : 1;
     const limit = limitParam
@@ -189,21 +210,22 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       : DEFAULT_LIMIT;
 
     if (isNaN(page) || page < 1) {
-      return new Response('Invalid page parameter', { status: 400 });
+      return new Response("Invalid page parameter", { status: 400 });
     }
 
     if (isNaN(limit) || limit < 1) {
-      return new Response('Invalid limit parameter', { status: 400 });
+      return new Response("Invalid limit parameter", { status: 400 });
     }
 
     // Fetch layout data for currency settings
     const layoutData = await getLayoutData();
+    setRuntimeImageCdnPolicy(layoutData?.media);
     const currencyCode = layoutData?.currency?.code ?? "BDT";
 
     // We need multiple API pages to fulfill 1 feed chunk depending on limit
     const limitParams = 100; // Fetch 100 products per API call
-    const startApiPage = ((page - 1) * (limit / limitParams)) + 1;
-    let requiredApiPages = limit / limitParams;
+    const requiredApiPages = Math.ceil(limit / limitParams);
+    const startApiPage = (page - 1) * requiredApiPages + 1;
 
     const allProducts: Product[] = [];
 
@@ -213,13 +235,17 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       limit: limitParams,
     });
 
-    if (!firstResponse || !firstResponse.data || firstResponse.data.length === 0) {
+    if (
+      !firstResponse ||
+      !firstResponse.data ||
+      firstResponse.data.length === 0
+    ) {
       if (page > 1) {
-        return new Response('Page not found', { status: 404 });
+        return new Response("Page not found", { status: 404 });
       }
       return new Response(generateFacebookFeed([], baseUrl, currencyCode), {
         status: 200,
-        headers: { 'Content-Type': 'application/xml; charset=utf-8' }
+        headers: { "Content-Type": "application/xml; charset=utf-8" },
       });
     }
 
@@ -227,13 +253,23 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     const totalPages = firstResponse.pagination.totalPages;
 
     // Limit requiredApiPages if we hit the end of the total products early
-    const maxApiPage = Math.min(startApiPage + requiredApiPages - 1, totalPages);
+    const maxApiPage = Math.min(
+      startApiPage + requiredApiPages - 1,
+      totalPages,
+    );
 
     // Fetch remaining API pages needed for this feed chunk in parallel batches to avoid timeout
     const BATCH_SIZE = 5;
-    for (let currentApiPage = startApiPage + 1; currentApiPage <= maxApiPage; currentApiPage += BATCH_SIZE) {
+    for (
+      let currentApiPage = startApiPage + 1;
+      currentApiPage <= maxApiPage;
+      currentApiPage += BATCH_SIZE
+    ) {
       const fetchPromises = [];
-      const endBatchPage = Math.min(currentApiPage + BATCH_SIZE - 1, maxApiPage);
+      const endBatchPage = Math.min(
+        currentApiPage + BATCH_SIZE - 1,
+        maxApiPage,
+      );
 
       for (let p = currentApiPage; p <= endBatchPage; p++) {
         fetchPromises.push(getAllProducts({ page: p, limit: limitParams }));
@@ -248,21 +284,25 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     }
 
     if (allProducts.length === 0 && page > 1) {
-      return new Response('Page not found', { status: 404 });
+      return new Response("Page not found", { status: 404 });
     }
 
     // Generate feed XML
-    const xml = generateFacebookFeed(allProducts, baseUrl, currencyCode);
+    const xml = generateFacebookFeed(
+      allProducts.slice(0, limit),
+      baseUrl,
+      currencyCode,
+    );
 
     return new Response(xml, {
       status: 200,
       headers: {
-        'Content-Type': 'application/xml; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600, stale-while-revalidate=43200',
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=3600, stale-while-revalidate=43200",
       },
     });
   } catch (error: unknown) {
-    console.error('Error generating Facebook product feed:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    console.error("Error generating Facebook product feed:", error);
+    return new Response("Internal Server Error", { status: 500 });
   }
 };

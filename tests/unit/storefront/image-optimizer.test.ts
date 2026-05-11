@@ -92,4 +92,36 @@ describe("storefront image optimization URLs", () => {
     expect(optimized).toContain("https://media.example-cdn.com/cdn-cgi/image/");
     expect(optimized).toContain("/products/image.webp?version=1");
   });
+
+  it("canonicalizes configured host aliases onto the canonical CDN host", () => {
+    const optimized = getOptimizedImageUrl(
+      "https://old-cdn.example.com/products/image.webp?version=1",
+      { width: 400, height: 400 },
+      {
+        cdnBase,
+        cdnHosts: ["cloud.scalius.com"],
+        cdnHostAliases: ["old-cdn.example.com"],
+        isDev: false,
+      },
+    );
+
+    expect(optimized).toContain("https://cloud.scalius.com/cdn-cgi/image/");
+    expect(optimized).toContain("/products/image.webp?version=1");
+  });
+
+  it("honors the dashboard image optimization toggle", () => {
+    const raw = getOptimizedImageUrl(
+      "products/image.webp",
+      { width: 400, height: 400 },
+      {
+        enabled: false,
+        cdnBase,
+        cdnHosts: ["cloud.scalius.com"],
+        cdnHostAliases: ["old-cdn.example.com"],
+        isDev: false,
+      },
+    );
+
+    expect(raw).toBe("https://cloud.scalius.com/products/image.webp");
+  });
 });

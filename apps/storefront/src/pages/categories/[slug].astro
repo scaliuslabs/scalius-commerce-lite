@@ -16,7 +16,10 @@ import {
 import CategoryFilters from "@/components/CategoryFilters";
 import RichContent from "@/components/RichContent.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
-import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import {
+  getRuntimeStorefrontUrl,
+  setRuntimeImageCdnPolicy,
+} from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   SlidersHorizontal,
@@ -48,6 +51,7 @@ try {
     getCategoryBySlug(slug),
   ]);
   layoutData = fetchedLayoutData;
+  setRuntimeImageCdnPolicy(layoutData?.media);
   category = fetchedCategory;
   if (!category) return new Response(null, { status: 404 });
 
@@ -101,7 +105,7 @@ function getPaginationUrl(pageNum: number) {
 
 function generatePaginationLinks(
   currentPage: number,
-  totalPages: number
+  totalPages: number,
 ): (number | "...")[] {
   if (totalPages <= 7)
     return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -128,7 +132,7 @@ function generatePaginationLinks(
 }
 
 const activeFilterCount = Object.keys(currentFilters).filter(
-  (key) => !["page", "sortBy"].includes(key) && currentFilters[key]
+  (key) => !["page", "sortBy"].includes(key) && currentFilters[key],
 ).length;
 
 // Include product name for richer analytics data
@@ -148,25 +152,44 @@ const canonicalUrl = `${storefrontUrl}/categories/${slug}`;
 
 // OG image from category image (per OG-02, OG-05)
 const ogImageUrl = category?.imageUrl
-  ? getOptimizedImageUrl(category.imageUrl, { width: 1200, height: 630, quality: 85, format: "auto", fit: "cover" })
+  ? getOptimizedImageUrl(category.imageUrl, {
+      width: 1200,
+      height: 630,
+      quality: 85,
+      format: "auto",
+      fit: "cover",
+    })
   : null;
 
 // CollectionPage JSON-LD with embedded BreadcrumbList (per SEO-03, SEO-04)
-const collectionJsonLd = category ? JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "CollectionPage",
-  "name": category.name,
-  "description": category.metaDescription || `Browse products in ${category.name}`,
-  "url": canonicalUrl,
-  "numberOfItems": pagination.total,
-  "breadcrumb": {
-    "@type": "BreadcrumbList",
-    "itemListElement": [
-      { "@type": "ListItem", "position": 1, "name": "Home", "item": `${storefrontUrl}/` },
-      { "@type": "ListItem", "position": 2, "name": category.name, "item": canonicalUrl }
-    ]
-  }
-}) : null;
+const collectionJsonLd = category
+  ? JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: category.name,
+      description:
+        category.metaDescription || `Browse products in ${category.name}`,
+      url: canonicalUrl,
+      numberOfItems: pagination.total,
+      breadcrumb: {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: `${storefrontUrl}/`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: category.name,
+            item: canonicalUrl,
+          },
+        ],
+      },
+    })
+  : null;
 ---
 
 <Layout
@@ -178,16 +201,18 @@ const collectionJsonLd = category ? JSON.stringify({
   ogType="website"
 >
   <Fragment slot="head">
-    {collectionJsonLd && <script type="application/ld+json" set:html={collectionJsonLd} />}
+    {
+      collectionJsonLd && (
+        <script type="application/ld+json" set:html={collectionJsonLd} />
+      )
+    }
   </Fragment>
   <main
     class="min-h-screen bg-gray-50"
     data-category-name={category?.name}
     data-products-for-analytics={JSON.stringify(analyticsProductData)}
   >
-    <div
-      class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100"
-    >
+    <div class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <nav class="text-sm mb-4">
           <ol class="flex items-center space-x-2">
@@ -263,11 +288,7 @@ const collectionJsonLd = category ? JSON.stringify({
               </button>
             </div>
 
-            <form
-              id="filterForm"
-              method="get"
-              class="grow overflow-y-auto"
-            >
+            <form id="filterForm" method="get" class="grow overflow-y-auto">
               <input type="hidden" name="page" value="1" />
               <!-- Hidden sortBy field to maintain sort state -->
               <input type="hidden" name="sortBy" value={sortBy} />
@@ -354,7 +375,10 @@ const collectionJsonLd = category ? JSON.stringify({
               <Fragment>
                 <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
                   {products.map((product) => (
-                    <ProductCard product={product} currencySymbol={currencySymbol} />
+                    <ProductCard
+                      product={product}
+                      currencySymbol={currencySymbol}
+                    />
                   ))}
                 </div>
 
@@ -383,7 +407,7 @@ const collectionJsonLd = category ? JSON.stringify({
 
                       {generatePaginationLinks(
                         pagination.page,
-                        pagination.totalPages
+                        pagination.totalPages,
                       ).map((pageNum) =>
                         typeof pageNum === "number" ? (
                           <a
@@ -404,7 +428,7 @@ const collectionJsonLd = category ? JSON.stringify({
                           <span class="inline-flex h-9 w-9 items-center justify-center text-sm text-gray-400">
                             ...
                           </span>
-                        )
+                        ),
                       )}
 
                       <a
@@ -503,14 +527,14 @@ const collectionJsonLd = category ? JSON.stringify({
 
   function trackCategoryView() {
     const mainElement = document.querySelector<HTMLElement>(
-      "main[data-products-for-analytics]"
+      "main[data-products-for-analytics]",
     );
     if (!mainElement || mainElement.dataset.viewContentTracked === "true")
       return;
 
     try {
       const productsData: ProductAnalyticsData[] = JSON.parse(
-        mainElement.dataset.productsForAnalytics || "[]"
+        mainElement.dataset.productsForAnalytics || "[]",
       );
       const categoryName = mainElement.dataset.categoryName || "Category";
 
