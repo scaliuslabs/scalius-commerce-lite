@@ -175,6 +175,21 @@ html.dark {
   overflow-x: clip;
   contain: layout style;
 }
+
+.cms-widget-frame {
+  width: 100%;
+  max-width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@supports (padding: max(0px)) {
+  .cms-widget-frame {
+    padding-left: max(1rem, var(--safe-area-inset-left));
+    padding-right: max(1rem, var(--safe-area-inset-right));
+  }
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

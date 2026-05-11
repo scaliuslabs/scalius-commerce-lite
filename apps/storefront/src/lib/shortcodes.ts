@@ -59,7 +59,7 @@ export async function renderWidgetShortcode(widgetId: string): Promise<string> {
       html = `<style>${scopeCss(css, scopeClass)}</style>${html}`;
     }
 
-    return `<div class="widget-shortcode not-prose ${scopeClass}" data-widget-id="${widgetId}">${html}</div>`;
+    return `<div class="widget-shortcode not-prose cms-widget-frame ${scopeClass}" data-widget-id="${widgetId}">${html}</div>`;
   } catch (error: unknown) {
     console.error("Error rendering widget shortcode:", error);
     return `<div class="shortcode-error">Error loading widget: ${widgetId}</div>`;
