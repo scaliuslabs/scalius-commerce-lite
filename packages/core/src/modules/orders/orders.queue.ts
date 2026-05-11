@@ -317,16 +317,21 @@ export async function handleOrderIngestBatch(
         }
     }
 
+    const successfulOrderIds = new Set(successMessages.map((msg) => msg.body.orderData.id));
+    const activeReservationEntries = reservationEntries.filter((entry) =>
+        successfulOrderIds.has(entry.orderId),
+    );
+
     // ── Phase 2: Inventory reservations ─────────────────────────────────────
 
-    if (reservationEntries.length > 0) {
-        console.log(`[Queue] Running reserveStockBatch for ${reservationEntries.length} entries`);
+    if (activeReservationEntries.length > 0) {
+        console.log(`[Queue] Running reserveStockBatch for ${activeReservationEntries.length} entries`);
         // Group entries by pool for the batch call. All entries in a single
         // order share the same pool, but across a batch we may have mixed
         // pools. reserveStockBatch takes a single pool, so group and call
         // once per pool.
-        const byPool = new Map<"regular" | "preorder" | "backorder", typeof reservationEntries>();
-        for (const entry of reservationEntries) {
+        const byPool = new Map<"regular" | "preorder" | "backorder", typeof activeReservationEntries>();
+        for (const entry of activeReservationEntries) {
             const pool = entry.pool;
             if (!byPool.has(pool)) byPool.set(pool, []);
             byPool.get(pool)!.push(entry);
@@ -405,9 +410,9 @@ export async function handleOrderIngestBatch(
         // ── Phase 4: Rollback on DB failure ───────────────────────────────────
         console.error("[Queue] Order ingest DB batch failed WITH EXCEPTION:", batchError);
 
-        if (reservationEntries.length > 0) {
+        if (activeReservationEntries.length > 0) {
             console.log(`[Queue] Rolling back inventory...`);
-            await releaseMultiple(db, reservationEntries, "batch-rollback").catch((releaseErr) =>
+            await releaseMultiple(db, activeReservationEntries, "batch-rollback").catch((releaseErr) =>
                 console.error("[Queue] Rollback release failed:", releaseErr),
             );
         }
