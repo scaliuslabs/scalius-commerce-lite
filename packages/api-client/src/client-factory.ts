@@ -5,7 +5,7 @@
  * - Service Binding: zero-latency RPC inside Cloudflare Workers (admin env.API, storefront env.BACKEND_API)
  * - HTTP: standard fetch for dev mode or external consumers
  */
-import { createClient, createConfig, type Client, type Config } from "./generated/client";
+import { createClient, createConfig, type Client, type Config } from "./generated/client-core";
 
 interface ServiceBindingOptions {
   /** Cloudflare Service Binding (env.API or env.BACKEND_API) */
