@@ -21,6 +21,7 @@ Last reviewed: 2026-05-11
 | #25 | API 404 Error on Individual Cache Clear Actions | `aa05893` | Production Chrome verification after deploy opened `/admin/settings/cache`, clicked the individual Categories cache Clear action, waited for the settled page state, and confirmed the row changed from `Never` to `0s ago`. The server function POST returned `200` and no `API error: 404`, `404`, or `Not Found` text appeared. |
 | #27 | Broken "View" Action for Trashed Items in Page Trash | `aa05893` | Read the GitHub issue body and attempted the linked Google Doc tab; the rendered preview exposed the matching "Broken View Action for Trashed Items" heading, while export returned a Google Docs error page. Production Chrome verification after deploy opened `/admin/pages?trashed=true`, found 3 real trashed pages, opened the first row menu, and confirmed the settled menu contained only `Restore` and `Delete Permanently` with no `View` action. |
 | #20 | "View" Action is Unresponsive in Category Trash | `aa05893` | Read the GitHub issue body and the linked Google Doc preview tab, which matched the issue title. Production Chrome verification after deploy opened `/admin/categories?trashed=true`, found the real trashed `Men Clothing` row, opened its row menu, and confirmed the settled menu contained only `Restore` and `Delete Permanently` with no `View` action. |
+| #22 | Sorting Functionality Completely Unresponsive in Inventory Module | `aa05893` | Read the GitHub issue body and the linked Google Doc preview tab, which matched the inventory sorting issue. Production Chrome verification after deploy opened `/admin/inventory`, clicked the Product, SKU, and Available sortable headers with settle waits, and confirmed four refetches returned `200`. Rendered rows sorted correctly for Product ascending, Product descending, SKU ascending, and Available ascending. |
 
 ## Implemented, Needs Browser Verification
 
@@ -28,7 +29,6 @@ These changes were already committed in `aa05893` before the current per-issue l
 
 | Issue | Title | Implementation Status |
 | --- | --- | --- |
-| #22 | Sorting Functionality Completely Unresponsive in Inventory Module | Inventory route/service accepts sort/order and sorts by supported fields. |
 | #17 | Deleted Products Retain "Active" Status in Trash | Product trash status label adjusted. The issue body also mentions WYSIWYG image rendering, which still needs separate investigation. |
 
 ## Open Work Queue
