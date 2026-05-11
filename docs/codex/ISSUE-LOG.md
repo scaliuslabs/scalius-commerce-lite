@@ -6,6 +6,7 @@ Last reviewed: 2026-05-11
 
 | Issue | Title | Commit | Verification |
 | --- | --- | --- | --- |
+| #23 | Content Featured Image not displaying on Storefront | `d2b891e9`, `ae00ea6` | Read the GitHub issue and linked Google Doc preview tab. Production admin Chrome verification opened the Combo Offers page editor, selected the latest uploaded `pexels-mali-229789.jpg` media item as the featured image, saved successfully, and returned to the Pages list with the row updated on May 11, 2026. Remote D1 and public API checks confirmed `/combo-offer` now stores and returns `featuredImage`. Production Chrome verification at `/combo-offer` showed the featured image visibly rendered as `img alt="blah"` with a Cloudflare Image Resizing URL containing `/cdn-cgi/image/` and `width=1280,height=640,quality=85,format=auto,fit=cover`; the optimized image request returned `200` with `cf-resized`. API version `8f436082-75a2-4d19-a1d8-02ef28deb72f`, Admin version `4aa74b2d-0ca7-4cc0-a108-931ceccab265`, Storefront version `cf5a88f2-73cf-4e87-968c-83d04b572336` were verified after deploy. |
 | #32 | Phone Search Logic Error | `428dab1` | Production API returned the expected order set for `01774452222` and `+8801774452222`. Chrome production dashboard showed `9 orders` for `01774452222`; visible rows all used `+880 1774 452222`. |
 | #34 | "Active" status showing for collections in Trash. | `aa05893` | Isolated Google Chrome verification opened the production Collections Trash page and showed the settled empty-trash state with no `Active` status text or status switches. A remote D1 read confirmed there are currently zero trashed collections in production, so a real trashed row could not be observed without creating production test data. The deployed column code renders trashed collection rows as `Trashed` and hides the switch. |
 | #31 | "Deactivate script" is not working | `aa05893` | Isolated Google Chrome verification opened the production Analytics Scripts page. The `Lorem ipsum` row started `Active` with a Deactivate action, changed to `Inactive` with an Activate action after clicking Deactivate, then restored to `Active` after clicking Activate. A remote D1 read confirmed the script ended at `is_active = 1`. |
@@ -36,4 +37,3 @@ These changes were already committed in `aa05893` before the current per-issue l
 | Issue | Title | Notes |
 | --- | --- | --- |
 | #24 | Layout Overflow & Missing Padding | Storefront mobile layout. |
-| #23 | Content Featured Image not displaying on Storefront | Storefront content/page rendering. |
