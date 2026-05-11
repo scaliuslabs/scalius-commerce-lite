@@ -15479,6 +15479,180 @@ export type PostApiV1AdminSettingsThemeResponses = {
 
 export type PostApiV1AdminSettingsThemeResponse = PostApiV1AdminSettingsThemeResponses[keyof PostApiV1AdminSettingsThemeResponses];
 
+export type GetApiV1AdminSettingsMediaData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/media';
+};
+
+export type GetApiV1AdminSettingsMediaErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsMediaError = GetApiV1AdminSettingsMediaErrors[keyof GetApiV1AdminSettingsMediaErrors];
+
+export type GetApiV1AdminSettingsMediaResponses = {
+    /**
+     * Media settings
+     */
+    200: {
+        success: true;
+        data: {
+            enabled?: boolean;
+            canonicalCdnUrl?: string;
+            allowedImageHosts?: Array<string>;
+            canonicalHostAliases?: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsMediaResponse = GetApiV1AdminSettingsMediaResponses[keyof GetApiV1AdminSettingsMediaResponses];
+
+export type PostApiV1AdminSettingsMediaData = {
+    body?: {
+        enabled?: boolean;
+        canonicalCdnUrl?: string;
+        allowedImageHosts?: Array<string>;
+        canonicalHostAliases?: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/media';
+};
+
+export type PostApiV1AdminSettingsMediaErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsMediaError = PostApiV1AdminSettingsMediaErrors[keyof PostApiV1AdminSettingsMediaErrors];
+
+export type PostApiV1AdminSettingsMediaResponses = {
+    /**
+     * Media settings saved
+     */
+    200: {
+        success: true;
+        data: {
+            enabled?: boolean;
+            canonicalCdnUrl?: string;
+            allowedImageHosts?: Array<string>;
+            canonicalHostAliases?: Array<string>;
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsMediaResponse = PostApiV1AdminSettingsMediaResponses[keyof PostApiV1AdminSettingsMediaResponses];
+
 export type GetApiV1AdminSettingsSeoData = {
     body?: never;
     path?: never;
@@ -16169,170 +16343,6 @@ export type PostApiV1AdminSettingsBusinessResponses = {
 };
 
 export type PostApiV1AdminSettingsBusinessResponse = PostApiV1AdminSettingsBusinessResponses[keyof PostApiV1AdminSettingsBusinessResponses];
-
-export type GetApiV1AdminSettingsOpenrouterData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/openrouter';
-};
-
-export type GetApiV1AdminSettingsOpenrouterErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1AdminSettingsOpenrouterError = GetApiV1AdminSettingsOpenrouterErrors[keyof GetApiV1AdminSettingsOpenrouterErrors];
-
-export type GetApiV1AdminSettingsOpenrouterResponses = {
-    /**
-     * API key status
-     */
-    200: {
-        success: true;
-        data: {
-            apiKey: string;
-        };
-    };
-};
-
-export type GetApiV1AdminSettingsOpenrouterResponse = GetApiV1AdminSettingsOpenrouterResponses[keyof GetApiV1AdminSettingsOpenrouterResponses];
-
-export type PostApiV1AdminSettingsOpenrouterData = {
-    body?: {
-        apiKey: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/openrouter';
-};
-
-export type PostApiV1AdminSettingsOpenrouterErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsOpenrouterError = PostApiV1AdminSettingsOpenrouterErrors[keyof PostApiV1AdminSettingsOpenrouterErrors];
-
-export type PostApiV1AdminSettingsOpenrouterResponses = {
-    /**
-     * API key saved
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsOpenrouterResponse = PostApiV1AdminSettingsOpenrouterResponses[keyof PostApiV1AdminSettingsOpenrouterResponses];
 
 export type GetApiV1AdminSettingsPaymentMethodsData = {
     body?: never;
@@ -20440,6 +20450,223 @@ export type PostApiV1AdminSettingsSmsResponses = {
 };
 
 export type PostApiV1AdminSettingsSmsResponse = PostApiV1AdminSettingsSmsResponses[keyof PostApiV1AdminSettingsSmsResponses];
+
+export type GetApiV1AdminSettingsWidgetAiData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/widget-ai';
+};
+
+export type GetApiV1AdminSettingsWidgetAiErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsWidgetAiError = GetApiV1AdminSettingsWidgetAiErrors[keyof GetApiV1AdminSettingsWidgetAiErrors];
+
+export type GetApiV1AdminSettingsWidgetAiResponses = {
+    /**
+     * Widget AI settings
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsWidgetAiResponse = GetApiV1AdminSettingsWidgetAiResponses[keyof GetApiV1AdminSettingsWidgetAiResponses];
+
+export type PostApiV1AdminSettingsWidgetAiData = {
+    body?: {
+        activeProvider?: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+        providers?: {
+            openrouter?: {
+                enabled?: boolean;
+                defaultModel?: string;
+                baseUrl?: string;
+                appName?: string;
+                appUrl?: string;
+                accountId?: string;
+            };
+            openai?: {
+                enabled?: boolean;
+                defaultModel?: string;
+                baseUrl?: string;
+                appName?: string;
+                appUrl?: string;
+                accountId?: string;
+            };
+            gemini?: {
+                enabled?: boolean;
+                defaultModel?: string;
+                baseUrl?: string;
+                appName?: string;
+                appUrl?: string;
+                accountId?: string;
+            };
+            cloudflare?: {
+                enabled?: boolean;
+                defaultModel?: string;
+                baseUrl?: string;
+                appName?: string;
+                appUrl?: string;
+                accountId?: string;
+            };
+        };
+        generation?: {
+            planningTemperature?: number;
+            generationTemperature?: number;
+            improvementTemperature?: number;
+            maxOutputTokens?: number;
+            stagedGenerationDefault?: boolean;
+        };
+        prompts?: {
+            widget?: string;
+            'landing-page'?: string;
+            collection?: string;
+        };
+        apiKeys?: {
+            openrouter?: string;
+            openai?: string;
+            gemini?: string;
+            cloudflare?: string;
+        };
+        clearApiKeys?: Array<'openrouter' | 'openai' | 'gemini' | 'cloudflare'>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/widget-ai';
+};
+
+export type PostApiV1AdminSettingsWidgetAiErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsWidgetAiError = PostApiV1AdminSettingsWidgetAiErrors[keyof PostApiV1AdminSettingsWidgetAiErrors];
+
+export type PostApiV1AdminSettingsWidgetAiResponses = {
+    /**
+     * Updated widget AI settings
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsWidgetAiResponse = PostApiV1AdminSettingsWidgetAiResponses[keyof PostApiV1AdminSettingsWidgetAiResponses];
 
 export type PutApiV1AdminOrdersByIdStatusData = {
     body?: {
@@ -24742,14 +24969,16 @@ export type GetApiV1AdminAiPromptsResponses = {
 
 export type GetApiV1AdminAiPromptsResponse = GetApiV1AdminAiPromptsResponses[keyof GetApiV1AdminAiPromptsResponses];
 
-export type GetApiV1AdminOpenrouterModelsData = {
+export type GetApiV1AdminAiModelsData = {
     body?: never;
     path?: never;
-    query?: never;
-    url: '/api/v1/admin/openrouter/models';
+    query?: {
+        provider?: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+    };
+    url: '/api/v1/admin/ai/models';
 };
 
-export type GetApiV1AdminOpenrouterModelsErrors = {
+export type GetApiV1AdminAiModelsErrors = {
     /**
      * Validation error
      */
@@ -24807,37 +25036,44 @@ export type GetApiV1AdminOpenrouterModelsErrors = {
     };
 };
 
-export type GetApiV1AdminOpenrouterModelsError = GetApiV1AdminOpenrouterModelsErrors[keyof GetApiV1AdminOpenrouterModelsErrors];
+export type GetApiV1AdminAiModelsError = GetApiV1AdminAiModelsErrors[keyof GetApiV1AdminAiModelsErrors];
 
-export type GetApiV1AdminOpenrouterModelsResponses = {
+export type GetApiV1AdminAiModelsResponses = {
     /**
-     * Model list
+     * AI model list
      */
     200: {
         success: true;
         data: {
+            provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+            defaultModel: string;
             models: Array<{
-                id: string;
-                name: string;
-                description?: string | null;
-                context_length?: number;
-                supportsVision: boolean;
-                modality: string;
-                [key: string]: unknown | string | (string | null) | number | boolean | undefined;
+                [key: string]: unknown;
             }>;
         };
     };
 };
 
-export type GetApiV1AdminOpenrouterModelsResponse = GetApiV1AdminOpenrouterModelsResponses[keyof GetApiV1AdminOpenrouterModelsResponses];
+export type GetApiV1AdminAiModelsResponse = GetApiV1AdminAiModelsResponses[keyof GetApiV1AdminAiModelsResponses];
 
-export type PostApiV1AdminOpenrouterGenerateData = {
+export type PostApiV1AdminAiGenerateData = {
     body?: {
-        model: string;
+        provider?: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+        model?: string;
         messages?: Array<{
-            role: string;
+            role: 'system' | 'user' | 'assistant';
             content: string | Array<{
-                [key: string]: unknown;
+                type: string;
+                text?: string;
+                image_url?: {
+                    url: string;
+                };
+                image?: string;
+                mediaType?: string;
+                cache_control?: unknown;
+                [key: string]: unknown | string | {
+                    url: string;
+                } | undefined;
             }>;
         }>;
         prompt?: string;
@@ -24850,10 +25086,10 @@ export type PostApiV1AdminOpenrouterGenerateData = {
     };
     path?: never;
     query?: never;
-    url: '/api/v1/admin/openrouter/generate';
+    url: '/api/v1/admin/ai/generate';
 };
 
-export type PostApiV1AdminOpenrouterGenerateErrors = {
+export type PostApiV1AdminAiGenerateErrors = {
     /**
      * Validation error
      */
@@ -24911,9 +25147,9 @@ export type PostApiV1AdminOpenrouterGenerateErrors = {
     };
 };
 
-export type PostApiV1AdminOpenrouterGenerateError = PostApiV1AdminOpenrouterGenerateErrors[keyof PostApiV1AdminOpenrouterGenerateErrors];
+export type PostApiV1AdminAiGenerateError = PostApiV1AdminAiGenerateErrors[keyof PostApiV1AdminAiGenerateErrors];
 
-export type PostApiV1AdminOpenrouterGenerateResponses = {
+export type PostApiV1AdminAiGenerateResponses = {
     /**
      * Generation result
      */
@@ -24925,15 +25161,26 @@ export type PostApiV1AdminOpenrouterGenerateResponses = {
     };
 };
 
-export type PostApiV1AdminOpenrouterGenerateResponse = PostApiV1AdminOpenrouterGenerateResponses[keyof PostApiV1AdminOpenrouterGenerateResponses];
+export type PostApiV1AdminAiGenerateResponse = PostApiV1AdminAiGenerateResponses[keyof PostApiV1AdminAiGenerateResponses];
 
-export type PostApiV1AdminOpenrouterGenerateStagedData = {
+export type PostApiV1AdminAiGenerateStagedData = {
     body?: {
-        model: string;
+        provider?: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+        model?: string;
         messages: Array<{
-            role: string;
+            role: 'system' | 'user' | 'assistant';
             content: string | Array<{
-                [key: string]: unknown;
+                type: string;
+                text?: string;
+                image_url?: {
+                    url: string;
+                };
+                image?: string;
+                mediaType?: string;
+                cache_control?: unknown;
+                [key: string]: unknown | string | {
+                    url: string;
+                } | undefined;
             }>;
         }>;
         stage?: string;
@@ -24942,10 +25189,10 @@ export type PostApiV1AdminOpenrouterGenerateStagedData = {
     };
     path?: never;
     query?: never;
-    url: '/api/v1/admin/openrouter/generate-staged';
+    url: '/api/v1/admin/ai/generate-staged';
 };
 
-export type PostApiV1AdminOpenrouterGenerateStagedErrors = {
+export type PostApiV1AdminAiGenerateStagedErrors = {
     /**
      * Validation error
      */
@@ -25003,24 +25250,21 @@ export type PostApiV1AdminOpenrouterGenerateStagedErrors = {
     };
 };
 
-export type PostApiV1AdminOpenrouterGenerateStagedError = PostApiV1AdminOpenrouterGenerateStagedErrors[keyof PostApiV1AdminOpenrouterGenerateStagedErrors];
+export type PostApiV1AdminAiGenerateStagedError = PostApiV1AdminAiGenerateStagedErrors[keyof PostApiV1AdminAiGenerateStagedErrors];
 
-export type PostApiV1AdminOpenrouterGenerateStagedResponses = {
+export type PostApiV1AdminAiGenerateStagedResponses = {
     /**
      * Staged generation result
      */
     200: {
         success: true;
         data: {
-            stage?: string;
-            sectionIndex?: number;
-            totalSections?: number;
-            [key: string]: unknown | string | number | undefined;
+            [key: string]: unknown;
         };
     };
 };
 
-export type PostApiV1AdminOpenrouterGenerateStagedResponse = PostApiV1AdminOpenrouterGenerateStagedResponses[keyof PostApiV1AdminOpenrouterGenerateStagedResponses];
+export type PostApiV1AdminAiGenerateStagedResponse = PostApiV1AdminAiGenerateStagedResponses[keyof PostApiV1AdminAiGenerateStagedResponses];
 
 export type GetApiV1AdminAttributesData = {
     body?: never;

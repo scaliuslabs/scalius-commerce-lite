@@ -43,6 +43,9 @@
       "bucket_name": "scalius-media"
     }
   ],
+  "ai": {
+    "binding": "AI"
+  },
   "queues": {
     "producers": [
       {

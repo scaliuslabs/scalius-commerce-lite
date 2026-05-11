@@ -437,11 +437,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
-  "/api/settings/openrouter": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
   "/api/settings/storefront-url": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
@@ -508,6 +503,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
 
   // Admin Settings
+  "/api/v1/admin/settings/widget-ai": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   "/api/v1/admin/settings/shipping-methods": {
     GET: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
@@ -697,21 +696,21 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
   "/api/v1/admin/ai-prompts": {
-    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
+    GET: { permission: PERMISSIONS.WIDGETS_EDIT },
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
   "/api/v1/admin/ai-prompts/*": {
-    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
+    GET: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
 
   // =============================================
-  // OpenRouter AI Generation API
+  // Widget AI Generation API
   // =============================================
-  "/api/v1/admin/openrouter": {
+  "/api/v1/admin/ai": {
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
-  "/api/v1/admin/openrouter/*": {
-    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
+  "/api/v1/admin/ai/*": {
+    GET: { permission: PERMISSIONS.WIDGETS_EDIT },
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
 

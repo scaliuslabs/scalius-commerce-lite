@@ -6,10 +6,11 @@ import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
+import { readChatCompletionStream } from './ai-stream';
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
-import { getOpenRouterSettings, getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
+import { getWidgetAiSettings, getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
@@ -19,9 +20,16 @@ type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
 interface ModelInfo {
   id: string;
   name: string;
+  provider?: string;
   supportsVision?: boolean;
   supportsAudio?: boolean;
   modality?: string;
+}
+
+interface WidgetAiSettings {
+  activeProvider?: string;
+  providers?: Record<string, { hasApiKey?: boolean; hasBinding?: boolean; defaultModel?: string }>;
+  generation?: { stagedGenerationDefault?: boolean };
 }
 
 export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widget: Widget | undefined | null) => {
@@ -30,7 +38,8 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
   >("widget");
   const [userPrompt, setUserPrompt] = useState("");
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
-  const [openRouterModels, setOpenRouterModels] = useState<ModelInfo[]>([]);
+  const [aiModels, setAiModels] = useState<ModelInfo[]>([]);
+  const [activeProvider, setActiveProvider] = useState("openrouter");
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [isApiKeySet, setIsApiKeySet] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
@@ -44,29 +53,64 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
 
 
   useEffect(() => {
-    getOpenRouterSettings()
-      .then((data: Record<string, unknown>) => {
-        if (data.apiKey) {
-          setIsApiKeySet(true);
-          // Models endpoint is a local proxy route — keep as raw fetch
-          fetch("/api/openrouter/models")
-            .then(res => res.json())
-            .then(modelData => {
-              const models = modelData.models || [];
-              setOpenRouterModels(models);
+    let cancelled = false;
 
-              const widgetModel = widget?.aiContext ? JSON.parse(widget.aiContext as string).preferredAiModel : null;
-              const globalModel = localStorage.getItem('global_preferred_ai_model');
+    async function loadAiSettings() {
+      const settings = (await getWidgetAiSettings()) as WidgetAiSettings;
+      if (cancelled) return;
 
-              if (widgetModel && models.some((m: ModelInfo) => m.id === widgetModel)) {
-                setSelectedModel(widgetModel);
-              } else if (globalModel && models.some((m: ModelInfo) => m.id === globalModel)) {
-                setSelectedModel(globalModel);
-              }
-            });
-        }
-      })
-      .catch(() => {});
+      const provider = settings.activeProvider || "openrouter";
+      const providerSettings = settings.providers?.[provider];
+      const configured = Boolean(providerSettings?.hasApiKey || providerSettings?.hasBinding);
+
+      setActiveProvider(provider);
+      setIsApiKeySet(configured);
+      setUseStagedMode(settings.generation?.stagedGenerationDefault !== false);
+
+      const response = await fetch(`/api/v1/admin/ai/models?provider=${encodeURIComponent(provider)}`);
+      const modelData = await response.json() as {
+        success?: boolean;
+        data?: { models?: ModelInfo[]; defaultModel?: string };
+        models?: ModelInfo[];
+        defaultModel?: string;
+      };
+      if (cancelled) return;
+
+      const models = modelData.data?.models || modelData.models || [];
+      const defaultModel = modelData.data?.defaultModel || modelData.defaultModel || providerSettings?.defaultModel || "";
+      setAiModels(models);
+
+      let widgetModel: string | null = null;
+      try {
+        widgetModel = widget?.aiContext
+          ? (JSON.parse(widget.aiContext as string).preferredAiModel as string | undefined) || null
+          : null;
+      } catch {
+        widgetModel = null;
+      }
+
+      const globalModel = localStorage.getItem(`global_preferred_ai_model_${provider}`)
+        || localStorage.getItem("global_preferred_ai_model");
+
+      if (widgetModel && models.some((m) => m.id === widgetModel)) {
+        setSelectedModel(widgetModel);
+      } else if (globalModel && models.some((m) => m.id === globalModel)) {
+        setSelectedModel(globalModel);
+      } else if (defaultModel) {
+        setSelectedModel(defaultModel);
+      } else {
+        setSelectedModel("");
+      }
+    }
+
+    loadAiSettings().catch((error) => {
+      if (import.meta.env.DEV) console.error("Failed to load widget AI settings:", error);
+      setIsApiKeySet(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [widget]);
 
   const handleAiRequest = async () => {
@@ -104,7 +148,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
       }) as { products?: unknown[]; categories?: unknown[] };
 
       // 3. Generate structured prompt with caching support
-      const currentModel = openRouterModels.find(m => m.id === selectedModel);
+      const currentModel = aiModels.find(m => m.id === selectedModel);
       const isVisionModel = currentModel?.supportsVision || false;
 
       const promptResult = await generateStructuredPrompt({
@@ -127,6 +171,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
       if (useStaged) {
         // STAGED GENERATION
         const result = await stagedGeneration.startStagedGeneration(
+          activeProvider,
           selectedModel,
           promptResult.messages,
           (section) => {
@@ -159,10 +204,11 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
 
   const handleSimpleGeneration = async (messages: PromptMessage[]) => {
     try {
-      const response = await fetch("/api/openrouter/generate", {
+      const response = await fetch("/api/v1/admin/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          provider: activeProvider,
           messages: messages,
           model: selectedModel,
           stream: true,
@@ -174,68 +220,36 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
         throw new Error(errorData.message || errorData.error?.message || "Failed to generate content.");
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let accumulatedJson = '';
+      const accumulatedJson = await readChatCompletionStream(response);
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          // Try tag-based parsing first (primary), then fall back to JSON
-          const tagResult = parseTagBasedResponse(accumulatedJson);
+      // Try tag-based parsing first (primary), then fall back to JSON
+      const tagResult = parseTagBasedResponse(accumulatedJson);
 
-          if (tagResult.success && tagResult.data) {
-            const validation = validateParsedWidget(tagResult.data);
-            if (validation.valid) {
-              setGeneratedContent(tagResult.data as { html: string; css: string });
-            } else {
-              if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
-              toast.error(`Invalid response: ${validation.error}`);
-              setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
-            }
-          } else {
-            // Fallback to JSON parsing
-            const jsonParsed = parseJSONSafely(accumulatedJson);
-            if (jsonParsed.success) {
-              const validation = validateWidgetJSON(jsonParsed.data);
-              if (validation.valid) {
-                setGeneratedContent(jsonParsed.data as { html: string; css: string });
-              } else {
-                if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
-                toast.error(`Invalid response: ${validation.error}`);
-                setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
-              }
-            } else {
-              if (import.meta.env.DEV) console.error("Failed to parse response:", tagResult.error, accumulatedJson);
-              toast.error("Failed to parse AI response.");
-              setGeneratedContent({ html: '<p class="text-destructive">Error parsing response.</p>', css: '' });
-            }
-          }
-          break;
+      if (tagResult.success && tagResult.data) {
+        const validation = validateParsedWidget(tagResult.data);
+        if (validation.valid) {
+          setGeneratedContent(tagResult.data as { html: string; css: string });
+        } else {
+          if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
+          toast.error(`Invalid response: ${validation.error}`);
+          setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
         }
-
-        buffer += decoder.decode(value, { stream: true });
-        let lineEnd;
-        while ((lineEnd = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, lineEnd).trim();
-          buffer = buffer.slice(lineEnd + 1);
-
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') {
-              break;
-            }
-            try {
-              const parsed = JSON.parse(data);
-              const delta = parsed.choices[0].delta.content;
-              if (delta) {
-                accumulatedJson += delta;
-              }
-            } catch (e) {
-              // Ignore JSON parse errors on partial data
-            }
+      } else {
+        // Fallback to JSON parsing
+        const jsonParsed = parseJSONSafely(accumulatedJson);
+        if (jsonParsed.success) {
+          const validation = validateWidgetJSON(jsonParsed.data);
+          if (validation.valid) {
+            setGeneratedContent(jsonParsed.data as { html: string; css: string });
+          } else {
+            if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
+            toast.error(`Invalid response: ${validation.error}`);
+            setGeneratedContent({ html: '<p class="text-destructive">Invalid widget structure.</p>', css: '' });
           }
+        } else {
+          if (import.meta.env.DEV) console.error("Failed to parse response:", tagResult.error, accumulatedJson);
+          toast.error("Failed to parse AI response.");
+          setGeneratedContent({ html: '<p class="text-destructive">Error parsing response.</p>', css: '' });
         }
       }
 
@@ -292,7 +306,7 @@ ${combinedPrompt}
 **IMPORTANT**: Your response must use this EXACT format:
 
 <htmljs>
-<!-- Your complete HTML code here, including inline JavaScript if needed -->
+<!-- Your complete HTML code here. Do not include script tags. -->
 </htmljs>
 
 <css>
@@ -327,7 +341,8 @@ ${aiContext.selectedImages.length > 0 ? `\n\n**Note**: ${aiContext.selectedImage
     isLoadingPrompt,
     handleAiRequest,
     handleCopyPrompt,
-    openRouterModels,
+    activeProvider,
+    aiModels,
     selectedModel,
     setSelectedModel,
     isApiKeySet,

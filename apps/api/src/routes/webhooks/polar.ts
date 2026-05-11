@@ -16,9 +16,9 @@ polarWebhookRoutes.post("/", async (c) => {
         const rawBody = await c.req.text();
 
         const headers: Record<string, string> = {};
-        for (const [key, value] of c.req.raw.headers.entries()) {
+        c.req.raw.headers.forEach((value, key) => {
             headers[key] = value;
-        }
+        });
 
         const db: Database = c.get("db");
         const kv = getKv();

@@ -1,0 +1,544 @@
+import { and, eq, sql } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
+import { settings } from "@scalius/database/schema";
+import {
+  decryptCredentialsGraceful,
+  encryptCredentials,
+} from "@scalius/core/utils/credential-encryption";
+import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import {
+  AI_PROVIDER_IDS,
+  GENERATION_CONFIG,
+  SYSTEM_PROMPT_FALLBACKS,
+  type PromptType,
+  type WidgetAiProvider,
+} from "./ai-config";
+import { AI_PROMPT_TYPES, DEFAULT_AI_PROMPTS } from "./default-prompts";
+
+const AI_SETTINGS_CATEGORY = "ai";
+const WIDGET_AI_CONFIG_KEY = "widget_generation_config";
+
+const PROMPT_KEYS: Record<PromptType, string> = {
+  widget: "prompt_widget",
+  "landing-page": "prompt_landing_page",
+  collection: "prompt_collection",
+};
+
+const API_KEY_KEYS: Record<WidgetAiProvider, string> = {
+  openrouter: "api_key_openrouter",
+  openai: "api_key_openai",
+  gemini: "api_key_gemini",
+  cloudflare: "api_key_cloudflare",
+};
+
+const DEFAULT_BASE_URLS: Record<"openrouter" | "openai" | "gemini", string> = {
+  openrouter: "https://openrouter.ai/api/v1",
+  openai: "https://api.openai.com/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta",
+};
+
+const ALLOWED_BASE_URLS: Record<"openrouter" | "openai" | "gemini", string[]> = {
+  openrouter: ["https://openrouter.ai/api/v1"],
+  openai: ["https://api.openai.com/v1"],
+  gemini: ["https://generativelanguage.googleapis.com/v1beta"],
+};
+
+export interface WidgetAiProviderConfig {
+  enabled: boolean;
+  defaultModel: string;
+  baseUrl?: string;
+  appName?: string;
+  appUrl?: string;
+  accountId?: string;
+}
+
+export interface WidgetAiGenerationConfig {
+  activeProvider: WidgetAiProvider;
+  providers: Record<WidgetAiProvider, WidgetAiProviderConfig>;
+  generation: {
+    planningTemperature: number;
+    generationTemperature: number;
+    improvementTemperature: number;
+    maxOutputTokens: number;
+    stagedGenerationDefault: boolean;
+  };
+}
+
+export interface WidgetAiAdminSettings extends WidgetAiGenerationConfig {
+  providers: Record<
+    WidgetAiProvider,
+    WidgetAiProviderConfig & {
+      hasApiKey: boolean;
+      hasBinding?: boolean;
+    }
+  >;
+  prompts: Record<PromptType, string>;
+  defaultPrompts: Record<PromptType, string>;
+}
+
+export interface WidgetAiRuntimeSettings extends WidgetAiGenerationConfig {
+  apiKeys: Partial<Record<WidgetAiProvider, string>>;
+  hasCloudflareBinding: boolean;
+}
+
+export interface WidgetAiSettingsUpdate {
+  activeProvider?: WidgetAiProvider;
+  providers?: Partial<Record<WidgetAiProvider, Partial<WidgetAiProviderConfig>>>;
+  generation?: Partial<WidgetAiGenerationConfig["generation"]>;
+  prompts?: Partial<Record<PromptType, string>>;
+  apiKeys?: Partial<Record<WidgetAiProvider, string>>;
+  clearApiKeys?: WidgetAiProvider[];
+}
+
+export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
+  activeProvider: "openrouter",
+  providers: {
+    openrouter: {
+      enabled: true,
+      defaultModel: "",
+      baseUrl: DEFAULT_BASE_URLS.openrouter,
+      appName: "Scalius Commerce",
+      appUrl: "",
+    },
+    openai: {
+      enabled: false,
+      defaultModel: "",
+      baseUrl: DEFAULT_BASE_URLS.openai,
+    },
+    gemini: {
+      enabled: false,
+      defaultModel: "",
+      baseUrl: DEFAULT_BASE_URLS.gemini,
+    },
+    cloudflare: {
+      enabled: false,
+      defaultModel: "@cf/openai/gpt-oss-120b",
+      accountId: "",
+    },
+  },
+  generation: {
+    planningTemperature: GENERATION_CONFIG.temperature.planning,
+    generationTemperature: GENERATION_CONFIG.temperature.generation,
+    improvementTemperature: GENERATION_CONFIG.temperature.improvement,
+    maxOutputTokens: 12000,
+    stagedGenerationDefault: true,
+  },
+};
+
+function isProvider(value: unknown): value is WidgetAiProvider {
+  return (
+    typeof value === "string" &&
+    (AI_PROVIDER_IDS as readonly string[]).includes(value)
+  );
+}
+
+function isPromptType(value: unknown): value is PromptType {
+  return (
+    typeof value === "string" &&
+    (AI_PROMPT_TYPES as readonly string[]).includes(value)
+  );
+}
+
+function clampNumber(value: unknown, fallback: number, min: number, max: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
+function asString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+function normalizeBaseUrl(
+  provider: "openrouter" | "openai" | "gemini",
+  value: unknown,
+): string {
+  const fallback = DEFAULT_BASE_URLS[provider];
+  const raw = asString(value, fallback) || fallback;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new ValidationError(`Invalid ${provider} base URL.`);
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new ValidationError(`Invalid ${provider} base URL. HTTPS is required.`);
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new ValidationError(
+      `Invalid ${provider} base URL. Credentials, query strings, and fragments are not allowed.`,
+    );
+  }
+  const normalized = parsed.toString().replace(/\/$/, "");
+  const allowed = ALLOWED_BASE_URLS[provider].map((url) => url.replace(/\/$/, ""));
+  if (!allowed.includes(normalized)) {
+    throw new ValidationError(
+      `Unsupported ${provider} base URL. Use the official provider endpoint.`,
+    );
+  }
+  return normalized;
+}
+
+function parseJsonObject(value: string | undefined): Record<string, unknown> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeProvider(
+  provider: WidgetAiProvider,
+  value: unknown,
+): WidgetAiProviderConfig {
+  const defaults = DEFAULT_WIDGET_AI_CONFIG.providers[provider];
+  const input =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  const normalized: WidgetAiProviderConfig = {
+    enabled:
+      typeof input.enabled === "boolean" ? input.enabled : defaults.enabled,
+    defaultModel: asString(input.defaultModel, defaults.defaultModel),
+  };
+
+  if (provider === "openrouter") {
+    normalized.baseUrl = normalizeBaseUrl(provider, input.baseUrl ?? defaults.baseUrl);
+    normalized.appName = asString(input.appName, defaults.appName);
+    normalized.appUrl = asString(input.appUrl, defaults.appUrl);
+  }
+
+  if (provider === "openai" || provider === "gemini") {
+    normalized.baseUrl = normalizeBaseUrl(provider, input.baseUrl ?? defaults.baseUrl);
+  }
+
+  if (provider === "cloudflare") {
+    normalized.accountId = asString(input.accountId, defaults.accountId);
+  }
+
+  return normalized;
+}
+
+export function normalizeWidgetAiConfig(
+  value: unknown,
+): WidgetAiGenerationConfig {
+  const input =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  const rawProviders =
+    input.providers && typeof input.providers === "object"
+      ? (input.providers as Record<string, unknown>)
+      : {};
+  const rawGeneration =
+    input.generation && typeof input.generation === "object"
+      ? (input.generation as Record<string, unknown>)
+      : {};
+
+  const providers = Object.fromEntries(
+    AI_PROVIDER_IDS.map((provider) => [
+      provider,
+      normalizeProvider(provider, rawProviders[provider]),
+    ]),
+  ) as WidgetAiGenerationConfig["providers"];
+
+  const activeProvider = isProvider(input.activeProvider)
+    ? input.activeProvider
+    : DEFAULT_WIDGET_AI_CONFIG.activeProvider;
+
+  return {
+    activeProvider,
+    providers,
+    generation: {
+      planningTemperature: clampNumber(
+        rawGeneration.planningTemperature,
+        DEFAULT_WIDGET_AI_CONFIG.generation.planningTemperature,
+        0,
+        2,
+      ),
+      generationTemperature: clampNumber(
+        rawGeneration.generationTemperature,
+        DEFAULT_WIDGET_AI_CONFIG.generation.generationTemperature,
+        0,
+        2,
+      ),
+      improvementTemperature: clampNumber(
+        rawGeneration.improvementTemperature,
+        DEFAULT_WIDGET_AI_CONFIG.generation.improvementTemperature,
+        0,
+        2,
+      ),
+      maxOutputTokens: Math.round(
+        clampNumber(
+          rawGeneration.maxOutputTokens,
+          DEFAULT_WIDGET_AI_CONFIG.generation.maxOutputTokens,
+          512,
+          64000,
+        ),
+      ),
+      stagedGenerationDefault:
+        typeof rawGeneration.stagedGenerationDefault === "boolean"
+          ? rawGeneration.stagedGenerationDefault
+          : DEFAULT_WIDGET_AI_CONFIG.generation.stagedGenerationDefault,
+    },
+  };
+}
+
+function mergeWidgetAiConfig(
+  current: WidgetAiGenerationConfig,
+  update: WidgetAiSettingsUpdate,
+): WidgetAiGenerationConfig {
+  const providers = Object.fromEntries(
+    AI_PROVIDER_IDS.map((provider) => [
+      provider,
+      normalizeProvider(provider, {
+        ...current.providers[provider],
+        ...(update.providers?.[provider] ?? {}),
+      }),
+    ]),
+  ) as WidgetAiGenerationConfig["providers"];
+
+  return normalizeWidgetAiConfig({
+    activeProvider: update.activeProvider ?? current.activeProvider,
+    providers,
+    generation: {
+      ...current.generation,
+      ...(update.generation ?? {}),
+    },
+  });
+}
+
+async function readCategory(db: Database): Promise<Record<string, string>> {
+  const rows = await db
+    .select({ key: settings.key, value: settings.value })
+    .from(settings)
+    .where(eq(settings.category, AI_SETTINGS_CATEGORY))
+    .all();
+
+  return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+}
+
+async function readApiKeys(
+  values: Record<string, string>,
+  encryptionKey?: string,
+): Promise<Partial<Record<WidgetAiProvider, string>>> {
+  const entries = await Promise.all(
+    AI_PROVIDER_IDS.map(async (provider) => {
+      const stored = values[API_KEY_KEYS[provider]];
+      if (!stored) return [provider, undefined] as const;
+      const decrypted = await decryptCredentialsGraceful(stored, encryptionKey);
+      return [provider, decrypted] as const;
+    }),
+  );
+
+  return Object.fromEntries(
+    entries.filter(([, value]) => Boolean(value)),
+  ) as Partial<Record<WidgetAiProvider, string>>;
+}
+
+export async function getWidgetAiPrompts(
+  db: Database,
+): Promise<Record<PromptType, string>> {
+  const values = await readCategory(db);
+  return Object.fromEntries(
+    AI_PROMPT_TYPES.map((type) => {
+      const stored = values[PROMPT_KEYS[type]]?.trim();
+      return [type, stored || SYSTEM_PROMPT_FALLBACKS[type]];
+    }),
+  ) as Record<PromptType, string>;
+}
+
+export async function getWidgetAiPrompt(
+  db: Database,
+  type: string | undefined,
+): Promise<string> {
+  const promptType = isPromptType(type) ? type : "widget";
+  const prompts = await getWidgetAiPrompts(db);
+  return prompts[promptType];
+}
+
+export async function getWidgetAiRuntimeSettings(
+  db: Database,
+  env: Record<string, unknown> = {},
+  encryptionKey?: string,
+): Promise<WidgetAiRuntimeSettings> {
+  const values = await readCategory(db);
+  const config = normalizeWidgetAiConfig(
+    parseJsonObject(values[WIDGET_AI_CONFIG_KEY]),
+  );
+  const apiKeys = await readApiKeys(values, encryptionKey);
+
+  return {
+    ...config,
+    apiKeys,
+    hasCloudflareBinding: Boolean(env.AI),
+  };
+}
+
+export async function getWidgetAiAdminSettings(
+  db: Database,
+  env: Record<string, unknown> = {},
+  encryptionKey?: string,
+): Promise<WidgetAiAdminSettings> {
+  const runtime = await getWidgetAiRuntimeSettings(db, env, encryptionKey);
+  const prompts = await getWidgetAiPrompts(db);
+
+  return {
+    ...runtime,
+    providers: Object.fromEntries(
+      AI_PROVIDER_IDS.map((provider) => [
+        provider,
+        {
+          ...runtime.providers[provider],
+          hasApiKey: Boolean(runtime.apiKeys[provider]),
+          ...(provider === "cloudflare"
+            ? { hasBinding: runtime.hasCloudflareBinding }
+            : {}),
+        },
+      ]),
+    ) as WidgetAiAdminSettings["providers"],
+    prompts,
+    defaultPrompts: DEFAULT_AI_PROMPTS,
+  };
+}
+
+async function deleteSetting(
+  db: Database,
+  category: string,
+  key: string,
+): Promise<void> {
+  await db
+    .delete(settings)
+    .where(and(eq(settings.category, category), eq(settings.key, key)));
+}
+
+async function upsertPlainSetting(
+  db: Database,
+  category: string,
+  key: string,
+  value: string,
+  type = "string",
+): Promise<void> {
+  await db
+    .insert(settings)
+    .values({
+      id: crypto.randomUUID(),
+      key,
+      value,
+      type,
+      category,
+    })
+    .onConflictDoUpdate({
+      target: [settings.key, settings.category],
+      set: { value, type, updatedAt: sql`unixepoch()` },
+    });
+}
+
+async function upsertSecretSetting(
+  db: Database,
+  key: string,
+  value: string,
+  encryptionKey?: string,
+): Promise<void> {
+  if (!encryptionKey) {
+    throw new ServiceUnavailableError(
+      "Credential encryption is not configured. Set CREDENTIAL_ENCRYPTION_KEY before saving AI provider keys.",
+    );
+  }
+  const stored = await encryptCredentials(value, encryptionKey);
+  await upsertPlainSetting(db, AI_SETTINGS_CATEGORY, key, stored);
+}
+
+export async function updateWidgetAiSettings(
+  db: Database,
+  update: WidgetAiSettingsUpdate,
+  encryptionKey?: string,
+): Promise<void> {
+  const values = await readCategory(db);
+  const current = normalizeWidgetAiConfig(
+    parseJsonObject(values[WIDGET_AI_CONFIG_KEY]),
+  );
+  const nextConfig = mergeWidgetAiConfig(current, update);
+
+  await upsertPlainSetting(
+    db,
+    AI_SETTINGS_CATEGORY,
+    WIDGET_AI_CONFIG_KEY,
+    JSON.stringify(nextConfig),
+    "json",
+  );
+
+  if (update.prompts) {
+    for (const [type, prompt] of Object.entries(update.prompts)) {
+      if (!isPromptType(type)) continue;
+      const cleaned = prompt.trim();
+      await upsertPlainSetting(
+        db,
+        AI_SETTINGS_CATEGORY,
+        PROMPT_KEYS[type],
+        cleaned || DEFAULT_AI_PROMPTS[type],
+      );
+    }
+  }
+
+  for (const provider of update.clearApiKeys ?? []) {
+    await deleteSetting(db, AI_SETTINGS_CATEGORY, API_KEY_KEYS[provider]);
+  }
+
+  if (update.apiKeys) {
+    for (const [provider, apiKey] of Object.entries(update.apiKeys)) {
+      if (!isProvider(provider)) continue;
+      const cleaned = apiKey.trim();
+      if (!cleaned) continue;
+      await upsertSecretSetting(
+        db,
+        API_KEY_KEYS[provider],
+        cleaned,
+        encryptionKey,
+      );
+    }
+  }
+
+  await db
+    .update(settings)
+    .set({ updatedAt: sql`unixepoch()` })
+    .where(
+      and(
+        eq(settings.category, AI_SETTINGS_CATEGORY),
+        eq(settings.key, WIDGET_AI_CONFIG_KEY),
+      ),
+    );
+}
+
+export function getConfiguredProvider(
+  settings: WidgetAiRuntimeSettings,
+  provider: WidgetAiProvider | undefined,
+): WidgetAiProvider {
+  const candidate = provider ?? settings.activeProvider;
+  if (!settings.providers[candidate]?.enabled) {
+    throw new ValidationError(`AI provider "${candidate}" is disabled.`);
+  }
+  return candidate;
+}
+
+export function providerHasCredentials(
+  settings: WidgetAiRuntimeSettings,
+  provider: WidgetAiProvider,
+): boolean {
+  if (provider === "cloudflare") {
+    return (
+      settings.hasCloudflareBinding ||
+      Boolean(
+        settings.providers.cloudflare.accountId &&
+          settings.apiKeys.cloudflare,
+      )
+    );
+  }
+  return Boolean(settings.apiKeys[provider]);
+}

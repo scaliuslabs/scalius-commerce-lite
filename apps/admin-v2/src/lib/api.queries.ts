@@ -100,7 +100,6 @@ import {
   getThemeSettings,
   getMediaSettings,
   getSmsSettings,
-  getOpenRouterSettings,
   getMetaConversionsSettings,
   getMetaConversionsLogs,
   getAllowedCountries,
@@ -747,13 +746,6 @@ export const smsSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.sms(),
     queryFn: () => getSmsSettings(),
-    staleTime: STALE.CONFIG,
-  });
-
-export const openRouterSettingsQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.openRouter(),
-    queryFn: () => getOpenRouterSettings(),
     staleTime: STALE.CONFIG,
   });
 

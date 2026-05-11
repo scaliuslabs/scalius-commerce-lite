@@ -119,7 +119,7 @@ apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config an
 Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, whatsapp OTP fields. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (resend_api_key, email_sender), `firebase` (service_account, public_config), `integrations` (openrouter_api_key), `notifications` (order_channels), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (resend_api_key, email_sender), `firebase` (service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `notifications` (order_channels), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
 ## API Endpoints (Admin)
 
@@ -168,11 +168,11 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/firebase` | Get Firebase settings (masks service account) |
 | POST | `/firebase` | Save Firebase service account + public config. Validates JSON. Invalidates `FIREBASE_CONFIG` layout cache |
 
-### `integrations.ts` -- Third-party integrations
+### `ai.ts` -- Widget AI providers and prompts
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/openrouter` | Get OpenRouter API key status (masked) |
-| POST | `/openrouter` | Save OpenRouter API key |
+| GET | `/widget-ai` | Get provider, model, prompt, and masked credential status |
+| POST | `/widget-ai` | Save provider config, local system prompts, and encrypted provider keys |
 
 ### `payments.ts` -- Payment gateway settings
 | Method | Path | Description |

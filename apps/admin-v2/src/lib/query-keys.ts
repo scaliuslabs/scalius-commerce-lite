@@ -185,8 +185,8 @@ export const queryKeys = {
     business: () => ["settings", "business"] as const,
     theme: () => ["settings", "theme"] as const,
     media: () => ["settings", "media"] as const,
+    widgetAi: () => ["settings", "widget-ai"] as const,
     sms: () => ["settings", "sms"] as const,
-    openRouter: () => ["settings", "openrouter"] as const,
     metaConversions: () => ["settings", "meta-conversions"] as const,
     metaConversionsLogs: (params?: Record<string, unknown>) =>
       params !== undefined

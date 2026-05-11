@@ -155,6 +155,7 @@ interface Env {
   CACHE: KVNamespace;
   BUCKET: R2Bucket;
   SHARED_AUTH_CACHE: KVNamespace;
+  AI?: Ai;
   EMAIL?: SendEmail;
 
   // Cloudflare Queue bindings

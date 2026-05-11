@@ -34,6 +34,7 @@ declare global {
     CACHE: KVNamespace;
     BUCKET: R2Bucket;
     SHARED_AUTH_CACHE: KVNamespace;
+    AI?: Ai;
 
     // Cloudflare Email Workers binding (optional)
     EMAIL?: SendEmail;

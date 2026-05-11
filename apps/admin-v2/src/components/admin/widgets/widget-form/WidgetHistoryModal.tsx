@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { formatDate } from '@scalius/shared/timestamps';
+import { sanitizeHtml } from '@scalius/shared/html-sanitize';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { GitCommitHorizontal, Trash2 } from 'lucide-react';
@@ -53,9 +54,9 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
                       <>
                           <div className="flex-1 overflow-auto border rounded-md">
                               <iframe
-                                  srcDoc={`<style>${selectedHistoryItem.cssContent}</style>${selectedHistoryItem.htmlContent}`}
+                                  srcDoc={`<style>${selectedHistoryItem.cssContent}</style>${sanitizeHtml(selectedHistoryItem.htmlContent)}`}
                                   className="w-full h-full"
-                                  sandbox="allow-scripts"
+                                  sandbox=""
                                   title="History Preview"
                               />
                           </div>

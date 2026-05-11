@@ -1,12 +1,13 @@
 # Codex Working Notes
 
-Last reviewed: 2026-05-11
+Last reviewed: 2026-05-12
 
 This folder is for Codex operational context only. Treat source code, tests, deployed behavior, and GitHub issues as the source of truth; older markdown and comments can be stale.
 
 ## Files
 
 - `CODEBASE-MAP.md` - implementation-derived architecture map and data-flow notes.
+- `WIDGET-AI.md` - current widget AI provider/prompt architecture and verification targets.
 - `ISSUE-LOG.md` - GitHub issue work queue, commit references, and verification status.
 
 ## Rules For Updating

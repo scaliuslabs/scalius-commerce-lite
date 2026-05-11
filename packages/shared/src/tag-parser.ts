@@ -237,7 +237,7 @@ RESPONSE FORMAT:
 Please respond with your code wrapped in the following tags:
 
 <htmljs>
-<!-- Your HTML code here. Include JavaScript within <script> tags if needed. -->
+<!-- Your HTML code here. Do not include script tags. -->
 </htmljs>
 
 <css>

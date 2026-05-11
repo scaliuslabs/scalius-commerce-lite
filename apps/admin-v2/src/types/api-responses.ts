@@ -650,11 +650,6 @@ export interface PaginationResponse {
   totalPages: number;
 }
 
-export interface OpenRouterMessage {
-  role: string;
-  content: string | Array<{ type: string; [key: string]: unknown }>;
-}
-
 // ---------------------------------------------------------------------------
 // Loader-level response shapes (list endpoints)
 // ---------------------------------------------------------------------------
