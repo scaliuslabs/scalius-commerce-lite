@@ -8,6 +8,7 @@ import { getPageBySlug, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
 import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 const { slug } = Astro.params;
 
@@ -80,6 +81,19 @@ const hasProductShortcode = processedContent.includes(
   'class="product-shortcode-container"',
 );
 
+const featuredImage = page.featuredImage ?? null;
+const featuredImageUrl = featuredImage?.url
+  ? getOptimizedImageUrl(featuredImage.url, {
+      width: 1280,
+      height: 640,
+      quality: 85,
+      format: "auto",
+      fit: "cover",
+    })
+  : "";
+const featuredImageAlt =
+  featuredImage?.altText || featuredImage?.filename || page.title;
+
 // --- SEO: canonical URL for CMS pages (per OG-03, CAN-01) ---
 const storefrontUrl = getRuntimeStorefrontUrl();
 const canonicalUrl = `${storefrontUrl}/${slug}`;
@@ -92,11 +106,25 @@ const canonicalUrl = `${storefrontUrl}/${slug}`;
   hideFooter={page.hideFooter}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl}
+  ogImage={featuredImageUrl || undefined}
   ogType="website"
 >
   {
     isStandaloneShortcodePage ? (
-      <div class="w-full overflow-hidden" set:html={processedContent} />
+      <>
+        {featuredImageUrl && (
+          <div class="mx-auto w-full max-w-7xl px-4 pt-6">
+            <img
+              src={featuredImageUrl}
+              alt={featuredImageAlt}
+              class="h-auto w-full rounded-lg object-cover"
+              loading="eager"
+              decoding="async"
+            />
+          </div>
+        )}
+        <div class="w-full overflow-hidden" set:html={processedContent} />
+      </>
     ) : (
       <div class="w-full max-w-7xl mx-auto px-4 py-8">
         <div class="text-center mb-8">
@@ -106,6 +134,18 @@ const canonicalUrl = `${storefrontUrl}/${slug}`;
             </h1>
           )}
         </div>
+
+        {featuredImageUrl && (
+          <figure class="mb-8 overflow-hidden rounded-lg bg-gray-100">
+            <img
+              src={featuredImageUrl}
+              alt={featuredImageAlt}
+              class="h-auto w-full object-cover"
+              loading="eager"
+              decoding="async"
+            />
+          </figure>
+        )}
 
         <div class="w-full">
           <RichContent

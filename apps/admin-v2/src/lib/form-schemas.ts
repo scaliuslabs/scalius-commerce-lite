@@ -11,6 +11,20 @@
 import { z } from "zod";
 import { WidgetPlacementRule } from "@/types/api-responses";
 
+const mediaFileFormSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  filename: z.string(),
+  size: z.number(),
+  mimeType: z.string().optional(),
+  altText: z.string().nullable().optional(),
+  width: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
+  folderId: z.string().nullable().optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date().optional(),
+});
+
 // ═══════════════════════════════════════════════════════════════════
 //  CATEGORIES
 // ═══════════════════════════════════════════════════════════════════
@@ -29,15 +43,7 @@ export const categoryFormSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
-  image: z
-    .object({
-      id: z.string(),
-      url: z.string(),
-      filename: z.string(),
-      size: z.number(),
-      createdAt: z.coerce.date(),
-    })
-    .nullable(),
+  image: mediaFileFormSchema.nullable(),
   slugEdited: z.boolean().optional(),
 });
 
@@ -67,15 +73,7 @@ export const pageFormSchema = z.object({
   hideHeader: z.boolean(),
   hideFooter: z.boolean(),
   hideTitle: z.boolean(),
-  featuredImage: z
-    .object({
-      id: z.string(),
-      url: z.string(),
-      filename: z.string(),
-      size: z.number(),
-      createdAt: z.coerce.date(),
-    })
-    .nullable(),
+  featuredImage: mediaFileFormSchema.nullable(),
 });
 
 export type PageFormValues = z.infer<typeof pageFormSchema>;

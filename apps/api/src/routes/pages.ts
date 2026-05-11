@@ -1,7 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getPublicPages, getPublicPageBySlug } from "@scalius/core/modules/pages/pages.service";
-import { pages } from "@scalius/database/schema";
-import { isNull, eq, and, SQL } from "drizzle-orm";
+import { getPublicPages, getPublicPageById, getPublicPageBySlug } from "@scalius/core/modules/pages/pages.service";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
@@ -35,6 +33,7 @@ export interface PageData {
   hideHeader: boolean;
   hideFooter: boolean;
   hideTitle: boolean;
+  featuredImage?: Record<string, unknown> | null;
   publishedAt: number | null;
   sortOrder: number;
   createdAt: number;
@@ -136,44 +135,9 @@ const getPageByIdRoute = createRoute({
 app.openapi(getPageByIdRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-
-  // Create an array of conditions for better type safety
-  const conditions: SQL<unknown>[] = [
-    eq(pages.id, id),
-    eq(pages.isPublished, true),
-    isNull(pages.deletedAt),
-  ];
-
-  // Fetch the page from the database
-  const page = await db
-    .select({
-      id: pages.id,
-      title: pages.title,
-      slug: pages.slug,
-      content: pages.content,
-      metaTitle: pages.metaTitle,
-      metaDescription: pages.metaDescription,
-      isPublished: pages.isPublished,
-      hideHeader: pages.hideHeader,
-      hideFooter: pages.hideFooter,
-      hideTitle: pages.hideTitle,
-      publishedAt: pages.publishedAt,
-      sortOrder: pages.sortOrder,
-      createdAt: pages.createdAt,
-      updatedAt: pages.updatedAt,
-      deletedAt: pages.deletedAt
-    })
-    .from(pages)
-    .where(and(...conditions))
-    .get();
-
-  if (!page) {
-    throw new NotFoundError("Page not found");
-  }
-
-  return ok(c, {
-    page,
-  });
+  const page = await getPublicPageById(db, id);
+  if (!page) throw new NotFoundError("Page not found");
+  return ok(c, { page });
 });
 
 // Export the pages routes

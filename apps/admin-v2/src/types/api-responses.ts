@@ -392,6 +392,20 @@ export interface EnhancedShipment extends DeliveryShipment {
 // Content domain
 // ---------------------------------------------------------------------------
 
+export interface PageFeaturedImage {
+  id: string;
+  url: string;
+  filename: string;
+  size: number;
+  mimeType?: string;
+  altText?: string | null;
+  width?: number | null;
+  height?: number | null;
+  folderId?: string | null;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
 export interface Page {
   id: string;
   title: string;
@@ -403,6 +417,7 @@ export interface Page {
   hideHeader: boolean;
   hideFooter: boolean;
   hideTitle: boolean;
+  featuredImage?: PageFeaturedImage | null;
   publishedAt: Date | null;
   sortOrder: number;
   createdAt: Date;

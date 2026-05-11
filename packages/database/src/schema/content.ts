@@ -7,6 +7,20 @@ import { UNIX_NOW } from "./shared";
 import { collections } from "./products";
 import { WidgetPlacementRule } from "./enums";
 
+export type PageFeaturedImage = {
+    id: string;
+    url: string;
+    filename: string;
+    size: number;
+    mimeType?: string;
+    altText?: string | null;
+    width?: number | null;
+    height?: number | null;
+    folderId?: string | null;
+    createdAt?: string | number | Date;
+    updatedAt?: string | number | Date;
+};
+
 export const pages = sqliteTable(
     "pages",
     {
@@ -20,6 +34,7 @@ export const pages = sqliteTable(
         hideHeader: integer("hide_header", { mode: "boolean" }).notNull().default(false),
         hideFooter: integer("hide_footer", { mode: "boolean" }).notNull().default(false),
         hideTitle: integer("hide_title", { mode: "boolean" }).notNull().default(false),
+        featuredImage: text("featured_image", { mode: "json" }).$type<PageFeaturedImage | null>(),
         publishedAt: integer("published_at", { mode: "timestamp" }),
         sortOrder: integer("sort_order").notNull().default(0),
         createdAt: integer("created_at", { mode: "timestamp" })

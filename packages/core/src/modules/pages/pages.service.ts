@@ -186,6 +186,7 @@ export async function createPage(db: Database, data: CreatePageInput): Promise<{
         hideHeader: data.hideHeader,
         hideFooter: data.hideFooter,
         hideTitle: data.hideTitle,
+        featuredImage: data.featuredImage ?? null,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
         deletedAt: null,

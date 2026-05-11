@@ -1345,6 +1345,21 @@ export type GetApiV1PagesResponses = {
                 hideHeader: boolean;
                 hideFooter: boolean;
                 hideTitle: boolean;
+                featuredImage?: {
+                    id: string;
+                    url: string;
+                    filename: string;
+                    size: number;
+                    mimeType?: string;
+                    altText?: string | null;
+                    width?: number | null;
+                    height?: number | null;
+                    folderId?: string | null;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    [key: string]: unknown | string | number | (string | null) | (number | null) | (number | null) | (string | null) | (string | number) | (string | number) | undefined;
+                } | null;
+                publishedAt?: string | number | unknown;
                 sortOrder: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -1427,6 +1442,21 @@ export type GetApiV1PagesSlugBySlugResponses = {
                 hideHeader: boolean;
                 hideFooter: boolean;
                 hideTitle: boolean;
+                featuredImage?: {
+                    id: string;
+                    url: string;
+                    filename: string;
+                    size: number;
+                    mimeType?: string;
+                    altText?: string | null;
+                    width?: number | null;
+                    height?: number | null;
+                    folderId?: string | null;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    [key: string]: unknown | string | number | (string | null) | (number | null) | (number | null) | (string | null) | (string | number) | (string | number) | undefined;
+                } | null;
+                publishedAt?: string | number | unknown;
                 sortOrder: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -1492,6 +1522,21 @@ export type GetApiV1PagesByIdResponses = {
                 hideHeader: boolean;
                 hideFooter: boolean;
                 hideTitle: boolean;
+                featuredImage?: {
+                    id: string;
+                    url: string;
+                    filename: string;
+                    size: number;
+                    mimeType?: string;
+                    altText?: string | null;
+                    width?: number | null;
+                    height?: number | null;
+                    folderId?: string | null;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    [key: string]: unknown | string | number | (string | null) | (number | null) | (number | null) | (string | null) | (string | number) | (string | number) | undefined;
+                } | null;
+                publishedAt?: string | number | unknown;
                 sortOrder: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -3753,33 +3798,6 @@ export type GetApiV1SeoResponses = {
 };
 
 export type GetApiV1SeoResponse = GetApiV1SeoResponses[keyof GetApiV1SeoResponses];
-
-export type GetApiV1MediaByKeyData = {
-    body?: never;
-    path: {
-        key: string;
-    };
-    query?: never;
-    url: '/api/v1/media/{key}';
-};
-
-export type GetApiV1MediaByKeyErrors = {
-    /**
-     * Not found
-     */
-    404: unknown;
-    /**
-     * R2 bucket not available
-     */
-    500: unknown;
-};
-
-export type GetApiV1MediaByKeyResponses = {
-    /**
-     * Media file
-     */
-    200: unknown;
-};
 
 export type GetApiV1PtproxyData = {
     body?: never;
@@ -7567,6 +7585,21 @@ export type GetApiV1AdminPagesResponses = {
                 hideHeader: boolean;
                 hideFooter: boolean;
                 hideTitle: boolean;
+                featuredImage?: {
+                    id: string;
+                    url: string;
+                    filename: string;
+                    size: number;
+                    mimeType?: string;
+                    altText?: string | null;
+                    width?: number | null;
+                    height?: number | null;
+                    folderId?: string | null;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    [key: string]: unknown | string | number | (string | null) | (number | null) | (number | null) | (string | null) | (string | number) | (string | number) | undefined;
+                } | null;
+                publishedAt?: string | number | unknown;
                 sortOrder: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -7591,8 +7624,22 @@ export type PostApiV1AdminPagesData = {
         content: string;
         metaTitle: string | null;
         metaDescription: string | null;
-        isPublished?: boolean;
+        featuredImage?: {
+            id: string;
+            url: string;
+            filename: string;
+            size: number;
+            mimeType?: string;
+            altText?: string | null;
+            width?: number | null;
+            height?: number | null;
+            folderId?: string | null;
+            createdAt?: string | number;
+            updatedAt?: string | number;
+            [key: string]: unknown | string | number | (string | null) | (number | null) | (number | null) | (string | null) | (string | number) | (string | number) | undefined;
+        } | null;
         publishedAt?: string | unknown;
+        isPublished?: boolean;
         sortOrder?: number;
         hideHeader?: boolean;
         hideFooter?: boolean;
@@ -8237,6 +8284,21 @@ export type GetApiV1AdminPagesByIdResponses = {
             hideHeader: boolean;
             hideFooter: boolean;
             hideTitle: boolean;
+            featuredImage?: {
+                id: string;
+                url: string;
+                filename: string;
+                size: number;
+                mimeType?: string;
+                altText?: string | null;
+                width?: number | null;
+                height?: number | null;
+                folderId?: string | null;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                [key: string]: unknown | string | number | (string | null) | (number | null) | (number | null) | (string | null) | (string | number) | (string | number) | undefined;
+            } | null;
+            publishedAt?: string | number | unknown;
             sortOrder: number;
             createdAt: string | number | unknown;
             updatedAt: string | number | unknown;
@@ -8260,6 +8322,20 @@ export type PutApiV1AdminPagesByIdData = {
         hideHeader?: boolean;
         hideFooter?: boolean;
         hideTitle?: boolean;
+        featuredImage?: {
+            id: string;
+            url: string;
+            filename: string;
+            size: number;
+            mimeType?: string;
+            altText?: string | null;
+            width?: number | null;
+            height?: number | null;
+            folderId?: string | null;
+            createdAt?: string | number;
+            updatedAt?: string | number;
+            [key: string]: unknown | string | number | (string | null) | (number | null) | (number | null) | (string | null) | (string | number) | (string | number) | undefined;
+        } | null;
     };
     path: {
         id: string;

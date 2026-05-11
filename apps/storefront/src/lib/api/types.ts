@@ -225,6 +225,20 @@ export interface ApiWidget {
 // Page & Site Settings Types (local domain types — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
 
+export interface PageFeaturedImage {
+  id: string;
+  url: string;
+  filename: string;
+  size: number;
+  mimeType?: string;
+  altText?: string | null;
+  width?: number | null;
+  height?: number | null;
+  folderId?: string | null;
+  createdAt?: string | number;
+  updatedAt?: string | number;
+}
+
 export interface Page {
   id: string;
   title: string;
@@ -236,6 +250,7 @@ export interface Page {
   hideHeader: boolean;
   hideFooter: boolean;
   hideTitle: boolean;
+  featuredImage?: PageFeaturedImage | null;
   publishedAt: number | null;
   sortOrder: number;
   createdAt: number;

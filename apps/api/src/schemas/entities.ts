@@ -355,6 +355,22 @@ export const discountSchema = z
 // ─────────────────────────────────────────
 
 /** Page — returned by page service endpoints. */
+export const pageFeaturedImageSchema = z
+  .object({
+    id: z.string(),
+    url: z.string(),
+    filename: z.string(),
+    size: z.number(),
+    mimeType: z.string().optional(),
+    altText: z.string().nullable().optional(),
+    width: z.number().nullable().optional(),
+    height: z.number().nullable().optional(),
+    folderId: z.string().nullable().optional(),
+    createdAt: z.union([z.string(), z.number()]).optional(),
+    updatedAt: z.union([z.string(), z.number()]).optional(),
+  })
+  .passthrough();
+
 export const pageSchema = z
   .object({
     id: z.string(),
@@ -367,6 +383,8 @@ export const pageSchema = z
     hideHeader: z.boolean(),
     hideFooter: z.boolean(),
     hideTitle: z.boolean(),
+    featuredImage: pageFeaturedImageSchema.nullable().optional(),
+    publishedAt: z.union([z.string(), z.number()]).nullable().optional(),
     sortOrder: z.number(),
     createdAt: z.union([z.string(), z.number()]).nullable(),
     updatedAt: z.union([z.string(), z.number()]).nullable(),
