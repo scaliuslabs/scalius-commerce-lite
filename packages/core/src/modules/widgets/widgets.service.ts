@@ -1,9 +1,9 @@
 // src/modules/widgets/widgets.service.ts
 // All DB queries and business logic for the widgets domain.
 
-import { widgets, widgetHistory, collections } from "@scalius/database/schema";
+import { widgets, widgetHistory, collections, WidgetPlacementRule } from "@scalius/database/schema";
 import type { WidgetHistory } from "@scalius/database/schema";
-import { isNull, asc, and, sql, inArray, eq } from "drizzle-orm";
+import { isNull, asc, and, sql, inArray, eq, ne } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
@@ -118,7 +118,12 @@ export async function getActiveHomepageWidgets(db: Database) {
     const result = await db
         .select()
         .from(widgets)
-        .where(and(eq(widgets.isActive, true), eq(widgets.displayTarget, "homepage"), isNull(widgets.deletedAt)))
+        .where(and(
+            eq(widgets.isActive, true),
+            eq(widgets.displayTarget, "homepage"),
+            ne(widgets.placementRule, WidgetPlacementRule.STANDALONE),
+            isNull(widgets.deletedAt),
+        ))
         .orderBy(asc(widgets.placementRule), asc(widgets.sortOrder));
 
     return result.map((w) => ({
