@@ -75,7 +75,7 @@ app.openapi(getTokenRoute, async (c) => {
     email: "system@internal",
     name: "System Service",
     role: "system"
-  });
+  }, undefined, c.env);
 
   return ok(c, { token });
 });
@@ -206,7 +206,7 @@ app.openapi(tokenStatsRoute, (c) => {
     throw new ForbiddenError("You do not have permission to access this resource");
   }
 
-  return ok(c, getTokenStats());
+  return ok(c, getTokenStats(c.env));
 });
 
 export default app;
