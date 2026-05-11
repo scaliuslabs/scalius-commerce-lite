@@ -7,7 +7,7 @@ Codex-maintained notes for the admin fraud checker integration.
 | Provider | Provider type | Required fields | Default endpoint |
 |----------|---------------|-----------------|------------------|
 | Custom / Legacy API | `default` | API key | `https://fraudchecker.link/api/v1/qc/` |
-| FraudBD | `fraudbd` | API key | `https://fraudbd.com/api/check-courier-info` |
+| FraudBD | `fraudbd` | API key, username, password | `https://fraudbd.com/api/check-courier-info` |
 | FraudGuard | `fraudguard` | API key, API secret | `https://fraudguard.slope.com.bd/api/v1/fraud-check` |
 | eCourier Fraud Alert | `ecourier` | API key, API secret, user ID | `https://backoffice.ecourier.com.bd/api/fraud-status-check` |
 
@@ -22,7 +22,7 @@ Codex-maintained notes for the admin fraud checker integration.
 
 ## Current Source Notes
 
-- FraudBD public docs describe `POST /api/check-courier-info`, `phone_number` JSON body, an `api_key` header, and courier summaries across Pathao, Steadfast, Paperfly, and RedX.
+- FraudBD public docs describe `POST /api/check-courier-info`, `phone_number` JSON body, `api_key`, `user_name`, and `password` headers, and courier summaries across Pathao, Steadfast, Paperfly, and RedX.
 - FraudGuard public docs describe `POST /api/v1/fraud-check`, `phone_number` JSON body, `X-API-KEY` and `X-API-SECRET` headers, delivery rate, customer tag, and courier stats.
 - eCourier's merchant API documentation includes `POST /api/fraud-status-check`, `number` JSON body, and `API-KEY`, `API-SECRET`, and `USER-ID` headers. Its response is status-based (`customer_status` and `customer_message`), not courier-count based.
 

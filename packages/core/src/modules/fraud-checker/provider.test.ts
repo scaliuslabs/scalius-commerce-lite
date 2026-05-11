@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe("Bangladesh fraud checker providers", () => {
-  it("calls FraudBD with API key headers and normalizes courier stats", async () => {
+  it("calls FraudBD with documented credentials and normalizes courier stats", async () => {
     const fetchMock = mockJsonResponse({
       data: {
         mobile_number: "01711111111",
@@ -43,6 +43,8 @@ describe("Bangladesh fraud checker providers", () => {
     const result = await new FraudBdCheckProvider().lookup("+8801711111111", {
       apiUrl: "https://api.fraudbd.com/api/check-courier-info",
       apiKey: "fraudbd-key",
+      apiSecret: "fraudbd-password",
+      userId: "fraudbd-user",
     });
 
     const firstCall = fetchMock.mock.calls[0];
@@ -50,6 +52,8 @@ describe("Bangladesh fraud checker providers", () => {
     const [, init] = firstCall!;
     expect(init?.headers).toMatchObject({
       api_key: "fraudbd-key",
+      user_name: "fraudbd-user",
+      password: "fraudbd-password",
     });
     expect(JSON.parse(String(init?.body))).toEqual({ phone_number: "01711111111" });
     expect(result.riskLevel).toBe("medium");
@@ -150,7 +154,7 @@ describe("Bangladesh fraud checker providers", () => {
   });
 
   it("documents required credentials for admin configuration", () => {
-    expect(getFraudCheckProviderDefinition("fraudbd").requiredFields).toEqual(["apiKey"]);
+    expect(getFraudCheckProviderDefinition("fraudbd").requiredFields).toEqual(["apiKey", "apiSecret", "userId"]);
     expect(getFraudCheckProviderDefinition("fraudguard").requiredFields).toEqual(["apiKey", "apiSecret"]);
     expect(getFraudCheckProviderDefinition("ecourier").requiredFields).toEqual(["apiKey", "apiSecret", "userId"]);
   });
