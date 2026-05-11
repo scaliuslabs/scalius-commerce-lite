@@ -11,6 +11,7 @@ Last reviewed: 2026-05-11
 | #16 | Media Library "Videos" filter is not working correctly. | `cb9390f` | Production API returned 89 total media files and 0 `mimeType=video` files. Chrome production dashboard Videos filter settled on `No Files Found` instead of showing image files. Legacy `type=video` also returned 0 for compatibility. |
 | #15 | Price Filter Slider capped at ৳50,000 (Cannot set higher value) | `1312766` | Local and production browser checks confirmed `/search` keeps `maxPrice=200000` after submit and reload. The hydrated max price control shows `200000`, and the slider label shows `৳200K`. Storefront version `e61c6d4a-bb63-4c68-bcd9-46880d869fea` was verified after deploy. |
 | #14 | Validation Error Displaying Raw JSON Code on Checkout. | `03cfbe8` | Local and production proxy checks return `Address must be at least 10 characters` for the short-address payload. Production browser checkout flow (Fish -> cart -> `rajshahi` address -> COD) shows only the readable message and no raw `too_small`/`origin`/`minimum` JSON fragments. Storefront version `06c013a9-5448-46fa-a959-08cae6ef2a3a` was verified after deploy. |
+| #13 | Issue with Page Content Display for "Combo Offers Page" | `317b48a` | Local browser verification used a local D1 fixture copied from the production combo-offer page/widget and confirmed the landing hero renders without the generic CMS title, Back to Home link, or raw widget wrapper tags. Production browser verification at `/combo-offer` after deploy confirmed the same settled DOM state. Storefront version `75164a7a-78dc-4e23-a4b3-c749cebf9f44` was verified after deploy. |
 
 ## Implemented, Needs Browser Verification
 
@@ -36,4 +37,3 @@ These changes were already committed in `aa05893` before the current per-issue l
 | #26 | "Edit" Button Triggers Immediate Save Instead of Enabling Inputs | Fraud checker settings edit/save behavior. |
 | #24 | Layout Overflow & Missing Padding | Storefront mobile layout. |
 | #23 | Content Featured Image not displaying on Storefront | Storefront content/page rendering. |
-| #13 | Issue with Page Content Display for "Combo Offers Page" | Storefront page/rich content rendering. |
