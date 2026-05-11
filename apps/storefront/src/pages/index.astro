@@ -101,7 +101,7 @@ function isCollection2(
 >
   {
     fixedTopWidgets.map((widget) => (
-      <div class={`widget-container sw-${widget.id}`}>
+      <div class={`widget-container cms-widget-frame sw-${widget.id}`}>
         {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
         <div set:html={widget.htmlContent} />
       </div>
@@ -117,7 +117,7 @@ function isCollection2(
       activeCollections.map((collection) => (
         <Fragment key={collection.id}>
           {(widgetsBeforeCollection[collection.id] || []).map((widget) => (
-            <div class={`widget-container mb-2 sw-${widget.id}`}>
+            <div class={`widget-container cms-widget-frame mb-2 sw-${widget.id}`}>
               {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
               <div set:html={widget.htmlContent} />
             </div>
@@ -127,7 +127,7 @@ function isCollection2(
           {isCollection2(collection) && <Collection2 collection={collection} />}
 
           {(widgetsAfterCollection[collection.id] || []).map((widget) => (
-            <div class={`widget-container mt-2 sw-${widget.id}`}>
+            <div class={`widget-container cms-widget-frame mt-2 sw-${widget.id}`}>
               {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
               <div set:html={widget.htmlContent} />
             </div>
@@ -139,7 +139,7 @@ function isCollection2(
 
   {
     fixedBottomWidgets.map((widget) => (
-      <div class={`widget-container mt-1 sw-${widget.id}`}>
+      <div class={`widget-container cms-widget-frame mt-1 sw-${widget.id}`}>
         {widget.cssContent && <style set:html={scopeCss(widget.cssContent, `sw-${widget.id}`)} />}
         <div set:html={widget.htmlContent} />
       </div>
