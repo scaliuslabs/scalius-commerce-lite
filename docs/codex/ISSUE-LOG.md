@@ -22,6 +22,7 @@ Last reviewed: 2026-05-11
 | #27 | Broken "View" Action for Trashed Items in Page Trash | `aa05893` | Read the GitHub issue body and attempted the linked Google Doc tab; the rendered preview exposed the matching "Broken View Action for Trashed Items" heading, while export returned a Google Docs error page. Production Chrome verification after deploy opened `/admin/pages?trashed=true`, found 3 real trashed pages, opened the first row menu, and confirmed the settled menu contained only `Restore` and `Delete Permanently` with no `View` action. |
 | #20 | "View" Action is Unresponsive in Category Trash | `aa05893` | Read the GitHub issue body and the linked Google Doc preview tab, which matched the issue title. Production Chrome verification after deploy opened `/admin/categories?trashed=true`, found the real trashed `Men Clothing` row, opened its row menu, and confirmed the settled menu contained only `Restore` and `Delete Permanently` with no `View` action. |
 | #22 | Sorting Functionality Completely Unresponsive in Inventory Module | `aa05893` | Read the GitHub issue body and the linked Google Doc preview tab, which matched the inventory sorting issue. Production Chrome verification after deploy opened `/admin/inventory`, clicked the Product, SKU, and Available sortable headers with settle waits, and confirmed four refetches returned `200`. Rendered rows sorted correctly for Product ascending, Product descending, SKU ascending, and Available ascending. |
+| #17 | Deleted Products Retain "Active" Status in Trash | `aa05893` | The issue title and body are mismatched, so both paths were checked. The linked Google Doc preview tab matched the WYSIWYG image report. Production API returned `/testing-page` content with the inserted image, and production Chrome verification confirmed the storefront image rendered with `naturalWidth=378`, `naturalHeight=567`, and no broken images. Production Product Trash was empty after settling and showed no `Active` status text. |
 
 ## Implemented, Needs Browser Verification
 
@@ -29,7 +30,6 @@ These changes were already committed in `aa05893` before the current per-issue l
 
 | Issue | Title | Implementation Status |
 | --- | --- | --- |
-| #17 | Deleted Products Retain "Active" Status in Trash | Product trash status label adjusted. The issue body also mentions WYSIWYG image rendering, which still needs separate investigation. |
 
 ## Open Work Queue
 
