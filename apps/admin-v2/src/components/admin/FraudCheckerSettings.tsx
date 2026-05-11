@@ -111,6 +111,8 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
   };
 
   const handleSave = async (values: ProviderFormValues) => {
+    if (!isEditing || (!isCreating && !selectedProvider)) return;
+
     setIsSaving(true);
     try {
       let saved: FraudProvider;
@@ -178,7 +180,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium">Providers</CardTitle>
-              <Button variant="outline" size="sm" onClick={handleCreate} className="h-7 text-xs">
+              <Button type="button" variant="outline" size="sm" onClick={handleCreate} className="h-7 text-xs">
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 Add
               </Button>
@@ -228,63 +230,45 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
             )}
           </CardHeader>
           <CardContent>
-            {(selectedProvider || isCreating) ? (
+            {(selectedProvider || isCreating) && isEditing ? (
               <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="name" className="text-xs">Name</Label>
-                  {isEditing ? (
-                    <>
-                      <Input
-                        id="name"
-                        {...form.register("name")}
-                        className="h-8 text-sm"
-                        placeholder="Provider name"
-                      />
-                      {form.formState.errors.name && (
-                        <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm">{selectedProvider?.name}</p>
+                  <Input
+                    id="name"
+                    {...form.register("name")}
+                    className="h-8 text-sm"
+                    placeholder="Provider name"
+                  />
+                  {form.formState.errors.name && (
+                    <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
                   )}
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="apiUrl" className="text-xs">API URL</Label>
-                  {isEditing ? (
-                    <>
-                      <Input
-                        id="apiUrl"
-                        {...form.register("apiUrl")}
-                        className="h-8 text-sm"
-                        placeholder="https://fraudchecker.link/api/v1/qc/"
-                      />
-                      {form.formState.errors.apiUrl && (
-                        <p className="text-xs text-destructive">{form.formState.errors.apiUrl.message}</p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm font-mono text-muted-foreground">{selectedProvider?.apiUrl}</p>
+                  <Input
+                    id="apiUrl"
+                    {...form.register("apiUrl")}
+                    className="h-8 text-sm"
+                    placeholder="https://fraudchecker.link/api/v1/qc/"
+                  />
+                  {form.formState.errors.apiUrl && (
+                    <p className="text-xs text-destructive">{form.formState.errors.apiUrl.message}</p>
                   )}
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="apiKey" className="text-xs">API Key</Label>
-                  {isEditing ? (
-                    <>
-                      <Input
-                        id="apiKey"
-                        type="password"
-                        {...form.register("apiKey")}
-                        className="h-8 text-sm"
-                        placeholder="Enter API key"
-                      />
-                      {form.formState.errors.apiKey && (
-                        <p className="text-xs text-destructive">{form.formState.errors.apiKey.message}</p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">{"*".repeat(12)}</p>
+                  <Input
+                    id="apiKey"
+                    type="password"
+                    {...form.register("apiKey")}
+                    className="h-8 text-sm"
+                    placeholder="Enter API key"
+                  />
+                  {form.formState.errors.apiKey && (
+                    <p className="text-xs text-destructive">{form.formState.errors.apiKey.message}</p>
                   )}
                 </div>
 
@@ -293,7 +277,6 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                     id="isActive"
                     checked={form.watch("isActive")}
                     onCheckedChange={(checked) => form.setValue("isActive", checked)}
-                    disabled={!isEditing}
                   />
                   <Label htmlFor="isActive" className="text-xs cursor-pointer">
                     {form.watch("isActive") ? "Active" : "Inactive"}
@@ -301,40 +284,64 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                 </div>
 
                 <div className="flex gap-2 pt-2 border-t">
-                  {isEditing ? (
-                    <>
-                      <Button type="submit" size="sm" disabled={isSaving} className="h-7 text-xs">
-                        {isSaving && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
-                        Save
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={handleCancel} className="h-7 text-xs">
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button type="button" variant="outline" size="sm" onClick={handleEdit} className="h-7 text-xs">
-                        <Pencil className="h-3.5 w-3.5 mr-1" />
-                        Edit
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={handleTest} disabled={isTesting} className="h-7 text-xs">
-                        {isTesting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <TestTube className="h-3.5 w-3.5 mr-1" />}
-                        Test
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => selectedProvider && setDeleteTarget(selectedProvider)}
-                        className="h-7 text-xs"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" />
-                        Delete
-                      </Button>
-                    </>
-                  )}
+                  <Button type="submit" size="sm" disabled={isSaving} className="h-7 text-xs">
+                    {isSaving && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                    Save
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={handleCancel} className="h-7 text-xs">
+                    Cancel
+                  </Button>
                 </div>
               </form>
+            ) : selectedProvider ? (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="text-xs">Name</Label>
+                  <p className="text-sm">{selectedProvider.name}</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="apiUrl" className="text-xs">API URL</Label>
+                  <p className="text-sm font-mono text-muted-foreground">{selectedProvider.apiUrl}</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="apiKey" className="text-xs">API Key</Label>
+                  <p className="text-sm text-muted-foreground">{"*".repeat(12)}</p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="isActive"
+                    checked={selectedProvider.isActive}
+                    disabled
+                  />
+                  <Label htmlFor="isActive" className="text-xs">
+                    {selectedProvider.isActive ? "Active" : "Inactive"}
+                  </Label>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t">
+                  <Button type="button" variant="outline" size="sm" onClick={handleEdit} className="h-7 text-xs">
+                    <Pencil className="h-3.5 w-3.5 mr-1" />
+                    Edit
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={handleTest} disabled={isTesting} className="h-7 text-xs">
+                    {isTesting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <TestTube className="h-3.5 w-3.5 mr-1" />}
+                    Test
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setDeleteTarget(selectedProvider)}
+                    className="h-7 text-xs"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
             ) : null}
           </CardContent>
         </Card>
