@@ -112,10 +112,10 @@ export function MediaFilterBar({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       {/* Top bar with actions */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {/* Upload Button */}
           {onUpload && (
             <Button type="button"
@@ -123,7 +123,7 @@ export function MediaFilterBar({
               size="sm"
               onClick={handleUploadClick}
               disabled={isUploading}
-              className="h-8"
+              className="h-8 shrink-0"
               title="Upload files (Max 20 files, 10MB each)"
             >
               <UploadIcon className="h-3.5 w-3.5 mr-1.5" />
@@ -136,7 +136,7 @@ export function MediaFilterBar({
             variant="outline"
             size="sm"
             onClick={() => setSearchExpanded(!searchExpanded)}
-            className="h-8"
+            className="h-8 shrink-0"
           >
             <Search className="h-3.5 w-3.5" />
           </Button>
@@ -151,7 +151,7 @@ export function MediaFilterBar({
               }
             }}
           >
-            <SelectTrigger className="h-8 w-[120px] text-xs">
+            <SelectTrigger className="h-8 min-w-[112px] flex-1 text-xs sm:w-[120px] sm:flex-none">
               <ArrowUpDown className="h-3 w-3 mr-1 shrink-0" />
               <SelectValue />
             </SelectTrigger>
@@ -172,7 +172,7 @@ export function MediaFilterBar({
               onFiltersChange({ ...filters, mimeType: opt?.mimeType });
             }}
           >
-            <SelectTrigger className="h-8 w-[120px] text-xs">
+            <SelectTrigger className="h-8 min-w-[112px] flex-1 text-xs sm:w-[120px] sm:flex-none">
               <Filter className="h-3 w-3 mr-1 shrink-0" />
               <SelectValue />
             </SelectTrigger>
@@ -190,7 +190,7 @@ export function MediaFilterBar({
             variant={selectionMode ? "default" : "outline"}
             size="sm"
             onClick={onToggleSelectionMode}
-            className="flex items-center gap-1.5 h-8"
+            className="h-8 shrink-0 items-center gap-1.5"
           >
             {selectionMode ? (
               <>
@@ -226,16 +226,16 @@ export function MediaFilterBar({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {selectionMode && selectedCount > 0 && (
             <>
               {onMoveToFolder && folders.length > 0 && (
-                <div className="flex items-center gap-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-1">
                   <Select
                     value={moveToFolderId}
                     onValueChange={setMoveToFolderId}
                   >
-                    <SelectTrigger className="h-8 w-[140px] text-xs">
+                    <SelectTrigger className="h-8 min-w-[132px] flex-1 text-xs sm:w-[140px] sm:flex-none">
                       <SelectValue placeholder="Move to..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -252,7 +252,7 @@ export function MediaFilterBar({
                     size="sm"
                     onClick={handleMoveToFolder}
                     disabled={!moveToFolderId}
-                    className="h-8"
+                    className="h-8 shrink-0"
                   >
                     <FolderInput className="h-3.5 w-3.5" />
                   </Button>
@@ -263,7 +263,7 @@ export function MediaFilterBar({
                   variant="default"
                   size="sm"
                   onClick={onAddSelected}
-                  className="h-8 text-xs"
+                  className="h-8 shrink-0 text-xs"
                 >
                   Add ({selectedCount})
                 </Button>
@@ -273,7 +273,7 @@ export function MediaFilterBar({
                   variant="destructive"
                   size="sm"
                   onClick={onBulkDelete}
-                  className="h-8"
+                  className="h-8 shrink-0"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>

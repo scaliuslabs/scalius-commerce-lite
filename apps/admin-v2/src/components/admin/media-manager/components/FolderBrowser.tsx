@@ -26,6 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Generate consistent color for each folder based on ID
 function getFolderColor(folderId: string): string {
@@ -87,6 +88,8 @@ export function FolderBrowser({
     string | null
   >(null);
   const [folderSearch, setFolderSearch] = useState("");
+  const isMobile = useIsMobile();
+  const showCollapsed = isCollapsed && !isMobile;
 
   const filteredFolders = folders.filter((f) =>
     f.name.toLowerCase().includes(folderSearch.toLowerCase()),
@@ -122,9 +125,9 @@ export function FolderBrowser({
     <>
       <div
         className={cn(
-          "border-r bg-muted/30 relative transition-all flex flex-col h-full",
+          "relative flex h-auto max-h-64 min-w-0 flex-col border-b bg-muted/30 transition-all md:h-full md:max-h-none md:border-b-0 md:border-r",
           className,
-          isCollapsed && "w-12",
+          showCollapsed && "md:w-12",
         )}
       >
         {/* Collapse/Expand Toggle */}
@@ -132,10 +135,10 @@ export function FolderBrowser({
           <Button type="button"
             variant="ghost"
             size="icon"
-            className="absolute -right-3 top-4 z-10 h-6 w-6 rounded-full border bg-background shadow-sm"
+            className="absolute -right-3 top-4 z-10 hidden h-6 w-6 rounded-full border bg-background shadow-sm md:inline-flex"
             onClick={onToggleCollapse}
           >
-            {isCollapsed ? (
+            {showCollapsed ? (
               <ChevronRight className="h-4 w-4" />
             ) : (
               <ChevronLeft className="h-4 w-4" />
@@ -143,7 +146,7 @@ export function FolderBrowser({
           </Button>
         )}
 
-        {!isCollapsed ? (
+        {!showCollapsed ? (
           <>
             <div className="p-3 border-b space-y-3 shrink-0">
               <div className="flex items-center justify-between">
